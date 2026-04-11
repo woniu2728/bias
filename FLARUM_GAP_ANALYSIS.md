@@ -10,12 +10,12 @@
 - 管理后台已有 Dashboard、Basics、Permissions、Appearance、Users、Tags、Mail、Advanced 的页面框架。
 - 顶栏搜索已支持 Flarum 式讨论、帖子、用户三类结果下拉和键盘选择。
 - 基础、外观、邮件、高级设置已接入 `Setting` 表持久化，并补齐缓存清理和测试邮件接口。
-- 讨论详情已支持 `near` 楼层定位、帖子页前后加载和基础帖子导航。
+- 讨论详情已支持 `near` 楼层定位、帖子页前后加载、基础帖子导航、滚动进度同步和地址栏历史状态更新。
 
 ## 前台与交互缺口
 
 - Flarum 使用浮层 Composer（发帖、回复、编辑可最小化/恢复），pyflarum 仍是独立发帖页和详情页内 textarea。
-- Flarum 讨论页有更完整的 PostStreamScrubber、滚动进度和历史状态；pyflarum 已补基础 `near` 定位和帖子导航，但还需要继续精细化。
+- Flarum 讨论页有更完整的 PostStreamScrubber 和浮层 Composer；pyflarum 已补基础 `near` 定位、帖子导航和滚动历史状态，但还需要继续精细化。
 - Flarum 的登录、注册、忘记密码、改邮箱、改密码、头像编辑是 Modal 交互；pyflarum 多数是独立页面或未实现上传。
 - Flarum 用户页有 Discussions、Posts、安全/Access Tokens、设置页等细分；pyflarum 用户页覆盖较少。
 - Flarum 移动端有抽屉式导航、滑动操作和更完整的 responsive 行为；pyflarum 只有基础响应式布局。
@@ -50,7 +50,7 @@
 
 ## 建议下一步
 
-- 第一优先级：继续精细化讨论详情 PostStream，补随滚动更新的 scrubber、历史状态和浮层回复 composer。
+- 第一优先级：继续精细化讨论详情 PostStream，补浮层回复 composer 和更完整的移动端浏览体验。
 - 第二优先级：补充后台全局搜索、扩展管理页框架和更完整的 PermissionGrid。
 - 第三优先级：实现 flags/approval/suspend 这三类版主管理能力，先覆盖后台和帖子操作菜单。
 - 第四优先级：继续完善设置校验、运行时配置生效和审计日志。

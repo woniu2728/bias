@@ -165,6 +165,7 @@
             <div class="scrubber">
               <div class="scrubber-status">
                 <span>已加载 {{ loadedRangeText }}</span>
+                <span>正在阅读 #{{ currentVisiblePostNumber }}</span>
                 <span>共 {{ totalPosts || discussion.comment_count }} 楼</span>
               </div>
               <input
@@ -205,7 +206,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
@@ -239,6 +240,9 @@ const replyingTo = ref(null)
 const togglingSubscription = ref(false)
 const highlightedPostNumber = ref(null)
 const jumpPostNumber = ref(1)
+const currentVisiblePostNumber = ref(1)
+let scrollFrame = null
+let nearUrlTimer = null
 
 const canManageDiscussion = computed(() => {
   return authStore.user?.is_staff || authStore.user?.id === discussion.value?.user.id
@@ -257,6 +261,21 @@ const loadedRangeText = computed(() => {
 
 onMounted(async () => {
   await refreshDiscussion()
+  window.addEventListener('scroll', handlePostScroll, { passive: true })
+  window.addEventListener('resize', handlePostScroll, { passive: true })
+  await nextTick()
+  updateVisiblePostFromScroll()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', handlePostScroll)
+  window.removeEventListener('resize', handlePostScroll)
+  if (scrollFrame) {
+    cancelAnimationFrame(scrollFrame)
+  }
+  if (nearUrlTimer) {
+    clearTimeout(nearUrlTimer)
+  }
 })
 
 watch(
@@ -317,6 +336,7 @@ function replacePosts(data) {
   lastLoadedPage.value = data.page || 1
   totalPosts.value = data.total || items.length
   syncJumpNumber()
+  nextTick(updateVisiblePostFromScroll)
 }
 
 function appendPosts(data) {
@@ -325,14 +345,26 @@ function appendPosts(data) {
   lastLoadedPage.value = data.page || lastLoadedPage.value + 1
   totalPosts.value = data.total || totalPosts.value
   syncJumpNumber()
+  nextTick(updateVisiblePostFromScroll)
 }
 
 function prependPosts(data) {
+  const anchorNumber = posts.value[0]?.number
+  const anchorTop = anchorNumber ? document.getElementById(`post-${anchorNumber}`)?.getBoundingClientRect().top : null
   const items = unwrapList(data).map(normalizePost)
   posts.value.unshift(...items)
   firstLoadedPage.value = data.page || Math.max(1, firstLoadedPage.value - 1)
   totalPosts.value = data.total || totalPosts.value
   syncJumpNumber()
+  nextTick(() => {
+    if (anchorNumber && anchorTop !== null) {
+      const newTop = document.getElementById(`post-${anchorNumber}`)?.getBoundingClientRect().top
+      if (typeof newTop === 'number') {
+        window.scrollBy({ top: newTop - anchorTop })
+      }
+    }
+    updateVisiblePostFromScroll()
+  })
 }
 
 async function loadMorePosts() {
@@ -361,6 +393,12 @@ async function jumpToPost(number) {
   const targetNumber = Number(number)
   if (!targetNumber) return
 
+  if (posts.value.some(post => post.number === targetNumber)) {
+    await scrollToPost(targetNumber)
+    replaceNearInAddressBar(targetNumber)
+    return
+  }
+
   router.replace({
     path: route.path,
     query: {
@@ -376,6 +414,8 @@ async function scrollToPost(number) {
   if (!target) return
 
   highlightedPostNumber.value = number
+  currentVisiblePostNumber.value = number
+  jumpPostNumber.value = number
   target.scrollIntoView({ behavior: 'smooth', block: 'center' })
   setTimeout(() => {
     if (highlightedPostNumber.value === number) {
@@ -391,6 +431,7 @@ function resetPostStream() {
   totalPosts.value = 0
   highlightedPostNumber.value = null
   jumpPostNumber.value = Number(route.query.near) || 1
+  currentVisiblePostNumber.value = jumpPostNumber.value
 }
 
 function syncJumpNumber() {
@@ -399,6 +440,63 @@ function syncJumpNumber() {
   } else if (posts.value.length) {
     jumpPostNumber.value = posts.value[posts.value.length - 1].number
   }
+}
+
+function handlePostScroll() {
+  if (scrollFrame) return
+
+  scrollFrame = requestAnimationFrame(() => {
+    scrollFrame = null
+    updateVisiblePostFromScroll()
+  })
+}
+
+function updateVisiblePostFromScroll() {
+  if (!posts.value.length) return
+
+  const anchorY = 120
+  let closestPostNumber = posts.value[0].number
+  let closestDistance = Number.POSITIVE_INFINITY
+
+  for (const post of posts.value) {
+    const element = document.getElementById(`post-${post.number}`)
+    if (!element) continue
+
+    const rect = element.getBoundingClientRect()
+    if (rect.bottom < 0 || rect.top > window.innerHeight) continue
+
+    const distance = Math.abs(rect.top - anchorY)
+    if (distance < closestDistance) {
+      closestDistance = distance
+      closestPostNumber = post.number
+    }
+  }
+
+  if (closestPostNumber !== currentVisiblePostNumber.value) {
+    currentVisiblePostNumber.value = closestPostNumber
+    jumpPostNumber.value = closestPostNumber
+    scheduleNearUrlSync(closestPostNumber)
+  }
+}
+
+function scheduleNearUrlSync(number) {
+  if (nearUrlTimer) {
+    clearTimeout(nearUrlTimer)
+  }
+
+  nearUrlTimer = setTimeout(() => {
+    replaceNearInAddressBar(number)
+  }, 300)
+}
+
+function replaceNearInAddressBar(number) {
+  if (typeof window === 'undefined') return
+
+  const url = new URL(window.location.href)
+  if (url.searchParams.get('near') === String(number)) return
+
+  url.searchParams.set('near', number)
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
 }
 
 async function toggleLike(post) {
