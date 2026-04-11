@@ -4,6 +4,8 @@ from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
+from datetime import timedelta
 from PIL import Image
 from ninja_jwt.tokens import RefreshToken
 
@@ -91,3 +93,28 @@ class AvatarUploadApiTests(TestCase):
         Image.new("RGB", (32, 32), "#4d698e").save(buffer, format="PNG")
         buffer.seek(0)
         return SimpleUploadedFile("avatar.png", buffer.getvalue(), content_type="image/png")
+
+
+class SuspendedUserAuthTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="suspended-user",
+            email="suspended@example.com",
+            password="password123",
+            suspended_until=timezone.now() + timedelta(days=3),
+            suspend_message="请联系管理员申诉",
+        )
+
+    def test_login_returns_suspension_notice(self):
+        response = self.client.post(
+            "/api/users/login",
+            data=json.dumps({
+                "identification": "suspended-user",
+                "password": "password123",
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 401, response.content)
+        self.assertIn("账号已被封禁", response.json()["error"])
+        self.assertIn("请联系管理员申诉", response.json()["error"])

@@ -9,6 +9,7 @@ from django.utils import timezone
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post
 from apps.users.models import User
+from apps.users.services import UserService
 from apps.tags.models import Tag, DiscussionTag
 from apps.core.services import SearchService
 
@@ -35,6 +36,8 @@ class DiscussionService:
         Returns:
             Discussion: 创建的讨论对象
         """
+        UserService.ensure_not_suspended(user, "发布讨论")
+
         with transaction.atomic():
             # 创建讨论
             discussion = Discussion.objects.create(
@@ -274,6 +277,7 @@ class DiscussionService:
 
     @staticmethod
     def subscribe_discussion(discussion_id: int, user: User) -> bool:
+        UserService.ensure_not_suspended(user, "关注讨论")
         discussion = Discussion.objects.get(id=discussion_id)
         state, _ = DiscussionUser.objects.get_or_create(
             discussion=discussion,
@@ -291,6 +295,7 @@ class DiscussionService:
 
     @staticmethod
     def unsubscribe_discussion(discussion_id: int, user: User) -> bool:
+        UserService.ensure_not_suspended(user, "关注讨论")
         discussion = Discussion.objects.get(id=discussion_id)
         state, _ = DiscussionUser.objects.get_or_create(
             discussion=discussion,
@@ -332,6 +337,7 @@ class DiscussionService:
         Raises:
             PermissionDenied: 权限不足
         """
+        UserService.ensure_not_suspended(user, "编辑讨论")
         discussion = Discussion.objects.get(id=discussion_id)
 
         # 权限检查
@@ -383,6 +389,7 @@ class DiscussionService:
         Raises:
             PermissionDenied: 权限不足
         """
+        UserService.ensure_not_suspended(user, "删除讨论")
         discussion = Discussion.objects.get(id=discussion_id)
 
         # 权限检查
@@ -413,6 +420,8 @@ class DiscussionService:
         """检查用户是否可以编辑讨论"""
         if not user or not user.is_authenticated:
             return False
+        if user.is_suspended:
+            return False
         if user.is_staff or user.is_superuser:
             return True
         if discussion.user_id == user.id:
@@ -424,6 +433,8 @@ class DiscussionService:
         """检查用户是否可以删除讨论"""
         if not user or not user.is_authenticated:
             return False
+        if user.is_suspended:
+            return False
         if user.is_staff or user.is_superuser:
             return True
         # 只有管理员可以删除讨论
@@ -433,6 +444,8 @@ class DiscussionService:
     def can_reply_discussion(discussion: Discussion, user: User) -> bool:
         """检查用户是否可以回复讨论"""
         if not user or not user.is_authenticated:
+            return False
+        if user.is_suspended:
             return False
         if discussion.is_locked and not user.is_staff:
             return False

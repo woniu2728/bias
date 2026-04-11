@@ -94,6 +94,13 @@ class UserDetailSchema(UserOutSchema):
     preferences: dict = {}
 
 
+class CurrentUserSchema(UserDetailSchema):
+    """当前用户详情Schema（包含封禁信息）"""
+    suspended_until: Optional[datetime] = None
+    suspend_reason: str = ""
+    suspend_message: str = ""
+
+
 class UserPreferencesSchema(Schema):
     """用户偏好Schema"""
     follow_after_reply: bool = False

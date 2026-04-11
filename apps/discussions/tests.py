@@ -1,6 +1,8 @@
 import json
 
 from django.test import TestCase, Client
+from django.utils import timezone
+from datetime import timedelta
 from ninja_jwt.tokens import RefreshToken
 
 from apps.discussions.services import DiscussionService
@@ -109,3 +111,23 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(len(payload["data"]), 1)
         self.assertEqual(payload["data"][0]["id"], life_discussion.id)
         self.assertEqual(payload["data"][0]["tags"][0]["slug"], life_tag.slug)
+
+    def test_suspended_user_cannot_create_discussion(self):
+        self.author.suspended_until = timezone.now() + timedelta(days=1)
+        self.author.suspend_message = "封禁期间不可发帖"
+        self.author.save(update_fields=["suspended_until", "suspend_message"])
+
+        response = self.client.post(
+            "/api/discussions/",
+            data=json.dumps({
+                "title": "Should fail",
+                "content": "Blocked content",
+                "tag_ids": [],
+            }),
+            content_type="application/json",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertIn("账号已被封禁", response.json()["error"])
+        self.assertIn("封禁期间不可发帖", response.json()["error"])

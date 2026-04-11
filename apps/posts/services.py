@@ -11,6 +11,7 @@ from apps.posts.models import Post, PostLike, PostMentionsUser, PostFlag
 from apps.discussions.models import Discussion
 from apps.discussions.models import DiscussionUser
 from apps.users.models import User
+from apps.users.services import UserService
 import re
 
 
@@ -37,6 +38,8 @@ class PostService:
         Raises:
             ValueError: 讨论不存在或已锁定
         """
+        UserService.ensure_not_suspended(user, "回复讨论")
+
         try:
             discussion = Discussion.objects.get(id=discussion_id)
         except Discussion.DoesNotExist:
@@ -224,6 +227,7 @@ class PostService:
         Raises:
             PermissionDenied: 权限不足
         """
+        UserService.ensure_not_suspended(user, "编辑帖子")
         post = Post.objects.get(id=post_id)
 
         # 权限检查
@@ -258,6 +262,7 @@ class PostService:
         Raises:
             PermissionDenied: 权限不足
         """
+        UserService.ensure_not_suspended(user, "删除帖子")
         post = Post.objects.select_related('discussion').get(id=post_id)
 
         # 权限检查
@@ -297,6 +302,7 @@ class PostService:
         Returns:
             bool: 是否点赞成功
         """
+        UserService.ensure_not_suspended(user, "点赞帖子")
         post = Post.objects.get(id=post_id)
 
         # 不能给自己的帖子点赞
@@ -318,6 +324,7 @@ class PostService:
     @staticmethod
     def report_post(post_id: int, user: User, reason: str, message: str = "") -> PostFlag:
         """举报帖子"""
+        UserService.ensure_not_suspended(user, "举报帖子")
         post = Post.objects.select_related("user", "discussion").get(id=post_id)
 
         if not user or not user.is_authenticated:
@@ -387,6 +394,7 @@ class PostService:
         Returns:
             bool: 是否取消成功
         """
+        UserService.ensure_not_suspended(user, "点赞帖子")
         post = Post.objects.get(id=post_id)
 
         deleted_count, _ = PostLike.objects.filter(post=post, user=user).delete()
@@ -400,6 +408,8 @@ class PostService:
         """检查用户是否可以编辑帖子"""
         if not user or not user.is_authenticated:
             return False
+        if user.is_suspended:
+            return False
         if user.is_staff or user.is_superuser:
             return True
         if post.user_id == user.id:
@@ -410,6 +420,8 @@ class PostService:
     def can_delete_post(post: Post, user: User) -> bool:
         """检查用户是否可以删除帖子"""
         if not user or not user.is_authenticated:
+            return False
+        if user.is_suspended:
             return False
         if user.is_staff or user.is_superuser:
             return True
@@ -422,6 +434,8 @@ class PostService:
     def can_like_post(post: Post, user: User) -> bool:
         """检查用户是否可以点赞帖子"""
         if not user or not user.is_authenticated:
+            return False
+        if user.is_suspended:
             return False
         if post.user_id == user.id:
             return False

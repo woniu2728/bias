@@ -68,13 +68,14 @@
                     @click="toggleLike(post)"
                     class="post-action"
                     :class="{ 'is-liked': post.is_liked }"
+                    :disabled="isSuspended"
                   >
                     ❤️ {{ post.like_count || 0 }}
                   </button>
                   <button
                     @click="replyToPost(post)"
                     class="post-action"
-                    v-if="authStore.isAuthenticated && !discussion.is_locked"
+                    v-if="authStore.isAuthenticated && !discussion.is_locked && !isSuspended"
                   >
                     💬 回复
                   </button>
@@ -111,7 +112,10 @@
             </button>
           </div>
 
-          <div v-if="authStore.isAuthenticated && !discussion.is_locked" class="reply-placeholder">
+          <div v-if="authStore.isAuthenticated && isSuspended" class="suspended-notice">
+            {{ suspensionNotice }}
+          </div>
+          <div v-else-if="authStore.isAuthenticated && !discussion.is_locked" class="reply-placeholder">
             <button @click="openComposer" class="primary">
               {{ replyContent.trim() ? '继续编辑回复' : '发表回复' }}
             </button>
@@ -128,7 +132,7 @@
 
         <!-- 侧边栏 -->
         <aside class="sidebar">
-          <div v-if="authStore.isAuthenticated" class="sidebar-section">
+          <div v-if="authStore.isAuthenticated && !isSuspended" class="sidebar-section">
             <h3>关注讨论</h3>
             <p class="subscription-copy">
               {{ discussion.is_subscribed ? '你会收到这条讨论的新回复通知。' : '关注后，这条讨论的新回复会进入你的通知列表。' }}
@@ -136,6 +140,10 @@
             <button @click="toggleSubscription" class="secondary full-width" :disabled="togglingSubscription">
               {{ togglingSubscription ? '提交中...' : (discussion.is_subscribed ? '取消关注' : '关注讨论') }}
             </button>
+          </div>
+          <div v-else-if="authStore.isAuthenticated && isSuspended" class="sidebar-section sidebar-section--warning">
+            <h3>账号状态</h3>
+            <p class="subscription-copy">{{ suspensionNotice }}</p>
           </div>
 
           <div class="sidebar-section">
@@ -202,7 +210,7 @@
     </div>
 
     <div
-      v-if="discussion && authStore.isAuthenticated && !discussion.is_locked && composerOpen"
+      v-if="discussion && authStore.isAuthenticated && !discussion.is_locked && !isSuspended && composerOpen"
       class="floating-composer"
       :class="{ 'is-minimized': composerMinimized, 'is-expanded': composerExpanded }"
     >
@@ -387,6 +395,21 @@ const composerTools = [
 
 const canManageDiscussion = computed(() => {
   return authStore.user?.is_staff || authStore.user?.id === discussion.value?.user.id
+})
+const isSuspended = computed(() => Boolean(authStore.user?.is_suspended))
+const suspensionNotice = computed(() => {
+  if (!isSuspended.value) return ''
+
+  const user = authStore.user || {}
+  if (user.suspend_message) {
+    return user.suspended_until
+      ? `账号已被封禁至 ${formatAbsoluteDate(user.suspended_until)}。${user.suspend_message}`
+      : `账号当前已被封禁。${user.suspend_message}`
+  }
+
+  return user.suspended_until
+    ? `账号已被封禁至 ${formatAbsoluteDate(user.suspended_until)}，暂时无法回复、点赞、举报或关注讨论。`
+    : '账号当前已被封禁，暂时无法回复、点赞、举报或关注讨论。'
 })
 
 const hasPrevious = computed(() => firstLoadedPage.value > 1)
@@ -655,6 +678,10 @@ async function toggleLike(post) {
     router.push('/login')
     return
   }
+  if (isSuspended.value) {
+    alert(suspensionNotice.value)
+    return
+  }
 
   try {
     if (post.is_liked) {
@@ -668,16 +695,25 @@ async function toggleLike(post) {
     }
   } catch (error) {
     console.error('点赞失败:', error)
+    alert('点赞失败: ' + (error.response?.data?.error || error.message || '未知错误'))
   }
 }
 
 function replyToPost(post) {
+  if (isSuspended.value) {
+    alert(suspensionNotice.value)
+    return
+  }
   replyingTo.value = post
   replyContent.value = `@${post.user.username} `
   openComposer()
 }
 
 function editPost(post) {
+  if (isSuspended.value) {
+    alert(suspensionNotice.value)
+    return
+  }
   editingPost.value = post
   replyContent.value = post.content
   replyingTo.value = null
@@ -689,6 +725,10 @@ function cancelEdit() {
 }
 
 async function openComposer() {
+  if (isSuspended.value) {
+    alert(suspensionNotice.value)
+    return
+  }
   composerOpen.value = true
   composerMinimized.value = false
   if (!editingPost.value && !replyContent.value.trim()) {
@@ -886,6 +926,10 @@ function formatDraftTime(value) {
 
 async function submitReply() {
   if (!replyContent.value.trim()) return
+  if (isSuspended.value) {
+    alert(suspensionNotice.value)
+    return
+  }
 
   submitting.value = true
   try {
@@ -923,7 +967,7 @@ async function submitReply() {
     resetComposerState()
   } catch (error) {
     console.error('提交失败:', error)
-    alert('提交失败，请稍后重试')
+    alert('提交失败: ' + (error.response?.data?.error || error.message || '未知错误'))
   } finally {
     submitting.value = false
   }
@@ -944,21 +988,28 @@ async function deletePost(post) {
 }
 
 function canEditPost(post) {
+  if (isSuspended.value) return false
   return authStore.user?.id === post.user.id || authStore.user?.is_staff
 }
 
 function canDeletePost(post) {
+  if (isSuspended.value) return false
   return authStore.user?.id === post.user.id || authStore.user?.is_staff
 }
 
 function canReportPost(post) {
   if (!authStore.isAuthenticated) return false
+  if (isSuspended.value) return false
   if (!post?.user?.id) return false
   if (post.user.id === authStore.user?.id) return false
   return true
 }
 
 function openReportModal(post) {
+  if (isSuspended.value) {
+    alert(suspensionNotice.value)
+    return
+  }
   reportingPost.value = post
   reportForm.value = {
     reason: '垃圾广告',
@@ -1037,6 +1088,10 @@ async function toggleSubscription() {
     router.push('/login')
     return
   }
+  if (isSuspended.value) {
+    alert(suspensionNotice.value)
+    return
+  }
 
   togglingSubscription.value = true
   try {
@@ -1049,7 +1104,7 @@ async function toggleSubscription() {
     }
   } catch (error) {
     console.error('更新关注状态失败:', error)
-    alert('操作失败，请稍后重试')
+    alert('操作失败: ' + (error.response?.data?.error || error.message || '未知错误'))
   } finally {
     togglingSubscription.value = false
   }
@@ -1057,6 +1112,12 @@ async function toggleSubscription() {
 
 function formatDate(dateString) {
   return formatRelativeTime(dateString)
+}
+
+function formatAbsoluteDate(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '未知时间'
+  return date.toLocaleString('zh-CN')
 }
 </script>
 
@@ -1267,6 +1328,11 @@ function formatDate(dateString) {
   color: #667eea;
 }
 
+.post-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .post-action.is-liked {
   background: #ffe0e0;
   border-color: #ff6b6b;
@@ -1305,6 +1371,16 @@ function formatDate(dateString) {
   font-size: 13px;
 }
 
+.suspended-notice {
+  padding: 18px 20px;
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  color: #856404;
+  line-height: 1.6;
+}
+
 .locked-notice, .login-notice {
   text-align: center;
   padding: 20px;
@@ -1330,6 +1406,11 @@ function formatDate(dateString) {
   font-size: 16px;
   margin-bottom: 15px;
   color: #333;
+}
+
+.sidebar-section--warning {
+  background: #fffaf0;
+  border: 1px solid #fde7b2;
 }
 
 .subscription-copy {

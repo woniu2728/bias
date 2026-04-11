@@ -1,4 +1,6 @@
 from django.test import TestCase
+from django.utils import timezone
+from datetime import timedelta
 from ninja_jwt.tokens import RefreshToken
 
 from apps.discussions.services import DiscussionService
@@ -81,3 +83,28 @@ class PostFlagApiTests(TestCase):
 
         flag = PostFlag.objects.get(post=self.post, user=self.reporter)
         self.assertEqual(flag.message, "包含明显违规信息")
+
+    def test_suspended_user_cannot_reply_or_report_post(self):
+        self.reporter.suspended_until = timezone.now() + timedelta(days=2)
+        self.reporter.suspend_message = "封禁期间不可互动"
+        self.reporter.save(update_fields=["suspended_until", "suspend_message"])
+
+        response = self.client.post(
+            f"/api/discussions/{self.discussion.id}/posts",
+            data='{"content":"尝试回复"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertIn("账号已被封禁", response.json()["error"])
+
+        response = self.client.post(
+            f"/api/posts/{self.post.id}/report",
+            data='{"reason":"违规内容","message":"尝试举报"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertIn("封禁期间不可互动", response.json()["error"])

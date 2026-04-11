@@ -4,6 +4,7 @@ User service - 用户业务逻辑
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password, check_password
 from django.db import transaction
+from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.conf import settings
 from datetime import timedelta, datetime
@@ -16,6 +17,29 @@ from apps.core.email_service import EmailService
 
 class UserService:
     """用户服务类"""
+
+    @staticmethod
+    def build_suspension_notice(user: User, action_label: str = "") -> str:
+        """构建封禁提示语"""
+        parts = ["账号已被封禁"]
+
+        if user.suspended_until:
+            until = timezone.localtime(user.suspended_until).strftime("%Y-%m-%d %H:%M")
+            parts.append(f"至 {until}")
+
+        message = " ".join(parts)
+
+        if user.suspend_message:
+            return f"{message}。{user.suspend_message}"
+        if action_label:
+            return f"{message}，暂时无法{action_label}"
+        return message
+
+    @staticmethod
+    def ensure_not_suspended(user: User, action_label: str = ""):
+        """禁止被封禁用户执行写操作"""
+        if user and user.is_suspended:
+            raise PermissionDenied(UserService.build_suspension_notice(user, action_label))
 
     @staticmethod
     def create_user(username: str, email: str, password: str) -> User:
@@ -63,7 +87,7 @@ class UserService:
         if user and check_password(password, user.password):
             # 检查是否被封禁
             if user.is_suspended:
-                raise ValueError("账号已被封禁")
+                raise ValueError(UserService.build_suspension_notice(user))
 
             # 更新最后登录时间
             user.last_seen_at = timezone.now()

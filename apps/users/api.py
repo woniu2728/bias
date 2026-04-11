@@ -18,6 +18,7 @@ from .schemas import (
     TokenSchema,
     UserOutSchema,
     UserDetailSchema,
+    CurrentUserSchema,
     UserUpdateSchema,
     PasswordChangeSchema,
     PasswordResetRequestSchema,
@@ -77,11 +78,7 @@ def login(request, payload: UserLoginSchema):
             "refresh": str(refresh),
         }
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=401,
-        )
+        return JsonResponse({"error": str(e)}, status=401)
 
 
 @router.post("/logout", auth=AuthBearer(), tags=["Auth"])
@@ -141,7 +138,7 @@ def reset_password(request, payload: PasswordResetSchema):
 
 # ==================== 用户信息 ====================
 
-@router.get("/me", response=UserDetailSchema, auth=AuthBearer(), tags=["Users"])
+@router.get("/me", response=CurrentUserSchema, auth=AuthBearer(), tags=["Users"])
 def get_current_user(request):
     """获取当前用户信息"""
     return request.auth

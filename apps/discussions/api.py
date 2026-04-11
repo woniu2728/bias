@@ -5,6 +5,7 @@ from typing import Optional
 from ninja import Router
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
+from django.http import JsonResponse
 
 from apps.discussions.models import Discussion
 from apps.discussions.schemas import (
@@ -37,6 +38,8 @@ def create_discussion(request, payload: DiscussionCreateSchema):
             tag_ids=payload.tag_ids,
         )
         return discussion
+    except PermissionDenied as e:
+        return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
         return router.create_response(
             request,
@@ -328,7 +331,9 @@ def subscribe_discussion(request, discussion_id: int):
         DiscussionService.subscribe_discussion(discussion_id, request.auth)
         return {"message": "已关注讨论", "is_subscribed": True}
     except Discussion.DoesNotExist:
-        return router.create_response(request, {"error": "讨论不存在"}, status=404)
+        return JsonResponse({"error": "讨论不存在"}, status=404)
+    except PermissionDenied as e:
+        return JsonResponse({"error": str(e)}, status=403)
 
 
 @router.delete("/{discussion_id}/subscribe", auth=AuthBearer(), tags=["Discussions"])
@@ -337,4 +342,6 @@ def unsubscribe_discussion(request, discussion_id: int):
         DiscussionService.unsubscribe_discussion(discussion_id, request.auth)
         return {"message": "已取消关注", "is_subscribed": False}
     except Discussion.DoesNotExist:
-        return router.create_response(request, {"error": "讨论不存在"}, status=404)
+        return JsonResponse({"error": "讨论不存在"}, status=404)
+    except PermissionDenied as e:
+        return JsonResponse({"error": str(e)}, status=403)

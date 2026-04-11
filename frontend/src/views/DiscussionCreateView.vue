@@ -5,6 +5,10 @@
         <h1>发起新讨论</h1>
 
         <form @submit.prevent="handleSubmit">
+          <div v-if="isSuspended" class="suspension-notice">
+            {{ suspensionNotice }}
+          </div>
+
           <div class="form-group">
             <label>标题 *</label>
             <input
@@ -69,7 +73,7 @@
           <div v-if="error" class="error-message">{{ error }}</div>
 
           <div class="form-actions">
-            <button type="submit" class="primary" :disabled="submitting || !canSubmit">
+            <button type="submit" class="primary" :disabled="submitting || !canSubmit || isSuspended">
               {{ submitting ? '发布中...' : '发布讨论' }}
             </button>
             <button type="button" class="secondary" @click="handleCancel">
@@ -125,9 +129,25 @@ const tags = ref([])
 const activeTab = ref('write')
 const submitting = ref(false)
 const error = ref('')
+const isSuspended = computed(() => Boolean(authStore.user?.is_suspended))
 
 const canSubmit = computed(() => {
   return form.value.title.trim() && form.value.content.trim()
+})
+
+const suspensionNotice = computed(() => {
+  if (!isSuspended.value) return ''
+
+  const user = authStore.user || {}
+  if (user.suspend_message) {
+    return user.suspended_until
+      ? `账号已被封禁至 ${formatDateTime(user.suspended_until)}。${user.suspend_message}`
+      : `账号当前已被封禁。${user.suspend_message}`
+  }
+
+  return user.suspended_until
+    ? `账号已被封禁至 ${formatDateTime(user.suspended_until)}，暂时无法发布讨论。`
+    : '账号当前已被封禁，暂时无法发布讨论。'
 })
 
 const previewHtml = computed(() => {
@@ -157,6 +177,10 @@ async function loadTags() {
 
 async function handleSubmit() {
   if (!canSubmit.value) return
+  if (isSuspended.value) {
+    error.value = suspensionNotice.value
+    return
+  }
 
   submitting.value = true
   error.value = ''
@@ -207,6 +231,12 @@ function handleCancel() {
     }
   }
   router.push('/discussions')
+}
+
+function formatDateTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '未知时间'
+  return date.toLocaleString('zh-CN')
 }
 
 // 简单的Markdown渲染（实际应该使用专业库）
@@ -395,6 +425,15 @@ function renderMarkdown(text) {
   border-radius: 6px;
   margin-bottom: 20px;
   font-size: 14px;
+}
+
+.suspension-notice {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: #fff3cd;
+  color: #856404;
+  line-height: 1.6;
 }
 
 .form-actions {

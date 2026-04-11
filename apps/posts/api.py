@@ -168,6 +168,8 @@ def create_post(request, discussion_id: int, payload: PostCreateSchema):
         post.like_count = 0
         post.is_liked = False
         return _serialize_post(post, request.auth)
+    except PermissionDenied as e:
+        return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
         return router.create_response(
             request,
@@ -258,11 +260,7 @@ def update_post(request, post_id: int, payload: PostUpdateSchema):
             status=404
         )
     except PermissionDenied as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=403
-        )
+        return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
         return router.create_response(
             request,
@@ -288,11 +286,7 @@ def delete_post(request, post_id: int):
             status=404
         )
     except PermissionDenied as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=403
-        )
+        return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
         return router.create_response(
             request,
@@ -317,6 +311,12 @@ def like_post(request, post_id: int):
             {"error": "帖子不存在"},
             status=404
         )
+    except PermissionDenied as e:
+        return router.create_response(
+            request,
+            {"error": str(e)},
+            status=403
+        )
     except ValueError as e:
         return router.create_response(
             request,
@@ -340,6 +340,12 @@ def unlike_post(request, post_id: int):
             request,
             {"error": "帖子不存在"},
             status=404
+        )
+    except PermissionDenied as e:
+        return router.create_response(
+            request,
+            {"error": str(e)},
+            status=403
         )
     except ValueError as e:
         return router.create_response(
