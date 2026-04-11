@@ -10,6 +10,7 @@ from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post
 from apps.users.models import User
 from apps.tags.models import Tag, DiscussionTag
+from apps.core.services import SearchService
 
 
 class DiscussionService:
@@ -116,8 +117,10 @@ class DiscussionService:
 
         # 搜索
         if q:
+            queryset = queryset.filter(SearchService.build_discussion_search_query(q))
             queryset = queryset.filter(
-                Q(title__icontains=q) | Q(slug__icontains=q)
+                Q(posts__isnull=True) |
+                Q(posts__type='comment', posts__hidden_at__isnull=True)
             )
 
         # 按标签过滤

@@ -1,20 +1,66 @@
 """
 管理后台API端点
 """
+import json
+import sys
+import functools
+
 from ninja import Router, Body
 from ninja.security import HttpBearer
 from django.shortcuts import get_object_or_404
 from typing import List, Dict, Any
 from django.db.models import Count
-import sys
-import functools
+from django.conf import settings
+from django.core.cache import cache
+from django.core.mail import send_mail
 
+from apps.core.models import Setting
 from apps.users.models import User, Group, Permission
 from apps.discussions.models import Discussion
 from apps.posts.models import Post
 from apps.tags.models import Tag
 
 router = Router()
+
+BASIC_SETTINGS_DEFAULTS = {
+    "forum_title": "PyFlarum",
+    "forum_description": "",
+    "welcome_title": "欢迎来到PyFlarum",
+    "welcome_message": "这是一个基于Django和Vue 3的现代化论坛",
+    "default_locale": "zh-CN",
+    "show_language_selector": False,
+}
+
+APPEARANCE_SETTINGS_DEFAULTS = {
+    "primary_color": "#4d698e",
+    "accent_color": "#e74c3c",
+    "logo_url": "",
+    "favicon_url": "",
+    "custom_css": "",
+    "custom_header": "",
+}
+
+MAIL_SETTINGS_DEFAULTS = {
+    "mail_driver": "smtp",
+    "mail_host": getattr(settings, "EMAIL_HOST", ""),
+    "mail_port": getattr(settings, "EMAIL_PORT", 587),
+    "mail_encryption": "tls" if getattr(settings, "EMAIL_USE_TLS", False) else "",
+    "mail_username": getattr(settings, "EMAIL_HOST_USER", ""),
+    "mail_password": "",
+    "mail_from_address": getattr(settings, "DEFAULT_FROM_EMAIL", ""),
+    "mail_from_name": "PyFlarum",
+}
+
+ADVANCED_SETTINGS_DEFAULTS = {
+    "cache_driver": "redis" if "redis" in settings.CACHES.get("default", {}).get("BACKEND", "").lower() else "file",
+    "cache_lifetime": 3600,
+    "queue_driver": "redis" if "redis" in getattr(settings, "CELERY_BROKER_URL", "") else "sync",
+    "queue_enabled": False,
+    "maintenance_mode": False,
+    "maintenance_message": "论坛正在维护中，请稍后再试...",
+    "debug_mode": settings.DEBUG,
+    "log_queries": False,
+}
 
 
 class AuthBearer(HttpBearer):
@@ -42,6 +88,38 @@ def require_staff(func):
     return wrapper
 
 
+def get_setting_group(prefix: str, defaults: Dict[str, Any]) -> Dict[str, Any]:
+    values = defaults.copy()
+    stored_settings = Setting.objects.filter(
+        key__in=[f"{prefix}.{key}" for key in defaults.keys()]
+    )
+
+    for setting in stored_settings:
+        key = setting.key.split(".", 1)[1]
+        try:
+            values[key] = json.loads(setting.value)
+        except json.JSONDecodeError:
+            values[key] = setting.value
+
+    return values
+
+
+def save_setting_group(prefix: str, defaults: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+    values = get_setting_group(prefix, defaults)
+
+    for key in defaults.keys():
+        if key not in payload:
+            continue
+
+        values[key] = payload[key]
+        Setting.objects.update_or_create(
+            key=f"{prefix}.{key}",
+            defaults={"value": json.dumps(payload[key], ensure_ascii=False)}
+        )
+
+    return values
+
+
 # ==================== 统计数据 ====================
 
 @router.get("/stats", auth=AuthBearer(), tags=["Admin"])
@@ -65,26 +143,108 @@ def get_stats(request):
 @require_staff
 def get_settings(request):
     """获取论坛设置"""
-    from django.conf import settings
-
-    # 这里应该从数据库读取设置，暂时返回默认值
-    return {
-        "forum_title": getattr(settings, 'FORUM_TITLE', 'PyFlarum'),
-        "forum_description": getattr(settings, 'FORUM_DESCRIPTION', ''),
-        "welcome_title": "欢迎来到PyFlarum",
-        "welcome_message": "这是一个基于Django和Vue 3的现代化论坛",
-        "default_locale": "zh-CN",
-        "show_language_selector": False,
-    }
+    return get_setting_group("basic", BASIC_SETTINGS_DEFAULTS)
 
 
 @router.post("/settings", auth=AuthBearer(), tags=["Admin"])
 @require_staff
 def save_settings(request, payload: Dict[str, Any] = Body(...)):
     """保存论坛设置"""
-    # TODO: 实现设置保存到数据库
-    # 可以创建一个Setting模型来存储键值对
-    return {"message": "设置保存成功"}
+    settings_data = save_setting_group("basic", BASIC_SETTINGS_DEFAULTS, payload)
+    return {"message": "设置保存成功", "settings": settings_data}
+
+
+@router.get("/appearance", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def get_appearance_settings(request):
+    """获取外观设置"""
+    return get_setting_group("appearance", APPEARANCE_SETTINGS_DEFAULTS)
+
+
+@router.post("/appearance", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def save_appearance_settings(request, payload: Dict[str, Any] = Body(...)):
+    """保存外观设置"""
+    settings_data = save_setting_group("appearance", APPEARANCE_SETTINGS_DEFAULTS, payload)
+    return {"message": "外观设置保存成功", "settings": settings_data}
+
+
+@router.get("/mail", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def get_mail_settings(request):
+    """获取邮件设置"""
+    return get_setting_group("mail", MAIL_SETTINGS_DEFAULTS)
+
+
+@router.post("/mail", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def save_mail_settings(request, payload: Dict[str, Any] = Body(...)):
+    """保存邮件设置"""
+    settings_data = save_setting_group("mail", MAIL_SETTINGS_DEFAULTS, payload)
+    return {"message": "邮件设置保存成功", "settings": settings_data}
+
+
+@router.post("/mail/test", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def send_test_email(request):
+    """发送测试邮件"""
+    if not request.auth.email:
+        return router.create_response(
+            request,
+            {"error": "当前管理员没有邮箱地址"},
+            status=400
+        )
+
+    mail_settings = get_setting_group("mail", MAIL_SETTINGS_DEFAULTS)
+    from_email = mail_settings.get("mail_from_address") or settings.DEFAULT_FROM_EMAIL
+
+    try:
+        sent_count = send_mail(
+            subject="PyFlarum 测试邮件",
+            message="如果你收到这封邮件，说明 PyFlarum 的邮件发送链路可用。",
+            from_email=from_email,
+            recipient_list=[request.auth.email],
+            fail_silently=False,
+        )
+    except Exception as e:
+        return router.create_response(
+            request,
+            {"error": str(e)},
+            status=400
+        )
+
+    return {"message": "测试邮件已发送", "sent_count": sent_count}
+
+
+@router.get("/advanced", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def get_advanced_settings(request):
+    """获取高级设置"""
+    return get_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS)
+
+
+@router.post("/advanced", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def save_advanced_settings(request, payload: Dict[str, Any] = Body(...)):
+    """保存高级设置"""
+    settings_data = save_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS, payload)
+    return {"message": "高级设置保存成功", "settings": settings_data}
+
+
+@router.post("/cache/clear", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def clear_cache(request):
+    """清除 Django 缓存"""
+    try:
+        cache.clear()
+    except Exception as e:
+        return router.create_response(
+            request,
+            {"error": f"缓存清理失败: {e}"},
+            status=503
+        )
+
+    return {"message": "缓存已清除"}
 
 
 # ==================== 用户组管理 ====================
@@ -313,4 +473,3 @@ def delete_admin_tag(request, tag_id: int):
     tag.delete()
 
     return {"message": "标签删除成功"}
-

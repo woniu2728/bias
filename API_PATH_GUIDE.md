@@ -99,6 +99,14 @@ GET    /api/search/suggestions      # 搜索建议
 GET    /api/admin/stats             # 统计数据
 GET    /api/admin/settings          # 获取设置
 POST   /api/admin/settings          # 保存设置
+GET    /api/admin/appearance        # 获取外观设置
+POST   /api/admin/appearance        # 保存外观设置
+GET    /api/admin/mail              # 获取邮件设置
+POST   /api/admin/mail              # 保存邮件设置
+POST   /api/admin/mail/test         # 发送测试邮件
+GET    /api/admin/advanced          # 获取高级设置
+POST   /api/admin/advanced          # 保存高级设置
+POST   /api/admin/cache/clear       # 清除缓存
 GET    /api/admin/groups            # 用户组列表
 POST   /api/admin/groups            # 创建用户组
 GET    /api/admin/permissions       # 获取权限
