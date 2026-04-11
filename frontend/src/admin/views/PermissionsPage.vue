@@ -13,7 +13,7 @@
             v-for="group in groups"
             :key="group.id"
             class="GroupBar-item"
-            :style="{ backgroundColor: group.color }"
+            :style="{ backgroundColor: getGroupColor(group) }"
           >
             <span class="GroupBar-name">{{ group.name }}</span>
             <button
@@ -41,7 +41,7 @@
                 v-for="group in groups"
                 :key="group.id"
                 class="PermissionGrid-group"
-                :style="{ color: group.color }"
+                :style="{ color: getGroupColor(group) }"
               >
                 {{ group.name }}
               </th>
@@ -89,6 +89,63 @@
         </button>
         <span v-if="saveSuccess" class="Form-success">✓ 保存成功</span>
       </div>
+
+      <div v-if="showGroupModal" class="Modal" @click.self="closeGroupModal">
+        <div class="Modal-content">
+          <div class="Modal-header">
+            <h3>{{ editingGroup ? '编辑用户组' : '创建用户组' }}</h3>
+            <button @click="closeGroupModal" class="Modal-close">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+
+          <div class="Modal-body">
+            <div class="Form-group">
+              <label>名称</label>
+              <input v-model="groupForm.name" type="text" class="FormControl" placeholder="例如：Moderator" />
+            </div>
+
+            <div class="FormRow">
+              <div class="Form-group">
+                <label>单数名称</label>
+                <input v-model="groupForm.name_singular" type="text" class="FormControl" />
+              </div>
+              <div class="Form-group">
+                <label>复数名称</label>
+                <input v-model="groupForm.name_plural" type="text" class="FormControl" />
+              </div>
+            </div>
+
+            <div class="FormRow">
+              <div class="Form-group">
+                <label>颜色</label>
+                <div class="ColorField">
+                  <input v-model="groupForm.color" type="color" class="ColorField-picker" />
+                  <input v-model="groupForm.color" type="text" class="FormControl" placeholder="#4d698e" />
+                </div>
+              </div>
+              <div class="Form-group">
+                <label>图标</label>
+                <input v-model="groupForm.icon" type="text" class="FormControl" placeholder="例如：fas fa-shield-alt" />
+              </div>
+            </div>
+
+            <label class="CheckboxField">
+              <input v-model="groupForm.is_hidden" type="checkbox" />
+              <span>隐藏用户组</span>
+            </label>
+          </div>
+
+          <div class="Modal-footer">
+            <button @click="closeGroupModal" class="Button Button--secondary">
+              取消
+            </button>
+            <button @click="saveGroup" class="Button Button--primary" :disabled="groupSaving">
+              {{ groupSaving ? '保存中...' : '保存' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </AdminPage>
 </template>
@@ -102,6 +159,10 @@ const groups = ref([])
 const permissions = ref({})
 const saving = ref(false)
 const saveSuccess = ref(false)
+const showGroupModal = ref(false)
+const groupSaving = ref(false)
+const editingGroup = ref(null)
+const groupForm = ref(getEmptyGroupForm())
 
 const permissionSections = [
   {
@@ -171,6 +232,10 @@ function hasPermission(groupId, permissionName) {
   return permissions.value[groupId]?.includes(permissionName) || false
 }
 
+function getGroupColor(group) {
+  return group?.color || '#6b7c93'
+}
+
 function togglePermission(groupId, permissionName, event) {
   if (!permissions.value[groupId]) {
     permissions.value[groupId] = []
@@ -205,13 +270,72 @@ async function savePermissions() {
 }
 
 function createGroup() {
-  // TODO: 打开创建用户组对话框
-  alert('创建用户组功能待实现')
+  editingGroup.value = null
+  groupForm.value = getEmptyGroupForm()
+  showGroupModal.value = true
 }
 
 function editGroup(group) {
-  // TODO: 打开编辑用户组对话框
-  alert(`编辑用户组: ${group.name}`)
+  editingGroup.value = group
+  groupForm.value = {
+    name: group.name || '',
+    name_singular: group.name_singular || '',
+    name_plural: group.name_plural || '',
+    color: group.color || '#4d698e',
+    icon: group.icon || '',
+    is_hidden: Boolean(group.is_hidden),
+  }
+  showGroupModal.value = true
+}
+
+async function saveGroup() {
+  if (!groupForm.value.name.trim()) {
+    alert('请输入用户组名称')
+    return
+  }
+
+  groupSaving.value = true
+  try {
+    const payload = {
+      ...groupForm.value,
+      name: groupForm.value.name.trim(),
+      name_singular: (groupForm.value.name_singular || '').trim(),
+      name_plural: (groupForm.value.name_plural || '').trim(),
+      icon: (groupForm.value.icon || '').trim(),
+    }
+
+    if (editingGroup.value) {
+      await api.put(`/admin/groups/${editingGroup.value.id}`, payload)
+    } else {
+      await api.post('/admin/groups', payload)
+    }
+
+    closeGroupModal()
+    await loadGroups()
+  } catch (error) {
+    console.error('保存用户组失败:', error)
+    alert('保存失败: ' + (error.response?.data?.error || error.message || '未知错误'))
+  } finally {
+    groupSaving.value = false
+  }
+}
+
+function closeGroupModal() {
+  showGroupModal.value = false
+  editingGroup.value = null
+  groupSaving.value = false
+  groupForm.value = getEmptyGroupForm()
+}
+
+function getEmptyGroupForm() {
+  return {
+    name: '',
+    name_singular: '',
+    name_plural: '',
+    color: '#4d698e',
+    icon: '',
+    is_hidden: false,
+  }
 }
 </script>
 
@@ -354,6 +478,12 @@ function editGroup(group) {
   gap: 15px;
 }
 
+.Button {
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
 .Button--primary {
   background: #4d698e;
   color: white;
@@ -379,5 +509,131 @@ function editGroup(group) {
   color: #27ae60;
   font-size: 14px;
   font-weight: 500;
+}
+
+.Button--secondary {
+  background: #f5f8fa;
+  border: 1px solid #ddd;
+  padding: 10px 20px;
+}
+
+.Button--secondary:hover {
+  background: #e8eef5;
+}
+
+.Modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.Modal-content {
+  width: min(560px, calc(100vw - 32px));
+  max-height: 90vh;
+  overflow: auto;
+  background: white;
+  border-radius: 3px;
+}
+
+.Modal-header,
+.Modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px;
+}
+
+.Modal-header {
+  border-bottom: 1px solid #e3e8ed;
+}
+
+.Modal-footer {
+  justify-content: flex-end;
+  border-top: 1px solid #e3e8ed;
+}
+
+.Modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.Modal-close {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.Modal-body {
+  padding: 20px;
+}
+
+.Form-group {
+  margin-bottom: 20px;
+}
+
+.Form-group:last-child {
+  margin-bottom: 0;
+}
+
+.Form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.FormControl {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 14px;
+}
+
+.FormControl:focus {
+  outline: none;
+  border-color: #4d698e;
+}
+
+.FormRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ColorField {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.ColorField-picker {
+  width: 52px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.CheckboxField {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #44515e;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .FormRow {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

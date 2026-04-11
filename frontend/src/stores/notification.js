@@ -5,19 +5,49 @@ export const useNotificationStore = defineStore('notification', () => {
   const notifications = ref([])
   const unreadCount = ref(0)
   const ws = ref(null)
+  let heartbeatTimer = null
+  let reconnectTimer = null
+
+  function resolveWsBaseUrl() {
+    const configured = import.meta.env.VITE_WS_BASE_URL?.trim()
+    if (configured) {
+      return configured.replace(/\/$/, '')
+    }
+
+    if (typeof window !== 'undefined') {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      return `${protocol}//${window.location.host}`
+    }
+
+    return 'ws://localhost:8000'
+  }
 
   // 连接WebSocket
   function connect() {
     const token = localStorage.getItem('access_token')
     if (!token) return
 
-    ws.value = new WebSocket(`ws://localhost:8000/ws/notifications/`)
+    if (ws.value && [WebSocket.OPEN, WebSocket.CONNECTING].includes(ws.value.readyState)) {
+      return
+    }
+
+    const baseUrl = resolveWsBaseUrl()
+    ws.value = new WebSocket(`${baseUrl}/ws/notifications/?token=${encodeURIComponent(token)}`)
 
     ws.value.onopen = () => {
       console.log('WebSocket连接成功')
 
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer)
+        reconnectTimer = null
+      }
+
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer)
+      }
+
       // 发送心跳
-      setInterval(() => {
+      heartbeatTimer = setInterval(() => {
         if (ws.value?.readyState === WebSocket.OPEN) {
           ws.value.send(JSON.stringify({ type: 'ping' }))
         }
@@ -48,8 +78,14 @@ export const useNotificationStore = defineStore('notification', () => {
 
     ws.value.onclose = () => {
       console.log('WebSocket连接关闭')
+
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer)
+        heartbeatTimer = null
+      }
+
       // 5秒后重连
-      setTimeout(() => {
+      reconnectTimer = setTimeout(() => {
         connect()
       }, 5000)
     }
@@ -57,6 +93,14 @@ export const useNotificationStore = defineStore('notification', () => {
 
   // 断开连接
   function disconnect() {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer)
+      heartbeatTimer = null
+    }
     if (ws.value) {
       ws.value.close()
       ws.value = null

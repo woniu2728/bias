@@ -93,6 +93,27 @@ def serialize_group(group: Group) -> Dict[str, Any]:
     }
 
 
+def validate_group_payload(payload: Dict[str, Any], group: Group = None):
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise ValueError("用户组名称不能为空")
+
+    queryset = Group.objects.filter(name=name)
+    if group is not None:
+        queryset = queryset.exclude(id=group.id)
+    if queryset.exists():
+        raise ValueError("用户组名称已存在")
+
+    return {
+        "name": name,
+        "name_singular": (payload.get("name_singular") or name).strip(),
+        "name_plural": (payload.get("name_plural") or f"{name}s").strip(),
+        "color": payload.get("color") or "#4d698e",
+        "icon": (payload.get("icon") or "").strip(),
+        "is_hidden": bool(payload.get("is_hidden", False)),
+    }
+
+
 def serialize_admin_user(user: User, include_details: bool = False) -> Dict[str, Any]:
     payload = {
         "id": user.id,
@@ -298,7 +319,7 @@ def clear_cache(request):
 @require_staff
 def list_groups(request):
     """获取用户组列表"""
-    groups = Group.objects.all()
+    groups = Group.objects.all().order_by("id", "name")
     return [serialize_group(group) for group in groups]
 
 
@@ -306,14 +327,29 @@ def list_groups(request):
 @require_staff
 def create_group(request, payload: Dict[str, Any] = Body(...)):
     """创建用户组"""
-    group = Group.objects.create(
-        name=payload.get('name'),
-        name_singular=payload.get('name_singular'),
-        name_plural=payload.get('name_plural'),
-        color=payload.get('color', '#000000'),
-        icon=payload.get('icon', ''),
-        is_hidden=payload.get('is_hidden', False),
-    )
+    try:
+        validated = validate_group_payload(payload)
+        group = Group.objects.create(**validated)
+        return serialize_group(group)
+    except ValueError as e:
+        return admin_error(str(e), status=400)
+
+
+@router.put("/groups/{group_id}", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def update_group(request, group_id: int, payload: Dict[str, Any] = Body(...)):
+    """更新用户组"""
+    group = get_object_or_404(Group, id=group_id)
+
+    try:
+        validated = validate_group_payload(payload, group=group)
+    except ValueError as e:
+        return admin_error(str(e), status=400)
+
+    for field, value in validated.items():
+        setattr(group, field, value)
+    group.save()
+
     return serialize_group(group)
 
 
