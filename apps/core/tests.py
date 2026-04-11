@@ -9,6 +9,8 @@ from apps.core.models import Setting
 from apps.core.services import SearchService
 from apps.core.websocket_auth import get_user_from_token
 from apps.discussions.services import DiscussionService
+from apps.posts.models import PostFlag
+from apps.posts.services import PostService
 from apps.users.models import Group, User
 
 
@@ -268,3 +270,68 @@ class AdminGroupManagementApiTests(TestCase):
         self.assertEqual(group.color, "#8e44ad")
         self.assertEqual(group.icon, "fas fa-life-ring")
         self.assertTrue(group.is_hidden)
+
+
+class AdminFlagManagementApiTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="admin-flag-mgr",
+            email="admin-flag-mgr@example.com",
+            password="password123",
+        )
+        self.author = User.objects.create_user(
+            username="flag-author",
+            email="flag-author@example.com",
+            password="password123",
+        )
+        self.reporter = User.objects.create_user(
+            username="flag-reporter",
+            email="flag-reporter@example.com",
+            password="password123",
+        )
+        discussion = DiscussionService.create_discussion(
+            title="Flag target",
+            content="First",
+            user=self.author,
+        )
+        post = PostService.create_post(
+            discussion_id=discussion.id,
+            content="这是一条被举报的帖子",
+            user=self.author,
+        )
+        self.flag = PostFlag.objects.create(
+            post=post,
+            user=self.reporter,
+            reason="违规内容",
+            message="请管理员处理",
+        )
+
+    def auth_header(self):
+        token = RefreshToken.for_user(self.admin).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_admin_can_list_and_resolve_flags(self):
+        response = self.client.get(
+            "/api/admin/flags",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["total"], 1)
+        self.assertEqual(response.json()["data"][0]["reason"], "违规内容")
+
+        response = self.client.post(
+            f"/api/admin/flags/{self.flag.id}/resolve",
+            data=json.dumps({
+                "status": "resolved",
+                "resolution_note": "已联系发帖人并隐藏内容",
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.flag.refresh_from_db()
+        self.assertEqual(self.flag.status, "resolved")
+        self.assertEqual(self.flag.resolution_note, "已联系发帖人并隐藏内容")
+        self.assertEqual(self.flag.resolved_by_id, self.admin.id)

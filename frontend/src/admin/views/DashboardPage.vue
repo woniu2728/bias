@@ -67,6 +67,15 @@
                 <div class="StatsWidget-label">帖子总数</div>
               </div>
             </div>
+            <div class="StatsWidget-item">
+              <div class="StatsWidget-icon StatsWidget-icon--warning">
+                <i class="fas fa-flag"></i>
+              </div>
+              <div class="StatsWidget-info">
+                <div class="StatsWidget-value">{{ stats.openFlags || 0 }}</div>
+                <div class="StatsWidget-label">待处理举报</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -89,6 +98,10 @@
             <router-link to="/admin/users" class="ActionsWidget-item">
               <i class="fas fa-users"></i>
               <span>管理用户</span>
+            </router-link>
+            <router-link to="/admin/flags" class="ActionsWidget-item">
+              <i class="fas fa-flag"></i>
+              <span>处理举报</span>
             </router-link>
             <router-link to="/admin/appearance" class="ActionsWidget-item">
               <i class="fas fa-paint-brush"></i>
@@ -114,6 +127,7 @@ const stats = ref({
   totalUsers: 0,
   totalDiscussions: 0,
   totalPosts: 0,
+  openFlags: 0,
 })
 
 onMounted(async () => {
@@ -209,6 +223,10 @@ onMounted(async () => {
 .StatsWidget-icon i {
   font-size: 20px;
   color: white;
+}
+
+.StatsWidget-icon--warning {
+  background: #e67e22;
 }
 
 .StatsWidget-info {

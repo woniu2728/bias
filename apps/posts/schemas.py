@@ -28,6 +28,22 @@ class PostUpdateSchema(BaseModel):
         return v.strip()
 
 
+class PostReportSchema(BaseModel):
+    """举报帖子"""
+    reason: str = Field(..., min_length=1, max_length=100, description="举报原因")
+    message: str = Field("", max_length=1000, description="补充说明")
+
+    @validator('reason')
+    def validate_reason(cls, v):
+        if not v.strip():
+            raise ValueError('举报原因不能为空')
+        return v.strip()
+
+    @validator('message')
+    def validate_message(cls, v):
+        return (v or "").strip()
+
+
 class PostFilterSchema(BaseModel):
     """帖子列表过滤"""
     author: Optional[str] = Field(None, description="作者用户名")

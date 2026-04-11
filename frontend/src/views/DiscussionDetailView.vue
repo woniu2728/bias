@@ -92,6 +92,13 @@
                   >
                     🗑️ 删除
                   </button>
+                  <button
+                    @click="openReportModal(post)"
+                    class="post-action warning"
+                    v-if="canReportPost(post)"
+                  >
+                    🚩 举报
+                  </button>
                 </div>
               </div>
             </div>
@@ -267,6 +274,47 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showReportModal" class="report-modal" @click.self="closeReportModal">
+      <div class="report-dialog">
+        <div class="report-header">
+          <h3>举报帖子</h3>
+          <button @click="closeReportModal" type="button" class="report-close">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
+        <div class="report-body">
+          <div class="form-group">
+            <label>举报原因</label>
+            <select v-model="reportForm.reason" class="report-select">
+              <option value="垃圾广告">垃圾广告</option>
+              <option value="骚扰攻击">骚扰攻击</option>
+              <option value="违规内容">违规内容</option>
+              <option value="剧透/灌水">剧透/灌水</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>补充说明</label>
+            <textarea
+              v-model="reportForm.message"
+              rows="4"
+              class="report-textarea"
+              placeholder="告诉管理员这条帖子为什么需要处理"
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="report-footer">
+          <button @click="closeReportModal" type="button" class="composer-secondary">取消</button>
+          <button @click="submitReport" type="button" class="composer-submit" :disabled="reportSubmitting">
+            {{ reportSubmitting ? '提交中...' : '提交举报' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -311,6 +359,13 @@ const composerDraftSavedAt = ref('')
 const highlightedPostNumber = ref(null)
 const jumpPostNumber = ref(1)
 const currentVisiblePostNumber = ref(1)
+const showReportModal = ref(false)
+const reportSubmitting = ref(false)
+const reportingPost = ref(null)
+const reportForm = ref({
+  reason: '垃圾广告',
+  message: ''
+})
 let scrollFrame = null
 let nearUrlTimer = null
 const composerTools = [
@@ -896,6 +951,48 @@ function canDeletePost(post) {
   return authStore.user?.id === post.user.id || authStore.user?.is_staff
 }
 
+function canReportPost(post) {
+  if (!authStore.isAuthenticated) return false
+  if (!post?.user?.id) return false
+  if (post.user.id === authStore.user?.id) return false
+  return true
+}
+
+function openReportModal(post) {
+  reportingPost.value = post
+  reportForm.value = {
+    reason: '垃圾广告',
+    message: ''
+  }
+  showReportModal.value = true
+}
+
+function closeReportModal() {
+  showReportModal.value = false
+  reportSubmitting.value = false
+  reportingPost.value = null
+  reportForm.value = {
+    reason: '垃圾广告',
+    message: ''
+  }
+}
+
+async function submitReport() {
+  if (!reportingPost.value) return
+
+  reportSubmitting.value = true
+  try {
+    await api.post(`/posts/${reportingPost.value.id}/report`, reportForm.value)
+    closeReportModal()
+    alert('举报已提交，管理员会尽快处理。')
+  } catch (error) {
+    console.error('举报失败:', error)
+    alert('举报失败: ' + (error.response?.data?.error || error.message || '未知错误'))
+  } finally {
+    reportSubmitting.value = false
+  }
+}
+
 async function togglePin() {
   try {
     await api.post(`/discussions/${discussion.value.id}/pin`)
@@ -1179,6 +1276,11 @@ function formatDate(dateString) {
 .post-action.danger:hover {
   border-color: #e74c3c;
   color: #e74c3c;
+}
+
+.post-action.warning:hover {
+  border-color: #e67e22;
+  color: #e67e22;
 }
 
 .load-more {
@@ -1533,6 +1635,71 @@ function formatDate(dateString) {
 .composer-secondary:hover {
   background: #e8edf3;
   color: #425062;
+}
+
+.report-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.report-dialog {
+  width: min(520px, calc(100vw - 32px));
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.report-header,
+.report-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.report-header {
+  border-bottom: 1px solid #e3e8ed;
+}
+
+.report-footer {
+  justify-content: flex-end;
+  border-top: 1px solid #e3e8ed;
+}
+
+.report-header h3 {
+  margin: 0;
+}
+
+.report-close {
+  border: 0;
+  background: transparent;
+  color: #99a1ab;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.report-body {
+  padding: 20px;
+}
+
+.report-select,
+.report-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d7dee6;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.report-textarea {
+  resize: vertical;
 }
 
 .loading, .error {

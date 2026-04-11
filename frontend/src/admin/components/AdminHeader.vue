@@ -26,16 +26,14 @@
 <script setup>
 import { computed } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
-const router = useRouter()
 
 const forumUrl = computed(() => '/')
 
 function handleLogout() {
   authStore.logout()
-  router.push('/login')
+  window.location.href = '/login'
 }
 </script>
 

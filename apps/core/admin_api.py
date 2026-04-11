@@ -20,7 +20,8 @@ from django.core.mail import send_mail
 from apps.core.models import Setting
 from apps.users.models import User, Group, Permission
 from apps.discussions.models import Discussion
-from apps.posts.models import Post
+from apps.posts.models import Post, PostFlag
+from apps.posts.services import PostService
 from apps.tags.models import Tag
 
 router = Router()
@@ -212,6 +213,7 @@ def get_stats(request):
         "totalUsers": User.objects.count(),
         "totalDiscussions": Discussion.objects.count(),
         "totalPosts": Post.objects.count(),
+        "openFlags": PostFlag.objects.filter(status=PostFlag.STATUS_OPEN).count(),
     }
 
 
@@ -353,6 +355,40 @@ def update_group(request, group_id: int, payload: Dict[str, Any] = Body(...)):
     return serialize_group(group)
 
 
+def serialize_post_flag(flag: PostFlag) -> Dict[str, Any]:
+    return {
+        "id": flag.id,
+        "reason": flag.reason,
+        "message": flag.message,
+        "status": flag.status,
+        "created_at": flag.created_at,
+        "resolved_at": flag.resolved_at,
+        "resolution_note": flag.resolution_note,
+        "post": {
+            "id": flag.post.id,
+            "number": flag.post.number,
+            "content": flag.post.content,
+            "discussion_id": flag.post.discussion_id,
+            "discussion_title": flag.post.discussion.title if flag.post.discussion else "",
+            "author": {
+                "id": flag.post.user.id,
+                "username": flag.post.user.username,
+                "display_name": flag.post.user.display_name,
+            } if flag.post.user else None,
+        },
+        "user": {
+            "id": flag.user.id,
+            "username": flag.user.username,
+            "display_name": flag.user.display_name,
+        },
+        "resolved_by": {
+            "id": flag.resolved_by.id,
+            "username": flag.resolved_by.username,
+            "display_name": flag.resolved_by.display_name,
+        } if flag.resolved_by else None,
+    }
+
+
 # ==================== 权限管理 ====================
 
 @router.get("/permissions", auth=AuthBearer(), tags=["Admin"])
@@ -487,6 +523,37 @@ def update_admin_user(request, user_id: int, payload: Dict[str, Any] = Body(...)
 
     user.refresh_from_db()
     return serialize_admin_user(user, include_details=True)
+
+
+@router.get("/flags", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def list_post_flags(request, page: int = 1, limit: int = 20, status: str = PostFlag.STATUS_OPEN):
+    """获取帖子举报列表"""
+    flags, total = PostService.get_flag_list(status=status, page=page, limit=limit)
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "data": [serialize_post_flag(flag) for flag in flags],
+    }
+
+
+@router.post("/flags/{flag_id}/resolve", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def resolve_post_flag(request, flag_id: int, payload: Dict[str, Any] = Body(...)):
+    """处理帖子举报"""
+    try:
+        flag = PostService.resolve_flag(
+            flag_id=flag_id,
+            admin_user=request.auth,
+            status=payload.get("status", PostFlag.STATUS_RESOLVED),
+            resolution_note=payload.get("resolution_note", ""),
+        )
+        return serialize_post_flag(flag)
+    except PostFlag.DoesNotExist:
+        return admin_error("举报记录不存在", status=404)
+    except ValueError as e:
+        return admin_error(str(e), status=400)
 
 
 # ==================== 标签管理 ====================

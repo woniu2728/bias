@@ -1,8 +1,9 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import DashboardPage from './views/DashboardPage.vue'
 import BasicsPage from './views/BasicsPage.vue'
 import PermissionsPage from './views/PermissionsPage.vue'
 import UsersPage from './views/UsersPage.vue'
+import FlagsPage from './views/FlagsPage.vue'
 import AppearancePage from './views/AppearancePage.vue'
 import TagsPage from './views/TagsPage.vue'
 import MailPage from './views/MailPage.vue'
@@ -39,6 +40,11 @@ const routes = [
     component: UsersPage,
   },
   {
+    path: '/admin/flags',
+    name: 'admin-flags',
+    component: FlagsPage,
+  },
+  {
     path: '/admin/tags',
     name: 'admin-tags',
     component: TagsPage,
@@ -60,7 +66,9 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  // Admin SPA is served from admin.html, so hash history avoids broken deep links
+  // when navigating out to the forum and using the browser back button.
+  history: createWebHashHistory(),
   routes,
 })
 

@@ -5,11 +5,13 @@ from typing import Optional
 from ninja import Router
 from django.db.models import Count
 from django.core.exceptions import PermissionDenied
+from django.http import JsonResponse
 
-from apps.posts.models import Post, PostLike
+from apps.posts.models import Post, PostLike, PostFlag
 from apps.posts.schemas import (
     PostCreateSchema,
     PostUpdateSchema,
+    PostReportSchema,
     PostFilterSchema,
     PostOutSchema,
     PostListSchema,
@@ -54,6 +56,40 @@ def _serialize_post(post, user=None):
         "can_edit": PostService.can_edit_post(post, user) if user else False,
         "can_delete": PostService.can_delete_post(post, user) if user else False,
         "can_like": PostService.can_like_post(post, user) if user else False,
+    }
+
+
+def _serialize_flag(flag):
+    return {
+        "id": flag.id,
+        "reason": flag.reason,
+        "message": flag.message,
+        "status": flag.status,
+        "created_at": flag.created_at,
+        "resolved_at": flag.resolved_at,
+        "resolution_note": flag.resolution_note,
+        "post": {
+            "id": flag.post.id,
+            "number": flag.post.number,
+            "content": flag.post.content,
+            "discussion_id": flag.post.discussion_id,
+            "discussion_title": flag.post.discussion.title if flag.post.discussion else "",
+            "author": {
+                "id": flag.post.user.id,
+                "username": flag.post.user.username,
+                "display_name": flag.post.user.display_name,
+            } if flag.post.user else None,
+        },
+        "user": {
+            "id": flag.user.id,
+            "username": flag.user.username,
+            "display_name": flag.user.display_name,
+        },
+        "resolved_by": {
+            "id": flag.resolved_by.id,
+            "username": flag.resolved_by.username,
+            "display_name": flag.resolved_by.display_name,
+        } if flag.resolved_by else None,
     }
 
 
@@ -311,3 +347,22 @@ def unlike_post(request, post_id: int):
             {"error": str(e)},
             status=400
         )
+
+
+@router.post("/posts/{post_id}/report", auth=AuthBearer(), tags=["Posts"])
+def report_post(request, post_id: int, payload: PostReportSchema):
+    """举报帖子"""
+    try:
+        flag = PostService.report_post(
+            post_id=post_id,
+            user=request.auth,
+            reason=payload.reason,
+            message=payload.message,
+        )
+        return _serialize_flag(flag)
+    except Post.DoesNotExist:
+        return JsonResponse({"error": "帖子不存在"}, status=404)
+    except PermissionDenied as e:
+        return JsonResponse({"error": str(e)}, status=403)
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)

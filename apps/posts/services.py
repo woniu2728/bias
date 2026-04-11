@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models import Q, F, Count, Exists, OuterRef
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
-from apps.posts.models import Post, PostLike, PostMentionsUser
+from apps.posts.models import Post, PostLike, PostMentionsUser, PostFlag
 from apps.discussions.models import Discussion
 from apps.discussions.models import DiscussionUser
 from apps.users.models import User
@@ -314,6 +314,66 @@ class PostService:
         NotificationService.notify_post_liked(post_id=post.id, from_user=user)
 
         return True
+
+    @staticmethod
+    def report_post(post_id: int, user: User, reason: str, message: str = "") -> PostFlag:
+        """举报帖子"""
+        post = Post.objects.select_related("user", "discussion").get(id=post_id)
+
+        if not user or not user.is_authenticated:
+            raise PermissionDenied("请先登录")
+        if post.user_id == user.id:
+            raise ValueError("不能举报自己的帖子")
+        if post.hidden_at is not None:
+            raise ValueError("该帖子已被隐藏")
+
+        try:
+            existing = PostFlag.objects.get(
+                post=post,
+                user=user,
+                status=PostFlag.STATUS_OPEN,
+            )
+            existing.reason = reason
+            existing.message = message
+            existing.save(update_fields=["reason", "message"])
+            return existing
+        except PostFlag.DoesNotExist:
+            return PostFlag.objects.create(
+                post=post,
+                user=user,
+                reason=reason,
+                message=message,
+            )
+
+    @staticmethod
+    def get_flag_list(status: Optional[str] = None, page: int = 1, limit: int = 20):
+        queryset = PostFlag.objects.select_related(
+            "post",
+            "post__discussion",
+            "post__user",
+            "user",
+            "resolved_by",
+        )
+
+        if status:
+            queryset = queryset.filter(status=status)
+
+        total = queryset.count()
+        offset = (page - 1) * limit
+        return list(queryset[offset:offset + limit]), total
+
+    @staticmethod
+    def resolve_flag(flag_id: int, admin_user: User, status: str, resolution_note: str = "") -> PostFlag:
+        if status not in {PostFlag.STATUS_RESOLVED, PostFlag.STATUS_IGNORED}:
+            raise ValueError("无效的处理状态")
+
+        flag = PostFlag.objects.select_related("post", "post__discussion", "user").get(id=flag_id)
+        flag.status = status
+        flag.resolution_note = resolution_note
+        flag.resolved_by = admin_user
+        flag.resolved_at = timezone.now()
+        flag.save(update_fields=["status", "resolution_note", "resolved_by", "resolved_at"])
+        return flag
 
     @staticmethod
     def unlike_post(post_id: int, user: User) -> bool:
