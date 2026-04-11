@@ -139,7 +139,13 @@
             <div class="discussion-list-item-content">
               <div class="discussion-list-item-author">
                 <router-link :to="buildUserPath(discussion.user)" class="avatar-link">
-                  <div class="avatar" :style="{ backgroundColor: getUserColor(discussion.user) }">
+                  <img
+                    v-if="discussion.user?.avatar_url"
+                    :src="discussion.user.avatar_url"
+                    :alt="discussion.user?.username"
+                    class="avatar avatar-image"
+                  />
+                  <div v-else class="avatar" :style="{ backgroundColor: getUserColor(discussion.user) }">
                     {{ discussion.user?.username?.charAt(0).toUpperCase() }}
                   </div>
                 </router-link>
@@ -680,6 +686,10 @@ function getUserColor(user) {
   color: white;
   font-size: 14px;
   font-weight: 600;
+}
+
+.avatar-image {
+  object-fit: cover;
 }
 
 .discussion-list-item-badges {

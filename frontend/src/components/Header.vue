@@ -75,7 +75,13 @@
 
           <!-- 用户菜单 -->
           <div class="user-dropdown" @click="toggleUserMenu">
-            <div class="avatar">
+            <img
+              v-if="authStore.user?.avatar_url"
+              :src="authStore.user.avatar_url"
+              :alt="authStore.user?.username"
+              class="avatar avatar-image"
+            />
+            <div v-else class="avatar">
               {{ authStore.user?.username.charAt(0).toUpperCase() }}
             </div>
             <span class="username">{{ authStore.user?.username }}</span>
@@ -633,6 +639,10 @@ onBeforeUnmount(() => {
   justify-content: center;
   font-size: 12px;
   font-weight: 600;
+}
+
+.avatar-image {
+  object-fit: cover;
 }
 
 .username {

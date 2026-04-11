@@ -9,7 +9,29 @@
           <div class="container">
             <div class="user-card">
               <div class="user-avatar">
-                <div class="avatar-large">
+                <label
+                  v-if="isOwnProfile"
+                  class="avatar-uploader"
+                  :class="{ disabled: avatarUploading }"
+                >
+                  <input
+                    ref="avatarInput"
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    class="avatar-input"
+                    @change="handleAvatarSelected"
+                  />
+                  <span class="avatar-upload-badge">
+                    {{ avatarUploading ? '上传中...' : '更换头像' }}
+                  </span>
+                </label>
+                <img
+                  v-if="user.avatar_url"
+                  :src="user.avatar_url"
+                  :alt="user.username"
+                  class="avatar-large avatar-image"
+                />
+                <div v-else class="avatar-large">
                   {{ user.username.charAt(0).toUpperCase() }}
                 </div>
               </div>
@@ -203,6 +225,8 @@ const loadingPosts = ref(false)
 const activeTab = ref('discussions')
 const showEditModal = ref(false)
 const saving = ref(false)
+const avatarUploading = ref(false)
+const avatarInput = ref(null)
 
 const editForm = ref({
   display_name: '',
@@ -315,6 +339,37 @@ async function saveProfile() {
   }
 }
 
+async function handleAvatarSelected(event) {
+  const file = event.target.files?.[0]
+  if (!file || !user.value) return
+
+  avatarUploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('avatar', file)
+
+    const updatedUser = await api.post(`/users/${user.value.id}/avatar`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+
+    user.value = updatedUser
+    editForm.value = {
+      display_name: updatedUser.display_name || '',
+      bio: updatedUser.bio || '',
+    }
+    await authStore.fetchUser()
+  } catch (error) {
+    alert('头像上传失败: ' + (error.response?.data?.error || error.message || '未知错误'))
+  } finally {
+    avatarUploading.value = false
+    if (avatarInput.value) {
+      avatarInput.value.value = ''
+    }
+  }
+}
+
 function formatDate(dateString) {
   return formatRelativeTime(dateString)
 }
@@ -374,6 +429,7 @@ function formatLastSeen(dateString) {
 
 .user-avatar {
   flex-shrink: 0;
+  position: relative;
 }
 
 .avatar-large {
@@ -390,6 +446,41 @@ function formatLastSeen(dateString) {
   font-weight: 600;
   color: white;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.avatar-image {
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.avatar-uploader {
+  position: absolute;
+  right: -8px;
+  bottom: -6px;
+  z-index: 2;
+  cursor: pointer;
+}
+
+.avatar-uploader.disabled {
+  cursor: default;
+}
+
+.avatar-input {
+  display: none;
+}
+
+.avatar-upload-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 76px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(47, 60, 77, 0.88);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(21, 32, 43, 0.2);
 }
 
 .user-info-wrapper {

@@ -7,9 +7,11 @@ from ninja_jwt.controller import NinjaJWTDefaultController
 from ninja_jwt.tokens import RefreshToken
 from django.shortcuts import get_object_or_404
 from django.conf import settings
+from django.http import JsonResponse
 from typing import List
 
 from .models import User
+from apps.core.file_service import FileUploadService
 from .schemas import (
     UserRegisterSchema,
     UserLoginSchema,
@@ -248,18 +250,28 @@ def change_password(request, user_id: int, payload: PasswordChangeSchema):
         )
 
 
-@router.post("/{user_id}/avatar", auth=AuthBearer(), tags=["Users"])
+@router.post("/{user_id}/avatar", response=UserOutSchema, auth=AuthBearer(), tags=["Users"])
 def upload_avatar(request, user_id: int):
     """上传头像"""
     user = get_object_or_404(User, id=user_id)
 
     # 检查权限
     if request.auth.id != user.id:
-        return router.create_response(
-            request,
-            {"error": "无权限"},
-            status=403,
-        )
+        return JsonResponse({"error": "无权限"}, status=403)
 
-    # TODO: 实现文件上传逻辑
-    return {"message": "头像上传功能待实现"}
+    avatar = request.FILES.get("avatar")
+    if not avatar:
+        return JsonResponse({"error": "请选择要上传的头像"}, status=400)
+
+    try:
+        previous_avatar = user.avatar_url
+        avatar_url, _ = FileUploadService.upload_avatar(avatar, user.id)
+        user.avatar_url = avatar_url
+        user.save(update_fields=["avatar_url"])
+
+        if previous_avatar and previous_avatar != avatar_url:
+            FileUploadService.delete_file(previous_avatar)
+
+        return user
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
