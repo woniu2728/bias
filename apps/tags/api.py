@@ -15,6 +15,7 @@ from apps.tags.schemas import (
     TagListSchema,
 )
 from apps.tags.services import TagService
+from apps.core.auth import AuthBearer, get_optional_user
 
 router = Router()
 
@@ -62,20 +63,13 @@ def _serialize_tag(tag, include_children=False):
     }
 
 
-@router.post("/tags", response=TagOutSchema, tags=["Tags"])
+@router.post("/tags", response=TagOutSchema, auth=AuthBearer(), tags=["Tags"])
 def create_tag(request, payload: TagCreateSchema):
     """
     创建标签
 
     需要管理员权限
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
     try:
         tag = TagService.create_tag(
             name=payload.name,
@@ -88,7 +82,7 @@ def create_tag(request, payload: TagCreateSchema):
             parent_id=payload.parent_id,
             is_hidden=payload.is_hidden or False,
             is_restricted=payload.is_restricted or False,
-            user=request.user,
+            user=request.auth,
         )
 
         # 加载子标签
@@ -124,7 +118,8 @@ def list_tags(
     - include_hidden: 是否包含隐藏标签（需要管理员权限）
     """
     # 只有管理员可以查看隐藏标签
-    if include_hidden and (not request.user.is_authenticated or not request.user.is_staff):
+    user = get_optional_user(request)
+    if include_hidden and (not user or not user.is_staff):
         include_hidden = False
 
     queryset = Tag.objects.select_related('last_posted_discussion').prefetch_related('children').all()
@@ -195,24 +190,17 @@ def get_tag_by_slug(request, slug: str):
     return _serialize_tag(tag, include_children=True)
 
 
-@router.patch("/tags/{tag_id}", response=TagOutSchema, tags=["Tags"])
+@router.patch("/tags/{tag_id}", response=TagOutSchema, auth=AuthBearer(), tags=["Tags"])
 def update_tag(request, tag_id: int, payload: TagUpdateSchema):
     """
     更新标签
 
     需要管理员权限
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
     try:
         tag = TagService.update_tag(
             tag_id=tag_id,
-            user=request.user,
+            user=request.auth,
             name=payload.name,
             slug=payload.slug,
             description=payload.description,
@@ -247,22 +235,15 @@ def update_tag(request, tag_id: int, payload: TagUpdateSchema):
         )
 
 
-@router.delete("/tags/{tag_id}", tags=["Tags"])
+@router.delete("/tags/{tag_id}", auth=AuthBearer(), tags=["Tags"])
 def delete_tag(request, tag_id: int):
     """
     删除标签
 
     需要管理员权限
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
     try:
-        TagService.delete_tag(tag_id, request.user)
+        TagService.delete_tag(tag_id, request.auth)
         return {"message": "标签已删除"}
     except Tag.DoesNotExist:
         return router.create_response(

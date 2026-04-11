@@ -15,6 +15,7 @@ from apps.posts.schemas import (
     PostListSchema,
 )
 from apps.posts.services import PostService
+from apps.core.auth import AuthBearer, get_optional_user
 
 router = Router()
 
@@ -73,7 +74,7 @@ def list_all_posts(
     - page: 页码
     - limit: 每页数量
     """
-    user = request.user if request.user.is_authenticated else None
+    user = get_optional_user(request)
 
     queryset = Post.objects.select_related(
         "discussion",
@@ -115,29 +116,22 @@ def list_all_posts(
     }
 
 
-@router.post("/discussions/{discussion_id}/posts", response=PostOutSchema, tags=["Posts"])
+@router.post("/discussions/{discussion_id}/posts", response=PostOutSchema, auth=AuthBearer(), tags=["Posts"])
 def create_post(request, discussion_id: int, payload: PostCreateSchema):
     """
     创建帖子（回复讨论）
 
     需要认证
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
     try:
         post = PostService.create_post(
             discussion_id=discussion_id,
             content=payload.content,
-            user=request.user,
+            user=request.auth,
         )
         post.like_count = 0
         post.is_liked = False
-        return _serialize_post(post, request.user)
+        return _serialize_post(post, request.auth)
     except ValueError as e:
         return router.create_response(
             request,
@@ -160,7 +154,7 @@ def list_posts(
     - page: 页码
     - limit: 每页数量
     """
-    user = request.user if request.user.is_authenticated else None
+    user = get_optional_user(request)
     posts, total = PostService.get_post_list(
         discussion_id=discussion_id,
         page=page,
@@ -181,7 +175,7 @@ def get_post(request, post_id: int):
     """
     获取帖子详情
     """
-    user = request.user if request.user.is_authenticated else None
+    user = get_optional_user(request)
     post = PostService.get_post_by_id(post_id, user)
 
     if not post:
@@ -194,31 +188,24 @@ def get_post(request, post_id: int):
     return _serialize_post(post, user)
 
 
-@router.patch("/posts/{post_id}", response=PostOutSchema, tags=["Posts"])
+@router.patch("/posts/{post_id}", response=PostOutSchema, auth=AuthBearer(), tags=["Posts"])
 def update_post(request, post_id: int, payload: PostUpdateSchema):
     """
     更新帖子
 
     需要认证和权限
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
     try:
         post = PostService.update_post(
             post_id=post_id,
-            user=request.user,
+            user=request.auth,
             content=payload.content,
         )
 
         # 重新获取帖子数据
-        post = PostService.get_post_by_id(post.id, request.user)
+        post = PostService.get_post_by_id(post.id, request.auth)
 
-        return _serialize_post(post, request.user)
+        return _serialize_post(post, request.auth)
     except Post.DoesNotExist:
         return router.create_response(
             request,
@@ -239,22 +226,15 @@ def update_post(request, post_id: int, payload: PostUpdateSchema):
         )
 
 
-@router.delete("/posts/{post_id}", tags=["Posts"])
+@router.delete("/posts/{post_id}", auth=AuthBearer(), tags=["Posts"])
 def delete_post(request, post_id: int):
     """
     删除帖子
 
     需要认证和权限
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
     try:
-        PostService.delete_post(post_id, request.user)
+        PostService.delete_post(post_id, request.auth)
         return {"message": "帖子已删除"}
     except Post.DoesNotExist:
         return router.create_response(
@@ -276,22 +256,15 @@ def delete_post(request, post_id: int):
         )
 
 
-@router.post("/posts/{post_id}/like", tags=["Posts"])
+@router.post("/posts/{post_id}/like", auth=AuthBearer(), tags=["Posts"])
 def like_post(request, post_id: int):
     """
     点赞帖子
 
     需要认证
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
     try:
-        PostService.like_post(post_id, request.user)
+        PostService.like_post(post_id, request.auth)
         return {"message": "点赞成功"}
     except Post.DoesNotExist:
         return router.create_response(
@@ -307,22 +280,15 @@ def like_post(request, post_id: int):
         )
 
 
-@router.delete("/posts/{post_id}/like", tags=["Posts"])
+@router.delete("/posts/{post_id}/like", auth=AuthBearer(), tags=["Posts"])
 def unlike_post(request, post_id: int):
     """
     取消点赞
 
     需要认证
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
     try:
-        PostService.unlike_post(post_id, request.user)
+        PostService.unlike_post(post_id, request.auth)
         return {"message": "取消点赞成功"}
     except Post.DoesNotExist:
         return router.create_response(

@@ -15,10 +15,14 @@ export function normalizeTag(tag = {}) {
 }
 
 export function normalizeDiscussion(discussion = {}) {
+  const unreadCount = Number(discussion.unread_count || 0)
   return {
     ...discussion,
     is_sticky: Boolean(discussion.is_sticky ?? discussion.is_pinned),
     is_subscribed: Boolean(discussion.is_subscribed),
+    is_unread: Boolean(discussion.is_unread || unreadCount > 0),
+    unread_count: unreadCount,
+    last_read_post_number: Number(discussion.last_read_post_number || 0),
     tags: unwrapList(discussion.tags).map(normalizeTag)
   }
 }

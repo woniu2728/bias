@@ -50,6 +50,9 @@ DELETE /api/discussions/{id}        # 删除讨论
 POST   /api/discussions/{id}/pin    # 切换置顶
 POST   /api/discussions/{id}/lock   # 切换锁定
 POST   /api/discussions/{id}/hide   # 切换隐藏
+POST   /api/discussions/{id}/subscribe # 关注讨论
+DELETE /api/discussions/{id}/subscribe # 取消关注讨论
+POST   /api/discussions/read-all    # 全部标记为已读
 ```
 
 ### 帖子相关

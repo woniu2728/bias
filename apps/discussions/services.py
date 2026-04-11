@@ -1,11 +1,11 @@
 """
 讨论系统业务逻辑层
 """
-from datetime import datetime
 from typing import Optional, List, Tuple
 from django.db import transaction
 from django.db.models import Q, F, Count
 from django.core.exceptions import PermissionDenied
+from django.utils import timezone
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post
 from apps.users.models import User
@@ -39,7 +39,7 @@ class DiscussionService:
             discussion = Discussion.objects.create(
                 title=title,
                 user=user,
-                last_posted_at=datetime.now(),
+                last_posted_at=timezone.now(),
                 last_posted_user=user,
             )
 
@@ -75,7 +75,7 @@ class DiscussionService:
             DiscussionUser.objects.create(
                 discussion=discussion,
                 user=user,
-                last_read_at=datetime.now(),
+                last_read_at=timezone.now(),
                 last_read_post_number=1,
                 is_subscribed=user.preferences.get('follow_after_create', False),
             )
@@ -156,20 +156,7 @@ class DiscussionService:
         offset = (page - 1) * limit
         discussions = list(queryset[offset:offset + limit])
 
-        if user and user.is_authenticated and discussions:
-            discussion_ids = [discussion.id for discussion in discussions]
-            subscribed_ids = set(
-                DiscussionUser.objects.filter(
-                    user=user,
-                    discussion_id__in=discussion_ids,
-                    is_subscribed=True,
-                ).values_list('discussion_id', flat=True)
-            )
-            for discussion in discussions:
-                discussion.is_subscribed = discussion.id in subscribed_ids
-        else:
-            for discussion in discussions:
-                discussion.is_subscribed = False
+        DiscussionService._attach_user_read_state(discussions, user)
 
         return discussions, total
 
@@ -199,17 +186,74 @@ class DiscussionService:
                     discussion=discussion,
                     user=user,
                     defaults={
-                        'last_read_at': datetime.now(),
+                        'last_read_at': timezone.now(),
                         'last_read_post_number': discussion.last_post_number or 0,
                     }
                 )
                 discussion.is_subscribed = state.is_subscribed
+                discussion.last_read_at = state.last_read_at
+                discussion.last_read_post_number = state.last_read_post_number
+                discussion.unread_count = 0
+                discussion.is_unread = False
             else:
                 discussion.is_subscribed = False
+                discussion.last_read_at = None
+                discussion.last_read_post_number = 0
+                discussion.unread_count = 0
+                discussion.is_unread = False
 
             return discussion
         except Discussion.DoesNotExist:
             return None
+
+    @staticmethod
+    def _attach_user_read_state(discussions: List[Discussion], user: Optional[User]) -> None:
+        if not discussions:
+            return
+
+        if not user or not user.is_authenticated:
+            for discussion in discussions:
+                discussion.is_subscribed = False
+                discussion.last_read_at = None
+                discussion.last_read_post_number = 0
+                discussion.unread_count = 0
+                discussion.is_unread = False
+            return
+
+        states = {
+            state.discussion_id: state
+            for state in DiscussionUser.objects.filter(
+                user=user,
+                discussion_id__in=[discussion.id for discussion in discussions],
+            )
+        }
+        marked_all_as_read_at = getattr(user, 'marked_all_as_read_at', None)
+
+        for discussion in discussions:
+            state = states.get(discussion.id)
+            last_read_at = state.last_read_at if state else None
+            last_read_post_number = state.last_read_post_number if state else 0
+
+            if (
+                marked_all_as_read_at
+                and discussion.last_posted_at
+                and discussion.last_posted_at <= marked_all_as_read_at
+            ):
+                last_read_at = marked_all_as_read_at
+                last_read_post_number = max(last_read_post_number, discussion.last_post_number or 0)
+
+            discussion.is_subscribed = bool(state and state.is_subscribed)
+            discussion.last_read_at = last_read_at
+            discussion.last_read_post_number = last_read_post_number
+            discussion.unread_count = max((discussion.last_post_number or 0) - last_read_post_number, 0)
+            discussion.is_unread = discussion.unread_count > 0
+
+    @staticmethod
+    def mark_all_as_read(user: User):
+        now = timezone.now()
+        user.marked_all_as_read_at = now
+        user.save(update_fields=['marked_all_as_read_at'])
+        return now
 
     @staticmethod
     def get_subscription_state(discussion: Discussion, user: Optional[User]) -> bool:
@@ -230,7 +274,7 @@ class DiscussionService:
             discussion=discussion,
             user=user,
             defaults={
-                'last_read_at': datetime.now(),
+                'last_read_at': timezone.now(),
                 'last_read_post_number': discussion.last_post_number or 0,
             }
         )
@@ -247,7 +291,7 @@ class DiscussionService:
             discussion=discussion,
             user=user,
             defaults={
-                'last_read_at': datetime.now(),
+                'last_read_at': timezone.now(),
                 'last_read_post_number': discussion.last_post_number or 0,
             }
         )
@@ -307,7 +351,7 @@ class DiscussionService:
                 if not user.is_staff:
                     raise PermissionDenied("没有权限隐藏/显示讨论")
                 if is_hidden:
-                    discussion.hidden_at = datetime.now()
+                    discussion.hidden_at = timezone.now()
                     discussion.hidden_user = user
                 else:
                     discussion.hidden_at = None

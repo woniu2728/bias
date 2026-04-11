@@ -103,6 +103,16 @@
           </ul>
 
           <ul class="index-toolbar-action">
+            <li v-if="authStore.isAuthenticated">
+              <button
+                class="btn-mark-read"
+                @click="markAllAsRead"
+                :disabled="markingAllRead"
+                title="全部标记为已读"
+              >
+                <i class="fas fa-check-double"></i>
+              </button>
+            </li>
             <li>
               <button class="btn-refresh" @click="refreshPageData" title="刷新">
                 <i class="fas fa-sync-alt"></i>
@@ -124,7 +134,7 @@
             v-for="discussion in discussions"
             :key="discussion.id"
             class="discussion-list-item"
-            :class="{ 'is-sticky': discussion.is_sticky }"
+            :class="{ 'is-sticky': discussion.is_sticky, 'is-unread': discussion.is_unread }"
           >
             <div class="discussion-list-item-content">
               <div class="discussion-list-item-author">
@@ -148,6 +158,7 @@
                   <router-link :to="buildDiscussionPath(discussion)" class="discussion-list-item-title">
                     {{ discussion.title }}
                   </router-link>
+                  <span v-if="discussion.is_unread" class="unread-pill">{{ discussion.unread_count }} 条未读</span>
                   <span v-if="discussion.is_subscribed" class="subscription-pill">已关注</span>
                 </div>
 
@@ -223,6 +234,7 @@ const loadingMore = ref(false)
 const sortBy = ref('latest')
 const currentPage = ref(1)
 const total = ref(0)
+const markingAllRead = ref(false)
 
 const currentTagSlug = computed(() => route.params.slug || null)
 const searchQuery = computed(() => route.query.search?.toString().trim() || '')
@@ -328,6 +340,27 @@ async function loadMore() {
     await loadDiscussions(true)
   } finally {
     loadingMore.value = false
+  }
+}
+
+async function markAllAsRead() {
+  if (!authStore.isAuthenticated || markingAllRead.value) return
+
+  markingAllRead.value = true
+  try {
+    const response = await api.post('/discussions/read-all')
+    discussions.value = discussions.value.map(discussion => ({
+      ...discussion,
+      is_unread: false,
+      unread_count: 0,
+      last_read_post_number: discussion.last_post_number || discussion.last_read_post_number || 0,
+      last_read_at: response.marked_all_as_read_at || discussion.last_read_at
+    }))
+  } catch (error) {
+    console.error('标记已读失败:', error)
+    alert('标记已读失败，请稍后重试')
+  } finally {
+    markingAllRead.value = false
   }
 }
 
@@ -560,7 +593,8 @@ function getUserColor(user) {
   color: white;
 }
 
-.btn-refresh {
+.btn-refresh,
+.btn-mark-read {
   background: none;
   border: none;
   color: #999;
@@ -571,9 +605,15 @@ function getUserColor(user) {
   transition: all 0.15s;
 }
 
-.btn-refresh:hover {
+.btn-refresh:hover,
+.btn-mark-read:hover {
   background: #f5f8fa;
   color: #555;
+}
+
+.btn-mark-read:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ========== 讨论列表 ========== */
@@ -598,6 +638,19 @@ function getUserColor(user) {
 
 .discussion-list-item.is-sticky:hover {
   background: #fff8e1;
+}
+
+.discussion-list-item.is-unread {
+  background: #f8fbff;
+}
+
+.discussion-list-item.is-unread:hover {
+  background: #f1f7fd;
+}
+
+.discussion-list-item.is-unread .discussion-list-item-title {
+  font-weight: 600;
+  color: #2f3c4d;
 }
 
 .discussion-list-item-content {
@@ -728,6 +781,18 @@ function getUserColor(user) {
   border-radius: 999px;
   background: #edf4fb;
   color: #4d698e;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.unread-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #4d698e;
+  color: white;
   font-size: 11px;
   font-weight: 600;
   flex-shrink: 0;

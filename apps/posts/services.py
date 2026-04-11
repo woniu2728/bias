@@ -1,11 +1,11 @@
 """
 帖子系统业务逻辑层
 """
-from datetime import datetime
 from typing import Optional, List, Tuple
 from django.db import transaction
 from django.db.models import Q, F, Count, Exists, OuterRef
 from django.core.exceptions import PermissionDenied
+from django.utils import timezone
 from apps.posts.models import Post, PostLike, PostMentionsUser
 from apps.discussions.models import Discussion
 from apps.discussions.models import DiscussionUser
@@ -61,7 +61,7 @@ class PostService:
 
             # 更新讨论统计
             discussion.comment_count = F('comment_count') + 1
-            discussion.last_posted_at = datetime.now()
+            discussion.last_posted_at = timezone.now()
             discussion.last_posted_user = user
             discussion.last_post_id = post.id
             discussion.last_post_number = post.number
@@ -77,7 +77,7 @@ class PostService:
                     user=user,
                     defaults={
                         'is_subscribed': True,
-                        'last_read_at': datetime.now(),
+                        'last_read_at': timezone.now(),
                         'last_read_post_number': post.number,
                     }
                 )
@@ -211,7 +211,7 @@ class PostService:
         with transaction.atomic():
             post.content = content
             post.content_html = PostService._render_markdown(content)
-            post.edited_at = datetime.now()
+            post.edited_at = timezone.now()
             post.edited_user = user
             post.save()
 

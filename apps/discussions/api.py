@@ -17,29 +17,23 @@ from apps.discussions.schemas import (
 )
 from apps.discussions.services import DiscussionService
 from apps.posts.models import Post
+from apps.core.auth import AuthBearer, get_optional_user
 
 router = Router()
 
 
-@router.post("/", response=DiscussionOutSchema, tags=["Discussions"])
+@router.post("/", response=DiscussionOutSchema, auth=AuthBearer(), tags=["Discussions"])
 def create_discussion(request, payload: DiscussionCreateSchema):
     """
     创建讨论
 
     需要认证
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
     try:
         discussion = DiscussionService.create_discussion(
             title=payload.title,
             content=payload.content,
-            user=request.user,
+            user=request.auth,
             tag_ids=payload.tag_ids,
         )
         return discussion
@@ -73,7 +67,7 @@ def list_discussions(
     - page: 页码
     - limit: 每页数量
     """
-    user = request.user if request.user.is_authenticated else None
+    user = get_optional_user(request)
 
     discussions, total = DiscussionService.get_discussion_list(
         q=q,
@@ -107,12 +101,26 @@ def list_discussions(
     }
 
 
+@router.post("/read-all", auth=AuthBearer(), tags=["Discussions"])
+def mark_all_discussions_as_read(request):
+    """
+    将当前用户可见的讨论标记为已读
+
+    需要认证
+    """
+    marked_at = DiscussionService.mark_all_as_read(request.auth)
+    return {
+        "message": "已全部标记为已读",
+        "marked_all_as_read_at": marked_at,
+    }
+
+
 @router.get("/{discussion_id}", response=DiscussionDetailSchema, tags=["Discussions"])
 def get_discussion(request, discussion_id: int):
     """
     获取讨论详情
     """
-    user = request.user if request.user.is_authenticated else None
+    user = get_optional_user(request)
     discussion = DiscussionService.get_discussion_by_id(discussion_id, user)
 
     if not discussion:
@@ -172,24 +180,17 @@ def get_discussion(request, discussion_id: int):
     return response_data
 
 
-@router.patch("/{discussion_id}", response=DiscussionOutSchema, tags=["Discussions"])
+@router.patch("/{discussion_id}", response=DiscussionOutSchema, auth=AuthBearer(), tags=["Discussions"])
 def update_discussion(request, discussion_id: int, payload: DiscussionUpdateSchema):
     """
     更新讨论
 
     需要认证和权限
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
     try:
         discussion = DiscussionService.update_discussion(
             discussion_id=discussion_id,
-            user=request.user,
+            user=request.auth,
             title=payload.title,
             is_locked=payload.is_locked,
             is_sticky=payload.is_sticky,
@@ -216,22 +217,15 @@ def update_discussion(request, discussion_id: int, payload: DiscussionUpdateSche
         )
 
 
-@router.delete("/{discussion_id}", tags=["Discussions"])
+@router.delete("/{discussion_id}", auth=AuthBearer(), tags=["Discussions"])
 def delete_discussion(request, discussion_id: int):
     """
     删除讨论
 
     需要认证和权限（仅管理员）
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
     try:
-        DiscussionService.delete_discussion(discussion_id, request.user)
+        DiscussionService.delete_discussion(discussion_id, request.auth)
         return {"message": "讨论已删除"}
     except Discussion.DoesNotExist:
         return router.create_response(
@@ -247,21 +241,14 @@ def delete_discussion(request, discussion_id: int):
         )
 
 
-@router.post("/{discussion_id}/pin", tags=["Discussions"])
+@router.post("/{discussion_id}/pin", auth=AuthBearer(), tags=["Discussions"])
 def toggle_pin_discussion(request, discussion_id: int):
     """
     切换讨论置顶状态
 
     需要管理员权限
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
-    if not request.user.is_staff:
+    if not request.auth.is_staff:
         return router.create_response(
             request,
             {"error": "需要管理员权限"},
@@ -281,21 +268,14 @@ def toggle_pin_discussion(request, discussion_id: int):
         )
 
 
-@router.post("/{discussion_id}/lock", tags=["Discussions"])
+@router.post("/{discussion_id}/lock", auth=AuthBearer(), tags=["Discussions"])
 def toggle_lock_discussion(request, discussion_id: int):
     """
     切换讨论锁定状态
 
     需要管理员权限
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
-    if not request.user.is_staff:
+    if not request.auth.is_staff:
         return router.create_response(
             request,
             {"error": "需要管理员权限"},
@@ -315,21 +295,14 @@ def toggle_lock_discussion(request, discussion_id: int):
         )
 
 
-@router.post("/{discussion_id}/hide", tags=["Discussions"])
+@router.post("/{discussion_id}/hide", auth=AuthBearer(), tags=["Discussions"])
 def toggle_hide_discussion(request, discussion_id: int):
     """
     切换讨论隐藏状态
 
     需要管理员权限
     """
-    if not request.user.is_authenticated:
-        return router.create_response(
-            request,
-            {"error": "需要登录"},
-            status=401
-        )
-
-    if not request.user.is_staff:
+    if not request.auth.is_staff:
         return router.create_response(
             request,
             {"error": "需要管理员权限"},
@@ -349,25 +322,19 @@ def toggle_hide_discussion(request, discussion_id: int):
         )
 
 
-@router.post("/{discussion_id}/subscribe", tags=["Discussions"])
+@router.post("/{discussion_id}/subscribe", auth=AuthBearer(), tags=["Discussions"])
 def subscribe_discussion(request, discussion_id: int):
-    if not request.user.is_authenticated:
-        return router.create_response(request, {"error": "需要登录"}, status=401)
-
     try:
-        DiscussionService.subscribe_discussion(discussion_id, request.user)
+        DiscussionService.subscribe_discussion(discussion_id, request.auth)
         return {"message": "已关注讨论", "is_subscribed": True}
     except Discussion.DoesNotExist:
         return router.create_response(request, {"error": "讨论不存在"}, status=404)
 
 
-@router.delete("/{discussion_id}/subscribe", tags=["Discussions"])
+@router.delete("/{discussion_id}/subscribe", auth=AuthBearer(), tags=["Discussions"])
 def unsubscribe_discussion(request, discussion_id: int):
-    if not request.user.is_authenticated:
-        return router.create_response(request, {"error": "需要登录"}, status=401)
-
     try:
-        DiscussionService.unsubscribe_discussion(discussion_id, request.user)
+        DiscussionService.unsubscribe_discussion(discussion_id, request.auth)
         return {"message": "已取消关注", "is_subscribed": False}
     except Discussion.DoesNotExist:
         return router.create_response(request, {"error": "讨论不存在"}, status=404)

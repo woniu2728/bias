@@ -67,6 +67,10 @@ class DiscussionOutSchema(BaseModel):
     is_sticky: bool
     is_hidden: bool
     is_subscribed: bool = False
+    is_unread: bool = False
+    unread_count: int = 0
+    last_read_at: Optional[datetime] = None
+    last_read_post_number: int = 0
     hidden_at: Optional[datetime] = None
     tags: List[dict] = []
 
