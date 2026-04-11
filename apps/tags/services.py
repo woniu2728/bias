@@ -330,3 +330,27 @@ class TagService:
         ).order_by('-discussion_count', '-last_posted_at')[:limit]
 
         return list(tags)
+
+    @staticmethod
+    def refresh_tag_stats(tag_ids: Optional[List[int]] = None) -> None:
+        """
+        重新计算标签讨论数和最后发帖讨论。
+
+        用于修复历史数据，也用于讨论创建、隐藏、删除后的统计同步。
+        """
+        queryset = Tag.objects.all()
+        if tag_ids is not None:
+            queryset = queryset.filter(id__in=tag_ids)
+
+        for tag in queryset:
+            discussion_links = DiscussionTag.objects.filter(
+                tag=tag,
+                discussion__hidden_at__isnull=True,
+            ).select_related('discussion').order_by('-discussion__last_posted_at', '-discussion__id')
+
+            latest_link = discussion_links.first()
+            Tag.objects.filter(id=tag.id).update(
+                discussion_count=discussion_links.count(),
+                last_posted_at=latest_link.discussion.last_posted_at if latest_link else None,
+                last_posted_discussion=latest_link.discussion if latest_link else None,
+            )

@@ -122,6 +122,8 @@ def list_tags(
     if include_hidden and (not user or not user.is_staff):
         include_hidden = False
 
+    TagService.refresh_tag_stats()
+
     queryset = Tag.objects.select_related('last_posted_discussion').prefetch_related('children').all()
 
     if parent_id is None:
@@ -145,6 +147,7 @@ def get_popular_tags(request, limit: int = 10):
     参数:
     - limit: 返回数量（默认10）
     """
+    TagService.refresh_tag_stats()
     tags = TagService.get_popular_tags(limit=limit)
 
     # 添加空的children字段

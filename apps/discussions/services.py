@@ -67,6 +67,8 @@ class DiscussionService:
                 tags = Tag.objects.filter(id__in=tag_ids)
                 for tag in tags:
                     DiscussionTag.objects.create(discussion=discussion, tag=tag)
+                from apps.tags.services import TagService
+                TagService.refresh_tag_stats(list(tags.values_list('id', flat=True)))
 
             # 更新用户统计
             user.discussion_count = F('discussion_count') + 1
@@ -361,6 +363,9 @@ class DiscussionService:
                     discussion.hidden_user = None
 
             discussion.save()
+            if is_hidden is not None:
+                from apps.tags.services import TagService
+                TagService.refresh_tag_stats(list(discussion.discussion_tags.values_list('tag_id', flat=True)))
             return discussion
 
     @staticmethod
@@ -387,9 +392,14 @@ class DiscussionService:
         with transaction.atomic():
             # 删除相关帖子
             Post.objects.filter(discussion=discussion).delete()
+            tag_ids = list(discussion.discussion_tags.values_list('tag_id', flat=True))
 
             # 删除讨论
             discussion.delete()
+
+            if tag_ids:
+                from apps.tags.services import TagService
+                TagService.refresh_tag_stats(tag_ids)
 
             # 更新用户统计
             if discussion.user:

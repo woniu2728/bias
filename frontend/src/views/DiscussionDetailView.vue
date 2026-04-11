@@ -104,20 +104,11 @@
             </button>
           </div>
 
-          <!-- 回复框 -->
-          <div v-if="authStore.isAuthenticated && !discussion.is_locked" class="reply-box">
-            <h3>{{ editingPost ? '编辑回复' : '发表回复' }}</h3>
-            <textarea
-              v-model="replyContent"
-              placeholder="输入你的回复... 支持Markdown语法"
-              rows="6"
-            ></textarea>
-            <div class="reply-actions">
-              <button @click="submitReply" class="primary" :disabled="submitting || !replyContent.trim()">
-                {{ submitting ? '提交中...' : (editingPost ? '更新' : '发表回复') }}
-              </button>
-              <button v-if="editingPost" @click="cancelEdit" class="secondary">取消</button>
-            </div>
+          <div v-if="authStore.isAuthenticated && !discussion.is_locked" class="reply-placeholder">
+            <button @click="openComposer" class="primary">
+              {{ replyContent.trim() ? '继续编辑回复' : '发表回复' }}
+            </button>
+            <span v-if="replyContent.trim()">已有未发布内容</span>
           </div>
 
           <div v-else-if="discussion.is_locked" class="locked-notice">
@@ -202,6 +193,80 @@
         </aside>
       </div>
     </div>
+
+    <div
+      v-if="discussion && authStore.isAuthenticated && !discussion.is_locked && composerOpen"
+      class="floating-composer"
+      :class="{ 'is-minimized': composerMinimized, 'is-expanded': composerExpanded }"
+    >
+      <div class="composer-handle" aria-hidden="true"></div>
+      <div class="composer-header">
+        <div class="composer-title">
+          <span>{{ composerTitle }}</span>
+          <small v-if="replyingTo">回复 #{{ replyingTo.number }} {{ replyingTo.user.username }}</small>
+          <small v-else>{{ composerStatusText }}</small>
+        </div>
+        <div class="composer-controls">
+          <button
+            v-if="!editingPost"
+            @click="saveComposerDraft()"
+            type="button"
+            title="保存草稿"
+            :disabled="!discussion"
+          >
+            <i class="far fa-save"></i>
+          </button>
+          <button @click="toggleComposerMinimized" type="button" :title="composerMinimized ? '展开' : '最小化'">
+            <i :class="composerMinimized ? 'far fa-window-restore' : 'fas fa-minus minimize'"></i>
+          </button>
+          <button @click="toggleComposerExpanded" type="button" :title="composerExpanded ? '退出全屏' : '全屏'">
+            <i :class="composerExpanded ? 'fas fa-compress' : 'fas fa-expand'"></i>
+          </button>
+          <button @click="closeComposer" type="button" title="关闭">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+
+      <div v-show="!composerMinimized" class="composer-body">
+        <textarea
+          ref="composerTextarea"
+          v-model="replyContent"
+          placeholder="输入你的回复... 支持 Markdown、@用户名 和代码块"
+          rows="7"
+        ></textarea>
+
+        <div class="composer-toolbar">
+          <button @click="submitReply" class="composer-submit" :disabled="submitting || !replyContent.trim()" type="button">
+            <i class="fas fa-paper-plane"></i>
+            {{ submitting ? '提交中...' : (editingPost ? '更新回复' : 'Post Reply') }}
+          </button>
+
+          <div class="composer-formatting" aria-label="格式化工具栏">
+            <button
+              v-for="tool in composerTools"
+              :key="tool.key"
+              @click="applyComposerTool(tool)"
+              type="button"
+              :title="tool.title"
+            >
+              <i v-if="tool.icon" :class="tool.icon"></i>
+              <span v-else>{{ tool.label }}</span>
+            </button>
+          </div>
+
+          <button
+            v-if="composerDraftSavedAt && !editingPost"
+            @click="clearComposerDraft"
+            class="composer-secondary"
+            type="button"
+          >
+            清除草稿
+          </button>
+          <button v-if="editingPost" @click="cancelEdit" class="composer-secondary" type="button">取消编辑</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -238,11 +303,32 @@ const submitting = ref(false)
 const editingPost = ref(null)
 const replyingTo = ref(null)
 const togglingSubscription = ref(false)
+const composerOpen = ref(false)
+const composerMinimized = ref(false)
+const composerExpanded = ref(false)
+const composerTextarea = ref(null)
+const composerDraftSavedAt = ref('')
 const highlightedPostNumber = ref(null)
 const jumpPostNumber = ref(1)
 const currentVisiblePostNumber = ref(1)
 let scrollFrame = null
 let nearUrlTimer = null
+const composerTools = [
+  { key: 'upload', title: '附件占位', icon: 'fas fa-file-upload' },
+  { key: 'heading', title: '标题', label: 'H', before: '## ', after: '' },
+  { key: 'bold', title: '加粗', label: 'B', before: '**', after: '**' },
+  { key: 'italic', title: '斜体', label: 'I', before: '*', after: '*' },
+  { key: 'strike', title: '删除线', label: 'S', before: '~~', after: '~~' },
+  { key: 'quote', title: '引用', icon: 'fas fa-quote-left' },
+  { key: 'spoiler', title: '提示/警告', icon: 'fas fa-exclamation-triangle', before: '> **提示：** ', after: '' },
+  { key: 'code', title: '代码', icon: 'fas fa-code', before: '`', after: '`' },
+  { key: 'link', title: '链接', icon: 'fas fa-link' },
+  { key: 'image', title: '图片', icon: 'fas fa-image' },
+  { key: 'bullets', title: '无序列表', icon: 'fas fa-list-ul' },
+  { key: 'ordered', title: '有序列表', icon: 'fas fa-list-ol' },
+  { key: 'mention', title: '@ 提及', icon: 'fas fa-at', before: '@', after: '' },
+  { key: 'emoji', title: '表情', icon: 'far fa-smile', before: '😊', after: '' }
+]
 
 const canManageDiscussion = computed(() => {
   return authStore.user?.is_staff || authStore.user?.id === discussion.value?.user.id
@@ -257,6 +343,16 @@ const targetNearPost = computed(() => {
 const loadedRangeText = computed(() => {
   if (!posts.value.length) return '暂无'
   return `#${posts.value[0].number} - #${posts.value[posts.value.length - 1].number}`
+})
+const composerTitle = computed(() => {
+  if (editingPost.value) return `编辑 #${editingPost.value.number}`
+  if (replyingTo.value) return '回复帖子'
+  return `回复：${discussion.value?.title || ''}`
+})
+const composerStatusText = computed(() => {
+  if (editingPost.value) return '编辑模式下不会恢复已保存草稿。'
+  if (composerDraftSavedAt.value) return `草稿已保存于 ${formatDraftTime(composerDraftSavedAt.value)}。`
+  return '支持 Markdown，可保存草稿并最小化继续编辑。'
 })
 
 onMounted(async () => {
@@ -523,19 +619,214 @@ async function toggleLike(post) {
 function replyToPost(post) {
   replyingTo.value = post
   replyContent.value = `@${post.user.username} `
-  document.querySelector('.reply-box textarea').focus()
+  openComposer()
 }
 
 function editPost(post) {
   editingPost.value = post
   replyContent.value = post.content
-  document.querySelector('.reply-box textarea').focus()
+  replyingTo.value = null
+  openComposer()
 }
 
 function cancelEdit() {
+  closeComposer(true)
+}
+
+async function openComposer() {
+  composerOpen.value = true
+  composerMinimized.value = false
+  if (!editingPost.value && !replyContent.value.trim()) {
+    restoreComposerDraft()
+  }
+  await nextTick()
+  composerTextarea.value?.focus()
+}
+
+function toggleComposerMinimized() {
+  composerMinimized.value = !composerMinimized.value
+  if (!composerMinimized.value) {
+    nextTick(() => composerTextarea.value?.focus())
+  }
+}
+
+function toggleComposerExpanded() {
+  composerExpanded.value = !composerExpanded.value
+  if (composerMinimized.value) {
+    composerMinimized.value = false
+  }
+  nextTick(() => composerTextarea.value?.focus())
+}
+
+function closeComposer(force = false) {
+  if (!force && replyContent.value.trim() && !confirm('确定要关闭回复框吗？当前草稿会被清空。')) {
+    return
+  }
+
+  resetComposerState()
+}
+
+function resetComposerState() {
+  composerOpen.value = false
+  composerMinimized.value = false
+  composerExpanded.value = false
+  composerDraftSavedAt.value = ''
   editingPost.value = null
   replyingTo.value = null
   replyContent.value = ''
+}
+
+async function applyComposerTool(tool) {
+  composerOpen.value = true
+  composerMinimized.value = false
+  await nextTick()
+
+  const textarea = composerTextarea.value
+  if (!textarea) return
+
+  const start = textarea.selectionStart ?? replyContent.value.length
+  const end = textarea.selectionEnd ?? replyContent.value.length
+  const selected = replyContent.value.slice(start, end)
+  const replacement = buildComposerToolReplacement(tool, selected)
+
+  replyContent.value = `${replyContent.value.slice(0, start)}${replacement}${replyContent.value.slice(end)}`
+
+  await nextTick()
+  textarea.focus()
+  const cursor = selected
+    ? start + replacement.length
+    : start + defaultToolCursorOffset(tool)
+  textarea.setSelectionRange(cursor, cursor)
+}
+
+function buildComposerToolReplacement(tool, selected) {
+  if (tool.key === 'link') {
+    return selected ? `[${selected}](https://)` : '[链接文字](https://)'
+  }
+  if (tool.key === 'image') {
+    return selected ? `![图片描述](${selected})` : '![图片描述](https://)'
+  }
+  if (tool.key === 'upload') {
+    return selected ? `[附件说明](${selected})` : '[附件说明](上传后的附件地址)'
+  }
+  if (tool.key === 'quote') {
+    return prefixLines(selected || '引用内容', '> ')
+  }
+  if (tool.key === 'bullets') {
+    return prefixLines(selected || '列表项', '- ')
+  }
+  if (tool.key === 'ordered') {
+    return prefixOrderedLines(selected || '列表项')
+  }
+
+  const before = tool.before || ''
+  const after = tool.after || ''
+  return `${before}${selected || defaultToolText(tool)}${after}`
+}
+
+function defaultToolCursorOffset(tool) {
+  const replacement = buildComposerToolReplacement(tool, '')
+  if (tool.key === 'image') return replacement.indexOf('https://') + 'https://'.length
+  if (tool.key === 'upload') return replacement.indexOf('上传后的附件地址')
+  if (tool.key === 'link') return replacement.indexOf('链接文字') + '链接文字'.length
+  if (tool.key === 'emoji') return replacement.length
+  return replacement.length
+}
+
+function prefixLines(content, prefix) {
+  return content
+    .split('\n')
+    .map(line => `${prefix}${line || '内容'}`)
+    .join('\n')
+}
+
+function prefixOrderedLines(content) {
+  return content
+    .split('\n')
+    .map((line, index) => `${index + 1}. ${line || '内容'}`)
+    .join('\n')
+}
+
+function defaultToolText(tool) {
+  if (tool.key === 'link') return '链接文字'
+  if (tool.key === 'code') return 'code'
+  if (tool.key === 'heading') return '标题'
+  if (tool.key === 'upload') return '附件'
+  if (tool.key === 'image') return 'https://'
+  if (tool.key === 'emoji') return ''
+  return '文本'
+}
+
+function getComposerDraftKey() {
+  if (!discussion.value?.id || editingPost.value) return null
+  return `pyflarum:discussion:${discussion.value.id}:draft:${authStore.user?.id || 'guest'}`
+}
+
+function restoreComposerDraft() {
+  if (typeof window === 'undefined') return false
+
+  composerDraftSavedAt.value = ''
+  const key = getComposerDraftKey()
+  if (!key) return false
+
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return false
+
+    const draft = JSON.parse(raw)
+    if (!draft?.content?.trim()) return false
+
+    replyContent.value = draft.content
+    composerDraftSavedAt.value = draft.updatedAt || ''
+    return true
+  } catch (error) {
+    console.error('恢复草稿失败:', error)
+    return false
+  }
+}
+
+function saveComposerDraft() {
+  if (typeof window === 'undefined' || editingPost.value) return
+
+  const key = getComposerDraftKey()
+  if (!key) return
+
+  const content = replyContent.value.trim()
+  if (!content) {
+    window.localStorage.removeItem(key)
+    composerDraftSavedAt.value = ''
+    return
+  }
+
+  const updatedAt = new Date().toISOString()
+  window.localStorage.setItem(
+    key,
+    JSON.stringify({
+      content: replyContent.value,
+      updatedAt
+    })
+  )
+  composerDraftSavedAt.value = updatedAt
+}
+
+function clearComposerDraft() {
+  if (typeof window === 'undefined') return
+
+  const key = getComposerDraftKey()
+  if (!key) return
+
+  window.localStorage.removeItem(key)
+  composerDraftSavedAt.value = ''
+}
+
+function formatDraftTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '刚刚'
+
+  return date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 async function submitReply() {
@@ -571,11 +862,10 @@ async function submitReply() {
       if (authStore.user?.preferences?.follow_after_reply) {
         discussion.value.is_subscribed = true
       }
+      clearComposerDraft()
     }
 
-    replyContent.value = ''
-    editingPost.value = null
-    replyingTo.value = null
+    resetComposerState()
   } catch (error) {
     console.error('提交失败:', error)
     alert('提交失败，请稍后重试')
@@ -900,37 +1190,17 @@ function formatDate(dateString) {
   margin-top: -10px;
 }
 
-.reply-box {
-  padding: 25px;
+.reply-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
   background: #fafafa;
+  border: 1px dashed #d7dee6;
   border-radius: 8px;
   margin-bottom: 20px;
-}
-
-.reply-box h3 {
-  margin-bottom: 15px;
-  color: #333;
-}
-
-.reply-box textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-  font-family: inherit;
-  resize: vertical;
-}
-
-.reply-box textarea:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.reply-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
+  color: #7b8794;
+  font-size: 13px;
 }
 
 .locked-notice, .login-notice {
@@ -1036,6 +1306,235 @@ function formatDate(dateString) {
   font-size: 12px;
 }
 
+.floating-composer {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: min(760px, calc(100vw - 32px));
+  background: #f7f9fb;
+  border: 1px solid #dbe2ea;
+  border-radius: 10px 10px 0 0;
+  box-shadow: 0 2px 8px rgba(31, 45, 61, 0.18);
+  z-index: 900;
+  overflow: hidden;
+}
+
+.floating-composer.is-minimized {
+  width: min(540px, calc(100vw - 32px));
+}
+
+.floating-composer.is-expanded {
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  transform: none;
+  width: auto;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.composer-handle {
+  height: 14px;
+  cursor: row-resize;
+}
+
+.composer-handle::before {
+  content: '';
+  display: block;
+  width: 64px;
+  height: 4px;
+  border-radius: 999px;
+  background: #d7dee6;
+  margin: 6px auto 0;
+}
+
+.composer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 20px 10px;
+  color: #4a5665;
+}
+
+.composer-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 400;
+}
+
+.composer-title span,
+.composer-title small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-title span {
+  font-size: 14px;
+  color: #445161;
+}
+
+.composer-title small {
+  color: #7b8794;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.composer-controls {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.composer-controls button {
+  border: 0;
+  background: transparent;
+  color: #6c7a89;
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.composer-controls button:hover {
+  background: #e8edf3;
+  color: #3f4b59;
+}
+
+.composer-controls button i {
+  font-size: 13px;
+}
+
+.composer-controls button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.composer-body {
+  padding: 0 20px 0;
+}
+
+.composer-body textarea {
+  width: 100%;
+  padding: 4px 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.7;
+  resize: none;
+  min-height: 176px;
+  max-height: 42vh;
+}
+
+.floating-composer.is-expanded .composer-body textarea {
+  min-height: calc(100vh - 170px);
+  max-height: none;
+}
+
+.composer-body textarea:focus {
+  outline: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -20px;
+  padding: 10px 20px;
+  border-top: 1px solid #dbe2ea;
+  flex-wrap: nowrap;
+}
+
+.composer-submit,
+.composer-secondary {
+  border: 0;
+  border-radius: 4px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.composer-submit {
+  background: #4d698e;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.composer-submit:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.composer-submit i {
+  font-size: 13px;
+}
+
+.composer-formatting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.composer-formatting button {
+  border: 0;
+  background: transparent;
+  color: #5b6776;
+  border-radius: 4px;
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.composer-formatting button:hover {
+  background: #e8edf3;
+  color: #354152;
+}
+
+.composer-formatting button i {
+  font-size: 14px;
+}
+
+.composer-formatting button span {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.composer-secondary {
+  background: transparent;
+  color: #6b7786;
+}
+
+.composer-secondary:hover {
+  background: #e8edf3;
+  color: #425062;
+}
+
 .loading, .error {
   text-align: center;
   padding: 60px 20px;
@@ -1053,6 +1552,32 @@ function formatDate(dateString) {
 
   .post-item {
     flex-direction: column;
+  }
+
+  .floating-composer {
+    bottom: 0;
+    width: 100vw;
+    border-radius: 10px 10px 0 0;
+  }
+
+  .floating-composer.is-expanded {
+    width: 100vw;
+  }
+
+  .composer-toolbar {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .composer-submit,
+  .composer-secondary {
+    justify-content: center;
+  }
+
+  .composer-formatting {
+    order: 3;
+    flex: 0 0 100%;
+    padding-bottom: 2px;
   }
 }
 </style>
