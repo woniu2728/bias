@@ -55,11 +55,7 @@ def register(request, payload: UserRegisterSchema):
         )
         return user
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400,
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.post("/login", response=TokenSchema, tags=["Auth"])
@@ -95,11 +91,23 @@ def verify_email(request, payload: EmailVerifySchema):
         user = UserService.verify_email(payload.token)
         return user
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400,
-        )
+        return JsonResponse({"error": str(e)}, status=400)
+
+
+@router.post("/me/resend-email-verification", auth=AuthBearer(), tags=["Users"])
+def resend_email_verification(request):
+    """重新发送邮箱验证邮件"""
+    try:
+        email_token = UserService.resend_email_verification(request.auth)
+        response = {"message": "验证邮件已重新发送"}
+
+        if settings.DEBUG:
+            response["debug_token"] = email_token.token
+            response["debug_verify_url"] = f"{settings.FRONTEND_URL}/verify-email?token={email_token.token}"
+
+        return response
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.post("/forgot-password", tags=["Auth"])
@@ -115,11 +123,7 @@ def forgot_password(request, payload: PasswordResetRequestSchema):
 
         return response
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400,
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.post("/reset-password", response=UserOutSchema, tags=["Auth"])
@@ -129,11 +133,7 @@ def reset_password(request, payload: PasswordResetSchema):
         user = UserService.reset_password(payload.token, payload.password)
         return user
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400,
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 # ==================== 用户信息 ====================
@@ -201,11 +201,7 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
 
     # 检查权限：只能修改自己的信息
     if request.auth.id != user.id and not request.auth.is_staff:
-        return router.create_response(
-            request,
-            {"error": "无权限"},
-            status=403,
-        )
+        return JsonResponse({"error": "无权限"}, status=403)
 
     try:
         user = UserService.update_user(
@@ -216,11 +212,7 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
         )
         return user
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400,
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.post("/{user_id}/password", auth=AuthBearer(), tags=["Users"])
@@ -230,21 +222,13 @@ def change_password(request, user_id: int, payload: PasswordChangeSchema):
 
     # 检查权限：只能修改自己的密码
     if request.auth.id != user.id:
-        return router.create_response(
-            request,
-            {"error": "无权限"},
-            status=403,
-        )
+        return JsonResponse({"error": "无权限"}, status=403)
 
     try:
         UserService.change_password(user, payload.old_password, payload.new_password)
         return {"message": "密码修改成功"}
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400,
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.post("/{user_id}/avatar", response=UserOutSchema, auth=AuthBearer(), tags=["Users"])

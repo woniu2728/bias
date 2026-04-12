@@ -3,7 +3,7 @@
     <div class="auth-container">
       <div class="auth-card">
         <h2>注册</h2>
-        <p class="subtitle">加入我们的社区</p>
+        <p class="subtitle">加入我们的社区，并通过邮件完成邮箱验证</p>
 
         <form @submit.prevent="handleRegister">
           <div class="form-group">
@@ -111,11 +111,11 @@ async function handleRegister() {
       return
     }
 
-    success.value = '注册成功！正在跳转...'
+    success.value = '注册成功！请检查邮箱完成验证，正在跳转到登录页...'
 
-    // 2秒后跳转到首页
+    // 2秒后跳转到登录页
     setTimeout(() => {
-      router.push('/')
+      router.push('/login')
     }, 2000)
   } catch (err) {
     if (err.response?.data) {

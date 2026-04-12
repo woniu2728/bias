@@ -3,7 +3,6 @@
     <div v-if="loading" class="loading-page">加载中...</div>
     <div v-else-if="!user" class="error-page">用户不存在</div>
     <div v-else>
-      <!-- Hero 用户卡片 -->
       <div class="user-hero" :style="{ backgroundColor: user.color || '#4d698e' }">
         <div class="hero-background">
           <div class="container">
@@ -52,9 +51,9 @@
                 </ul>
               </div>
               <div class="user-card-controls">
-                <button v-if="isOwnProfile" @click="showEditModal = true" class="btn-control">
-                  <i class="fas fa-pencil-alt"></i>
-                  编辑
+                <button v-if="isOwnProfile" @click="switchTab('settings')" class="btn-control">
+                  <i class="fas fa-sliders-h"></i>
+                  设置
                 </button>
               </div>
             </div>
@@ -62,10 +61,8 @@
         </div>
       </div>
 
-      <!-- 主内容区 -->
       <div class="container">
         <div class="user-page-layout">
-          <!-- 侧边栏导航 -->
           <aside class="user-sidebar">
             <nav class="side-nav">
               <ul>
@@ -91,13 +88,31 @@
                     <span class="badge-count">{{ user.comment_count || 0 }}</span>
                   </a>
                 </li>
+                <li v-if="isOwnProfile">
+                  <a
+                    @click.prevent="switchTab('settings')"
+                    :class="{ active: activeTab === 'settings' }"
+                    class="nav-link"
+                  >
+                    <i class="fas fa-user-cog"></i>
+                    <span>设置</span>
+                  </a>
+                </li>
+                <li v-if="isOwnProfile">
+                  <a
+                    @click.prevent="switchTab('security')"
+                    :class="{ active: activeTab === 'security' }"
+                    class="nav-link"
+                  >
+                    <i class="fas fa-shield-alt"></i>
+                    <span>安全</span>
+                  </a>
+                </li>
               </ul>
             </nav>
           </aside>
 
-          <!-- 主内容 -->
           <main class="user-content">
-            <!-- 讨论列表 -->
             <div v-if="activeTab === 'discussions'" class="content-section">
               <div v-if="loadingDiscussions" class="loading-small">加载中...</div>
               <div v-else-if="discussions.length === 0" class="empty-state">
@@ -130,7 +145,6 @@
               </div>
             </div>
 
-            <!-- 回复列表 -->
             <div v-if="activeTab === 'posts'" class="content-section">
               <div v-if="loadingPosts" class="loading-small">加载中...</div>
               <div v-else-if="posts.length === 0" class="empty-state">
@@ -155,50 +169,152 @@
                 </div>
               </div>
             </div>
+
+            <div v-if="activeTab === 'settings' && isOwnProfile" class="content-section settings-section">
+              <div class="section-header">
+                <div>
+                  <h2>个人设置</h2>
+                  <p>维护你的显示名称、邮箱和个人简介。</p>
+                </div>
+              </div>
+
+              <div v-if="settingsSuccess" class="success-banner">{{ settingsSuccess }}</div>
+              <div v-if="settingsError" class="error-banner">{{ settingsError }}</div>
+
+              <div class="settings-card">
+                <div class="form-group">
+                  <label>显示名称</label>
+                  <input
+                    v-model="editForm.display_name"
+                    type="text"
+                    class="form-control"
+                    placeholder="显示名称"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label>邮箱</label>
+                  <input
+                    v-model="editForm.email"
+                    type="email"
+                    class="form-control"
+                    placeholder="name@example.com"
+                  />
+                  <small class="form-help">
+                    {{ user.is_email_confirmed ? '当前邮箱已完成验证。' : '修改邮箱后会重新进入未验证状态。' }}
+                  </small>
+                </div>
+
+                <div class="form-group">
+                  <label>个人简介</label>
+                  <textarea
+                    v-model="editForm.bio"
+                    class="form-control"
+                    rows="5"
+                    placeholder="介绍一下自己..."
+                  ></textarea>
+                </div>
+
+                <div class="form-actions">
+                  <button @click="saveProfile" class="btn-primary" :disabled="saving">
+                    {{ saving ? '保存中...' : '保存资料' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="activeTab === 'security' && isOwnProfile" class="content-section security-section">
+              <div class="section-header">
+                <div>
+                  <h2>账号安全</h2>
+                  <p>查看邮箱验证状态，并修改登录密码。</p>
+                </div>
+              </div>
+
+              <div class="security-grid">
+                <section class="settings-card">
+                  <div class="security-card-header">
+                    <div>
+                      <h3>邮箱验证</h3>
+                      <p>验证邮箱后，可确保找回密码和安全通知正常送达。</p>
+                    </div>
+                    <span
+                      class="email-status"
+                      :class="{ confirmed: user.is_email_confirmed, pending: !user.is_email_confirmed }"
+                    >
+                      {{ user.is_email_confirmed ? '已验证' : '未验证' }}
+                    </span>
+                  </div>
+
+                  <div class="email-summary">
+                    <strong>{{ user.email }}</strong>
+                    <p v-if="user.is_email_confirmed">当前邮箱已通过验证。</p>
+                    <p v-else>当前邮箱尚未验证，你可以重新发送验证邮件。</p>
+                  </div>
+
+                  <div v-if="verificationSuccess" class="success-banner">{{ verificationSuccess }}</div>
+                  <div v-if="verificationError" class="error-banner">{{ verificationError }}</div>
+
+                  <button
+                    v-if="!user.is_email_confirmed"
+                    @click="resendVerificationEmail"
+                    class="btn-secondary"
+                    :disabled="verificationSending"
+                  >
+                    {{ verificationSending ? '发送中...' : '重新发送验证邮件' }}
+                  </button>
+                </section>
+
+                <section class="settings-card">
+                  <div class="security-card-header">
+                    <div>
+                      <h3>修改密码</h3>
+                      <p>修改后，下次登录请使用新密码。</p>
+                    </div>
+                  </div>
+
+                  <div v-if="passwordSuccess" class="success-banner">{{ passwordSuccess }}</div>
+                  <div v-if="passwordError" class="error-banner">{{ passwordError }}</div>
+
+                  <div class="form-group">
+                    <label>当前密码</label>
+                    <input
+                      v-model="passwordForm.old_password"
+                      type="password"
+                      class="form-control"
+                      placeholder="请输入当前密码"
+                    />
+                  </div>
+
+                  <div class="form-group">
+                    <label>新密码</label>
+                    <input
+                      v-model="passwordForm.new_password"
+                      type="password"
+                      class="form-control"
+                      placeholder="请输入新密码"
+                    />
+                  </div>
+
+                  <div class="form-group">
+                    <label>确认新密码</label>
+                    <input
+                      v-model="passwordForm.confirm_password"
+                      type="password"
+                      class="form-control"
+                      placeholder="请再次输入新密码"
+                    />
+                  </div>
+
+                  <div class="form-actions">
+                    <button @click="changePassword" class="btn-primary" :disabled="changingPassword">
+                      {{ changingPassword ? '提交中...' : '更新密码' }}
+                    </button>
+                  </div>
+                </section>
+              </div>
+            </div>
           </main>
-        </div>
-      </div>
-    </div>
-
-    <!-- 编辑资料模态框 -->
-    <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
-      <div class="modal-dialog">
-        <div class="modal-header">
-          <h3>编辑资料</h3>
-          <button @click="showEditModal = false" class="modal-close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-
-        <div class="modal-body">
-          <div class="form-group">
-            <label>显示名称</label>
-            <input
-              v-model="editForm.display_name"
-              type="text"
-              class="form-control"
-              placeholder="显示名称"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>个人简介</label>
-            <textarea
-              v-model="editForm.bio"
-              class="form-control"
-              rows="4"
-              placeholder="介绍一下自己..."
-            ></textarea>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button @click="showEditModal = false" class="btn-secondary">
-            取消
-          </button>
-          <button @click="saveProfile" class="btn-primary" :disabled="saving">
-            {{ saving ? '保存中...' : '保存' }}
-          </button>
         </div>
       </div>
     </div>
@@ -229,14 +345,28 @@ const loading = ref(true)
 const loadingDiscussions = ref(false)
 const loadingPosts = ref(false)
 const activeTab = ref('discussions')
-const showEditModal = ref(false)
 const saving = ref(false)
 const avatarUploading = ref(false)
 const avatarInput = ref(null)
+const settingsSuccess = ref('')
+const settingsError = ref('')
+const verificationSending = ref(false)
+const verificationSuccess = ref('')
+const verificationError = ref('')
+const changingPassword = ref(false)
+const passwordSuccess = ref('')
+const passwordError = ref('')
 
 const editForm = ref({
   display_name: '',
   bio: '',
+  email: '',
+})
+
+const passwordForm = ref({
+  old_password: '',
+  new_password: '',
+  confirm_password: '',
 })
 
 const isOwnProfile = computed(() => {
@@ -247,7 +377,7 @@ const isOnline = computed(() => {
   if (!user.value?.last_seen_at) return false
   const lastSeen = new Date(user.value.last_seen_at)
   const now = new Date()
-  return (now - lastSeen) < 5 * 60 * 1000 // 5分钟内
+  return (now - lastSeen) < 5 * 60 * 1000
 })
 
 onMounted(async () => {
@@ -258,6 +388,12 @@ watch(() => route.params.id, async () => {
   posts.value = []
   discussions.value = []
   await refreshProfile()
+})
+
+watch(isOwnProfile, (value) => {
+  if (!value && (activeTab.value === 'settings' || activeTab.value === 'security')) {
+    activeTab.value = 'discussions'
+  }
 })
 
 async function refreshProfile() {
@@ -277,6 +413,12 @@ async function loadUser() {
     editForm.value = {
       display_name: data.display_name || '',
       bio: data.bio || '',
+      email: data.email || '',
+    }
+
+    if (!authStore.user || authStore.user.id !== data.id) {
+      verificationSuccess.value = ''
+      verificationError.value = ''
     }
   } catch (error) {
     console.error('加载用户失败:', error)
@@ -325,6 +467,11 @@ async function loadPosts() {
 }
 
 function switchTab(tab) {
+  if (!isOwnProfile.value && (tab === 'settings' || tab === 'security')) {
+    activeTab.value = 'discussions'
+    return
+  }
+
   activeTab.value = tab
   if (tab === 'posts' && posts.value.length === 0) {
     loadPosts()
@@ -333,15 +480,81 @@ function switchTab(tab) {
 
 async function saveProfile() {
   saving.value = true
+  settingsSuccess.value = ''
+  settingsError.value = ''
+
   try {
-    await api.patch(`/users/${user.value.id}`, editForm.value)
+    const previousEmail = user.value.email
+    const updatedUser = await api.patch(`/users/${user.value.id}`, editForm.value)
+
+    user.value = {
+      ...user.value,
+      ...updatedUser,
+    }
+
+    editForm.value = {
+      display_name: updatedUser.display_name || '',
+      bio: updatedUser.bio || '',
+      email: updatedUser.email || '',
+    }
+
     await authStore.fetchUser()
-    await loadUser()
-    showEditModal.value = false
+
+    settingsSuccess.value = previousEmail !== updatedUser.email
+      ? `资料已保存，验证邮件已发送到 ${updatedUser.email}`
+      : '资料已保存'
   } catch (error) {
-    alert('保存失败: ' + (error.response?.data?.error || error.message || '未知错误'))
+    settingsError.value = error.response?.data?.error || error.message || '保存失败'
   } finally {
     saving.value = false
+  }
+}
+
+async function resendVerificationEmail() {
+  verificationSending.value = true
+  verificationSuccess.value = ''
+  verificationError.value = ''
+
+  try {
+    const data = await api.post('/users/me/resend-email-verification')
+    verificationSuccess.value = data.message || '验证邮件已发送'
+  } catch (error) {
+    verificationError.value = error.response?.data?.error || error.message || '发送失败'
+  } finally {
+    verificationSending.value = false
+  }
+}
+
+async function changePassword() {
+  passwordSuccess.value = ''
+  passwordError.value = ''
+
+  if (!passwordForm.value.old_password || !passwordForm.value.new_password) {
+    passwordError.value = '请完整填写密码信息'
+    return
+  }
+
+  if (passwordForm.value.new_password !== passwordForm.value.confirm_password) {
+    passwordError.value = '两次输入的新密码不一致'
+    return
+  }
+
+  changingPassword.value = true
+  try {
+    const data = await api.post(`/users/${user.value.id}/password`, {
+      old_password: passwordForm.value.old_password,
+      new_password: passwordForm.value.new_password,
+    })
+    passwordSuccess.value = data.message || '密码修改成功'
+    passwordForm.value = {
+      old_password: '',
+      new_password: '',
+      confirm_password: '',
+    }
+  } catch (error) {
+    passwordError.value = error.response?.data?.error || error.message || '密码修改失败'
+  } finally {
+    changingPassword.value = false
   }
 }
 
@@ -364,6 +577,7 @@ async function handleAvatarSelected(event) {
     editForm.value = {
       display_name: updatedUser.display_name || '',
       bio: updatedUser.bio || '',
+      email: updatedUser.email || '',
     }
     await authStore.fetchUser()
   } catch (error) {
@@ -415,7 +629,6 @@ function formatLastSeen(dateString) {
   font-size: 15px;
 }
 
-/* Hero 用户卡片 */
 .user-hero {
   color: white;
   position: relative;
@@ -588,7 +801,6 @@ function formatLastSeen(dateString) {
   font-size: 13px;
 }
 
-/* 主内容布局 */
 .container {
   max-width: 1200px;
   margin: 0 auto;
@@ -602,7 +814,6 @@ function formatLastSeen(dateString) {
   padding: 40px 0 30px 0;
 }
 
-/* 侧边栏导航 */
 .user-sidebar {
   position: sticky;
   top: 76px;
@@ -672,7 +883,6 @@ function formatLastSeen(dateString) {
   background: rgba(255, 255, 255, 0.25);
 }
 
-/* 主内容区 */
 .user-content {
   background: white;
   border: 1px solid #e3e8ed;
@@ -683,6 +893,21 @@ function formatLastSeen(dateString) {
 .content-section {
   padding: 25px;
   min-height: 200px;
+}
+
+.section-header {
+  margin-bottom: 24px;
+}
+
+.section-header h2 {
+  font-size: 22px;
+  color: #24313f;
+  margin-bottom: 8px;
+}
+
+.section-header p {
+  color: #6b7a88;
+  line-height: 1.6;
 }
 
 .loading-small {
@@ -704,8 +929,8 @@ function formatLastSeen(dateString) {
   line-height: 1.6;
 }
 
-/* 讨论列表 */
-.discussion-list {
+.discussion-list,
+.post-list {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -720,13 +945,18 @@ function formatLastSeen(dateString) {
   transition: background 0.15s;
 }
 
-.discussion-item:hover {
+.discussion-item:hover,
+.post-item:hover {
   background: #fafbfc;
   margin: 0 -25px;
+}
+
+.discussion-item:hover {
   padding: 18px 25px;
 }
 
-.discussion-item:last-child {
+.discussion-item:last-child,
+.post-item:last-child {
   border-bottom: none;
 }
 
@@ -779,13 +1009,6 @@ function formatLastSeen(dateString) {
   font-size: 14px;
 }
 
-/* 回复列表 */
-.post-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
 .post-item {
   padding: 20px 0;
   border-bottom: 1px solid #f0f0f0;
@@ -793,13 +1016,7 @@ function formatLastSeen(dateString) {
 }
 
 .post-item:hover {
-  background: #fafbfc;
-  margin: 0 -25px;
   padding: 20px 25px;
-}
-
-.post-item:last-child {
-  border-bottom: none;
 }
 
 .post-header {
@@ -850,73 +1067,83 @@ function formatLastSeen(dateString) {
   font-size: 15px;
 }
 
-/* 模态框 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+.settings-card {
+  border: 1px solid #e5ebf0;
+  border-radius: 12px;
+  padding: 22px 24px;
+  background: #fbfcfd;
 }
 
-.modal-dialog {
-  background: white;
-  border-radius: 3px;
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow: auto;
+.security-grid {
+  display: grid;
+  gap: 18px;
 }
 
-.modal-header {
+.security-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #e3e8ed;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 18px;
 }
 
-.modal-header h3 {
-  margin: 0;
+.security-card-header h3 {
   font-size: 18px;
-  font-weight: 600;
+  color: #24313f;
+  margin-bottom: 6px;
 }
 
-.modal-close {
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: #999;
-  cursor: pointer;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
+.security-card-header p,
+.email-summary p {
+  color: #6b7a88;
+  line-height: 1.6;
+}
+
+.email-summary {
+  margin-bottom: 18px;
+}
+
+.email-summary strong {
+  color: #24313f;
+}
+
+.email-status {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 3px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-.modal-close:hover {
-  background: #f5f8fa;
-  color: #333;
+.email-status.confirmed {
+  background: #edf8f1;
+  color: #1f7a45;
 }
 
-.modal-body {
-  padding: 20px;
+.email-status.pending {
+  background: #fff3cd;
+  color: #856404;
 }
 
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 20px;
-  border-top: 1px solid #e3e8ed;
+.success-banner,
+.error-banner {
+  padding: 12px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.success-banner {
+  background: #edf8f1;
+  color: #1f7a45;
+}
+
+.error-banner {
+  background: #fdf0f0;
+  color: #b03a37;
 }
 
 .form-group {
@@ -949,6 +1176,19 @@ function formatLastSeen(dateString) {
   border-color: #4d698e;
 }
 
+.form-help {
+  display: block;
+  margin-top: 6px;
+  color: #7a8895;
+  font-size: 12px;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
 .btn-primary,
 .btn-secondary {
   padding: 8px 16px;
@@ -979,7 +1219,7 @@ function formatLastSeen(dateString) {
   color: #555;
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background: #d3d8dd;
 }
 
@@ -1004,6 +1244,10 @@ function formatLastSeen(dateString) {
 
   .user-sidebar {
     position: static;
+  }
+
+  .security-card-header {
+    flex-direction: column;
   }
 }
 </style>

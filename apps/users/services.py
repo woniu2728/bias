@@ -208,6 +208,17 @@ class UserService:
             raise ValueError("无效的验证令牌")
 
     @staticmethod
+    def resend_email_verification(user: User) -> EmailToken:
+        """重新发送当前邮箱的验证邮件"""
+        if user.is_email_confirmed:
+            raise ValueError("当前邮箱已经验证")
+        if not user.email:
+            raise ValueError("当前账号没有可验证的邮箱")
+
+        user.email_tokens.all().delete()
+        return UserService.create_email_verification_token(user, user.email)
+
+    @staticmethod
     def create_password_reset_token(email: str) -> PasswordToken:
         """创建密码重置令牌"""
         try:

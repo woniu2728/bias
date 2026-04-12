@@ -2,11 +2,28 @@
   <div class="discussion-create-page">
     <div class="container">
       <div class="create-card">
-        <h1>发起新讨论</h1>
+        <div class="create-card-header">
+          <div>
+            <h1>发起新讨论</h1>
+            <p class="create-subtitle">标题、标签和正文会自动保存为草稿，刷新页面后可以继续编辑。</p>
+          </div>
+          <div class="draft-actions">
+            <span v-if="draftSavedAt" class="draft-status">草稿保存于 {{ formatDraftTime(draftSavedAt) }}</span>
+            <button type="button" class="secondary" @click="saveDraft">
+              保存草稿
+            </button>
+            <button type="button" class="secondary" @click="clearDraft" :disabled="!hasDraftContent">
+              清除草稿
+            </button>
+          </div>
+        </div>
 
         <form @submit.prevent="handleSubmit">
           <div v-if="isSuspended" class="suspension-notice">
             {{ suspensionNotice }}
+          </div>
+          <div v-else-if="draftMessage" class="draft-banner">
+            {{ draftMessage }}
           </div>
 
           <div class="form-group">
@@ -60,8 +77,7 @@
               required
             ></textarea>
 
-            <div v-show="activeTab === 'preview'" class="preview-content" v-html="previewHtml">
-            </div>
+            <div v-show="activeTab === 'preview'" class="preview-content" v-html="previewHtml"></div>
 
             <div class="editor-help">
               <small>
@@ -83,7 +99,6 @@
         </form>
       </div>
 
-      <!-- 侧边栏提示 -->
       <aside class="tips-card">
         <h3>发帖指南</h3>
         <ul>
@@ -110,7 +125,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
@@ -129,10 +144,17 @@ const tags = ref([])
 const activeTab = ref('write')
 const submitting = ref(false)
 const error = ref('')
+const draftSavedAt = ref('')
+const draftMessage = ref('')
 const isSuspended = computed(() => Boolean(authStore.user?.is_suspended))
+let draftTimer = null
 
 const canSubmit = computed(() => {
   return form.value.title.trim() && form.value.content.trim()
+})
+
+const hasDraftContent = computed(() => {
+  return Boolean(form.value.title.trim() || form.value.content.trim() || form.value.tag_id)
 })
 
 const suspensionNotice = computed(() => {
@@ -154,13 +176,27 @@ const previewHtml = computed(() => {
   if (!form.value.content) {
     return '<p class="empty-preview">暂无内容</p>'
   }
-  // 简单的Markdown预览（实际应该调用后端API）
   return renderMarkdown(form.value.content)
 })
 
 onMounted(async () => {
   await loadTags()
+  restoreDraft()
 })
+
+onBeforeUnmount(() => {
+  if (draftTimer) {
+    clearTimeout(draftTimer)
+  }
+})
+
+watch(
+  form,
+  () => {
+    scheduleDraftSave()
+  },
+  { deep: true }
+)
 
 async function loadTags() {
   try {
@@ -186,22 +222,17 @@ async function handleSubmit() {
   error.value = ''
 
   try {
-    console.log('提交数据:', {
-      title: form.value.title,
-      content: form.value.content,
-      tag_ids: form.value.tag_id ? [parseInt(form.value.tag_id)] : []
-    })
-
     const data = await api.post('/discussions/', {
       title: form.value.title,
       content: form.value.content,
       tag_ids: form.value.tag_id ? [parseInt(form.value.tag_id)] : []
     })
 
-    console.log('创建成功:', data)
     if (data.approval_status === 'pending') {
       alert('讨论已提交审核，管理员通过后会显示在论坛列表中。')
     }
+
+    clearDraftStorage()
     router.push(`/d/${data.id}`)
   } catch (err) {
     console.error('创建失败:', err)
@@ -228,11 +259,97 @@ async function handleSubmit() {
 
 function handleCancel() {
   if (form.value.title || form.value.content) {
-    if (!confirm('确定要放弃当前编辑的内容吗？')) {
+    if (!confirm('确定要放弃当前编辑的内容吗？已保存的草稿会继续保留。')) {
       return
     }
   }
   router.push('/discussions')
+}
+
+function getDraftKey() {
+  return `pyflarum:create-discussion-draft:${authStore.user?.id || 'guest'}`
+}
+
+function restoreDraft() {
+  if (typeof window === 'undefined') return
+
+  const raw = window.localStorage.getItem(getDraftKey())
+  if (!raw) return
+
+  try {
+    const draft = JSON.parse(raw)
+    form.value = {
+      title: draft.title || '',
+      content: draft.content || '',
+      tag_id: draft.tag_id || ''
+    }
+    draftSavedAt.value = draft.updatedAt || ''
+    draftMessage.value = draftSavedAt.value
+      ? `已恢复你在 ${formatDraftTime(draftSavedAt.value)} 保存的讨论草稿。`
+      : '已恢复本地讨论草稿。'
+  } catch (error) {
+    console.error('恢复讨论草稿失败:', error)
+  }
+}
+
+function scheduleDraftSave() {
+  if (draftTimer) {
+    clearTimeout(draftTimer)
+  }
+
+  draftTimer = setTimeout(() => {
+    saveDraft(false)
+  }, 300)
+}
+
+function saveDraft(showMessage = true) {
+  if (typeof window === 'undefined') return
+
+  if (!hasDraftContent.value) {
+    clearDraftStorage(showMessage ? '草稿已清空' : '')
+    return
+  }
+
+  const updatedAt = new Date().toISOString()
+  window.localStorage.setItem(
+    getDraftKey(),
+    JSON.stringify({
+      title: form.value.title,
+      content: form.value.content,
+      tag_id: form.value.tag_id,
+      updatedAt,
+    })
+  )
+  draftSavedAt.value = updatedAt
+  draftMessage.value = showMessage ? '讨论草稿已保存。' : ''
+}
+
+function clearDraft() {
+  form.value = {
+    title: '',
+    content: '',
+    tag_id: ''
+  }
+  clearDraftStorage('已清除本地草稿。')
+}
+
+function clearDraftStorage(message = '') {
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(getDraftKey())
+  }
+  draftSavedAt.value = ''
+  draftMessage.value = message
+}
+
+function formatDraftTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '刚刚'
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 function formatDateTime(value) {
@@ -241,24 +358,16 @@ function formatDateTime(value) {
   return date.toLocaleString('zh-CN')
 }
 
-// 简单的Markdown渲染（实际应该使用专业库）
 function renderMarkdown(text) {
   let html = text
-    // 标题
     .replace(/^### (.*$)/gim, '<h3>$1</h3>')
     .replace(/^## (.*$)/gim, '<h2>$1</h2>')
     .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-    // 粗体
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    // 斜体
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // 代码
     .replace(/`(.*?)`/g, '<code>$1</code>')
-    // 链接
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-    // @提及
     .replace(/@(\w+)/g, '<span class="mention">@$1</span>')
-    // 换行
     .replace(/\n/g, '<br>')
 
   return html
@@ -284,10 +393,45 @@ function renderMarkdown(text) {
   border-radius: 8px;
 }
 
+.create-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 30px;
+}
+
 .create-card h1 {
   font-size: 28px;
-  margin-bottom: 30px;
+  margin-bottom: 8px;
   color: #333;
+}
+
+.create-subtitle {
+  color: #6d7b88;
+  line-height: 1.6;
+}
+
+.draft-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.draft-status {
+  color: #7a8895;
+  font-size: 12px;
+  padding-top: 8px;
+}
+
+.draft-banner {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: #edf4fb;
+  color: #325b88;
+  line-height: 1.6;
 }
 
 .form-group {
@@ -496,6 +640,14 @@ function renderMarkdown(text) {
 @media (max-width: 768px) {
   .container {
     grid-template-columns: 1fr;
+  }
+
+  .create-card-header {
+    flex-direction: column;
+  }
+
+  .draft-actions {
+    justify-content: flex-start;
   }
 
   .tips-card {

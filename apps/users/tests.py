@@ -11,7 +11,7 @@ from PIL import Image
 from ninja_jwt.tokens import RefreshToken
 
 from apps.core.models import Setting
-from apps.users.models import PasswordToken, User
+from apps.users.models import EmailToken, PasswordToken, User
 
 
 @override_settings(
@@ -144,3 +144,43 @@ class SuspendedUserAuthTests(TestCase):
         self.assertEqual(response.status_code, 401, response.content)
         self.assertIn("账号已被封禁", response.json()["error"])
         self.assertIn("请联系管理员申诉", response.json()["error"])
+
+
+@override_settings(
+    DEBUG=False,
+    FRONTEND_URL="http://localhost:5173",
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+)
+class EmailVerificationApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="verify-user",
+            email="verify@example.com",
+            password="password123",
+            is_email_confirmed=False,
+        )
+        self.token = str(RefreshToken.for_user(self.user).access_token)
+
+    def test_resend_email_verification_sends_new_mail(self):
+        response = self.client.post(
+            "/api/users/me/resend-email-verification",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["message"], "验证邮件已重新发送")
+        self.assertEqual(EmailToken.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("/verify-email?token=", mail.outbox[0].body)
+
+    def test_resend_email_verification_rejects_confirmed_user(self):
+        self.user.is_email_confirmed = True
+        self.user.save(update_fields=["is_email_confirmed"])
+
+        response = self.client.post(
+            "/api/users/me/resend-email-verification",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(response.json()["error"], "当前邮箱已经验证")
