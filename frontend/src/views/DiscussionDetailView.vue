@@ -119,9 +119,9 @@
           </div>
           <div v-else-if="authStore.isAuthenticated && !discussion.is_locked" class="reply-placeholder">
             <button @click="openComposer" class="primary">
-              {{ replyContent.trim() ? '继续编辑回复' : '发表回复' }}
+              {{ hasActiveComposer ? '继续编辑回复' : '发表回复' }}
             </button>
-            <span v-if="replyContent.trim()">已有未发布内容</span>
+            <span v-if="hasActiveComposer">已有未发布内容</span>
           </div>
 
           <div v-else-if="discussion.is_locked" class="locked-notice">
@@ -211,80 +211,6 @@
       </div>
     </div>
 
-    <div
-      v-if="discussion && authStore.isAuthenticated && !discussion.is_locked && !isSuspended && composerOpen"
-      class="floating-composer"
-      :class="{ 'is-minimized': composerMinimized, 'is-expanded': composerExpanded }"
-    >
-      <div class="composer-handle" aria-hidden="true"></div>
-      <div class="composer-header">
-        <div class="composer-title">
-          <span>{{ composerTitle }}</span>
-          <small v-if="replyingTo">回复 #{{ replyingTo.number }} {{ replyingTo.user.username }}</small>
-          <small v-else>{{ composerStatusText }}</small>
-        </div>
-        <div class="composer-controls">
-          <button
-            v-if="!editingPost"
-            @click="saveComposerDraft()"
-            type="button"
-            title="保存草稿"
-            :disabled="!discussion"
-          >
-            <i class="far fa-save"></i>
-          </button>
-          <button @click="toggleComposerMinimized" type="button" :title="composerMinimized ? '展开' : '最小化'">
-            <i :class="composerMinimized ? 'far fa-window-restore' : 'fas fa-minus minimize'"></i>
-          </button>
-          <button @click="toggleComposerExpanded" type="button" :title="composerExpanded ? '退出全屏' : '全屏'">
-            <i :class="composerExpanded ? 'fas fa-compress' : 'fas fa-expand'"></i>
-          </button>
-          <button @click="closeComposer" type="button" title="关闭">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-      </div>
-
-      <div v-show="!composerMinimized" class="composer-body">
-        <textarea
-          ref="composerTextarea"
-          v-model="replyContent"
-          placeholder="输入你的回复... 支持 Markdown、@用户名 和代码块"
-          rows="7"
-        ></textarea>
-
-        <div class="composer-toolbar">
-          <button @click="submitReply" class="composer-submit" :disabled="submitting || !replyContent.trim()" type="button">
-            <i class="fas fa-paper-plane"></i>
-            {{ submitting ? '提交中...' : (editingPost ? '更新回复' : 'Post Reply') }}
-          </button>
-
-          <div class="composer-formatting" aria-label="格式化工具栏">
-            <button
-              v-for="tool in composerTools"
-              :key="tool.key"
-              @click="applyComposerTool(tool)"
-              type="button"
-              :title="tool.title"
-            >
-              <i v-if="tool.icon" :class="tool.icon"></i>
-              <span v-else>{{ tool.label }}</span>
-            </button>
-          </div>
-
-          <button
-            v-if="composerDraftSavedAt && !editingPost"
-            @click="clearComposerDraft"
-            class="composer-secondary"
-            type="button"
-          >
-            清除草稿
-          </button>
-          <button v-if="editingPost" @click="cancelEdit" class="composer-secondary" type="button">取消编辑</button>
-        </div>
-      </div>
-    </div>
-
     <div v-if="showReportModal" class="report-modal" @click.self="closeReportModal">
       <div class="report-dialog">
         <div class="report-header">
@@ -332,6 +258,7 @@
 import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useComposerStore } from '@/stores/composer'
 import api from '@/api'
 import {
   buildTagPath,
@@ -345,6 +272,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const composerStore = useComposerStore()
 
 const discussion = ref(null)
 const posts = ref([])
@@ -356,16 +284,7 @@ const lastLoadedPage = ref(1)
 const totalPosts = ref(0)
 const pageLimit = 20
 
-const replyContent = ref('')
-const submitting = ref(false)
-const editingPost = ref(null)
-const replyingTo = ref(null)
 const togglingSubscription = ref(false)
-const composerOpen = ref(false)
-const composerMinimized = ref(false)
-const composerExpanded = ref(false)
-const composerTextarea = ref(null)
-const composerDraftSavedAt = ref('')
 const highlightedPostNumber = ref(null)
 const jumpPostNumber = ref(1)
 const currentVisiblePostNumber = ref(1)
@@ -378,22 +297,6 @@ const reportForm = ref({
 })
 let scrollFrame = null
 let nearUrlTimer = null
-const composerTools = [
-  { key: 'upload', title: '附件占位', icon: 'fas fa-file-upload' },
-  { key: 'heading', title: '标题', label: 'H', before: '## ', after: '' },
-  { key: 'bold', title: '加粗', label: 'B', before: '**', after: '**' },
-  { key: 'italic', title: '斜体', label: 'I', before: '*', after: '*' },
-  { key: 'strike', title: '删除线', label: 'S', before: '~~', after: '~~' },
-  { key: 'quote', title: '引用', icon: 'fas fa-quote-left' },
-  { key: 'spoiler', title: '提示/警告', icon: 'fas fa-exclamation-triangle', before: '> **提示：** ', after: '' },
-  { key: 'code', title: '代码', icon: 'fas fa-code', before: '`', after: '`' },
-  { key: 'link', title: '链接', icon: 'fas fa-link' },
-  { key: 'image', title: '图片', icon: 'fas fa-image' },
-  { key: 'bullets', title: '无序列表', icon: 'fas fa-list-ul' },
-  { key: 'ordered', title: '有序列表', icon: 'fas fa-list-ol' },
-  { key: 'mention', title: '@ 提及', icon: 'fas fa-at', before: '@', after: '' },
-  { key: 'emoji', title: '表情', icon: 'far fa-smile', before: '😊', after: '' }
-]
 
 const canManageDiscussion = computed(() => {
   return authStore.user?.is_staff || authStore.user?.id === discussion.value?.user.id
@@ -416,6 +319,11 @@ const suspensionNotice = computed(() => {
 
 const hasPrevious = computed(() => firstLoadedPage.value > 1)
 const hasMore = computed(() => totalPosts.value > 0 && lastLoadedPage.value * pageLimit < totalPosts.value)
+const hasActiveComposer = computed(() => {
+  if (!discussion.value) return false
+  if (!['reply', 'edit'].includes(composerStore.current.type)) return false
+  return Number(composerStore.current.discussionId) === Number(discussion.value.id)
+})
 const targetNearPost = computed(() => {
   const value = Number(route.query.near)
   return Number.isFinite(value) && value > 0 ? value : null
@@ -424,21 +332,13 @@ const loadedRangeText = computed(() => {
   if (!posts.value.length) return '暂无'
   return `#${posts.value[0].number} - #${posts.value[posts.value.length - 1].number}`
 })
-const composerTitle = computed(() => {
-  if (editingPost.value) return `编辑 #${editingPost.value.number}`
-  if (replyingTo.value) return '回复帖子'
-  return `回复：${discussion.value?.title || ''}`
-})
-const composerStatusText = computed(() => {
-  if (editingPost.value) return '编辑模式下不会恢复已保存草稿。'
-  if (composerDraftSavedAt.value) return `草稿已保存于 ${formatDraftTime(composerDraftSavedAt.value)}。`
-  return '支持 Markdown，可保存草稿并最小化继续编辑。'
-})
 
 onMounted(async () => {
   await refreshDiscussion()
   window.addEventListener('scroll', handlePostScroll, { passive: true })
   window.addEventListener('resize', handlePostScroll, { passive: true })
+  window.addEventListener('pyflarum:reply-created', handleReplyCreated)
+  window.addEventListener('pyflarum:post-updated', handlePostUpdated)
   await nextTick()
   updateVisiblePostFromScroll()
 })
@@ -446,6 +346,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', handlePostScroll)
   window.removeEventListener('resize', handlePostScroll)
+  window.removeEventListener('pyflarum:reply-created', handleReplyCreated)
+  window.removeEventListener('pyflarum:post-updated', handlePostUpdated)
   if (scrollFrame) {
     cancelAnimationFrame(scrollFrame)
   }
@@ -706,9 +608,15 @@ function replyToPost(post) {
     alert(suspensionNotice.value)
     return
   }
-  replyingTo.value = post
-  replyContent.value = `@${post.user.username} `
-  openComposer()
+  composerStore.openReplyComposer({
+    source: 'discussion-detail',
+    discussionId: discussion.value?.id,
+    discussionTitle: discussion.value?.title || '',
+    postId: post.id,
+    postNumber: post.number,
+    username: post.user.username,
+    initialContent: `@${post.user.username} `
+  })
 }
 
 function editPost(post) {
@@ -716,265 +624,68 @@ function editPost(post) {
     alert(suspensionNotice.value)
     return
   }
-  editingPost.value = post
-  replyContent.value = post.content
-  replyingTo.value = null
-  openComposer()
-}
-
-function cancelEdit() {
-  closeComposer(true)
-}
-
-async function openComposer() {
-  if (isSuspended.value) {
-    alert(suspensionNotice.value)
-    return
-  }
-  composerOpen.value = true
-  composerMinimized.value = false
-  if (!editingPost.value && !replyContent.value.trim()) {
-    restoreComposerDraft()
-  }
-  await nextTick()
-  composerTextarea.value?.focus()
-}
-
-function toggleComposerMinimized() {
-  composerMinimized.value = !composerMinimized.value
-  if (!composerMinimized.value) {
-    nextTick(() => composerTextarea.value?.focus())
-  }
-}
-
-function toggleComposerExpanded() {
-  composerExpanded.value = !composerExpanded.value
-  if (composerMinimized.value) {
-    composerMinimized.value = false
-  }
-  nextTick(() => composerTextarea.value?.focus())
-}
-
-function closeComposer(force = false) {
-  if (!force && replyContent.value.trim() && !confirm('确定要关闭回复框吗？当前草稿会被清空。')) {
-    return
-  }
-
-  resetComposerState()
-}
-
-function resetComposerState() {
-  composerOpen.value = false
-  composerMinimized.value = false
-  composerExpanded.value = false
-  composerDraftSavedAt.value = ''
-  editingPost.value = null
-  replyingTo.value = null
-  replyContent.value = ''
-}
-
-async function applyComposerTool(tool) {
-  composerOpen.value = true
-  composerMinimized.value = false
-  await nextTick()
-
-  const textarea = composerTextarea.value
-  if (!textarea) return
-
-  const start = textarea.selectionStart ?? replyContent.value.length
-  const end = textarea.selectionEnd ?? replyContent.value.length
-  const selected = replyContent.value.slice(start, end)
-  const replacement = buildComposerToolReplacement(tool, selected)
-
-  replyContent.value = `${replyContent.value.slice(0, start)}${replacement}${replyContent.value.slice(end)}`
-
-  await nextTick()
-  textarea.focus()
-  const cursor = selected
-    ? start + replacement.length
-    : start + defaultToolCursorOffset(tool)
-  textarea.setSelectionRange(cursor, cursor)
-}
-
-function buildComposerToolReplacement(tool, selected) {
-  if (tool.key === 'link') {
-    return selected ? `[${selected}](https://)` : '[链接文字](https://)'
-  }
-  if (tool.key === 'image') {
-    return selected ? `![图片描述](${selected})` : '![图片描述](https://)'
-  }
-  if (tool.key === 'upload') {
-    return selected ? `[附件说明](${selected})` : '[附件说明](上传后的附件地址)'
-  }
-  if (tool.key === 'quote') {
-    return prefixLines(selected || '引用内容', '> ')
-  }
-  if (tool.key === 'bullets') {
-    return prefixLines(selected || '列表项', '- ')
-  }
-  if (tool.key === 'ordered') {
-    return prefixOrderedLines(selected || '列表项')
-  }
-
-  const before = tool.before || ''
-  const after = tool.after || ''
-  return `${before}${selected || defaultToolText(tool)}${after}`
-}
-
-function defaultToolCursorOffset(tool) {
-  const replacement = buildComposerToolReplacement(tool, '')
-  if (tool.key === 'image') return replacement.indexOf('https://') + 'https://'.length
-  if (tool.key === 'upload') return replacement.indexOf('上传后的附件地址')
-  if (tool.key === 'link') return replacement.indexOf('链接文字') + '链接文字'.length
-  if (tool.key === 'emoji') return replacement.length
-  return replacement.length
-}
-
-function prefixLines(content, prefix) {
-  return content
-    .split('\n')
-    .map(line => `${prefix}${line || '内容'}`)
-    .join('\n')
-}
-
-function prefixOrderedLines(content) {
-  return content
-    .split('\n')
-    .map((line, index) => `${index + 1}. ${line || '内容'}`)
-    .join('\n')
-}
-
-function defaultToolText(tool) {
-  if (tool.key === 'link') return '链接文字'
-  if (tool.key === 'code') return 'code'
-  if (tool.key === 'heading') return '标题'
-  if (tool.key === 'upload') return '附件'
-  if (tool.key === 'image') return 'https://'
-  if (tool.key === 'emoji') return ''
-  return '文本'
-}
-
-function getComposerDraftKey() {
-  if (!discussion.value?.id || editingPost.value) return null
-  return `pyflarum:discussion:${discussion.value.id}:draft:${authStore.user?.id || 'guest'}`
-}
-
-function restoreComposerDraft() {
-  if (typeof window === 'undefined') return false
-
-  composerDraftSavedAt.value = ''
-  const key = getComposerDraftKey()
-  if (!key) return false
-
-  try {
-    const raw = window.localStorage.getItem(key)
-    if (!raw) return false
-
-    const draft = JSON.parse(raw)
-    if (!draft?.content?.trim()) return false
-
-    replyContent.value = draft.content
-    composerDraftSavedAt.value = draft.updatedAt || ''
-    return true
-  } catch (error) {
-    console.error('恢复草稿失败:', error)
-    return false
-  }
-}
-
-function saveComposerDraft() {
-  if (typeof window === 'undefined' || editingPost.value) return
-
-  const key = getComposerDraftKey()
-  if (!key) return
-
-  const content = replyContent.value.trim()
-  if (!content) {
-    window.localStorage.removeItem(key)
-    composerDraftSavedAt.value = ''
-    return
-  }
-
-  const updatedAt = new Date().toISOString()
-  window.localStorage.setItem(
-    key,
-    JSON.stringify({
-      content: replyContent.value,
-      updatedAt
-    })
-  )
-  composerDraftSavedAt.value = updatedAt
-}
-
-function clearComposerDraft() {
-  if (typeof window === 'undefined') return
-
-  const key = getComposerDraftKey()
-  if (!key) return
-
-  window.localStorage.removeItem(key)
-  composerDraftSavedAt.value = ''
-}
-
-function formatDraftTime(value) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '刚刚'
-
-  return date.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit'
+  composerStore.openEditPostComposer({
+    source: 'discussion-detail',
+    discussionId: discussion.value?.id,
+    discussionTitle: discussion.value?.title || '',
+    postId: post.id,
+    postNumber: post.number,
+    username: post.user.username,
+    initialContent: post.content
   })
 }
 
-async function submitReply() {
-  if (!replyContent.value.trim()) return
+function openComposer() {
   if (isSuspended.value) {
     alert(suspensionNotice.value)
     return
   }
+  if (hasActiveComposer.value) {
+    composerStore.showComposer()
+    return
+  }
 
-  submitting.value = true
-  try {
-    if (editingPost.value) {
-      // 编辑帖子
-      const data = await api.patch(`/posts/${editingPost.value.id}`, {
-        content: replyContent.value
-      })
-      const index = posts.value.findIndex(p => p.id === editingPost.value.id)
-      if (index !== -1) {
-        posts.value[index] = normalizePost(data)
-      }
-    } else {
-      // 创建新回复
-      const data = await api.post(`/discussions/${route.params.id}/posts`, {
-        content: replyContent.value
-      })
-      const newPost = normalizePost(data)
-      const shouldJumpToNewPost = hasMore.value
-      discussion.value.comment_count++
-      totalPosts.value++
-      lastLoadedPage.value = Math.max(lastLoadedPage.value, Math.ceil(totalPosts.value / pageLimit))
-      if (shouldJumpToNewPost) {
-        await jumpToPost(newPost.number)
-      } else {
-        posts.value.push(newPost)
-        await scrollToPost(newPost.number)
-      }
-      if (newPost.approval_status === 'pending') {
-        alert('回复已提交审核，管理员通过后会向其他用户显示。')
-      }
-      if (authStore.user?.preferences?.follow_after_reply) {
-        discussion.value.is_subscribed = true
-      }
-      clearComposerDraft()
-    }
+  composerStore.openReplyComposer({
+    source: 'discussion-detail',
+    discussionId: discussion.value?.id,
+    discussionTitle: discussion.value?.title || '',
+    postId: null,
+    postNumber: null,
+    username: '',
+    initialContent: ''
+  })
+}
 
-    resetComposerState()
-  } catch (error) {
-    console.error('提交失败:', error)
-    alert('提交失败: ' + (error.response?.data?.error || error.message || '未知错误'))
-  } finally {
-    submitting.value = false
+async function handleReplyCreated(event) {
+  const detail = event.detail || {}
+  if (!discussion.value || Number(detail.discussionId) !== Number(discussion.value.id)) return
+  if (!detail.post) return
+
+  const newPost = normalizePost(detail.post)
+  if (posts.value.some(post => post.id === newPost.id)) return
+
+  posts.value.push(newPost)
+  discussion.value.comment_count = (discussion.value.comment_count || 0) + 1
+  discussion.value.last_post_number = Math.max(discussion.value.last_post_number || 0, newPost.number || 0)
+  discussion.value.last_posted_at = newPost.created_at || discussion.value.last_posted_at
+  totalPosts.value = Math.max(totalPosts.value + 1, posts.value.length)
+  lastLoadedPage.value = Math.max(lastLoadedPage.value, Math.ceil(totalPosts.value / pageLimit))
+  if (authStore.user?.preferences?.follow_after_reply) {
+    discussion.value.is_subscribed = true
+  }
+
+  await scrollToPost(newPost.number)
+}
+
+function handlePostUpdated(event) {
+  const detail = event.detail || {}
+  if (!discussion.value || Number(detail.discussionId) !== Number(discussion.value.id)) return
+  if (!detail.post) return
+
+  const updatedPost = normalizePost(detail.post)
+  const index = posts.value.findIndex(post => post.id === updatedPost.id)
+  if (index !== -1) {
+    posts.value[index] = updatedPost
   }
 }
 

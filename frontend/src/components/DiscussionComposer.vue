@@ -4,8 +4,9 @@
       v-if="composerStore.isOpen && authStore.isAuthenticated"
       class="floating-composer"
       :class="{ 'is-minimized': composerStore.isMinimized, 'is-expanded': composerStore.isExpanded }"
+      :style="composerInlineStyle"
     >
-      <div class="composer-handle" aria-hidden="true"></div>
+      <div class="composer-handle" aria-hidden="true" @mousedown.prevent="startResize"></div>
       <div class="composer-header">
         <div class="composer-title">
           <span>发起讨论</span>
@@ -117,7 +118,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
@@ -141,6 +142,10 @@ const composerTextarea = ref(null)
 const draftSavedAt = ref('')
 const draftMessage = ref('')
 let draftTimer = null
+const composerHeight = ref(loadComposerHeight())
+const resizing = ref(false)
+let resizeStartY = 0
+let resizeStartHeight = composerHeight.value
 
 const composerTools = [
   { key: 'heading', title: '标题', label: 'H', before: '## ', after: '' },
@@ -180,6 +185,10 @@ const composerStatusText = computed(() => {
   if (draftSavedAt.value) return `草稿保存于 ${formatDraftTime(draftSavedAt.value)}`
   if (selectedTagName.value) return `将发布到 ${selectedTagName.value}`
   return '支持 Markdown，可最小化继续编辑。'
+})
+const composerInlineStyle = computed(() => {
+  if (composerStore.isMinimized || composerStore.isExpanded) return {}
+  return { height: `${composerHeight.value}px` }
 })
 const suspensionNotice = computed(() => {
   if (!isSuspended.value) return ''
@@ -226,6 +235,13 @@ onBeforeUnmount(() => {
   if (draftTimer) {
     clearTimeout(draftTimer)
   }
+  window.removeEventListener('mousemove', handleResizeMove)
+  window.removeEventListener('mouseup', stopResize)
+})
+
+onMounted(() => {
+  window.addEventListener('mousemove', handleResizeMove)
+  window.addEventListener('mouseup', stopResize)
 })
 
 async function prepareComposer() {
@@ -305,6 +321,27 @@ function toggleMinimized() {
 function toggleExpanded() {
   composerStore.toggleExpanded()
   focusPreferredField()
+}
+
+function startResize(event) {
+  if (composerStore.isExpanded || composerStore.isMinimized || window.innerWidth <= 768) return
+
+  resizing.value = true
+  resizeStartY = event.clientY
+  resizeStartHeight = composerHeight.value
+}
+
+function handleResizeMove(event) {
+  if (!resizing.value) return
+
+  const delta = resizeStartY - event.clientY
+  composerHeight.value = clampComposerHeight(resizeStartHeight + delta)
+}
+
+function stopResize() {
+  if (!resizing.value) return
+  resizing.value = false
+  persistComposerHeight(composerHeight.value)
 }
 
 function closeComposer() {
@@ -525,6 +562,23 @@ function formatDateTime(value) {
   if (Number.isNaN(date.getTime())) return '未知时间'
   return date.toLocaleString('zh-CN')
 }
+
+function loadComposerHeight() {
+  if (typeof window === 'undefined') return 520
+  const value = Number(window.localStorage.getItem('pyflarum:composer-height:discussion') || 520)
+  return clampComposerHeight(value)
+}
+
+function persistComposerHeight(value) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem('pyflarum:composer-height:discussion', String(clampComposerHeight(value)))
+}
+
+function clampComposerHeight(value) {
+  const min = 360
+  const max = typeof window === 'undefined' ? 760 : Math.max(420, window.innerHeight - 72)
+  return Math.max(min, Math.min(value, max))
+}
 </script>
 
 <style scoped>
@@ -540,6 +594,8 @@ function formatDateTime(value) {
   box-shadow: 0 2px 8px rgba(31, 45, 61, 0.18);
   z-index: 900;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .floating-composer.is-minimized {
@@ -635,6 +691,10 @@ function formatDateTime(value) {
 
 .composer-body {
   padding: 0 20px 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .composer-notice {
@@ -707,8 +767,9 @@ function formatDateTime(value) {
   font-family: inherit;
   line-height: 1.7;
   resize: none;
-  min-height: 220px;
-  max-height: 46vh;
+  min-height: 140px;
+  max-height: none;
+  flex: 1;
 }
 
 .composer-editor:focus {
