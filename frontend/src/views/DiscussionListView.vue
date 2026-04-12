@@ -5,7 +5,7 @@
         <div class="index-nav-header">
           <button
             class="btn-start-discussion"
-            @click="authStore.isAuthenticated ? $router.push('/discussions/create') : $router.push('/login')"
+            @click="handleStartDiscussion"
           >
             <i class="fas fa-edit"></i>
             发起讨论
@@ -225,8 +225,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useComposerStore } from '@/stores/composer'
 import { useForumStore } from '@/stores/forum'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
 import {
   buildDiscussionPath,
@@ -240,8 +241,10 @@ import {
 } from '@/utils/forum'
 
 const authStore = useAuthStore()
+const composerStore = useComposerStore()
 const forumStore = useForumStore()
 const route = useRoute()
+const router = useRouter()
 
 const discussions = ref([])
 const tags = ref([])
@@ -380,6 +383,18 @@ async function markAllAsRead() {
   } finally {
     markingAllRead.value = false
   }
+}
+
+function handleStartDiscussion() {
+  if (!authStore.isAuthenticated) {
+    router.push('/login')
+    return
+  }
+
+  composerStore.openDiscussionComposer({
+    tagId: currentTag.value?.id,
+    source: route.name?.toString() || 'index'
+  })
 }
 
 function getUserColor(user) {

@@ -5,6 +5,7 @@
       <router-view />
     </main>
     <Footer />
+    <DiscussionComposer />
   </div>
 </template>
 
@@ -12,6 +13,7 @@
 import { onMounted } from 'vue'
 import Header from './components/Header.vue'
 import Footer from './components/Footer.vue'
+import DiscussionComposer from './components/DiscussionComposer.vue'
 import { useAuthStore } from './stores/auth'
 import { useNotificationStore } from './stores/notification'
 

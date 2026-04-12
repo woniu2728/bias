@@ -12,10 +12,10 @@
           <span class="icon">💬</span>
           <span>浏览讨论</span>
         </router-link>
-        <router-link to="/discussions/create" v-if="authStore.isAuthenticated" class="action-btn">
+        <button v-if="authStore.isAuthenticated" type="button" class="action-btn" @click="handleStartDiscussion">
           <span class="icon">✏️</span>
           <span>发起讨论</span>
-        </router-link>
+        </button>
         <router-link to="/register" v-else class="action-btn">
           <span class="icon">👤</span>
           <span>注册账号</span>
@@ -27,8 +27,16 @@
 
 <script setup>
 import { useAuthStore } from '@/stores/auth'
+import { useComposerStore } from '@/stores/composer'
 
 const authStore = useAuthStore()
+const composerStore = useComposerStore()
+
+function handleStartDiscussion() {
+  composerStore.openDiscussionComposer({
+    source: 'home'
+  })
+}
 </script>
 
 <style scoped>

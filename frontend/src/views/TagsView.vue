@@ -4,7 +4,7 @@
       <aside class="tags-sidebar">
         <button
           class="btn-start-discussion"
-          @click="authStore.isAuthenticated ? $router.push('/discussions/create') : $router.push('/login')"
+          @click="handleStartDiscussion"
         >
           <i class="fas fa-edit"></i>
           发起讨论
@@ -101,6 +101,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useComposerStore } from '@/stores/composer'
+import { useRouter } from 'vue-router'
 import api from '@/api'
 import {
   buildDiscussionPath,
@@ -112,6 +114,8 @@ import {
 } from '@/utils/forum'
 
 const authStore = useAuthStore()
+const composerStore = useComposerStore()
+const router = useRouter()
 
 const tags = ref([])
 const loading = ref(true)
@@ -136,6 +140,17 @@ async function loadTags() {
   } finally {
     loading.value = false
   }
+}
+
+function handleStartDiscussion() {
+  if (!authStore.isAuthenticated) {
+    router.push('/login')
+    return
+  }
+
+  composerStore.openDiscussionComposer({
+    source: 'tags'
+  })
 }
 </script>
 

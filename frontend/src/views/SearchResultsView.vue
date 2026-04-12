@@ -4,7 +4,7 @@
       <aside class="search-sidebar">
         <button
           class="btn-start-discussion"
-          @click="authStore.isAuthenticated ? $router.push('/discussions/create') : $router.push('/login')"
+          @click="handleStartDiscussion"
         >
           <i class="fas fa-edit"></i>
           发起讨论
@@ -169,6 +169,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useComposerStore } from '@/stores/composer'
 import api from '@/api'
 import {
   buildDiscussionPath,
@@ -180,6 +181,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const composerStore = useComposerStore()
 
 const loading = ref(false)
 const total = ref(0)
@@ -226,6 +228,17 @@ const heroText = computed(() => {
   }
   return `当前显示 ${labelMap[searchType.value]}结果，共 ${total.value} 条。`
 })
+
+function handleStartDiscussion() {
+  if (!authStore.isAuthenticated) {
+    router.push('/login')
+    return
+  }
+
+  composerStore.openDiscussionComposer({
+    source: 'search'
+  })
+}
 
 watch(
   () => [normalizedQuery.value, searchType.value, page.value],
