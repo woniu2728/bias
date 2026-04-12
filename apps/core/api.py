@@ -12,10 +12,13 @@ from apps.core.schemas import (
     DiscussionSearchResultSchema,
     PostSearchResultSchema,
     UserSearchResultSchema,
+    MarkdownPreviewInSchema,
+    MarkdownPreviewOutSchema,
     UploadFileOutSchema,
 )
 from apps.core.auth import AuthBearer
 from apps.core.file_service import FileUploadService
+from apps.core.markdown_service import MarkdownService
 from apps.core.settings_service import get_public_forum_settings
 from apps.core.services import SearchService
 
@@ -26,6 +29,14 @@ router = Router()
 def get_forum_settings(request):
     """获取前台公开论坛设置"""
     return get_public_forum_settings()
+
+
+@router.post("/preview", response=MarkdownPreviewOutSchema, tags=["Forum"])
+def preview_markdown(request, payload: MarkdownPreviewInSchema):
+    """实时预览 Markdown 内容"""
+    return {
+        "html": MarkdownService.render(payload.content or "", sanitize=True)
+    }
 
 
 @router.post("/uploads", response=UploadFileOutSchema, auth=AuthBearer(), tags=["Uploads"])

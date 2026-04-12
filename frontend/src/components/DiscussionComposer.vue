@@ -62,6 +62,9 @@
         >
           {{ uploadNotice }}
         </div>
+        <div v-if="previewError" class="composer-notice composer-notice-error">
+          {{ previewError }}
+        </div>
 
         <input
           ref="titleInput"
@@ -91,16 +94,42 @@
         </div>
 
         <textarea
+          v-show="!showPreview"
           ref="composerTextarea"
           v-model="form.content"
           class="composer-editor"
           rows="8"
           placeholder="输入讨论内容... 支持 Markdown、@用户名 和代码块"
           :disabled="submitting || isSuspended || uploading"
+          @input="handleEditorInteraction"
+          @click="handleEditorInteraction"
+          @keyup="handleEditorInteraction"
+          @keydown="handleEditorKeydown"
           @keydown.ctrl.enter.prevent="submitDiscussion"
           @keydown.meta.enter.prevent="submitDiscussion"
           @keydown.esc.prevent="closeComposer"
         ></textarea>
+        <div v-if="showPreview" class="composer-preview">
+          <div class="composer-preview-header">
+            <span>预览</span>
+            <small>{{ previewStatusText }}</small>
+          </div>
+          <div v-if="previewLoading" class="composer-preview-loading">正在生成预览...</div>
+          <div
+            v-else
+            class="composer-preview-body post-body"
+            v-html="previewHtml || '<p class=&quot;composer-preview-empty&quot;>输入内容后即可查看预览</p>'"
+          ></div>
+        </div>
+        <ComposerMentionPicker
+          v-if="showMentionPicker"
+          :items="mentionUsers"
+          :active-index="mentionActiveIndex"
+          :loading="mentionLoading"
+          :style-object="mentionPickerStyle"
+          @highlight="mentionActiveIndex = $event"
+          @select="handleMentionSelect"
+        />
 
         <div class="composer-toolbar">
           <button
@@ -114,6 +143,15 @@
           </button>
 
           <div class="composer-formatting" aria-label="格式化工具栏">
+            <button
+              type="button"
+              title="预览"
+              :disabled="submitting || uploading"
+              :class="{ 'is-active': showPreview }"
+              @click="togglePreview"
+            >
+              <i class="far fa-eye"></i>
+            </button>
             <template v-for="tool in composerTools" :key="tool.key">
               <div v-if="tool.key === 'emoji'" :ref="setEmojiToolRef" class="composer-tool">
                 <button
@@ -175,14 +213,18 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ComposerEmojiPicker from '@/components/ComposerEmojiPicker.vue'
+import ComposerMentionPicker from '@/components/ComposerMentionPicker.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
 import api from '@/api'
 import {
   EMOJI_GROUPS,
+  buildMentionReplacement,
   buildComposerToolReplacement,
   buildUploadedFileMarkdown,
+  detectMentionQuery,
   defaultToolCursorOffset,
+  fetchComposerPreview,
   getComposerErrorMessage,
   replaceSelection,
   uploadComposerFile
@@ -212,7 +254,18 @@ const draftMessage = ref('')
 const uploadNotice = ref('')
 const uploadNoticeTone = ref('info')
 const showEmojiPicker = ref(false)
+const mentionUsers = ref([])
+const mentionState = ref(null)
+const mentionLoading = ref(false)
+const mentionActiveIndex = ref(0)
+const showPreview = ref(false)
+const previewHtml = ref('')
+const previewLoading = ref(false)
+const previewError = ref('')
 let draftTimer = null
+let previewTimer = null
+let mentionTimer = null
+let mentionRequestId = 0
 const composerHeight = ref(loadComposerHeight())
 const resizing = ref(false)
 const viewportWidth = ref(typeof window === 'undefined' ? 1280 : window.innerWidth)
@@ -277,9 +330,17 @@ const unsavedExitMessage = '你有未发布的讨论内容。确定要离开当�
 const isPhoneViewport = computed(() => viewportWidth.value <= 768)
 const isPhoneOverlay = computed(() => isPhoneViewport.value && showComposer.value && !composerStore.isMinimized)
 const showBackdrop = computed(() => isPhoneOverlay.value)
+const showMentionPicker = computed(() => {
+  return Boolean(mentionState.value) && (mentionLoading.value || mentionUsers.value.length > 0)
+})
 const composerInlineStyle = computed(() => {
   if (composerStore.isMinimized || composerStore.isExpanded || isPhoneOverlay.value) return {}
   return { height: `${composerHeight.value}px` }
+})
+const previewStatusText = computed(() => {
+  if (previewLoading.value) return '同步中'
+  if (!form.value.content.trim()) return '暂无内容'
+  return '按论坛最终渲染效果预览'
 })
 const emojiPickerStyle = computed(() => {
   const anchor = emojiToolRef.value
@@ -294,6 +355,21 @@ const emojiPickerStyle = computed(() => {
     left: `${left}px`,
     top: `${top}px`,
     transform: 'translateY(-100%)'
+  }
+})
+const mentionPickerStyle = computed(() => {
+  const anchor = composerTextarea.value
+  if (!anchor) return {}
+
+  const rect = anchor.getBoundingClientRect()
+  const pickerWidth = Math.min(320, Math.max(240, window.innerWidth - 32))
+  const left = Math.max(16, Math.min(rect.left, window.innerWidth - pickerWidth - 16))
+  const openAbove = rect.bottom + 240 > window.innerHeight - 16 && rect.top > 280
+
+  return {
+    left: `${left}px`,
+    top: openAbove ? `${rect.top - 8}px` : `${rect.bottom + 8}px`,
+    transform: openAbove ? 'translateY(-100%)' : 'none'
   }
 })
 const suspensionNotice = computed(() => {
@@ -324,6 +400,7 @@ watch(
   () => {
     if (!composerStore.isOpen) return
     scheduleDraftSave()
+    schedulePreview()
   },
   { deep: true }
 )
@@ -362,6 +439,12 @@ watch(
 onBeforeUnmount(() => {
   if (draftTimer) {
     clearTimeout(draftTimer)
+  }
+  if (previewTimer) {
+    clearTimeout(previewTimer)
+  }
+  if (mentionTimer) {
+    clearTimeout(mentionTimer)
   }
   window.removeEventListener('resize', handleViewportResize)
   window.removeEventListener('mousemove', handleResizeMove)
@@ -441,13 +524,16 @@ async function focusPreferredField() {
 }
 
 function focusEditor() {
+  showPreview.value = false
   composerTextarea.value?.focus()
+  handleEditorInteraction()
 }
 
 function toggleMinimized() {
   composerStore.toggleMinimized()
   if (!composerStore.isMinimized) {
     focusPreferredField()
+    handleEditorInteraction()
   }
 }
 
@@ -456,10 +542,24 @@ function toggleExpanded() {
   focusPreferredField()
 }
 
+function togglePreview() {
+  showPreview.value = !showPreview.value
+  previewError.value = ''
+  clearMentionSuggestions()
+
+  if (showPreview.value) {
+    requestPreview()
+    return
+  }
+
+  nextTick(() => composerTextarea.value?.focus())
+}
+
 function handleHeaderSummaryClick() {
   if (!composerStore.isMinimized) return
   composerStore.showComposer()
   focusPreferredField()
+  handleEditorInteraction()
 }
 
 function handleViewportResize() {
@@ -492,6 +592,8 @@ function closeComposer() {
     return
   }
   showEmojiPicker.value = false
+  showPreview.value = false
+  clearMentionSuggestions()
   uploadNotice.value = ''
   saveDraft(false)
   composerStore.closeComposer()
@@ -645,6 +747,39 @@ async function applyComposerTool(tool) {
   await insertComposerText(replacement, { start, end, cursor })
 }
 
+function handleEditorInteraction() {
+  syncMentionSuggestions()
+}
+
+function handleEditorKeydown(event) {
+  if (!showMentionPicker.value) return
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    mentionActiveIndex.value = (mentionActiveIndex.value + 1) % Math.max(mentionUsers.value.length, 1)
+    return
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    mentionActiveIndex.value =
+      (mentionActiveIndex.value - 1 + Math.max(mentionUsers.value.length, 1)) % Math.max(mentionUsers.value.length, 1)
+    return
+  }
+
+  if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    const activeUser = mentionUsers.value[mentionActiveIndex.value]
+    if (!activeUser) return
+    event.preventDefault()
+    handleMentionSelect(activeUser)
+    return
+  }
+
+  if (event.key === 'Escape') {
+    clearMentionSuggestions()
+  }
+}
+
 async function handleAttachmentSelected(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
@@ -690,6 +825,104 @@ async function handleEmojiSelect(emoji) {
   await insertComposerText(emoji)
 }
 
+function syncMentionSuggestions() {
+  if (showPreview.value) {
+    clearMentionSuggestions()
+    return
+  }
+
+  const textarea = composerTextarea.value
+  if (!textarea || textarea.selectionStart !== textarea.selectionEnd) {
+    clearMentionSuggestions()
+    return
+  }
+
+  const detected = detectMentionQuery(form.value.content, textarea.selectionStart)
+  if (!detected) {
+    clearMentionSuggestions()
+    return
+  }
+
+  mentionState.value = detected
+  scheduleMentionSearch(detected.query)
+}
+
+function scheduleMentionSearch(query) {
+  if (mentionTimer) {
+    clearTimeout(mentionTimer)
+  }
+
+  mentionLoading.value = true
+  const requestId = ++mentionRequestId
+  mentionTimer = setTimeout(async () => {
+    try {
+      const users = await api.get('/users', {
+        params: {
+          q: query,
+          limit: 5
+        }
+      })
+      if (requestId !== mentionRequestId || !mentionState.value) return
+      mentionUsers.value = Array.isArray(users) ? users.slice(0, 5) : []
+      mentionActiveIndex.value = 0
+    } catch (error) {
+      if (requestId !== mentionRequestId) return
+      mentionUsers.value = []
+    } finally {
+      if (requestId === mentionRequestId) {
+        mentionLoading.value = false
+      }
+    }
+  }, 150)
+}
+
+async function handleMentionSelect(user) {
+  if (!mentionState.value || !user?.username) return
+
+  const replacement = buildMentionReplacement(user.username)
+  await insertComposerText(replacement, {
+    start: mentionState.value.start,
+    end: mentionState.value.end,
+    cursor: mentionState.value.start + replacement.length
+  })
+  clearMentionSuggestions()
+}
+
+function schedulePreview() {
+  if (!showPreview.value) return
+
+  if (previewTimer) {
+    clearTimeout(previewTimer)
+  }
+
+  previewTimer = setTimeout(() => {
+    requestPreview()
+  }, 220)
+}
+
+async function requestPreview() {
+  if (!showPreview.value) return
+
+  const content = form.value.content.trim()
+  previewError.value = ''
+  if (!content) {
+    previewHtml.value = ''
+    previewLoading.value = false
+    return
+  }
+
+  previewLoading.value = true
+  try {
+    const data = await fetchComposerPreview(form.value.content)
+    if (!showPreview.value) return
+    previewHtml.value = data.html || ''
+  } catch (error) {
+    previewError.value = getComposerErrorMessage(error, '预览加载失败')
+  } finally {
+    previewLoading.value = false
+  }
+}
+
 async function insertComposerText(replacement, options = {}) {
   await nextTick()
 
@@ -704,16 +937,30 @@ async function insertComposerText(replacement, options = {}) {
   await nextTick()
   composerTextarea.value?.focus()
   composerTextarea.value?.setSelectionRange(cursor, cursor)
+  syncMentionSuggestions()
 }
 
 function handleDocumentMouseDown(event) {
-  if (!showEmojiPicker.value) return
-  if (emojiToolRef.value?.contains(event.target)) return
-  showEmojiPicker.value = false
+  if (showEmojiPicker.value && !emojiToolRef.value?.contains(event.target)) {
+    showEmojiPicker.value = false
+  }
+  if (event.target !== composerTextarea.value) {
+    clearMentionSuggestions()
+  }
 }
 
 function setEmojiToolRef(element) {
   emojiToolRef.value = element
+}
+
+function clearMentionSuggestions() {
+  if (mentionTimer) {
+    clearTimeout(mentionTimer)
+  }
+  mentionLoading.value = false
+  mentionUsers.value = []
+  mentionState.value = null
+  mentionActiveIndex.value = 0
 }
 
 function resetComposer() {
@@ -725,6 +972,10 @@ function resetComposer() {
   }
   uploadNotice.value = ''
   showEmojiPicker.value = false
+  showPreview.value = false
+  previewHtml.value = ''
+  previewError.value = ''
+  clearMentionSuggestions()
   composerStore.closeComposer()
 }
 
@@ -997,6 +1248,35 @@ function clearComposerViewportEffects() {
   min-height: 140px;
   max-height: none;
   flex: 1;
+}
+
+.composer-preview {
+  display: flex;
+  flex: 1;
+  min-height: 140px;
+  flex-direction: column;
+  padding: 14px 0 12px;
+}
+
+.composer-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: #5c6d7d;
+  font-size: 13px;
+}
+
+.composer-preview-loading,
+.composer-preview-empty {
+  color: #7a8794;
+  font-size: 14px;
+}
+
+.composer-preview-body {
+  flex: 1;
+  overflow-y: auto;
+  line-height: 1.7;
 }
 
 .composer-editor:focus {

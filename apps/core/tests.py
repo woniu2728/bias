@@ -255,6 +255,21 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(payload["primary_color"], "#123456")
         self.assertEqual(payload["logo_url"], "/media/runtime-logo.png")
 
+    def test_markdown_preview_endpoint_returns_rendered_html(self):
+        response = self.client.post(
+            "/api/preview",
+            data=json.dumps({
+                "content": "# 标题\n\n你好 @alice\n\n[官网](https://example.com)"
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        html = response.json()["html"]
+        self.assertIn("<h1", html)
+        self.assertIn('href="/u/alice"', html)
+        self.assertIn('target="_blank"', html)
+
 
 class AdminUserManagementApiTests(TestCase):
     def setUp(self):

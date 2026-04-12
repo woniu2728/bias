@@ -92,3 +92,13 @@ class UploadFileOutSchema(BaseModel):
     mime_type: Optional[str] = None
     hash: Optional[str] = None
     is_image: bool = False
+
+
+class MarkdownPreviewInSchema(BaseModel):
+    """Markdown 预览请求"""
+    content: str = Field("", description="Markdown 原文")
+
+
+class MarkdownPreviewOutSchema(BaseModel):
+    """Markdown 预览结果"""
+    html: str
