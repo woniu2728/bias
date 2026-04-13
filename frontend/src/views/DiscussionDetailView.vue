@@ -44,73 +44,106 @@
                 <span>从这里开始是未读回复</span>
               </div>
 
-              <div
+              <article
                 :id="`post-${post.number}`"
                 class="post-item"
                 :class="{ 'is-hidden': post.is_hidden, 'is-target': highlightedPostNumber === post.number }"
               >
-                <div class="post-avatar">
-                  <div v-if="!post.user.avatar_url" class="avatar-placeholder">
-                    {{ post.user.username.charAt(0).toUpperCase() }}
+                <div class="post-container">
+                  <aside class="post-side">
+                    <router-link :to="buildUserPath(post.user)" class="post-avatar-link" :title="post.user.username">
+                      <div v-if="!post.user.avatar_url" class="post-avatar avatar-placeholder">
+                        {{ post.user.username.charAt(0).toUpperCase() }}
+                      </div>
+                      <img
+                        v-else
+                        class="post-avatar"
+                        :src="post.user.avatar_url"
+                        :alt="post.user.username"
+                      />
+                    </router-link>
+                  </aside>
+
+                  <div class="post-main">
+                    <header class="post-header">
+                      <div class="post-header-main">
+                        <router-link :to="buildUserPath(post.user)" class="post-author">{{ post.user.username }}</router-link>
+                        <button
+                          type="button"
+                          class="post-meta-link post-number"
+                          :title="`跳转到第 ${post.number} 楼`"
+                          @click="jumpToPost(post.number)"
+                        >
+                          #{{ post.number }}
+                        </button>
+                        <time class="post-time" :datetime="post.created_at" :title="formatAbsoluteDate(post.created_at)">
+                          {{ formatDate(post.created_at) }}
+                        </time>
+                        <span v-if="post.edited_at" class="post-edited" :title="formatAbsoluteDate(post.edited_at)">已编辑</span>
+                        <span v-if="post.approval_status === 'pending'" class="post-status">待审核</span>
+                      </div>
+
+                      <aside class="post-actions" :class="{ 'is-open': activePostMenuId === post.id }">
+                        <button
+                          type="button"
+                          class="post-action"
+                          :class="{ 'is-active': post.is_liked }"
+                          :disabled="isSuspended"
+                          @click="toggleLike(post)"
+                        >
+                          <i class="fas fa-thumbs-up"></i>
+                          <span>赞</span>
+                        </button>
+                        <button
+                          v-if="authStore.isAuthenticated && !discussion.is_locked && !isSuspended"
+                          type="button"
+                          class="post-action"
+                          @click="replyToPost(post)"
+                        >
+                          <i class="fas fa-reply"></i>
+                          <span>回复</span>
+                        </button>
+                        <div v-if="hasPostControls(post)" class="post-controls" :class="{ 'is-open': activePostMenuId === post.id }">
+                          <button
+                            type="button"
+                            class="post-action post-action--icon"
+                            :aria-expanded="activePostMenuId === post.id"
+                            @click.stop="togglePostMenu(post.id)"
+                          >
+                            <i class="fas fa-ellipsis-h"></i>
+                          </button>
+                          <div v-if="activePostMenuId === post.id" class="post-controls-menu">
+                            <button v-if="canEditPost(post)" type="button" @click="handlePostMenuAction(() => editPost(post))">
+                              编辑
+                            </button>
+                            <button v-if="canDeletePost(post)" type="button" class="is-danger" @click="handlePostMenuAction(() => deletePost(post))">
+                              删除
+                            </button>
+                            <button v-if="canReportPost(post)" type="button" @click="handlePostMenuAction(() => openReportModal(post))">
+                              举报
+                            </button>
+                          </div>
+                        </div>
+                      </aside>
+                    </header>
+
+                    <div class="post-body" v-html="post.content_html"></div>
+
+                    <footer v-if="post.like_count > 0" class="post-footer">
+                      <button
+                        type="button"
+                        class="post-feedback"
+                        :class="{ 'is-active': post.is_liked }"
+                        :disabled="isSuspended"
+                        @click="toggleLike(post)"
+                      >
+                        <i class="fas fa-thumbs-up"></i>
+                        <span>{{ formatLikeSummary(post) }}</span>
+                      </button>
+                    </footer>
                   </div>
-                  <img
-                    v-else
-                    :src="post.user.avatar_url"
-                    :alt="post.user.username"
-                  />
                 </div>
-
-                <div class="post-content">
-                  <div class="post-header">
-                    <router-link :to="buildUserPath(post.user)" class="post-author">{{ post.user.username }}</router-link>
-                    <span class="post-number">#{{ post.number }}</span>
-                    <span class="post-time">{{ formatDate(post.created_at) }}</span>
-                    <span v-if="post.approval_status === 'pending'" class="post-status">待审核</span>
-                    <span v-if="post.edited_at" class="post-edited">(已编辑)</span>
-                  </div>
-
-                  <div class="post-body" v-html="post.content_html"></div>
-
-                  <div class="post-footer">
-                    <button
-                      @click="toggleLike(post)"
-                      class="post-action"
-                      :class="{ 'is-liked': post.is_liked }"
-                      :disabled="isSuspended"
-                    >
-                      ❤️ {{ post.like_count || 0 }}
-                    </button>
-                    <button
-                      @click="replyToPost(post)"
-                      class="post-action"
-                      v-if="authStore.isAuthenticated && !discussion.is_locked && !isSuspended"
-                    >
-                      💬 回复
-                    </button>
-                    <button
-                      @click="editPost(post)"
-                      class="post-action"
-                      v-if="canEditPost(post)"
-                    >
-                      ✏️ 编辑
-                    </button>
-                    <button
-                      @click="deletePost(post)"
-                      class="post-action danger"
-                      v-if="canDeletePost(post)"
-                    >
-                      🗑️ 删除
-                    </button>
-                    <button
-                      @click="openReportModal(post)"
-                      class="post-action warning"
-                      v-if="canReportPost(post)"
-                    >
-                      🚩 举报
-                    </button>
-                  </div>
-                </div>
-              </div>
+              </article>
             </template>
           </div>
 
@@ -370,6 +403,7 @@ const showReportModal = ref(false)
 const reportSubmitting = ref(false)
 const reportingPost = ref(null)
 const showDiscussionMenu = ref(false)
+const activePostMenuId = ref(null)
 const scrubberTrackHeight = ref(300)
 const scrubberTrackMaxHeight = ref(null)
 const scrubberDragging = ref(false)
@@ -700,6 +734,7 @@ function resetPostStream() {
   lastLoadedPage.value = 1
   totalPosts.value = 0
   highlightedPostNumber.value = null
+  activePostMenuId.value = null
   currentVisiblePostNumber.value = normalizePostNumber(route.query.near) || 1
   currentVisiblePostProgress.value = currentVisiblePostNumber.value
   scrubberPreviewNumber.value = null
@@ -744,6 +779,10 @@ function showUnreadDivider(post) {
 function handleDocumentMouseDown(event) {
   if (showDiscussionMenu.value && !discussionActionsRef.value?.contains(event.target)) {
     showDiscussionMenu.value = false
+  }
+
+  if (activePostMenuId.value && !(event.target instanceof Element && event.target.closest('.post-controls'))) {
+    activePostMenuId.value = null
   }
 }
 
@@ -936,6 +975,19 @@ function getPointerClientY(event) {
 
 function toggleDiscussionMenu() {
   showDiscussionMenu.value = !showDiscussionMenu.value
+}
+
+function hasPostControls(post) {
+  return canEditPost(post) || canDeletePost(post) || canReportPost(post)
+}
+
+function togglePostMenu(postId) {
+  activePostMenuId.value = activePostMenuId.value === postId ? null : postId
+}
+
+async function handlePostMenuAction(action) {
+  activePostMenuId.value = null
+  await action()
 }
 
 async function handleDiscussionMenuAction(action) {
@@ -1157,6 +1209,7 @@ function openReportModal(post) {
     alert(suspensionNotice.value)
     return
   }
+  activePostMenuId.value = null
   reportingPost.value = post
   reportForm.value = {
     reason: '垃圾广告',
@@ -1261,6 +1314,17 @@ function formatDate(dateString) {
   return formatRelativeTime(dateString)
 }
 
+function formatLikeSummary(post) {
+  const count = Number(post?.like_count || 0)
+  if (count <= 0) return ''
+
+  if (post?.is_liked) {
+    return count === 1 ? '你赞了这条回复' : `你和其他 ${count - 1} 人赞了这条回复`
+  }
+
+  return `${count} 人赞了这条回复`
+}
+
 function formatAbsoluteDate(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '未知时间'
@@ -1352,7 +1416,7 @@ function formatAbsoluteDate(value) {
 .posts {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 0;
   margin-bottom: 30px;
 }
 
@@ -1360,6 +1424,7 @@ function formatAbsoluteDate(value) {
   display: flex;
   align-items: center;
   gap: 14px;
+  margin: 10px 0 4px;
   color: #cf6a2b;
   font-size: 12px;
   font-weight: 700;
@@ -1376,157 +1441,338 @@ function formatAbsoluteDate(value) {
 }
 
 .post-item {
-  display: flex;
-  gap: 20px;
-  padding: 20px;
-  background: #fafafa;
-  border-radius: 8px;
-  transition: all 0.2s;
+  position: relative;
+  padding: 22px 0 24px;
+  transition: opacity 0.2s, transform 0.2s;
 }
 
-.post-item:hover {
-  background: #f5f5f5;
+.post-item::after {
+  content: '';
+  display: block;
+  width: calc(100% - 84px);
+  height: 1px;
+  margin-left: auto;
+  background: #e6ecf1;
+}
+
+.post-item:last-of-type::after {
+  display: none;
 }
 
 .post-item.is-hidden {
-  opacity: 0.5;
+  opacity: 0.52;
 }
 
-.post-item.is-target {
-  background: #fff8e1;
-  box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.38);
+.post-item.is-target .post-main {
+  background: #fffaf0;
+  box-shadow: 0 0 0 2px rgba(231, 124, 47, 0.18);
+  border-radius: 10px;
+  margin: -12px -16px 0 0;
+  padding: 12px 16px 16px;
 }
 
-.post-avatar img {
-  width: 48px;
-  height: 48px;
+.post-container {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 0;
+}
+
+.post-side {
+  padding-top: 2px;
+}
+
+.post-avatar-link {
+  display: inline-flex;
+  text-decoration: none;
+}
+
+.post-avatar {
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   object-fit: cover;
+  display: block;
 }
 
-.post-avatar .avatar-placeholder {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: #667eea;
-  color: white;
+.avatar-placeholder.post-avatar {
+  background: #56739a;
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
 }
 
-.post-content {
-  flex: 1;
+.post-main {
+  min-width: 0;
+  padding-top: 2px;
 }
 
 .post-header {
+  margin-bottom: 15px;
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.post-header-main {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+  color: #7b8794;
   font-size: 14px;
 }
 
 .post-author {
-  font-weight: 600;
-  color: #667eea;
+  color: #1f2d3d;
+  font-weight: 700;
+  font-size: 15px;
 }
 
 .post-author:hover {
   text-decoration: none;
+  color: #2c4f7b;
 }
 
-.post-number {
-  color: #999;
+.post-meta-link,
+.post-time,
+.post-edited {
+  color: #7b8794;
+  font-size: 13px;
 }
 
-.post-time {
-  color: #999;
+.post-meta-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.post-meta-link:hover,
+.post-time:hover {
+  color: #516174;
 }
 
 .post-edited {
-  color: #999;
-  font-style: italic;
+  cursor: default;
 }
 
 .post-status {
-  color: #856404;
+  color: #8b6a17;
   background: #fff3cd;
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 3px 8px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .post-body {
-  margin-bottom: 15px;
-  line-height: 1.6;
-  color: #333;
+  position: relative;
+  overflow: auto;
+  overflow-wrap: break-word;
+  color: #2c3a47;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
-.post-body :deep(pre) {
-  background: #2d2d2d;
-  color: #f8f8f2;
-  padding: 15px;
-  border-radius: 6px;
-  overflow-x: auto;
+.post-body :deep(p),
+.post-body :deep(ul),
+.post-body :deep(ol),
+.post-body :deep(blockquote) {
+  margin-bottom: 1em;
 }
 
-.post-body :deep(code) {
-  background: #f0f0f0;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-family: 'Courier New', monospace;
+.post-body :deep(a) {
+  border-bottom: 1px solid #dde5ec;
+  font-weight: 600;
+}
+
+.post-body :deep(a:hover),
+.post-body :deep(a:focus),
+.post-body :deep(a:active) {
+  text-decoration: none;
+  border-color: #4c6b90;
 }
 
 .post-body :deep(blockquote) {
-  border-left: 4px solid #667eea;
-  padding-left: 15px;
-  margin: 15px 0;
-  color: #666;
+  margin: 1em 0;
+  border: 0;
+  border-top: 2px dotted #f5f7fa;
+  border-bottom: 2px dotted #f5f7fa;
+  border-radius: 10px;
+  padding: 8px 15px;
+  background: #eef3f7;
+  color: #66717c;
 }
 
-.post-footer {
+.post-body :deep(code) {
+  font-family: source-code-pro, Monaco, Consolas, 'Courier New', monospace;
+  padding: 5px;
+  border-radius: 4px;
+  background: #edf2f7;
+  color: #4a5663;
+  line-height: 1.3;
+  font-size: 90%;
+}
+
+.post-body :deep(pre) {
+  border: 0;
+  padding: 0;
+  border-radius: 10px;
+  background: #24313d;
+  color: #eef3f7;
+  font-size: 90%;
+  overflow-wrap: normal;
+}
+
+.post-body :deep(pre code) {
+  display: block;
+  padding: 1em;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  line-height: inherit;
+  font-size: 100%;
+  overflow-x: auto;
+  max-height: max(50vh, 250px);
+}
+
+.post-body :deep(h1),
+.post-body :deep(h2),
+.post-body :deep(h3),
+.post-body :deep(h4),
+.post-body :deep(h5),
+.post-body :deep(h6) {
+  margin-top: 1em;
+  margin-bottom: 16px;
+  font-weight: 700;
+}
+
+.post-body :deep(*:first-child) {
+  margin-top: 0 !important;
+}
+
+.post-body :deep(img),
+.post-body :deep(iframe) {
+  max-width: 100%;
+}
+
+.post-actions {
   display: flex;
-  gap: 15px;
+  align-items: center;
+  gap: 2px;
+  margin-top: -4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  position: relative;
+}
+
+.post-item:hover .post-actions,
+.post-item:focus-within .post-actions,
+.post-actions.is-open {
+  opacity: 1;
 }
 
 .post-action {
-  padding: 6px 12px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 0;
+  background: transparent;
+  color: #72808d;
+  padding: 6px 8px;
+  border-radius: 6px;
   font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, color 0.2s;
 }
 
 .post-action:hover {
-  border-color: #667eea;
-  color: #667eea;
+  background: #eef3f7;
+  color: #3f5165;
 }
 
-.post-action:disabled {
+.post-action:disabled,
+.post-feedback:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
 
-.post-action.is-liked {
-  background: #ffe0e0;
-  border-color: #ff6b6b;
-  color: #ff6b6b;
+.post-action.is-active,
+.post-feedback.is-active {
+  color: #d5652a;
 }
 
-.post-action.danger:hover {
-  border-color: #e74c3c;
-  color: #e74c3c;
+.post-action--icon {
+  padding-left: 7px;
+  padding-right: 7px;
 }
 
-.post-action.warning:hover {
-  border-color: #e67e22;
-  color: #e67e22;
+.post-controls {
+  position: relative;
+}
+
+.post-controls-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 138px;
+  padding: 8px;
+  border: 1px solid #dce4ec;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(31, 45, 61, 0.14);
+  z-index: 8;
+}
+
+.post-controls-menu button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #495869;
+  text-align: left;
+  padding: 9px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.post-controls-menu button:hover {
+  background: #f3f7fa;
+}
+
+.post-controls-menu button.is-danger {
+  color: #b54b4b;
+}
+
+.post-controls-menu button.is-danger:hover {
+  background: #fff2f2;
+}
+
+.post-footer {
+  display: inline-block;
+  margin-top: 12px;
+  margin-bottom: 2px;
+}
+
+.post-feedback {
+  border: 0;
+  background: transparent;
+  color: #738191;
+  padding: 0;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.post-feedback:hover {
+  color: #4c5c6d;
 }
 
 .load-more {
@@ -2169,7 +2415,43 @@ function formatAbsoluteDate(value) {
   }
 
   .post-item {
+    padding: 18px 0 20px;
+  }
+
+  .post-item::after {
+    width: 100%;
+  }
+
+  .post-item.is-target .post-main {
+    margin: -10px -12px 0;
+    padding: 10px 12px 14px;
+  }
+
+  .post-container {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .post-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .avatar-placeholder.post-avatar {
+    font-size: 16px;
+  }
+
+  .post-header {
     flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .post-actions {
+    opacity: 1;
+    margin-top: 0;
+    flex-wrap: wrap;
   }
 
   .floating-composer {
