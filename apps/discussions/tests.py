@@ -86,6 +86,75 @@ class DiscussionApiTests(TestCase):
         self.assertFalse(discussion_payload["is_unread"])
         self.assertEqual(discussion_payload["unread_count"], 0)
 
+    def test_discussion_detail_does_not_mark_everything_read_immediately(self):
+        discussion = DiscussionService.create_discussion(
+            title="Unread detail",
+            content="Initial post",
+            user=self.author,
+        )
+        DiscussionService.get_discussion_by_id(discussion.id, self.reader)
+        PostService.create_post(
+            discussion_id=discussion.id,
+            content="Reply one",
+            user=self.author,
+        )
+        PostService.create_post(
+            discussion_id=discussion.id,
+            content="Reply two",
+            user=self.author,
+        )
+
+        response = self.client.get(
+            f"/api/discussions/{discussion.id}",
+            **self.auth_header(self.reader),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["last_read_post_number"], 1)
+        self.assertEqual(payload["unread_count"], 2)
+        self.assertTrue(payload["is_unread"])
+
+    def test_update_discussion_read_state_advances_progress(self):
+        discussion = DiscussionService.create_discussion(
+            title="Read state update",
+            content="Initial post",
+            user=self.author,
+        )
+        DiscussionService.get_discussion_by_id(discussion.id, self.reader)
+        PostService.create_post(
+            discussion_id=discussion.id,
+            content="Reply one",
+            user=self.author,
+        )
+        PostService.create_post(
+            discussion_id=discussion.id,
+            content="Reply two",
+            user=self.author,
+        )
+
+        response = self.client.post(
+            f"/api/discussions/{discussion.id}/read",
+            data=json.dumps({
+                "last_read_post_number": 2,
+            }),
+            content_type="application/json",
+            **self.auth_header(self.reader),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["last_read_post_number"], 2)
+
+        response = self.client.get(
+            f"/api/discussions/{discussion.id}",
+            **self.auth_header(self.reader),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["last_read_post_number"], 2)
+        self.assertEqual(payload["unread_count"], 1)
+
     def test_discussion_list_filters_by_tag_slug(self):
         life_tag = Tag.objects.create(name="生活", slug="life", color="#4d698e")
         tech_tag = Tag.objects.create(name="技术", slug="tech", color="#3498db")

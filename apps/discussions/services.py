@@ -226,27 +226,23 @@ class DiscussionService:
             # 增加浏览次数
             discussion.increment_view_count()
 
-            # 更新用户阅读状态
+            # 仅附加当前阅读状态，不在进入讨论页时直接清空未读
             if user and user.is_authenticated:
-                state, _ = DiscussionUser.objects.update_or_create(
+                DiscussionUser.objects.get_or_create(
                     discussion=discussion,
                     user=user,
                     defaults={
                         'last_read_at': timezone.now(),
-                        'last_read_post_number': discussion.last_post_number or 0,
+                        'last_read_post_number': 1 if discussion.last_post_number else 0,
                     }
                 )
-                discussion.is_subscribed = state.is_subscribed
-                discussion.last_read_at = state.last_read_at
-                discussion.last_read_post_number = state.last_read_post_number
-                discussion.unread_count = 0
-                discussion.is_unread = False
+                DiscussionService._attach_user_read_state([discussion], user)
             else:
                 discussion.is_subscribed = False
                 discussion.last_read_at = None
                 discussion.last_read_post_number = 0
-                discussion.unread_count = 0
-                discussion.is_unread = False
+                discussion.unread_count = discussion.last_post_number or 0
+                discussion.is_unread = discussion.unread_count > 0
 
             return discussion
         except Discussion.DoesNotExist:
@@ -300,6 +296,38 @@ class DiscussionService:
         user.marked_all_as_read_at = now
         user.save(update_fields=['marked_all_as_read_at'])
         return now
+
+    @staticmethod
+    def update_read_state(discussion_id: int, user: User, last_read_post_number: int) -> DiscussionUser:
+        discussion = Discussion.objects.get(id=discussion_id)
+        if not DiscussionService._can_view_discussion(discussion, user):
+            raise PermissionDenied("没有权限查看此讨论")
+
+        clamped_number = max(1, min(last_read_post_number, discussion.last_post_number or 1))
+        state, _ = DiscussionUser.objects.get_or_create(
+            discussion=discussion,
+            user=user,
+            defaults={
+                'last_read_at': timezone.now(),
+                'last_read_post_number': clamped_number,
+            }
+        )
+
+        next_number = max(state.last_read_post_number, clamped_number)
+        update_fields = []
+        if next_number != state.last_read_post_number:
+            state.last_read_post_number = next_number
+            update_fields.append('last_read_post_number')
+
+        now = timezone.now()
+        if not state.last_read_at or next_number >= state.last_read_post_number:
+            state.last_read_at = now
+            update_fields.append('last_read_at')
+
+        if update_fields:
+            state.save(update_fields=update_fields)
+
+        return state
 
     @staticmethod
     def get_subscription_state(discussion: Discussion, user: Optional[User]) -> bool:

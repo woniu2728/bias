@@ -168,26 +168,76 @@
             </div>
           </div>
 
-          <div class="sidebar-section">
-            <h3>帖子导航</h3>
-            <div class="scrubber">
-              <div class="scrubber-status">
-                <span>已加载 {{ loadedRangeText }}</span>
-                <span>正在阅读 #{{ currentVisiblePostNumber }}</span>
-                <span>共 {{ totalPosts || discussion.comment_count }} 楼</span>
+          <div class="sidebar-section sidebar-section--scrubber">
+            <div class="scrubber-panel">
+              <button type="button" class="scrubber-link" @click="jumpToPost(1)">
+                <i class="fas fa-angle-double-up"></i>
+                原帖
+              </button>
+
+              <div ref="scrubberTrack" class="scrubber-scrollbar" @click="handleScrubberTrackClick">
+                <div class="scrubber-before" :style="{ height: `${scrubberBeforePercent}%` }"></div>
+                <div
+                  v-if="unreadCount"
+                  class="scrubber-unread"
+                  :style="{
+                    top: `${unreadTopPercent}%`,
+                    height: `${unreadHeightPercent}%`
+                  }"
+                >
+                  <span>{{ unreadCount }} 未读</span>
+                </div>
+                <div
+                  class="scrubber-handle"
+                  :style="{
+                    top: `${scrubberBeforePercent}%`,
+                    height: `${scrubberHandlePercent}%`
+                  }"
+                  @click.stop
+                >
+                  <div class="scrubber-bar"></div>
+                  <div class="scrubber-info">
+                    <strong>{{ scrubberPositionText }}</strong>
+                    <span class="scrubber-description">{{ currentVisiblePostDateLabel }}</span>
+                    <span class="scrubber-description">{{ loadedRangeText }}</span>
+                  </div>
+                </div>
+                <div class="scrubber-after" :style="{ height: `${scrubberAfterPercent}%` }"></div>
               </div>
-              <input
-                v-model.number="jumpPostNumber"
-                type="range"
-                min="1"
-                :max="discussion.last_post_number || discussion.comment_count || 1"
-                class="scrubber-range"
-                @change="jumpToPost(jumpPostNumber)"
-              />
-              <div class="scrubber-actions">
-                <button @click="jumpToPost(1)" class="secondary">首帖</button>
-                <button @click="jumpToPost(jumpPostNumber)" class="secondary">跳转</button>
-                <button @click="jumpToPost(discussion.last_post_number || discussion.comment_count || 1)" class="secondary">最新</button>
+
+              <div class="scrubber-links">
+                <button
+                  v-if="unreadStartPostNumber"
+                  type="button"
+                  class="scrubber-link scrubber-link--muted"
+                  @click="jumpToPost(unreadStartPostNumber)"
+                >
+                  <i class="fas fa-angle-down"></i>
+                  未读
+                </button>
+                <div v-else class="scrubber-link scrubber-link--muted is-disabled">
+                  <i class="fas fa-angle-down"></i>
+                  已读
+                </div>
+                <button type="button" class="scrubber-link" @click="jumpToPost(maxPostNumber)">
+                  <i class="fas fa-angle-double-down"></i>
+                  现在
+                </button>
+              </div>
+
+              <div class="scrubber-jump-inline">
+                <span>#</span>
+                <input
+                  id="discussion-post-jump"
+                  v-model.number="jumpPostNumber"
+                  type="number"
+                  min="1"
+                  :max="maxPostNumber"
+                  class="scrubber-number"
+                  @keydown.enter.prevent="jumpToPost(jumpPostNumber)"
+                  @blur="normalizeJumpPostNumber"
+                />
+                <button type="button" class="secondary" @click="jumpToPost(jumpPostNumber)">跳转</button>
               </div>
             </div>
           </div>
@@ -285,11 +335,13 @@ const totalPosts = ref(0)
 const pageLimit = 20
 const previousTrigger = ref(null)
 const nextTrigger = ref(null)
+const scrubberTrack = ref(null)
 
 const togglingSubscription = ref(false)
 const highlightedPostNumber = ref(null)
 const jumpPostNumber = ref(1)
 const currentVisiblePostNumber = ref(1)
+const visiblePostCount = ref(1)
 const showReportModal = ref(false)
 const reportSubmitting = ref(false)
 const reportingPost = ref(null)
@@ -299,6 +351,8 @@ const reportForm = ref({
 })
 let scrollFrame = null
 let nearUrlTimer = null
+let readStateTimer = null
+let lastReportedReadNumber = 0
 
 const canManageDiscussion = computed(() => {
   return authStore.user?.is_staff || authStore.user?.id === discussion.value?.user.id
@@ -334,6 +388,58 @@ const loadedRangeText = computed(() => {
   if (!posts.value.length) return '暂无'
   return `#${posts.value[0].number} - #${posts.value[posts.value.length - 1].number}`
 })
+const maxPostNumber = computed(() => {
+  return discussion.value?.last_post_number || discussion.value?.comment_count || 1
+})
+const unreadCount = computed(() => {
+  return Math.max(Number(discussion.value?.unread_count || 0), 0)
+})
+const unreadStartPostNumber = computed(() => {
+  if (!unreadCount.value) return null
+  const lastRead = Number(discussion.value?.last_read_post_number || 0)
+  return Math.min(maxPostNumber.value, Math.max(1, lastRead + 1))
+})
+const currentVisiblePost = computed(() => {
+  return posts.value.find(post => post.number === currentVisiblePostNumber.value) || posts.value[0] || null
+})
+const currentVisiblePostDateLabel = computed(() => {
+  const createdAt = currentVisiblePost.value?.created_at
+  if (!createdAt) return '当前阅读位置'
+
+  const date = new Date(createdAt)
+  if (Number.isNaN(date.getTime())) return '当前阅读位置'
+
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long'
+  })
+})
+const scrubberPositionText = computed(() => {
+  return `第 ${currentVisiblePostNumber.value} / ${maxPostNumber.value} 楼`
+})
+const scrubberHandlePercent = computed(() => {
+  const total = Math.max(maxPostNumber.value, 1)
+  const visible = Math.min(total, Math.max(visiblePostCount.value, 1))
+  return Math.min(100, Math.max((visible / total) * 100, 12))
+})
+const scrubberBeforePercent = computed(() => {
+  const total = Math.max(maxPostNumber.value, 1)
+  const handle = scrubberHandlePercent.value
+  const visible = Math.min(total, Math.max(visiblePostCount.value, 1))
+  if (total <= visible) return 0
+
+  const progress = (Math.min(total, Math.max(1, currentVisiblePostNumber.value)) - 1) / (total - visible)
+  return Math.max(0, Math.min(100 - handle, progress * (100 - handle)))
+})
+const scrubberAfterPercent = computed(() => {
+  return Math.max(0, 100 - scrubberBeforePercent.value - scrubberHandlePercent.value)
+})
+const unreadTopPercent = computed(() => {
+  return getPostProgressPercent(unreadStartPostNumber.value || 1)
+})
+const unreadHeightPercent = computed(() => {
+  return unreadCount.value ? Math.max(0, 100 - unreadTopPercent.value) : 0
+})
 
 onMounted(async () => {
   await refreshDiscussion()
@@ -356,6 +462,9 @@ onBeforeUnmount(() => {
   if (nearUrlTimer) {
     clearTimeout(nearUrlTimer)
   }
+  if (readStateTimer) {
+    clearTimeout(readStateTimer)
+  }
 })
 
 watch(
@@ -376,6 +485,7 @@ async function loadDiscussion() {
   try {
     const data = await api.get(`/discussions/${route.params.id}`)
     discussion.value = normalizeDiscussion(data)
+    lastReportedReadNumber = Number(discussion.value?.last_read_post_number || 0)
   } catch (error) {
     console.error('加载讨论失败:', error)
   } finally {
@@ -477,7 +587,7 @@ async function loadPreviousPosts() {
 }
 
 async function jumpToPost(number) {
-  const targetNumber = Number(number)
+  const targetNumber = normalizePostNumber(number)
   if (!targetNumber) return
 
   if (posts.value.some(post => post.number === targetNumber)) {
@@ -517,15 +627,15 @@ function resetPostStream() {
   lastLoadedPage.value = 1
   totalPosts.value = 0
   highlightedPostNumber.value = null
-  jumpPostNumber.value = Number(route.query.near) || 1
+  jumpPostNumber.value = normalizePostNumber(route.query.near) || 1
   currentVisiblePostNumber.value = jumpPostNumber.value
 }
 
 function syncJumpNumber() {
   if (targetNearPost.value) {
-    jumpPostNumber.value = targetNearPost.value
+    jumpPostNumber.value = normalizePostNumber(targetNearPost.value)
   } else if (posts.value.length) {
-    jumpPostNumber.value = posts.value[posts.value.length - 1].number
+    jumpPostNumber.value = normalizePostNumber(posts.value[posts.value.length - 1].number)
   }
 }
 
@@ -561,6 +671,7 @@ function updateVisiblePostFromScroll() {
   const anchorY = 120
   let closestPostNumber = posts.value[0].number
   let closestDistance = Number.POSITIVE_INFINITY
+  let visibleCount = 0
 
   for (const post of posts.value) {
     const element = document.getElementById(`post-${post.number}`)
@@ -568,6 +679,7 @@ function updateVisiblePostFromScroll() {
 
     const rect = element.getBoundingClientRect()
     if (rect.bottom < 0 || rect.top > window.innerHeight) continue
+    visibleCount += 1
 
     const distance = Math.abs(rect.top - anchorY)
     if (distance < closestDistance) {
@@ -576,11 +688,43 @@ function updateVisiblePostFromScroll() {
     }
   }
 
+  visiblePostCount.value = Math.max(1, visibleCount)
+
   if (closestPostNumber !== currentVisiblePostNumber.value) {
     currentVisiblePostNumber.value = closestPostNumber
     jumpPostNumber.value = closestPostNumber
     scheduleNearUrlSync(closestPostNumber)
+    scheduleReadStateSync(closestPostNumber)
   }
+}
+
+function normalizeJumpPostNumber() {
+  jumpPostNumber.value = normalizePostNumber(jumpPostNumber.value)
+}
+
+function normalizePostNumber(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 1
+  return Math.min(maxPostNumber.value, Math.max(1, Math.round(parsed)))
+}
+
+function getPostProgressPercent(value) {
+  const total = Math.max(maxPostNumber.value, 1)
+  const number = Math.min(total, Math.max(1, Number(value) || 1))
+  if (total <= 1) return 0
+  return ((number - 1) / (total - 1)) * 100
+}
+
+function handleScrubberTrackClick(event) {
+  const track = scrubberTrack.value
+  if (!track) return
+
+  const rect = track.getBoundingClientRect()
+  if (!rect.height) return
+
+  const percent = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
+  const targetNumber = Math.round(1 + percent * Math.max(maxPostNumber.value - 1, 0))
+  jumpToPost(targetNumber)
 }
 
 function scheduleNearUrlSync(number) {
@@ -601,6 +745,42 @@ function replaceNearInAddressBar(number) {
 
   url.searchParams.set('near', number)
   window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+}
+
+function scheduleReadStateSync(number) {
+  if (!authStore.isAuthenticated || !discussion.value) return
+
+  const targetNumber = normalizePostNumber(number)
+  const currentRead = Number(discussion.value.last_read_post_number || 0)
+  if (targetNumber <= Math.max(currentRead, lastReportedReadNumber)) return
+
+  if (readStateTimer) {
+    clearTimeout(readStateTimer)
+  }
+
+  readStateTimer = setTimeout(async () => {
+    try {
+      const data = await api.post(`/discussions/${discussion.value.id}/read`, {
+        last_read_post_number: targetNumber
+      })
+      if (!discussion.value) return
+      lastReportedReadNumber = Number(data.last_read_post_number || targetNumber)
+      discussion.value.last_read_post_number = lastReportedReadNumber
+      discussion.value.last_read_at = data.last_read_at || discussion.value.last_read_at
+      discussion.value.unread_count = Math.max((discussion.value.last_post_number || 0) - lastReportedReadNumber, 0)
+      discussion.value.is_unread = discussion.value.unread_count > 0
+      window.dispatchEvent(new CustomEvent('pyflarum:discussion-read-state-updated', {
+        detail: {
+          discussionId: discussion.value.id,
+          lastReadPostNumber: lastReportedReadNumber,
+          lastReadAt: discussion.value.last_read_at,
+          unreadCount: discussion.value.unread_count
+        }
+      }))
+    } catch (error) {
+      console.error('更新讨论阅读状态失败:', error)
+    }
+  }, 400)
 }
 
 async function toggleLike(post) {
@@ -1214,35 +1394,157 @@ function formatAbsoluteDate(value) {
   width: 100%;
 }
 
-.scrubber {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.sidebar-section--scrubber {
+  padding: 18px 18px 16px;
 }
 
-.scrubber-status {
+.scrubber-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.scrubber-link,
+.scrubber-link--muted {
+  border: 0;
+  background: transparent;
+  color: #6d7b88;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.scrubber-link:hover {
+  color: #41505f;
+}
+
+.scrubber-link--muted {
+  color: #8b98a6;
+}
+
+.scrubber-link.is-disabled {
+  cursor: default;
+}
+
+.scrubber-scrollbar {
+  margin: 6px 0 2px 3px;
+  height: 320px;
+  min-height: 120px;
+  position: relative;
+  cursor: pointer;
+}
+
+.scrubber-before,
+.scrubber-after {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  border-left: 1px solid #d6dee7;
+}
+
+.scrubber-before {
+  top: 0;
+}
+
+.scrubber-after {
+  bottom: 0;
+}
+
+.scrubber-unread {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  border-left: 1px solid #b8c4d1;
+  background-image: linear-gradient(to right, rgba(222, 228, 236, 0.9), transparent 12px, transparent);
+  display: flex;
+  align-items: center;
+  color: #7d8894;
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding-left: 13px;
+}
+
+.scrubber-handle {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  padding: 5px 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.scrubber-bar {
+  height: 100%;
+  width: 5px;
+  background: var(--forum-primary-color);
+  border-radius: 999px;
+  margin-left: -2px;
+  transition: background 0.2s;
+}
+
+.scrubber-info {
+  margin-top: -1.6em;
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  width: calc(100% - 16px);
+}
+
+.scrubber-info strong {
+  display: block;
+  color: #2f3b47;
+  font-size: 12px;
+}
+
+.scrubber-description {
+  display: block;
+  color: #7b8794;
+  font-size: 12px;
+}
+
+.scrubber-links {
   display: flex;
   justify-content: space-between;
   gap: 10px;
+  margin-top: -2px;
+}
+
+.scrubber-jump-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid #eef2f6;
+}
+
+.scrubber-jump-inline span {
   color: #66717c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.scrubber-number {
+  width: 80px;
+  padding: 7px 10px;
+  border: 1px solid #d7dee6;
+  border-radius: 6px;
+  color: #2f3b47;
   font-size: 13px;
 }
 
-.scrubber-range {
-  width: 100%;
-  accent-color: #4d698e;
+.scrubber-number:focus {
+  outline: none;
+  border-color: #4d698e;
+  box-shadow: 0 0 0 3px rgba(77, 105, 142, 0.12);
 }
 
-.scrubber-actions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.scrubber-actions button {
+.scrubber-jump-inline button {
   margin-bottom: 0;
-  padding: 8px;
-  font-size: 12px;
 }
 
 .floating-composer {
@@ -1570,6 +1872,15 @@ function formatAbsoluteDate(value) {
 
   .composer-toolbar {
     align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .scrubber-scrollbar {
+    height: 42vh;
+  }
+
+  .scrubber-links,
+  .scrubber-jump-inline {
     flex-wrap: wrap;
   }
 

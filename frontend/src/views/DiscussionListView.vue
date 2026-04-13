@@ -223,7 +223,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
 import { useForumStore } from '@/stores/forum'
@@ -275,6 +275,11 @@ const emptyStateText = computed(() => {
 
 onMounted(async () => {
   await refreshPageData()
+  window.addEventListener('pyflarum:discussion-read-state-updated', handleDiscussionReadStateUpdated)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pyflarum:discussion-read-state-updated', handleDiscussionReadStateUpdated)
 })
 
 watch(
@@ -383,6 +388,30 @@ async function markAllAsRead() {
   } finally {
     markingAllRead.value = false
   }
+}
+
+function handleDiscussionReadStateUpdated(event) {
+  const detail = event.detail || {}
+  const discussionId = Number(detail.discussionId)
+  if (!discussionId) return
+
+  discussions.value = discussions.value.map(discussion => {
+    if (Number(discussion.id) !== discussionId) return discussion
+
+    const lastReadPostNumber = Math.max(
+      Number(discussion.last_read_post_number || 0),
+      Number(detail.lastReadPostNumber || 0)
+    )
+    const unreadCount = Math.max(Number(detail.unreadCount || 0), 0)
+
+    return {
+      ...discussion,
+      last_read_post_number: lastReadPostNumber,
+      last_read_at: detail.lastReadAt || discussion.last_read_at,
+      unread_count: unreadCount,
+      is_unread: unreadCount > 0
+    }
+  })
 }
 
 function handleStartDiscussion() {

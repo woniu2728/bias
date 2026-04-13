@@ -27,6 +27,11 @@ class DiscussionUpdateSchema(BaseModel):
     is_hidden: Optional[bool] = Field(None, description="是否隐藏")
 
 
+class DiscussionReadStateSchema(BaseModel):
+    """讨论阅读状态更新"""
+    last_read_post_number: int = Field(..., ge=1, description="最后已读楼层")
+
+
 class DiscussionFilterSchema(BaseModel):
     """讨论列表过滤"""
     q: Optional[str] = Field(None, description="搜索关键词")

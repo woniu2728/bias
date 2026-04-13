@@ -11,6 +11,7 @@ from apps.discussions.models import Discussion
 from apps.discussions.schemas import (
     DiscussionCreateSchema,
     DiscussionUpdateSchema,
+    DiscussionReadStateSchema,
     DiscussionFilterSchema,
     DiscussionOutSchema,
     DiscussionListSchema,
@@ -116,6 +117,33 @@ def mark_all_discussions_as_read(request):
         "message": "已全部标记为已读",
         "marked_all_as_read_at": marked_at,
     }
+
+
+@router.post("/{discussion_id}/read", auth=AuthBearer(), tags=["Discussions"])
+def update_discussion_read_state(request, discussion_id: int, payload: DiscussionReadStateSchema):
+    try:
+        state = DiscussionService.update_read_state(
+            discussion_id=discussion_id,
+            user=request.auth,
+            last_read_post_number=payload.last_read_post_number,
+        )
+        return {
+            "message": "阅读状态已更新",
+            "last_read_at": state.last_read_at,
+            "last_read_post_number": state.last_read_post_number,
+        }
+    except Discussion.DoesNotExist:
+        return router.create_response(
+            request,
+            {"error": "讨论不存在"},
+            status=404
+        )
+    except PermissionDenied as e:
+        return router.create_response(
+            request,
+            {"error": str(e)},
+            status=403
+        )
 
 
 @router.get("/{discussion_id}", response=DiscussionDetailSchema, tags=["Discussions"])
