@@ -36,75 +36,82 @@
 
           <!-- 帖子列表 -->
           <div class="posts">
-            <div
-              v-for="post in posts"
-              :key="post.id"
-              :id="`post-${post.number}`"
-              class="post-item"
-              :class="{ 'is-hidden': post.is_hidden, 'is-target': highlightedPostNumber === post.number }"
-            >
-              <div class="post-avatar">
-                <div v-if="!post.user.avatar_url" class="avatar-placeholder">
-                  {{ post.user.username.charAt(0).toUpperCase() }}
-                </div>
-                <img
-                  v-else
-                  :src="post.user.avatar_url"
-                  :alt="post.user.username"
-                />
+            <template v-for="post in posts" :key="post.id">
+              <div
+                v-if="showUnreadDivider(post)"
+                class="post-unread-divider"
+              >
+                <span>从这里开始是未读回复</span>
               </div>
 
-              <div class="post-content">
-                <div class="post-header">
-                  <router-link :to="buildUserPath(post.user)" class="post-author">{{ post.user.username }}</router-link>
-                  <span class="post-number">#{{ post.number }}</span>
-                  <span class="post-time">{{ formatDate(post.created_at) }}</span>
-                  <span v-if="post.approval_status === 'pending'" class="post-status">待审核</span>
-                  <span v-if="post.edited_at" class="post-edited">(已编辑)</span>
+              <div
+                :id="`post-${post.number}`"
+                class="post-item"
+                :class="{ 'is-hidden': post.is_hidden, 'is-target': highlightedPostNumber === post.number }"
+              >
+                <div class="post-avatar">
+                  <div v-if="!post.user.avatar_url" class="avatar-placeholder">
+                    {{ post.user.username.charAt(0).toUpperCase() }}
+                  </div>
+                  <img
+                    v-else
+                    :src="post.user.avatar_url"
+                    :alt="post.user.username"
+                  />
                 </div>
 
-                <div class="post-body" v-html="post.content_html"></div>
+                <div class="post-content">
+                  <div class="post-header">
+                    <router-link :to="buildUserPath(post.user)" class="post-author">{{ post.user.username }}</router-link>
+                    <span class="post-number">#{{ post.number }}</span>
+                    <span class="post-time">{{ formatDate(post.created_at) }}</span>
+                    <span v-if="post.approval_status === 'pending'" class="post-status">待审核</span>
+                    <span v-if="post.edited_at" class="post-edited">(已编辑)</span>
+                  </div>
 
-                <div class="post-footer">
-                  <button
-                    @click="toggleLike(post)"
-                    class="post-action"
-                    :class="{ 'is-liked': post.is_liked }"
-                    :disabled="isSuspended"
-                  >
-                    ❤️ {{ post.like_count || 0 }}
-                  </button>
-                  <button
-                    @click="replyToPost(post)"
-                    class="post-action"
-                    v-if="authStore.isAuthenticated && !discussion.is_locked && !isSuspended"
-                  >
-                    💬 回复
-                  </button>
-                  <button
-                    @click="editPost(post)"
-                    class="post-action"
-                    v-if="canEditPost(post)"
-                  >
-                    ✏️ 编辑
-                  </button>
-                  <button
-                    @click="deletePost(post)"
-                    class="post-action danger"
-                    v-if="canDeletePost(post)"
-                  >
-                    🗑️ 删除
-                  </button>
-                  <button
-                    @click="openReportModal(post)"
-                    class="post-action warning"
-                    v-if="canReportPost(post)"
-                  >
-                    🚩 举报
-                  </button>
+                  <div class="post-body" v-html="post.content_html"></div>
+
+                  <div class="post-footer">
+                    <button
+                      @click="toggleLike(post)"
+                      class="post-action"
+                      :class="{ 'is-liked': post.is_liked }"
+                      :disabled="isSuspended"
+                    >
+                      ❤️ {{ post.like_count || 0 }}
+                    </button>
+                    <button
+                      @click="replyToPost(post)"
+                      class="post-action"
+                      v-if="authStore.isAuthenticated && !discussion.is_locked && !isSuspended"
+                    >
+                      💬 回复
+                    </button>
+                    <button
+                      @click="editPost(post)"
+                      class="post-action"
+                      v-if="canEditPost(post)"
+                    >
+                      ✏️ 编辑
+                    </button>
+                    <button
+                      @click="deletePost(post)"
+                      class="post-action danger"
+                      v-if="canDeletePost(post)"
+                    >
+                      🗑️ 删除
+                    </button>
+                    <button
+                      @click="openReportModal(post)"
+                      class="post-action warning"
+                      v-if="canReportPost(post)"
+                    >
+                      🚩 举报
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </template>
           </div>
 
           <!-- 加载更多 -->
@@ -134,48 +141,106 @@
 
         <!-- 侧边栏 -->
         <aside class="sidebar">
-          <div v-if="authStore.isAuthenticated && !isSuspended" class="sidebar-section">
-            <h3>关注讨论</h3>
-            <p class="subscription-copy">
-              {{ discussion.is_subscribed ? '你会收到这条讨论的新回复通知。' : '关注后，这条讨论的新回复会进入你的通知列表。' }}
-            </p>
-            <button @click="toggleSubscription" class="secondary full-width" :disabled="togglingSubscription">
-              {{ togglingSubscription ? '提交中...' : (discussion.is_subscribed ? '取消关注' : '关注讨论') }}
+          <div
+            v-if="discussion"
+            ref="discussionActionsRef"
+            class="sidebar-section sidebar-section--actions"
+          >
+            <button
+              v-if="authStore.isAuthenticated"
+              type="button"
+              class="discussion-primary-action"
+              :disabled="discussion.is_locked || isSuspended"
+              @click="openComposer"
+            >
+              <i class="fas fa-reply"></i>
+              {{ hasActiveComposer ? '继续回复' : '回复' }}
             </button>
+            <button
+              v-else
+              type="button"
+              class="discussion-primary-action"
+              @click="goToLoginForReply"
+            >
+              <i class="fas fa-sign-in-alt"></i>
+              登录后回复
+            </button>
+
+            <div v-if="authStore.isAuthenticated && !isSuspended" class="discussion-secondary-row">
+              <button
+                type="button"
+                class="discussion-follow-action"
+                :class="{
+                  'is-active': discussion.is_subscribed,
+                  'is-standalone': !canManageDiscussion
+                }"
+                :disabled="togglingSubscription"
+                @click="toggleSubscription"
+              >
+                <i :class="discussion.is_subscribed ? 'fas fa-bell-slash' : 'far fa-star'"></i>
+                {{ togglingSubscription ? '提交中...' : (discussion.is_subscribed ? '取消关注' : '关注') }}
+              </button>
+              <button
+                v-if="canManageDiscussion"
+                type="button"
+                class="discussion-menu-toggle"
+                :class="{ 'is-active': showDiscussionMenu }"
+                @click="toggleDiscussionMenu"
+              >
+                <i class="fas fa-chevron-down"></i>
+              </button>
+            </div>
+
+            <div
+              v-if="showDiscussionMenu && canManageDiscussion"
+              class="discussion-actions-menu"
+            >
+              <button type="button" @click="handleDiscussionMenuAction(togglePin)">
+                {{ discussion.is_sticky ? '取消置顶' : '置顶讨论' }}
+              </button>
+              <button type="button" @click="handleDiscussionMenuAction(toggleLock)">
+                {{ discussion.is_locked ? '解除锁定' : '锁定讨论' }}
+              </button>
+              <button type="button" @click="handleDiscussionMenuAction(toggleHide)">
+                {{ discussion.is_hidden ? '恢复显示' : '隐藏讨论' }}
+              </button>
+              <button type="button" class="is-danger" @click="handleDiscussionMenuAction(deleteDiscussion)">
+                删除讨论
+              </button>
+            </div>
+
+            <p v-if="authStore.isAuthenticated && hasActiveComposer" class="discussion-action-copy">
+              当前讨论已有未发布回复草稿。
+            </p>
+            <p v-else-if="authStore.isAuthenticated && discussion.is_subscribed" class="discussion-action-copy">
+              你会收到这条讨论后续回复的通知。
+            </p>
+            <p v-else-if="authStore.isAuthenticated && discussion.is_locked" class="discussion-action-copy">
+              当前讨论已锁定，暂时无法继续回复。
+            </p>
+            <p v-else-if="authStore.isAuthenticated && isSuspended" class="discussion-action-copy discussion-action-copy--warning">
+              {{ suspensionNotice }}
+            </p>
           </div>
-          <div v-else-if="authStore.isAuthenticated && isSuspended" class="sidebar-section sidebar-section--warning">
+
+          <div v-if="authStore.isAuthenticated && isSuspended" class="sidebar-section sidebar-section--warning">
             <h3>账号状态</h3>
             <p class="subscription-copy">{{ suspensionNotice }}</p>
           </div>
 
-          <div class="sidebar-section">
-            <h3>讨论信息</h3>
-            <div class="info-item">
-              <span class="label">发起人</span>
-              <router-link :to="buildUserPath(discussion.user)" class="value value-link">{{ discussion.user.username }}</router-link>
-            </div>
-            <div class="info-item">
-              <span class="label">创建时间</span>
-              <span class="value">{{ formatDate(discussion.created_at) }}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">最后回复</span>
-              <span class="value">{{ formatDate(discussion.last_posted_at) }}</span>
-            </div>
-            <div class="info-item">
-              <span class="label">回复数</span>
-              <span class="value">{{ discussion.comment_count }}</span>
-            </div>
-          </div>
-
           <div class="sidebar-section sidebar-section--scrubber">
-            <div class="scrubber-panel">
+            <div ref="scrubberPanel" class="scrubber-panel">
               <button type="button" class="scrubber-link" @click="jumpToPost(1)">
                 <i class="fas fa-angle-double-up"></i>
                 原帖
               </button>
 
-              <div ref="scrubberTrack" class="scrubber-scrollbar" @click="handleScrubberTrackClick">
+              <div
+                ref="scrubberTrack"
+                class="scrubber-scrollbar"
+                :style="scrubberScrollbarStyle"
+                @click="handleScrubberTrackClick"
+              >
                 <div class="scrubber-before" :style="{ height: `${scrubberBeforePercent}%` }"></div>
                 <div
                   v-if="unreadCount"
@@ -193,70 +258,27 @@
                     top: `${scrubberBeforePercent}%`,
                     height: `${scrubberHandlePercent}%`
                   }"
+                  :class="{ 'is-dragging': scrubberDragging }"
+                  @mousedown="handleScrubberMouseDown"
+                  @touchstart="handleScrubberMouseDown"
                   @click.stop
                 >
                   <div class="scrubber-bar"></div>
                   <div class="scrubber-info">
                     <strong>{{ scrubberPositionText }}</strong>
-                    <span class="scrubber-description">{{ currentVisiblePostDateLabel }}</span>
-                    <span class="scrubber-description">{{ loadedRangeText }}</span>
+                    <span class="scrubber-description">{{ scrubberDescription }}</span>
                   </div>
                 </div>
                 <div class="scrubber-after" :style="{ height: `${scrubberAfterPercent}%` }"></div>
               </div>
 
-              <div class="scrubber-links">
-                <button
-                  v-if="unreadStartPostNumber"
-                  type="button"
-                  class="scrubber-link scrubber-link--muted"
-                  @click="jumpToPost(unreadStartPostNumber)"
-                >
-                  <i class="fas fa-angle-down"></i>
-                  未读
-                </button>
-                <div v-else class="scrubber-link scrubber-link--muted is-disabled">
-                  <i class="fas fa-angle-down"></i>
-                  已读
-                </div>
-                <button type="button" class="scrubber-link" @click="jumpToPost(maxPostNumber)">
-                  <i class="fas fa-angle-double-down"></i>
-                  现在
-                </button>
-              </div>
-
-              <div class="scrubber-jump-inline">
-                <span>#</span>
-                <input
-                  id="discussion-post-jump"
-                  v-model.number="jumpPostNumber"
-                  type="number"
-                  min="1"
-                  :max="maxPostNumber"
-                  class="scrubber-number"
-                  @keydown.enter.prevent="jumpToPost(jumpPostNumber)"
-                  @blur="normalizeJumpPostNumber"
-                />
-                <button type="button" class="secondary" @click="jumpToPost(jumpPostNumber)">跳转</button>
-              </div>
+              <button type="button" class="scrubber-link" @click="jumpToPost(maxPostNumber)">
+                <i class="fas fa-angle-double-down"></i>
+                现在
+              </button>
             </div>
           </div>
 
-          <div class="sidebar-section" v-if="canManageDiscussion">
-            <h3>管理操作</h3>
-            <button @click="togglePin" class="secondary full-width">
-              {{ discussion.is_sticky ? '取消置顶' : '置顶' }}
-            </button>
-            <button @click="toggleLock" class="secondary full-width">
-              {{ discussion.is_locked ? '解锁' : '锁定' }}
-            </button>
-            <button @click="toggleHide" class="secondary full-width">
-              {{ discussion.is_hidden ? '显示' : '隐藏' }}
-            </button>
-            <button @click="deleteDiscussion" class="danger full-width">
-              删除讨论
-            </button>
-          </div>
         </aside>
       </div>
     </div>
@@ -335,16 +357,23 @@ const totalPosts = ref(0)
 const pageLimit = 20
 const previousTrigger = ref(null)
 const nextTrigger = ref(null)
+const scrubberPanel = ref(null)
 const scrubberTrack = ref(null)
+const discussionActionsRef = ref(null)
 
 const togglingSubscription = ref(false)
 const highlightedPostNumber = ref(null)
-const jumpPostNumber = ref(1)
 const currentVisiblePostNumber = ref(1)
+const currentVisiblePostProgress = ref(1)
 const visiblePostCount = ref(1)
 const showReportModal = ref(false)
 const reportSubmitting = ref(false)
 const reportingPost = ref(null)
+const showDiscussionMenu = ref(false)
+const scrubberTrackHeight = ref(300)
+const scrubberTrackMaxHeight = ref(null)
+const scrubberDragging = ref(false)
+const scrubberPreviewNumber = ref(null)
 const reportForm = ref({
   reason: '垃圾广告',
   message: ''
@@ -353,6 +382,9 @@ let scrollFrame = null
 let nearUrlTimer = null
 let readStateTimer = null
 let lastReportedReadNumber = 0
+let scrubberResizeObserver = null
+let scrubberDragStartY = 0
+let scrubberDragStartNumber = 1
 
 const canManageDiscussion = computed(() => {
   return authStore.user?.is_staff || authStore.user?.id === discussion.value?.user.id
@@ -384,10 +416,6 @@ const targetNearPost = computed(() => {
   const value = Number(route.query.near)
   return Number.isFinite(value) && value > 0 ? value : null
 })
-const loadedRangeText = computed(() => {
-  if (!posts.value.length) return '暂无'
-  return `#${posts.value[0].number} - #${posts.value[posts.value.length - 1].number}`
-})
 const maxPostNumber = computed(() => {
   return discussion.value?.last_post_number || discussion.value?.comment_count || 1
 })
@@ -399,37 +427,75 @@ const unreadStartPostNumber = computed(() => {
   const lastRead = Number(discussion.value?.last_read_post_number || 0)
   return Math.min(maxPostNumber.value, Math.max(1, lastRead + 1))
 })
-const currentVisiblePost = computed(() => {
-  return posts.value.find(post => post.number === currentVisiblePostNumber.value) || posts.value[0] || null
+const scrubberDisplayNumber = computed(() => {
+  return clampPostPosition(scrubberPreviewNumber.value ?? currentVisiblePostProgress.value)
 })
-const currentVisiblePostDateLabel = computed(() => {
-  const createdAt = currentVisiblePost.value?.created_at
-  if (!createdAt) return '当前阅读位置'
+const scrubberDisplayPostNumber = computed(() => {
+  return sanitizePostNumber(scrubberDisplayNumber.value)
+})
+const scrubberScrollbarStyle = computed(() => {
+  if (!scrubberTrackMaxHeight.value) return {}
+  return {
+    maxHeight: `${scrubberTrackMaxHeight.value}px`
+  }
+})
+const scrubberHasExactLoadedPost = computed(() => {
+  return posts.value.some(post => post.number === scrubberDisplayPostNumber.value)
+})
+const scrubberDisplayPost = computed(() => {
+  if (!posts.value.length) return null
 
-  const date = new Date(createdAt)
-  if (Number.isNaN(date.getTime())) return '当前阅读位置'
+  const exactMatch = posts.value.find(post => post.number === scrubberDisplayPostNumber.value)
+  if (exactMatch) return exactMatch
 
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: 'long'
-  })
+  return posts.value.reduce((closest, post) => {
+    if (!closest) return post
+    return Math.abs(post.number - scrubberDisplayPostNumber.value) < Math.abs(closest.number - scrubberDisplayPostNumber.value)
+      ? post
+      : closest
+  }, null)
+})
+const scrubberDescription = computed(() => {
+  if (scrubberDragging.value && !scrubberHasExactLoadedPost.value) {
+    return `松开后跳转到第 ${scrubberDisplayPostNumber.value} 楼`
+  }
+
+  const createdAt = scrubberDisplayPost.value?.created_at
+  if (!createdAt) {
+    return scrubberDragging.value ? '松开后跳转到该楼层' : '当前阅读位置'
+  }
+
+  return formatRelativeTime(createdAt)
 })
 const scrubberPositionText = computed(() => {
-  return `第 ${currentVisiblePostNumber.value} / ${maxPostNumber.value} 楼`
+  return `${scrubberDisplayPostNumber.value} / ${maxPostNumber.value}`
+})
+const scrubberPercentPerPost = computed(() => {
+  const total = Math.max(maxPostNumber.value, 1)
+  const visible = Math.min(total, Math.max(visiblePostCount.value, 1))
+  const trackHeight = Math.max(scrubberTrackHeight.value, 1)
+  const minPercentVisible = (50 / trackHeight) * 100
+  const visiblePercent = Math.max(100 / total, minPercentVisible / visible)
+  const indexPercent = total === visible ? 0 : (100 - visiblePercent * visible) / (total - visible)
+
+  return {
+    total,
+    visible,
+    visiblePercent,
+    indexPercent
+  }
 })
 const scrubberHandlePercent = computed(() => {
-  const total = Math.max(maxPostNumber.value, 1)
-  const visible = Math.min(total, Math.max(visiblePostCount.value, 1))
-  return Math.min(100, Math.max((visible / total) * 100, 12))
+  const { total, visible, visiblePercent } = scrubberPercentPerPost.value
+  return Math.min(100, Math.max(visiblePercent * visible, total === visible ? 100 : 0))
 })
 const scrubberBeforePercent = computed(() => {
-  const total = Math.max(maxPostNumber.value, 1)
+  const { total, visible, indexPercent } = scrubberPercentPerPost.value
   const handle = scrubberHandlePercent.value
-  const visible = Math.min(total, Math.max(visiblePostCount.value, 1))
   if (total <= visible) return 0
 
-  const progress = (Math.min(total, Math.max(1, currentVisiblePostNumber.value)) - 1) / (total - visible)
-  return Math.max(0, Math.min(100 - handle, progress * (100 - handle)))
+  const displayNumber = Math.min(total, Math.max(1, scrubberDisplayNumber.value))
+  return Math.max(0, Math.min(100 - handle, indexPercent * Math.min(displayNumber - 1, total - visible)))
 })
 const scrubberAfterPercent = computed(() => {
   return Math.max(0, 100 - scrubberBeforePercent.value - scrubberHandlePercent.value)
@@ -445,17 +511,25 @@ onMounted(async () => {
   await refreshDiscussion()
   window.addEventListener('scroll', handlePostScroll, { passive: true })
   window.addEventListener('resize', handlePostScroll, { passive: true })
+  window.addEventListener('resize', syncScrubberTrackMetrics, { passive: true })
   window.addEventListener('pyflarum:reply-created', handleReplyCreated)
   window.addEventListener('pyflarum:post-updated', handlePostUpdated)
+  document.addEventListener('mousedown', handleDocumentMouseDown)
   await nextTick()
+  syncScrubberTrackMetrics()
+  attachScrubberObserver()
   updateVisiblePostFromScroll()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', handlePostScroll)
   window.removeEventListener('resize', handlePostScroll)
+  window.removeEventListener('resize', syncScrubberTrackMetrics)
   window.removeEventListener('pyflarum:reply-created', handleReplyCreated)
   window.removeEventListener('pyflarum:post-updated', handlePostUpdated)
+  document.removeEventListener('mousedown', handleDocumentMouseDown)
+  detachScrubberDragListeners()
+  detachScrubberObserver()
   if (scrollFrame) {
     cancelAnimationFrame(scrollFrame)
   }
@@ -525,8 +599,8 @@ function replacePosts(data) {
   firstLoadedPage.value = data.page || 1
   lastLoadedPage.value = data.page || 1
   totalPosts.value = data.total || items.length
-  syncJumpNumber()
   nextTick(() => {
+    syncScrubberTrackMetrics()
     updateVisiblePostFromScroll()
     maybeAutoLoadPosts()
   })
@@ -537,8 +611,8 @@ function appendPosts(data) {
   posts.value.push(...items)
   lastLoadedPage.value = data.page || lastLoadedPage.value + 1
   totalPosts.value = data.total || totalPosts.value
-  syncJumpNumber()
   nextTick(() => {
+    syncScrubberTrackMetrics()
     updateVisiblePostFromScroll()
     maybeAutoLoadPosts()
   })
@@ -551,7 +625,6 @@ function prependPosts(data) {
   posts.value.unshift(...items)
   firstLoadedPage.value = data.page || Math.max(1, firstLoadedPage.value - 1)
   totalPosts.value = data.total || totalPosts.value
-  syncJumpNumber()
   nextTick(() => {
     if (anchorNumber && anchorTop !== null) {
       const newTop = document.getElementById(`post-${anchorNumber}`)?.getBoundingClientRect().top
@@ -559,6 +632,7 @@ function prependPosts(data) {
         window.scrollBy({ top: newTop - anchorTop })
       }
     }
+    syncScrubberTrackMetrics()
     updateVisiblePostFromScroll()
     maybeAutoLoadPosts()
   })
@@ -612,7 +686,6 @@ async function scrollToPost(number) {
 
   highlightedPostNumber.value = number
   currentVisiblePostNumber.value = number
-  jumpPostNumber.value = number
   target.scrollIntoView({ behavior: 'smooth', block: 'center' })
   setTimeout(() => {
     if (highlightedPostNumber.value === number) {
@@ -627,16 +700,9 @@ function resetPostStream() {
   lastLoadedPage.value = 1
   totalPosts.value = 0
   highlightedPostNumber.value = null
-  jumpPostNumber.value = normalizePostNumber(route.query.near) || 1
-  currentVisiblePostNumber.value = jumpPostNumber.value
-}
-
-function syncJumpNumber() {
-  if (targetNearPost.value) {
-    jumpPostNumber.value = normalizePostNumber(targetNearPost.value)
-  } else if (posts.value.length) {
-    jumpPostNumber.value = normalizePostNumber(posts.value[posts.value.length - 1].number)
-  }
+  currentVisiblePostNumber.value = normalizePostNumber(route.query.near) || 1
+  currentVisiblePostProgress.value = currentVisiblePostNumber.value
+  scrubberPreviewNumber.value = null
 }
 
 function handlePostScroll() {
@@ -644,6 +710,7 @@ function handlePostScroll() {
 
   scrollFrame = requestAnimationFrame(() => {
     scrollFrame = null
+    syncScrubberTrackMetrics()
     updateVisiblePostFromScroll()
     maybeAutoLoadPosts()
   })
@@ -665,21 +732,52 @@ function maybeAutoLoadPosts() {
   }
 }
 
+function showUnreadDivider(post) {
+  return Boolean(
+    authStore.isAuthenticated &&
+    unreadStartPostNumber.value &&
+    unreadCount.value > 0 &&
+    Number(post?.number) === Number(unreadStartPostNumber.value)
+  )
+}
+
+function handleDocumentMouseDown(event) {
+  if (showDiscussionMenu.value && !discussionActionsRef.value?.contains(event.target)) {
+    showDiscussionMenu.value = false
+  }
+}
+
 function updateVisiblePostFromScroll() {
   if (!posts.value.length) return
 
   const anchorY = 120
+  const viewportTop = 96
+  const viewportBottom = window.innerHeight
   let closestPostNumber = posts.value[0].number
   let closestDistance = Number.POSITIVE_INFINITY
   let visibleCount = 0
+  let indexFromViewport = null
 
   for (const post of posts.value) {
     const element = document.getElementById(`post-${post.number}`)
     if (!element) continue
 
     const rect = element.getBoundingClientRect()
-    if (rect.bottom < 0 || rect.top > window.innerHeight) continue
-    visibleCount += 1
+    if (rect.bottom < viewportTop) continue
+    if (rect.top > viewportBottom) break
+
+    const height = rect.height || 1
+    const visibleTop = Math.max(0, viewportTop - rect.top)
+    const visibleBottom = Math.min(height, viewportBottom - rect.top)
+    const visiblePart = visibleBottom - visibleTop
+
+    if (indexFromViewport === null) {
+      indexFromViewport = post.number + visibleTop / height
+    }
+
+    if (visiblePart > 0) {
+      visibleCount += visiblePart / height
+    }
 
     const distance = Math.abs(rect.top - anchorY)
     if (distance < closestDistance) {
@@ -689,23 +787,27 @@ function updateVisiblePostFromScroll() {
   }
 
   visiblePostCount.value = Math.max(1, visibleCount)
+  currentVisiblePostProgress.value = clampPostPosition(indexFromViewport ?? closestPostNumber)
 
   if (closestPostNumber !== currentVisiblePostNumber.value) {
     currentVisiblePostNumber.value = closestPostNumber
-    jumpPostNumber.value = closestPostNumber
     scheduleNearUrlSync(closestPostNumber)
     scheduleReadStateSync(closestPostNumber)
   }
 }
 
-function normalizeJumpPostNumber() {
-  jumpPostNumber.value = normalizePostNumber(jumpPostNumber.value)
+function clampPostPosition(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 1
+  return Math.min(maxPostNumber.value, Math.max(1, parsed))
+}
+
+function sanitizePostNumber(value) {
+  return Math.floor(clampPostPosition(value))
 }
 
 function normalizePostNumber(value) {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return 1
-  return Math.min(maxPostNumber.value, Math.max(1, Math.round(parsed)))
+  return sanitizePostNumber(value)
 }
 
 function getPostProgressPercent(value) {
@@ -716,15 +818,129 @@ function getPostProgressPercent(value) {
 }
 
 function handleScrubberTrackClick(event) {
+  if (scrubberDragging.value) return
+
   const track = scrubberTrack.value
   if (!track) return
 
   const rect = track.getBoundingClientRect()
   if (!rect.height) return
 
-  const percent = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
-  const targetNumber = Math.round(1 + percent * Math.max(maxPostNumber.value - 1, 0))
+  const percent = Math.max(0, Math.min(1, (getPointerClientY(event) - rect.top) / rect.height))
+  const targetNumber = getPostNumberFromTrackPercent(percent, true)
   jumpToPost(targetNumber)
+}
+
+function handleScrubberMouseDown(event) {
+  const clientY = getPointerClientY(event)
+  if (clientY === null) return
+
+  event.preventDefault()
+  scrubberDragging.value = true
+  scrubberPreviewNumber.value = scrubberDisplayNumber.value
+  scrubberDragStartY = clientY
+  scrubberDragStartNumber = scrubberDisplayNumber.value
+  document.body.classList.add('scrubber-dragging')
+  window.addEventListener('mousemove', handleScrubberMouseMove)
+  window.addEventListener('mouseup', handleScrubberMouseUp)
+  window.addEventListener('touchmove', handleScrubberMouseMove, { passive: false })
+  window.addEventListener('touchend', handleScrubberMouseUp)
+}
+
+function handleScrubberMouseMove(event) {
+  if (!scrubberDragging.value) return
+
+  event.preventDefault()
+  const clientY = getPointerClientY(event)
+  if (clientY === null) return
+
+  const trackHeight = Math.max(scrubberTrackHeight.value, 1)
+  const deltaPixels = clientY - scrubberDragStartY
+  const deltaPercent = (deltaPixels / trackHeight) * 100
+  const percentPerPost = scrubberPercentPerPost.value.indexPercent
+  const nextNumber = percentPerPost > 0
+    ? scrubberDragStartNumber + deltaPercent / percentPerPost
+    : 1 + (deltaPercent / 100) * Math.max(maxPostNumber.value - 1, 0)
+
+  scrubberPreviewNumber.value = clampPostPosition(nextNumber)
+}
+
+function handleScrubberMouseUp() {
+  if (!scrubberDragging.value) return
+
+  scrubberDragging.value = false
+  detachScrubberDragListeners()
+  const targetNumber = normalizePostNumber(scrubberPreviewNumber.value ?? currentVisiblePostNumber.value)
+  scrubberPreviewNumber.value = null
+  jumpToPost(targetNumber)
+}
+
+function detachScrubberDragListeners() {
+  document.body.classList.remove('scrubber-dragging')
+  window.removeEventListener('mousemove', handleScrubberMouseMove)
+  window.removeEventListener('mouseup', handleScrubberMouseUp)
+  window.removeEventListener('touchmove', handleScrubberMouseMove)
+  window.removeEventListener('touchend', handleScrubberMouseUp)
+}
+
+function attachScrubberObserver() {
+  detachScrubberObserver()
+  if (!scrubberTrack.value || typeof ResizeObserver === 'undefined') return
+
+  scrubberResizeObserver = new ResizeObserver(() => {
+    syncScrubberTrackMetrics()
+  })
+  scrubberResizeObserver.observe(scrubberTrack.value)
+}
+
+function detachScrubberObserver() {
+  scrubberResizeObserver?.disconnect()
+  scrubberResizeObserver = null
+}
+
+function syncScrubberTrackMetrics() {
+  const panelRect = scrubberPanel.value?.getBoundingClientRect()
+  const trackRect = scrubberTrack.value?.getBoundingClientRect()
+  const height = trackRect?.height
+
+  if (panelRect && trackRect && window.innerWidth > 768) {
+    const panelChrome = panelRect.height - trackRect.height
+    const availableHeight = Math.floor(window.innerHeight - panelRect.top - panelChrome - 24)
+    scrubberTrackMaxHeight.value = Math.max(50, availableHeight)
+  } else {
+    scrubberTrackMaxHeight.value = null
+  }
+
+  if (height) {
+    scrubberTrackHeight.value = height
+  }
+}
+
+function getPostNumberFromTrackPercent(percent, centerHandle = false) {
+  const clampedPercent = Math.max(0, Math.min(100, percent * 100))
+  const { total, visible, indexPercent } = scrubberPercentPerPost.value
+
+  if (total <= visible || indexPercent <= 0) {
+    return normalizePostNumber(1 + (clampedPercent / 100) * Math.max(total - 1, 0))
+  }
+
+  const centeredPercent = clampedPercent - (centerHandle ? scrubberHandlePercent.value / 2 : 0)
+  return normalizePostNumber(1 + centeredPercent / indexPercent)
+}
+
+function getPointerClientY(event) {
+  if (typeof event?.clientY === 'number') return event.clientY
+  const touch = event?.touches?.[0] || event?.changedTouches?.[0]
+  return typeof touch?.clientY === 'number' ? touch.clientY : null
+}
+
+function toggleDiscussionMenu() {
+  showDiscussionMenu.value = !showDiscussionMenu.value
+}
+
+async function handleDiscussionMenuAction(action) {
+  showDiscussionMenu.value = false
+  await action()
 }
 
 function scheduleNearUrlSync(number) {
@@ -859,6 +1075,15 @@ function openComposer() {
     postNumber: null,
     username: '',
     initialContent: ''
+  })
+}
+
+function goToLoginForReply() {
+  router.push({
+    name: 'login',
+    query: {
+      redirect: route.fullPath
+    }
   })
 }
 
@@ -1131,6 +1356,25 @@ function formatAbsoluteDate(value) {
   margin-bottom: 30px;
 }
 
+.post-unread-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #cf6a2b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.post-unread-divider::before,
+.post-unread-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(207, 106, 43, 0.28);
+}
+
 .post-item {
   display: flex;
   gap: 20px;
@@ -1349,37 +1593,140 @@ function formatAbsoluteDate(value) {
   border: 1px solid #fde7b2;
 }
 
+.sidebar-section--actions {
+  position: relative;
+  padding: 16px;
+}
+
+.discussion-primary-action {
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  padding: 12px 16px;
+  background: #e86f2d;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.discussion-primary-action:hover {
+  filter: brightness(0.96);
+}
+
+.discussion-primary-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.discussion-secondary-row {
+  display: flex;
+  margin-top: 12px;
+}
+
+.discussion-follow-action,
+.discussion-menu-toggle {
+  border: 0;
+  background: #edf2f7;
+  color: #627284;
+  cursor: pointer;
+  height: 44px;
+}
+
+.discussion-follow-action {
+  flex: 1;
+  border-radius: 8px 0 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.discussion-follow-action.is-standalone {
+  border-radius: 8px;
+}
+
+.discussion-follow-action.is-active {
+  color: #405469;
+}
+
+.discussion-menu-toggle {
+  width: 48px;
+  border-left: 1px solid #dde5ee;
+  border-radius: 0 8px 8px 0;
+}
+
+.discussion-follow-action:hover,
+.discussion-menu-toggle:hover,
+.discussion-menu-toggle.is-active {
+  background: #e3ebf4;
+}
+
+.discussion-follow-action:disabled,
+.discussion-menu-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.discussion-actions-menu {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 72px;
+  padding: 8px;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(31, 45, 61, 0.14);
+  z-index: 5;
+}
+
+.discussion-actions-menu button {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: #465567;
+  padding: 9px 10px;
+  border-radius: 6px;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.discussion-actions-menu button:hover {
+  background: #f2f6fa;
+}
+
+.discussion-actions-menu button.is-danger {
+  color: #b64545;
+}
+
+.discussion-actions-menu button.is-danger:hover {
+  background: #fff1f1;
+}
+
+.discussion-action-copy {
+  margin: 12px 0 0;
+  color: #738090;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.discussion-action-copy--warning {
+  color: #8a6b19;
+}
+
 .subscription-copy {
   color: #66717c;
   line-height: 1.6;
   margin-bottom: 14px;
-}
-
-.info-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.info-item:last-child {
-  border-bottom: none;
-}
-
-.info-item .label {
-  color: #999;
-  font-size: 14px;
-}
-
-.info-item .value {
-  color: #333;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.value-link:hover {
-  color: #4d698e;
-  text-decoration: none;
 }
 
 .sidebar-section button {
@@ -1395,17 +1742,16 @@ function formatAbsoluteDate(value) {
 }
 
 .sidebar-section--scrubber {
-  padding: 18px 18px 16px;
+  padding: 18px 18px 14px;
 }
 
 .scrubber-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
-.scrubber-link,
-.scrubber-link--muted {
+.scrubber-link {
   border: 0;
   background: transparent;
   color: #6d7b88;
@@ -1414,6 +1760,8 @@ function formatAbsoluteDate(value) {
   align-items: center;
   gap: 8px;
   font-size: 13px;
+  font-weight: 600;
+  width: fit-content;
   cursor: pointer;
 }
 
@@ -1421,20 +1769,13 @@ function formatAbsoluteDate(value) {
   color: #41505f;
 }
 
-.scrubber-link--muted {
-  color: #8b98a6;
-}
-
-.scrubber-link.is-disabled {
-  cursor: default;
-}
-
 .scrubber-scrollbar {
-  margin: 6px 0 2px 3px;
-  height: 320px;
-  min-height: 120px;
+  margin: 8px 0 8px 3px;
+  height: 300px;
+  min-height: 50px;
   position: relative;
   cursor: pointer;
+  user-select: none;
 }
 
 .scrubber-before,
@@ -1442,7 +1783,7 @@ function formatAbsoluteDate(value) {
   position: absolute;
   left: 0;
   width: 100%;
-  border-left: 1px solid #d6dee7;
+  border-left: 1px solid #d8e0e8;
 }
 
 .scrubber-before {
@@ -1457,8 +1798,8 @@ function formatAbsoluteDate(value) {
   position: absolute;
   left: 0;
   width: 100%;
-  border-left: 1px solid #b8c4d1;
-  background-image: linear-gradient(to right, rgba(222, 228, 236, 0.9), transparent 12px, transparent);
+  border-left: 1px solid #c1ccd8;
+  background-image: linear-gradient(to right, rgba(230, 235, 241, 0.92), transparent 10px, transparent);
   display: flex;
   align-items: center;
   color: #7d8894;
@@ -1467,6 +1808,7 @@ function formatAbsoluteDate(value) {
   font-weight: 700;
   letter-spacing: 0.02em;
   padding-left: 13px;
+  pointer-events: none;
 }
 
 .scrubber-handle {
@@ -1474,7 +1816,7 @@ function formatAbsoluteDate(value) {
   left: 0;
   width: 100%;
   padding: 5px 0;
-  cursor: pointer;
+  cursor: move;
   z-index: 1;
 }
 
@@ -1482,23 +1824,24 @@ function formatAbsoluteDate(value) {
   height: 100%;
   width: 5px;
   background: var(--forum-primary-color);
-  border-radius: 999px;
+  border-radius: 4px;
   margin-left: -2px;
   transition: background 0.2s;
 }
 
 .scrubber-info {
-  margin-top: -1.6em;
+  margin-top: -1.5em;
   position: absolute;
   top: 50%;
-  left: 16px;
-  width: calc(100% - 16px);
+  left: 15px;
+  width: calc(100% - 15px);
 }
 
 .scrubber-info strong {
   display: block;
-  color: #2f3b47;
-  font-size: 12px;
+  color: #35424f;
+  font-size: 13px;
+  line-height: 1.3;
 }
 
 .scrubber-description {
@@ -1507,44 +1850,13 @@ function formatAbsoluteDate(value) {
   font-size: 12px;
 }
 
-.scrubber-links {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: -2px;
+.scrubber-handle.is-dragging .scrubber-bar,
+:global(body.scrubber-dragging) .scrubber-bar {
+  background: #d46a2c;
 }
 
-.scrubber-jump-inline {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-top: 4px;
-  border-top: 1px solid #eef2f6;
-}
-
-.scrubber-jump-inline span {
-  color: #66717c;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.scrubber-number {
-  width: 80px;
-  padding: 7px 10px;
-  border: 1px solid #d7dee6;
-  border-radius: 6px;
-  color: #2f3b47;
-  font-size: 13px;
-}
-
-.scrubber-number:focus {
-  outline: none;
-  border-color: #4d698e;
-  box-shadow: 0 0 0 3px rgba(77, 105, 142, 0.12);
-}
-
-.scrubber-jump-inline button {
-  margin-bottom: 0;
+:global(body.scrubber-dragging) {
+  cursor: move;
 }
 
 .floating-composer {
@@ -1877,11 +2189,6 @@ function formatAbsoluteDate(value) {
 
   .scrubber-scrollbar {
     height: 42vh;
-  }
-
-  .scrubber-links,
-  .scrubber-jump-inline {
-    flex-wrap: wrap;
   }
 
   .composer-submit,
