@@ -3,6 +3,7 @@
 """
 from math import ceil
 from typing import Optional, List, Tuple
+from django.db import IntegrityError
 from django.db import transaction
 from django.db.models import Q, F, Count, Exists, OuterRef
 from django.core.exceptions import PermissionDenied
@@ -33,6 +34,7 @@ class PostService:
         discussion_id: int,
         content: str,
         user: User,
+        reply_to_post_id: Optional[int] = None,
     ) -> Post:
         """
         创建帖子（回复讨论）
@@ -66,6 +68,13 @@ class PostService:
             # 获取下一个楼层号
             last_post = Post.objects.filter(discussion=discussion).order_by('-number').first()
             next_number = (last_post.number + 1) if last_post else 1
+
+            reply_target = None
+            if reply_to_post_id:
+                reply_target = Post.objects.filter(
+                    id=reply_to_post_id,
+                    discussion=discussion,
+                ).select_related('user').first()
 
             # 创建帖子
             post = Post.objects.create(
@@ -114,6 +123,12 @@ class PostService:
                     post_id=post.id,
                     from_user=user
                 )
+                if reply_target:
+                    NotificationService.notify_post_reply(
+                        reply_to_post_id=reply_target.id,
+                        post_id=post.id,
+                        from_user=user,
+                    )
 
             return post
 
@@ -350,7 +365,10 @@ class PostService:
         if PostLike.objects.filter(post=post, user=user).exists():
             raise ValueError("已经点赞过了")
 
-        PostLike.objects.create(post=post, user=user)
+        try:
+            PostLike.objects.create(post=post, user=user)
+        except IntegrityError:
+            raise ValueError("已经点赞过了")
 
         # 发送通知：帖子被点赞
         from apps.notifications.services import NotificationService

@@ -697,7 +697,7 @@ async function submitDiscussion() {
   draftMessage.value = ''
 
   try {
-    const data = await api.post('/discussions/', {
+    const data = await api.post('/discussions', {
       title: form.value.title,
       content: form.value.content,
       tag_ids: form.value.tag_id ? [parseInt(form.value.tag_id, 10)] : []

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, validator
 class PostCreateSchema(BaseModel):
     """创建帖子（回复讨论）"""
     content: str = Field(..., min_length=1, description="帖子内容")
+    reply_to_post_id: Optional[int] = Field(None, ge=1, description="被回复的帖子ID")
 
     @validator('content')
     def validate_content(cls, v):

@@ -85,10 +85,11 @@
 
                       <aside class="post-actions" :class="{ 'is-open': activePostMenuId === post.id }">
                         <button
+                          v-if="canLikePost(post)"
                           type="button"
                           class="post-action"
                           :class="{ 'is-active': post.is_liked }"
-                          :disabled="isSuspended"
+                          :disabled="likePendingPostIds.includes(post.id)"
                           @click="toggleLike(post)"
                         >
                           <i class="fas fa-thumbs-up"></i>
@@ -131,15 +132,24 @@
 
                     <footer v-if="post.like_count > 0" class="post-footer">
                       <button
+                        v-if="canLikePost(post)"
                         type="button"
                         class="post-feedback"
                         :class="{ 'is-active': post.is_liked }"
-                        :disabled="isSuspended"
+                        :disabled="likePendingPostIds.includes(post.id)"
                         @click="toggleLike(post)"
                       >
                         <i class="fas fa-thumbs-up"></i>
                         <span>{{ formatLikeSummary(post) }}</span>
                       </button>
+                      <div
+                        v-else
+                        class="post-feedback"
+                        :class="{ 'is-active': post.is_liked }"
+                      >
+                        <i class="fas fa-thumbs-up"></i>
+                        <span>{{ formatLikeSummary(post) }}</span>
+                      </div>
                     </footer>
                   </div>
                 </div>
@@ -404,6 +414,7 @@ const reportSubmitting = ref(false)
 const reportingPost = ref(null)
 const showDiscussionMenu = ref(false)
 const activePostMenuId = ref(null)
+const likePendingPostIds = ref([])
 const scrubberTrackHeight = ref(300)
 const scrubberTrackMaxHeight = ref(null)
 const scrubberDragging = ref(false)
@@ -796,6 +807,7 @@ function updateVisiblePostFromScroll() {
   let closestDistance = Number.POSITIVE_INFINITY
   let visibleCount = 0
   let indexFromViewport = null
+  let lastVisiblePostNumber = posts.value[0].number
 
   for (const post of posts.value) {
     const element = document.getElementById(`post-${post.number}`)
@@ -816,6 +828,7 @@ function updateVisiblePostFromScroll() {
 
     if (visiblePart > 0) {
       visibleCount += visiblePart / height
+      lastVisiblePostNumber = post.number
     }
 
     const distance = Math.abs(rect.top - anchorY)
@@ -825,13 +838,20 @@ function updateVisiblePostFromScroll() {
     }
   }
 
-  visiblePostCount.value = Math.max(1, visibleCount)
-  currentVisiblePostProgress.value = clampPostPosition(indexFromViewport ?? closestPostNumber)
+  const scrollBottom = window.scrollY + window.innerHeight
+  const documentBottom = document.documentElement.scrollHeight
+  const isAtPageBottom = documentBottom - scrollBottom <= 24
+  const trackedPostNumber = isAtPageBottom ? lastVisiblePostNumber : closestPostNumber
 
-  if (closestPostNumber !== currentVisiblePostNumber.value) {
-    currentVisiblePostNumber.value = closestPostNumber
-    scheduleNearUrlSync(closestPostNumber)
-    scheduleReadStateSync(closestPostNumber)
+  visiblePostCount.value = Math.max(1, visibleCount)
+  currentVisiblePostProgress.value = isAtPageBottom
+    ? maxPostNumber.value
+    : clampPostPosition(indexFromViewport ?? trackedPostNumber)
+
+  if (trackedPostNumber !== currentVisiblePostNumber.value) {
+    currentVisiblePostNumber.value = trackedPostNumber
+    scheduleNearUrlSync(trackedPostNumber)
+    scheduleReadStateSync(trackedPostNumber)
   }
 }
 
@@ -1056,24 +1076,37 @@ async function toggleLike(post) {
     router.push('/login')
     return
   }
+  if (!canLikePost(post)) {
+    return
+  }
   if (isSuspended.value) {
     alert(suspensionNotice.value)
     return
   }
+  if (likePendingPostIds.value.includes(post.id)) {
+    return
+  }
 
+  likePendingPostIds.value.push(post.id)
+  const previousLiked = Boolean(post.is_liked)
+  const previousLikeCount = Number(post.like_count || 0)
   try {
-    if (post.is_liked) {
-      await api.delete(`/posts/${post.id}/like`)
-      post.like_count--
+    if (previousLiked) {
+      post.like_count = Math.max(0, previousLikeCount - 1)
       post.is_liked = false
+      await api.delete(`/posts/${post.id}/like`)
     } else {
-      await api.post(`/posts/${post.id}/like`)
-      post.like_count++
+      post.like_count = previousLikeCount + 1
       post.is_liked = true
+      await api.post(`/posts/${post.id}/like`)
     }
   } catch (error) {
+    post.like_count = previousLikeCount
+    post.is_liked = previousLiked
     console.error('点赞失败:', error)
     alert('点赞失败: ' + (error.response?.data?.error || error.message || '未知错误'))
+  } finally {
+    likePendingPostIds.value = likePendingPostIds.value.filter(id => id !== post.id)
   }
 }
 
@@ -1149,13 +1182,28 @@ async function handleReplyCreated(event) {
 
   posts.value.push(newPost)
   discussion.value.comment_count = (discussion.value.comment_count || 0) + 1
+  discussion.value.last_post_id = newPost.id
   discussion.value.last_post_number = Math.max(discussion.value.last_post_number || 0, newPost.number || 0)
   discussion.value.last_posted_at = newPost.created_at || discussion.value.last_posted_at
   totalPosts.value = Math.max(totalPosts.value + 1, posts.value.length)
   lastLoadedPage.value = Math.max(lastLoadedPage.value, Math.ceil(totalPosts.value / pageLimit))
+  lastReportedReadNumber = Math.max(lastReportedReadNumber, newPost.number || 0)
+  discussion.value.last_read_post_number = Math.max(Number(discussion.value.last_read_post_number || 0), newPost.number || 0)
+  discussion.value.last_read_at = newPost.created_at || discussion.value.last_read_at
+  discussion.value.unread_count = Math.max((discussion.value.last_post_number || 0) - discussion.value.last_read_post_number, 0)
+  discussion.value.is_unread = discussion.value.unread_count > 0
   if (authStore.user?.preferences?.follow_after_reply) {
     discussion.value.is_subscribed = true
   }
+
+  window.dispatchEvent(new CustomEvent('pyflarum:discussion-read-state-updated', {
+    detail: {
+      discussionId: discussion.value.id,
+      lastReadPostNumber: discussion.value.last_read_post_number,
+      lastReadAt: discussion.value.last_read_at,
+      unreadCount: discussion.value.unread_count
+    }
+  }))
 
   await scrollToPost(newPost.number)
 }
@@ -1194,6 +1242,12 @@ function canEditPost(post) {
 function canDeletePost(post) {
   if (isSuspended.value) return false
   return authStore.user?.id === post.user.id || authStore.user?.is_staff
+}
+
+function canLikePost(post) {
+  if (!authStore.isAuthenticated) return false
+  if (isSuspended.value) return false
+  return Boolean(post?.can_like ?? (post?.user?.id !== authStore.user?.id))
 }
 
 function canReportPost(post) {

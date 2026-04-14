@@ -154,7 +154,7 @@ onMounted(async () => {
 async function loadNotifications() {
   loading.value = true
   try {
-    const data = await api.get('/notifications/', {
+    const data = await api.get('/notifications', {
       params: { page: currentPage.value }
     })
     notifications.value = unwrapList(data)
@@ -217,7 +217,9 @@ function handleNotificationClick(notification) {
   }
 
   // 跳转到相关页面
-  if (notification.data?.discussion_id) {
+  if (notification.data?.discussion_id && notification.data?.post_number) {
+    router.push(`/d/${notification.data.discussion_id}?near=${notification.data.post_number}`)
+  } else if (notification.data?.discussion_id) {
     router.push(buildDiscussionPath(notification.data.discussion_id))
   } else if (notification.data?.post_id) {
     router.push(buildDiscussionPath(notification.data.discussion_id || ''))
@@ -271,6 +273,7 @@ function getNotificationIcon(type) {
     discussionReply: '💬',
     postLiked: '❤️',
     userMentioned: '@',
+    postReply: '↩️',
     discussionCreated: '📝',
     postCreated: '💭',
     default: '🔔'
@@ -288,6 +291,8 @@ function getNotificationMessage(notification) {
       return `${fromUser?.username || '有人'} 点赞了你的回复`
     case 'userMentioned':
       return `${fromUser?.username || '有人'} 在回复中提到了你`
+    case 'postReply':
+      return `${fromUser?.username || '有人'} 回复了你的帖子`
     case 'discussionCreated':
       return `${fromUser?.username || '有人'} 发起了新讨论 "${data?.discussion_title || ''}"`
     case 'postCreated':

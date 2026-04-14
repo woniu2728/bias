@@ -50,7 +50,7 @@ if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
     # Debug Toolbar
-    if 'debug_toolbar' in settings.INSTALLED_APPS:
+    if getattr(settings, 'ENABLE_DEBUG_TOOLBAR', False):
         urlpatterns = [
             path('__debug__/', include('debug_toolbar.urls')),
         ] + urlpatterns

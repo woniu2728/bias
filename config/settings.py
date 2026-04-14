@@ -235,7 +235,9 @@ LOGGING = {
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
 
 # Debug Toolbar (only in DEBUG mode)
-if DEBUG:
+ENABLE_DEBUG_TOOLBAR = DEBUG and os.getenv('ENABLE_DEBUG_TOOLBAR', 'False') == 'True'
+
+if ENABLE_DEBUG_TOOLBAR:
     INSTALLED_APPS += ['debug_toolbar']
     MIDDLEWARE.insert(0, 'debug_toolbar.middleware.DebugToolbarMiddleware')
     INTERNAL_IPS = ['127.0.0.1', 'localhost']

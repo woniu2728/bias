@@ -957,7 +957,8 @@ async function submitReply() {
       }
     } else {
       const data = await api.post(`/discussions/${discussionId.value}/posts`, {
-        content: replyContent.value
+        content: replyContent.value,
+        reply_to_post_id: composerStore.current.postId || null
       })
       const post = normalizePost(data)
       window.dispatchEvent(new CustomEvent('pyflarum:reply-created', {

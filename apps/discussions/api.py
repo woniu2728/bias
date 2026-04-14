@@ -42,11 +42,7 @@ def create_discussion(request, payload: DiscussionCreateSchema):
     except PermissionDenied as e:
         return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.get("/", response=DiscussionListSchema, tags=["Discussions"])
@@ -133,17 +129,9 @@ def update_discussion_read_state(request, discussion_id: int, payload: Discussio
             "last_read_post_number": state.last_read_post_number,
         }
     except Discussion.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "讨论不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "讨论不存在"}, status=404)
     except PermissionDenied as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=403
-        )
+        return JsonResponse({"error": str(e)}, status=403)
 
 
 @router.get("/{discussion_id}", response=DiscussionDetailSchema, tags=["Discussions"])
@@ -155,11 +143,7 @@ def get_discussion(request, discussion_id: int):
     discussion = DiscussionService.get_discussion_by_id(discussion_id, user)
 
     if not discussion:
-        return router.create_response(
-            request,
-            {"error": "讨论不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "讨论不存在"}, status=404)
 
     # 获取第一条帖子
     first_post = None
@@ -231,23 +215,11 @@ def update_discussion(request, discussion_id: int, payload: DiscussionUpdateSche
         )
         return discussion
     except Discussion.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "讨论不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "讨论不存在"}, status=404)
     except PermissionDenied as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=403
-        )
+        return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.delete("/{discussion_id}", auth=AuthBearer(), tags=["Discussions"])
@@ -261,17 +233,9 @@ def delete_discussion(request, discussion_id: int):
         DiscussionService.delete_discussion(discussion_id, request.auth)
         return {"message": "讨论已删除"}
     except Discussion.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "讨论不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "讨论不存在"}, status=404)
     except PermissionDenied as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=403
-        )
+        return JsonResponse({"error": str(e)}, status=403)
 
 
 @router.post("/{discussion_id}/pin", auth=AuthBearer(), tags=["Discussions"])
@@ -282,11 +246,7 @@ def toggle_pin_discussion(request, discussion_id: int):
     需要管理员权限
     """
     if not request.auth.is_staff:
-        return router.create_response(
-            request,
-            {"error": "需要管理员权限"},
-            status=403
-        )
+        return JsonResponse({"error": "需要管理员权限"}, status=403)
 
     try:
         discussion = Discussion.objects.get(id=discussion_id)
@@ -294,11 +254,7 @@ def toggle_pin_discussion(request, discussion_id: int):
         discussion.save(update_fields=['is_sticky'])
         return {"message": "操作成功", "is_sticky": discussion.is_sticky}
     except Discussion.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "讨论不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "讨论不存在"}, status=404)
 
 
 @router.post("/{discussion_id}/lock", auth=AuthBearer(), tags=["Discussions"])
@@ -309,11 +265,7 @@ def toggle_lock_discussion(request, discussion_id: int):
     需要管理员权限
     """
     if not request.auth.is_staff:
-        return router.create_response(
-            request,
-            {"error": "需要管理员权限"},
-            status=403
-        )
+        return JsonResponse({"error": "需要管理员权限"}, status=403)
 
     try:
         discussion = Discussion.objects.get(id=discussion_id)
@@ -321,11 +273,7 @@ def toggle_lock_discussion(request, discussion_id: int):
         discussion.save(update_fields=['is_locked'])
         return {"message": "操作成功", "is_locked": discussion.is_locked}
     except Discussion.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "讨论不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "讨论不存在"}, status=404)
 
 
 @router.post("/{discussion_id}/hide", auth=AuthBearer(), tags=["Discussions"])
@@ -336,11 +284,7 @@ def toggle_hide_discussion(request, discussion_id: int):
     需要管理员权限
     """
     if not request.auth.is_staff:
-        return router.create_response(
-            request,
-            {"error": "需要管理员权限"},
-            status=403
-        )
+        return JsonResponse({"error": "需要管理员权限"}, status=403)
 
     try:
         discussion = Discussion.objects.get(id=discussion_id)
@@ -348,11 +292,7 @@ def toggle_hide_discussion(request, discussion_id: int):
         discussion.save(update_fields=['is_hidden'])
         return {"message": "操作成功", "is_hidden": discussion.is_hidden}
     except Discussion.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "讨论不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "讨论不存在"}, status=404)
 
 
 @router.post("/{discussion_id}/subscribe", auth=AuthBearer(), tags=["Discussions"])

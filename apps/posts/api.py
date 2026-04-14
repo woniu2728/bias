@@ -174,6 +174,7 @@ def create_post(request, discussion_id: int, payload: PostCreateSchema):
             discussion_id=discussion_id,
             content=payload.content,
             user=request.auth,
+            reply_to_post_id=payload.reply_to_post_id,
         )
         post.like_count = 0
         post.is_liked = False
@@ -181,11 +182,7 @@ def create_post(request, discussion_id: int, payload: PostCreateSchema):
     except PermissionDenied as e:
         return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.get("/discussions/{discussion_id}/posts", response=PostListSchema, tags=["Posts"])
@@ -236,11 +233,7 @@ def get_post(request, post_id: int):
     post = PostService.get_post_by_id(post_id, user)
 
     if not post:
-        return router.create_response(
-            request,
-            {"error": "帖子不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "帖子不存在"}, status=404)
 
     return _serialize_post(post, user)
 
@@ -264,19 +257,11 @@ def update_post(request, post_id: int, payload: PostUpdateSchema):
 
         return _serialize_post(post, request.auth)
     except Post.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "帖子不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "帖子不存在"}, status=404)
     except PermissionDenied as e:
         return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.delete("/posts/{post_id}", auth=AuthBearer(), tags=["Posts"])
@@ -290,19 +275,11 @@ def delete_post(request, post_id: int):
         PostService.delete_post(post_id, request.auth)
         return {"message": "帖子已删除"}
     except Post.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "帖子不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "帖子不存在"}, status=404)
     except PermissionDenied as e:
         return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.post("/posts/{post_id}/like", auth=AuthBearer(), tags=["Posts"])
@@ -316,23 +293,11 @@ def like_post(request, post_id: int):
         PostService.like_post(post_id, request.auth)
         return {"message": "点赞成功"}
     except Post.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "帖子不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "帖子不存在"}, status=404)
     except PermissionDenied as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=403
-        )
+        return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.delete("/posts/{post_id}/like", auth=AuthBearer(), tags=["Posts"])
@@ -346,23 +311,11 @@ def unlike_post(request, post_id: int):
         PostService.unlike_post(post_id, request.auth)
         return {"message": "取消点赞成功"}
     except Post.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "帖子不存在"},
-            status=404
-        )
+        return JsonResponse({"error": "帖子不存在"}, status=404)
     except PermissionDenied as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=403
-        )
+        return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400
-        )
+        return JsonResponse({"error": str(e)}, status=400)
 
 
 @router.post("/posts/{post_id}/report", auth=AuthBearer(), tags=["Posts"])

@@ -122,3 +122,45 @@ class PostFlagApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()["approval_status"], "pending")
+
+
+class PostLikeTests(TestCase):
+    def setUp(self):
+        self.author = User.objects.create_user(
+            username="like_author",
+            email="like_author@example.com",
+            password="password123",
+        )
+        self.liker = User.objects.create_user(
+            username="like_user",
+            email="like_user@example.com",
+            password="password123",
+        )
+        self.discussion = DiscussionService.create_discussion(
+            title="Like discussion",
+            content="Initial post",
+            user=self.author,
+        )
+        self.post = PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="Reply to like",
+            user=self.author,
+        )
+
+    def test_duplicate_like_raises_value_error_not_integrity_error(self):
+        PostService.like_post(self.post.id, self.liker)
+
+        with self.assertRaisesMessage(ValueError, "已经点赞过了"):
+            PostService.like_post(self.post.id, self.liker)
+
+    def test_like_own_post_returns_bad_request_in_api(self):
+        token = RefreshToken.for_user(self.author).access_token
+
+        response = self.client.post(
+            f"/api/posts/{self.post.id}/like",
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(response.json()["error"], "不能给自己的帖子点赞")

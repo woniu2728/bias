@@ -264,9 +264,11 @@ class NotificationService:
             from_user: 回复者
         """
         from apps.discussions.models import Discussion
+        from apps.posts.models import Post
 
         try:
             discussion = Discussion.objects.select_related('user').get(id=discussion_id)
+            post = Post.objects.only('id', 'number').get(id=post_id)
 
             # 通知讨论作者
             if discussion.user and discussion.user.id != from_user.id:
@@ -280,6 +282,7 @@ class NotificationService:
                         'discussion_id': discussion_id,
                         'discussion_title': discussion.title,
                         'post_id': post_id,
+                        'post_number': post.number,
                     }
                 )
 
@@ -306,9 +309,49 @@ class NotificationService:
                                 'discussion_id': discussion_id,
                                 'discussion_title': discussion.title,
                                 'post_id': post_id,
+                                'post_number': post.number,
                             }
                         )
-        except Discussion.DoesNotExist:
+        except (Discussion.DoesNotExist, Post.DoesNotExist):
+            pass
+
+    @staticmethod
+    def notify_post_reply(reply_to_post_id: int, post_id: int, from_user: User):
+        """
+        通知某条帖子被回复
+
+        Args:
+            reply_to_post_id: 被回复帖子ID
+            post_id: 新回复帖子ID
+            from_user: 回复者
+        """
+        from apps.posts.models import Post
+
+        try:
+            reply_to_post = Post.objects.select_related('user', 'discussion__user').get(id=reply_to_post_id)
+            post = Post.objects.only('id', 'number').get(id=post_id)
+
+            if (
+                reply_to_post.user
+                and reply_to_post.user.id != from_user.id
+                and reply_to_post.user.id != getattr(reply_to_post.discussion.user, 'id', None)
+            ):
+                NotificationService.create_notification(
+                    user=reply_to_post.user,
+                    type=NotificationService.TYPE_POST_REPLY,
+                    from_user=from_user,
+                    subject_type='post',
+                    subject_id=reply_to_post_id,
+                    data={
+                        'post_id': post_id,
+                        'post_number': post.number,
+                        'discussion_id': reply_to_post.discussion_id,
+                        'discussion_title': reply_to_post.discussion.title,
+                        'reply_to_post_id': reply_to_post_id,
+                        'reply_to_post_number': reply_to_post.number,
+                    }
+                )
+        except Post.DoesNotExist:
             pass
 
     @staticmethod
@@ -335,6 +378,7 @@ class NotificationService:
                     subject_id=post_id,
                     data={
                         'post_id': post_id,
+                        'post_number': post.number,
                         'discussion_id': post.discussion_id,
                         'discussion_title': post.discussion.title,
                     }
@@ -365,6 +409,7 @@ class NotificationService:
                 subject_id=post_id,
                 data={
                     'post_id': post_id,
+                    'post_number': post.number,
                     'discussion_id': post.discussion_id,
                     'discussion_title': post.discussion.title,
                 }
@@ -393,6 +438,7 @@ class NotificationService:
                     'avatar_url': notification.from_user.avatar_url,
                 } if notification.from_user else None,
                 'data': notification.data,
+                'is_read': notification.is_read,
                 'created_at': notification.created_at.isoformat(),
             }
 
