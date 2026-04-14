@@ -5,6 +5,7 @@
       <router-view />
     </main>
     <Footer />
+    <AppModalHost />
     <DiscussionComposer />
     <PostComposer />
   </div>
@@ -14,6 +15,7 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import Header from './components/Header.vue'
 import Footer from './components/Footer.vue'
+import AppModalHost from './components/AppModalHost.vue'
 import DiscussionComposer from './components/DiscussionComposer.vue'
 import PostComposer from './components/PostComposer.vue'
 import { useAuthStore } from './stores/auth'

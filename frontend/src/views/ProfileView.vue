@@ -366,6 +366,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useModalStore } from '@/stores/modal'
 import api from '@/api'
 import {
   buildDiscussionPath,
@@ -378,6 +379,7 @@ import {
 
 const route = useRoute()
 const authStore = useAuthStore()
+const modalStore = useModalStore()
 
 const user = ref(null)
 const discussions = ref([])
@@ -679,7 +681,11 @@ async function handleAvatarSelected(event) {
     }
     await authStore.fetchUser()
   } catch (error) {
-    alert('头像上传失败: ' + (error.response?.data?.error || error.message || '未知错误'))
+    await modalStore.alert({
+      title: '头像上传失败',
+      message: error.response?.data?.error || error.message || '未知错误',
+      tone: 'danger'
+    })
   } finally {
     avatarUploading.value = false
     if (avatarInput.value) {

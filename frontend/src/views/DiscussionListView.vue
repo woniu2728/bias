@@ -227,6 +227,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
 import { useForumStore } from '@/stores/forum'
+import { useModalStore } from '@/stores/modal'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
 import {
@@ -243,6 +244,7 @@ import {
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
 const forumStore = useForumStore()
+const modalStore = useModalStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -384,7 +386,11 @@ async function markAllAsRead() {
     }))
   } catch (error) {
     console.error('标记已读失败:', error)
-    alert('标记已读失败，请稍后重试')
+    await modalStore.alert({
+      title: '标记已读失败',
+      message: '请稍后重试',
+      tone: 'danger'
+    })
   } finally {
     markingAllRead.value = false
   }

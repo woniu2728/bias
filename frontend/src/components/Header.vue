@@ -225,6 +225,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
 import { useForumStore } from '@/stores/forum'
+import { useModalStore } from '@/stores/modal'
 import { useNotificationStore } from '@/stores/notification'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
@@ -233,6 +234,7 @@ import { buildDiscussionPath, buildUserPath, formatRelativeTime } from '@/utils/
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
 const forumStore = useForumStore()
+const modalStore = useModalStore()
 const notificationStore = useNotificationStore()
 const route = useRoute()
 const router = useRouter()
@@ -403,9 +405,16 @@ function handleSearch() {
   router.push({ path: '/search', query: { q: query } })
 }
 
-function handleLogout() {
-  if (composerStore.hasUnsavedChanges && !confirm(composerStore.unsavedMessage || '你有未保存内容，确定要登出吗？')) {
-    return
+async function handleLogout() {
+  if (composerStore.hasUnsavedChanges) {
+    const confirmed = await modalStore.confirm({
+      title: '确认登出',
+      message: composerStore.unsavedMessage || '你有未保存内容，确定要登出吗？',
+      confirmText: '继续登出',
+      cancelText: '返回',
+      tone: 'danger'
+    })
+    if (!confirmed) return
   }
 
   authStore.logout()

@@ -92,12 +92,14 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useModalStore } from '@/stores/modal'
 import { useNotificationStore } from '@/stores/notification'
 import api from '@/api'
 import { buildDiscussionPath, formatRelativeTime, unwrapList } from '@/utils/forum'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const modalStore = useModalStore()
 const notificationStore = useNotificationStore()
 
 const notifications = ref([])
@@ -153,14 +155,25 @@ async function markAllAsRead() {
 }
 
 async function deleteNotification(notificationId) {
-  if (!confirm('确定要删除这条通知吗？')) return
+  const confirmed = await modalStore.confirm({
+    title: '删除通知',
+    message: '确定要删除这条通知吗？',
+    confirmText: '删除',
+    cancelText: '取消',
+    tone: 'danger'
+  })
+  if (!confirmed) return
 
   try {
-    const notification = notifications.value.find(n => n.id === notificationId)
     await notificationStore.deleteNotification(notificationId)
     notifications.value = notifications.value.filter(n => n.id !== notificationId)
   } catch (error) {
     console.error('删除失败:', error)
+    await modalStore.alert({
+      title: '删除失败',
+      message: error.response?.data?.error || error.message || '请稍后重试',
+      tone: 'danger'
+    })
   }
 }
 

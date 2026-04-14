@@ -214,6 +214,7 @@ import ComposerEmojiPicker from '@/components/ComposerEmojiPicker.vue'
 import ComposerMentionPicker from '@/components/ComposerMentionPicker.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
+import { useModalStore } from '@/stores/modal'
 import api from '@/api'
 import {
   EMOJI_GROUPS,
@@ -234,6 +235,7 @@ import { flattenTags, normalizeTag, unwrapList } from '@/utils/forum'
 const router = useRouter()
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
+const modalStore = useModalStore()
 
 const form = ref({
   title: '',
@@ -595,9 +597,15 @@ function stopResize() {
   persistComposerHeight(composerHeight.value)
 }
 
-function closeComposer() {
-  if (hasDraftContent.value && !confirm('确定要关闭发帖编辑器吗？当前内容会保留在本地草稿中。')) {
-    return
+async function closeComposer() {
+  if (hasDraftContent.value) {
+    const confirmed = await modalStore.confirm({
+      title: '关闭发帖编辑器',
+      message: '确定要关闭发帖编辑器吗？当前内容会保留在本地草稿中。',
+      confirmText: '关闭',
+      cancelText: '继续编辑'
+    })
+    if (!confirmed) return
   }
   showEmojiPicker.value = false
   showPreview.value = false
@@ -667,9 +675,16 @@ function saveDraft(showMessage = true) {
   draftMessage.value = showMessage ? '讨论草稿已保存。' : ''
 }
 
-function clearDraft() {
-  if (hasDraftContent.value && !confirm('确定要清除当前讨论草稿吗？')) {
-    return
+async function clearDraft() {
+  if (hasDraftContent.value) {
+    const confirmed = await modalStore.confirm({
+      title: '清除讨论草稿',
+      message: '确定要清除当前讨论草稿吗？',
+      confirmText: '清除',
+      cancelText: '取消',
+      tone: 'danger'
+    })
+    if (!confirmed) return
   }
 
   form.value = {
@@ -704,7 +719,10 @@ async function submitDiscussion() {
     })
 
     if (data.approval_status === 'pending') {
-      alert('讨论已提交审核，管理员通过后会显示在论坛列表中。')
+      await modalStore.alert({
+        title: '讨论已进入审核队列',
+        message: '管理员通过后，这条讨论才会显示在论坛列表中。'
+      })
     }
 
     resetComposer()
@@ -718,7 +736,11 @@ async function submitDiscussion() {
       error.response?.data?.detail ||
       error.message ||
       '发布失败，请稍后重试'
-    alert(`发布失败: ${message}`)
+    await modalStore.alert({
+      title: '发布失败',
+      message,
+      tone: 'danger'
+    })
   } finally {
     submitting.value = false
   }
@@ -875,7 +897,11 @@ async function uploadAndInsertFile(file, asImage) {
     const message = getComposerErrorMessage(error, asImage ? '图片上传失败' : '附件上传失败')
     uploadNoticeTone.value = 'error'
     uploadNotice.value = message
-    alert(message)
+    modalStore.alert({
+      title: asImage ? '图片上传失败' : '附件上传失败',
+      message,
+      tone: 'danger'
+    })
   } finally {
     uploading.value = false
   }

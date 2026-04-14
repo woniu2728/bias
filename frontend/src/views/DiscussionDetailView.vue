@@ -326,46 +326,6 @@
       </div>
     </div>
 
-    <div v-if="showReportModal" class="report-modal" @click.self="closeReportModal">
-      <div class="report-dialog">
-        <div class="report-header">
-          <h3>举报帖子</h3>
-          <button @click="closeReportModal" type="button" class="report-close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-
-        <div class="report-body">
-          <div class="form-group">
-            <label>举报原因</label>
-            <select v-model="reportForm.reason" class="report-select">
-              <option value="垃圾广告">垃圾广告</option>
-              <option value="骚扰攻击">骚扰攻击</option>
-              <option value="违规内容">违规内容</option>
-              <option value="剧透/灌水">剧透/灌水</option>
-              <option value="其他">其他</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>补充说明</label>
-            <textarea
-              v-model="reportForm.message"
-              rows="4"
-              class="report-textarea"
-              placeholder="告诉管理员这条帖子为什么需要处理"
-            ></textarea>
-          </div>
-        </div>
-
-        <div class="report-footer">
-          <button @click="closeReportModal" type="button" class="composer-secondary">取消</button>
-          <button @click="submitReport" type="button" class="composer-submit" :disabled="reportSubmitting">
-            {{ reportSubmitting ? '提交中...' : '提交举报' }}
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -374,6 +334,8 @@ import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
+import { useModalStore } from '@/stores/modal'
+import PostReportModal from '@/components/modals/PostReportModal.vue'
 import api from '@/api'
 import {
   buildTagPath,
@@ -388,6 +350,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
+const modalStore = useModalStore()
 
 const discussion = ref(null)
 const posts = ref([])
@@ -409,9 +372,6 @@ const highlightedPostNumber = ref(null)
 const currentVisiblePostNumber = ref(1)
 const currentVisiblePostProgress = ref(1)
 const visiblePostCount = ref(1)
-const showReportModal = ref(false)
-const reportSubmitting = ref(false)
-const reportingPost = ref(null)
 const showDiscussionMenu = ref(false)
 const activePostMenuId = ref(null)
 const likePendingPostIds = ref([])
@@ -419,10 +379,6 @@ const scrubberTrackHeight = ref(300)
 const scrubberTrackMaxHeight = ref(null)
 const scrubberDragging = ref(false)
 const scrubberPreviewNumber = ref(null)
-const reportForm = ref({
-  reason: '垃圾广告',
-  message: ''
-})
 let scrollFrame = null
 let nearUrlTimer = null
 let readStateTimer = null
@@ -449,6 +405,18 @@ const suspensionNotice = computed(() => {
     ? `账号已被封禁至 ${formatAbsoluteDate(user.suspended_until)}，暂时无法回复、点赞、举报或关注讨论。`
     : '账号当前已被封禁，暂时无法回复、点赞、举报或关注讨论。'
 })
+
+function getUiErrorMessage(error, fallback = '操作失败，请稍后重试') {
+  return error.response?.data?.error || error.response?.data?.detail || error.message || fallback
+}
+
+function showSuspensionAlert() {
+  return modalStore.alert({
+    title: '账号已被封禁',
+    message: suspensionNotice.value,
+    tone: 'danger'
+  })
+}
 
 const hasPrevious = computed(() => firstLoadedPage.value > 1)
 const hasMore = computed(() => totalPosts.value > 0 && lastLoadedPage.value * pageLimit < totalPosts.value)
@@ -1080,7 +1048,7 @@ async function toggleLike(post) {
     return
   }
   if (isSuspended.value) {
-    alert(suspensionNotice.value)
+    await showSuspensionAlert()
     return
   }
   if (likePendingPostIds.value.includes(post.id)) {
@@ -1104,7 +1072,11 @@ async function toggleLike(post) {
     post.like_count = previousLikeCount
     post.is_liked = previousLiked
     console.error('点赞失败:', error)
-    alert('点赞失败: ' + (error.response?.data?.error || error.message || '未知错误'))
+    await modalStore.alert({
+      title: '点赞失败',
+      message: getUiErrorMessage(error, '请稍后重试'),
+      tone: 'danger'
+    })
   } finally {
     likePendingPostIds.value = likePendingPostIds.value.filter(id => id !== post.id)
   }
@@ -1112,7 +1084,7 @@ async function toggleLike(post) {
 
 function replyToPost(post) {
   if (isSuspended.value) {
-    alert(suspensionNotice.value)
+    showSuspensionAlert()
     return
   }
   composerStore.openReplyComposer({
@@ -1128,7 +1100,7 @@ function replyToPost(post) {
 
 function editPost(post) {
   if (isSuspended.value) {
-    alert(suspensionNotice.value)
+    showSuspensionAlert()
     return
   }
   composerStore.openEditPostComposer({
@@ -1144,7 +1116,7 @@ function editPost(post) {
 
 function openComposer() {
   if (isSuspended.value) {
-    alert(suspensionNotice.value)
+    showSuspensionAlert()
     return
   }
   if (hasActiveComposer.value) {
@@ -1221,7 +1193,14 @@ function handlePostUpdated(event) {
 }
 
 async function deletePost(post) {
-  if (!confirm('确定要删除这条回复吗？')) return
+  const confirmed = await modalStore.confirm({
+    title: '删除回复',
+    message: '确定要删除这条回复吗？',
+    confirmText: '删除',
+    cancelText: '取消',
+    tone: 'danger'
+  })
+  if (!confirmed) return
 
   try {
     await api.delete(`/posts/${post.id}`)
@@ -1230,7 +1209,11 @@ async function deletePost(post) {
     totalPosts.value = Math.max(0, totalPosts.value - 1)
   } catch (error) {
     console.error('删除失败:', error)
-    alert('删除失败，请稍后重试')
+    await modalStore.alert({
+      title: '删除失败',
+      message: '请稍后重试',
+      tone: 'danger'
+    })
   }
 }
 
@@ -1258,43 +1241,38 @@ function canReportPost(post) {
   return true
 }
 
-function openReportModal(post) {
+async function openReportModal(post) {
   if (isSuspended.value) {
-    alert(suspensionNotice.value)
+    await showSuspensionAlert()
     return
   }
   activePostMenuId.value = null
-  reportingPost.value = post
-  reportForm.value = {
-    reason: '垃圾广告',
-    message: ''
-  }
-  showReportModal.value = true
-}
 
-function closeReportModal() {
-  showReportModal.value = false
-  reportSubmitting.value = false
-  reportingPost.value = null
-  reportForm.value = {
-    reason: '垃圾广告',
-    message: ''
-  }
-}
-
-async function submitReport() {
-  if (!reportingPost.value) return
-
-  reportSubmitting.value = true
   try {
-    await api.post(`/posts/${reportingPost.value.id}/report`, reportForm.value)
-    closeReportModal()
-    alert('举报已提交，管理员会尽快处理。')
+    const result = await modalStore.show(
+      PostReportModal,
+      {
+        post,
+        submitReport: payload => api.post(`/posts/${post.id}/report`, payload)
+      },
+      {
+        size: 'small'
+      }
+    )
+
+    if (result?.reported) {
+      await modalStore.alert({
+        title: '举报已提交',
+        message: '管理员会尽快处理。'
+      })
+    }
   } catch (error) {
     console.error('举报失败:', error)
-    alert('举报失败: ' + (error.response?.data?.error || error.message || '未知错误'))
-  } finally {
-    reportSubmitting.value = false
+    await modalStore.alert({
+      title: '举报失败',
+      message: getUiErrorMessage(error, '请稍后重试'),
+      tone: 'danger'
+    })
   }
 }
 
@@ -1326,14 +1304,25 @@ async function toggleHide() {
 }
 
 async function deleteDiscussion() {
-  if (!confirm('确定要删除这个讨论吗？此操作不可恢复！')) return
+  const confirmed = await modalStore.confirm({
+    title: '删除讨论',
+    message: '确定要删除这个讨论吗？此操作不可恢复！',
+    confirmText: '删除',
+    cancelText: '取消',
+    tone: 'danger'
+  })
+  if (!confirmed) return
 
   try {
     await api.delete(`/discussions/${discussion.value.id}`)
     router.push('/')
   } catch (error) {
     console.error('删除失败:', error)
-    alert('删除失败，请稍后重试')
+    await modalStore.alert({
+      title: '删除失败',
+      message: '请稍后重试',
+      tone: 'danger'
+    })
   }
 }
 
@@ -1343,7 +1332,7 @@ async function toggleSubscription() {
     return
   }
   if (isSuspended.value) {
-    alert(suspensionNotice.value)
+    await showSuspensionAlert()
     return
   }
 
@@ -1358,7 +1347,11 @@ async function toggleSubscription() {
     }
   } catch (error) {
     console.error('更新关注状态失败:', error)
-    alert('操作失败: ' + (error.response?.data?.error || error.message || '未知错误'))
+    await modalStore.alert({
+      title: '更新关注失败',
+      message: getUiErrorMessage(error, '请稍后重试'),
+      tone: 'danger'
+    })
   } finally {
     togglingSubscription.value = false
   }
@@ -2386,71 +2379,6 @@ function formatAbsoluteDate(value) {
 .composer-secondary:hover {
   background: #e8edf3;
   color: #425062;
-}
-
-.report-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1100;
-}
-
-.report-dialog {
-  width: min(520px, calc(100vw - 32px));
-  background: white;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.report-header,
-.report-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 18px 20px;
-}
-
-.report-header {
-  border-bottom: 1px solid #e3e8ed;
-}
-
-.report-footer {
-  justify-content: flex-end;
-  border-top: 1px solid #e3e8ed;
-}
-
-.report-header h3 {
-  margin: 0;
-}
-
-.report-close {
-  border: 0;
-  background: transparent;
-  color: #99a1ab;
-  font-size: 18px;
-  cursor: pointer;
-}
-
-.report-body {
-  padding: 20px;
-}
-
-.report-select,
-.report-textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d7dee6;
-  border-radius: 4px;
-  font-size: 14px;
-  font-family: inherit;
-}
-
-.report-textarea {
-  resize: vertical;
 }
 
 .loading, .error {

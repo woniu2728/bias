@@ -195,6 +195,7 @@ import ComposerEmojiPicker from '@/components/ComposerEmojiPicker.vue'
 import ComposerMentionPicker from '@/components/ComposerMentionPicker.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
+import { useModalStore } from '@/stores/modal'
 import api from '@/api'
 import {
   EMOJI_GROUPS,
@@ -216,6 +217,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
+const modalStore = useModalStore()
 
 const replyContent = ref('')
 const submitting = ref(false)
@@ -519,9 +521,17 @@ function togglePreview() {
   nextTick(() => composerTextarea.value?.focus())
 }
 
-function closeComposer(force = false) {
-  if (!force && dirtyState.value && !confirm(isEditing.value ? '确定要关闭编辑器吗？未保存修改将丢失。' : '确定要关闭回复框吗？当前内容会保留在本地草稿中。')) {
-    return
+async function closeComposer(force = false) {
+  if (!force && dirtyState.value) {
+    const confirmed = await modalStore.confirm({
+      title: isEditing.value ? '关闭编辑器' : '关闭回复框',
+      message: isEditing.value
+        ? '确定要关闭编辑器吗？未保存修改将丢失。'
+        : '确定要关闭回复框吗？当前内容会保留在本地草稿中。',
+      confirmText: '关闭',
+      cancelText: '继续编辑'
+    })
+    if (!confirmed) return
   }
 
   showEmojiPicker.value = false
@@ -781,7 +791,11 @@ async function uploadAndInsertFile(file, asImage) {
     const message = getComposerErrorMessage(error, asImage ? '图片上传失败' : '附件上传失败')
     uploadNoticeTone.value = 'error'
     uploadNotice.value = message
-    alert(message)
+    await modalStore.alert({
+      title: asImage ? '图片上传失败' : '附件上传失败',
+      message,
+      tone: 'danger'
+    })
   } finally {
     uploading.value = false
   }
@@ -969,7 +983,10 @@ async function submitReply() {
       }))
 
       if (post.approval_status === 'pending') {
-        alert('回复已提交审核，管理员通过后会向其他用户显示。')
+        await modalStore.alert({
+          title: '回复已进入审核队列',
+          message: '管理员通过后，这条回复才会显示给其他用户。'
+        })
       }
 
       if (!isViewingCurrentDiscussion()) {
@@ -982,7 +999,11 @@ async function submitReply() {
     resetComposerState()
   } catch (error) {
     console.error('提交失败:', error)
-    alert('提交失败: ' + (error.response?.data?.error || error.message || '未知错误'))
+    await modalStore.alert({
+      title: '提交失败',
+      message: error.response?.data?.error || error.message || '未知错误',
+      tone: 'danger'
+    })
   } finally {
     submitting.value = false
   }
