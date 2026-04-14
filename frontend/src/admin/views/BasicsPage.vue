@@ -28,24 +28,8 @@
         <p class="Form-help">简短描述你的论坛，用于SEO</p>
       </div>
 
-      <div class="Form-group">
-        <label>欢迎标题</label>
-        <input
-          v-model="settings.welcome_title"
-          type="text"
-          class="FormControl"
-          placeholder="欢迎来到我的论坛"
-        />
-      </div>
-
-      <div class="Form-group">
-        <label>欢迎消息</label>
-        <textarea
-          v-model="settings.welcome_message"
-          class="FormControl"
-          rows="3"
-          placeholder="这是一个友好的社区..."
-        ></textarea>
+      <div class="Form-note">
+        首页欢迎横幅已停用，当前首页直接进入讨论列表，因此这里不再单独维护欢迎标题和欢迎消息。
       </div>
 
       <div class="Form-group">
@@ -90,8 +74,6 @@ import api from '../../api'
 const settings = ref({
   forum_title: '',
   forum_description: '',
-  welcome_title: '',
-  welcome_message: '',
   default_locale: 'zh-CN',
   show_language_selector: false,
 })
@@ -103,7 +85,12 @@ const saveError = ref(false)
 onMounted(async () => {
   try {
     const data = await api.get('/admin/settings')
-    settings.value = { ...settings.value, ...data }
+    settings.value = {
+      forum_title: data.forum_title || '',
+      forum_description: data.forum_description || '',
+      default_locale: data.default_locale || 'zh-CN',
+      show_language_selector: Boolean(data.show_language_selector),
+    }
   } catch (error) {
     console.error('加载设置失败:', error)
   }
@@ -136,6 +123,16 @@ async function handleSubmit() {
 
 .Form-group {
   margin-bottom: 25px;
+}
+
+.Form-note {
+  margin-bottom: 25px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f5f8fb;
+  color: #617282;
+  line-height: 1.6;
+  font-size: 13px;
 }
 
 .Form-group label {

@@ -45,14 +45,24 @@
           <h4 class="index-nav-heading">标签</h4>
           <nav class="index-nav-list">
             <ul>
-              <li v-for="tag in sidebarTags" :key="tag.id">
+              <li v-for="item in sidebarTagItems" :key="item.tag.id">
                 <router-link
-                  :to="buildTagPath(tag)"
+                  :to="buildTagPath(item.tag)"
                   class="nav-item tag-item"
-                  :class="{ active: currentTagSlug === tag.slug }"
+                  :class="{
+                    active: isSidebarTagActive(item.tag),
+                    'tag-item--child': item.depth > 0,
+                    'tag-item--icon': Boolean(item.tag.icon)
+                  }"
+                  :style="{
+                    '--tag-color': item.tag.color,
+                    '--tag-depth': item.depth
+                  }"
                 >
-                  <span class="tag-bullet" :style="{ backgroundColor: tag.color }"></span>
-                  <span>{{ tag.name }}</span>
+                  <span class="tag-bullet" :class="{ 'tag-bullet--icon': Boolean(item.tag.icon) }">
+                    <i v-if="item.tag.icon" :class="item.tag.icon"></i>
+                  </span>
+                  <span class="tag-name">{{ item.tag.name }}</span>
                 </router-link>
               </li>
             </ul>
@@ -61,14 +71,6 @@
       </aside>
 
       <main class="index-content">
-        <section v-if="showForumHero" class="forum-hero">
-          <div class="forum-hero-inner">
-            <div class="forum-hero-pill">{{ forumStore.settings.forum_title }}</div>
-            <h1>{{ forumStore.settings.welcome_title }}</h1>
-            <p>{{ forumStore.settings.welcome_message }}</p>
-          </div>
-        </section>
-
         <section v-if="isFollowingPage" class="tag-hero following-hero">
           <div class="tag-hero-inner">
             <div class="tag-hero-pill following-pill">
@@ -226,7 +228,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
-import { useForumStore } from '@/stores/forum'
 import { useModalStore } from '@/stores/modal'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
@@ -234,7 +235,6 @@ import {
   buildDiscussionPath,
   buildTagPath,
   buildUserPath,
-  flattenTags,
   formatRelativeTime,
   normalizeDiscussion,
   normalizeTag,
@@ -243,7 +243,6 @@ import {
 
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
-const forumStore = useForumStore()
 const modalStore = useModalStore()
 const route = useRoute()
 const router = useRouter()
@@ -261,10 +260,10 @@ const markingAllRead = ref(false)
 const currentTagSlug = computed(() => route.params.slug || null)
 const searchQuery = computed(() => route.query.search?.toString().trim() || '')
 const hasMore = computed(() => currentPage.value * 20 < total.value)
-const sidebarTags = computed(() => flattenTags(tags.value))
+const sidebarTagItems = computed(() => buildSidebarTagItems(tags.value))
 const isFollowingPage = computed(() => route.name === 'following')
 const isAllDiscussionsPage = computed(() => route.name === 'home' && !currentTagSlug.value)
-const showForumHero = computed(() => isAllDiscussionsPage.value && !searchQuery.value)
+const currentTagParentSlug = computed(() => findParentTagSlug(currentTagSlug.value, tags.value))
 const emptyStateText = computed(() => {
   if (isFollowingPage.value) {
     return '你还没有关注任何讨论。'
@@ -432,6 +431,55 @@ function handleStartDiscussion() {
   })
 }
 
+function buildSidebarTagItems(sourceTags, depth = 0) {
+  return sortSidebarTags(sourceTags).flatMap(tag => {
+    const normalized = normalizeTag(tag)
+    return [
+      { tag: normalized, depth },
+      ...buildSidebarTagItems(normalized.children, depth + 1)
+    ]
+  })
+}
+
+function sortSidebarTags(sourceTags) {
+  return unwrapList(sourceTags)
+    .map(normalizeTag)
+    .sort((left, right) => {
+      const leftPosition = left.position
+      const rightPosition = right.position
+
+      if (leftPosition !== null && leftPosition !== undefined && rightPosition !== null && rightPosition !== undefined) {
+        return leftPosition - rightPosition
+      }
+      if (leftPosition !== null && leftPosition !== undefined) return -1
+      if (rightPosition !== null && rightPosition !== undefined) return 1
+
+      const discussionDelta = Number(right.discussion_count || 0) - Number(left.discussion_count || 0)
+      if (discussionDelta !== 0) return discussionDelta
+
+      return String(left.name || '').localeCompare(String(right.name || ''), 'zh-CN')
+    })
+}
+
+function findParentTagSlug(targetSlug, sourceTags) {
+  if (!targetSlug) return null
+
+  for (const tag of sourceTags) {
+    const normalized = normalizeTag(tag)
+    const directChild = normalized.children.find(child => child.slug === targetSlug)
+    if (directChild) return normalized.slug
+
+    const nestedParentSlug = findParentTagSlug(targetSlug, normalized.children)
+    if (nestedParentSlug) return nestedParentSlug
+  }
+
+  return null
+}
+
+function isSidebarTagActive(tag) {
+  return currentTagSlug.value === tag.slug || currentTagParentSlug.value === tag.slug
+}
+
 function getUserColor(user) {
   const colors = ['#4d698e', '#e67e22', '#3498db', '#27ae60', '#c0392b', '#8e44ad']
   const index = (user?.id || 0) % colors.length
@@ -566,14 +614,36 @@ function getUserColor(user) {
 .tag-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
+  padding-left: calc(15px + var(--tag-depth, 0) * 14px);
+  position: relative;
 }
 
 .tag-bullet {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
   flex-shrink: 0;
+  background: var(--tag-color);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08), 0 0 0 3px color-mix(in srgb, var(--tag-color) 16%, white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 8px;
+}
+
+.tag-bullet--icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.tag-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tag-bullet.large {
@@ -581,42 +651,33 @@ function getUserColor(user) {
   height: 12px;
 }
 
+.tag-item--child::before {
+  content: '';
+  position: absolute;
+  left: calc(21px + (var(--tag-depth, 0) - 1) * 14px);
+  top: 50%;
+  width: 7px;
+  height: 1px;
+  background: rgba(120, 132, 146, 0.42);
+}
+
+.tag-item.active {
+  background: color-mix(in srgb, var(--tag-color) 16%, white);
+  color: #31465b;
+}
+
+.tag-item.active .tag-name {
+  font-weight: 700;
+}
+
+.tag-item.active .tag-bullet {
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08), 0 0 0 4px color-mix(in srgb, var(--tag-color) 24%, white);
+}
+
 /* ========== 主内容区 ========== */
 .index-content {
   flex: 1;
   background: white;
-}
-
-.forum-hero {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--forum-primary-color) 16%, white), #f8fbfd);
-  border-bottom: 1px solid #e3e8ed;
-}
-
-.forum-hero-inner {
-  padding: 30px 26px;
-}
-
-.forum-hero-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.88);
-  color: var(--forum-primary-color);
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 12px;
-}
-
-.forum-hero h1 {
-  font-size: 30px;
-  font-weight: 300;
-  color: #2f3c4d;
-  margin-bottom: 8px;
-}
-
-.forum-hero p {
-  color: #61707f;
 }
 
 .tag-hero {

@@ -7,7 +7,7 @@
   >
     <div class="TagsPage-content">
       <div class="TagsPage-toolbar">
-        <button @click="showCreateModal = true" class="Button Button--primary">
+        <button @click="openCreateModal" class="Button Button--primary">
           <i class="fas fa-plus"></i>
           创建标签
         </button>
@@ -17,7 +17,7 @@
         <table class="TagTable">
           <thead>
             <tr>
-              <th style="width: 50px"></th>
+              <th style="width: 180px">预览</th>
               <th>标签名称</th>
               <th>别名</th>
               <th>描述</th>
@@ -32,12 +32,12 @@
             <tr v-else-if="tags.length === 0">
               <td colspan="6" class="TagTable-empty">暂无标签</td>
             </tr>
-            <tr v-else v-for="tag in tags" :key="tag.id">
+            <tr v-for="tag in tags" v-else :key="tag.id">
               <td>
-                <div
-                  class="TagColor"
-                  :style="{ backgroundColor: tag.color }"
-                ></div>
+                <span class="TagBadgePreview" :style="getTagBadgeStyle(tag.color)">
+                  <i v-if="tag.icon" :class="tag.icon"></i>
+                  <span>{{ tag.name }}</span>
+                </span>
               </td>
               <td>
                 <strong>{{ tag.name }}</strong>
@@ -59,17 +59,30 @@
       </div>
     </div>
 
-    <!-- 创建/编辑标签模态框 -->
     <div v-if="showCreateModal || showEditModal" class="Modal" @click.self="closeModal">
       <div class="Modal-content">
         <div class="Modal-header">
-          <h3>{{ showEditModal ? '编辑标签' : '创建标签' }}</h3>
+          <div>
+            <h3>{{ showEditModal ? '编辑标签' : '创建标签' }}</h3>
+            <p class="Modal-subtitle">参考 Flarum 的标签编辑流程，提供实时颜色和图标预览。</p>
+          </div>
           <button @click="closeModal" class="Modal-close">
             <i class="fas fa-times"></i>
           </button>
         </div>
 
         <div class="Modal-body">
+          <div class="TagPreviewPanel">
+            <span class="TagPreviewPanel-label">实时预览</span>
+            <div class="TagPreviewPanel-card">
+              <span class="TagBadgePreview TagBadgePreview--large" :style="getTagBadgeStyle(formData.color)">
+                <i v-if="formData.icon" :class="formData.icon"></i>
+                <span>{{ formData.name || '新标签' }}</span>
+              </span>
+              <small>{{ formData.description || '这里会显示标签在讨论列表中的视觉效果。' }}</small>
+            </div>
+          </div>
+
           <div class="Form-group">
             <label>标签名称 *</label>
             <input
@@ -105,15 +118,56 @@
                 placeholder="#888888"
               />
             </div>
+            <div class="ColorPresetList">
+              <button
+                v-for="color in TAG_COLOR_PRESETS"
+                :key="color"
+                type="button"
+                class="ColorPreset"
+                :class="{ active: normalizeColor(formData.color) === color.toLowerCase() }"
+                :style="{ '--preset-color': color }"
+                @click="formData.color = color"
+              ></button>
+            </div>
           </div>
 
           <div class="Form-group">
-            <label>图标（Font Awesome类名）</label>
+            <div class="Form-group-header">
+              <label>图标</label>
+              <button type="button" class="LinkButton" @click="formData.icon = ''">清除图标</button>
+            </div>
+
+            <input
+              v-model.trim="iconSearch"
+              type="text"
+              class="FormControl"
+              placeholder="搜索图标，例如 code、comments、tag"
+            />
+
+            <div class="IconPicker">
+              <button
+                v-for="icon in filteredIconOptions"
+                :key="icon.value"
+                type="button"
+                class="IconPicker-option"
+                :class="{ active: formData.icon === icon.value }"
+                @click="formData.icon = icon.value"
+              >
+                <i :class="icon.value"></i>
+                <span>{{ icon.label }}</span>
+              </button>
+            </div>
+
+            <div v-if="!filteredIconOptions.length" class="IconPicker-empty">
+              没有找到匹配的图标
+            </div>
+
+            <div class="Form-help">标签仍然保存为 Font Awesome 类名，但现在可以直接搜索和点选。</div>
             <input
               v-model="formData.icon"
               type="text"
-              class="FormControl"
-              placeholder="例如：fas fa-code"
+              class="FormControl FormControl--subtle"
+              placeholder="高级模式：手动输入 Font Awesome 类名"
             />
           </div>
         </div>
@@ -132,9 +186,63 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import AdminPage from '../components/AdminPage.vue'
 import api from '../../api'
+
+const TAG_COLOR_PRESETS = [
+  '#3c78d8',
+  '#4d698e',
+  '#0e7490',
+  '#0f766e',
+  '#2f855a',
+  '#65a30d',
+  '#ca8a04',
+  '#ea580c',
+  '#dc2626',
+  '#c026d3',
+  '#7c3aed',
+  '#475569',
+]
+
+const TAG_ICON_OPTIONS = [
+  { value: 'fas fa-comments', label: '讨论' },
+  { value: 'fas fa-comment-dots', label: '对话' },
+  { value: 'fas fa-code', label: '代码' },
+  { value: 'fas fa-terminal', label: '终端' },
+  { value: 'fas fa-bug', label: '问题' },
+  { value: 'fas fa-lightbulb', label: '想法' },
+  { value: 'fas fa-rocket', label: '发布' },
+  { value: 'fas fa-book', label: '文档' },
+  { value: 'fas fa-graduation-cap', label: '教程' },
+  { value: 'fas fa-wrench', label: '工具' },
+  { value: 'fas fa-cubes', label: '框架' },
+  { value: 'fas fa-plug', label: '插件' },
+  { value: 'fas fa-cloud', label: '云服务' },
+  { value: 'fas fa-server', label: '服务端' },
+  { value: 'fas fa-database', label: '数据库' },
+  { value: 'fas fa-shield-alt', label: '安全' },
+  { value: 'fas fa-mobile-alt', label: '移动端' },
+  { value: 'fas fa-desktop', label: '桌面端' },
+  { value: 'fas fa-image', label: '图片' },
+  { value: 'fas fa-video', label: '视频' },
+  { value: 'fas fa-music', label: '音频' },
+  { value: 'fas fa-gamepad', label: '游戏' },
+  { value: 'fas fa-briefcase', label: '工作' },
+  { value: 'fas fa-chart-line', label: '增长' },
+  { value: 'fas fa-bullhorn', label: '公告' },
+  { value: 'fas fa-fire', label: '热门' },
+  { value: 'fas fa-star', label: '精选' },
+  { value: 'fas fa-heart', label: '喜欢' },
+  { value: 'fas fa-users', label: '社区' },
+  { value: 'fas fa-user-shield', label: '管理' },
+  { value: 'fas fa-tags', label: '标签' },
+  { value: 'fas fa-thumbtack', label: '置顶' },
+  { value: 'fas fa-lock', label: '锁定' },
+  { value: 'fas fa-language', label: '语言' },
+  { value: 'fas fa-globe', label: '全球' },
+  { value: 'fas fa-seedling', label: '新手' },
+]
 
 const tags = ref([])
 const loading = ref(true)
@@ -142,12 +250,22 @@ const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const saving = ref(false)
 const editingTag = ref(null)
+const iconSearch = ref('')
 
 const formData = ref({
   name: '',
   description: '',
   color: '#888888',
   icon: '',
+})
+
+const filteredIconOptions = computed(() => {
+  const query = iconSearch.value.trim().toLowerCase()
+  if (!query) return TAG_ICON_OPTIONS
+
+  return TAG_ICON_OPTIONS.filter(icon =>
+    icon.label.toLowerCase().includes(query) || icon.value.toLowerCase().includes(query)
+  )
 })
 
 onMounted(() => {
@@ -166,8 +284,14 @@ async function loadTags() {
   }
 }
 
+function openCreateModal() {
+  iconSearch.value = ''
+  showCreateModal.value = true
+}
+
 function editTag(tag) {
   editingTag.value = tag
+  iconSearch.value = ''
   formData.value = {
     name: tag.name,
     description: tag.description,
@@ -186,10 +310,8 @@ async function saveTag() {
   saving.value = true
   try {
     if (showEditModal.value) {
-      // 更新标签
       await api.put(`/admin/tags/${editingTag.value.id}`, formData.value)
     } else {
-      // 创建标签
       await api.post('/admin/tags', formData.value)
     }
 
@@ -224,11 +346,22 @@ function closeModal() {
   showCreateModal.value = false
   showEditModal.value = false
   editingTag.value = null
+  iconSearch.value = ''
   formData.value = {
     name: '',
     description: '',
     color: '#888888',
     icon: '',
+  }
+}
+
+function normalizeColor(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function getTagBadgeStyle(color) {
+  return {
+    '--tag-bg': color || '#888888',
   }
 }
 </script>
@@ -327,14 +460,32 @@ function closeModal() {
   color: #999;
 }
 
-.TagColor {
-  width: 30px;
-  height: 30px;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+.TagBadgePreview {
+  --tag-bg: #888888;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  max-width: 100%;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--tag-bg);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
 }
 
-/* 模态框 */
+.TagBadgePreview i {
+  font-size: 12px;
+}
+
+.TagBadgePreview--large {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
 .Modal {
   position: fixed;
   top: 0;
@@ -350,9 +501,9 @@ function closeModal() {
 
 .Modal-content {
   background: white;
-  border-radius: 3px;
+  border-radius: 10px;
   width: 90%;
-  max-width: 500px;
+  max-width: 760px;
   max-height: 90vh;
   overflow: auto;
 }
@@ -360,8 +511,9 @@ function closeModal() {
 .Modal-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 20px;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 24px;
   border-bottom: 1px solid #e3e8ed;
 }
 
@@ -369,6 +521,12 @@ function closeModal() {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+}
+
+.Modal-subtitle {
+  margin: 6px 0 0;
+  color: #7a8794;
+  font-size: 13px;
 }
 
 .Modal-close {
@@ -392,15 +550,42 @@ function closeModal() {
 }
 
 .Modal-body {
-  padding: 20px;
+  padding: 24px;
 }
 
 .Modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  padding: 20px;
+  padding: 20px 24px;
   border-top: 1px solid #e3e8ed;
+}
+
+.TagPreviewPanel {
+  margin-bottom: 20px;
+}
+
+.TagPreviewPanel-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #617282;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.TagPreviewPanel-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid #e3e8ed;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfdff, #f4f7fa);
+}
+
+.TagPreviewPanel-card small {
+  color: #768594;
+  line-height: 1.6;
 }
 
 .Form-group {
@@ -409,6 +594,14 @@ function closeModal() {
 
 .Form-group:last-child {
   margin-bottom: 0;
+}
+
+.Form-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .Form-group label {
@@ -434,6 +627,17 @@ function closeModal() {
   border-color: #4d698e;
 }
 
+.FormControl--subtle {
+  margin-top: 10px;
+  background: #f8fafc;
+}
+
+.Form-help {
+  margin-top: 10px;
+  color: #7a8794;
+  font-size: 13px;
+}
+
 .ColorPicker {
   display: flex;
   gap: 10px;
@@ -450,5 +654,105 @@ function closeModal() {
 
 .ColorPicker-text {
   flex: 1;
+}
+
+.ColorPresetList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.ColorPreset {
+  --preset-color: #888888;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--preset-color);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+}
+
+.ColorPreset.active {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 0 0 3px color-mix(in srgb, var(--preset-color) 26%, white);
+}
+
+.IconPicker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.IconPicker-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-height: 84px;
+  padding: 12px 10px;
+  border: 1px solid #dce4ec;
+  border-radius: 10px;
+  background: #fff;
+  color: #4a5d70;
+}
+
+.IconPicker-option:hover {
+  border-color: #4d698e;
+  background: #f7fafe;
+}
+
+.IconPicker-option.active {
+  border-color: #4d698e;
+  background: #edf3f9;
+  color: #35506f;
+}
+
+.IconPicker-option i {
+  font-size: 18px;
+}
+
+.IconPicker-option span {
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.IconPicker-empty {
+  margin-top: 12px;
+  color: #8a97a3;
+  font-size: 13px;
+}
+
+.LinkButton {
+  border: 0;
+  background: transparent;
+  color: #4d698e;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.LinkButton:hover {
+  color: #3d5875;
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .Modal-content {
+    width: calc(100vw - 24px);
+  }
+
+  .ColorPicker {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .IconPicker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>
