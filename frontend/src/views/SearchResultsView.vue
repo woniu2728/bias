@@ -2,10 +2,7 @@
   <div class="search-page">
     <div class="search-container">
       <aside class="search-sidebar">
-        <button
-          class="btn-start-discussion"
-          @click="handleStartDiscussion"
-        >
+        <button class="btn-start-discussion" @click="handleStartDiscussion">
           <i class="fas fa-edit"></i>
           发起讨论
         </button>
@@ -30,6 +27,21 @@
           <div class="search-hero-pill">全局搜索</div>
           <h1>“{{ normalizedQuery || '未输入关键词' }}”</h1>
           <p>{{ heroText }}</p>
+
+          <div v-if="normalizedQuery" class="search-stats">
+            <span class="search-stat">
+              <strong>{{ discussionTotal }}</strong>
+              <span>讨论</span>
+            </span>
+            <span class="search-stat">
+              <strong>{{ postTotal }}</strong>
+              <span>帖子</span>
+            </span>
+            <span class="search-stat">
+              <strong>{{ userTotal }}</strong>
+              <span>用户</span>
+            </span>
+          </div>
         </section>
 
         <div v-if="!normalizedQuery" class="search-state">
@@ -61,13 +73,20 @@
                 class="result-card"
                 @click="$router.push(buildDiscussionPath(discussion))"
               >
-                <div class="result-card-icon">
-                  <i class="far fa-comments"></i>
+                <div class="result-card-icon" :class="{ 'result-card-icon--avatar': discussion.user?.avatar_url }">
+                  <img
+                    v-if="discussion.user?.avatar_url"
+                    :src="discussion.user.avatar_url"
+                    :alt="discussion.user.display_name || discussion.user.username"
+                    class="result-avatar"
+                  />
+                  <i v-else class="far fa-comments"></i>
                 </div>
                 <div class="result-card-main">
-                  <h3>{{ discussion.title }}</h3>
-                  <p>{{ stripExcerpt(discussion.excerpt) || '这个讨论没有更多摘要。' }}</p>
+                  <h3 v-html="getDiscussionTitleHtml(discussion)"></h3>
+                  <p v-html="getDiscussionExcerptHtml(discussion)"></p>
                   <div class="result-meta">
+                    <span>{{ discussion.user?.display_name || discussion.user?.username || '未知用户' }}</span>
                     <span>{{ discussion.comment_count || 0 }} 回复</span>
                     <span>{{ formatRelativeTime(discussion.last_posted_at || discussion.created_at) }}</span>
                   </div>
@@ -95,14 +114,21 @@
                 class="result-card"
                 @click="$router.push(`/d/${post.discussion_id}?near=${post.number}`)"
               >
-                <div class="result-card-icon">
-                  <i class="far fa-comment"></i>
+                <div class="result-card-icon" :class="{ 'result-card-icon--avatar': post.user?.avatar_url }">
+                  <img
+                    v-if="post.user?.avatar_url"
+                    :src="post.user.avatar_url"
+                    :alt="post.user.display_name || post.user.username"
+                    class="result-avatar"
+                  />
+                  <i v-else class="far fa-comment"></i>
                 </div>
                 <div class="result-card-main">
-                  <h3>{{ post.discussion_title || '帖子结果' }}</h3>
-                  <p>{{ stripExcerpt(post.excerpt || post.content) }}</p>
+                  <h3 v-html="getPostTitleHtml(post)"></h3>
+                  <p v-html="getPostExcerptHtml(post)"></p>
                   <div class="result-meta">
                     <span>#{{ post.number }}</span>
+                    <span>{{ post.user?.display_name || post.user?.username || '未知用户' }}</span>
                     <span>{{ formatRelativeTime(post.created_at) }}</span>
                   </div>
                 </div>
@@ -129,19 +155,20 @@
                 class="result-card user-card"
                 @click="$router.push(buildUserPath(user))"
               >
-                <div class="result-card-icon user-avatar">
+                <div class="result-card-icon result-card-icon--avatar">
                   <img
                     v-if="user.avatar_url"
                     :src="user.avatar_url"
                     :alt="user.username"
-                    class="user-avatar-image"
+                    class="result-avatar"
                   />
                   <span v-else>{{ (user.display_name || user.username || '?').charAt(0).toUpperCase() }}</span>
                 </div>
                 <div class="result-card-main">
-                  <h3>{{ user.display_name || user.username }}</h3>
-                  <p>{{ user.bio || `@${user.username}` }}</p>
+                  <h3 v-html="getUserTitleHtml(user)"></h3>
+                  <p v-html="getUserSubtitleHtml(user)"></p>
                   <div class="result-meta">
+                    <span>@{{ user.username }}</span>
                     <span>{{ user.discussion_count || 0 }} 讨论</span>
                     <span>{{ user.comment_count || 0 }} 回复</span>
                   </div>
@@ -177,6 +204,7 @@ import {
   formatRelativeTime,
   unwrapList
 } from '@/utils/forum'
+import { highlightSearchText } from '@/utils/search'
 
 const route = useRoute()
 const router = useRouter()
@@ -314,8 +342,28 @@ function changePage(nextPage) {
   })
 }
 
-function stripExcerpt(value) {
-  return String(value || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+function getDiscussionTitleHtml(discussion) {
+  return highlightSearchText(discussion.title || '讨论', normalizedQuery.value, 90)
+}
+
+function getDiscussionExcerptHtml(discussion) {
+  return highlightSearchText(discussion.excerpt || '这个讨论没有更多摘要。', normalizedQuery.value, 180)
+}
+
+function getPostTitleHtml(post) {
+  return highlightSearchText(post.discussion_title || '帖子结果', normalizedQuery.value, 90)
+}
+
+function getPostExcerptHtml(post) {
+  return highlightSearchText(post.excerpt || post.content || '', normalizedQuery.value, 200)
+}
+
+function getUserTitleHtml(user) {
+  return highlightSearchText(user.display_name || user.username || '用户', normalizedQuery.value, 80)
+}
+
+function getUserSubtitleHtml(user) {
+  return highlightSearchText(user.bio || `@${user.username}`, normalizedQuery.value, 150)
 }
 </script>
 
@@ -420,6 +468,29 @@ function stripExcerpt(value) {
   max-width: 720px;
 }
 
+.search-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.search-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #4a5d70;
+}
+
+.search-stat strong {
+  color: #263646;
+  font-size: 15px;
+}
+
 .search-state {
   padding: 60px 24px;
   background: white;
@@ -464,7 +535,7 @@ function stripExcerpt(value) {
   padding: 18px 20px;
   background: white;
   border: 1px solid #e1e8ef;
-  border-radius: 10px;
+  border-radius: 12px;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
@@ -485,6 +556,18 @@ function stripExcerpt(value) {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.result-card-icon--avatar {
+  background: #eef3f7;
+  color: #506274;
+}
+
+.result-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .result-card-main {
@@ -495,12 +578,20 @@ function stripExcerpt(value) {
   font-size: 17px;
   color: #24313f;
   margin-bottom: 6px;
+  line-height: 1.45;
 }
 
 .result-card-main p {
   color: #667684;
-  line-height: 1.6;
+  line-height: 1.7;
   margin-bottom: 8px;
+}
+
+.result-card-main :deep(mark) {
+  background: rgba(255, 220, 126, 0.55);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 4px;
 }
 
 .result-meta {
@@ -513,17 +604,6 @@ function stripExcerpt(value) {
 
 .user-card {
   align-items: center;
-}
-
-.user-avatar {
-  overflow: hidden;
-  font-weight: 700;
-}
-
-.user-avatar-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .pagination {

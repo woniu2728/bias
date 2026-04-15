@@ -90,6 +90,34 @@ class ChineseSearchTests(TestCase):
         self.assertGreaterEqual(payload["post_total"], 1)
         self.assertGreaterEqual(payload["user_total"], 1)
 
+    def test_search_api_posts_type_returns_pagination_metadata(self):
+        discussion = DiscussionService.create_discussion(
+            title="分页搜索讨论",
+            content="讨论首帖包含分页搜索关键字",
+            user=self.user,
+        )
+        PostService.create_post(
+            discussion_id=discussion.id,
+            content="第一页搜索帖子内容",
+            user=self.user,
+        )
+        PostService.create_post(
+            discussion_id=discussion.id,
+            content="第二页搜索帖子内容",
+            user=self.user,
+        )
+
+        response = self.client.get("/api/search", {"q": "搜索", "type": "posts", "page": 1, "limit": 1})
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["type"], "posts")
+        self.assertEqual(payload["page"], 1)
+        self.assertEqual(payload["limit"], 1)
+        self.assertGreaterEqual(payload["total"], 2)
+        self.assertGreaterEqual(payload["post_total"], 2)
+        self.assertEqual(len(payload["posts"]), 1)
+
 
 class WebSocketJwtAuthTests(TestCase):
     def setUp(self):
