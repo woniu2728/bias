@@ -5,6 +5,8 @@
         <div class="index-nav-header">
           <button
             class="btn-start-discussion"
+            :class="{ 'btn-start-discussion--tag': Boolean(currentTag?.color) }"
+            :style="startDiscussionButtonStyle"
             @click="handleStartDiscussion"
           >
             <i class="fas fa-edit"></i>
@@ -26,48 +28,64 @@
                 <span>关注中</span>
               </router-link>
             </li>
-            <li>
-              <router-link to="/tags" class="nav-item">
-                <i class="fas fa-tags"></i>
-                <span>全部标签</span>
-              </router-link>
-            </li>
             <li v-if="authStore.user">
-              <router-link :to="buildUserPath(authStore.user)" class="nav-item">
+              <router-link
+                :to="buildUserPath(authStore.user)"
+                class="nav-item"
+                :class="{ active: isOwnProfilePage }"
+              >
                 <i class="fas fa-user"></i>
                 <span>我的主页</span>
               </router-link>
             </li>
+            <li v-if="hasSidebarTagNavigation" class="nav-separator" aria-hidden="true"></li>
+            <li v-if="hasSidebarTagNavigation">
+              <router-link to="/tags" class="nav-item" :class="{ active: isTagsPage }">
+                <i class="fas fa-th-large"></i>
+                <span>标签</span>
+              </router-link>
+            </li>
+            <li v-for="tag in sidebarPrimaryTagItems" :key="`tag-${tag.id}`">
+              <router-link
+                :to="buildTagPath(tag)"
+                class="nav-item tag-link"
+                :class="{
+                  active: isSidebarTagActive(tag),
+                  'tag-link--child': Boolean(tag.parent_id)
+                }"
+                :style="getSidebarTagStyle(tag)"
+                :title="tag.description || undefined"
+              >
+                <span class="tag-link-icon" :class="{ 'tag-link-icon--placeholder': !tag.icon }" aria-hidden="true">
+                  <i v-if="tag.icon" :class="tag.icon"></i>
+                  <span v-else class="tag-icon-box"></span>
+                </span>
+                <span class="tag-link-label">{{ tag.name }}</span>
+              </router-link>
+            </li>
+            <li v-for="tag in sidebarSecondaryTagItems" :key="`secondary-${tag.id}`">
+              <router-link
+                :to="buildTagPath(tag)"
+                class="nav-item tag-link"
+                :class="{ active: isSidebarTagActive(tag) }"
+                :style="getSidebarTagStyle(tag)"
+                :title="tag.description || undefined"
+              >
+                <span class="tag-link-icon" :class="{ 'tag-link-icon--placeholder': !tag.icon }" aria-hidden="true">
+                  <i v-if="tag.icon" :class="tag.icon"></i>
+                  <span v-else class="tag-icon-box"></span>
+                </span>
+                <span class="tag-link-label">{{ tag.name }}</span>
+              </router-link>
+            </li>
+            <li v-if="showMoreTagsLink">
+              <router-link to="/tags" class="nav-item nav-item--muted">
+                <i class="fas fa-ellipsis-h"></i>
+                <span>更多标签</span>
+              </router-link>
+            </li>
           </ul>
         </nav>
-
-        <div class="index-nav-section">
-          <h4 class="index-nav-heading">标签</h4>
-          <nav class="index-nav-list">
-            <ul>
-              <li v-for="item in sidebarTagItems" :key="item.tag.id">
-                <router-link
-                  :to="buildTagPath(item.tag)"
-                  class="nav-item tag-item"
-                  :class="{
-                    active: isSidebarTagActive(item.tag),
-                    'tag-item--child': item.depth > 0,
-                    'tag-item--icon': Boolean(item.tag.icon)
-                  }"
-                  :style="{
-                    '--tag-color': item.tag.color,
-                    '--tag-depth': item.depth
-                  }"
-                >
-                  <span class="tag-bullet" :class="{ 'tag-bullet--icon': Boolean(item.tag.icon) }">
-                    <i v-if="item.tag.icon" :class="item.tag.icon"></i>
-                  </span>
-                  <span class="tag-name">{{ item.tag.name }}</span>
-                </router-link>
-              </li>
-            </ul>
-          </nav>
-        </div>
       </aside>
 
       <main class="index-content">
@@ -152,11 +170,11 @@
                   <img
                     v-if="discussion.user?.avatar_url"
                     :src="discussion.user.avatar_url"
-                    :alt="discussion.user?.username"
+                    :alt="getUserDisplayName(discussion.user)"
                     class="avatar avatar-image"
                   />
                   <div v-else class="avatar" :style="{ backgroundColor: getUserColor(discussion.user) }">
-                    {{ discussion.user?.username?.charAt(0).toUpperCase() }}
+                    {{ getUserInitial(discussion.user) }}
                   </div>
                 </router-link>
                 <div class="discussion-list-item-badges">
@@ -235,6 +253,7 @@ import {
   buildDiscussionPath,
   buildTagPath,
   buildUserPath,
+  flattenTags,
   formatRelativeTime,
   normalizeDiscussion,
   normalizeTag,
@@ -260,10 +279,23 @@ const markingAllRead = ref(false)
 const currentTagSlug = computed(() => route.params.slug || null)
 const searchQuery = computed(() => route.query.search?.toString().trim() || '')
 const hasMore = computed(() => currentPage.value * 20 < total.value)
-const sidebarTagItems = computed(() => buildSidebarTagItems(tags.value))
 const isFollowingPage = computed(() => route.name === 'following')
+const isTagsPage = computed(() => route.name === 'tags')
 const isAllDiscussionsPage = computed(() => route.name === 'home' && !currentTagSlug.value)
-const currentTagParentSlug = computed(() => findParentTagSlug(currentTagSlug.value, tags.value))
+const isOwnProfilePage = computed(() => {
+  if (!authStore.user) return false
+
+  return (
+    route.name === 'profile'
+    || (route.name === 'user-profile' && String(route.params.id) === String(authStore.user.id))
+  )
+})
+const currentTagContextParent = computed(() => findSidebarContextParent(currentTagSlug.value, tags.value))
+const sidebarPrimaryTagItems = computed(() => buildSidebarPrimaryTagItems(tags.value, currentTagContextParent.value))
+const sidebarSecondaryTagItems = computed(() => buildSidebarSecondaryTagItems(tags.value))
+const hasSidebarTagNavigation = computed(() => tags.value.length > 0)
+const showMoreTagsLink = computed(() => sidebarSecondaryTagItems.value.length > 0)
+const startDiscussionButtonStyle = computed(() => getStartDiscussionButtonStyle(currentTag.value))
 const emptyStateText = computed(() => {
   if (isFollowingPage.value) {
     return '你还没有关注任何讨论。'
@@ -295,6 +327,10 @@ async function refreshPageData() {
   loading.value = true
   try {
     await Promise.all([loadTags(), loadCurrentTag(), loadDiscussions(false)])
+  } catch (error) {
+    discussions.value = []
+    currentTag.value = null
+    console.error('加载首页列表失败:', error)
   } finally {
     loading.value = false
   }
@@ -431,59 +467,131 @@ function handleStartDiscussion() {
   })
 }
 
-function buildSidebarTagItems(sourceTags, depth = 0) {
-  return sortSidebarTags(sourceTags).flatMap(tag => {
-    const normalized = normalizeTag(tag)
-    return [
-      { tag: normalized, depth },
-      ...buildSidebarTagItems(normalized.children, depth + 1)
-    ]
+function buildSidebarPrimaryTagItems(sourceTags, contextParent) {
+  return sortForumSidebarTags(flattenTags(sourceTags)).filter(tag => {
+    const position = normalizeTagPosition(tag.position)
+    if (position === null) return false
+    if (!tag.parent_id) return true
+    return Boolean(contextParent && tag.parent_id === contextParent.id)
   })
 }
 
-function sortSidebarTags(sourceTags) {
-  return unwrapList(sourceTags)
-    .map(normalizeTag)
-    .sort((left, right) => {
-      const leftPosition = left.position
-      const rightPosition = right.position
-
-      if (leftPosition !== null && leftPosition !== undefined && rightPosition !== null && rightPosition !== undefined) {
-        return leftPosition - rightPosition
-      }
-      if (leftPosition !== null && leftPosition !== undefined) return -1
-      if (rightPosition !== null && rightPosition !== undefined) return 1
-
-      const discussionDelta = Number(right.discussion_count || 0) - Number(left.discussion_count || 0)
-      if (discussionDelta !== 0) return discussionDelta
-
-      return String(left.name || '').localeCompare(String(right.name || ''), 'zh-CN')
-    })
+function buildSidebarSecondaryTagItems(sourceTags) {
+  return sortForumSidebarTags(flattenTags(sourceTags))
+    .filter(tag => normalizeTagPosition(tag.position) === null)
+    .slice(0, 3)
 }
 
-function findParentTagSlug(targetSlug, sourceTags) {
+function sortForumSidebarTags(sourceTags) {
+  const normalizedTags = unwrapList(sourceTags).map(normalizeTag)
+  const tagsById = new Map(normalizedTags.map(tag => [tag.id, tag]))
+
+  return normalizedTags.slice().sort((left, right) => {
+    const leftPosition = normalizeTagPosition(left.position)
+    const rightPosition = normalizeTagPosition(right.position)
+
+    if (leftPosition === null && rightPosition === null) {
+      return Number(right.discussion_count || 0) - Number(left.discussion_count || 0)
+    }
+
+    if (rightPosition === null) return -1
+    if (leftPosition === null) return 1
+
+    const leftParent = left.parent_id ? tagsById.get(left.parent_id) : null
+    const rightParent = right.parent_id ? tagsById.get(right.parent_id) : null
+
+    if (leftParent?.id === rightParent?.id) return leftPosition - rightPosition
+
+    if (leftParent && rightParent) {
+      return normalizeTagPosition(leftParent.position) - normalizeTagPosition(rightParent.position)
+    }
+
+    if (leftParent) {
+      return leftParent.id === right.id
+        ? 1
+        : normalizeTagPosition(leftParent.position) - rightPosition
+    }
+
+    if (rightParent) {
+      return rightParent.id === left.id
+        ? -1
+        : leftPosition - normalizeTagPosition(rightParent.position)
+    }
+
+    return 0
+  })
+}
+
+function findSidebarContextParent(targetSlug, sourceTags) {
   if (!targetSlug) return null
 
-  for (const tag of sourceTags) {
-    const normalized = normalizeTag(tag)
-    const directChild = normalized.children.find(child => child.slug === targetSlug)
-    if (directChild) return normalized.slug
+  for (const tag of unwrapList(sourceTags).map(normalizeTag)) {
+    if (tag.slug === targetSlug) return tag
 
-    const nestedParentSlug = findParentTagSlug(targetSlug, normalized.children)
-    if (nestedParentSlug) return nestedParentSlug
+    if (flattenTags(tag.children).some(child => child.slug === targetSlug)) {
+      return tag
+    }
   }
 
   return null
 }
 
+function normalizeTagPosition(position) {
+  return position === null || position === undefined ? null : Number(position)
+}
+
+function getSidebarTagStyle(tag) {
+  return {
+    '--tag-color': tag.color || '#6c7a89'
+  }
+}
+
+function getStartDiscussionButtonStyle(tag) {
+  if (!tag?.color) return {}
+
+  return {
+    '--tag-button-bg': tag.color,
+    '--tag-button-text': getContrastColor(tag.color)
+  }
+}
+
+function getContrastColor(color) {
+  const hex = String(color || '').trim().replace('#', '')
+  if (!/^[\da-fA-F]{6}$/.test(hex)) return '#ffffff'
+
+  const red = parseInt(hex.slice(0, 2), 16)
+  const green = parseInt(hex.slice(2, 4), 16)
+  const blue = parseInt(hex.slice(4, 6), 16)
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000
+
+  return brightness >= 150 ? '#243447' : '#ffffff'
+}
+
+function findParentTagSlug(targetSlug, sourceTags) {
+  const parent = findSidebarContextParent(targetSlug, sourceTags)
+  return parent?.slug || null
+}
+
 function isSidebarTagActive(tag) {
-  return currentTagSlug.value === tag.slug || currentTagParentSlug.value === tag.slug
+  if (currentTagSlug.value === tag.slug) return true
+
+  const currentTagParentSlug = findParentTagSlug(currentTagSlug.value, tags.value)
+  return Boolean(currentTag.value?.parent_id && currentTagParentSlug === tag.slug)
 }
 
 function getUserColor(user) {
   const colors = ['#4d698e', '#e67e22', '#3498db', '#27ae60', '#c0392b', '#8e44ad']
   const index = (user?.id || 0) % colors.length
   return colors[index]
+}
+
+function getUserDisplayName(user) {
+  return user?.display_name || user?.username || '已删除用户'
+}
+
+function getUserInitial(user) {
+  const source = getUserDisplayName(user).trim()
+  return source ? source.charAt(0).toUpperCase() : '?'
 }
 </script>
 
@@ -512,12 +620,12 @@ function getUserColor(user) {
 }
 
 .index-nav-header {
-  padding: 15px;
+  padding: 18px 18px 12px;
 }
 
 .btn-start-discussion {
   width: 100%;
-  padding: 8px 13px;
+  padding: 10px 14px;
   background: var(--forum-accent-color);
   color: white;
   border: none;
@@ -525,7 +633,7 @@ function getUserColor(user) {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: filter 0.2s, background 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -539,12 +647,17 @@ function getUserColor(user) {
   filter: brightness(0.92);
 }
 
+.btn-start-discussion--tag {
+  background: var(--tag-button-bg);
+  color: var(--tag-button-text);
+}
+
 .btn-start-discussion i {
   font-size: 13px;
 }
 
 .index-nav-list {
-  padding: 0 15px;
+  padding: 0 18px 24px;
 }
 
 .index-nav-list ul {
@@ -553,14 +666,18 @@ function getUserColor(user) {
   margin: 0;
 }
 
+.index-nav-list li {
+  margin-bottom: 10px;
+}
+
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 15px;
-  color: #555;
+  gap: 12px;
+  padding: 0;
+  color: #75808c;
   text-decoration: none;
-  transition: all 0.15s;
+  transition: color 0.15s ease;
   font-size: 13px;
   font-weight: normal;
   cursor: pointer;
@@ -576,17 +693,19 @@ function getUserColor(user) {
   text-overflow: ellipsis;
   user-select: none;
   box-shadow: none;
+  min-height: 18px;
 }
 
 .nav-item:hover {
-  background: #f5f8fa;
-  color: #333;
+  background: none;
+  color: var(--forum-primary-color);
   text-decoration: none;
 }
 
 .nav-item.active {
-  background: var(--forum-primary-color);
-  color: white;
+  background: none;
+  color: var(--forum-primary-color);
+  font-weight: 700;
 }
 
 .nav-item i {
@@ -595,83 +714,69 @@ function getUserColor(user) {
   font-size: 14px;
 }
 
-.index-nav-section {
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #e3e8ed;
+.nav-separator {
+  height: 1px;
+  margin: 16px 0 14px;
+  background: #e5ebf1;
 }
 
-.index-nav-heading {
-  padding: 8px 15px;
-  font-size: 11px;
-  color: #999;
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  margin: 0;
+.nav-item--muted {
+  color: #8a95a1;
 }
 
-.tag-item {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding-left: calc(15px + var(--tag-depth, 0) * 14px);
-  position: relative;
+.nav-item--muted:hover {
+  color: var(--forum-primary-color);
 }
 
-.tag-bullet {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  flex-shrink: 0;
-  background: var(--tag-color);
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08), 0 0 0 3px color-mix(in srgb, var(--tag-color) 16%, white);
+.tag-link {
+  --tag-color: #6c7a89;
+  color: #75808c;
+}
+
+.tag-link:hover,
+.tag-link.active {
+  color: var(--tag-color);
+}
+
+.tag-link-icon {
+  width: 16px;
+  height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  font-size: 8px;
+  flex-shrink: 0;
+  color: var(--tag-color);
+  font-size: 14px;
 }
 
-.tag-bullet--icon {
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+.tag-link-icon--placeholder {
+  color: transparent;
 }
 
-.tag-name {
+.tag-icon-box {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--tag-color);
+}
+
+.tag-link-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.tag-bullet.large {
+.tag-link--child {
+  margin-left: 10px;
+}
+
+.tag-bullet {
   width: 12px;
   height: 12px;
-}
-
-.tag-item--child::before {
-  content: '';
-  position: absolute;
-  left: calc(21px + (var(--tag-depth, 0) - 1) * 14px);
-  top: 50%;
-  width: 7px;
-  height: 1px;
-  background: rgba(120, 132, 146, 0.42);
-}
-
-.tag-item.active {
-  background: color-mix(in srgb, var(--tag-color) 16%, white);
-  color: #31465b;
-}
-
-.tag-item.active .tag-name {
-  font-weight: 700;
-}
-
-.tag-item.active .tag-bullet {
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08), 0 0 0 4px color-mix(in srgb, var(--tag-color) 24%, white);
+  display: inline-block;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: var(--tag-color);
 }
 
 /* ========== 主内容区 ========== */
@@ -1073,6 +1178,8 @@ function getUserColor(user) {
     width: 100%;
     position: static;
     min-height: auto;
+    border-right: 0;
+    border-bottom: 1px solid #e3e8ed;
   }
 
   .discussion-list-item-content {
@@ -1087,6 +1194,10 @@ function getUserColor(user) {
     position: absolute;
     top: 12px;
     right: 12px;
+  }
+
+  .index-nav-list {
+    padding-bottom: 18px;
   }
 }
 </style>
