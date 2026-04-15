@@ -42,6 +42,23 @@ export function normalizePost(post = {}) {
   }
 }
 
+export function getUserDisplayName(user = {}) {
+  return user?.display_name || user?.username || '已删除用户'
+}
+
+export function getUserInitial(user = {}) {
+  const source = getUserDisplayName(user).trim()
+  return source ? source.charAt(0).toUpperCase() : '?'
+}
+
+export function getUserAvatarColor(user = {}) {
+  if (user?.color) return user.color
+
+  const colors = ['#4d698e', '#e67e22', '#3498db', '#27ae60', '#c0392b', '#8e44ad']
+  const identifier = Number(user?.id || 0)
+  return colors[identifier % colors.length]
+}
+
 export function flattenTags(tags) {
   return unwrapList(tags).flatMap(tag => {
     const normalized = normalizeTag(tag)

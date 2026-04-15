@@ -51,15 +51,19 @@
               >
                 <div class="post-container">
                   <aside class="post-side">
-                    <router-link :to="buildUserPath(post.user)" class="post-avatar-link" :title="post.user.username">
-                      <div v-if="!post.user.avatar_url" class="post-avatar avatar-placeholder">
-                        {{ post.user.username.charAt(0).toUpperCase() }}
+                    <router-link :to="buildUserPath(post.user)" class="post-avatar-link" :title="getUserDisplayName(post.user)">
+                      <div
+                        v-if="!post.user.avatar_url"
+                        class="post-avatar avatar-placeholder"
+                        :style="{ backgroundColor: getUserAvatarColor(post.user) }"
+                      >
+                        {{ getUserInitial(post.user) }}
                       </div>
                       <img
                         v-else
                         class="post-avatar"
                         :src="post.user.avatar_url"
-                        :alt="post.user.username"
+                        :alt="getUserDisplayName(post.user)"
                       />
                     </router-link>
                   </aside>
@@ -67,7 +71,7 @@
                   <div class="post-main">
                     <header class="post-header">
                       <div class="post-header-main">
-                        <router-link :to="buildUserPath(post.user)" class="post-author">{{ post.user.username }}</router-link>
+                        <router-link :to="buildUserPath(post.user)" class="post-author">{{ getUserDisplayName(post.user) }}</router-link>
                         <button
                           type="button"
                           class="post-meta-link post-number"
@@ -341,6 +345,9 @@ import {
   buildTagPath,
   buildUserPath,
   formatRelativeTime,
+  getUserAvatarColor,
+  getUserDisplayName,
+  getUserInitial,
   normalizeDiscussion,
   normalizePost,
   unwrapList

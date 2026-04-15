@@ -33,7 +33,6 @@
       <main class="tags-content">
         <section class="tags-hero">
           <h1>全部标签</h1>
-          <p>按 Flarum 的标签浏览方式整理，支持父子标签和最后活跃讨论入口。</p>
         </section>
 
         <div v-if="loading" class="state-block">加载中...</div>

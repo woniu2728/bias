@@ -147,8 +147,8 @@
               :alt="authStore.user?.username"
               class="avatar avatar-image"
             />
-            <div v-else class="avatar">
-              {{ authStore.user?.username.charAt(0).toUpperCase() }}
+            <div v-else class="avatar" :style="{ backgroundColor: getUserAvatarColor(authStore.user) }">
+              {{ getUserInitial(authStore.user) }}
             </div>
             <span class="username">{{ authStore.user?.username }}</span>
             <i class="fas fa-caret-down"></i>
@@ -203,7 +203,13 @@ import { useNotificationStore } from '@/stores/notification'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
 import GlobalSearchModal from '@/components/modals/GlobalSearchModal.vue'
-import { buildDiscussionPath, buildUserPath, formatRelativeTime } from '@/utils/forum'
+import {
+  buildDiscussionPath,
+  buildUserPath,
+  formatRelativeTime,
+  getUserAvatarColor,
+  getUserInitial
+} from '@/utils/forum'
 
 const authStore = useAuthStore()
 const composerStore = useComposerStore()

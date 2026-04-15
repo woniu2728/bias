@@ -173,7 +173,7 @@
                     :alt="getUserDisplayName(discussion.user)"
                     class="avatar avatar-image"
                   />
-                  <div v-else class="avatar" :style="{ backgroundColor: getUserColor(discussion.user) }">
+                  <div v-else class="avatar" :style="{ backgroundColor: getUserAvatarColor(discussion.user) }">
                     {{ getUserInitial(discussion.user) }}
                   </div>
                 </router-link>
@@ -255,6 +255,9 @@ import {
   buildUserPath,
   flattenTags,
   formatRelativeTime,
+  getUserAvatarColor,
+  getUserDisplayName,
+  getUserInitial,
   normalizeDiscussion,
   normalizeTag,
   unwrapList
@@ -579,20 +582,6 @@ function isSidebarTagActive(tag) {
   return Boolean(currentTag.value?.parent_id && currentTagParentSlug === tag.slug)
 }
 
-function getUserColor(user) {
-  const colors = ['#4d698e', '#e67e22', '#3498db', '#27ae60', '#c0392b', '#8e44ad']
-  const index = (user?.id || 0) % colors.length
-  return colors[index]
-}
-
-function getUserDisplayName(user) {
-  return user?.display_name || user?.username || '已删除用户'
-}
-
-function getUserInitial(user) {
-  const source = getUserDisplayName(user).trim()
-  return source ? source.charAt(0).toUpperCase() : '?'
-}
 </script>
 
 <style scoped>
