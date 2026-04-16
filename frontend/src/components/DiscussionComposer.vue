@@ -80,13 +80,25 @@
 
         <div class="composer-meta">
           <select
-            v-model="form.tag_id"
+            v-model="form.primary_tag_id"
             class="composer-field composer-tag-select"
             :disabled="submitting || loadingTags || isSuspended"
+            @change="handlePrimaryTagChange"
             @keydown.esc.prevent="closeComposer"
           >
-            <option value="">{{ loadingTags ? '加载标签中...' : (hasStartableTags ? '选择标签' : '暂无可发帖标签') }}</option>
-            <option v-for="tag in availableTags" :key="tag.id" :value="String(tag.id)">
+            <option value="">{{ loadingTags ? '加载标签中...' : (hasStartableTags ? '选择主标签' : '暂无可发帖标签') }}</option>
+            <option v-for="tag in primaryTags" :key="tag.id" :value="String(tag.id)">
+              {{ tag.name }}
+            </option>
+          </select>
+          <select
+            v-model="form.secondary_tag_id"
+            class="composer-field composer-tag-select"
+            :disabled="submitting || loadingTags || isSuspended || !secondaryTagOptions.length"
+            @keydown.esc.prevent="closeComposer"
+          >
+            <option value="">{{ secondaryTagOptions.length ? '选择次标签（可选）' : '无可用次标签' }}</option>
+            <option v-for="tag in secondaryTagOptions" :key="tag.id" :value="String(tag.id)">
               {{ tag.name }}
             </option>
           </select>
@@ -243,7 +255,8 @@ const modalStore = useModalStore()
 const form = ref({
   title: '',
   content: '',
-  tag_id: ''
+  primary_tag_id: '',
+  secondary_tag_id: ''
 })
 const tags = ref([])
 const loadingTags = ref(false)
@@ -297,19 +310,36 @@ const composerTools = [
 const emojiGroups = EMOJI_GROUPS
 
 const availableTags = computed(() => flattenTags(tags.value))
-const hasStartableTags = computed(() => availableTags.value.length > 0)
+const primaryTags = computed(() => tags.value.filter(tag => !tag.parent_id))
+const secondaryTagOptions = computed(() => {
+  if (!form.value.primary_tag_id) return []
+  const primaryTag = primaryTags.value.find(tag => String(tag.id) === String(form.value.primary_tag_id))
+  return primaryTag?.children || []
+})
+const selectedTagIds = computed(() => {
+  return [form.value.primary_tag_id, form.value.secondary_tag_id]
+    .filter(Boolean)
+    .map(value => parseInt(value, 10))
+    .filter(Number.isInteger)
+})
+const hasStartableTags = computed(() => primaryTags.value.length > 0)
 const showComposer = computed(() => {
   return composerStore.isOpen && composerStore.current.type === 'discussion' && authStore.isAuthenticated
 })
 const hasDraftContent = computed(() => {
-  return Boolean(form.value.title.trim() || form.value.content.trim() || form.value.tag_id)
+  return Boolean(
+    form.value.title.trim()
+    || form.value.content.trim()
+    || form.value.primary_tag_id
+    || form.value.secondary_tag_id
+  )
 })
 const canSubmit = computed(() => {
   return Boolean(
     authStore.isAuthenticated &&
     form.value.title.trim() &&
     form.value.content.trim() &&
-    form.value.tag_id &&
+    form.value.primary_tag_id &&
     !submitting.value &&
     !uploading.value &&
     !loadingTags.value &&
@@ -319,8 +349,9 @@ const canSubmit = computed(() => {
 })
 const isSuspended = computed(() => Boolean(authStore.user?.is_suspended))
 const selectedTagName = computed(() => {
-  const tag = availableTags.value.find(item => String(item.id) === String(form.value.tag_id))
-  return tag?.name || ''
+  const primaryTag = primaryTags.value.find(item => String(item.id) === String(form.value.primary_tag_id))
+  const secondaryTag = secondaryTagOptions.value.find(item => String(item.id) === String(form.value.secondary_tag_id))
+  return [primaryTag?.name, secondaryTag?.name].filter(Boolean).join(' / ')
 })
 const composerStatusText = computed(() => {
   if (composerStore.isMinimized) return minimizedSummary.value
@@ -516,15 +547,40 @@ function applyRequestedTag() {
   const requestedTagId = composerStore.current.tagId
   if (!requestedTagId) return
 
-  if (!availableTags.value.some(tag => String(tag.id) === String(requestedTagId))) {
-    if (String(form.value.tag_id) === String(requestedTagId)) {
-      form.value.tag_id = ''
+  const requestedTag = availableTags.value.find(tag => String(tag.id) === String(requestedTagId))
+  if (!requestedTag) {
+    if (String(form.value.primary_tag_id) === String(requestedTagId)) {
+      form.value.primary_tag_id = ''
+    }
+    if (String(form.value.secondary_tag_id) === String(requestedTagId)) {
+      form.value.secondary_tag_id = ''
     }
     return
   }
 
-  if (!form.value.tag_id || (!form.value.title.trim() && !form.value.content.trim())) {
-    form.value.tag_id = String(requestedTagId)
+  if (!form.value.primary_tag_id || (!form.value.title.trim() && !form.value.content.trim())) {
+    applyTagSelection(requestedTag)
+  }
+}
+
+function applyTagSelection(tag) {
+  if (!tag) return
+
+  if (tag.parent_id) {
+    form.value.primary_tag_id = String(tag.parent_id)
+    form.value.secondary_tag_id = String(tag.id)
+    return
+  }
+
+  form.value.primary_tag_id = String(tag.id)
+  if (!secondaryTagOptions.value.some(option => String(option.id) === String(form.value.secondary_tag_id))) {
+    form.value.secondary_tag_id = ''
+  }
+}
+
+function handlePrimaryTagChange() {
+  if (!secondaryTagOptions.value.some(option => String(option.id) === String(form.value.secondary_tag_id))) {
+    form.value.secondary_tag_id = ''
   }
 }
 
@@ -643,7 +699,14 @@ function restoreDraft() {
     form.value = {
       title: draft.title || '',
       content: draft.content || '',
-      tag_id: draft.tag_id || ''
+      primary_tag_id: draft.primary_tag_id || '',
+      secondary_tag_id: draft.secondary_tag_id || ''
+    }
+    if (!form.value.primary_tag_id && draft.tag_id) {
+      const legacyTag = availableTags.value.find(tag => String(tag.id) === String(draft.tag_id))
+      applyTagSelection(legacyTag)
+    } else {
+      handlePrimaryTagChange()
     }
     draftSavedAt.value = draft.updatedAt || ''
     draftMessage.value = draftSavedAt.value
@@ -680,7 +743,8 @@ function saveDraft(showMessage = true) {
     JSON.stringify({
       title: form.value.title,
       content: form.value.content,
-      tag_id: form.value.tag_id,
+      primary_tag_id: form.value.primary_tag_id,
+      secondary_tag_id: form.value.secondary_tag_id,
       updatedAt
     })
   )
@@ -703,7 +767,8 @@ async function clearDraft() {
   form.value = {
     title: '',
     content: '',
-    tag_id: ''
+    primary_tag_id: '',
+    secondary_tag_id: ''
   }
   clearDraftStorage('已清除本地草稿。')
   focusPreferredField()
@@ -728,7 +793,7 @@ async function submitDiscussion() {
     const data = await api.post('/discussions/', {
       title: form.value.title,
       content: form.value.content,
-      tag_ids: form.value.tag_id ? [parseInt(form.value.tag_id, 10)] : []
+      tag_ids: selectedTagIds.value
     })
 
     if (data.approval_status === 'pending') {
@@ -1070,7 +1135,8 @@ function resetComposer() {
   form.value = {
     title: '',
     content: '',
-    tag_id: ''
+    primary_tag_id: '',
+    secondary_tag_id: ''
   }
   uploadNotice.value = ''
   showEmojiPicker.value = false

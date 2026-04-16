@@ -134,10 +134,33 @@ class TagService:
         if not normalized_ids:
             return []
 
-        tags = list(Tag.objects.filter(id__in=normalized_ids).order_by("id"))
-        if len(tags) != len(normalized_ids):
+        tags_by_id = {
+            tag.id: tag
+            for tag in Tag.objects.filter(id__in=normalized_ids).select_related("parent")
+        }
+        if len(tags_by_id) != len(normalized_ids):
             raise ValueError("部分标签不存在")
-        return tags
+
+        tags = [tags_by_id[tag_id] for tag_id in normalized_ids]
+        primary_tags = [tag for tag in tags if tag.parent_id is None]
+        secondary_tags = [tag for tag in tags if tag.parent_id is not None]
+
+        if len(primary_tags) > 1:
+            raise ValueError("当前最多只能选择 1 个主标签")
+
+        if len(secondary_tags) > 1:
+            raise ValueError("当前最多只能选择 1 个次标签")
+
+        if secondary_tags and not primary_tags:
+            raise ValueError("选择次标签时必须同时选择对应的主标签")
+
+        if primary_tags and secondary_tags and secondary_tags[0].parent_id != primary_tags[0].id:
+            raise ValueError("次标签必须与对应的主标签一起选择")
+
+        if len(tags) > 2:
+            raise ValueError("当前最多只能选择 2 个标签")
+
+        return primary_tags + secondary_tags
 
     @staticmethod
     def ensure_can_start_discussion(user: User, tag_ids: Optional[List[int]]) -> List[Tag]:

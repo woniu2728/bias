@@ -298,3 +298,58 @@ class DiscussionApiTests(TestCase):
 
         self.assertEqual(response.status_code, 403, response.content)
         self.assertIn("没有权限", response.json()["error"])
+
+    def test_cannot_create_discussion_with_secondary_tag_only(self):
+        parent_tag = Tag.objects.create(name="开发", slug="dev")
+        child_tag = Tag.objects.create(name="后端", slug="backend", parent=parent_tag)
+
+        response = self.client.post(
+            "/api/discussions/",
+            data=json.dumps({
+                "title": "Invalid child only",
+                "content": "Blocked by tag combination",
+                "tag_ids": [child_tag.id],
+            }),
+            content_type="application/json",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("次标签", response.json()["error"])
+
+    def test_cannot_create_discussion_with_two_primary_tags(self):
+        first_tag = Tag.objects.create(name="前端", slug="frontend")
+        second_tag = Tag.objects.create(name="后端", slug="backend-main")
+
+        response = self.client.post(
+            "/api/discussions/",
+            data=json.dumps({
+                "title": "Too many primary tags",
+                "content": "Blocked by primary count",
+                "tag_ids": [first_tag.id, second_tag.id],
+            }),
+            content_type="application/json",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("主标签", response.json()["error"])
+
+    def test_cannot_create_discussion_with_mismatched_parent_child_tags(self):
+        first_tag = Tag.objects.create(name="前端", slug="frontend-main")
+        second_tag = Tag.objects.create(name="后端", slug="backend-main")
+        child_tag = Tag.objects.create(name="Vue", slug="vue-child", parent=first_tag)
+
+        response = self.client.post(
+            "/api/discussions/",
+            data=json.dumps({
+                "title": "Mismatched tags",
+                "content": "Blocked by parent child mismatch",
+                "tag_ids": [second_tag.id, child_tag.id],
+            }),
+            content_type="application/json",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("主标签", response.json()["error"])
