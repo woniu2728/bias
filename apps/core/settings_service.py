@@ -4,8 +4,13 @@
 import json
 
 from django.conf import settings
+from django.core.cache import cache
 
 from apps.core.models import Setting
+
+
+ADVANCED_SETTINGS_CACHE_KEY = "settings.group.advanced"
+PUBLIC_FORUM_SETTINGS_CACHE_KEY = "settings.public.forum"
 
 
 BASIC_SETTINGS_DEFAULTS = {
@@ -96,6 +101,66 @@ def get_setting_group(prefix: str, defaults: dict) -> dict:
     return values
 
 
+def clear_runtime_setting_caches():
+    _cache_delete(ADVANCED_SETTINGS_CACHE_KEY)
+    _cache_delete(PUBLIC_FORUM_SETTINGS_CACHE_KEY)
+
+
+def _cache_get(key, default=None):
+    try:
+        return cache.get(key, default)
+    except Exception:
+        return default
+
+
+def _cache_set(key, value, timeout):
+    try:
+        cache.set(key, value, timeout)
+    except Exception:
+        return None
+    return value
+
+
+def _cache_delete(key):
+    try:
+        cache.delete(key)
+    except Exception:
+        return None
+    return True
+
+
+def get_advanced_settings() -> dict:
+    cached = _cache_get(ADVANCED_SETTINGS_CACHE_KEY)
+    if cached is not None:
+        return cached
+
+    advanced_settings = get_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS)
+    advanced_settings["debug_mode"] = settings.DEBUG
+    _cache_set(ADVANCED_SETTINGS_CACHE_KEY, advanced_settings, None)
+    return advanced_settings
+
+
+def get_cache_lifetime() -> int:
+    try:
+        lifetime = int(get_advanced_settings().get("cache_lifetime", 0) or 0)
+    except (TypeError, ValueError):
+        lifetime = 0
+    return max(lifetime, 0)
+
+
+def is_maintenance_mode_enabled() -> bool:
+    return bool(get_advanced_settings().get("maintenance_mode", False))
+
+
+def get_maintenance_message() -> str:
+    message = (get_advanced_settings().get("maintenance_message") or "").strip()
+    return message or ADVANCED_SETTINGS_DEFAULTS["maintenance_message"]
+
+
+def is_query_logging_enabled() -> bool:
+    return bool(get_advanced_settings().get("log_queries", False))
+
+
 def save_setting_group(prefix: str, defaults: dict, payload: dict) -> dict:
     values = get_setting_group(prefix, defaults)
 
@@ -109,12 +174,27 @@ def save_setting_group(prefix: str, defaults: dict, payload: dict) -> dict:
             defaults={"value": json.dumps(payload[key], ensure_ascii=False)}
         )
 
+    clear_runtime_setting_caches()
     return values
 
 
 def get_public_forum_settings() -> dict:
+    cache_lifetime = get_cache_lifetime()
+    if cache_lifetime > 0:
+        cached = _cache_get(PUBLIC_FORUM_SETTINGS_CACHE_KEY)
+        if cached is not None:
+            return cached
+
     forum_settings = get_setting_group("basic", BASIC_SETTINGS_DEFAULTS)
-    forum_settings.update(
-        get_setting_group("appearance", APPEARANCE_SETTINGS_DEFAULTS)
-    )
+    forum_settings.update(get_setting_group("appearance", APPEARANCE_SETTINGS_DEFAULTS))
+
+    advanced_settings = get_advanced_settings()
+    forum_settings.update({
+        "maintenance_mode": bool(advanced_settings.get("maintenance_mode", False)),
+        "maintenance_message": get_maintenance_message(),
+    })
+
+    if cache_lifetime > 0:
+        _cache_set(PUBLIC_FORUM_SETTINGS_CACHE_KEY, forum_settings, cache_lifetime)
+
     return forum_settings

@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import uuid
 
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -13,6 +14,7 @@ from unittest.mock import patch
 
 from apps.core.models import Setting
 from apps.core.file_service import FileUploadService
+from apps.core.settings_service import clear_runtime_setting_caches
 from apps.core.services import SearchService
 from apps.core.websocket_auth import get_user_from_token
 from apps.discussions.services import DiscussionService
@@ -153,6 +155,10 @@ class AdminSettingsApiTests(TestCase):
         token = RefreshToken.for_user(self.admin).access_token
         return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
+    def tearDown(self):
+        clear_runtime_setting_caches()
+        super().tearDown()
+
     def test_settings_are_persisted(self):
         response = self.client.post(
             "/api/admin/settings",
@@ -233,6 +239,20 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(payload["storage_r2_bucket"], "forum-assets")
         self.assertEqual(payload["storage_r2_public_url"], "https://cdn.example.com")
 
+    def test_debug_mode_setting_is_read_only_runtime_value(self):
+        response = self.client.post(
+            "/api/admin/advanced",
+            data=json.dumps({
+                "debug_mode": not settings.DEBUG,
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["settings"]["debug_mode"], settings.DEBUG)
+        self.assertFalse(Setting.objects.filter(key="advanced.debug_mode").exists())
+
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_mail_settings_affect_test_email_sender(self):
         response = self.client.post(
@@ -283,6 +303,99 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(payload["welcome_title"], "欢迎来到运行时论坛")
         self.assertEqual(payload["primary_color"], "#123456")
         self.assertEqual(payload["logo_url"], "/media/runtime-logo.png")
+
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
+    def test_cache_lifetime_controls_public_forum_settings_cache(self):
+        Setting.objects.update_or_create(
+            key="basic.forum_title",
+            defaults={"value": json.dumps("缓存标题 A")},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.cache_lifetime",
+            defaults={"value": json.dumps(60)},
+        )
+        clear_runtime_setting_caches()
+
+        first_response = self.client.get("/api/forum")
+        self.assertEqual(first_response.status_code, 200, first_response.content)
+        self.assertEqual(first_response.json()["forum_title"], "缓存标题 A")
+
+        Setting.objects.update_or_create(
+            key="basic.forum_title",
+            defaults={"value": json.dumps("缓存标题 B")},
+        )
+
+        cached_response = self.client.get("/api/forum")
+        self.assertEqual(cached_response.status_code, 200, cached_response.content)
+        self.assertEqual(cached_response.json()["forum_title"], "缓存标题 A")
+
+        Setting.objects.update_or_create(
+            key="advanced.cache_lifetime",
+            defaults={"value": json.dumps(0)},
+        )
+        clear_runtime_setting_caches()
+
+        uncached_response = self.client.get("/api/forum")
+        self.assertEqual(uncached_response.status_code, 200, uncached_response.content)
+        self.assertEqual(uncached_response.json()["forum_title"], "缓存标题 B")
+
+        Setting.objects.update_or_create(
+            key="basic.forum_title",
+            defaults={"value": json.dumps("缓存标题 C")},
+        )
+        direct_response = self.client.get("/api/forum")
+        self.assertEqual(direct_response.status_code, 200, direct_response.content)
+        self.assertEqual(direct_response.json()["forum_title"], "缓存标题 C")
+
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
+    def test_maintenance_mode_blocks_public_api_but_keeps_admin_paths_available(self):
+        Setting.objects.update_or_create(
+            key="advanced.maintenance_mode",
+            defaults={"value": json.dumps(True)},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.maintenance_message",
+            defaults={"value": json.dumps("站点维护中，请稍后回来。")},
+        )
+        clear_runtime_setting_caches()
+
+        public_settings_response = self.client.get("/api/forum")
+        self.assertEqual(public_settings_response.status_code, 200, public_settings_response.content)
+        self.assertTrue(public_settings_response.json()["maintenance_mode"])
+        self.assertEqual(public_settings_response.json()["maintenance_message"], "站点维护中，请稍后回来。")
+
+        blocked_response = self.client.get("/api/search", {"q": "维护"})
+        self.assertEqual(blocked_response.status_code, 503, blocked_response.content)
+        self.assertEqual(blocked_response.json()["error"], "站点维护中，请稍后回来。")
+        self.assertTrue(blocked_response.json()["maintenance"])
+
+        admin_response = self.client.get("/api/admin/advanced", **self.auth_header())
+        self.assertEqual(admin_response.status_code, 200, admin_response.content)
+
+        me_response = self.client.get("/api/users/me", **self.auth_header())
+        self.assertEqual(me_response.status_code, 200, me_response.content)
+        self.assertTrue(me_response.json()["is_staff"])
+
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
+    def test_log_queries_setting_logs_sql_statements(self):
+        Setting.objects.update_or_create(
+            key="advanced.cache_lifetime",
+            defaults={"value": json.dumps(0)},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.log_queries",
+            defaults={"value": json.dumps(True)},
+        )
+        clear_runtime_setting_caches()
+
+        with self.assertLogs("pyflarum.sql", level="INFO") as captured:
+            response = self.client.get("/api/forum")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        joined_output = "\n".join(captured.output)
+        self.assertIn("/api/forum", joined_output)
+        self.assertIn("total_queries=", joined_output)
+        self.assertIn("SELECT", joined_output.upper())
 
     def test_markdown_preview_endpoint_returns_rendered_html(self):
         response = self.client.post(

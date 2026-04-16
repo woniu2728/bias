@@ -67,16 +67,22 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const data = await api.get('/users/me')
       user.value = data
+      return data
     } catch (error) {
-      console.error('获取用户信息失败:', error)
+      user.value = null
+      if (error.response?.status !== 503) {
+        console.error('获取用户信息失败:', error)
+      }
+      return null
     }
   }
 
   // 检查认证状态
   async function checkAuth() {
     if (accessToken.value) {
-      await fetchUser()
+      return fetchUser()
     }
+    return null
   }
 
   return {

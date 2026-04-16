@@ -15,6 +15,8 @@ const DEFAULT_SETTINGS = {
   favicon_url: '',
   custom_css: '',
   custom_header: '',
+  maintenance_mode: false,
+  maintenance_message: '论坛正在维护中，请稍后再试...',
 }
 
 const CUSTOM_CSS_STYLE_ID = 'forum-custom-css'

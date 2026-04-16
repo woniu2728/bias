@@ -20,6 +20,8 @@ from apps.core.settings_service import (
     APPEARANCE_SETTINGS_DEFAULTS,
     BASIC_SETTINGS_DEFAULTS,
     MAIL_SETTINGS_DEFAULTS,
+    clear_runtime_setting_caches,
+    get_advanced_settings as get_runtime_advanced_settings,
     get_setting_group,
     save_setting_group,
 )
@@ -175,10 +177,15 @@ def require_staff(func):
 @require_staff
 def get_stats(request):
     """获取系统统计数据"""
+    advanced_settings = get_runtime_advanced_settings()
+    queue_driver = advanced_settings.get("queue_driver", "sync")
+    if not advanced_settings.get("queue_enabled", False):
+        queue_driver = "sync"
+
     return {
         "phpVersion": f"Python {sys.version.split()[0]}",
         "dbDriver": "SQLite/PostgreSQL/MySQL",
-        "queueDriver": "sync",
+        "queueDriver": queue_driver,
         "sessionDriver": "database",
         "totalUsers": User.objects.count(),
         "totalDiscussions": Discussion.objects.count(),
@@ -261,14 +268,18 @@ def send_test_email(request):
 @require_staff
 def get_advanced_settings(request):
     """获取高级设置"""
-    return get_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS)
+    return get_runtime_advanced_settings()
 
 
 @router.post("/advanced", auth=AuthBearer(), tags=["Admin"])
 @require_staff
 def save_advanced_settings(request, payload: Dict[str, Any] = Body(...)):
     """保存高级设置"""
-    settings_data = save_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS, payload)
+    runtime_payload = dict(payload)
+    runtime_payload.pop("debug_mode", None)
+
+    settings_data = save_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS, runtime_payload)
+    settings_data["debug_mode"] = get_runtime_advanced_settings()["debug_mode"]
     return {"message": "高级设置保存成功", "settings": settings_data}
 
 
@@ -278,6 +289,7 @@ def clear_cache(request):
     """清除 Django 缓存"""
     try:
         cache.clear()
+        clear_runtime_setting_caches()
     except Exception as e:
         return admin_error(f"缓存清理失败: {e}", status=503)
 

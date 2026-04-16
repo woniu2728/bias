@@ -6,6 +6,20 @@
     description="配置缓存、队列、维护模式与文件存储"
   >
     <div class="AdvancedPage-content">
+      <div class="RuntimeNotice">
+        <h3 class="Section-title">运行时说明</h3>
+        <div class="RuntimeNotice-grid">
+          <div>
+            <h4>即时生效</h4>
+            <p>`maintenance_mode`、`maintenance_message`、`cache_lifetime`、`log_queries` 会在保存后直接影响请求层行为。</p>
+          </div>
+          <div>
+            <h4>需额外部署或重启</h4>
+            <p>`debug_mode` 由 Django 配置文件或环境变量控制；`queue_enabled` / `queue_driver` 目前只声明目标执行方式，完整异步 worker 链路仍待接入。</p>
+          </div>
+        </div>
+      </div>
+
       <div class="Form-section">
         <h3 class="Section-title">缓存设置</h3>
 
@@ -27,7 +41,7 @@
             class="FormControl"
             placeholder="3600"
           />
-          <p class="Form-help">默认缓存过期时间</p>
+          <p class="Form-help">当前已接入公开论坛设置缓存。填 0 表示禁用该缓存，保存基础/外观/高级设置时会自动清理。</p>
         </div>
 
         <div class="Form-actions">
@@ -47,7 +61,7 @@
             <option value="database">数据库</option>
             <option value="redis">Redis</option>
           </select>
-          <p class="Form-help">选择队列处理方式</p>
+          <p class="Form-help">当前用于声明目标执行器。未部署 worker 时，耗时任务仍按同步方式执行。</p>
         </div>
 
         <div class="Form-group">
@@ -59,7 +73,7 @@
             />
             启用队列处理
           </label>
-          <p class="Form-help">异步处理耗时任务</p>
+          <p class="Form-help">关闭时强制同步执行。开启后仅保留运行目标配置，完整异步任务链路后续再补。</p>
         </div>
       </div>
 
@@ -358,7 +372,7 @@
             />
             启用维护模式
           </label>
-          <p class="Form-help">启用后，普通用户将无法访问论坛</p>
+          <p class="Form-help">启用后，普通用户访问论坛 API 将收到 503；`/api/forum`、登录接口和后台入口保留豁免。</p>
         </div>
 
         <div class="Form-group">
@@ -381,10 +395,11 @@
               v-model="settings.debug_mode"
               type="checkbox"
               class="FormControl-checkbox"
+              disabled
             />
-            启用调试模式
+            调试模式（只读）
           </label>
-          <p class="Form-help">显示详细错误信息（仅用于开发环境）</p>
+          <p class="Form-help">当前运行值来自 Django 配置文件或环境变量，保存这里不会热切换服务端 DEBUG。</p>
         </div>
 
         <div class="Form-group">
@@ -396,7 +411,7 @@
             />
             记录数据库查询
           </label>
-          <p class="Form-help">记录所有数据库查询到日志</p>
+          <p class="Form-help">保存后即时生效。会把每个 HTTP 请求触发的 SQL 记录到服务器日志。</p>
         </div>
       </div>
 
@@ -511,6 +526,33 @@ async function clearCache() {
 <style scoped>
 .AdvancedPage-content {
   max-width: 920px;
+}
+
+.RuntimeNotice {
+  background: linear-gradient(135deg, #f7fafc 0%, #edf3f9 100%);
+  border: 1px solid #d6e1ec;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.RuntimeNotice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.RuntimeNotice h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #223041;
+}
+
+.RuntimeNotice p {
+  margin: 0;
+  color: #536273;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .Form-section {
@@ -634,6 +676,7 @@ async function clearCache() {
 }
 
 @media (max-width: 768px) {
+  .RuntimeNotice-grid,
   .Form-grid {
     grid-template-columns: 1fr;
   }

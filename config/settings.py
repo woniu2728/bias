@@ -9,6 +9,13 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+
+def env_flag(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -53,6 +60,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.core.middleware.QueryLoggingMiddleware',
+    'apps.core.middleware.MaintenanceModeMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -150,35 +159,59 @@ CORS_ALLOW_CREDENTIALS = True
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = os.getenv('REDIS_PORT', '6379')
 REDIS_DB = os.getenv('REDIS_DB', '0')
+USE_REDIS = env_flag('USE_REDIS', not DEBUG)
 
 # Cache Configuration
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+CACHES = (
+    {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            }
         }
     }
-}
+    if USE_REDIS else
+    {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'pyflarum-dev-cache',
+        }
+    }
+)
 
 # Celery Configuration
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', f'redis://{REDIS_HOST}:{REDIS_PORT}/1')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', f'redis://{REDIS_HOST}:{REDIS_PORT}/2')
+CELERY_BROKER_URL = os.getenv(
+    'CELERY_BROKER_URL',
+    f'redis://{REDIS_HOST}:{REDIS_PORT}/1' if USE_REDIS else 'memory://'
+)
+CELERY_RESULT_BACKEND = os.getenv(
+    'CELERY_RESULT_BACKEND',
+    f'redis://{REDIS_HOST}:{REDIS_PORT}/2' if USE_REDIS else 'cache+memory://'
+)
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
 # Channels Configuration
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts': [(REDIS_HOST, int(REDIS_PORT))],
+CHANNEL_LAYERS = (
+    {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [(REDIS_HOST, int(REDIS_PORT))],
+            },
         },
-    },
-}
+    }
+    if USE_REDIS else
+    {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
+)
 
 # Email Configuration
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
