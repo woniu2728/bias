@@ -171,7 +171,7 @@
           <div v-if="authStore.isAuthenticated && isSuspended" class="suspended-notice">
             {{ suspensionNotice }}
           </div>
-          <div v-else-if="authStore.isAuthenticated && !discussion.is_locked" class="reply-placeholder">
+          <div v-else-if="authStore.isAuthenticated && discussion.can_reply" class="reply-placeholder">
             <button @click="openComposer" class="primary">
               {{ hasActiveComposer ? '继续编辑回复' : '发表回复' }}
             </button>
@@ -180,6 +180,9 @@
 
           <div v-else-if="discussion.is_locked" class="locked-notice">
             此讨论已被锁定，无法回复
+          </div>
+          <div v-else-if="authStore.isAuthenticated" class="locked-notice">
+            当前没有在此讨论下回复的权限
           </div>
           <div v-else class="login-notice">
             <router-link to="/login">登录</router-link> 后才能回复

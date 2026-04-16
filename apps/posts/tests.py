@@ -10,6 +10,7 @@ from apps.discussions.services import DiscussionService
 from apps.posts.models import Post
 from apps.posts.models import PostFlag
 from apps.posts.services import PostService
+from apps.tags.models import Tag
 from apps.users.models import Group, Permission, User
 
 
@@ -152,6 +153,36 @@ class PostFlagApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()["approval_status"], "pending")
+
+    def test_cannot_reply_in_tag_without_reply_permission(self):
+        admin = User.objects.create_superuser(
+            username="reply-admin",
+            email="reply-admin@example.com",
+            password="password123",
+        )
+        restricted_tag = Tag.objects.create(
+            name="管理回复区",
+            slug="staff-reply-only",
+            view_scope=Tag.ACCESS_PUBLIC,
+            start_discussion_scope=Tag.ACCESS_PUBLIC,
+            reply_scope=Tag.ACCESS_STAFF,
+        )
+        restricted_discussion = DiscussionService.create_discussion(
+            title="限制回复讨论",
+            content="只有管理员能回复",
+            user=admin,
+            tag_ids=[restricted_tag.id],
+        )
+
+        response = self.client.post(
+            f"/api/discussions/{restricted_discussion.id}/posts",
+            data='{"content":"尝试回复"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertIn("没有权限", response.json()["error"])
 
 
 class PostLikeTests(TestCase):

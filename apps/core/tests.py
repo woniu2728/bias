@@ -32,6 +32,10 @@ class ChineseSearchTests(TestCase):
             password="password123",
         )
 
+    def auth_header(self, user=None):
+        token = RefreshToken.for_user(user or self.user).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
     def test_chinese_query_matches_discussion_content(self):
         discussion = DiscussionService.create_discussion(
             title="无关标题",
@@ -120,6 +124,39 @@ class ChineseSearchTests(TestCase):
         self.assertGreaterEqual(payload["total"], 2)
         self.assertGreaterEqual(payload["post_total"], 2)
         self.assertEqual(len(payload["posts"]), 1)
+
+    def test_search_api_hides_discussions_in_staff_only_tags(self):
+        admin = User.objects.create_superuser(
+            username="search-admin",
+            email="search-admin@example.com",
+            password="password123",
+        )
+        hidden_tag = Tag.objects.create(
+            name="管理搜索区",
+            slug="search-staff",
+            view_scope=Tag.ACCESS_STAFF,
+            start_discussion_scope=Tag.ACCESS_STAFF,
+            reply_scope=Tag.ACCESS_STAFF,
+        )
+        DiscussionService.create_discussion(
+            title="搜索内网讨论",
+            content="这里有搜索关键字",
+            user=admin,
+            tag_ids=[hidden_tag.id],
+        )
+
+        guest_response = self.client.get("/api/search", {"q": "搜索", "type": "discussions"})
+        self.assertEqual(guest_response.status_code, 200, guest_response.content)
+        self.assertEqual(guest_response.json()["discussion_total"], 0)
+        self.assertEqual(guest_response.json()["discussions"], [])
+
+        admin_response = self.client.get(
+            "/api/search",
+            {"q": "搜索", "type": "discussions"},
+            **self.auth_header(admin),
+        )
+        self.assertEqual(admin_response.status_code, 200, admin_response.content)
+        self.assertGreaterEqual(admin_response.json()["discussion_total"], 1)
 
 
 class WebSocketJwtAuthTests(TestCase):
@@ -779,6 +816,9 @@ class AdminTagManagementApiTests(TestCase):
                 "position": 3,
                 "is_hidden": True,
                 "is_restricted": True,
+                "view_scope": "members",
+                "start_discussion_scope": "staff",
+                "reply_scope": "members",
             }),
             content_type="application/json",
             **self.auth_header(),
@@ -791,9 +831,13 @@ class AdminTagManagementApiTests(TestCase):
         self.assertEqual(payload["parent_name"], self.parent_tag.name)
         self.assertTrue(payload["is_hidden"])
         self.assertTrue(payload["is_restricted"])
+        self.assertEqual(payload["view_scope"], "members")
+        self.assertEqual(payload["start_discussion_scope"], "staff")
+        self.assertEqual(payload["reply_scope"], "members")
 
         created_tag = Tag.objects.get(id=payload["id"])
         self.assertEqual(created_tag.parent_id, self.parent_tag.id)
+        self.assertEqual(created_tag.view_scope, "members")
 
         response = self.client.put(
             f"/api/admin/tags/{created_tag.id}",
@@ -804,6 +848,9 @@ class AdminTagManagementApiTests(TestCase):
                 "position": 6,
                 "is_hidden": False,
                 "is_restricted": False,
+                "view_scope": "public",
+                "start_discussion_scope": "members",
+                "reply_scope": "staff",
             }),
             content_type="application/json",
             **self.auth_header(),
@@ -817,10 +864,14 @@ class AdminTagManagementApiTests(TestCase):
         self.assertIsNone(payload["parent_name"])
         self.assertFalse(payload["is_hidden"])
         self.assertFalse(payload["is_restricted"])
+        self.assertEqual(payload["view_scope"], "public")
+        self.assertEqual(payload["start_discussion_scope"], "members")
+        self.assertEqual(payload["reply_scope"], "staff")
 
         created_tag.refresh_from_db()
         self.assertIsNone(created_tag.parent_id)
         self.assertEqual(created_tag.position, 6)
+        self.assertEqual(created_tag.reply_scope, "staff")
 
     def test_admin_cannot_delete_tag_with_children(self):
         response = self.client.delete(

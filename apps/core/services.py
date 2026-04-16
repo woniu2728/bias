@@ -8,6 +8,7 @@ from django.db.models import Q
 
 from apps.discussions.models import Discussion
 from apps.posts.models import Post
+from apps.tags.services import TagService
 from apps.users.models import User
 
 try:
@@ -72,6 +73,7 @@ class SearchService:
         query: str,
         page: int = 1,
         limit: int = 20,
+        user=None,
     ) -> Dict:
         """
         全局搜索
@@ -84,15 +86,15 @@ class SearchService:
         Returns:
             Dict: 搜索结果
         """
-        discussion_total = SearchService._discussion_queryset(query).count()
-        post_total = SearchService._post_queryset(query).count()
+        discussion_total = SearchService._discussion_queryset(query, user=user).count()
+        post_total = SearchService._post_queryset(query, user=user).count()
         user_total = SearchService._user_queryset(query).count()
 
         # 搜索讨论
-        discussions = SearchService._search_discussions(query, limit=min(limit, 5))
+        discussions = SearchService._search_discussions(query, limit=min(limit, 5), user=user)
 
         # 搜索帖子
-        posts = SearchService._search_posts(query, limit=min(limit, 5))
+        posts = SearchService._search_posts(query, limit=min(limit, 5), user=user)
 
         # 搜索用户
         users = SearchService._search_users(query, limit=min(limit, 5))
@@ -117,6 +119,7 @@ class SearchService:
         query: str,
         page: int = 1,
         limit: int = 20,
+        user=None,
     ) -> Tuple[List[Discussion], int]:
         """
         搜索讨论
@@ -129,8 +132,8 @@ class SearchService:
         Returns:
             Tuple[List[Discussion], int]: (讨论列表, 总数)
         """
-        discussions = SearchService._search_discussions(query, page, limit)
-        total = SearchService._discussion_queryset(query).count()
+        discussions = SearchService._search_discussions(query, page, limit, user=user)
+        total = SearchService._discussion_queryset(query, user=user).count()
 
         return discussions, total
 
@@ -139,6 +142,7 @@ class SearchService:
         query: str,
         page: int = 1,
         limit: int = 20,
+        user=None,
     ) -> List[Discussion]:
         """
         内部方法：搜索讨论
@@ -151,7 +155,7 @@ class SearchService:
         Returns:
             List[Discussion]: 讨论列表
         """
-        queryset = SearchService._discussion_queryset(query).select_related('user', 'last_posted_user')
+        queryset = SearchService._discussion_queryset(query, user=user).select_related('user', 'last_posted_user')
 
         # 排序：置顶优先，然后按相关度（评论数、浏览数）
         queryset = queryset.order_by('-is_sticky', '-comment_count', '-view_count')
@@ -179,6 +183,7 @@ class SearchService:
         query: str,
         page: int = 1,
         limit: int = 20,
+        user=None,
     ) -> Tuple[List[Post], int]:
         """
         搜索帖子
@@ -191,8 +196,8 @@ class SearchService:
         Returns:
             Tuple[List[Post], int]: (帖子列表, 总数)
         """
-        posts = SearchService._search_posts(query, page, limit)
-        total = SearchService._post_queryset(query).count()
+        posts = SearchService._search_posts(query, page, limit, user=user)
+        total = SearchService._post_queryset(query, user=user).count()
 
         return posts, total
 
@@ -201,6 +206,7 @@ class SearchService:
         query: str,
         page: int = 1,
         limit: int = 20,
+        user=None,
     ) -> List[Post]:
         """
         内部方法：搜索帖子
@@ -213,7 +219,7 @@ class SearchService:
         Returns:
             List[Post]: 帖子列表
         """
-        queryset = SearchService._post_queryset(query).select_related('user', 'discussion')
+        queryset = SearchService._post_queryset(query, user=user).select_related('user', 'discussion')
 
         # 排序：按创建时间倒序
         queryset = queryset.order_by('-created_at')
@@ -280,7 +286,7 @@ class SearchService:
         return users
 
     @staticmethod
-    def get_search_suggestions(query: str, limit: int = 5) -> List[str]:
+    def get_search_suggestions(query: str, limit: int = 5, user=None) -> List[str]:
         """
         获取搜索建议
 
@@ -294,7 +300,7 @@ class SearchService:
         suggestions = []
 
         # 从讨论标题中获取建议
-        discussions = SearchService._discussion_queryset(query).values_list('title', flat=True)[:limit]
+        discussions = SearchService._discussion_queryset(query, user=user).values_list('title', flat=True)[:limit]
 
         suggestions.extend(discussions)
 
@@ -316,23 +322,25 @@ class SearchService:
         return content[:length] + '...' if len(content) > length else content
 
     @staticmethod
-    def _discussion_queryset(query: str):
-        return Discussion.objects.filter(
+    def _discussion_queryset(query: str, user=None):
+        queryset = Discussion.objects.filter(
             SearchService.build_discussion_search_query(query),
             hidden_at__isnull=True,
         ).filter(
             Q(posts__isnull=True) |
             Q(posts__type='comment', posts__hidden_at__isnull=True)
         ).distinct()
+        return TagService.filter_discussions_for_user(queryset, user)
 
     @staticmethod
-    def _post_queryset(query: str):
-        return Post.objects.filter(
+    def _post_queryset(query: str, user=None):
+        queryset = Post.objects.filter(
             SearchService.build_text_query(['content'], query),
             type='comment',
             hidden_at__isnull=True,
             discussion__hidden_at__isnull=True,
         )
+        return TagService.filter_posts_for_user(queryset, user)
 
     @staticmethod
     def _user_queryset(query: str):

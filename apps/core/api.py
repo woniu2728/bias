@@ -17,6 +17,7 @@ from apps.core.schemas import (
     UploadFileOutSchema,
 )
 from apps.core.auth import AuthBearer
+from apps.core.auth import get_optional_user
 from apps.core.file_service import FileUploadService
 from apps.core.markdown_service import MarkdownService
 from apps.core.settings_service import get_public_forum_settings
@@ -133,12 +134,13 @@ def search(
         }
 
     query = q.strip()
-    discussion_total = SearchService._discussion_queryset(query).count()
-    post_total = SearchService._post_queryset(query).count()
+    user = get_optional_user(request)
+    discussion_total = SearchService._discussion_queryset(query, user=user).count()
+    post_total = SearchService._post_queryset(query, user=user).count()
     user_total = SearchService._user_queryset(query).count()
 
     if type == 'all':
-        result = SearchService.search_all(query, page, limit)
+        result = SearchService.search_all(query, page, limit, user=user)
         return {
             **result,
             'discussions': [serialize_discussion_search_result(item) for item in result['discussions']],
@@ -146,7 +148,7 @@ def search(
         }
 
     elif type == 'discussions':
-        discussions, total = SearchService.search_discussions(query, page, limit)
+        discussions, total = SearchService.search_discussions(query, page, limit, user=user)
 
         discussion_data = [serialize_discussion_search_result(discussion) for discussion in discussions]
 
@@ -164,7 +166,7 @@ def search(
         }
 
     elif type == 'posts':
-        posts, total = SearchService.search_posts(query, page, limit)
+        posts, total = SearchService.search_posts(query, page, limit, user=user)
 
         post_data = [serialize_post_search_result(post) for post in posts]
 
@@ -217,5 +219,6 @@ def get_search_suggestions(request, q: str, limit: int = 5):
     if not q or len(q.strip()) == 0:
         return {'suggestions': []}
 
-    suggestions = SearchService.get_search_suggestions(q.strip(), limit)
+    user = get_optional_user(request)
+    suggestions = SearchService.get_search_suggestions(q.strip(), limit, user=user)
     return {'suggestions': suggestions}

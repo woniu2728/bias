@@ -3,8 +3,8 @@
 """
 from typing import Optional
 from ninja import Router
-from django.shortcuts import get_object_or_404
 from django.core.exceptions import PermissionDenied
+from django.http import JsonResponse
 
 from apps.tags.models import Tag
 from apps.tags.schemas import (
@@ -33,13 +33,13 @@ def _serialize_discussion_summary(discussion):
     }
 
 
-def _serialize_tag(tag, include_children=False):
+def _serialize_tag(tag, user=None, include_children=False, action="view"):
     children = []
     if include_children:
         children = [
-            _serialize_tag(child, include_children=True)
+            _serialize_tag(child, user=user, include_children=True, action=action)
             for child in tag.children.all().order_by('position', 'name')
-            if not child.is_hidden
+            if not child.is_hidden and child.id not in TagService.get_forbidden_tag_ids(user, action=action)
         ]
 
     return {
@@ -54,6 +54,11 @@ def _serialize_tag(tag, include_children=False):
         'parent_id': tag.parent_id,
         'is_hidden': tag.is_hidden,
         'is_restricted': tag.is_restricted,
+        'view_scope': tag.view_scope,
+        'start_discussion_scope': tag.start_discussion_scope,
+        'reply_scope': tag.reply_scope,
+        'can_start_discussion': TagService.can_start_discussion_in_tag(tag, user),
+        'can_reply': TagService.can_reply_in_tag(tag, user),
         'discussion_count': tag.discussion_count,
         'last_posted_at': tag.last_posted_at,
         'last_posted_discussion': _serialize_discussion_summary(tag.last_posted_discussion),
@@ -82,13 +87,16 @@ def create_tag(request, payload: TagCreateSchema):
             parent_id=payload.parent_id,
             is_hidden=payload.is_hidden or False,
             is_restricted=payload.is_restricted or False,
+            view_scope=payload.view_scope or Tag.ACCESS_PUBLIC,
+            start_discussion_scope=payload.start_discussion_scope or Tag.ACCESS_MEMBERS,
+            reply_scope=payload.reply_scope or Tag.ACCESS_MEMBERS,
             user=request.auth,
         )
 
         # 加载子标签
         tag.children = []
 
-        return tag
+        return _serialize_tag(tag, user=request.auth, include_children=True)
     except PermissionDenied as e:
         return router.create_response(
             request,
@@ -109,6 +117,7 @@ def list_tags(
     parent_id: Optional[int] = None,
     include_hidden: bool = False,
     include_children: bool = True,
+    purpose: str = "view",
 ):
     """
     获取标签列表
@@ -121,6 +130,8 @@ def list_tags(
     user = get_optional_user(request)
     if include_hidden and (not user or not user.is_staff):
         include_hidden = False
+    if purpose not in {"view", "start_discussion", "reply"}:
+        purpose = "view"
 
     TagService.refresh_tag_stats()
 
@@ -134,9 +145,10 @@ def list_tags(
     if not include_hidden:
         queryset = queryset.filter(is_hidden=False)
 
+    queryset = TagService.filter_tags_for_user(queryset, user, action=purpose)
     tags = queryset.order_by('position', 'name')
 
-    return {"data": [_serialize_tag(tag, include_children=include_children) for tag in tags]}
+    return {"data": [_serialize_tag(tag, user=user, include_children=include_children, action=purpose) for tag in tags]}
 
 
 @router.get("/tags/popular", response=TagListSchema, tags=["Tags"])
@@ -148,13 +160,18 @@ def get_popular_tags(request, limit: int = 10):
     - limit: 返回数量（默认10）
     """
     TagService.refresh_tag_stats()
-    tags = TagService.get_popular_tags(limit=limit)
+    user = get_optional_user(request)
+    tags = TagService.filter_tags_for_user(
+        Tag.objects.filter(is_hidden=False),
+        user,
+        action="view",
+    ).order_by('-discussion_count', '-last_posted_at')[:limit]
 
     # 添加空的children字段
     for tag in tags:
         tag.children = []
 
-    return {"data": tags}
+    return {"data": [_serialize_tag(tag, user=user) for tag in tags]}
 
 
 @router.get("/tags/{tag_id}", response=TagOutSchema, tags=["Tags"])
@@ -171,8 +188,11 @@ def get_tag(request, tag_id: int):
             status=404
         )
 
+    user = get_optional_user(request)
     tag = Tag.objects.select_related('last_posted_discussion').prefetch_related('children').get(id=tag.id)
-    return _serialize_tag(tag, include_children=True)
+    if not TagService.can_view_tag(tag, user):
+        return JsonResponse({"error": "没有权限查看此标签"}, status=403)
+    return _serialize_tag(tag, user=user, include_children=True)
 
 
 @router.get("/tags/slug/{slug}", response=TagOutSchema, tags=["Tags"])
@@ -189,8 +209,11 @@ def get_tag_by_slug(request, slug: str):
             status=404
         )
 
+    user = get_optional_user(request)
     tag = Tag.objects.select_related('last_posted_discussion').prefetch_related('children').get(id=tag.id)
-    return _serialize_tag(tag, include_children=True)
+    if not TagService.can_view_tag(tag, user):
+        return JsonResponse({"error": "没有权限查看此标签"}, status=403)
+    return _serialize_tag(tag, user=user, include_children=True)
 
 
 @router.patch("/tags/{tag_id}", response=TagOutSchema, auth=AuthBearer(), tags=["Tags"])
@@ -214,10 +237,13 @@ def update_tag(request, tag_id: int, payload: TagUpdateSchema):
             parent_id=payload.parent_id,
             is_hidden=payload.is_hidden,
             is_restricted=payload.is_restricted,
+            view_scope=payload.view_scope,
+            start_discussion_scope=payload.start_discussion_scope,
+            reply_scope=payload.reply_scope,
         )
 
         tag = Tag.objects.select_related('last_posted_discussion').prefetch_related('children').get(id=tag.id)
-        return _serialize_tag(tag, include_children=True)
+        return _serialize_tag(tag, user=request.auth, include_children=True)
     except Tag.DoesNotExist:
         return router.create_response(
             request,

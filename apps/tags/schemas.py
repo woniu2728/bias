@@ -18,6 +18,9 @@ class TagCreateSchema(BaseModel):
     parent_id: Optional[int] = Field(None, description="父标签ID")
     is_hidden: Optional[bool] = Field(False, description="是否隐藏")
     is_restricted: Optional[bool] = Field(False, description="是否限制发帖")
+    view_scope: Optional[str] = Field("public", description="查看权限级别")
+    start_discussion_scope: Optional[str] = Field("members", description="发帖权限级别")
+    reply_scope: Optional[str] = Field("members", description="回帖权限级别")
 
     @validator('name')
     def validate_name(cls, v):
@@ -38,6 +41,9 @@ class TagUpdateSchema(BaseModel):
     parent_id: Optional[int] = Field(None, description="父标签ID")
     is_hidden: Optional[bool] = Field(None, description="是否隐藏")
     is_restricted: Optional[bool] = Field(None, description="是否限制发帖")
+    view_scope: Optional[str] = Field(None, description="查看权限级别")
+    start_discussion_scope: Optional[str] = Field(None, description="发帖权限级别")
+    reply_scope: Optional[str] = Field(None, description="回帖权限级别")
 
 
 class TagFilterSchema(BaseModel):
@@ -59,6 +65,11 @@ class TagOutSchema(BaseModel):
     parent_id: Optional[int] = None
     is_hidden: bool
     is_restricted: bool
+    view_scope: str = "public"
+    start_discussion_scope: str = "members"
+    reply_scope: str = "members"
+    can_start_discussion: bool = False
+    can_reply: bool = False
     discussion_count: int
     last_posted_at: Optional[datetime] = None
     last_posted_discussion: Optional[dict] = None

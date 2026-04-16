@@ -85,12 +85,15 @@
             :disabled="submitting || loadingTags || isSuspended"
             @keydown.esc.prevent="closeComposer"
           >
-            <option value="">{{ loadingTags ? '加载标签中...' : '选择标签' }}</option>
+            <option value="">{{ loadingTags ? '加载标签中...' : (hasStartableTags ? '选择标签' : '暂无可发帖标签') }}</option>
             <option v-for="tag in availableTags" :key="tag.id" :value="String(tag.id)">
               {{ tag.name }}
             </option>
           </select>
           <span class="composer-counter">{{ form.title.length }}/200</span>
+        </div>
+        <div v-if="!loadingTags && !hasStartableTags" class="composer-notice composer-notice-warning">
+          当前没有可发帖的标签，请联系管理员开放标签权限。
         </div>
 
         <textarea
@@ -294,6 +297,7 @@ const composerTools = [
 const emojiGroups = EMOJI_GROUPS
 
 const availableTags = computed(() => flattenTags(tags.value))
+const hasStartableTags = computed(() => availableTags.value.length > 0)
 const showComposer = computed(() => {
   return composerStore.isOpen && composerStore.current.type === 'discussion' && authStore.isAuthenticated
 })
@@ -309,6 +313,7 @@ const canSubmit = computed(() => {
     !submitting.value &&
     !uploading.value &&
     !loadingTags.value &&
+    hasStartableTags.value &&
     !isSuspended.value
   )
 })
@@ -495,7 +500,8 @@ async function ensureTagsLoaded() {
   try {
     const response = await api.get('/tags', {
       params: {
-        include_children: true
+        include_children: true,
+        purpose: 'start_discussion'
       }
     })
     tags.value = unwrapList(response).map(normalizeTag)
@@ -509,6 +515,13 @@ async function ensureTagsLoaded() {
 function applyRequestedTag() {
   const requestedTagId = composerStore.current.tagId
   if (!requestedTagId) return
+
+  if (!availableTags.value.some(tag => String(tag.id) === String(requestedTagId))) {
+    if (String(form.value.tag_id) === String(requestedTagId)) {
+      form.value.tag_id = ''
+    }
+    return
+  }
 
   if (!form.value.tag_id || (!form.value.title.trim() && !form.value.content.trim())) {
     form.value.tag_id = String(requestedTagId)

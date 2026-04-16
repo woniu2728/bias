@@ -242,3 +242,59 @@ class DiscussionApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()["approval_status"], "pending")
+
+    def test_discussion_list_hides_staff_only_tag_for_non_staff(self):
+        staff_tag = Tag.objects.create(
+            name="Staff",
+            slug="staff-zone",
+            view_scope=Tag.ACCESS_STAFF,
+            start_discussion_scope=Tag.ACCESS_STAFF,
+            reply_scope=Tag.ACCESS_STAFF,
+        )
+        admin = User.objects.create_superuser(
+            username="discussion-admin",
+            email="discussion-admin@example.com",
+            password="password123",
+        )
+        discussion = DiscussionService.create_discussion(
+            title="仅管理员可见",
+            content="内部讨论",
+            user=admin,
+            tag_ids=[staff_tag.id],
+        )
+
+        guest_response = self.client.get("/api/discussions/")
+        self.assertEqual(guest_response.status_code, 200, guest_response.content)
+        self.assertEqual(guest_response.json()["total"], 0)
+
+        member_response = self.client.get("/api/discussions/", **self.auth_header(self.reader))
+        self.assertEqual(member_response.status_code, 200, member_response.content)
+        self.assertEqual(member_response.json()["total"], 0)
+
+        admin_response = self.client.get("/api/discussions/", **self.auth_header(admin))
+        self.assertEqual(admin_response.status_code, 200, admin_response.content)
+        self.assertEqual(admin_response.json()["total"], 1)
+        self.assertEqual(admin_response.json()["data"][0]["id"], discussion.id)
+
+    def test_cannot_create_discussion_in_staff_only_tag(self):
+        restricted_tag = Tag.objects.create(
+            name="管理员专用",
+            slug="staff-only-start",
+            view_scope=Tag.ACCESS_PUBLIC,
+            start_discussion_scope=Tag.ACCESS_STAFF,
+            reply_scope=Tag.ACCESS_PUBLIC,
+        )
+
+        response = self.client.post(
+            "/api/discussions/",
+            data=json.dumps({
+                "title": "Should fail",
+                "content": "Blocked by tag scope",
+                "tag_ids": [restricted_tag.id],
+            }),
+            content_type="application/json",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertIn("没有权限", response.json()["error"])

@@ -7,6 +7,15 @@ class Tag(models.Model):
     """
     标签模型 - 对标Flarum的Tag模型
     """
+    ACCESS_PUBLIC = "public"
+    ACCESS_MEMBERS = "members"
+    ACCESS_STAFF = "staff"
+    ACCESS_SCOPE_CHOICES = [
+        (ACCESS_PUBLIC, "所有人"),
+        (ACCESS_MEMBERS, "已登录用户"),
+        (ACCESS_STAFF, "仅管理员"),
+    ]
+
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=100, unique=True, db_index=True)
     description = models.TextField(blank=True)
@@ -27,6 +36,9 @@ class Tag(models.Model):
     # 状态标志
     is_hidden = models.BooleanField(default=False)
     is_restricted = models.BooleanField(default=False)  # 是否限制发帖
+    view_scope = models.CharField(max_length=20, choices=ACCESS_SCOPE_CHOICES, default=ACCESS_PUBLIC)
+    start_discussion_scope = models.CharField(max_length=20, choices=ACCESS_SCOPE_CHOICES, default=ACCESS_MEMBERS)
+    reply_scope = models.CharField(max_length=20, choices=ACCESS_SCOPE_CHOICES, default=ACCESS_MEMBERS)
 
     # 统计数据
     discussion_count = models.IntegerField(default=0)

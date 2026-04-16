@@ -12,6 +12,7 @@ from apps.posts.models import Post
 from apps.users.models import User
 from apps.users.services import UserService
 from apps.tags.models import Tag, DiscussionTag
+from apps.tags.services import TagService
 from apps.core.services import SearchService
 
 
@@ -21,6 +22,8 @@ class DiscussionService:
     @staticmethod
     def _can_view_discussion(discussion: Discussion, user: Optional[User]) -> bool:
         if discussion.hidden_at and not (user and user.is_staff):
+            return False
+        if not TagService.can_view_discussion_tags(discussion, user):
             return False
         if discussion.approval_status == Discussion.APPROVAL_APPROVED:
             return True
@@ -58,6 +61,7 @@ class DiscussionService:
         approval_status = Discussion.APPROVAL_PENDING if requires_approval else Discussion.APPROVAL_APPROVED
         approved_at = None if requires_approval else timezone.now()
         approved_by = None if requires_approval else user
+        tags = TagService.ensure_can_start_discussion(user, tag_ids)
 
         with transaction.atomic():
             # 创建讨论
@@ -93,12 +97,10 @@ class DiscussionService:
             discussion.save()
 
             # 添加标签
-            if tag_ids:
-                tags = Tag.objects.filter(id__in=tag_ids)
+            if tags:
                 for tag in tags:
                     DiscussionTag.objects.create(discussion=discussion, tag=tag)
-                from apps.tags.services import TagService
-                TagService.refresh_tag_stats(list(tags.values_list('id', flat=True)))
+                TagService.refresh_tag_stats([tag.id for tag in tags])
 
             # 更新用户统计
             if not requires_approval:
@@ -156,6 +158,8 @@ class DiscussionService:
             )
         elif not user or not user.is_authenticated:
             queryset = queryset.filter(approval_status=Discussion.APPROVAL_APPROVED)
+
+        queryset = TagService.filter_discussions_for_user(queryset, user)
 
         # 搜索
         if q:
@@ -577,6 +581,8 @@ class DiscussionService:
         if discussion.approval_status != Discussion.APPROVAL_APPROVED and not user.is_staff:
             return False
         if discussion.is_locked and not user.is_staff:
+            return False
+        if not TagService.can_reply_in_discussion(discussion, user):
             return False
         return True
 

@@ -62,6 +62,9 @@
                 <div class="TagStatusList">
                   <span v-if="row.tag.is_hidden" class="TagStatus TagStatus--muted">隐藏</span>
                   <span v-if="row.tag.is_restricted" class="TagStatus TagStatus--warning">限制发帖</span>
+                  <span class="TagStatus">查看: {{ getScopeLabel(row.tag.view_scope) }}</span>
+                  <span class="TagStatus">发帖: {{ getScopeLabel(row.tag.start_discussion_scope) }}</span>
+                  <span class="TagStatus">回帖: {{ getScopeLabel(row.tag.reply_scope) }}</span>
                   <span v-if="!row.tag.is_hidden && !row.tag.is_restricted" class="TagStatus">公开</span>
                 </div>
               </td>
@@ -254,6 +257,36 @@
               </label>
             </div>
           </div>
+
+          <div class="FormRow">
+            <div class="Form-group">
+              <label>查看权限</label>
+              <select v-model="formData.view_scope" class="FormControl">
+                <option v-for="option in TAG_SCOPE_OPTIONS" :key="`view-${option.value}`" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+
+            <div class="Form-group">
+              <label>发帖权限</label>
+              <select v-model="formData.start_discussion_scope" class="FormControl">
+                <option v-for="option in TAG_SCOPE_OPTIONS" :key="`start-${option.value}`" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="Form-group">
+            <label>回帖权限</label>
+            <select v-model="formData.reply_scope" class="FormControl">
+              <option v-for="option in TAG_SCOPE_OPTIONS" :key="`reply-${option.value}`" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+            <div class="Form-help">标签级权限会作用到讨论列表、详情页、发帖和回帖流程。</div>
+          </div>
         </div>
 
         <div class="Modal-footer">
@@ -287,6 +320,12 @@ const TAG_COLOR_PRESETS = [
   '#c026d3',
   '#7c3aed',
   '#475569',
+]
+
+const TAG_SCOPE_OPTIONS = [
+  { value: 'public', label: '所有人' },
+  { value: 'members', label: '已登录用户' },
+  { value: 'staff', label: '仅管理员' },
 ]
 
 const TAG_ICON_OPTIONS = [
@@ -399,6 +438,9 @@ function editTag(tag) {
     parent_id: tag.parent_id ?? null,
     is_hidden: Boolean(tag.is_hidden),
     is_restricted: Boolean(tag.is_restricted),
+    view_scope: tag.view_scope || 'public',
+    start_discussion_scope: tag.start_discussion_scope || 'members',
+    reply_scope: tag.reply_scope || 'members',
   })
   showEditModal.value = true
 }
@@ -422,6 +464,9 @@ async function saveTag() {
       parent_id: formData.value.parent_id ?? null,
       is_hidden: Boolean(formData.value.is_hidden),
       is_restricted: Boolean(formData.value.is_restricted),
+      view_scope: formData.value.view_scope || 'public',
+      start_discussion_scope: formData.value.start_discussion_scope || 'members',
+      reply_scope: formData.value.reply_scope || 'members',
     }
 
     if (showEditModal.value) {
@@ -476,12 +521,19 @@ function getEmptyForm(overrides = {}) {
     parent_id: null,
     is_hidden: false,
     is_restricted: false,
+    view_scope: 'public',
+    start_discussion_scope: 'members',
+    reply_scope: 'members',
     ...overrides,
   }
 }
 
 function normalizeColor(value) {
   return String(value || '').trim().toLowerCase()
+}
+
+function getScopeLabel(scope) {
+  return TAG_SCOPE_OPTIONS.find(option => option.value === scope)?.label || '未知'
 }
 
 function getTagBadgeStyle(tag) {

@@ -17,6 +17,7 @@ from apps.posts.schemas import (
     PostListSchema,
 )
 from apps.posts.services import PostService
+from apps.tags.services import TagService
 from apps.core.auth import AuthBearer, get_optional_user
 
 router = Router()
@@ -132,6 +133,8 @@ def list_all_posts(
         )
     elif not user or not user.is_authenticated:
         queryset = queryset.filter(approval_status=Post.APPROVAL_APPROVED)
+
+    queryset = TagService.filter_posts_for_user(queryset, user)
 
     if author:
         queryset = queryset.filter(user__username=author)

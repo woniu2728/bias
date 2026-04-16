@@ -12,6 +12,7 @@ from apps.core.db import sqlite_write_retry
 from apps.posts.models import Post, PostLike, PostMentionsUser, PostFlag
 from apps.discussions.models import Discussion
 from apps.discussions.models import DiscussionUser
+from apps.tags.services import TagService
 from apps.users.models import User
 from apps.users.services import UserService
 import re
@@ -23,6 +24,8 @@ class PostService:
     @staticmethod
     def _can_view_post(post: Post, user: Optional[User]) -> bool:
         if post.hidden_at and not (user and user.is_staff):
+            return False
+        if not TagService.can_view_discussion_tags(post.discussion, user):
             return False
         if post.approval_status == Post.APPROVAL_APPROVED:
             return True
@@ -65,6 +68,8 @@ class PostService:
 
         if discussion.is_locked and not user.is_staff:
             raise ValueError("讨论已锁定，无法回复")
+
+        TagService.ensure_can_reply_in_discussion(user, discussion)
 
         with transaction.atomic():
             # 获取下一个楼层号
@@ -173,6 +178,8 @@ class PostService:
         elif not user or not user.is_authenticated:
             queryset = queryset.filter(approval_status=Post.APPROVAL_APPROVED)
 
+        queryset = TagService.filter_posts_for_user(queryset, user)
+
         # 排序
         queryset = queryset.order_by('number')
 
@@ -220,6 +227,8 @@ class PostService:
             )
         elif not user or not user.is_authenticated:
             queryset = queryset.filter(approval_status=Post.APPROVAL_APPROVED)
+
+        queryset = TagService.filter_posts_for_user(queryset, user)
 
         position = queryset.count()
         if position <= 0:
@@ -358,6 +367,8 @@ class PostService:
         """
         UserService.ensure_not_suspended(user, "点赞帖子")
         post = Post.objects.get(id=post_id)
+        if not PostService._can_view_post(post, user):
+            raise PermissionDenied("没有权限查看此帖子")
 
         # 不能给自己的帖子点赞
         if post.user_id == user.id:
@@ -383,6 +394,8 @@ class PostService:
         """举报帖子"""
         UserService.ensure_not_suspended(user, "举报帖子")
         post = Post.objects.select_related("user", "discussion").get(id=post_id)
+        if not PostService._can_view_post(post, user):
+            raise PermissionDenied("没有权限查看此帖子")
 
         if not user or not user.is_authenticated:
             raise PermissionDenied("请先登录")
@@ -506,6 +519,8 @@ class PostService:
         """
         UserService.ensure_not_suspended(user, "点赞帖子")
         post = Post.objects.get(id=post_id)
+        if not PostService._can_view_post(post, user):
+            raise PermissionDenied("没有权限查看此帖子")
 
         deleted_count, _ = PostLike.objects.filter(post=post, user=user).delete()
         if deleted_count == 0:

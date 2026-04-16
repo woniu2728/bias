@@ -77,6 +77,12 @@ def serialize_admin_tag(tag: Tag) -> Dict[str, Any]:
         "discussion_count": tag.discussion_count,
         "is_hidden": tag.is_hidden,
         "is_restricted": tag.is_restricted,
+        "view_scope": tag.view_scope,
+        "start_discussion_scope": tag.start_discussion_scope,
+        "reply_scope": tag.reply_scope,
+        "view_scope_label": TagService.get_scope_label(tag.view_scope),
+        "start_discussion_scope_label": TagService.get_scope_label(tag.start_discussion_scope),
+        "reply_scope_label": TagService.get_scope_label(tag.reply_scope),
     }
 
 
@@ -688,6 +694,9 @@ def create_admin_tag(request, payload: Dict[str, Any] = Body(...)):
             parent_id=parent_id,
             is_hidden=bool(normalized.get("is_hidden", False)),
             is_restricted=bool(normalized.get("is_restricted", False)),
+            view_scope=normalized.get("view_scope") or Tag.ACCESS_PUBLIC,
+            start_discussion_scope=normalized.get("start_discussion_scope") or Tag.ACCESS_MEMBERS,
+            reply_scope=normalized.get("reply_scope") or Tag.ACCESS_MEMBERS,
             user=request.auth,
         )
         tag = Tag.objects.select_related("parent").get(id=tag.id)
@@ -736,6 +745,18 @@ def update_admin_tag(request, tag_id: int, payload: Dict[str, Any] = Body(...)):
             tag.is_hidden = bool(normalized["is_hidden"])
         if "is_restricted" in normalized:
             tag.is_restricted = bool(normalized["is_restricted"])
+        if "view_scope" in normalized:
+            tag.view_scope = TagService.normalize_access_scope(normalized.get("view_scope"), tag.view_scope)
+        if "start_discussion_scope" in normalized:
+            tag.start_discussion_scope = TagService.normalize_access_scope(
+                normalized.get("start_discussion_scope"),
+                tag.start_discussion_scope,
+            )
+        if "reply_scope" in normalized:
+            tag.reply_scope = TagService.normalize_access_scope(
+                normalized.get("reply_scope"),
+                tag.reply_scope,
+            )
         tag.save()
         tag.refresh_from_db()
         return serialize_admin_tag(tag)

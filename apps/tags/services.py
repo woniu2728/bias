@@ -4,7 +4,7 @@
 from datetime import datetime
 from typing import Optional, List
 from django.db import transaction
-from django.db.models import Q, F, Count
+from django.db.models import Q, F, Count, QuerySet
 from django.core.exceptions import PermissionDenied
 from apps.tags.models import Tag, DiscussionTag
 from apps.users.models import User
@@ -12,6 +12,148 @@ from apps.users.models import User
 
 class TagService:
     """标签服务"""
+
+    ACTION_SCOPE_FIELD = {
+        "view": "view_scope",
+        "start_discussion": "start_discussion_scope",
+        "reply": "reply_scope",
+    }
+
+    ACCESS_SCOPE_LABELS = {
+        Tag.ACCESS_PUBLIC: "所有人",
+        Tag.ACCESS_MEMBERS: "已登录用户",
+        Tag.ACCESS_STAFF: "仅管理员",
+    }
+
+    @staticmethod
+    def normalize_access_scope(scope: Optional[str], default: str) -> str:
+        normalized = (scope or default).strip() if isinstance(scope, str) else default
+        if normalized not in TagService.ACCESS_SCOPE_LABELS:
+            raise ValueError("无效的标签访问级别")
+        return normalized
+
+    @staticmethod
+    def has_scope_access(user: Optional[User], scope: str) -> bool:
+        if user and (user.is_staff or user.is_superuser):
+            return True
+        if scope == Tag.ACCESS_PUBLIC:
+            return True
+        if scope == Tag.ACCESS_MEMBERS:
+            return bool(user and user.is_authenticated)
+        if scope == Tag.ACCESS_STAFF:
+            return False
+        return False
+
+    @staticmethod
+    def get_scope_label(scope: str) -> str:
+        return TagService.ACCESS_SCOPE_LABELS.get(scope, "未知")
+
+    @staticmethod
+    def can_view_tag(tag: Tag, user: Optional[User]) -> bool:
+        return TagService.has_scope_access(user, tag.view_scope)
+
+    @staticmethod
+    def can_start_discussion_in_tag(tag: Tag, user: Optional[User]) -> bool:
+        if tag.is_restricted and not (user and (user.is_staff or user.is_superuser)):
+            return False
+        return (
+            TagService.can_view_tag(tag, user)
+            and TagService.has_scope_access(user, tag.start_discussion_scope)
+        )
+
+    @staticmethod
+    def can_reply_in_tag(tag: Tag, user: Optional[User]) -> bool:
+        return (
+            TagService.can_view_tag(tag, user)
+            and TagService.has_scope_access(user, tag.reply_scope)
+        )
+
+    @staticmethod
+    def can_view_discussion_tags(discussion, user: Optional[User]) -> bool:
+        return all(TagService.can_view_tag(dt.tag, user) for dt in discussion.discussion_tags.all())
+
+    @staticmethod
+    def can_reply_in_discussion(discussion, user: Optional[User]) -> bool:
+        tags = [dt.tag for dt in discussion.discussion_tags.all()]
+        return all(TagService.can_reply_in_tag(tag, user) for tag in tags)
+
+    @staticmethod
+    def filter_tags_for_user(queryset: QuerySet, user: Optional[User], action: str = "view") -> QuerySet:
+        if user and (user.is_staff or user.is_superuser):
+            return queryset
+
+        scope_field = TagService.ACTION_SCOPE_FIELD.get(action)
+        if not scope_field:
+            return queryset
+
+        if user and user.is_authenticated:
+            return queryset.exclude(**{scope_field: Tag.ACCESS_STAFF})
+
+        return queryset.exclude(**{f"{scope_field}__in": [Tag.ACCESS_MEMBERS, Tag.ACCESS_STAFF]})
+
+    @staticmethod
+    def get_forbidden_tag_ids(user: Optional[User], action: str = "view") -> List[int]:
+        allowed_tag_ids = TagService.filter_tags_for_user(
+            Tag.objects.all(),
+            user,
+            action=action,
+        ).values_list("id", flat=True)
+        return list(Tag.objects.exclude(id__in=allowed_tag_ids).values_list("id", flat=True))
+
+    @staticmethod
+    def filter_discussions_for_user(queryset: QuerySet, user: Optional[User]) -> QuerySet:
+        forbidden_tag_ids = TagService.get_forbidden_tag_ids(user, action="view")
+        if not forbidden_tag_ids:
+            return queryset
+
+        return queryset.exclude(discussion_tags__tag_id__in=forbidden_tag_ids)
+
+    @staticmethod
+    def filter_posts_for_user(queryset: QuerySet, user: Optional[User]) -> QuerySet:
+        forbidden_tag_ids = TagService.get_forbidden_tag_ids(user, action="view")
+        if not forbidden_tag_ids:
+            return queryset
+
+        return queryset.exclude(discussion__discussion_tags__tag_id__in=forbidden_tag_ids)
+
+    @staticmethod
+    def validate_tag_selection(tag_ids: Optional[List[int]]) -> List[int]:
+        if not tag_ids:
+            return []
+        normalized = []
+        for tag_id in tag_ids:
+            if not tag_id:
+                continue
+            if int(tag_id) not in normalized:
+                normalized.append(int(tag_id))
+        return normalized
+
+    @staticmethod
+    def get_tags_for_selection(tag_ids: Optional[List[int]]) -> List[Tag]:
+        normalized_ids = TagService.validate_tag_selection(tag_ids)
+        if not normalized_ids:
+            return []
+
+        tags = list(Tag.objects.filter(id__in=normalized_ids).order_by("id"))
+        if len(tags) != len(normalized_ids):
+            raise ValueError("部分标签不存在")
+        return tags
+
+    @staticmethod
+    def ensure_can_start_discussion(user: User, tag_ids: Optional[List[int]]) -> List[Tag]:
+        tags = TagService.get_tags_for_selection(tag_ids)
+
+        for tag in tags:
+            if not TagService.can_start_discussion_in_tag(tag, user):
+                raise PermissionDenied(f"没有权限在标签“{tag.name}”下发起讨论")
+
+        return tags
+
+    @staticmethod
+    def ensure_can_reply_in_discussion(user: User, discussion) -> None:
+        for discussion_tag in discussion.discussion_tags.select_related("tag").all():
+            if not TagService.can_reply_in_tag(discussion_tag.tag, user):
+                raise PermissionDenied(f"没有权限在标签“{discussion_tag.tag.name}”下回复讨论")
 
     @staticmethod
     def create_tag(
@@ -25,6 +167,9 @@ class TagService:
         parent_id: Optional[int] = None,
         is_hidden: bool = False,
         is_restricted: bool = False,
+        view_scope: str = Tag.ACCESS_PUBLIC,
+        start_discussion_scope: str = Tag.ACCESS_MEMBERS,
+        reply_scope: str = Tag.ACCESS_MEMBERS,
         user: Optional[User] = None,
     ) -> Tag:
         """
@@ -74,6 +219,9 @@ class TagService:
                 parent=parent,
                 is_hidden=is_hidden,
                 is_restricted=is_restricted,
+                view_scope=TagService.normalize_access_scope(view_scope, Tag.ACCESS_PUBLIC),
+                start_discussion_scope=TagService.normalize_access_scope(start_discussion_scope, Tag.ACCESS_MEMBERS),
+                reply_scope=TagService.normalize_access_scope(reply_scope, Tag.ACCESS_MEMBERS),
             )
 
             return tag
@@ -154,10 +302,7 @@ class TagService:
             Optional[Tag]: 标签对象
         """
         try:
-            tag = Tag.objects.get(id=tag_id)
-            # 加载子标签
-            tag.children = TagService._get_children(tag.id, include_hidden=True)
-            return tag
+            return Tag.objects.get(id=tag_id)
         except Tag.DoesNotExist:
             return None
 
@@ -173,10 +318,7 @@ class TagService:
             Optional[Tag]: 标签对象
         """
         try:
-            tag = Tag.objects.get(slug=slug)
-            # 加载子标签
-            tag.children = TagService._get_children(tag.id, include_hidden=True)
-            return tag
+            return Tag.objects.get(slug=slug)
         except Tag.DoesNotExist:
             return None
 
@@ -194,6 +336,9 @@ class TagService:
         parent_id: Optional[int] = None,
         is_hidden: Optional[bool] = None,
         is_restricted: Optional[bool] = None,
+        view_scope: Optional[str] = None,
+        start_discussion_scope: Optional[str] = None,
+        reply_scope: Optional[str] = None,
     ) -> Tag:
         """
         更新标签
@@ -256,6 +401,18 @@ class TagService:
 
             if is_restricted is not None:
                 tag.is_restricted = is_restricted
+
+            if view_scope is not None:
+                tag.view_scope = TagService.normalize_access_scope(view_scope, tag.view_scope)
+
+            if start_discussion_scope is not None:
+                tag.start_discussion_scope = TagService.normalize_access_scope(
+                    start_discussion_scope,
+                    tag.start_discussion_scope,
+                )
+
+            if reply_scope is not None:
+                tag.reply_scope = TagService.normalize_access_scope(reply_scope, tag.reply_scope)
 
             tag.save()
             return tag
