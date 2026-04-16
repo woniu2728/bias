@@ -12,6 +12,7 @@ from apps.posts.schemas import (
     PostCreateSchema,
     PostUpdateSchema,
     PostReportSchema,
+    PostFlagResolveSchema,
     PostFilterSchema,
     PostOutSchema,
     PostListSchema,
@@ -24,6 +25,7 @@ router = Router()
 
 
 def _serialize_post(post, user=None):
+    open_flags = getattr(post, "open_flags_cache", [])
     return {
         "id": post.id,
         "discussion_id": post.discussion_id,
@@ -59,6 +61,23 @@ def _serialize_post(post, user=None):
         "can_edit": PostService.can_edit_post(post, user) if user else False,
         "can_delete": PostService.can_delete_post(post, user) if user else False,
         "can_like": PostService.can_like_post(post, user) if user else False,
+        "viewer_has_open_flag": bool(getattr(post, "viewer_has_open_flag", False)),
+        "open_flag_count": int(getattr(post, "open_flag_count", 0) or 0),
+        "open_flags": [
+            {
+                "id": flag.id,
+                "reason": flag.reason,
+                "message": flag.message,
+                "created_at": flag.created_at,
+                "user": {
+                    "id": flag.user.id,
+                    "username": flag.user.username,
+                    "display_name": flag.user.display_name,
+                } if flag.user else None,
+            }
+            for flag in open_flags
+        ],
+        "can_moderate_flags": bool(user and user.is_staff),
     }
 
 
@@ -120,11 +139,12 @@ def list_all_posts(
         "user",
         "edited_user",
     ).annotate(
-        like_count=Count("likes")
+        like_count=Count("likes", distinct=True)
     ).filter(
         type="comment",
         hidden_at__isnull=True,
     )
+    queryset = PostService.annotate_flag_state(queryset, user)
 
     if user and user.is_authenticated and not user.is_staff:
         queryset = queryset.filter(
@@ -332,6 +352,31 @@ def report_post(request, post_id: int, payload: PostReportSchema):
             message=payload.message,
         )
         return _serialize_flag(flag)
+    except Post.DoesNotExist:
+        return JsonResponse({"error": "帖子不存在"}, status=404)
+    except PermissionDenied as e:
+        return JsonResponse({"error": str(e)}, status=403)
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
+
+
+@router.post("/posts/{post_id}/flags/resolve", auth=AuthBearer(), tags=["Posts"])
+def resolve_post_flags(request, post_id: int, payload: PostFlagResolveSchema):
+    try:
+        resolved_count = PostService.resolve_post_flags(
+            post_id=post_id,
+            admin_user=request.auth,
+            status=payload.status,
+            resolution_note=payload.resolution_note,
+        )
+        post = PostService.get_post_by_id(post_id, request.auth)
+        if not post:
+            return JsonResponse({"error": "帖子不存在"}, status=404)
+        return {
+            "message": "举报已处理",
+            "resolved_count": resolved_count,
+            "post": _serialize_post(post, request.auth),
+        }
     except Post.DoesNotExist:
         return JsonResponse({"error": "帖子不存在"}, status=404)
     except PermissionDenied as e:

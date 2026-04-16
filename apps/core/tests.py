@@ -785,6 +785,12 @@ class AdminTagManagementApiTests(TestCase):
             email="admin-tag@example.com",
             password="password123",
         )
+        self.other_root_tag = Tag.objects.create(
+            name="产品",
+            slug="product",
+            color="#e67e22",
+            position=2,
+        )
         self.parent_tag = Tag.objects.create(
             name="开发",
             slug="development",
@@ -881,6 +887,109 @@ class AdminTagManagementApiTests(TestCase):
 
         self.assertEqual(response.status_code, 400, response.content)
         self.assertIn("子标签", response.json()["error"])
+
+    def test_admin_cannot_create_grandchild_tag(self):
+        response = self.client.post(
+            "/api/admin/tags",
+            data=json.dumps({
+                "name": "Django ORM",
+                "slug": "django-orm",
+                "parent_id": self.child_tag.id,
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("顶级标签", response.json()["error"])
+
+    def test_admin_cannot_turn_parent_tag_with_children_into_child(self):
+        response = self.client.put(
+            f"/api/admin/tags/{self.parent_tag.id}",
+            data=json.dumps({
+                "parent_id": self.other_root_tag.id,
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("已有子标签", response.json()["error"])
+
+    def test_admin_cannot_set_posting_scopes_wider_than_view_scope(self):
+        response = self.client.post(
+            "/api/admin/tags",
+            data=json.dumps({
+                "name": "内部运营",
+                "slug": "internal-ops",
+                "view_scope": "staff",
+                "start_discussion_scope": "members",
+                "reply_scope": "staff",
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("发帖权限不能比查看权限更宽松", response.json()["error"])
+
+        response = self.client.put(
+            f"/api/admin/tags/{self.parent_tag.id}",
+            data=json.dumps({
+                "view_scope": "members",
+                "reply_scope": "public",
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("回帖权限不能比查看权限更宽松", response.json()["error"])
+
+    def test_admin_can_move_root_tag_up(self):
+        response = self.client.post(
+            f"/api/admin/tags/{self.other_root_tag.id}/move",
+            data=json.dumps({"direction": "up"}),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertTrue(payload["moved"])
+
+        self.other_root_tag.refresh_from_db()
+        self.parent_tag.refresh_from_db()
+        self.assertEqual(self.other_root_tag.position, 0)
+        self.assertEqual(self.parent_tag.position, 1)
+
+    def test_admin_can_move_child_tag_within_same_parent(self):
+        sibling_child = Tag.objects.create(
+            name="前端",
+            slug="frontend",
+            color="#3c78d8",
+            position=2,
+            parent=self.parent_tag,
+        )
+
+        response = self.client.post(
+            f"/api/admin/tags/{sibling_child.id}/move",
+            data=json.dumps({"direction": "up"}),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertTrue(payload["moved"])
+
+        sibling_child.refresh_from_db()
+        self.child_tag.refresh_from_db()
+        self.parent_tag.refresh_from_db()
+
+        self.assertEqual(sibling_child.position, 0)
+        self.assertEqual(self.child_tag.position, 1)
+        self.assertEqual(self.parent_tag.position, 0)
 
 
 class AdminApprovalQueueApiTests(TestCase):

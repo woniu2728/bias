@@ -13,6 +13,25 @@
         </button>
       </div>
 
+      <div class="TagSummaryGrid">
+        <article class="TagSummaryCard">
+          <small>标签总数</small>
+          <strong>{{ tagSummary.total }}</strong>
+        </article>
+        <article class="TagSummaryCard">
+          <small>顶级 / 子标签</small>
+          <strong>{{ tagSummary.root }} / {{ tagSummary.child }}</strong>
+        </article>
+        <article class="TagSummaryCard">
+          <small>隐藏标签</small>
+          <strong>{{ tagSummary.hidden }}</strong>
+        </article>
+        <article class="TagSummaryCard">
+          <small>限制发帖</small>
+          <strong>{{ tagSummary.restricted }}</strong>
+        </article>
+      </div>
+
       <div class="TagsPage-list">
         <table class="TagTable">
           <thead>
@@ -73,6 +92,20 @@
                 <button @click="editTag(row.tag)" class="Button Button--small">
                   编辑
                 </button>
+                <button
+                  @click="moveTag(row.tag, 'up')"
+                  class="Button Button--small"
+                  :disabled="!canMoveTag(row.tag, 'up') || movingTagId === row.tag.id"
+                >
+                  上移
+                </button>
+                <button
+                  @click="moveTag(row.tag, 'down')"
+                  class="Button Button--small"
+                  :disabled="!canMoveTag(row.tag, 'down') || movingTagId === row.tag.id"
+                >
+                  下移
+                </button>
                 <button @click="deleteTag(row.tag)" class="Button Button--small Button--danger">
                   删除
                 </button>
@@ -113,6 +146,25 @@
             </div>
           </div>
 
+          <div class="TagConfigSummary">
+            <article class="TagConfigCard">
+              <small>层级</small>
+              <strong>{{ hierarchySummary }}</strong>
+            </article>
+            <article class="TagConfigCard">
+              <small>排序</small>
+              <strong>{{ positionSummary }}</strong>
+            </article>
+            <article class="TagConfigCard">
+              <small>查看范围</small>
+              <strong>{{ visibilitySummary }}</strong>
+            </article>
+            <article class="TagConfigCard">
+              <small>发帖 / 回帖</small>
+              <strong>{{ postingSummary }}</strong>
+            </article>
+          </div>
+
           <div class="FormRow">
             <div class="Form-group">
               <label>标签名称 *</label>
@@ -149,7 +201,7 @@
           <div class="FormRow">
             <div class="Form-group">
               <label>父标签</label>
-              <select v-model="formData.parent_id" class="FormControl">
+              <select v-model="formData.parent_id" class="FormControl" :disabled="editingTagHasChildren">
                 <option :value="null">作为顶级标签</option>
                 <option
                   v-for="option in availableParentOptions"
@@ -159,7 +211,11 @@
                   {{ option.label }}
                 </option>
               </select>
-              <div class="Form-help">设置后，这个标签会显示在对应父标签下方。</div>
+              <div class="Form-help">
+                {{ editingTagHasChildren
+                  ? '当前标签下已有子标签，不能再把它设为次标签。'
+                  : '只能选择顶级标签作为父标签；设置后，这个标签会显示在对应父标签下方。' }}
+              </div>
             </div>
 
             <div class="Form-group">
@@ -171,7 +227,7 @@
                 class="FormControl"
                 placeholder="0"
               />
-              <div class="Form-help">数字越小越靠前，和 Flarum 的排序思路一致。</div>
+              <div class="Form-help">{{ positionHelpText }}</div>
             </div>
           </div>
 
@@ -271,21 +327,26 @@
             <div class="Form-group">
               <label>发帖权限</label>
               <select v-model="formData.start_discussion_scope" class="FormControl">
-                <option v-for="option in TAG_SCOPE_OPTIONS" :key="`start-${option.value}`" :value="option.value">
+                <option v-for="option in availableStartScopeOptions" :key="`start-${option.value}`" :value="option.value">
                   {{ option.label }}
                 </option>
               </select>
+              <div class="Form-help">发帖权限不能比查看权限更宽松。</div>
             </div>
           </div>
 
           <div class="Form-group">
             <label>回帖权限</label>
             <select v-model="formData.reply_scope" class="FormControl">
-              <option v-for="option in TAG_SCOPE_OPTIONS" :key="`reply-${option.value}`" :value="option.value">
+              <option v-for="option in availableReplyScopeOptions" :key="`reply-${option.value}`" :value="option.value">
                 {{ option.label }}
               </option>
             </select>
-            <div class="Form-help">标签级权限会作用到讨论列表、详情页、发帖和回帖流程。</div>
+            <div class="Form-help">
+              {{ formData.is_restricted
+                ? '“限制发帖”开启后，普通用户无法在该标签下发起讨论；回帖权限仍按这里的配置生效。'
+                : '标签级权限会作用到讨论列表、详情页、发帖和回帖流程。' }}
+            </div>
           </div>
         </div>
 
@@ -303,7 +364,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import AdminPage from '../components/AdminPage.vue'
 import api from '../../api'
 
@@ -372,6 +433,7 @@ const loading = ref(true)
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const saving = ref(false)
+const movingTagId = ref(null)
 const editingTag = ref(null)
 const iconSearch = ref('')
 
@@ -388,21 +450,79 @@ const filteredIconOptions = computed(() => {
 
 const tagTree = computed(() => buildTagTree(tags.value))
 const tagRows = computed(() => flattenTagTree(tagTree.value))
+const tagSummary = computed(() => ({
+  total: tags.value.length,
+  root: tags.value.filter(tag => !tag.parent_id).length,
+  child: tags.value.filter(tag => Boolean(tag.parent_id)).length,
+  hidden: tags.value.filter(tag => tag.is_hidden).length,
+  restricted: tags.value.filter(tag => tag.is_restricted).length,
+}))
+const editingTagHasChildren = computed(() => {
+  if (!editingTag.value) return false
+  return tags.value.some(tag => tag.parent_id === editingTag.value.id)
+})
 const availableParentOptions = computed(() => {
   const editingId = editingTag.value?.id || null
   const blockedIds = editingId ? new Set([editingId, ...collectDescendantIds(tags.value, editingId)]) : new Set()
 
   return tagRows.value
-    .filter(row => !blockedIds.has(row.tag.id))
+    .filter(row => row.depth === 0 && !blockedIds.has(row.tag.id))
     .map(row => ({
       id: row.tag.id,
-      label: `${'— '.repeat(row.depth)}${row.tag.name}`
+      label: row.tag.name
     }))
+})
+const availableStartScopeOptions = computed(() => {
+  const minimumLevel = getScopeLevel(formData.value.view_scope)
+  return TAG_SCOPE_OPTIONS.filter(option => getScopeLevel(option.value) >= minimumLevel)
+})
+const availableReplyScopeOptions = computed(() => {
+  const minimumLevel = getScopeLevel(formData.value.view_scope)
+  return TAG_SCOPE_OPTIONS.filter(option => getScopeLevel(option.value) >= minimumLevel)
+})
+const hierarchySummary = computed(() => {
+  if (!formData.value.parent_id) {
+    return '顶级标签'
+  }
+
+  const parentTag = tags.value.find(tag => tag.id === formData.value.parent_id)
+  return parentTag ? `子标签 · 归属 ${parentTag.name}` : '子标签'
+})
+const positionSummary = computed(() => {
+  const siblingCount = getSiblingCount(formData.value.parent_id, editingTag.value?.id)
+  const rank = getPreviewRank(formData.value.parent_id, formData.value.position, editingTag.value?.id)
+  return `第 ${rank} 位 / 共 ${siblingCount + 1} 个同级标签`
+})
+const visibilitySummary = computed(() => {
+  const baseText = `查看: ${getScopeLabel(formData.value.view_scope)}`
+  return formData.value.is_hidden ? `${baseText} · 前台隐藏` : `${baseText} · 正常显示`
+})
+const postingSummary = computed(() => {
+  if (formData.value.is_restricted) {
+    return `发帖: 仅管理员 · 回帖: ${getScopeLabel(formData.value.reply_scope)}`
+  }
+  return `发帖: ${getScopeLabel(formData.value.start_discussion_scope)} · 回帖: ${getScopeLabel(formData.value.reply_scope)}`
+})
+const positionHelpText = computed(() => {
+  const parentText = formData.value.parent_id ? '当前父标签下' : '顶级标签层'
+  return `${parentText}数字越小越靠前；${positionSummary.value}。`
 })
 
 onMounted(() => {
   loadTags()
 })
+
+watch(
+  () => formData.value.view_scope,
+  viewScope => {
+    if (getScopeLevel(formData.value.start_discussion_scope) < getScopeLevel(viewScope)) {
+      formData.value.start_discussion_scope = viewScope
+    }
+    if (getScopeLevel(formData.value.reply_scope) < getScopeLevel(viewScope)) {
+      formData.value.reply_scope = viewScope
+    }
+  }
+)
 
 async function loadTags() {
   loading.value = true
@@ -502,6 +622,24 @@ async function deleteTag(tag) {
   }
 }
 
+async function moveTag(tag, direction) {
+  if (!canMoveTag(tag, direction)) return
+
+  movingTagId.value = tag.id
+  try {
+    const response = await api.post(`/admin/tags/${tag.id}/move`, { direction })
+    tags.value = Array.isArray(response.data) ? response.data : tags.value
+  } catch (error) {
+    const errorMsg = error.response?.data?.error
+      || error.response?.data?.detail
+      || error.message
+      || '未知错误'
+    alert(`调整排序失败: ${errorMsg}`)
+  } finally {
+    movingTagId.value = null
+  }
+}
+
 function closeModal() {
   showCreateModal.value = false
   showEditModal.value = false
@@ -534,6 +672,15 @@ function normalizeColor(value) {
 
 function getScopeLabel(scope) {
   return TAG_SCOPE_OPTIONS.find(option => option.value === scope)?.label || '未知'
+}
+
+function getScopeLevel(scope) {
+  const levels = {
+    public: 0,
+    members: 1,
+    staff: 2,
+  }
+  return levels[scope] ?? 0
 }
 
 function getTagBadgeStyle(tag) {
@@ -590,6 +737,41 @@ function collectDescendantIds(sourceTags, tagId) {
   return children.flatMap(child => [child.id, ...collectDescendantIds(sourceTags, child.id)])
 }
 
+function getSiblingRows(tag) {
+  return tagRows.value.filter(row => (row.tag.parent_id ?? null) === (tag.parent_id ?? null))
+}
+
+function canMoveTag(tag, direction) {
+  const siblings = getSiblingRows(tag)
+  const currentIndex = siblings.findIndex(row => row.tag.id === tag.id)
+  if (currentIndex < 0) return false
+  if (direction === 'up') return currentIndex > 0
+  if (direction === 'down') return currentIndex < siblings.length - 1
+  return false
+}
+
+function getSiblingCount(parentId, excludeTagId = null) {
+  return tags.value.filter(tag => {
+    if ((tag.parent_id ?? null) !== (parentId ?? null)) return false
+    if (excludeTagId && tag.id === excludeTagId) return false
+    return true
+  }).length
+}
+
+function getPreviewRank(parentId, position, excludeTagId = null) {
+  const numericPosition = Number(position || 0)
+  const siblings = tags.value
+    .filter(tag => {
+      if ((tag.parent_id ?? null) !== (parentId ?? null)) return false
+      if (excludeTagId && tag.id === excludeTagId) return false
+      return true
+    })
+    .map(tag => Number(tag.position || 0))
+
+  const beforeCount = siblings.filter(value => value < numericPosition).length
+  return beforeCount + 1
+}
+
 function getNextPosition(sourceTags, parentId) {
   const siblingPositions = sourceTags
     .filter(tag => (tag.parent_id ?? null) === (parentId ?? null))
@@ -609,6 +791,38 @@ function getNextPosition(sourceTags, parentId) {
 .TagsPage-toolbar {
   display: flex;
   justify-content: flex-end;
+}
+
+.TagSummaryGrid,
+.TagConfigSummary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.TagSummaryCard,
+.TagConfigCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid #e3e8ed;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #f6f9fc);
+}
+
+.TagSummaryCard small,
+.TagConfigCard small {
+  color: #738395;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.TagSummaryCard strong,
+.TagConfigCard strong {
+  color: #304558;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .Button {
@@ -917,6 +1131,10 @@ function getNextPosition(sourceTags, parentId) {
   margin-bottom: 20px;
 }
 
+.TagConfigSummary {
+  margin-bottom: 20px;
+}
+
 .Form-group:last-child {
   margin-bottom: 0;
 }
@@ -1123,6 +1341,11 @@ function getNextPosition(sourceTags, parentId) {
     width: calc(100vw - 24px);
   }
 
+  .TagSummaryGrid,
+  .TagConfigSummary {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .FormRow {
     grid-template-columns: 1fr;
   }
@@ -1134,6 +1357,13 @@ function getNextPosition(sourceTags, parentId) {
 
   .IconPicker {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .TagSummaryGrid,
+  .TagConfigSummary {
+    grid-template-columns: 1fr;
   }
 }
 </style>

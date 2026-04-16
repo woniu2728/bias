@@ -79,6 +79,11 @@ class PostFlagApiTests(TestCase):
             email="author@example.com",
             password="password123",
         )
+        self.admin = User.objects.create_superuser(
+            username="flag-admin",
+            email="flag-admin@example.com",
+            password="password123",
+        )
         self.reporter = User.objects.create_user(
             username="reporter",
             email="reporter@example.com",
@@ -99,6 +104,10 @@ class PostFlagApiTests(TestCase):
         token = RefreshToken.for_user(self.reporter).access_token
         return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
+    def admin_auth_header(self):
+        token = RefreshToken.for_user(self.admin).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
     def test_report_post_creates_flag(self):
         response = self.client.post(
             f"/api/posts/{self.post.id}/report",
@@ -114,6 +123,77 @@ class PostFlagApiTests(TestCase):
 
         flag = PostFlag.objects.get(post=self.post, user=self.reporter)
         self.assertEqual(flag.message, "包含明显违规信息")
+
+    def test_reported_post_exposes_flag_feedback_for_reporter(self):
+        self.client.post(
+            f"/api/posts/{self.post.id}/report",
+            data='{"reason":"违规内容","message":"包含明显违规信息"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        response = self.client.get(
+            f"/api/discussions/{self.discussion.id}/posts",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        target = next(item for item in response.json()["data"] if item["id"] == self.post.id)
+        self.assertTrue(target["viewer_has_open_flag"])
+        self.assertEqual(target["open_flag_count"], 0)
+
+    def test_staff_can_resolve_flags_from_forum_post_flow(self):
+        self.client.post(
+            f"/api/posts/{self.post.id}/report",
+            data='{"reason":"违规内容","message":"包含明显违规信息"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        response = self.client.get(
+            f"/api/discussions/{self.discussion.id}/posts",
+            **self.admin_auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        target = next(item for item in response.json()["data"] if item["id"] == self.post.id)
+        self.assertEqual(target["open_flag_count"], 1)
+        self.assertEqual(len(target["open_flags"]), 1)
+        self.assertTrue(target["can_moderate_flags"])
+
+        resolve_response = self.client.post(
+            f"/api/posts/{self.post.id}/flags/resolve",
+            data='{"status":"resolved","resolution_note":"已在前台处理"}',
+            content_type="application/json",
+            **self.admin_auth_header(),
+        )
+
+        self.assertEqual(resolve_response.status_code, 200, resolve_response.content)
+        self.assertEqual(resolve_response.json()["resolved_count"], 1)
+        self.assertEqual(resolve_response.json()["post"]["open_flag_count"], 0)
+
+        flag = PostFlag.objects.get(post=self.post, user=self.reporter)
+        self.assertEqual(flag.status, PostFlag.STATUS_RESOLVED)
+        self.assertEqual(flag.resolution_note, "已在前台处理")
+        self.assertEqual(flag.resolved_by_id, self.admin.id)
+
+    def test_non_staff_cannot_resolve_flags_from_forum_post_flow(self):
+        self.client.post(
+            f"/api/posts/{self.post.id}/report",
+            data='{"reason":"违规内容","message":"包含明显违规信息"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        response = self.client.post(
+            f"/api/posts/{self.post.id}/flags/resolve",
+            data='{"status":"resolved"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertIn("只有管理员", response.json()["error"])
 
     def test_suspended_user_cannot_reply_or_report_post(self):
         self.reporter.suspended_until = timezone.now() + timedelta(days=2)

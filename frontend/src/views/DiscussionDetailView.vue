@@ -85,6 +85,10 @@
                         </time>
                         <span v-if="post.edited_at" class="post-edited" :title="formatAbsoluteDate(post.edited_at)">已编辑</span>
                         <span v-if="post.approval_status === 'pending'" class="post-status">待审核</span>
+                        <span v-if="post.viewer_has_open_flag && !post.can_moderate_flags" class="post-status post-status--info">已举报</span>
+                        <span v-if="post.open_flag_count > 0 && post.can_moderate_flags" class="post-status post-status--warning">
+                          {{ post.open_flag_count }} 条举报待处理
+                        </span>
                       </div>
 
                       <aside class="post-actions" :class="{ 'is-open': activePostMenuId === post.id }">
@@ -133,6 +137,39 @@
                     </header>
 
                     <div class="post-body" v-html="post.content_html"></div>
+                    <div v-if="post.can_moderate_flags && post.open_flag_count > 0" class="post-flag-panel">
+                      <div class="post-flag-panel-header">
+                        <strong>前台举报处理</strong>
+                        <span>版主可直接在这里查看原因并关闭举报。</span>
+                      </div>
+                      <div class="post-flag-list">
+                        <article v-for="flag in post.open_flags" :key="flag.id" class="post-flag-item">
+                          <div class="post-flag-item-header">
+                            <span class="post-flag-reason">{{ flag.reason }}</span>
+                            <span class="post-flag-user">{{ flag.user?.display_name || flag.user?.username || '匿名用户' }}</span>
+                          </div>
+                          <p>{{ flag.message || '举报人未填写补充说明。' }}</p>
+                        </article>
+                      </div>
+                      <div class="post-flag-actions">
+                        <button
+                          type="button"
+                          class="post-flag-button post-flag-button--primary"
+                          :disabled="flagPendingPostIds.includes(post.id)"
+                          @click="resolvePostFlags(post, 'resolved')"
+                        >
+                          {{ flagPendingPostIds.includes(post.id) ? '处理中...' : '标记已处理' }}
+                        </button>
+                        <button
+                          type="button"
+                          class="post-flag-button"
+                          :disabled="flagPendingPostIds.includes(post.id)"
+                          @click="resolvePostFlags(post, 'ignored')"
+                        >
+                          忽略举报
+                        </button>
+                      </div>
+                    </div>
 
                     <footer v-if="post.like_count > 0" class="post-footer">
                       <button
@@ -385,6 +422,7 @@ const visiblePostCount = ref(1)
 const showDiscussionMenu = ref(false)
 const activePostMenuId = ref(null)
 const likePendingPostIds = ref([])
+const flagPendingPostIds = ref([])
 const scrubberTrackHeight = ref(300)
 const scrubberTrackMaxHeight = ref(null)
 const scrubberDragging = ref(false)
@@ -1195,11 +1233,7 @@ function handlePostUpdated(event) {
   if (!discussion.value || Number(detail.discussionId) !== Number(discussion.value.id)) return
   if (!detail.post) return
 
-  const updatedPost = normalizePost(detail.post)
-  const index = posts.value.findIndex(post => post.id === updatedPost.id)
-  if (index !== -1) {
-    posts.value[index] = updatedPost
-  }
+  upsertPost(detail.post)
 }
 
 async function deletePost(post) {
@@ -1251,6 +1285,14 @@ function canReportPost(post) {
   return true
 }
 
+function upsertPost(rawPost) {
+  const updatedPost = normalizePost(rawPost)
+  const index = posts.value.findIndex(post => post.id === updatedPost.id)
+  if (index !== -1) {
+    posts.value[index] = updatedPost
+  }
+}
+
 async function openReportModal(post) {
   if (isSuspended.value) {
     await showSuspensionAlert()
@@ -1271,9 +1313,10 @@ async function openReportModal(post) {
     )
 
     if (result?.reported) {
+      post.viewer_has_open_flag = true
       await modalStore.alert({
         title: '举报已提交',
-        message: '管理员会尽快处理。'
+        message: '版主会尽快查看并处理。'
       })
     }
   } catch (error) {
@@ -1283,6 +1326,47 @@ async function openReportModal(post) {
       message: getUiErrorMessage(error, '请稍后重试'),
       tone: 'danger'
     })
+  }
+}
+
+async function resolvePostFlags(post, status) {
+  if (!post?.can_moderate_flags) return
+  if (flagPendingPostIds.value.includes(post.id)) return
+
+  const isIgnoring = status === 'ignored'
+  const confirmed = await modalStore.confirm({
+    title: isIgnoring ? '忽略举报' : '处理举报',
+    message: isIgnoring
+      ? `确定忽略这条回复的 ${post.open_flag_count} 条举报吗？`
+      : `确定将这条回复的 ${post.open_flag_count} 条举报标记为已处理吗？`,
+    confirmText: isIgnoring ? '忽略' : '已处理',
+    cancelText: '取消',
+    tone: isIgnoring ? 'warning' : 'primary'
+  })
+  if (!confirmed) return
+
+  flagPendingPostIds.value.push(post.id)
+  try {
+    const response = await api.post(`/posts/${post.id}/flags/resolve`, {
+      status,
+      resolution_note: ''
+    })
+    if (response?.post) {
+      upsertPost(response.post)
+    }
+    await modalStore.alert({
+      title: isIgnoring ? '举报已忽略' : '举报已处理',
+      message: isIgnoring ? '这条回复的待处理举报已关闭。' : '这条回复的待处理举报已标记为已处理。'
+    })
+  } catch (error) {
+    console.error('处理举报失败:', error)
+    await modalStore.alert({
+      title: '处理举报失败',
+      message: getUiErrorMessage(error, '请稍后重试'),
+      tone: 'danger'
+    })
+  } finally {
+    flagPendingPostIds.value = flagPendingPostIds.value.filter(id => id !== post.id)
   }
 }
 
@@ -1627,6 +1711,16 @@ function formatAbsoluteDate(value) {
   font-weight: 700;
 }
 
+.post-status--info {
+  color: #2d5f88;
+  background: #eaf4fb;
+}
+
+.post-status--warning {
+  color: #9a5520;
+  background: #fff1df;
+}
+
 .post-body {
   position: relative;
   overflow: auto;
@@ -1716,6 +1810,110 @@ function formatAbsoluteDate(value) {
 .post-body :deep(img),
 .post-body :deep(iframe) {
   max-width: 100%;
+}
+
+.post-flag-panel {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid #f0d8bd;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff9f3, #fff4ea);
+}
+
+.post-flag-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.post-flag-panel-header strong {
+  color: #7f4a1f;
+  font-size: 13px;
+}
+
+.post-flag-panel-header span {
+  color: #9a6d46;
+  font-size: 12px;
+}
+
+.post-flag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.post-flag-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(205, 170, 137, 0.34);
+}
+
+.post-flag-item-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 6px;
+}
+
+.post-flag-reason {
+  color: #6f4523;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.post-flag-user {
+  color: #8b6a4e;
+  font-size: 12px;
+}
+
+.post-flag-item p {
+  margin: 0;
+  color: #6f5a47;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.post-flag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.post-flag-button {
+  border: 0;
+  border-radius: 999px;
+  min-height: 34px;
+  padding: 0 14px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #72563c;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.post-flag-button:hover {
+  background: #fff;
+}
+
+.post-flag-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.post-flag-button--primary {
+  background: #d86c2b;
+  color: #fff;
+}
+
+.post-flag-button--primary:hover {
+  filter: brightness(0.96);
 }
 
 .post-actions {

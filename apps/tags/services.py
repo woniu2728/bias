@@ -24,6 +24,11 @@ class TagService:
         Tag.ACCESS_MEMBERS: "已登录用户",
         Tag.ACCESS_STAFF: "仅管理员",
     }
+    ACCESS_SCOPE_LEVELS = {
+        Tag.ACCESS_PUBLIC: 0,
+        Tag.ACCESS_MEMBERS: 1,
+        Tag.ACCESS_STAFF: 2,
+    }
 
     @staticmethod
     def normalize_access_scope(scope: Optional[str], default: str) -> str:
@@ -47,6 +52,24 @@ class TagService:
     @staticmethod
     def get_scope_label(scope: str) -> str:
         return TagService.ACCESS_SCOPE_LABELS.get(scope, "未知")
+
+    @staticmethod
+    def validate_scope_configuration(
+        view_scope: str,
+        start_discussion_scope: str,
+        reply_scope: str,
+    ) -> tuple[str, str, str]:
+        normalized_view = TagService.normalize_access_scope(view_scope, Tag.ACCESS_PUBLIC)
+        normalized_start = TagService.normalize_access_scope(start_discussion_scope, Tag.ACCESS_MEMBERS)
+        normalized_reply = TagService.normalize_access_scope(reply_scope, Tag.ACCESS_MEMBERS)
+
+        if TagService.ACCESS_SCOPE_LEVELS[normalized_start] < TagService.ACCESS_SCOPE_LEVELS[normalized_view]:
+            raise ValueError("发帖权限不能比查看权限更宽松")
+
+        if TagService.ACCESS_SCOPE_LEVELS[normalized_reply] < TagService.ACCESS_SCOPE_LEVELS[normalized_view]:
+            raise ValueError("回帖权限不能比查看权限更宽松")
+
+        return normalized_view, normalized_start, normalized_reply
 
     @staticmethod
     def can_view_tag(tag: Tag, user: Optional[User]) -> bool:
@@ -179,6 +202,22 @@ class TagService:
                 raise PermissionDenied(f"没有权限在标签“{discussion_tag.tag.name}”下回复讨论")
 
     @staticmethod
+    def validate_parent_assignment(tag: Optional[Tag], parent: Optional[Tag]) -> None:
+        if parent is None:
+            return
+
+        if parent.parent_id is not None:
+            raise ValueError("只能选择顶级标签作为父标签")
+
+        if tag is not None:
+            if tag.id == parent.id:
+                raise ValueError("标签不能设置自己为父标签")
+            if TagService._would_create_cycle(tag, parent):
+                raise ValueError("不能设置子标签为父标签（会形成循环）")
+            if tag.children.exists() and parent is not None:
+                raise ValueError("已有子标签的标签不能再设置为子标签")
+
+    @staticmethod
     def create_tag(
         name: str,
         slug: Optional[str] = None,
@@ -229,6 +268,13 @@ class TagService:
                 parent = Tag.objects.get(id=parent_id)
             except Tag.DoesNotExist:
                 raise ValueError("父标签不存在")
+            TagService.validate_parent_assignment(None, parent)
+
+        normalized_view, normalized_start, normalized_reply = TagService.validate_scope_configuration(
+            view_scope,
+            start_discussion_scope,
+            reply_scope,
+        )
 
         with transaction.atomic():
             tag = Tag.objects.create(
@@ -242,9 +288,9 @@ class TagService:
                 parent=parent,
                 is_hidden=is_hidden,
                 is_restricted=is_restricted,
-                view_scope=TagService.normalize_access_scope(view_scope, Tag.ACCESS_PUBLIC),
-                start_discussion_scope=TagService.normalize_access_scope(start_discussion_scope, Tag.ACCESS_MEMBERS),
-                reply_scope=TagService.normalize_access_scope(reply_scope, Tag.ACCESS_MEMBERS),
+                view_scope=normalized_view,
+                start_discussion_scope=normalized_start,
+                reply_scope=normalized_reply,
             )
 
             return tag
@@ -383,6 +429,9 @@ class TagService:
             raise PermissionDenied("只有管理员可以编辑标签")
 
         tag = Tag.objects.get(id=tag_id)
+        next_view_scope = tag.view_scope
+        next_start_scope = tag.start_discussion_scope
+        next_reply_scope = tag.reply_scope
 
         with transaction.atomic():
             if name is not None:
@@ -408,16 +457,15 @@ class TagService:
 
             if parent_id is not None:
                 # 检查父标签
-                if parent_id == tag.id:
-                    raise ValueError("标签不能设置自己为父标签")
-                try:
-                    parent = Tag.objects.get(id=parent_id)
-                    # 检查是否会形成循环
-                    if TagService._would_create_cycle(tag, parent):
-                        raise ValueError("不能设置子标签为父标签（会形成循环）")
+                if parent_id in ("", 0, "0", None):
+                    tag.parent = None
+                else:
+                    try:
+                        parent = Tag.objects.get(id=parent_id)
+                    except Tag.DoesNotExist:
+                        raise ValueError("父标签不存在")
+                    TagService.validate_parent_assignment(tag, parent)
                     tag.parent = parent
-                except Tag.DoesNotExist:
-                    raise ValueError("父标签不存在")
 
             if is_hidden is not None:
                 tag.is_hidden = is_hidden
@@ -426,19 +474,60 @@ class TagService:
                 tag.is_restricted = is_restricted
 
             if view_scope is not None:
-                tag.view_scope = TagService.normalize_access_scope(view_scope, tag.view_scope)
+                next_view_scope = view_scope
 
             if start_discussion_scope is not None:
-                tag.start_discussion_scope = TagService.normalize_access_scope(
-                    start_discussion_scope,
-                    tag.start_discussion_scope,
-                )
+                next_start_scope = start_discussion_scope
 
             if reply_scope is not None:
-                tag.reply_scope = TagService.normalize_access_scope(reply_scope, tag.reply_scope)
+                next_reply_scope = reply_scope
+
+            (
+                tag.view_scope,
+                tag.start_discussion_scope,
+                tag.reply_scope,
+            ) = TagService.validate_scope_configuration(
+                next_view_scope,
+                next_start_scope,
+                next_reply_scope,
+            )
 
             tag.save()
             return tag
+
+    @staticmethod
+    def move_tag(tag_id: int, direction: str, user: User) -> bool:
+        if not user.is_staff:
+            raise PermissionDenied("只有管理员可以调整标签排序")
+
+        if direction not in {"up", "down"}:
+            raise ValueError("无效的排序方向")
+
+        tag = Tag.objects.get(id=tag_id)
+
+        with transaction.atomic():
+            siblings = list(
+                Tag.objects.filter(parent_id=tag.parent_id).order_by("position", "name", "id")
+            )
+            current_index = next(
+                (index for index, sibling in enumerate(siblings) if sibling.id == tag.id),
+                None,
+            )
+            if current_index is None:
+                raise ValueError("标签不存在于当前层级")
+
+            target_index = current_index - 1 if direction == "up" else current_index + 1
+            if target_index < 0 or target_index >= len(siblings):
+                return False
+
+            siblings[current_index], siblings[target_index] = siblings[target_index], siblings[current_index]
+
+            for index, sibling in enumerate(siblings):
+                sibling.position = index
+
+            Tag.objects.bulk_update(siblings, ["position"])
+
+        return True
 
     @staticmethod
     def _would_create_cycle(tag: Tag, new_parent: Tag) -> bool:

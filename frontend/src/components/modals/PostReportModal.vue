@@ -18,7 +18,7 @@
 
       <div class="Modal-body">
         <p class="PostReportModal-description">
-          帖子 #{{ post?.number || '?' }} 将进入后台举报队列，管理员稍后会查看处理。
+          帖子 #{{ post?.number || '?' }} 会进入举报队列，版主可以直接在讨论页或后台查看并处理。
         </p>
 
         <div v-if="errorMessage" class="PostReportModal-error">
@@ -28,16 +28,17 @@
         <div class="form-group">
           <label>举报原因</label>
           <select v-model="form.reason" class="report-select">
-            <option value="垃圾广告">垃圾广告</option>
-            <option value="骚扰攻击">骚扰攻击</option>
-            <option value="违规内容">违规内容</option>
-            <option value="剧透/灌水">剧透/灌水</option>
-            <option value="其他">其他</option>
+            <option v-for="option in REPORT_REASON_OPTIONS" :key="option" :value="option">
+              {{ option }}
+            </option>
           </select>
         </div>
 
         <div class="form-group">
           <label>补充说明</label>
+          <p class="PostReportModal-help">
+            {{ form.reason === '其他' ? '请尽量写清楚问题背景，方便版主快速判断。' : '可补充上下文、受影响内容或希望的处理方式。' }}
+          </p>
           <textarea
             v-model="form.message"
             rows="4"
@@ -79,6 +80,15 @@ const props = defineProps({
 })
 
 const modalStore = useModalStore()
+const REPORT_REASON_OPTIONS = [
+  '垃圾广告',
+  '骚扰攻击',
+  '仇恨或歧视',
+  '违规内容',
+  '侵权/隐私',
+  '灌水离题',
+  '其他'
+]
 const submitting = ref(false)
 const errorMessage = ref('')
 const form = reactive({
@@ -91,11 +101,11 @@ async function submit() {
   errorMessage.value = ''
 
   try {
-    await props.submitReport({
+    const result = await props.submitReport({
       reason: form.reason,
       message: form.message
     })
-    modalStore.close({ reported: true })
+    modalStore.close({ reported: true, flag: result })
   } catch (error) {
     errorMessage.value = error.response?.data?.error || error.message || '提交失败，请稍后重试'
   } finally {
@@ -133,6 +143,13 @@ async function submit() {
   margin-bottom: 8px;
   color: #30404f;
   font-weight: 600;
+}
+
+.PostReportModal-help {
+  margin: -2px 0 8px;
+  color: #748292;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .report-select,

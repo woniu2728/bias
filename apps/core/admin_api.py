@@ -714,6 +714,9 @@ def update_admin_tag(request, tag_id: int, payload: Dict[str, Any] = Body(...)):
     try:
         tag = get_object_or_404(Tag, id=tag_id)
         normalized = normalize_optional_tag_parent(payload)
+        next_view_scope = tag.view_scope
+        next_start_scope = tag.start_discussion_scope
+        next_reply_scope = tag.reply_scope
 
         if "name" in normalized:
             name = (normalized.get("name") or "").strip()
@@ -735,28 +738,28 @@ def update_admin_tag(request, tag_id: int, payload: Dict[str, Any] = Body(...)):
             if parent_id is None:
                 tag.parent = None
             else:
-                if int(parent_id) == tag.id:
-                    raise ValueError("标签不能设置自己为父标签")
                 parent = get_object_or_404(Tag, id=parent_id)
-                if TagService._would_create_cycle(tag, parent):
-                    raise ValueError("不能设置子标签为父标签")
+                TagService.validate_parent_assignment(tag, parent)
                 tag.parent = parent
         if "is_hidden" in normalized:
             tag.is_hidden = bool(normalized["is_hidden"])
         if "is_restricted" in normalized:
             tag.is_restricted = bool(normalized["is_restricted"])
         if "view_scope" in normalized:
-            tag.view_scope = TagService.normalize_access_scope(normalized.get("view_scope"), tag.view_scope)
+            next_view_scope = normalized.get("view_scope")
         if "start_discussion_scope" in normalized:
-            tag.start_discussion_scope = TagService.normalize_access_scope(
-                normalized.get("start_discussion_scope"),
-                tag.start_discussion_scope,
-            )
+            next_start_scope = normalized.get("start_discussion_scope")
         if "reply_scope" in normalized:
-            tag.reply_scope = TagService.normalize_access_scope(
-                normalized.get("reply_scope"),
-                tag.reply_scope,
-            )
+            next_reply_scope = normalized.get("reply_scope")
+        (
+            tag.view_scope,
+            tag.start_discussion_scope,
+            tag.reply_scope,
+        ) = TagService.validate_scope_configuration(
+            next_view_scope,
+            next_start_scope,
+            next_reply_scope,
+        )
         tag.save()
         tag.refresh_from_db()
         return serialize_admin_tag(tag)
@@ -764,6 +767,26 @@ def update_admin_tag(request, tag_id: int, payload: Dict[str, Any] = Body(...)):
         return admin_error(str(e), status=400)
     except Exception as e:
         return admin_error(str(e), status=400)
+
+
+@router.post("/tags/{tag_id}/move", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def move_admin_tag(request, tag_id: int, payload: Dict[str, Any] = Body(...)):
+    try:
+        moved = TagService.move_tag(
+            tag_id=tag_id,
+            direction=(payload.get("direction") or "").strip(),
+            user=request.auth,
+        )
+        tags = Tag.objects.select_related("parent").all().order_by("position", "name")
+        return {
+            "moved": moved,
+            "data": [serialize_admin_tag(tag) for tag in tags],
+        }
+    except ValueError as e:
+        return admin_error(str(e), status=400)
+    except Tag.DoesNotExist:
+        return admin_error("标签不存在", status=404)
 
 
 @router.delete("/tags/{tag_id}", auth=AuthBearer(), tags=["Admin"])

@@ -45,6 +45,23 @@ class PostReportSchema(BaseModel):
         return (v or "").strip()
 
 
+class PostFlagResolveSchema(BaseModel):
+    """前台处理举报"""
+    status: str = Field(..., description="处理状态")
+    resolution_note: str = Field("", max_length=1000, description="处理备注")
+
+    @validator('status')
+    def validate_status(cls, v):
+        normalized = (v or "").strip()
+        if normalized not in {"resolved", "ignored"}:
+            raise ValueError('无效的处理状态')
+        return normalized
+
+    @validator('resolution_note')
+    def validate_resolution_note(cls, v):
+        return (v or "").strip()
+
+
 class PostFilterSchema(BaseModel):
     """帖子列表过滤"""
     author: Optional[str] = Field(None, description="作者用户名")
@@ -86,6 +103,10 @@ class PostOutSchema(BaseModel):
     can_edit: bool = False
     can_delete: bool = False
     can_like: bool = False
+    viewer_has_open_flag: bool = False
+    open_flag_count: int = 0
+    open_flags: List[dict] = []
+    can_moderate_flags: bool = False
 
     class Config:
         from_attributes = True

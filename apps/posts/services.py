@@ -5,7 +5,7 @@ from math import ceil
 from typing import Optional, List, Tuple
 from django.db import IntegrityError
 from django.db import transaction
-from django.db.models import Q, F, Count, Exists, OuterRef
+from django.db.models import Q, F, Count, Exists, OuterRef, Prefetch
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from apps.core.db import sqlite_write_retry
@@ -20,6 +20,36 @@ import re
 
 class PostService:
     """帖子服务"""
+
+    @staticmethod
+    def annotate_flag_state(queryset, user: Optional[User] = None):
+        if user and user.is_authenticated:
+            queryset = queryset.annotate(
+                viewer_has_open_flag=Exists(
+                    PostFlag.objects.filter(
+                        post=OuterRef("pk"),
+                        user=user,
+                        status=PostFlag.STATUS_OPEN,
+                    )
+                )
+            )
+
+        if user and user.is_staff:
+            queryset = queryset.annotate(
+                open_flag_count=Count(
+                    "flags",
+                    filter=Q(flags__status=PostFlag.STATUS_OPEN),
+                    distinct=True,
+                )
+            ).prefetch_related(
+                Prefetch(
+                    "flags",
+                    queryset=PostFlag.objects.filter(status=PostFlag.STATUS_OPEN).select_related("user"),
+                    to_attr="open_flags_cache",
+                )
+            )
+
+        return queryset
 
     @staticmethod
     def _can_view_post(post: Post, user: Optional[User]) -> bool:
@@ -163,8 +193,9 @@ class PostService:
         ).select_related(
             'user', 'edited_user'
         ).annotate(
-            like_count=Count('likes')
+            like_count=Count('likes', distinct=True)
         )
+        queryset = PostService.annotate_flag_state(queryset, user)
 
         # 过滤隐藏的帖子
         if not user or not user.is_staff:
@@ -252,8 +283,9 @@ class PostService:
             post = Post.objects.select_related(
                 'user', 'edited_user', 'discussion'
             ).annotate(
-                like_count=Count('likes')
-            ).get(id=post_id)
+                like_count=Count('likes', distinct=True)
+            )
+            post = PostService.annotate_flag_state(post, user).get(id=post_id)
 
             if not PostService._can_view_post(post, user):
                 return None
@@ -451,6 +483,31 @@ class PostService:
         flag.resolved_at = timezone.now()
         flag.save(update_fields=["status", "resolution_note", "resolved_by", "resolved_at"])
         return flag
+
+    @staticmethod
+    def resolve_post_flags(post_id: int, admin_user: User, status: str, resolution_note: str = "") -> int:
+        if not admin_user.is_staff:
+            raise PermissionDenied("只有管理员可以处理举报")
+
+        if status not in {PostFlag.STATUS_RESOLVED, PostFlag.STATUS_IGNORED}:
+            raise ValueError("无效的处理状态")
+
+        open_flags = list(PostFlag.objects.filter(post_id=post_id, status=PostFlag.STATUS_OPEN))
+        if not open_flags:
+            raise ValueError("当前帖子没有待处理举报")
+
+        resolved_at = timezone.now()
+        for flag in open_flags:
+            flag.status = status
+            flag.resolution_note = resolution_note
+            flag.resolved_by = admin_user
+            flag.resolved_at = resolved_at
+
+        PostFlag.objects.bulk_update(
+            open_flags,
+            ["status", "resolution_note", "resolved_by", "resolved_at"],
+        )
+        return len(open_flags)
 
     @staticmethod
     def approve_post(post: Post, admin_user: User, note: str = "") -> Post:
