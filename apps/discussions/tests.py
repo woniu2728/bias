@@ -337,6 +337,59 @@ class DiscussionApiTests(TestCase):
         )
         self.assertEqual(reader_response.status_code, 404, reader_response.content)
 
+        reader_list_response = self.client.get(
+            "/api/discussions/",
+            **self.auth_header(self.reader),
+        )
+        self.assertEqual(reader_list_response.status_code, 200, reader_list_response.content)
+        self.assertFalse(any(item["id"] == discussion.id for item in reader_list_response.json()["data"]))
+
+    def test_approving_pending_discussion_makes_discussion_and_first_post_visible(self):
+        trusted_group = Group.objects.create(name="Trusted2", color="#4d698e")
+        Permission.objects.create(group=trusted_group, permission="startDiscussionWithoutApproval")
+
+        response = self.client.post(
+            "/api/discussions/",
+            data=json.dumps({
+                "title": "Pending discussion to approve",
+                "content": "Needs approval first",
+                "tag_ids": [],
+            }),
+            content_type="application/json",
+            **self.auth_header(self.author),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        discussion_id = response.json()["id"]
+
+        discussion = Discussion.objects.get(id=discussion_id)
+        self.assertEqual(discussion.approval_status, Discussion.APPROVAL_PENDING)
+
+        admin = User.objects.create_superuser(
+            username="approval-admin-visible",
+            email="approval-admin-visible@example.com",
+            password="password123",
+        )
+        DiscussionService.approve_discussion(discussion, admin, note="已通过审核")
+
+        discussion.refresh_from_db()
+        self.assertEqual(discussion.approval_status, Discussion.APPROVAL_APPROVED)
+
+        detail_response = self.client.get(
+            f"/api/discussions/{discussion.id}",
+            **self.auth_header(self.reader),
+        )
+        self.assertEqual(detail_response.status_code, 200, detail_response.content)
+        payload = detail_response.json()
+        self.assertEqual(payload["approval_status"], "approved")
+        self.assertEqual(payload["first_post"]["approval_status"], "approved")
+
+        list_response = self.client.get(
+            "/api/discussions/",
+            **self.auth_header(self.reader),
+        )
+        self.assertEqual(list_response.status_code, 200, list_response.content)
+        self.assertTrue(any(item["id"] == discussion.id for item in list_response.json()["data"]))
+
     def test_discussion_list_hides_staff_only_tag_for_non_staff(self):
         staff_tag = Tag.objects.create(
             name="Staff",

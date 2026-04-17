@@ -1,13 +1,16 @@
 import json
+import os
 from pathlib import Path
 import shutil
 import uuid
 from datetime import timedelta
+from tempfile import TemporaryDirectory
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from ninja_jwt.tokens import RefreshToken
@@ -657,6 +660,113 @@ class ComposerUploadApiTests(TestCase):
         self.assertEqual(response.json()["error"], "不支持的文件格式")
 
 
+class InitForumCommandTests(TestCase):
+    def test_init_forum_command_writes_sqlite_env_and_creates_admin(self):
+        with TemporaryDirectory() as temp_dir:
+            env_path = Path(temp_dir) / ".env.test"
+            with patch.dict(os.environ, {}, clear=False):
+                with override_settings(BASE_DIR=Path(temp_dir)):
+                    call_command(
+                        "init_forum",
+                        "--database",
+                        "sqlite",
+                        "--env-file",
+                        str(env_path),
+                        "--skip-migrate",
+                        "--admin-username",
+                        "forum-admin",
+                        "--admin-email",
+                        "forum-admin@example.com",
+                        "--admin-password",
+                        "password123",
+                        "--non-interactive",
+                    )
+
+            self.assertTrue(env_path.exists())
+            env_content = env_path.read_text(encoding="utf-8")
+            self.assertIn("DB_MODE=sqlite", env_content)
+            self.assertIn("SQLITE_NAME=db.sqlite3", env_content)
+            self.assertIn("USE_REDIS=False", env_content)
+            self.assertIn("FRONTEND_URL=http://localhost:5173", env_content)
+            self.assertIn("SECRET_KEY=", env_content)
+            self.assertIn("JWT_SECRET_KEY=", env_content)
+
+            admin = User.objects.get(username="forum-admin")
+            self.assertTrue(admin.is_staff)
+            self.assertTrue(admin.is_superuser)
+            self.assertTrue(admin.user_groups.filter(name="Admin").exists())
+
+    def test_init_forum_command_writes_postgres_env_values(self):
+        with TemporaryDirectory() as temp_dir:
+            env_path = Path(temp_dir) / ".env.postgres"
+            with patch.dict(os.environ, {}, clear=False):
+                with override_settings(BASE_DIR=Path(temp_dir)):
+                    call_command(
+                        "init_forum",
+                        "--database",
+                        "postgres",
+                        "--env-file",
+                        str(env_path),
+                        "--skip-migrate",
+                        "--skip-admin",
+                        "--db-name",
+                        "community",
+                        "--db-user",
+                        "community_user",
+                        "--db-password",
+                        "community_pass",
+                        "--db-host",
+                        "db.internal",
+                        "--db-port",
+                        "5433",
+                        "--frontend-url",
+                        "http://forum.example.com",
+                        "--non-interactive",
+                    )
+
+            self.assertTrue(env_path.exists())
+            env_content = env_path.read_text(encoding="utf-8")
+            self.assertIn("DB_MODE=postgres", env_content)
+            self.assertIn("DEBUG=False", env_content)
+            self.assertIn("USE_REDIS=True", env_content)
+            self.assertIn("DB_NAME=community", env_content)
+            self.assertIn("DB_USER=community_user", env_content)
+            self.assertIn("DB_PASSWORD=community_pass", env_content)
+            self.assertIn("DB_HOST=db.internal", env_content)
+            self.assertIn("DB_PORT=5433", env_content)
+            self.assertIn("FRONTEND_URL=http://forum.example.com", env_content)
+
+    def test_init_forum_command_allows_explicit_redis_override(self):
+        with TemporaryDirectory() as temp_dir:
+            env_path = Path(temp_dir) / ".env.override"
+            with patch.dict(os.environ, {}, clear=False):
+                with override_settings(BASE_DIR=Path(temp_dir)):
+                    call_command(
+                        "init_forum",
+                        "--database",
+                        "sqlite",
+                        "--redis",
+                        "on",
+                        "--redis-host",
+                        "cache.internal",
+                        "--redis-port",
+                        "6380",
+                        "--redis-db",
+                        "5",
+                        "--env-file",
+                        str(env_path),
+                        "--skip-migrate",
+                        "--skip-admin",
+                        "--non-interactive",
+                    )
+
+            env_content = env_path.read_text(encoding="utf-8")
+            self.assertIn("USE_REDIS=True", env_content)
+            self.assertIn("REDIS_HOST=cache.internal", env_content)
+            self.assertIn("REDIS_PORT=6380", env_content)
+            self.assertIn("REDIS_DB=5", env_content)
+
+
 class LocalStorageSettingsTests(TestCase):
     def test_attachment_upload_respects_custom_local_storage_settings(self):
         tmpdir = Path.cwd() / "media" / f"storage-test-{uuid.uuid4().hex}"
@@ -1148,3 +1258,11 @@ class AdminApprovalQueueApiTests(TestCase):
             **auth,
         )
         self.assertEqual(approve_response.status_code, 403, approve_response.content)
+
+        reject_post_response = self.client.post(
+            f"/api/admin/approval-queue/post/{self.post.id}/reject",
+            data=json.dumps({"note": "尝试越权拒绝回复"}),
+            content_type="application/json",
+            **auth,
+        )
+        self.assertEqual(reject_post_response.status_code, 403, reject_post_response.content)

@@ -88,12 +88,17 @@ WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
 # Database
-# 开发环境使用SQLite，生产环境使用PostgreSQL
-if DEBUG:
+DB_MODE = os.getenv('DB_MODE', 'sqlite' if DEBUG else 'postgres').strip().lower()
+
+if DB_MODE in {'sqlite', 'sqlite3'}:
+    sqlite_name = os.getenv('SQLITE_NAME', 'db.sqlite3')
+    sqlite_path = Path(sqlite_name)
+    if not sqlite_path.is_absolute():
+        sqlite_path = BASE_DIR / sqlite_path
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'NAME': sqlite_path,
             'OPTIONS': {
                 'timeout': 10,
             },

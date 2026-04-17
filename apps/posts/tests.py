@@ -336,6 +336,55 @@ class PostFlagApiTests(TestCase):
         )
         self.assertEqual(reader_detail_response.status_code, 404, reader_detail_response.content)
 
+        reader_list_response = self.client.get(
+            f"/api/discussions/{self.discussion.id}/posts",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(reader_list_response.status_code, 200, reader_list_response.content)
+        self.assertFalse(any(item["id"] == rejected_post.id for item in reader_list_response.json()["data"]))
+
+    def test_approving_pending_reply_makes_it_visible_to_other_members(self):
+        trusted_group = Group.objects.create(name="TrustedReplyVisible", color="#4d698e")
+        Permission.objects.create(group=trusted_group, permission="replyWithoutApproval")
+
+        response = self.client.post(
+            f"/api/discussions/{self.discussion.id}/posts",
+            data='{"content":"需要审核后公开的回复"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        pending_post_id = response.json()["id"]
+        pending_post = Post.objects.get(id=pending_post_id)
+        self.assertEqual(pending_post.approval_status, Post.APPROVAL_PENDING)
+
+        PostService.approve_post(pending_post, self.admin, note="已通过审核")
+
+        pending_post.refresh_from_db()
+        self.assertEqual(pending_post.approval_status, Post.APPROVAL_APPROVED)
+
+        reader = User.objects.create_user(
+            username="reader-posts-visible",
+            email="reader-posts-visible@example.com",
+            password="password123",
+        )
+        token = RefreshToken.for_user(reader).access_token
+
+        detail_response = self.client.get(
+            f"/api/posts/{pending_post.id}",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(detail_response.status_code, 200, detail_response.content)
+        self.assertEqual(detail_response.json()["approval_status"], "approved")
+
+        list_response = self.client.get(
+            f"/api/discussions/{self.discussion.id}/posts",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        self.assertEqual(list_response.status_code, 200, list_response.content)
+        self.assertTrue(any(item["id"] == pending_post.id for item in list_response.json()["data"]))
+
     def test_cannot_reply_in_tag_without_reply_permission(self):
         admin = User.objects.create_superuser(
             username="reply-admin",

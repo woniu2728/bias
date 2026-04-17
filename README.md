@@ -1,445 +1,229 @@
-# PyFlarum - Flarum的Python完美复刻
+# PyFlarum
 
-## 🎉 项目状态：100% 完成 ✅
+PyFlarum 是一个使用 Django + Vue 3 构建的论坛项目，目标是对齐 Flarum 2.x 的核心论坛体验和后台管理能力，同时采用更适合 Python 项目的实现方式。
 
-PyFlarum是使用Django + Vue 3完美复刻的Flarum论坛系统，包含完整的后端API和前端界面。
+当前它已经具备可用的论坛主链路、后台管理页、审核与举报治理能力、通知与搜索能力，但还不应该被描述为“100% 完成”或“完美复刻”。当前主线重点是：
 
-## 项目特点
+- 完善治理链路
+- 优化安装、初始化与升级体验
+- 重写文档
+- 优化后台管理体验
 
-- ✅ **完美复刻Flarum** - 数据库结构、API设计、功能特性完全对标Flarum
-- ✅ **现代化技术栈** - Django 5 + Django Ninja + Vue 3 + Composition API
-- ✅ **高性能** - PostgreSQL + Redis缓存 + Celery异步任务
-- ✅ **实时通信** - Django Channels + WebSocket实时通知
-- ✅ **RESTful API** - 42个完整的API端点
-- ✅ **完整前端** - 8个页面组件，3800+行Vue代码
-- ✅ **生产就绪** - Docker容器化部署
+截至 2026-04-17，本地后端测试套件 `python manage.py test apps` 共 `87` 项通过。
 
-## 项目统计
+## 当前能力
 
-- **总代码行数**: 10,600+行
-- **后端代码**: 7,100行Python
-- **前端代码**: 3,800行JavaScript/Vue
-- **API端点**: 42个（40个HTTP + 2个WebSocket）
-- **页面组件**: 8个完整页面
-- **数据模型**: 10个
-- **文件总数**: 130+个
+- 用户注册、登录、邮箱验证重发、密码重置、头像上传、基础资料维护
+- 讨论与回复的创建、编辑、删除、置顶、锁定、隐藏、关注、已读
+- Composer、附件上传、图片上传、表情面板、@ 提及、预览、草稿恢复
+- 站内通知、WebSocket 通知基础链路、全局搜索、搜索结果页
+- 标签管理、用户管理、权限管理、邮件设置、基础外观设置
+- 举报、审核、封禁、治理通知与作者整改后重新提交审核
 
 ## 技术栈
 
-### 后端（100%完成）
-- **框架**: Django 5.0.3
-- **API**: Django Ninja 1.2.2
-- **数据库**: PostgreSQL 15
-- **缓存**: Redis 7
-- **任务队列**: Celery 5.3.6
-- **实时通信**: Django Channels 4.0.0
-- **认证**: JWT Token
-- **服务器**: Daphne (ASGI)
+- 后端：Django 5、Django Ninja、Channels、Celery
+- 前端：Vue 3、Vue Router、Pinia、Vite
+- 数据库：SQLite 或 PostgreSQL
+- 缓存与队列：Redis 可选，本地快速启动可不使用
 
-### 前端（100%完成）✨
-- **框架**: Vue 3.4.21 (Composition API)
-- **路由**: Vue Router 4.3.0
-- **状态管理**: Pinia 2.1.7
-- **构建工具**: Vite 5.1.5
-- **HTTP客户端**: Axios 1.6.7
-- **UI**: 完美复刻Flarum设计风格
+## 安装策略
 
-### 部署
-- **容器化**: Docker + Docker Compose
-- **反向代理**: Nginx
-- **WebSocket**: 完整支持
+项目当前明确支持两条安装路径：
 
-## 快速开始
+1. 本地快速启动：`SQLite + 无 Redis`
+2. 正式部署/预发布：`PostgreSQL + Redis`
 
-### 方式一：Docker部署（推荐）⭐
+这套策略已经固化到 `python manage.py init_forum`：
 
-最简单的方式，一键启动所有服务：
+- 当选择 `--database sqlite` 时，默认写入 `USE_REDIS=False`
+- 当选择 `--database postgres` 时，默认写入 `USE_REDIS=True`
+- 可通过 `--redis on` 或 `--redis off` 显式覆盖默认策略
+
+说明：
+
+- `USE_REDIS=False` 时，项目会退回到进程内缓存、进程内 channel layer、内存 broker/backend，仅适合本地单进程开发或快速体验
+- `USE_REDIS=True` 时，缓存、WebSocket channel layer、Celery broker/backend 会默认使用 Redis，更适合正式部署
+
+## 后端安装
+
+### 1. 准备环境
+
+- Python 3.11+
+- Node.js 18+
+- 本地快速启动不要求 Redis
+- 正式部署建议准备 PostgreSQL 15+ 和 Redis 7+
+
+### 2. 克隆项目并安装依赖
 
 ```bash
-# 1. 克隆项目
-git clone https://github.com/yourusername/pyflarum.git
+git clone <your-repo-url>
 cd pyflarum
 
-# 2. 启动所有服务（后端+数据库+Redis+Nginx）
-docker-compose up -d --build
+python -m venv venv
+```
 
-# 3. 创建超级用户
-docker-compose exec web python manage.py createsuperuser
+Windows:
 
-# 4. 启动前端开发服务器
+```powershell
+venv\Scripts\activate
+```
+
+Linux / macOS:
+
+```bash
+source venv/bin/activate
+```
+
+安装 Python 依赖：
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. 初始化论坛
+
+当前没有网页安装向导，首次安装统一使用 `init_forum` 命令。
+
+#### 本地快速启动
+
+这条路径默认使用 SQLite，且默认关闭 Redis：
+
+```bash
+python manage.py init_forum \
+  --database sqlite \
+  --admin-username admin \
+  --admin-email admin@example.com \
+  --admin-password admin123456 \
+  --non-interactive
+```
+
+命令会完成这些事情：
+
+- 生成 `.env`
+- 执行数据库迁移
+- 初始化默认用户组与权限
+- 创建或更新管理员账号
+
+如果你想交互式填写数据库模式和管理员信息，也可以直接执行：
+
+```bash
+python manage.py init_forum
+```
+
+#### 正式部署 / 预发布环境
+
+这条路径建议使用 PostgreSQL，并默认开启 Redis：
+
+```bash
+python manage.py init_forum \
+  --database postgres \
+  --db-name pyflarum \
+  --db-user postgres \
+  --db-password postgres \
+  --db-host 127.0.0.1 \
+  --db-port 5432 \
+  --redis auto \
+  --admin-username admin \
+  --admin-email admin@example.com \
+  --admin-password change-me \
+  --non-interactive
+```
+
+如果你的 Redis 不是默认地址，可以继续补充：
+
+```bash
+python manage.py init_forum \
+  --database postgres \
+  --redis on \
+  --redis-host 127.0.0.1 \
+  --redis-port 6379 \
+  --redis-db 0 \
+  --admin-username admin \
+  --admin-email admin@example.com \
+  --admin-password change-me \
+  --non-interactive
+```
+
+可选参数：
+
+- `--skip-env-write`：不写 `.env`
+- `--skip-migrate`：跳过迁移
+- `--skip-admin`：跳过管理员创建
+- `--env-file <path>`：指定环境文件路径
+- `--frontend-url <url>`：指定前端地址
+- `--sqlite-name <path>`：指定 SQLite 文件位置
+
+## 前端安装与启动
+
+```bash
 cd frontend
 npm install
 npm run dev
-
-# 访问应用
-# 前端: http://localhost:3000
-# 后端API: http://localhost:8000/api
-# 管理后台: http://localhost:8000/admin
 ```
 
-### 方式二：本地开发
+默认前端地址为 `http://localhost:5173`。
 
-#### 后端设置
+## 运行项目
 
-1. **环境要求**
-   - Python 3.11+
-   - PostgreSQL 15+ (可选，开发环境使用SQLite)
-   - Redis 7+
+启动后端开发服务：
 
-2. **安装步骤**
 ```bash
-# 克隆项目
-git clone https://github.com/yourusername/pyflarum.git
-cd pyflarum
-
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或 venv\Scripts\activate  # Windows
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 运行迁移
-python manage.py migrate
-
-# 创建超级用户
-python manage.py createsuperuser
-
-# 启动开发服务器
 python manage.py runserver
 ```
 
-#### 前端设置
+常用入口：
 
-```bash
-# 进入前端目录
-cd frontend
+- Forum 前台：`http://localhost:5173`
+- 管理后台 SPA：`http://localhost:5173/admin.html`
+- API 文档：`http://127.0.0.1:8000/api/docs`
+- Django Admin：`http://127.0.0.1:8000/admin/`
 
-# 安装依赖
-npm install
+## 环境变量
 
-# 启动开发服务器
-npm run dev
+可参考 [`.env.example`](.env.example)。
 
-# 访问 http://localhost:3000
-```
+关键变量说明：
 
-## 功能特性
+- `DB_MODE=sqlite|postgres`
+- `SQLITE_NAME=db.sqlite3`
+- `USE_REDIS=False|True`
+- `FRONTEND_URL=http://localhost:5173`
+- `CELERY_BROKER_URL` 和 `CELERY_RESULT_BACKEND` 可留空，让系统按 `USE_REDIS` 自动选择默认值
 
-### 后端功能（100%完成）
-- ✅ **用户系统** (12个API)
-  - 注册、登录、JWT认证
-  - 邮箱验证、密码重置
-  - 头像上传、用户管理
-  
-- ✅ **讨论系统** (5个API)
-  - CRUD操作、搜索过滤
-  - 置顶、锁定、隐藏
-  - Markdown渲染
-  
-- ✅ **帖子系统** (7个API)
-  - 回复讨论、编辑历史
-  - 点赞/取消点赞
-  - @提及功能
-  
-- ✅ **标签系统** (7个API)
-  - 层级结构、热门统计
-  - 防止循环引用
-  
-- ✅ **通知系统** (7个API)
-  - 多种通知类型
-  - WebSocket实时推送
-  - 邮件通知
-  
-- ✅ **搜索功能** (2个API)
-  - 全局搜索、分类搜索
-  
-- ✅ **文件上传**
-  - 头像、附件上传
-  - 缩略图生成
+## 升级当前版本
 
-### 前端功能（100%完成）✨
-- ✅ **首页** - 统计展示、最新讨论
-- ✅ **登录/注册** - 完整的认证流程
-- ✅ **讨论列表** - 搜索、筛选、排序、分页
-- ✅ **讨论详情** - 完整的帖子展示和交互
-- ✅ **创建讨论** - Markdown编辑器+实时预览
-- ✅ **用户资料** - 个人信息、讨论列表
-- ✅ **通知中心** - 实时通知、标记已读
-- ✅ **WebSocket** - 实时通知推送
-- ✅ **响应式设计** - 完美适配移动端
+统一升级命令仍在开发中。现阶段建议按下面的手工流程升级：
 
-## 项目结构
+1. 备份数据库、`media/` 和当前 `.env`
+2. 拉取新代码
+3. 更新 Python 依赖：`pip install -r requirements.txt`
+4. 执行迁移：`python manage.py migrate`
+5. 如前端有变更，重新构建或重启前端开发服务
+6. 重启 Django、Celery、反向代理等相关进程
 
-```
-pyflarum/
-├── apps/                      # Django应用（后端）
-│   ├── users/                # 用户系统（12个API）
-│   ├── discussions/          # 讨论系统（5个API）
-│   ├── posts/                # 帖子系统（7个API）
-│   ├── notifications/        # 通知系统（7个API）
-│   ├── tags/                 # 标签系统（7个API）
-│   └── core/                 # 核心功能（搜索、文件、邮件）
-├── config/                   # Django配置
-│   ├── settings.py
-│   ├── urls.py
-│   ├── asgi.py              # ASGI配置（WebSocket）
-│   └── wsgi.py
-├── frontend/                 # Vue前端（100%完成）✨
-│   ├── public/
-│   │   └── default-avatar.svg
-│   ├── src/
-│   │   ├── api/             # Axios配置
-│   │   ├── components/      # Header、Footer
-│   │   ├── router/          # 路由配置
-│   │   ├── stores/          # Pinia状态管理
-│   │   ├── views/           # 8个页面组件
-│   │   ├── App.vue
-│   │   └── main.js
-│   ├── package.json
-│   └── vite.config.js
-├── static/                  # 静态文件
-├── media/                   # 媒体文件
-├── docker-compose.yml       # Docker编排
-├── Dockerfile               # Docker镜像
-├── nginx.conf               # Nginx配置
-├── requirements.txt         # Python依赖
-└── manage.py
-
-## API文档
-
-启动服务后访问：
-- Swagger UI: http://localhost:8000/api/docs
-- 管理后台: http://localhost:8000/admin
-
-### 主要API端点
-
-**用户相关** (12个)
-- POST `/api/users/register` - 注册
-- POST `/api/users/login` - 登录
-- POST `/api/users/logout` - 登出
-- GET `/api/users/me` - 获取当前用户
-- PATCH `/api/users/{id}` - 更新用户
-- POST `/api/users/upload-avatar` - 上传头像
-- POST `/api/users/verify-email` - 验证邮箱
-- POST `/api/users/forgot-password` - 忘记密码
-- POST `/api/users/reset-password` - 重置密码
-
-**讨论相关** (5个)
-- GET `/api/discussions/` - 讨论列表
-- POST `/api/discussions/` - 创建讨论
-- GET `/api/discussions/{id}` - 讨论详情
-- PATCH `/api/discussions/{id}` - 更新讨论
-- DELETE `/api/discussions/{id}` - 删除讨论
-
-**帖子相关** (7个)
-- GET `/api/discussions/{id}/posts/` - 帖子列表
-- POST `/api/discussions/{id}/posts/` - 创建回复
-- PATCH `/api/posts/{id}` - 更新帖子
-- DELETE `/api/posts/{id}` - 删除帖子
-- POST `/api/posts/{id}/like` - 点赞
-- DELETE `/api/posts/{id}/unlike` - 取消点赞
-
-**通知相关** (7个)
-- GET `/api/notifications/` - 通知列表
-- POST `/api/notifications/{id}/mark-read` - 标记已读
-- POST `/api/notifications/mark-all-read` - 全部已读
-
-**WebSocket**
-- `ws://localhost:8000/ws/notifications/` - 实时通知
-
-## 开发文档
-
-详细文档请查看：
-- [Docker部署指南](DOCKER_DEPLOY.md)
-- [前端开发指南](frontend/README.md)
-- [开发总结文档](开发总结_前端完成版.md)
-
-## 核心功能
-
-### 已完成 ✅ (100%)
-
-**后端系统**
-- [x] 项目初始化和架构设计
-- [x] 数据库模型设计（10个模型）
-  - [x] User模型（用户、用户组、权限）
-  - [x] Discussion模型（讨论、讨论状态）
-  - [x] Post模型（帖子、点赞、提及）
-  - [x] Tag模型（标签、层级结构）
-  - [x] Notification模型（通知）
-  - [x] Setting模型（系统设置）
-- [x] 用户认证API（12个端点）
-- [x] 讨论CRUD API（5个端点）
-- [x] 帖子CRUD API（7个端点）
-- [x] 标签系统API（7个端点）
-- [x] 通知系统API（7个端点）
-- [x] 搜索功能API（2个端点）
-- [x] WebSocket实时通信（2个端点）
-- [x] 文件上传功能
-- [x] Markdown渲染
-- [x] 邮件发送系统
-- [x] Docker部署配置
-
-**前端系统**
-- [x] Vue 3项目架构
-- [x] 路由配置和守卫
-- [x] 状态管理（Pinia）
-- [x] API集成（Axios）
-- [x] WebSocket连接管理
-- [x] 8个完整页面组件
-  - [x] 首页（HomeView）
-  - [x] 登录页（LoginView）
-  - [x] 注册页（RegisterView）
-  - [x] 讨论列表（DiscussionListView）
-  - [x] 讨论详情（DiscussionDetailView）
-  - [x] 创建讨论（DiscussionCreateView）
-  - [x] 用户资料（ProfileView）
-  - [x] 通知中心（NotificationView）
-- [x] 响应式设计
-- [x] 实时通知推送
-- [x] Markdown编辑器
-
-### 可选优化 📋
-- [ ] 单元测试（Jest + Pytest）
-- [ ] E2E测试（Cypress）
-- [ ] 性能优化（缓存策略）
-- [ ] 国际化支持
-- [ ] 私信系统
-- [ ] 用户关注功能
-- [ ] 帖子收藏功能
-
-## 截图预览
-
-（待添加实际截图）
-
-- 首页
-- 讨论列表
-- 讨论详情
-- 创建讨论
-- 用户资料
-- 通知中心
-
-## 贡献指南
-
-欢迎贡献代码！请遵循以下步骤：
-
-1. Fork本项目
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启Pull Request
-
-## 许可证
-
-MIT License
-
-## 致谢
-
-- [Flarum](https://flarum.org/) - 原始设计灵感
-- [Django](https://www.djangoproject.com/) - 后端框架
-- [Vue.js](https://vuejs.org/) - 前端框架
-
-## 联系方式
-
-如有问题或建议，请提交Issue或Pull Request。
-
----
-
-**项目状态**: ✅ 生产就绪  
-**完成度**: 100%  
-**最后更新**: 2026年4月
-- ReDoc: http://localhost:8000/api/redoc
-
-## 开发文档
-
-详细的开发文档请查看：
-- [开发计划](../FLARUM_PYTHON_开发计划.md)
-- [数据库设计](../数据库设计文档.md)
-- [API设计](../API设计文档.md)
-- [前端设计](../前端设计文档.md)
-- [开发进度](../开发进度跟踪.md)
-
-## 数据库模型
-
-### 核心表
-- `users` - 用户表
-- `groups` - 用户组表
-- `permissions` - 权限表
-- `discussions` - 讨论表
-- `posts` - 帖子表
-- `tags` - 标签表
-- `notifications` - 通知表
-- `settings` - 系统设置表
-
-详细的表结构请查看[数据库设计文档](../数据库设计文档.md)
-
-## 贡献指南
-
-欢迎贡献代码！请遵循以下步骤：
-
-1. Fork本项目
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启Pull Request
-
-## 代码规范
-
-- Python代码遵循PEP 8规范
-- 使用Black格式化代码
-- 使用Flake8检查代码质量
-- 使用isort排序导入
-
-```bash
-# 格式化代码
-black .
-
-# 检查代码
-flake8 .
-
-# 排序导入
-isort .
-```
+SQLite 路径建议直接备份数据库文件；PostgreSQL 路径建议使用标准数据库备份方式。若生产环境启用了 Redis，升级时通常不需要备份 Redis 作为主数据源，但要确认队列消费状态。
 
 ## 测试
 
+运行完整后端测试：
+
 ```bash
-# 运行所有测试
-pytest
-
-# 运行特定测试
-pytest apps/users/tests/
-
-# 生成覆盖率报告
-pytest --cov=apps --cov-report=html
+python manage.py test apps
 ```
 
-## 许可证
+## Docker Compose
 
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
+仓库内提供了 `docker-compose.yml`，它更接近一套 `PostgreSQL + Redis + Web + Celery + Nginx` 的部署示例。若只是本地快速开发，优先建议使用前面的原生安装方式。
 
-## 致谢
+## 项目文档
 
-- [Flarum](https://flarum.org/) - 原始项目灵感来源
-- [Django](https://www.djangoproject.com/) - 强大的Python Web框架
-- [Django Ninja](https://django-ninja.rest-framework.com/) - 现代化的Django API框架
+- 路线图与对标评估：[PYFLARUM_REPLICATION_ROADMAP.md](PYFLARUM_REPLICATION_ROADMAP.md)
+- 前端说明：[frontend/README.md](frontend/README.md)
 
-## 联系方式
+## 当前已知限制
 
-- 项目主页: https://github.com/yourusername/pyflarum
-- 问题反馈: https://github.com/yourusername/pyflarum/issues
-
-## 开发进度
-
-当前进度：**15%**
-
-- ✅ 项目初始化（100%）
-- 🚧 用户系统（20%）
-- 🚧 讨论系统（10%）
-- 🚧 帖子系统（10%）
-- 📋 通知系统（10%）
-- 📋 管理后台（0%）
-- 📋 前端开发（0%）
-
-详细进度请查看[开发进度跟踪](../开发进度跟踪.md)
+- 还没有网页安装向导
+- 统一升级命令还未落地
+- 后台体验仍在继续优化，尤其是 Dashboard、Basics、Permissions、Appearance、Users
+- 前端自动化测试与端到端测试体系尚未建立
