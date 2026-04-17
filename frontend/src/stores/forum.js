@@ -5,6 +5,11 @@ import api from '@/api'
 const DEFAULT_SETTINGS = {
   forum_title: 'PyFlarum',
   forum_description: '',
+  seo_title: '',
+  seo_description: '',
+  seo_keywords: '',
+  seo_robots_index: true,
+  seo_robots_follow: true,
   welcome_title: '欢迎来到PyFlarum',
   welcome_message: '这是一个基于Django和Vue 3的现代化论坛',
   default_locale: 'zh-CN',
@@ -21,6 +26,15 @@ const DEFAULT_SETTINGS = {
 
 const CUSTOM_CSS_STYLE_ID = 'forum-custom-css'
 const CUSTOM_HEADER_CONTAINER_ID = 'forum-custom-header'
+
+function upsertHeadTag(selector, buildTag) {
+  let element = document.head.querySelector(selector)
+  if (!element) {
+    element = buildTag()
+    document.head.appendChild(element)
+  }
+  return element
+}
 
 export const useForumStore = defineStore('forum', () => {
   const settings = ref({ ...DEFAULT_SETTINGS })
@@ -50,12 +64,53 @@ export const useForumStore = defineStore('forum', () => {
     document.documentElement.style.setProperty('--forum-primary-color', settings.value.primary_color || DEFAULT_SETTINGS.primary_color)
     document.documentElement.style.setProperty('--forum-accent-color', settings.value.accent_color || DEFAULT_SETTINGS.accent_color)
 
-    document.title = settings.value.forum_title || DEFAULT_SETTINGS.forum_title
+    const title = settings.value.seo_title || settings.value.forum_title || DEFAULT_SETTINGS.forum_title
+    const description = settings.value.seo_description
+      || settings.value.forum_description
+      || settings.value.welcome_message
+      || DEFAULT_SETTINGS.welcome_message
+    const keywords = settings.value.seo_keywords || ''
+    const robots = [
+      settings.value.seo_robots_index === false ? 'noindex' : 'index',
+      settings.value.seo_robots_follow === false ? 'nofollow' : 'follow',
+    ].join(', ')
 
-    const metaDescription = document.querySelector('meta[name="description"]')
-    if (metaDescription) {
-      metaDescription.setAttribute('content', settings.value.forum_description || settings.value.welcome_message || DEFAULT_SETTINGS.welcome_message)
-    }
+    document.title = title
+
+    const metaDescription = upsertHeadTag('meta[name="description"]', () => {
+      const element = document.createElement('meta')
+      element.setAttribute('name', 'description')
+      return element
+    })
+    metaDescription.setAttribute('content', description)
+
+    const metaKeywords = upsertHeadTag('meta[name="keywords"]', () => {
+      const element = document.createElement('meta')
+      element.setAttribute('name', 'keywords')
+      return element
+    })
+    metaKeywords.setAttribute('content', keywords)
+
+    const metaRobots = upsertHeadTag('meta[name="robots"]', () => {
+      const element = document.createElement('meta')
+      element.setAttribute('name', 'robots')
+      return element
+    })
+    metaRobots.setAttribute('content', robots)
+
+    const ogTitle = upsertHeadTag('meta[property="og:title"]', () => {
+      const element = document.createElement('meta')
+      element.setAttribute('property', 'og:title')
+      return element
+    })
+    ogTitle.setAttribute('content', title)
+
+    const ogDescription = upsertHeadTag('meta[property="og:description"]', () => {
+      const element = document.createElement('meta')
+      element.setAttribute('property', 'og:description')
+      return element
+    })
+    ogDescription.setAttribute('content', description)
 
     let favicon = document.querySelector('link[rel="icon"]')
     if (!favicon) {

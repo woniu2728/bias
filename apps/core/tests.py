@@ -207,6 +207,11 @@ class AdminSettingsApiTests(TestCase):
             "/api/admin/settings",
             data=json.dumps({
                 "forum_title": "中文社区",
+                "seo_title": "中文社区 - 技术论坛",
+                "seo_description": "这是一个专注 Django 与 Vue 的中文社区。",
+                "seo_keywords": "Python, Django, Vue",
+                "seo_robots_index": False,
+                "seo_robots_follow": True,
                 "show_language_selector": True,
             }),
             content_type="application/json",
@@ -217,6 +222,14 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(
             json.loads(Setting.objects.get(key="basic.forum_title").value),
             "中文社区",
+        )
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="basic.seo_title").value),
+            "中文社区 - 技术论坛",
+        )
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="basic.seo_robots_index").value),
+            False,
         )
 
 
@@ -317,6 +330,26 @@ class AdminSettingsApiTests(TestCase):
             defaults={"value": json.dumps("运行时论坛名称")},
         )
         Setting.objects.update_or_create(
+            key="basic.seo_title",
+            defaults={"value": json.dumps("运行时 SEO 标题")},
+        )
+        Setting.objects.update_or_create(
+            key="basic.seo_description",
+            defaults={"value": json.dumps("运行时 SEO 描述")},
+        )
+        Setting.objects.update_or_create(
+            key="basic.seo_keywords",
+            defaults={"value": json.dumps("Python, Django, Vue")},
+        )
+        Setting.objects.update_or_create(
+            key="basic.seo_robots_index",
+            defaults={"value": json.dumps(False)},
+        )
+        Setting.objects.update_or_create(
+            key="basic.seo_robots_follow",
+            defaults={"value": json.dumps(True)},
+        )
+        Setting.objects.update_or_create(
             key="basic.welcome_title",
             defaults={"value": json.dumps("欢迎来到运行时论坛")},
         )
@@ -334,6 +367,11 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
         self.assertEqual(payload["forum_title"], "运行时论坛名称")
+        self.assertEqual(payload["seo_title"], "运行时 SEO 标题")
+        self.assertEqual(payload["seo_description"], "运行时 SEO 描述")
+        self.assertEqual(payload["seo_keywords"], "Python, Django, Vue")
+        self.assertFalse(payload["seo_robots_index"])
+        self.assertTrue(payload["seo_robots_follow"])
         self.assertEqual(payload["welcome_title"], "欢迎来到运行时论坛")
         self.assertEqual(payload["primary_color"], "#123456")
         self.assertEqual(payload["logo_url"], "/media/runtime-logo.png")

@@ -28,9 +28,69 @@
         <p class="Form-help">简短描述你的论坛，用于SEO</p>
       </div>
 
-      <div class="Form-note">
-        首页欢迎横幅已停用，当前首页直接进入讨论列表，因此这里不再单独维护欢迎标题和欢迎消息。
-      </div>
+      <section class="Form-section">
+        <div class="Form-sectionHeader">
+          <h3>SEO 设置</h3>
+          <p>这些字段会进入公开论坛设置，并在前台页面标题与 meta 标签中生效。</p>
+        </div>
+
+        <div class="Form-group">
+          <label>SEO 标题</label>
+          <input
+            v-model="settings.seo_title"
+            type="text"
+            class="FormControl"
+            placeholder="留空时使用论坛名称"
+          />
+          <p class="Form-help">建议控制在 30-60 字符，留空时自动回退到论坛名称。</p>
+        </div>
+
+        <div class="Form-group">
+          <label>SEO 描述</label>
+          <textarea
+            v-model="settings.seo_description"
+            class="FormControl"
+            rows="3"
+            placeholder="留空时使用论坛描述"
+          ></textarea>
+          <p class="Form-help">建议控制在 80-160 字符，留空时自动回退到论坛描述。</p>
+        </div>
+
+        <div class="Form-group">
+          <label>SEO 关键词</label>
+          <input
+            v-model="settings.seo_keywords"
+            type="text"
+            class="FormControl"
+            placeholder="论坛, 社区, 技术讨论"
+          />
+          <p class="Form-help">使用英文逗号分隔多个关键词，例如：Python, Django, Vue。</p>
+        </div>
+
+        <div class="Form-grid">
+          <label class="Form-toggle">
+            <input
+              v-model="settings.seo_robots_index"
+              type="checkbox"
+              class="FormControl-checkbox"
+            />
+            <span>允许搜索引擎建立索引</span>
+          </label>
+
+          <label class="Form-toggle">
+            <input
+              v-model="settings.seo_robots_follow"
+              type="checkbox"
+              class="FormControl-checkbox"
+            />
+            <span>允许搜索引擎跟踪页面链接</span>
+          </label>
+        </div>
+
+        <div class="Form-note Form-note--compact">
+          SEO 设置保存后，对外访问的论坛页面通常刷新即可生效；若站点前面接了 CDN 或反向代理缓存，请同步清理缓存。
+        </div>
+      </section>
 
       <div class="Form-group">
         <label>默认语言</label>
@@ -74,6 +134,11 @@ import api from '../../api'
 const settings = ref({
   forum_title: '',
   forum_description: '',
+  seo_title: '',
+  seo_description: '',
+  seo_keywords: '',
+  seo_robots_index: true,
+  seo_robots_follow: true,
   default_locale: 'zh-CN',
   show_language_selector: false,
 })
@@ -88,6 +153,11 @@ onMounted(async () => {
     settings.value = {
       forum_title: data.forum_title || '',
       forum_description: data.forum_description || '',
+      seo_title: data.seo_title || '',
+      seo_description: data.seo_description || '',
+      seo_keywords: data.seo_keywords || '',
+      seo_robots_index: data.seo_robots_index !== false,
+      seo_robots_follow: data.seo_robots_follow !== false,
       default_locale: data.default_locale || 'zh-CN',
       show_language_selector: Boolean(data.show_language_selector),
     }
@@ -125,6 +195,31 @@ async function handleSubmit() {
   margin-bottom: 25px;
 }
 
+.Form-section {
+  margin-bottom: 28px;
+  padding: 18px 18px 4px;
+  border: 1px solid #e6ebf0;
+  border-radius: 10px;
+  background: #fbfcfe;
+}
+
+.Form-sectionHeader {
+  margin-bottom: 18px;
+}
+
+.Form-sectionHeader h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: #243447;
+}
+
+.Form-sectionHeader p {
+  margin: 0;
+  color: #6b7a89;
+  line-height: 1.6;
+  font-size: 13px;
+}
+
 .Form-note {
   margin-bottom: 25px;
   padding: 12px 14px;
@@ -133,6 +228,11 @@ async function handleSubmit() {
   color: #617282;
   line-height: 1.6;
   font-size: 13px;
+}
+
+.Form-note--compact {
+  margin-top: -6px;
+  margin-bottom: 20px;
 }
 
 .Form-group label {
@@ -167,6 +267,24 @@ async function handleSubmit() {
   margin: 6px 0 0 0;
   font-size: 13px;
   color: #999;
+}
+
+.Form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.Form-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid #dde5ec;
+  border-radius: 8px;
+  background: white;
 }
 
 .Form-actions {

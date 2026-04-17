@@ -16,6 +16,11 @@ PUBLIC_FORUM_SETTINGS_CACHE_KEY = "settings.public.forum"
 BASIC_SETTINGS_DEFAULTS = {
     "forum_title": "PyFlarum",
     "forum_description": "",
+    "seo_title": "",
+    "seo_description": "",
+    "seo_keywords": "",
+    "seo_robots_index": True,
+    "seo_robots_follow": True,
     "welcome_title": "欢迎来到PyFlarum",
     "welcome_message": "这是一个基于Django和Vue 3的现代化论坛",
     "default_locale": "zh-CN",
