@@ -30,7 +30,7 @@
                   :alt="user.username"
                   class="avatar-large avatar-image"
                 />
-                <div v-else class="avatar-large">
+                <div v-else class="avatar-large" :style="{ backgroundColor: getUserAvatarColor(user) }">
                   {{ user.username.charAt(0).toUpperCase() }}
                 </div>
                 <span
@@ -388,6 +388,7 @@ import {
   buildDiscussionPath,
   formatMonth,
   formatRelativeTime,
+  getUserAvatarColor,
   normalizeDiscussion,
   normalizePost,
   unwrapList
