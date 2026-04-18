@@ -205,6 +205,7 @@ import {
   unwrapList
 } from '@/utils/forum'
 import { highlightSearchText } from '@/utils/search'
+import { renderTwemojiHtml } from '@/utils/twemoji'
 
 const route = useRoute()
 const router = useRouter()
@@ -343,27 +344,27 @@ function changePage(nextPage) {
 }
 
 function getDiscussionTitleHtml(discussion) {
-  return highlightSearchText(discussion.title || '讨论', normalizedQuery.value, 90)
+  return renderTwemojiHtml(highlightSearchText(discussion.title || '讨论', normalizedQuery.value, 90))
 }
 
 function getDiscussionExcerptHtml(discussion) {
-  return highlightSearchText(discussion.excerpt || '这个讨论没有更多摘要。', normalizedQuery.value, 180)
+  return renderTwemojiHtml(highlightSearchText(discussion.excerpt || '这个讨论没有更多摘要。', normalizedQuery.value, 180))
 }
 
 function getPostTitleHtml(post) {
-  return highlightSearchText(post.discussion_title || '帖子结果', normalizedQuery.value, 90)
+  return renderTwemojiHtml(highlightSearchText(post.discussion_title || '帖子结果', normalizedQuery.value, 90))
 }
 
 function getPostExcerptHtml(post) {
-  return highlightSearchText(post.excerpt || post.content || '', normalizedQuery.value, 200)
+  return renderTwemojiHtml(highlightSearchText(post.excerpt || post.content || '', normalizedQuery.value, 200))
 }
 
 function getUserTitleHtml(user) {
-  return highlightSearchText(user.display_name || user.username || '用户', normalizedQuery.value, 80)
+  return renderTwemojiHtml(highlightSearchText(user.display_name || user.username || '用户', normalizedQuery.value, 80))
 }
 
 function getUserSubtitleHtml(user) {
-  return highlightSearchText(user.bio || `@${user.username}`, normalizedQuery.value, 150)
+  return renderTwemojiHtml(highlightSearchText(user.bio || `@${user.username}`, normalizedQuery.value, 150))
 }
 </script>
 

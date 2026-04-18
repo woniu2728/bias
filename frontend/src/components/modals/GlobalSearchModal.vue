@@ -146,6 +146,7 @@ import { useModalStore } from '@/stores/modal'
 import api from '@/api'
 import { buildDiscussionPath, buildUserPath, formatRelativeTime, unwrapList } from '@/utils/forum'
 import { highlightSearchText } from '@/utils/search'
+import { renderTwemojiHtml } from '@/utils/twemoji'
 
 const props = defineProps({
   showing: {
@@ -356,8 +357,8 @@ function buildDiscussionItems(items) {
     icon: 'far fa-comments',
     avatarUrl: discussion.user?.avatar_url || '',
     titleText: discussion.title || '讨论',
-    titleHtml: highlightSearchText(discussion.title || '讨论', normalizedQuery.value, 80),
-    subtitleHtml: highlightSearchText(discussion.excerpt || '这个讨论没有更多摘要。', normalizedQuery.value, 120),
+    titleHtml: renderTwemojiHtml(highlightSearchText(discussion.title || '讨论', normalizedQuery.value, 80)),
+    subtitleHtml: renderTwemojiHtml(highlightSearchText(discussion.excerpt || '这个讨论没有更多摘要。', normalizedQuery.value, 120)),
     metaText: `${discussion.comment_count || 0} 回复 · ${formatRelativeTime(discussion.last_posted_at || discussion.created_at)}`,
     path: buildDiscussionPath(discussion),
   }))
@@ -369,8 +370,8 @@ function buildPostItems(items) {
     icon: 'far fa-comment',
     avatarUrl: post.user?.avatar_url || '',
     titleText: post.discussion_title || '帖子',
-    titleHtml: highlightSearchText(post.discussion_title || '帖子', normalizedQuery.value, 80),
-    subtitleHtml: highlightSearchText(post.excerpt || post.content || '', normalizedQuery.value, 140),
+    titleHtml: renderTwemojiHtml(highlightSearchText(post.discussion_title || '帖子', normalizedQuery.value, 80)),
+    subtitleHtml: renderTwemojiHtml(highlightSearchText(post.excerpt || post.content || '', normalizedQuery.value, 140)),
     metaText: `#${post.number} · ${post.user?.display_name || post.user?.username || '未知用户'} · ${formatRelativeTime(post.created_at)}`,
     path: `/d/${post.discussion_id}?near=${post.number}`,
   }))
@@ -382,8 +383,8 @@ function buildUserItems(items) {
     icon: 'far fa-user',
     avatarUrl: user.avatar_url || '',
     titleText: user.display_name || user.username || '用户',
-    titleHtml: highlightSearchText(user.display_name || user.username || '用户', normalizedQuery.value, 60),
-    subtitleHtml: highlightSearchText(user.bio || `@${user.username}`, normalizedQuery.value, 100),
+    titleHtml: renderTwemojiHtml(highlightSearchText(user.display_name || user.username || '用户', normalizedQuery.value, 60)),
+    subtitleHtml: renderTwemojiHtml(highlightSearchText(user.bio || `@${user.username}`, normalizedQuery.value, 100)),
     metaText: `${user.discussion_count || 0} 讨论 · ${user.comment_count || 0} 回复`,
     path: buildUserPath(user),
   }))

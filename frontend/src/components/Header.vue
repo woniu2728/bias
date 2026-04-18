@@ -123,7 +123,7 @@
                       <i v-else :class="getNotificationIconClass(notification.type)"></i>
                     </span>
                     <span class="notification-entry-main">
-                      <span class="notification-entry-message">{{ getNotificationText(notification) }}</span>
+                      <span class="notification-entry-message" v-html="getNotificationTextHtml(notification)"></span>
                       <span class="notification-entry-time">{{ formatRelativeTime(notification.created_at) }}</span>
                     </span>
                     <span v-if="!notification.is_read" class="notification-entry-unread"></span>
@@ -200,6 +200,7 @@ import { useComposerStore } from '@/stores/composer'
 import { useForumStore } from '@/stores/forum'
 import { useModalStore } from '@/stores/modal'
 import { useNotificationStore } from '@/stores/notification'
+import { renderTwemojiText } from '@/utils/twemoji'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
 import GlobalSearchModal from '@/components/modals/GlobalSearchModal.vue'
@@ -397,6 +398,10 @@ function getNotificationText(notification) {
     default:
       return notificationStore.getNotificationMessage(notification)
   }
+}
+
+function getNotificationTextHtml(notification) {
+  return renderTwemojiText(getNotificationText(notification))
 }
 
 async function handleLogout() {

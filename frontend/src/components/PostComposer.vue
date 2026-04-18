@@ -103,6 +103,14 @@
           @highlight="mentionActiveIndex = $event"
           @select="handleMentionSelect"
         />
+        <ComposerEmojiAutocomplete
+          v-if="showEmojiAutocomplete"
+          :items="emojiSuggestions"
+          :active-index="emojiAutocompleteActiveIndex"
+          :style-object="emojiAutocompleteStyle"
+          @highlight="emojiAutocompleteActiveIndex = $event"
+          @select="handleEmojiAutocompleteSelect"
+        />
 
         <div class="composer-toolbar">
           <button
@@ -191,6 +199,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ComposerEmojiAutocomplete from '@/components/ComposerEmojiAutocomplete.vue'
 import ComposerEmojiPicker from '@/components/ComposerEmojiPicker.vue'
 import ComposerMentionPicker from '@/components/ComposerMentionPicker.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -198,20 +207,25 @@ import { useComposerStore } from '@/stores/composer'
 import { useModalStore } from '@/stores/modal'
 import api from '@/api'
 import {
+  COMPOSER_EMOJI_PICKER_WIDTH,
   EMOJI_GROUPS,
+  buildEmojiReplacement,
   buildMentionTrigger,
   buildMentionReplacement,
   buildComposerToolReplacement,
   buildUploadedFileMarkdown,
+  detectEmojiQuery,
   detectMentionQuery,
   defaultToolCursorOffset,
   fetchComposerPreview,
   getComposerErrorMessage,
   getTextareaCaretCoordinates,
   replaceSelection,
+  searchEmojiItems,
   uploadComposerFile
 } from '@/utils/composer'
 import { normalizePost } from '@/utils/forum'
+import { renderTwemojiHtml } from '@/utils/twemoji'
 
 const route = useRoute()
 const router = useRouter()
@@ -230,6 +244,10 @@ const composerDraftSavedAt = ref('')
 const uploadNotice = ref('')
 const uploadNoticeTone = ref('info')
 const showEmojiPicker = ref(false)
+const emojiSuggestions = ref([])
+const emojiAutocompleteState = ref(null)
+const emojiAutocompleteCaret = ref(null)
+const emojiAutocompleteActiveIndex = ref(0)
 const mentionUsers = ref([])
 const mentionState = ref(null)
 const mentionCaret = ref(null)
@@ -316,6 +334,9 @@ const showBackdrop = computed(() => isPhoneOverlay.value)
 const showMentionPicker = computed(() => {
   return Boolean(mentionState.value) && (mentionLoading.value || mentionUsers.value.length > 0)
 })
+const showEmojiAutocomplete = computed(() => {
+  return Boolean(emojiAutocompleteState.value) && emojiSuggestions.value.length > 0
+})
 const composerInlineStyle = computed(() => {
   if (composerStore.isMinimized || composerStore.isExpanded || isPhoneOverlay.value) return {}
   return { height: `${composerHeight.value}px` }
@@ -330,7 +351,7 @@ const emojiPickerStyle = computed(() => {
   if (!anchor) return {}
 
   const rect = anchor.getBoundingClientRect()
-  const pickerWidth = Math.min(320, Math.max(220, window.innerWidth - 32))
+  const pickerWidth = Math.min(COMPOSER_EMOJI_PICKER_WIDTH, Math.max(280, window.innerWidth - 32))
   const left = Math.max(16, Math.min(rect.right - pickerWidth, window.innerWidth - pickerWidth - 16))
   const top = Math.max(16, rect.top - 12)
 
@@ -346,6 +367,22 @@ const mentionPickerStyle = computed(() => {
 
   const pickerWidth = Math.min(320, Math.max(240, window.innerWidth - 32))
   const pickerHeight = Math.min(280, Math.max(180, window.innerHeight - 32))
+  const left = Math.max(16, Math.min(anchor.left, window.innerWidth - pickerWidth - 16))
+  const belowTop = anchor.top + anchor.lineHeight + 8
+  const openAbove = belowTop + pickerHeight > window.innerHeight - 16 && anchor.top > pickerHeight + 24
+
+  return {
+    left: `${left}px`,
+    top: openAbove ? `${anchor.top - 8}px` : `${belowTop}px`,
+    transform: openAbove ? 'translateY(-100%)' : 'none'
+  }
+})
+const emojiAutocompleteStyle = computed(() => {
+  const anchor = emojiAutocompleteCaret.value
+  if (!anchor) return {}
+
+  const pickerWidth = Math.min(320, Math.max(240, window.innerWidth - 32))
+  const pickerHeight = Math.min(320, Math.max(180, window.innerHeight - 32))
   const left = Math.max(16, Math.min(anchor.left, window.innerWidth - pickerWidth - 16))
   const belowTop = anchor.top + anchor.lineHeight + 8
   const openAbove = belowTop + pickerHeight > window.innerHeight - 16 && anchor.top > pickerHeight + 24
@@ -466,9 +503,9 @@ function handleHeaderSummaryClick() {
 
 function handleViewportResize() {
   viewportWidth.value = window.innerWidth
-  if (mentionState.value) {
+  if (mentionState.value || emojiAutocompleteState.value) {
     nextTick(() => {
-      syncMentionSuggestions()
+      syncInlineSuggestions()
     })
   }
 }
@@ -512,6 +549,7 @@ function togglePreview() {
   previewError.value = ''
   showEmojiPicker.value = false
   clearMentionSuggestions()
+  clearEmojiAutocomplete()
 
   if (showPreview.value) {
     requestPreview()
@@ -537,6 +575,7 @@ async function closeComposer(force = false) {
   showEmojiPicker.value = false
   showPreview.value = false
   clearMentionSuggestions()
+  clearEmojiAutocomplete()
   if (!isEditing.value) {
     saveComposerDraft()
   }
@@ -556,6 +595,7 @@ function resetComposerState() {
   previewHtml.value = ''
   previewError.value = ''
   clearMentionSuggestions()
+  clearEmojiAutocomplete()
   replyContent.value = ''
 }
 
@@ -647,17 +687,20 @@ async function applyComposerTool(tool) {
   if (tool.key === 'upload') {
     showEmojiPicker.value = false
     clearMentionSuggestions()
+    clearEmojiAutocomplete()
     attachmentInput.value?.click()
     return
   }
   if (tool.key === 'image') {
     showEmojiPicker.value = false
     clearMentionSuggestions()
+    clearEmojiAutocomplete()
     imageInput.value?.click()
     return
   }
   if (tool.key === 'emoji') {
     clearMentionSuggestions()
+    clearEmojiAutocomplete()
     if (showPreview.value) {
       showPreview.value = false
       await nextTick()
@@ -697,7 +740,7 @@ function handleEditorInteraction(event) {
   ) {
     return
   }
-  syncMentionSuggestions()
+  syncInlineSuggestions()
 }
 
 function handleEditorKeydown(event) {
@@ -711,6 +754,11 @@ function handleEditorKeydown(event) {
     if (showMentionPicker.value) {
       event.preventDefault()
       clearMentionSuggestions()
+      return
+    }
+    if (showEmojiAutocomplete.value) {
+      event.preventDefault()
+      clearEmojiAutocomplete()
       return
     }
     if (showEmojiPicker.value) {
@@ -727,6 +775,36 @@ function handleEditorKeydown(event) {
     event.preventDefault()
     closeComposer()
     return
+  }
+
+  if (showEmojiAutocomplete.value) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      emojiAutocompleteActiveIndex.value =
+        (emojiAutocompleteActiveIndex.value + 1) % Math.max(emojiSuggestions.value.length, 1)
+      return
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      emojiAutocompleteActiveIndex.value =
+        (emojiAutocompleteActiveIndex.value - 1 + Math.max(emojiSuggestions.value.length, 1)) % Math.max(emojiSuggestions.value.length, 1)
+      return
+    }
+
+    if (
+      (event.key === 'Enter' || event.key === 'Tab') &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
+      const activeEmoji = emojiSuggestions.value[emojiAutocompleteActiveIndex.value]
+      if (!activeEmoji) return
+      event.preventDefault()
+      handleEmojiAutocompleteSelect(activeEmoji)
+      return
+    }
   }
 
   if (!showMentionPicker.value) return
@@ -806,27 +884,56 @@ async function handleEmojiSelect(emoji) {
   await insertComposerText(emoji)
 }
 
-function syncMentionSuggestions() {
+async function handleEmojiAutocompleteSelect(item) {
+  if (!emojiAutocompleteState.value || !item?.emoji) return
+
+  const replacement = buildEmojiReplacement(item.emoji)
+  await insertComposerText(replacement, {
+    start: emojiAutocompleteState.value.start,
+    end: emojiAutocompleteState.value.end,
+    cursor: emojiAutocompleteState.value.start + replacement.length
+  })
+  clearEmojiAutocomplete()
+}
+
+function syncInlineSuggestions() {
   if (showPreview.value) {
     clearMentionSuggestions()
+    clearEmojiAutocomplete()
     return
   }
 
   const textarea = composerTextarea.value
   if (!textarea || textarea.selectionStart !== textarea.selectionEnd) {
     clearMentionSuggestions()
+    clearEmojiAutocomplete()
     return
   }
 
   const detected = detectMentionQuery(replyContent.value, textarea.selectionStart)
-  if (!detected) {
-    clearMentionSuggestions()
+  if (detected) {
+    clearEmojiAutocomplete()
+    mentionState.value = detected
+    mentionCaret.value = getTextareaCaretCoordinates(textarea, detected.start)
+    scheduleMentionSearch(detected.query)
     return
   }
 
-  mentionState.value = detected
-  mentionCaret.value = getTextareaCaretCoordinates(textarea, detected.start)
-  scheduleMentionSearch(detected.query)
+  clearMentionSuggestions()
+
+  const detectedEmoji = detectEmojiQuery(replyContent.value, textarea.selectionStart)
+  if (!detectedEmoji) {
+    clearEmojiAutocomplete()
+    return
+  }
+
+  emojiAutocompleteState.value = detectedEmoji
+  emojiAutocompleteCaret.value = getTextareaCaretCoordinates(textarea, detectedEmoji.start)
+  emojiSuggestions.value = searchEmojiItems(detectedEmoji.query, {
+    limit: 8,
+    includeCommonWhenEmpty: true
+  })
+  emojiAutocompleteActiveIndex.value = 0
 }
 
 function scheduleMentionSearch(query) {
@@ -897,7 +1004,7 @@ async function requestPreview() {
   try {
     const data = await fetchComposerPreview(replyContent.value)
     if (!showPreview.value) return
-    previewHtml.value = data.html || ''
+    previewHtml.value = renderTwemojiHtml(data.html || '')
   } catch (error) {
     previewError.value = getComposerErrorMessage(error, '预览加载失败')
   } finally {
@@ -919,7 +1026,7 @@ async function insertComposerText(replacement, options = {}) {
   await nextTick()
   composerTextarea.value?.focus()
   composerTextarea.value?.setSelectionRange(cursor, cursor)
-  syncMentionSuggestions()
+  syncInlineSuggestions()
 }
 
 function handleDocumentMouseDown(event) {
@@ -928,6 +1035,7 @@ function handleDocumentMouseDown(event) {
   }
   if (event.target !== composerTextarea.value) {
     clearMentionSuggestions()
+    clearEmojiAutocomplete()
   }
 }
 
@@ -946,12 +1054,20 @@ function clearMentionSuggestions() {
   mentionActiveIndex.value = 0
 }
 
+function clearEmojiAutocomplete() {
+  emojiSuggestions.value = []
+  emojiAutocompleteState.value = null
+  emojiAutocompleteCaret.value = null
+  emojiAutocompleteActiveIndex.value = 0
+}
+
 async function submitReply() {
   if (!replyContent.value.trim() || !discussionId.value) return
 
   showEmojiPicker.value = false
   showPreview.value = false
   clearMentionSuggestions()
+  clearEmojiAutocomplete()
   submitting.value = true
   try {
     if (isEditing.value) {

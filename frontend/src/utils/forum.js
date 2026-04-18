@@ -1,3 +1,5 @@
+import { renderTwemojiHtml } from '@/utils/twemoji'
+
 export function unwrapList(payload) {
   if (Array.isArray(payload?.data)) return payload.data
   if (Array.isArray(payload?.results)) return payload.results
@@ -32,6 +34,7 @@ export function normalizeDiscussion(discussion = {}) {
 export function normalizePost(post = {}) {
   return {
     ...post,
+    content_html: renderTwemojiHtml(post.content_html || ''),
     approval_status: post.approval_status || 'approved',
     approval_note: post.approval_note || '',
     like_count: post.like_count ?? post.likes_count ?? 0,

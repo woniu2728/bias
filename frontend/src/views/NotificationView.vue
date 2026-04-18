@@ -37,9 +37,7 @@
             </div>
 
             <div class="notification-content">
-              <div class="notification-message">
-                {{ getNotificationMessage(notification) }}
-              </div>
+              <div class="notification-message" v-html="getNotificationMessageHtml(notification)"></div>
               <div class="notification-time">
                 {{ formatDate(notification.created_at) }}
               </div>
@@ -96,6 +94,7 @@ import { useModalStore } from '@/stores/modal'
 import { useNotificationStore } from '@/stores/notification'
 import api from '@/api'
 import { buildDiscussionPath, formatRelativeTime, unwrapList } from '@/utils/forum'
+import { renderTwemojiText } from '@/utils/twemoji'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -251,6 +250,10 @@ function getNotificationMessage(notification) {
     default:
       return notification.message || '你有新通知'
   }
+}
+
+function getNotificationMessageHtml(notification) {
+  return renderTwemojiText(getNotificationMessage(notification))
 }
 
 function formatDate(dateString) {

@@ -1,27 +1,7 @@
 import api from '@/api'
+export { EMOJI_GROUPS, searchEmojiItems } from '@/utils/emojiData'
 
-export const EMOJI_GROUPS = [
-  {
-    key: 'common',
-    label: '常用',
-    emojis: ['😀', '😁', '😂', '😊', '😉', '😍', '😘', '🤔', '😎', '😭', '😡', '👍', '👎', '👏', '🙏', '🎉']
-  },
-  {
-    key: 'people',
-    label: '人物',
-    emojis: ['🙂', '😇', '🥳', '😴', '🤗', '🤯', '😅', '🤩', '😬', '🤓', '😷', '🤝', '💪', '🙌', '👀', '🫡']
-  },
-  {
-    key: 'nature',
-    label: '自然',
-    emojis: ['🌞', '🌙', '⭐', '🔥', '🌈', '☁️', '🌧️', '❄️', '🌸', '🌻', '🍀', '🌲', '🐶', '🐱', '🦊', '🐼']
-  },
-  {
-    key: 'objects',
-    label: '物件',
-    emojis: ['📌', '📎', '📷', '💻', '⌚', '📱', '🎧', '🎁', '📚', '✏️', '🧩', '⚙️', '🔒', '🔔', '❤️', '✅']
-  }
-]
+export const COMPOSER_EMOJI_PICKER_WIDTH = 420
 
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg']
 
@@ -83,6 +63,22 @@ export function detectMentionQuery(content, cursorPosition) {
   const safeCursor = Math.max(0, Math.min(cursorPosition ?? safeContent.length, safeContent.length))
   const beforeCursor = safeContent.slice(0, safeCursor)
   const match = beforeCursor.match(/(^|[\s(])@([A-Za-z0-9_.-]{0,30})$/)
+  if (!match) return null
+
+  const query = match[2] || ''
+  const start = safeCursor - query.length - 1
+  return {
+    query,
+    start,
+    end: safeCursor
+  }
+}
+
+export function detectEmojiQuery(content, cursorPosition) {
+  const safeContent = String(content || '')
+  const safeCursor = Math.max(0, Math.min(cursorPosition ?? safeContent.length, safeContent.length))
+  const beforeCursor = safeContent.slice(0, safeCursor)
+  const match = beforeCursor.match(/(^|[\s(\[{"'“‘]):([A-Za-z0-9_+\-\u4e00-\u9fa5]{0,32})$/u)
   if (!match) return null
 
   const query = match[2] || ''
@@ -169,6 +165,10 @@ export function getTextareaCaretCoordinates(textarea, position) {
 
 export function buildMentionReplacement(username) {
   return `@${String(username || '').trim()} `
+}
+
+export function buildEmojiReplacement(emoji) {
+  return `${String(emoji || '').trim()} `
 }
 
 export function buildMentionTrigger(content, start) {
