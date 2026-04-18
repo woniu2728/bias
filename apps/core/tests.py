@@ -1113,6 +1113,7 @@ class AdminGroupManagementApiTests(TestCase):
             data=json.dumps({
                 "name": "Helpers",
                 "color": "#27ae60",
+                "icon": "fas fa-life-ring",
                 "is_hidden": False,
             }),
             content_type="application/json",
@@ -1128,6 +1129,7 @@ class AdminGroupManagementApiTests(TestCase):
             data=json.dumps({
                 "name": "Support",
                 "color": "#8e44ad",
+                "icon": "fas fa-headset",
                 "is_hidden": True,
             }),
             content_type="application/json",
@@ -1144,7 +1146,7 @@ class AdminGroupManagementApiTests(TestCase):
         self.assertEqual(group.name_singular, "Support")
         self.assertEqual(group.name_plural, "Support")
         self.assertEqual(group.color, "#8e44ad")
-        self.assertEqual(group.icon, "")
+        self.assertEqual(group.icon, "fas fa-headset")
         self.assertTrue(group.is_hidden)
 
     def test_admin_can_delete_custom_group(self):

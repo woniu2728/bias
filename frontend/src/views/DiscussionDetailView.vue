@@ -90,6 +90,14 @@
                         :src="post.user.avatar_url"
                         :alt="getUserDisplayName(post.user)"
                       />
+                      <span
+                        v-if="getUserPrimaryGroupIcon(post.user)"
+                        class="post-avatar-badge"
+                        :style="{ backgroundColor: getUserPrimaryGroupColor(post.user) }"
+                        :title="getUserPrimaryGroupLabel(post.user)"
+                      >
+                        <i :class="getUserPrimaryGroupIcon(post.user)"></i>
+                      </span>
                     </router-link>
                   </aside>
 
@@ -476,7 +484,6 @@ const togglingSubscription = ref(false)
 const highlightedPostNumber = ref(null)
 const currentVisiblePostNumber = ref(1)
 const currentVisiblePostProgress = ref(1)
-const visiblePostCount = ref(1)
 const showDiscussionMenu = ref(false)
 const activePostMenuId = ref(null)
 const likePendingPostIds = ref([])
@@ -490,8 +497,7 @@ let nearUrlTimer = null
 let readStateTimer = null
 let lastReportedReadNumber = 0
 let scrubberResizeObserver = null
-let scrubberDragStartY = 0
-let scrubberDragStartNumber = 1
+let scrubberDragPointerOffset = 0
 
 const canEditDiscussion = computed(() => Boolean(
   authStore.isAuthenticated
@@ -596,32 +602,16 @@ const scrubberDescription = computed(() => {
 const scrubberPositionText = computed(() => {
   return `${scrubberDisplayPostNumber.value} / ${maxPostNumber.value}`
 })
-const scrubberPercentPerPost = computed(() => {
-  const total = Math.max(maxPostNumber.value, 1)
-  const visible = Math.min(total, Math.max(visiblePostCount.value, 1))
-  const trackHeight = Math.max(scrubberTrackHeight.value, 1)
-  const minPercentVisible = (50 / trackHeight) * 100
-  const visiblePercent = Math.max(100 / total, minPercentVisible / visible)
-  const indexPercent = total === visible ? 0 : (100 - visiblePercent * visible) / (total - visible)
-
-  return {
-    total,
-    visible,
-    visiblePercent,
-    indexPercent
-  }
-})
 const scrubberHandlePercent = computed(() => {
-  const { total, visible, visiblePercent } = scrubberPercentPerPost.value
-  return Math.min(100, Math.max(visiblePercent * visible, total === visible ? 100 : 0))
+  const total = Math.max(maxPostNumber.value, 1)
+  if (total <= 1) return 100
+
+  const trackHeight = Math.max(scrubberTrackHeight.value, 1)
+  const minHandlePercent = (28 / trackHeight) * 100
+  return Math.min(16, Math.max(minHandlePercent, 100 / total))
 })
 const scrubberBeforePercent = computed(() => {
-  const { total, visible, indexPercent } = scrubberPercentPerPost.value
-  const handle = scrubberHandlePercent.value
-  if (total <= visible) return 0
-
-  const displayNumber = Math.min(total, Math.max(1, scrubberDisplayNumber.value))
-  return Math.max(0, Math.min(100 - handle, indexPercent * Math.min(displayNumber - 1, total - visible)))
+  return getScrubberHandleTopPercent(scrubberDisplayNumber.value)
 })
 const scrubberAfterPercent = computed(() => {
   return Math.max(0, 100 - scrubberBeforePercent.value - scrubberHandlePercent.value)
@@ -888,7 +878,6 @@ function updateVisiblePostFromScroll() {
   const viewportBottom = window.innerHeight
   let closestPostNumber = posts.value[0].number
   let closestDistance = Number.POSITIVE_INFINITY
-  let visibleCount = 0
   let indexFromViewport = null
   let lastVisiblePostNumber = posts.value[0].number
 
@@ -910,7 +899,6 @@ function updateVisiblePostFromScroll() {
     }
 
     if (visiblePart > 0) {
-      visibleCount += visiblePart / height
       lastVisiblePostNumber = post.number
     }
 
@@ -926,7 +914,6 @@ function updateVisiblePostFromScroll() {
   const isAtPageBottom = documentBottom - scrollBottom <= 24
   const trackedPostNumber = isAtPageBottom ? lastVisiblePostNumber : closestPostNumber
 
-  visiblePostCount.value = Math.max(1, visibleCount)
   currentVisiblePostProgress.value = isAtPageBottom
     ? maxPostNumber.value
     : clampPostPosition(indexFromViewport ?? trackedPostNumber)
@@ -959,6 +946,14 @@ function getPostProgressPercent(value) {
   return ((number - 1) / (total - 1)) * 100
 }
 
+function getScrubberHandleTopPercent(value) {
+  const handle = scrubberHandlePercent.value
+  if (handle >= 100) return 0
+
+  const centerPercent = getPostProgressPercent(clampPostPosition(value))
+  return Math.max(0, Math.min(100 - handle, centerPercent - handle / 2))
+}
+
 function handleScrubberTrackClick(event) {
   if (scrubberDragging.value) return
 
@@ -969,7 +964,7 @@ function handleScrubberTrackClick(event) {
   if (!rect.height) return
 
   const percent = Math.max(0, Math.min(1, (getPointerClientY(event) - rect.top) / rect.height))
-  const targetNumber = getPostNumberFromTrackPercent(percent, true)
+  const targetNumber = getPostNumberFromTrackPercent(percent)
   jumpToPost(targetNumber)
 }
 
@@ -978,10 +973,12 @@ function handleScrubberMouseDown(event) {
   if (clientY === null) return
 
   event.preventDefault()
+  const track = scrubberTrack.value
+  const rect = track?.getBoundingClientRect()
+  const handleTopPx = rect ? (scrubberBeforePercent.value / 100) * rect.height : 0
   scrubberDragging.value = true
   scrubberPreviewNumber.value = scrubberDisplayNumber.value
-  scrubberDragStartY = clientY
-  scrubberDragStartNumber = scrubberDisplayNumber.value
+  scrubberDragPointerOffset = Math.max(0, clientY - (rect?.top || 0) - handleTopPx)
   document.body.classList.add('scrubber-dragging')
   window.addEventListener('mousemove', handleScrubberMouseMove)
   window.addEventListener('mouseup', handleScrubberMouseUp)
@@ -996,15 +993,16 @@ function handleScrubberMouseMove(event) {
   const clientY = getPointerClientY(event)
   if (clientY === null) return
 
-  const trackHeight = Math.max(scrubberTrackHeight.value, 1)
-  const deltaPixels = clientY - scrubberDragStartY
-  const deltaPercent = (deltaPixels / trackHeight) * 100
-  const percentPerPost = scrubberPercentPerPost.value.indexPercent
-  const nextNumber = percentPerPost > 0
-    ? scrubberDragStartNumber + deltaPercent / percentPerPost
-    : 1 + (deltaPercent / 100) * Math.max(maxPostNumber.value - 1, 0)
+  const track = scrubberTrack.value
+  const rect = track?.getBoundingClientRect()
+  if (!rect?.height) return
 
-  scrubberPreviewNumber.value = clampPostPosition(nextNumber)
+  const handleHeightPx = (scrubberHandlePercent.value / 100) * rect.height
+  const maxTopPx = Math.max(0, rect.height - handleHeightPx)
+  const topPx = Math.max(0, Math.min(maxTopPx, clientY - rect.top - scrubberDragPointerOffset))
+  const centerPercent = rect.height ? (topPx + handleHeightPx / 2) / rect.height : 0
+
+  scrubberPreviewNumber.value = getPostNumberFromTrackPercent(centerPercent)
 }
 
 function handleScrubberMouseUp() {
@@ -1058,22 +1056,36 @@ function syncScrubberTrackMetrics() {
   }
 }
 
-function getPostNumberFromTrackPercent(percent, centerHandle = false) {
-  const clampedPercent = Math.max(0, Math.min(100, percent * 100))
-  const { total, visible, indexPercent } = scrubberPercentPerPost.value
+function getPostNumberFromTrackPercent(percent) {
+  const total = Math.max(maxPostNumber.value, 1)
+  if (total <= 1) return 1
 
-  if (total <= visible || indexPercent <= 0) {
-    return normalizePostNumber(1 + (clampedPercent / 100) * Math.max(total - 1, 0))
-  }
+  const clampedPercent = Math.max(0, Math.min(1, Number(percent) || 0))
+  if (clampedPercent >= 1) return total
 
-  const centeredPercent = clampedPercent - (centerHandle ? scrubberHandlePercent.value / 2 : 0)
-  return normalizePostNumber(1 + centeredPercent / indexPercent)
+  return Math.min(total, Math.floor(clampedPercent * total) + 1)
 }
 
 function getPointerClientY(event) {
   if (typeof event?.clientY === 'number') return event.clientY
   const touch = event?.touches?.[0] || event?.changedTouches?.[0]
   return typeof touch?.clientY === 'number' ? touch.clientY : null
+}
+
+function getUserPrimaryGroup(user) {
+  return user?.primary_group || null
+}
+
+function getUserPrimaryGroupIcon(user) {
+  return getUserPrimaryGroup(user)?.icon || ''
+}
+
+function getUserPrimaryGroupColor(user) {
+  return getUserPrimaryGroup(user)?.color || 'var(--forum-primary-color)'
+}
+
+function getUserPrimaryGroupLabel(user) {
+  return getUserPrimaryGroup(user)?.name || ''
 }
 
 function toggleDiscussionMenu() {
@@ -1841,6 +1853,7 @@ function formatAbsoluteDate(value) {
 
 .post-avatar-link {
   display: inline-flex;
+  position: relative;
   text-decoration: none;
 }
 
@@ -1860,6 +1873,25 @@ function formatAbsoluteDate(value) {
   justify-content: center;
   font-size: 24px;
   font-weight: 700;
+}
+
+.post-avatar-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  box-shadow: 0 10px 18px rgba(17, 33, 52, 0.18);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.post-avatar-badge i {
+  font-size: 10px;
 }
 
 .post-main {
@@ -2866,6 +2898,17 @@ function formatAbsoluteDate(value) {
 
   .avatar-placeholder.post-avatar {
     font-size: 16px;
+  }
+
+  .post-avatar-badge {
+    width: 18px;
+    height: 18px;
+    right: -1px;
+    bottom: -1px;
+  }
+
+  .post-avatar-badge i {
+    font-size: 8px;
   }
 
   .post-header {

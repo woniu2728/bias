@@ -45,15 +45,16 @@
                 <td>{{ user.id }}</td>
                 <td>
                   <strong>{{ user.username }}</strong>
-                  <span v-if="user.is_staff" class="UserBadge UserBadge--admin">管理员</span>
-                  <div v-if="user.groups?.length" class="UserGroups">
+                  <div v-if="getUserGroupBadges(user).length" class="UserGroups">
                     <span
-                      v-for="group in user.groups"
-                      :key="group.id"
-                      class="UserBadge UserBadge--group"
+                      v-for="group in getUserGroupBadges(user)"
+                      :key="`${user.id}-${group.id}-${group.name}`"
+                      class="UserGroupIcon"
                       :style="{ backgroundColor: group.color || '#7f8c8d' }"
+                      :title="group.name"
                     >
-                      {{ group.name }}
+                      <i v-if="group.icon" :class="group.icon"></i>
+                      <span v-else>{{ getGroupFallbackLabel(group) }}</span>
                     </span>
                   </div>
                 </td>
@@ -409,6 +410,34 @@ function statusClass(user) {
   return 'UserStatus--pending'
 }
 
+function getPrimaryGroup(user) {
+  return user?.primary_group || null
+}
+
+function getUserGroupBadges(user) {
+  const badges = []
+  const seen = new Set()
+
+  const addGroup = (group) => {
+    if (!group) return
+    const key = `${group.id}-${group.name}`
+    if (seen.has(key)) return
+    seen.add(key)
+    badges.push(group)
+  }
+
+  addGroup(getPrimaryGroup(user))
+  for (const group of Array.isArray(user?.groups) ? user.groups : []) {
+    addGroup(group)
+  }
+
+  return badges
+}
+
+function getGroupFallbackLabel(group) {
+  return (group?.name || '?').slice(0, 1).toUpperCase()
+}
+
 function formatDate(dateString) {
   if (!dateString) return ''
   const date = new Date(dateString)
@@ -517,29 +546,28 @@ const canDeleteCurrentUser = computed(() => {
   color: #999;
 }
 
-.UserBadge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 600;
-  margin-left: 8px;
-}
-
-.UserBadge--admin {
-  background: #e74c3c;
-  color: white;
-}
-
-.UserBadge--group {
-  color: white;
-}
-
 .UserGroups {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+.UserGroupIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  font-size: 11px;
+}
+
+.UserGroupIcon i,
+.UserGroupIcon span {
+  line-height: 1;
 }
 
 .UserStatus {

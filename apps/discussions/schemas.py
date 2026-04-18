@@ -55,10 +55,21 @@ class DiscussionFilterSchema(BaseModel):
 
 class UserSimpleSchema(BaseModel):
     """简化的用户信息"""
+    class GroupBadgeSchema(BaseModel):
+        id: int
+        name: str
+        color: str = ""
+        icon: str = ""
+        is_hidden: bool = False
+
+        class Config:
+            from_attributes = True
+
     id: int
     username: str
     display_name: str
     avatar_url: Optional[str] = None
+    primary_group: Optional[GroupBadgeSchema] = None
 
     class Config:
         from_attributes = True

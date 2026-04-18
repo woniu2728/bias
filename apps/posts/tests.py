@@ -6,6 +6,7 @@ from django.utils import timezone
 from datetime import timedelta
 from ninja_jwt.tokens import RefreshToken
 
+from apps.discussions.models import DiscussionUser
 from apps.discussions.services import DiscussionService
 from apps.posts.models import Post
 from apps.posts.models import PostFlag
@@ -70,6 +71,31 @@ class PostPaginationTests(TestCase):
 
         self.assertTrue(state["failed"])
         self.assertEqual(post.content, "Retry reply")
+
+    def test_own_reply_advances_read_state_without_auto_follow(self):
+        self.user.preferences = {"follow_after_reply": False}
+        self.user.save(update_fields=["preferences"])
+
+        discussion = DiscussionService.create_discussion(
+            title="Read progress discussion",
+            content="First post",
+            user=self.user,
+        )
+
+        DiscussionUser.objects.filter(discussion=discussion, user=self.user).update(
+            last_read_post_number=1,
+            is_subscribed=False,
+        )
+
+        reply = PostService.create_post(
+            discussion_id=discussion.id,
+            content="My own reply",
+            user=self.user,
+        )
+
+        state = DiscussionUser.objects.get(discussion=discussion, user=self.user)
+        self.assertEqual(state.last_read_post_number, reply.number)
+        self.assertFalse(state.is_subscribed)
 
 
 class PostFlagApiTests(TestCase):

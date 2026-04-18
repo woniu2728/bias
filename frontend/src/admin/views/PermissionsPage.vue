@@ -15,6 +15,7 @@
             class="GroupBar-item"
             :style="{ backgroundColor: getGroupColor(group) }"
           >
+            <i v-if="group.icon" :class="group.icon" class="GroupBar-icon"></i>
             <span class="GroupBar-name">{{ group.name }}</span>
             <button
               @click="editGroup(group)"
@@ -109,6 +110,10 @@
             </div>
 
             <div class="FormRow">
+              <div class="Form-group">
+                <label>图标</label>
+                <input v-model="groupForm.icon" type="text" class="FormControl" placeholder="例如：fas fa-shield-alt" />
+              </div>
               <div class="Form-group">
                 <label>颜色</label>
                 <div class="ColorField">
@@ -296,6 +301,7 @@ function editGroup(group) {
   editingGroup.value = group
   groupForm.value = {
     name: group.name || '',
+    icon: group.icon || '',
     color: group.color || '#4d698e',
     is_hidden: Boolean(group.is_hidden),
   }
@@ -370,6 +376,7 @@ function closeGroupModal() {
 function getEmptyGroupForm() {
   return {
     name: '',
+    icon: '',
     color: '#4d698e',
     is_hidden: false,
   }
@@ -407,6 +414,11 @@ function getEmptyGroupForm() {
 
 .GroupBar-name {
   flex: 1;
+}
+
+.GroupBar-icon {
+  width: 14px;
+  text-align: center;
 }
 
 .GroupBar-edit {

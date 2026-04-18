@@ -152,7 +152,7 @@ class DiscussionService:
         """
         queryset = Discussion.objects.select_related(
             'user', 'last_posted_user'
-        ).prefetch_related('discussion_tags__tag')
+        ).prefetch_related('discussion_tags__tag', 'user__user_groups', 'last_posted_user__user_groups')
 
         # 过滤隐藏的讨论
         if not user or not user.is_staff:
@@ -238,7 +238,7 @@ class DiscussionService:
         try:
             discussion = Discussion.objects.select_related(
                 'user', 'last_posted_user'
-            ).prefetch_related('discussion_tags__tag').get(id=discussion_id)
+            ).prefetch_related('discussion_tags__tag', 'user__user_groups', 'last_posted_user__user_groups').get(id=discussion_id)
 
             if not DiscussionService._can_view_discussion(discussion, user):
                 return None

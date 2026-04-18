@@ -33,6 +33,14 @@
                 <div v-else class="avatar-large">
                   {{ user.username.charAt(0).toUpperCase() }}
                 </div>
+                <span
+                  v-if="getUserPrimaryGroupIcon(user)"
+                  class="avatar-group-badge"
+                  :style="{ backgroundColor: getUserPrimaryGroupColor(user) }"
+                  :title="getUserPrimaryGroupLabel(user)"
+                >
+                  <i :class="getUserPrimaryGroupIcon(user)"></i>
+                </span>
               </div>
               <div class="user-info-wrapper">
                 <h1 class="user-identity">{{ user.display_name || user.username }}</h1>
@@ -440,6 +448,22 @@ const isOnline = computed(() => {
   return (now - lastSeen) < 5 * 60 * 1000
 })
 
+function getUserPrimaryGroup(userValue) {
+  return userValue?.primary_group || null
+}
+
+function getUserPrimaryGroupIcon(userValue) {
+  return getUserPrimaryGroup(userValue)?.icon || ''
+}
+
+function getUserPrimaryGroupColor(userValue) {
+  return getUserPrimaryGroup(userValue)?.color || '#4d698e'
+}
+
+function getUserPrimaryGroupLabel(userValue) {
+  return getUserPrimaryGroup(userValue)?.name || ''
+}
+
 onMounted(async () => {
   await refreshProfile()
 })
@@ -782,6 +806,26 @@ function formatLastSeen(dateString) {
 .avatar-image {
   object-fit: cover;
   background: rgba(255, 255, 255, 0.18);
+}
+
+.avatar-group-badge {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  color: white;
+  box-shadow: 0 8px 18px rgba(18, 29, 41, 0.22);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-group-badge i {
+  font-size: 13px;
 }
 
 .avatar-uploader {
@@ -1422,6 +1466,15 @@ function formatLastSeen(dateString) {
 
   .user-badges {
     justify-content: center;
+  }
+
+  .avatar-group-badge {
+    width: 24px;
+    height: 24px;
+  }
+
+  .avatar-group-badge i {
+    font-size: 11px;
   }
 
   .user-page-layout {

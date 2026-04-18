@@ -151,16 +151,18 @@ class PostService:
                 user.comment_count = F('comment_count') + 1
                 user.save(update_fields=['comment_count'])
 
-                if user.preferences.get('follow_after_reply', False):
-                    DiscussionUser.objects.update_or_create(
-                        discussion=discussion,
-                        user=user,
-                        defaults={
-                            'is_subscribed': True,
-                            'last_read_at': timezone.now(),
-                            'last_read_post_number': post.number,
-                        }
-                    )
+                follow_after_reply = user.preferences.get('follow_after_reply', False)
+                state_defaults = {
+                    'last_read_at': timezone.now(),
+                    'last_read_post_number': post.number,
+                }
+                if follow_after_reply:
+                    state_defaults['is_subscribed'] = True
+                DiscussionUser.objects.update_or_create(
+                    discussion=discussion,
+                    user=user,
+                    defaults=state_defaults,
+                )
 
                 # 处理@提及
                 PostService._process_mentions(post, content)
@@ -204,6 +206,8 @@ class PostService:
             discussion_id=discussion_id
         ).select_related(
             'user', 'edited_user'
+        ).prefetch_related(
+            'user__user_groups', 'edited_user__user_groups'
         ).annotate(
             like_count=Count('likes', distinct=True)
         )
@@ -308,6 +312,8 @@ class PostService:
         try:
             post = Post.objects.select_related(
                 'user', 'edited_user', 'discussion'
+            ).prefetch_related(
+                'user__user_groups', 'edited_user__user_groups'
             ).annotate(
                 like_count=Count('likes', distinct=True)
             )
@@ -578,6 +584,18 @@ class PostService:
             if post.user:
                 post.user.comment_count = F('comment_count') + 1
                 post.user.save(update_fields=['comment_count'])
+                follow_after_reply = post.user.preferences.get('follow_after_reply', False)
+                approval_defaults = {
+                    'last_read_at': now,
+                    'last_read_post_number': post.number,
+                }
+                if follow_after_reply:
+                    approval_defaults['is_subscribed'] = True
+                DiscussionUser.objects.update_or_create(
+                    discussion=discussion,
+                    user=post.user,
+                    defaults=approval_defaults,
+                )
 
             PostService._process_mentions(post, post.content)
 

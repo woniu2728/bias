@@ -12,6 +12,7 @@ from typing import List
 
 from .models import User
 from apps.core.file_service import FileUploadService
+from apps.users.group_utils import get_primary_group, serialize_group_badge
 from .schemas import (
     UserRegisterSchema,
     UserLoginSchema,
@@ -29,6 +30,20 @@ from .schemas import (
 from .services import UserService
 
 router = Router()
+
+
+def _attach_primary_group(user):
+    if not user:
+        return None
+
+    user.primary_group = serialize_group_badge(get_primary_group(user))
+    return user
+
+
+def _attach_primary_groups(users):
+    for user in users:
+        _attach_primary_group(user)
+    return users
 
 
 class AuthBearer(HttpBearer):
@@ -141,7 +156,7 @@ def reset_password(request, payload: PasswordResetSchema):
 @router.get("/me", response=CurrentUserSchema, auth=AuthBearer(), tags=["Users"])
 def get_current_user(request):
     """获取当前用户信息"""
-    return request.auth
+    return _attach_primary_group(request.auth)
 
 
 @router.get("/me/preferences", response=UserPreferencesSchema, auth=AuthBearer(), tags=["Users"])
@@ -174,7 +189,7 @@ def update_preferences(request, payload: UserPreferencesSchema):
 @router.get("", response=List[UserOutSchema], tags=["Users"])
 def list_users(request, page: int = 1, limit: int = 20, q: str = None):
     """获取用户列表"""
-    queryset = User.objects.all()
+    queryset = User.objects.prefetch_related("user_groups").all()
 
     # 搜索
     if q:
@@ -184,14 +199,14 @@ def list_users(request, page: int = 1, limit: int = 20, q: str = None):
     start = (page - 1) * limit
     end = start + limit
 
-    return list(queryset[start:end])
+    return _attach_primary_groups(list(queryset[start:end]))
 
 
 @router.get("/{user_id}", response=UserDetailSchema, tags=["Users"])
 def get_user(request, user_id: int):
     """获取用户详情"""
-    user = get_object_or_404(User, id=user_id)
-    return user
+    user = get_object_or_404(User.objects.prefetch_related("user_groups"), id=user_id)
+    return _attach_primary_group(user)
 
 
 @router.patch("/{user_id}", response=UserOutSchema, auth=AuthBearer(), tags=["Users"])
@@ -210,7 +225,8 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
             bio=payload.bio,
             email=payload.email,
         )
-        return user
+        user = User.objects.prefetch_related("user_groups").get(id=user.id)
+        return _attach_primary_group(user)
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=400)
 
@@ -253,6 +269,7 @@ def upload_avatar(request, user_id: int):
         if previous_avatar and previous_avatar != avatar_url:
             FileUploadService.delete_file(previous_avatar)
 
-        return user
+        user = User.objects.prefetch_related("user_groups").get(id=user.id)
+        return _attach_primary_group(user)
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=400)

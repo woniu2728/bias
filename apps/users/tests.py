@@ -11,6 +11,7 @@ from PIL import Image
 from ninja_jwt.tokens import RefreshToken
 
 from apps.core.models import Setting
+from apps.users.models import Group
 from apps.users.models import EmailToken, PasswordToken, User
 
 
@@ -119,6 +120,39 @@ class AvatarUploadApiTests(TestCase):
         Image.new("RGB", (32, 32), "#4d698e").save(buffer, format="PNG")
         buffer.seek(0)
         return SimpleUploadedFile("avatar.png", buffer.getvalue(), content_type="image/png")
+
+
+class UserProfileApiTests(TestCase):
+    def test_user_detail_exposes_primary_group_for_staff_user(self):
+        user = User.objects.create_user(
+            username="staff-profile",
+            email="staff-profile@example.com",
+            password="password123",
+            is_staff=True,
+        )
+
+        response = self.client.get(f"/api/users/{user.id}")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["primary_group"]["name"], "Admin")
+        self.assertEqual(payload["primary_group"]["icon"], "fas fa-user-shield")
+
+    def test_user_detail_exposes_primary_group_for_regular_group_member(self):
+        user = User.objects.create_user(
+            username="group-profile",
+            email="group-profile@example.com",
+            password="password123",
+        )
+        group = Group.objects.create(name="Support", color="#27ae60", icon="fas fa-life-ring")
+        user.user_groups.add(group)
+
+        response = self.client.get(f"/api/users/{user.id}")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["primary_group"]["name"], "Support")
+        self.assertEqual(payload["primary_group"]["icon"], "fas fa-life-ring")
 
 
 class SuspendedUserAuthTests(TestCase):

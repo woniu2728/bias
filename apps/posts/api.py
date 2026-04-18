@@ -20,8 +20,22 @@ from apps.posts.schemas import (
 from apps.posts.services import PostService
 from apps.tags.services import TagService
 from apps.core.auth import AuthBearer, get_optional_user
+from apps.users.group_utils import get_primary_group, serialize_group_badge
 
 router = Router()
+
+
+def _serialize_user_summary(user):
+    if not user:
+        return None
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "avatar_url": user.avatar_url,
+        "primary_group": serialize_group_badge(get_primary_group(user)),
+    }
 
 
 def _serialize_post(post, user=None):
@@ -30,24 +44,14 @@ def _serialize_post(post, user=None):
         "id": post.id,
         "discussion_id": post.discussion_id,
         "number": post.number,
-        "user": {
-            "id": post.user.id,
-            "username": post.user.username,
-            "display_name": post.user.display_name,
-            "avatar_url": post.user.avatar_url,
-        } if post.user else None,
+        "user": _serialize_user_summary(post.user),
         "type": post.type,
         "content": post.content,
         "content_html": post.content_html,
         "created_at": post.created_at,
         "updated_at": post.updated_at,
         "edited_at": post.edited_at,
-        "edited_user": {
-            "id": post.edited_user.id,
-            "username": post.edited_user.username,
-            "display_name": post.edited_user.display_name,
-            "avatar_url": post.edited_user.avatar_url,
-        } if post.edited_user else None,
+        "edited_user": _serialize_user_summary(post.edited_user),
         "discussion": {
             "id": post.discussion.id,
             "title": post.discussion.title,

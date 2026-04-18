@@ -19,6 +19,7 @@ class Command(BaseCommand):
                 'name_singular': 'Admin',
                 'name_plural': 'Admins',
                 'color': '#B72A2A',
+                'icon': 'fas fa-user-shield',
                 'is_hidden': False,
             },
             {
@@ -27,6 +28,7 @@ class Command(BaseCommand):
                 'name_singular': 'Guest',
                 'name_plural': 'Guests',
                 'color': '',
+                'icon': '',
                 'is_hidden': False,
             },
             {
@@ -35,6 +37,7 @@ class Command(BaseCommand):
                 'name_singular': 'Member',
                 'name_plural': 'Members',
                 'color': '',
+                'icon': '',
                 'is_hidden': False,
             },
             {
@@ -43,6 +46,7 @@ class Command(BaseCommand):
                 'name_singular': 'Moderator',
                 'name_plural': 'Moderators',
                 'color': '#80349E',
+                'icon': 'fas fa-shield-alt',
                 'is_hidden': False,
             },
         ]
@@ -55,6 +59,12 @@ class Command(BaseCommand):
             if created:
                 self.stdout.write(self.style.SUCCESS(f'[OK] 创建用户组: {group.name}'))
             else:
+                updates = []
+                if not group.icon and group_data.get('icon'):
+                    group.icon = group_data['icon']
+                    updates.append('icon')
+                if updates:
+                    group.save(update_fields=updates)
                 self.stdout.write(f'  用户组已存在: {group.name}')
 
         # Admin权限

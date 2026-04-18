@@ -38,6 +38,7 @@ from apps.posts.services import PostService
 from apps.tags.models import Tag
 from apps.tags.services import TagService
 from apps.notifications.services import NotificationService
+from apps.users.group_utils import get_primary_group, serialize_group_badge
 
 router = Router()
 
@@ -96,13 +97,9 @@ def admin_error(message: str, status: int = 400):
 
 
 def serialize_group(group: Group) -> Dict[str, Any]:
-    return {
-        "id": group.id,
-        "name": group.name,
-        "color": group.color,
-        "is_hidden": group.is_hidden,
-        "is_system": is_builtin_group(group),
-    }
+    payload = serialize_group_badge(group) or {}
+    payload["is_system"] = is_builtin_group(group)
+    return payload
 
 
 def serialize_admin_tag(tag: Tag) -> Dict[str, Any]:
@@ -162,7 +159,7 @@ def validate_group_payload(payload: Dict[str, Any], group: Group = None):
         "name_singular": name,
         "name_plural": name,
         "color": payload.get("color") or "#4d698e",
-        "icon": "",
+        "icon": (payload.get("icon") or "").strip(),
         "is_hidden": bool(payload.get("is_hidden", False)),
     }
 
@@ -179,6 +176,7 @@ def normalize_permission_code(permission: str):
 
 
 def serialize_admin_user(user: User, include_details: bool = False) -> Dict[str, Any]:
+    primary_group = get_primary_group(user)
     payload = {
         "id": user.id,
         "username": user.username,
@@ -193,6 +191,7 @@ def serialize_admin_user(user: User, include_details: bool = False) -> Dict[str,
         "discussion_count": user.discussion_count,
         "comment_count": user.comment_count,
         "groups": [serialize_group(group) for group in user.user_groups.all().order_by("name")],
+        "primary_group": serialize_group(primary_group) if primary_group else None,
     }
 
     if include_details:

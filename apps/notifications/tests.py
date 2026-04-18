@@ -89,6 +89,31 @@ class NotificationServiceTests(TestCase):
         self.assertEqual(notification.data["post_id"], post.id)
         self.assertEqual(notification.data["post_number"], post.number)
 
+    def test_multiple_replies_in_same_discussion_create_multiple_notifications(self):
+        PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="Second reply",
+            user=self.replier,
+        )
+        PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="Third reply",
+            user=self.replier,
+        )
+
+        notifications = Notification.objects.filter(
+            user=self.author,
+            type="discussionReply",
+            subject_id=self.discussion.id,
+            is_read=False,
+        ).order_by("id")
+
+        self.assertEqual(notifications.count(), 3)
+        self.assertEqual(
+            [item.data["post_number"] for item in notifications],
+            [2, 3, 4],
+        )
+
     def auth_header(self, user):
         token = RefreshToken.for_user(user).access_token
         return {"HTTP_AUTHORIZATION": f"Bearer {token}"}

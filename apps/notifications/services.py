@@ -33,6 +33,7 @@ class NotificationService:
         subject_type: Optional[str] = None,
         subject_id: Optional[int] = None,
         data: Optional[dict] = None,
+        allow_merge: bool = True,
     ) -> Notification:
         """
         创建通知
@@ -53,13 +54,15 @@ class NotificationService:
             return None
 
         # 检查是否已存在相同通知（防止重复）
-        existing = Notification.objects.filter(
-            user=user,
-            type=type,
-            subject_type=subject_type,
-            subject_id=subject_id,
-            is_read=False,
-        ).first()
+        existing = None
+        if allow_merge:
+            existing = Notification.objects.filter(
+                user=user,
+                type=type,
+                subject_type=subject_type,
+                subject_id=subject_id,
+                is_read=False,
+            ).first()
 
         if existing:
             # 更新现有通知
@@ -284,6 +287,7 @@ class NotificationService:
                     from_user=from_user,
                     subject_type='discussion',
                     subject_id=discussion_id,
+                    allow_merge=False,
                     data={
                         'discussion_id': discussion_id,
                         'discussion_title': discussion.title,
@@ -298,6 +302,8 @@ class NotificationService:
                     is_subscribed=True,
                 ).exclude(
                     user_id=from_user.id
+                ).exclude(
+                    user_id=getattr(discussion.user, 'id', None)
                 ).values_list('user_id', flat=True)
             )
 
@@ -311,6 +317,7 @@ class NotificationService:
                             from_user=from_user,
                             subject_type='discussion',
                             subject_id=discussion_id,
+                            allow_merge=False,
                             data={
                                 'discussion_id': discussion_id,
                                 'discussion_title': discussion.title,
@@ -348,6 +355,7 @@ class NotificationService:
                     from_user=from_user,
                     subject_type='post',
                     subject_id=reply_to_post_id,
+                    allow_merge=False,
                     data={
                         'post_id': post_id,
                         'post_number': post.number,

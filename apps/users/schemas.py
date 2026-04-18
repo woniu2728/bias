@@ -27,6 +27,13 @@ class TokenSchema(Schema):
 
 class UserOutSchema(Schema):
     """用户输出Schema"""
+    class GroupBadgeSchema(Schema):
+        id: int
+        name: str
+        color: str = ""
+        icon: str = ""
+        is_hidden: bool = False
+
     id: int
     username: str
     display_name: str
@@ -40,6 +47,7 @@ class UserOutSchema(Schema):
     comment_count: int
     is_suspended: bool
     is_staff: bool = False
+    primary_group: Optional[GroupBadgeSchema] = None
 
     class Config:
         from_attributes = True
