@@ -605,7 +605,7 @@ function hasUnsavedChanges() {
 
 function getComposerDraftKey() {
   if (!discussionId.value || isEditing.value) return null
-  return `pyflarum:discussion:${discussionId.value}:draft:${authStore.user?.id || 'guest'}`
+  return `bias:discussion:${discussionId.value}:draft:${authStore.user?.id || 'guest'}`
 }
 
 function restoreComposerDraft() {
@@ -1075,7 +1075,7 @@ async function submitReply() {
         content: replyContent.value
       })
       const post = normalizePost(data)
-      window.dispatchEvent(new CustomEvent('pyflarum:post-updated', {
+      window.dispatchEvent(new CustomEvent('bias:post-updated', {
         detail: {
           discussionId: discussionId.value,
           post
@@ -1098,7 +1098,7 @@ async function submitReply() {
         reply_to_post_id: composerStore.current.postId || null
       })
       const post = normalizePost(data)
-      window.dispatchEvent(new CustomEvent('pyflarum:reply-created', {
+      window.dispatchEvent(new CustomEvent('bias:reply-created', {
         detail: {
           discussionId: discussionId.value,
           post
@@ -1148,13 +1148,13 @@ function formatDraftTime(value) {
 
 function loadComposerHeight() {
   if (typeof window === 'undefined') return 420
-  const value = Number(window.localStorage.getItem('pyflarum:composer-height:post') || 420)
+  const value = Number(window.localStorage.getItem('bias:composer-height:post') || 420)
   return clampComposerHeight(value)
 }
 
 function persistComposerHeight(value) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem('pyflarum:composer-height:post', String(clampComposerHeight(value)))
+  window.localStorage.setItem('bias:composer-height:post', String(clampComposerHeight(value)))
 }
 
 function clampComposerHeight(value) {

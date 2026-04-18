@@ -3,14 +3,14 @@ import { ref } from 'vue'
 import api from '@/api'
 
 const DEFAULT_SETTINGS = {
-  forum_title: 'PyFlarum',
+  forum_title: 'Bias',
   forum_description: '',
   seo_title: '',
   seo_description: '',
   seo_keywords: '',
   seo_robots_index: true,
   seo_robots_follow: true,
-  welcome_title: '欢迎来到PyFlarum',
+  welcome_title: '欢迎来到Bias',
   welcome_message: '这是一个基于Django和Vue 3的现代化论坛',
   default_locale: 'zh-CN',
   show_language_selector: false,

@@ -3,7 +3,7 @@
     <div class="redirect-card">
       <div class="redirect-spinner"></div>
       <h1>正在打开讨论编辑器...</h1>
-      <p>PyFlarum 已切换为 Flarum 风格的浮层 composer。</p>
+      <p>Bias 已切换为 Flarum 风格的浮层 composer。</p>
     </div>
   </div>
 </template>

@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# PyFlarum 快速启动脚本
+# Bias 快速启动脚本
 
 echo "================================"
-echo "PyFlarum 快速启动"
+echo "Bias 快速启动"
 echo "================================"
 echo ""
 

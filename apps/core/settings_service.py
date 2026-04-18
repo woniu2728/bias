@@ -14,14 +14,14 @@ PUBLIC_FORUM_SETTINGS_CACHE_KEY = "settings.public.forum"
 
 
 BASIC_SETTINGS_DEFAULTS = {
-    "forum_title": "PyFlarum",
+    "forum_title": "Bias",
     "forum_description": "",
     "seo_title": "",
     "seo_description": "",
     "seo_keywords": "",
     "seo_robots_index": True,
     "seo_robots_follow": True,
-    "welcome_title": "欢迎来到PyFlarum",
+    "welcome_title": "欢迎来到Bias",
     "welcome_message": "这是一个基于Django和Vue 3的现代化论坛",
     "default_locale": "zh-CN",
     "show_language_selector": False,
@@ -44,7 +44,7 @@ MAIL_SETTINGS_DEFAULTS = {
     "mail_username": getattr(settings, "EMAIL_HOST_USER", ""),
     "mail_password": "",
     "mail_from_address": getattr(settings, "DEFAULT_FROM_EMAIL", ""),
-    "mail_from_name": "PyFlarum",
+    "mail_from_name": "Bias",
 }
 
 ADVANCED_SETTINGS_DEFAULTS = {

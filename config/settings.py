@@ -1,5 +1,5 @@
 """
-Django settings for pyflarum project.
+Django settings for bias project.
 """
 
 from pathlib import Path
@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables. Explicit env files are primarily used by
 # installation/upgrade commands that need to re-run Django in a subprocess.
-load_dotenv(os.getenv('PYFLARUM_ENV_FILE') or BASE_DIR / '.env')
+load_dotenv(os.getenv('BIAS_ENV_FILE') or BASE_DIR / '.env')
 
 
 def env_flag(name: str, default: bool) -> bool:
@@ -110,7 +110,7 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-            'NAME': os.getenv('DB_NAME', 'pyflarum'),
+            'NAME': os.getenv('DB_NAME', 'bias'),
             'USER': os.getenv('DB_USER', 'postgres'),
             'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
             'HOST': os.getenv('DB_HOST', 'localhost'),
@@ -183,7 +183,7 @@ CACHES = (
     {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'pyflarum-dev-cache',
+            'LOCATION': 'bias-dev-cache',
         }
     }
 )
@@ -227,7 +227,7 @@ EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@pyflarum.com')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@bias.local')
 
 # Frontend URL
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')

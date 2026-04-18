@@ -13,7 +13,7 @@ def build_manage_env(env_values: Mapping[str, str], env_path: Path | None = None
     env = os.environ.copy()
     env.update({key: str(value) for key, value in env_values.items() if value is not None})
     if env_path is not None:
-        env["PYFLARUM_ENV_FILE"] = str(env_path)
+        env["BIAS_ENV_FILE"] = str(env_path)
     return env
 
 

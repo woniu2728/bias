@@ -40,7 +40,7 @@ api.interceptors.response.use(
         if (isAdminRuntime) {
           window.location.href = '/login'
         } else {
-          window.dispatchEvent(new CustomEvent('pyflarum:auth-required', {
+          window.dispatchEvent(new CustomEvent('bias:auth-required', {
             detail: {
               redirect: `${window.location.pathname}${window.location.search}${window.location.hash}`
             }

@@ -87,7 +87,7 @@
             v-model="settings.mail_from_name"
             type="text"
             class="FormControl"
-            placeholder="PyFlarum"
+            placeholder="Bias"
           />
         </div>
       </div>

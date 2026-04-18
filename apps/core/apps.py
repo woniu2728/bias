@@ -10,7 +10,7 @@ class CoreConfig(AppConfig):
 
         connection_created.connect(
             configure_sqlite_pragmas,
-            dispatch_uid="pyflarum.configure_sqlite_pragmas",
+            dispatch_uid="bias.configure_sqlite_pragmas",
         )
 
 
@@ -18,7 +18,7 @@ def configure_sqlite_pragmas(sender, connection, **kwargs):
     if connection.vendor != "sqlite":
         return
 
-    if getattr(connection, "_pyflarum_sqlite_configured", False):
+    if getattr(connection, "_bias_sqlite_configured", False):
         return
 
     try:
@@ -30,4 +30,4 @@ def configure_sqlite_pragmas(sender, connection, **kwargs):
     except Exception:
         return
 
-    connection._pyflarum_sqlite_configured = True
+    connection._bias_sqlite_configured = True

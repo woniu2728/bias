@@ -1,5 +1,5 @@
 """
-ASGI config for pyflarum project.
+ASGI config for bias project.
 """
 import os
 from django.core.asgi import get_asgi_application

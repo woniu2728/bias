@@ -1,8 +1,8 @@
 @echo off
-REM PyFlarum 快速启动脚本 (Windows)
+REM Bias 快速启动脚本 (Windows)
 
 echo ================================
-echo PyFlarum 快速启动
+echo Bias 快速启动
 echo ================================
 echo.
 

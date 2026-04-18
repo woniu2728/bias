@@ -18,7 +18,7 @@ ENV_DEFAULTS = {
     "DB_MODE": "sqlite",
     "SQLITE_NAME": "db.sqlite3",
     "DB_ENGINE": "django.db.backends.postgresql",
-    "DB_NAME": "pyflarum",
+    "DB_NAME": "bias",
     "DB_USER": "postgres",
     "DB_PASSWORD": "postgres",
     "DB_HOST": "localhost",
@@ -35,7 +35,7 @@ ENV_DEFAULTS = {
     "EMAIL_USE_TLS": "True",
     "EMAIL_HOST_USER": "",
     "EMAIL_HOST_PASSWORD": "",
-    "DEFAULT_FROM_EMAIL": "noreply@pyflarum.com",
+    "DEFAULT_FROM_EMAIL": "noreply@bias.local",
     "JWT_SECRET_KEY": "",
     "JWT_ALGORITHM": "HS256",
     "JWT_ACCESS_TOKEN_LIFETIME": "3600",
@@ -122,7 +122,7 @@ class Command(BaseCommand):
         env_path = self._resolve_env_path(options["env_file"])
         env_values = self._build_env_values(database, options)
 
-        self.stdout.write(self.style.MIGRATE_HEADING("开始初始化 PyFlarum"))
+        self.stdout.write(self.style.MIGRATE_HEADING("开始初始化 Bias"))
         self.stdout.write(f"数据库模式: {database}")
         self.stdout.write(f"Redis: {'开启' if env_values['USE_REDIS'] == 'True' else '关闭'}")
         self.stdout.write(f"环境文件: {env_path}")

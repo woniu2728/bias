@@ -3,7 +3,7 @@
     <!-- Flarum风格：直接重定向到讨论列表 -->
     <div class="flarum-container">
       <div class="welcome-banner">
-        <h1>PyFlarum</h1>
+        <h1>Bias</h1>
         <p>基于Django和Vue 3的现代化论坛</p>
       </div>
 

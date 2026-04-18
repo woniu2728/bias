@@ -83,7 +83,7 @@ onMounted(async () => {
   }
 
   window.addEventListener('beforeunload', handleBeforeUnload)
-  window.addEventListener('pyflarum:auth-required', handleAuthRequired)
+  window.addEventListener('bias:auth-required', handleAuthRequired)
 })
 
 watch(
@@ -107,7 +107,7 @@ watch(
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
-  window.removeEventListener('pyflarum:auth-required', handleAuthRequired)
+  window.removeEventListener('bias:auth-required', handleAuthRequired)
 })
 </script>
 

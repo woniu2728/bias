@@ -1,6 +1,6 @@
-# PyFlarum
+# Bias
 
-PyFlarum 是一个使用 Django + Vue 3 构建的论坛项目，目标是对齐 Flarum 2.x 的核心论坛体验和后台管理能力，同时采用更适合 Python 项目的实现方式。
+Bias 是一个使用 Django + Vue 3 构建的论坛项目，目标是对齐 Flarum 2.x 的核心论坛体验和后台管理能力，同时采用更适合 Python 项目的实现方式。
 
 当前它已经具备可用的论坛主链路、后台管理页、审核与举报治理能力、通知与搜索能力，但还不应该被描述为“100% 完成”或“完美复刻”。当前主线重点是：
 
@@ -58,7 +58,7 @@ PyFlarum 是一个使用 Django + Vue 3 构建的论坛项目，目标是对齐 
 
 ```bash
 git clone <your-repo-url>
-cd pyflarum
+cd bias
 
 python -m venv venv
 ```
@@ -118,7 +118,7 @@ python manage.py init_forum
 ```bash
 python manage.py init_forum \
   --database postgres \
-  --db-name pyflarum \
+  --db-name bias \
   --db-user postgres \
   --db-password postgres \
   --db-host 127.0.0.1 \
@@ -240,8 +240,8 @@ python manage.py test apps
 
 ## 项目文档
 
-- 路线图与对标评估：[PYFLARUM_REPLICATION_ROADMAP.md](PYFLARUM_REPLICATION_ROADMAP.md)
 - 前端说明：[frontend/README.md](frontend/README.md)
+- 日常协作与迭代建议通过 GitHub Issues / PR 管理
 
 ## 当前已知限制
 

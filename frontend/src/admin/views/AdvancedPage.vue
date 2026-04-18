@@ -124,7 +124,7 @@
                 v-model="settings.storage_local_path"
                 type="text"
                 class="FormControl"
-                placeholder="D:\\data\\pyflarum\\media"
+                placeholder="D:\\data\\bias\\media"
               />
               <p class="Form-help">可填写绝对路径，也可填写相对项目根目录的路径</p>
             </div>
@@ -191,7 +191,7 @@
                 v-model="settings.storage_s3_object_prefix"
                 type="text"
                 class="FormControl"
-                placeholder="pyflarum"
+                placeholder="bias"
               />
             </div>
             <div class="Form-group Form-group--checkbox">
@@ -247,7 +247,7 @@
                 v-model="settings.storage_r2_object_prefix"
                 type="text"
                 class="FormControl"
-                placeholder="pyflarum"
+                placeholder="bias"
               />
             </div>
           </div>
@@ -292,7 +292,7 @@
                 v-model="settings.storage_oss_object_prefix"
                 type="text"
                 class="FormControl"
-                placeholder="pyflarum"
+                placeholder="bias"
               />
             </div>
           </div>

@@ -1,5 +1,5 @@
 """
-URL configuration for pyflarum project.
+URL configuration for bias project.
 """
 from django.contrib import admin
 from django.urls import path, include
@@ -9,9 +9,9 @@ from ninja import NinjaAPI
 
 # 创建API实例
 api = NinjaAPI(
-    title="PyFlarum API",
+    title="Bias API",
     version="1.0.0",
-    description="Flarum的Python完美复刻 - RESTful API",
+    description="Flarum 风格论坛的 Python RESTful API",
     docs_url="/api/docs",
 )
 
@@ -37,7 +37,7 @@ api.add_router("/admin", admin_router, tags=["Admin"])
 @api.get("/health", tags=["System"])
 def health_check(request):
     """健康检查"""
-    return {"status": "ok", "message": "PyFlarum API is running"}
+    return {"status": "ok", "message": "Bias API is running"}
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -15,7 +15,7 @@ class Command(BaseCommand):
             # 创建管理员账号
             admin = User.objects.create(
                 username='admin',
-                email='admin@pyflarum.com',
+                email='admin@bias.local',
                 password=make_password('admin123'),
                 is_staff=True,
                 is_superuser=True,

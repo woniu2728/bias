@@ -315,11 +315,11 @@ const emptyStateText = computed(() => {
 
 onMounted(async () => {
   await refreshPageData()
-  window.addEventListener('pyflarum:discussion-read-state-updated', handleDiscussionReadStateUpdated)
+  window.addEventListener('bias:discussion-read-state-updated', handleDiscussionReadStateUpdated)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('pyflarum:discussion-read-state-updated', handleDiscussionReadStateUpdated)
+  window.removeEventListener('bias:discussion-read-state-updated', handleDiscussionReadStateUpdated)
 })
 
 watch(

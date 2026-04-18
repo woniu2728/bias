@@ -27,7 +27,7 @@ class EmailService:
             "mail_username": getattr(settings, "EMAIL_HOST_USER", ""),
             "mail_password": "",
             "mail_from_address": getattr(settings, "DEFAULT_FROM_EMAIL", ""),
-            "mail_from_name": "PyFlarum",
+            "mail_from_name": "Bias",
             "_customized": False,
         }
 
@@ -90,7 +90,7 @@ class EmailService:
         Returns:
             bool: 是否发送成功
         """
-        subject = '验证您的邮箱 - PyFlarum'
+        subject = '验证您的邮箱 - Bias'
 
         # 生成验证链接
         verification_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
@@ -99,17 +99,17 @@ class EmailService:
         text_content = f"""
         您好 {username}，
 
-        感谢您注册PyFlarum！
+        感谢您注册 Bias！
 
         请点击以下链接验证您的邮箱：
         {verification_url}
 
-        如果您没有注册PyFlarum账号，请忽略此邮件。
+        如果您没有注册 Bias 账号，请忽略此邮件。
 
         此链接将在24小时后失效。
 
         ---
-        PyFlarum团队
+        Bias 团队
         """
 
         # HTML内容
@@ -130,20 +130,20 @@ class EmailService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>PyFlarum</h1>
+                    <h1>Bias</h1>
                 </div>
                 <div class="content">
                     <h2>您好 {username}，</h2>
-                    <p>感谢您注册PyFlarum！</p>
+                    <p>感谢您注册 Bias！</p>
                     <p>请点击下方按钮验证您的邮箱：</p>
                     <a href="{verification_url}" class="button">验证邮箱</a>
                     <p>或复制以下链接到浏览器：</p>
                     <p style="word-break: break-all; color: #666;">{verification_url}</p>
-                    <p>如果您没有注册PyFlarum账号，请忽略此邮件。</p>
+                    <p>如果您没有注册 Bias 账号，请忽略此邮件。</p>
                     <p style="color: #999; font-size: 14px;">此链接将在24小时后失效。</p>
                 </div>
                 <div class="footer">
-                    <p>PyFlarum团队</p>
+                    <p>Bias 团队</p>
                 </div>
             </div>
         </body>
@@ -170,7 +170,7 @@ class EmailService:
         Returns:
             bool: 是否发送成功
         """
-        subject = '重置您的密码 - PyFlarum'
+        subject = '重置您的密码 - Bias'
 
         # 生成重置链接
         reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
@@ -189,7 +189,7 @@ class EmailService:
         此链接将在1小时后失效。
 
         ---
-        PyFlarum团队
+        Bias 团队
         """
 
         # HTML内容
@@ -211,7 +211,7 @@ class EmailService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>PyFlarum</h1>
+                    <h1>Bias</h1>
                 </div>
                 <div class="content">
                     <h2>您好 {username}，</h2>
@@ -226,7 +226,7 @@ class EmailService:
                     <p style="color: #999; font-size: 14px;">此链接将在1小时后失效。</p>
                 </div>
                 <div class="footer">
-                    <p>PyFlarum团队</p>
+                    <p>Bias 团队</p>
                 </div>
             </div>
         </body>
@@ -261,7 +261,7 @@ class EmailService:
         """
         # 根据通知类型生成邮件内容
         if notification_type == 'discussionReply':
-            subject = f'您的讨论有新回复 - PyFlarum'
+            subject = f'您的讨论有新回复 - Bias'
             discussion_title = notification_data.get('discussion_title', '')
             discussion_url = f"{settings.FRONTEND_URL}/d/{notification_data.get('discussion_id')}"
 
@@ -273,7 +273,7 @@ class EmailService:
             查看详情：{discussion_url}
 
             ---
-            PyFlarum团队
+            Bias 团队
             """
 
             html_content = f"""
@@ -293,7 +293,7 @@ class EmailService:
             <body>
                 <div class="container">
                     <div class="header">
-                        <h1>PyFlarum</h1>
+                        <h1>Bias</h1>
                     </div>
                     <div class="content">
                         <h2>您好 {username}，</h2>
@@ -301,7 +301,7 @@ class EmailService:
                         <a href="{discussion_url}" class="button">查看详情</a>
                     </div>
                     <div class="footer">
-                        <p>PyFlarum团队</p>
+                        <p>Bias 团队</p>
                         <p><a href="{settings.FRONTEND_URL}/settings/notifications">管理通知设置</a></p>
                     </div>
                 </div>
@@ -310,7 +310,7 @@ class EmailService:
             """
 
         elif notification_type == 'postLiked':
-            subject = f'您的帖子被点赞 - PyFlarum'
+            subject = f'您的帖子被点赞 - Bias'
             discussion_title = notification_data.get('discussion_title', '')
             discussion_url = f"{settings.FRONTEND_URL}/d/{notification_data.get('discussion_id')}"
 
@@ -322,7 +322,7 @@ class EmailService:
             查看详情：{discussion_url}
 
             ---
-            PyFlarum团队
+            Bias 团队
             """
 
             html_content = f"""
@@ -342,7 +342,7 @@ class EmailService:
             <body>
                 <div class="container">
                     <div class="header">
-                        <h1>PyFlarum</h1>
+                        <h1>Bias</h1>
                     </div>
                     <div class="content">
                         <h2>您好 {username}，</h2>
@@ -350,7 +350,7 @@ class EmailService:
                         <a href="{discussion_url}" class="button">查看详情</a>
                     </div>
                     <div class="footer">
-                        <p>PyFlarum团队</p>
+                        <p>Bias 团队</p>
                         <p><a href="{settings.FRONTEND_URL}/settings/notifications">管理通知设置</a></p>
                     </div>
                 </div>
@@ -360,8 +360,8 @@ class EmailService:
 
         else:
             # 默认通知邮件
-            subject = f'您有新通知 - PyFlarum'
-            text_content = f"您好 {username}，\n\n您有新通知。\n\n---\nPyFlarum团队"
+            subject = f'您有新通知 - Bias'
+            text_content = f"您好 {username}，\n\n您有新通知。\n\n---\nBias 团队"
             html_content = f"<p>您好 {username}，</p><p>您有新通知。</p>"
 
         return EmailService._send_email(
@@ -433,8 +433,8 @@ class EmailService:
         )
 
         email = EmailMultiAlternatives(
-            subject="PyFlarum 测试邮件",
-            body="如果你收到这封邮件，说明 PyFlarum 的邮件发送链路可用。",
+            subject="Bias 测试邮件",
+            body="如果你收到这封邮件，说明 Bias 的邮件发送链路可用。",
             from_email=from_email,
             to=[to_email],
             connection=EmailService.build_connection(),

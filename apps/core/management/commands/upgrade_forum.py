@@ -35,7 +35,7 @@ class Command(BaseCommand):
         db_mode = self._validate_env_values(env_path, env_values)
         use_redis = _env_flag(env_values.get("USE_REDIS"), default=db_mode == "postgres")
 
-        self.stdout.write(self.style.MIGRATE_HEADING("开始升级 PyFlarum"))
+        self.stdout.write(self.style.MIGRATE_HEADING("开始升级 Bias"))
         self.stdout.write(f"环境文件: {env_path}")
         self.stdout.write(f"数据库模式: {db_mode}")
         self.stdout.write(f"Redis: {'开启' if use_redis else '关闭'}")

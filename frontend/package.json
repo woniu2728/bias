@@ -1,7 +1,7 @@
 {
-  "name": "pyflarum-frontend",
+  "name": "bias-frontend",
   "version": "1.0.0",
-  "description": "PyFlarum Frontend - Vue 3 Application",
+  "description": "Bias Frontend - Vue 3 Application",
   "private": true,
   "scripts": {
     "dev": "vite",

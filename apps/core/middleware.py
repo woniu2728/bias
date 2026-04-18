@@ -13,7 +13,7 @@ from apps.core.settings_service import (
 )
 
 
-sql_logger = logging.getLogger("pyflarum.sql")
+sql_logger = logging.getLogger("bias.sql")
 
 
 class QueryLoggingMiddleware(MiddlewareMixin):

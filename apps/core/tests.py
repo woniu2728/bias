@@ -307,7 +307,7 @@ class AdminSettingsApiTests(TestCase):
             data=json.dumps({
                 "mail_driver": "sendmail",
                 "mail_from_address": "service@example.com",
-                "mail_from_name": "PyFlarum Mailer",
+                "mail_from_name": "Bias Mailer",
             }),
             content_type="application/json",
             **self.auth_header(),
@@ -322,7 +322,7 @@ class AdminSettingsApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].from_email, "PyFlarum Mailer <service@example.com>")
+        self.assertEqual(mail.outbox[0].from_email, "Bias Mailer <service@example.com>")
 
     def test_public_forum_settings_include_basic_and_appearance(self):
         Setting.objects.update_or_create(
@@ -496,7 +496,7 @@ class AdminSettingsApiTests(TestCase):
         )
         clear_runtime_setting_caches()
 
-        with self.assertLogs("pyflarum.sql", level="INFO") as captured:
+        with self.assertLogs("bias.sql", level="INFO") as captured:
             response = self.client.get("/api/forum")
 
         self.assertEqual(response.status_code, 200, response.content)
@@ -882,7 +882,7 @@ class InitForumCommandTests(TestCase):
                     "password123",
                 ],
             )
-            self.assertEqual(first_env["PYFLARUM_ENV_FILE"], str(env_path))
+            self.assertEqual(first_env["BIAS_ENV_FILE"], str(env_path))
             self.assertEqual(first_env["USE_REDIS"], "False")
             self.assertEqual(second_env["DB_MODE"], "sqlite")
 
@@ -1031,7 +1031,7 @@ class UpgradeForumCommandTests(TestCase):
                 ["clear_runtime_cache"],
             ],
         )
-        self.assertEqual(mock_run_manage_py.call_args_list[0].args[1]["PYFLARUM_ENV_FILE"], str(env_path))
+        self.assertEqual(mock_run_manage_py.call_args_list[0].args[1]["BIAS_ENV_FILE"], str(env_path))
 
     @patch("apps.core.management.commands.upgrade_forum.run_manage_py")
     def test_upgrade_forum_dry_run_does_not_execute_steps(self, mock_run_manage_py):
@@ -1067,7 +1067,7 @@ class UpgradeForumCommandTests(TestCase):
                 "\n".join(
                     [
                         "DB_MODE=postgres",
-                        "DB_NAME=pyflarum",
+                        "DB_NAME=bias",
                         "DB_USER=postgres",
                     ]
                 )

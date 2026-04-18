@@ -628,9 +628,9 @@ onMounted(async () => {
   window.addEventListener('scroll', handlePostScroll, { passive: true })
   window.addEventListener('resize', handlePostScroll, { passive: true })
   window.addEventListener('resize', syncScrubberTrackMetrics, { passive: true })
-  window.addEventListener('pyflarum:reply-created', handleReplyCreated)
-  window.addEventListener('pyflarum:post-updated', handlePostUpdated)
-  window.addEventListener('pyflarum:discussion-updated', handleDiscussionUpdated)
+  window.addEventListener('bias:reply-created', handleReplyCreated)
+  window.addEventListener('bias:post-updated', handlePostUpdated)
+  window.addEventListener('bias:discussion-updated', handleDiscussionUpdated)
   document.addEventListener('mousedown', handleDocumentMouseDown)
   await nextTick()
   syncScrubberTrackMetrics()
@@ -642,9 +642,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('scroll', handlePostScroll)
   window.removeEventListener('resize', handlePostScroll)
   window.removeEventListener('resize', syncScrubberTrackMetrics)
-  window.removeEventListener('pyflarum:reply-created', handleReplyCreated)
-  window.removeEventListener('pyflarum:post-updated', handlePostUpdated)
-  window.removeEventListener('pyflarum:discussion-updated', handleDiscussionUpdated)
+  window.removeEventListener('bias:reply-created', handleReplyCreated)
+  window.removeEventListener('bias:post-updated', handlePostUpdated)
+  window.removeEventListener('bias:discussion-updated', handleDiscussionUpdated)
   document.removeEventListener('mousedown', handleDocumentMouseDown)
   detachScrubberDragListeners()
   detachScrubberObserver()
@@ -1152,7 +1152,7 @@ function scheduleReadStateSync(number) {
       discussion.value.last_read_at = data.last_read_at || discussion.value.last_read_at
       discussion.value.unread_count = Math.max((discussion.value.last_post_number || 0) - lastReportedReadNumber, 0)
       discussion.value.is_unread = discussion.value.unread_count > 0
-      window.dispatchEvent(new CustomEvent('pyflarum:discussion-read-state-updated', {
+      window.dispatchEvent(new CustomEvent('bias:discussion-read-state-updated', {
         detail: {
           discussionId: discussion.value.id,
           lastReadPostNumber: lastReportedReadNumber,
@@ -1316,7 +1316,7 @@ async function handleReplyCreated(event) {
     discussion.value.is_subscribed = true
   }
 
-  window.dispatchEvent(new CustomEvent('pyflarum:discussion-read-state-updated', {
+  window.dispatchEvent(new CustomEvent('bias:discussion-read-state-updated', {
     detail: {
       discussionId: discussion.value.id,
       lastReadPostNumber: discussion.value.last_read_post_number,

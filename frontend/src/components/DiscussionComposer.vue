@@ -748,9 +748,9 @@ async function closeComposer() {
 function getDraftKey() {
   const userId = authStore.user?.id || 'guest'
   if (isEditingDiscussion.value && composerStore.current.discussionId) {
-    return `pyflarum:edit-discussion-draft:${userId}:${composerStore.current.discussionId}`
+    return `bias:edit-discussion-draft:${userId}:${composerStore.current.discussionId}`
   }
-  return `pyflarum:create-discussion-draft:${userId}`
+  return `bias:create-discussion-draft:${userId}`
 }
 
 function restoreDraft() {
@@ -863,7 +863,7 @@ async function submitDiscussion() {
         tag_ids: selectedTagIds.value
       })
 
-      window.dispatchEvent(new CustomEvent('pyflarum:discussion-updated', {
+      window.dispatchEvent(new CustomEvent('bias:discussion-updated', {
         detail: {
           discussionId: data.id,
           discussion: normalizeDiscussion(data)
@@ -1335,13 +1335,13 @@ function formatDateTime(value) {
 
 function loadComposerHeight() {
   if (typeof window === 'undefined') return 520
-  const value = Number(window.localStorage.getItem('pyflarum:composer-height:discussion') || 520)
+  const value = Number(window.localStorage.getItem('bias:composer-height:discussion') || 520)
   return clampComposerHeight(value)
 }
 
 function persistComposerHeight(value) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem('pyflarum:composer-height:discussion', String(clampComposerHeight(value)))
+  window.localStorage.setItem('bias:composer-height:discussion', String(clampComposerHeight(value)))
 }
 
 function clampComposerHeight(value) {

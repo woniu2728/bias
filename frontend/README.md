@@ -1,8 +1,6 @@
-# PyFlarum 前端开发指南
+# Bias 前端开发指南
 
-## 🎉 项目完成度：100%
-
-所有核心功能已完成，包括8个完整的页面组件和完整的用户交互功能。
+Bias 前端基于 Vue 3、Pinia 与 Vite，提供论坛前台与管理后台两个 SPA 入口。
 
 ## 技术栈
 
@@ -27,13 +25,19 @@ npm install
 npm run dev
 ```
 
-访问: http://localhost:3000
+访问: http://localhost:5173
 
 ### 3. 构建生产版本
 
 ```bash
 npm run build
 ```
+
+## 入口说明
+
+- 前台开发入口：`http://localhost:5173`
+- 管理后台开发入口：`http://localhost:5173/admin.html`
+- 默认后端接口：`http://127.0.0.1:8000/api`
 
 ## 项目结构
 
@@ -53,15 +57,13 @@ frontend/
 │   ├── stores/                 # Pinia状态管理
 │   │   ├── auth.js            # 认证状态
 │   │   └── notification.js    # 通知和WebSocket
-│   ├── views/                  # 页面组件（8个）
-│   │   ├── HomeView.vue       # 首页
-│   │   ├── LoginView.vue      # 登录页
-│   │   ├── RegisterView.vue   # 注册页
-│   │   ├── DiscussionListView.vue      # 讨论列表
-│   │   ├── DiscussionDetailView.vue    # 讨论详情
-│   │   ├── DiscussionCreateView.vue    # 创建讨论
-│   │   ├── ProfileView.vue             # 用户资料
-│   │   └── NotificationView.vue        # 通知中心
+│   ├── views/                  # 前台页面
+│   │   ├── DiscussionListView.vue
+│   │   ├── DiscussionDetailView.vue
+│   │   ├── DiscussionCreateView.vue
+│   │   ├── ProfileView.vue
+│   │   └── NotificationView.vue
+│   ├── admin/                  # 后台页面与组件
 │   ├── App.vue                 # 根组件
 │   └── main.js                 # 入口文件
 ├── index.html
@@ -69,64 +71,15 @@ frontend/
 └── vite.config.js
 ```
 
-## ✅ 完成的功能特性
+## 当前能力
 
-### 1. 用户认证系统
-- ✅ 登录/注册页面（带表单验证）
-- ✅ JWT Token管理
-- ✅ 自动刷新Token
-- ✅ 路由守卫（保护需要登录的页面）
-- ✅ 记住登录状态
+- 讨论列表、讨论详情、浮层 Composer、回复与编辑
+- 登录、注册、忘记密码等认证弹窗流程
+- 搜索、通知、用户资料、标签筛选
+- 后台 Dashboard、Basics、Permissions、Appearance、Users、Tags、Mail、Advanced
+- Twemoji 渲染、附件上传、图片上传、@ 提及、Markdown 预览
 
-### 2. WebSocket实时通知
-- ✅ 自动连接/重连机制
-- ✅ 心跳检测（30秒）
-- ✅ 浏览器桌面通知
-- ✅ 未读消息计数徽章
-- ✅ 实时通知推送
-
-### 3. 讨论功能
-- ✅ 讨论列表（带搜索、排序、分页）
-- ✅ 讨论详情（完整的帖子展示）
-- ✅ 创建讨论（Markdown编辑器+预览）
-- ✅ 回复帖子（支持@提及）
-- ✅ 点赞/取消点赞
-- ✅ 编辑/删除帖子
-- ✅ 置顶/锁定/隐藏（管理员）
-
-### 4. 标签系统
-- ✅ 标签筛选
-- ✅ 标签选择器（创建讨论时）
-- ✅ 彩色标签显示
-
-### 5. 用户资料
-- ✅ 个人资料页
-- ✅ 编辑资料（显示名称、简介）
-- ✅ 头像上传
-- ✅ 用户统计（讨论数、回复数）
-- ✅ 用户的讨论和回复列表
-
-### 6. 通知中心
-- ✅ 通知列表（分页）
-- ✅ 标记为已读/全部已读
-- ✅ 删除通知
-- ✅ 点击通知跳转到相关页面
-- ✅ 多种通知类型图标
-
-### 7. Markdown支持
-- ✅ 实时预览
-- ✅ 语法高亮
-- ✅ @提及用户
-- ✅ 代码块、链接、粗体、斜体
-
-### 8. UI/UX设计
-- ✅ 响应式设计（移动端适配）
-- ✅ 现代化界面（参考Flarum设计）
-- ✅ 流畅的动画过渡
-- ✅ 加载状态提示
-- ✅ 错误处理和提示
-
-## API集成
+## API 集成
 
 ### HTTP API
 
@@ -197,13 +150,13 @@ const notifications = notificationStore.notifications
 const unreadCount = notificationStore.unreadCount
 ```
 
-## 路由配置
+## 路由说明
 
 ```javascript
 const routes = [
   { path: '/', name: 'home' },
-  { path: '/login', name: 'login' },
-  { path: '/register', name: 'register' },
+  { path: '/login', name: 'login' }, // 兼容路由，实际打开认证弹窗
+  { path: '/register', name: 'register' }, // 兼容路由，实际打开认证弹窗
   { path: '/discussions', name: 'discussions' },
   { path: '/discussions/:id', name: 'discussion-detail' },
   { path: '/discussions/create', name: 'discussion-create', meta: { requiresAuth: true } },
@@ -285,15 +238,15 @@ server {
 确保后端配置了正确的CORS设置：
 ```python
 CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
+    'http://localhost:5173',
 ]
 ```
 
 ### 2. WebSocket连接失败
 检查：
-- Redis是否运行
-- Django Channels配置
-- WebSocket URL是否正确
+- `USE_REDIS=False` 的本地模式下会退回进程内 channel layer
+- `USE_REDIS=True` 时需确认 Redis 与 Django Channels 配置正常
+- WebSocket URL 需与后端地址一致
 
 ### 3. Token过期
 自动刷新Token或重新登录
