@@ -714,6 +714,33 @@ class AdminDashboardStatsApiTests(TestCase):
         self.assertTrue(payload["queueEnabled"])
         self.assertTrue(payload["redisEnabled"])
 
+    @override_settings(
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "dashboard-test"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
+        CELERY_BROKER_URL="redis://localhost:6379/1",
+    )
+    def test_admin_stats_does_not_mark_redis_enabled_from_idle_broker_config(self):
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(False)},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.queue_driver",
+            defaults={"value": json.dumps("redis")},
+        )
+        clear_runtime_setting_caches()
+
+        response = self.client.get("/api/admin/stats", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["cacheDriver"], "内存")
+        self.assertEqual(payload["realtimeDriver"], "In-memory")
+        self.assertEqual(payload["queueDriver"], "redis")
+        self.assertEqual(payload["queueLabel"], "同步执行")
+        self.assertFalse(payload["queueEnabled"])
+        self.assertFalse(payload["redisEnabled"])
+
 
 class ComposerUploadApiTests(TestCase):
     def setUp(self):

@@ -272,11 +272,16 @@ def detect_queue_driver_label(queue_enabled: bool, queue_driver: str) -> str:
     return queue_driver or "未知"
 
 
-def is_redis_enabled() -> bool:
+def is_redis_enabled(queue_enabled: bool = False, queue_driver: str = "") -> bool:
     cache_backend = (settings.CACHES.get("default", {}).get("BACKEND") or "").lower()
     channel_backend = (settings.CHANNEL_LAYERS.get("default", {}).get("BACKEND") or "").lower()
     broker = getattr(settings, "CELERY_BROKER_URL", "").lower()
-    return any("redis" in value for value in (cache_backend, channel_backend, broker))
+
+    cache_uses_redis = "redis" in cache_backend
+    realtime_uses_redis = "redis" in channel_backend
+    queue_uses_redis = bool(queue_enabled and queue_driver == "redis" and "redis" in broker)
+
+    return cache_uses_redis or realtime_uses_redis or queue_uses_redis
 
 
 # ==================== 统计数据 ====================
@@ -299,7 +304,7 @@ def get_stats(request):
         "queueEnabled": queue_enabled,
         "queueLabel": detect_queue_driver_label(queue_enabled, queue_driver),
         "realtimeDriver": detect_realtime_driver(),
-        "redisEnabled": is_redis_enabled(),
+        "redisEnabled": is_redis_enabled(queue_enabled=queue_enabled, queue_driver=queue_driver),
         "debugMode": settings.DEBUG,
         "maintenanceMode": bool(advanced_settings.get("maintenance_mode", False)),
         "totalUsers": User.objects.count(),
