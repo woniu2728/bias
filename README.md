@@ -2,24 +2,6 @@
 
 Bias 是一个使用 Django + Vue 3 构建的论坛项目，目标是对齐 Flarum 2.x 的核心论坛体验和后台管理能力，同时采用更适合 Python 项目的实现方式。
 
-当前它已经具备可用的论坛主链路、后台管理页、审核与举报治理能力、通知与搜索能力，但还不应该被描述为“100% 完成”或“完美复刻”。当前主线重点是：
-
-- 完善治理链路
-- 优化安装、初始化与升级体验
-- 重写文档
-- 优化后台管理体验
-
-截至 2026-04-18，本地后端测试套件 `python manage.py test apps` 共 `94` 项通过。
-
-## 当前能力
-
-- 用户注册、登录、邮箱验证重发、密码重置、头像上传、基础资料维护
-- 讨论与回复的创建、编辑、删除、置顶、锁定、隐藏、关注、已读
-- Composer、附件上传、图片上传、表情面板、@ 提及、预览、草稿恢复
-- 站内通知、WebSocket 通知基础链路、全局搜索、搜索结果页
-- 标签管理、用户管理、权限管理、邮件设置、基础外观设置
-- 举报、审核、封禁、治理通知与作者整改后重新提交审核
-
 ## 技术栈
 
 - 后端：Django 5、Django Ninja、Channels、Celery
@@ -33,17 +15,6 @@ Bias 是一个使用 Django + Vue 3 构建的论坛项目，目标是对齐 Flar
 
 1. 推荐安装：`Docker Compose + PostgreSQL + Redis + Nginx`
 2. 原生安装：本地快速启动走 `SQLite + 无 Redis`，正式部署走 `PostgreSQL + Redis`
-
-这套策略已经固化到 `python manage.py init_forum`：
-
-- 当选择 `--database sqlite` 时，默认写入 `USE_REDIS=False`
-- 当选择 `--database postgres` 时，默认写入 `USE_REDIS=True`
-- 可通过 `--redis on` 或 `--redis off` 显式覆盖默认策略
-
-说明：
-
-- `USE_REDIS=False` 时，项目会退回到进程内缓存、进程内 channel layer、内存 broker/backend，仅适合本地单进程开发或快速体验
-- `USE_REDIS=True` 时，缓存、WebSocket channel layer、Celery broker/backend 会默认使用 Redis，更适合正式部署
 
 ## Docker 安装
 
