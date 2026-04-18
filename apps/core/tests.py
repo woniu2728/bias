@@ -639,6 +639,25 @@ class AdminUserManagementApiTests(TestCase):
         )
         self.assertEqual(unsuspended_notification.from_user_id, self.admin.id)
 
+    def test_admin_can_delete_user(self):
+        response = self.client.delete(
+            f"/api/admin/users/{self.user.id}",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(User.objects.filter(id=self.user.id).exists())
+
+    def test_admin_cannot_delete_self(self):
+        response = self.client.delete(
+            f"/api/admin/users/{self.admin.id}",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(response.json()["error"], "不能删除当前登录的管理员账号")
+        self.assertTrue(User.objects.filter(id=self.admin.id).exists())
+
 
 class AdminDashboardStatsApiTests(TestCase):
     def setUp(self):
@@ -1077,6 +1096,7 @@ class LocalStorageSettingsTests(TestCase):
 
 class AdminGroupManagementApiTests(TestCase):
     def setUp(self):
+        call_command("init_groups")
         self.admin = User.objects.create_superuser(
             username="admin-group-mgr",
             email="admin-group-mgr@example.com",
@@ -1092,10 +1112,7 @@ class AdminGroupManagementApiTests(TestCase):
             "/api/admin/groups",
             data=json.dumps({
                 "name": "Helpers",
-                "name_singular": "Helper",
-                "name_plural": "Helpers",
                 "color": "#27ae60",
-                "icon": "fas fa-hands-helping",
                 "is_hidden": False,
             }),
             content_type="application/json",
@@ -1110,10 +1127,7 @@ class AdminGroupManagementApiTests(TestCase):
             f"/api/admin/groups/{group_id}",
             data=json.dumps({
                 "name": "Support",
-                "name_singular": "Support",
-                "name_plural": "Support Team",
                 "color": "#8e44ad",
-                "icon": "fas fa-life-ring",
                 "is_hidden": True,
             }),
             content_type="application/json",
@@ -1127,10 +1141,101 @@ class AdminGroupManagementApiTests(TestCase):
 
         group = Group.objects.get(id=group_id)
         self.assertEqual(group.name, "Support")
-        self.assertEqual(group.name_plural, "Support Team")
+        self.assertEqual(group.name_singular, "Support")
+        self.assertEqual(group.name_plural, "Support")
         self.assertEqual(group.color, "#8e44ad")
-        self.assertEqual(group.icon, "fas fa-life-ring")
+        self.assertEqual(group.icon, "")
         self.assertTrue(group.is_hidden)
+
+    def test_admin_can_delete_custom_group(self):
+        group = Group.objects.create(
+            name="Helpers",
+            name_singular="Helper",
+            name_plural="Helpers",
+            color="#27ae60",
+        )
+        Permission.objects.create(group=group, permission="discussion.reply")
+
+        response = self.client.delete(
+            f"/api/admin/groups/{group.id}",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(Group.objects.filter(id=group.id).exists())
+        self.assertFalse(Permission.objects.filter(group_id=group.id).exists())
+
+    def test_admin_cannot_delete_builtin_group(self):
+        response = self.client.delete(
+            "/api/admin/groups/1",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(response.json()["error"], "系统默认用户组不允许删除")
+        self.assertTrue(Group.objects.filter(id=1, name="Admin").exists())
+
+
+class AdminPermissionsApiTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="admin-permission-mgr",
+            email="admin-permission-mgr@example.com",
+            password="password123",
+        )
+        self.group = Group.objects.create(
+            name="Editors",
+            name_singular="Editor",
+            name_plural="Editors",
+            color="#4d698e",
+        )
+
+    def auth_header(self):
+        token = RefreshToken.for_user(self.admin).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_permissions_api_normalizes_legacy_codes_on_read(self):
+        Permission.objects.create(group=self.group, permission="reply")
+        Permission.objects.create(group=self.group, permission="editPosts")
+
+        response = self.client.get(
+            "/api/admin/permissions",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        group_permissions = payload.get(str(self.group.id), payload.get(self.group.id, []))
+        self.assertEqual(set(group_permissions), {"discussion.reply", "discussion.edit"})
+
+    def test_permissions_api_normalizes_legacy_codes_on_save(self):
+        response = self.client.post(
+            "/api/admin/permissions",
+            data=json.dumps({
+                str(self.group.id): ["reply", "editPosts", "reply"],
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            set(Permission.objects.filter(group=self.group).values_list("permission", flat=True)),
+            {"discussion.reply", "discussion.edit"},
+        )
+
+    def test_permissions_api_rejects_unknown_permission(self):
+        response = self.client.post(
+            "/api/admin/permissions",
+            data=json.dumps({
+                str(self.group.id): ["unknown.permission"],
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("未知权限", response.json()["error"])
 
 
 class AdminFlagManagementApiTests(TestCase):

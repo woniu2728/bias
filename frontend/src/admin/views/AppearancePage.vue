@@ -65,7 +65,7 @@
           </div>
         </div>
 
-        <div class="Form-group">
+        <div class="Form-group Form-group--assetUrl">
           <label>Logo URL</label>
           <input
             v-model="settings.logo_url"
@@ -94,7 +94,7 @@
           </div>
         </div>
 
-        <div class="Form-group">
+        <div class="Form-group Form-group--assetUrl">
           <label>Favicon URL</label>
           <input
             v-model="settings.favicon_url"
@@ -423,6 +423,12 @@ async function uploadAsset(event, target) {
 
 .Form-group {
   margin-bottom: 20px;
+  min-width: 0;
+}
+
+.Form-group--assetUrl {
+  margin-left: 198px;
+  max-width: calc(100% - 198px);
 }
 
 .Form-group:last-child {
@@ -439,11 +445,14 @@ async function uploadAsset(event, target) {
 
 .FormControl {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 3px;
   font-size: 14px;
   font-family: inherit;
+  box-sizing: border-box;
   transition: border-color 0.2s;
 }
 
@@ -547,6 +556,11 @@ async function uploadAsset(event, target) {
 
   .AssetCard {
     grid-template-columns: 1fr;
+  }
+
+  .Form-group--assetUrl {
+    margin-left: 0;
+    max-width: none;
   }
 
   .AssetCard-preview {

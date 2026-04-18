@@ -19,7 +19,6 @@ class Command(BaseCommand):
                 'name_singular': 'Admin',
                 'name_plural': 'Admins',
                 'color': '#B72A2A',
-                'icon': 'fas fa-wrench',
                 'is_hidden': False,
             },
             {
@@ -28,7 +27,6 @@ class Command(BaseCommand):
                 'name_singular': 'Guest',
                 'name_plural': 'Guests',
                 'color': '',
-                'icon': '',
                 'is_hidden': False,
             },
             {
@@ -37,7 +35,6 @@ class Command(BaseCommand):
                 'name_singular': 'Member',
                 'name_plural': 'Members',
                 'color': '',
-                'icon': '',
                 'is_hidden': False,
             },
             {
@@ -46,7 +43,6 @@ class Command(BaseCommand):
                 'name_singular': 'Moderator',
                 'name_plural': 'Moderators',
                 'color': '#80349E',
-                'icon': 'fas fa-shield-alt',
                 'is_hidden': False,
             },
         ]

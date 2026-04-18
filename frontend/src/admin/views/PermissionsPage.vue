@@ -90,6 +90,7 @@
           {{ saving ? '保存中...' : '保存权限' }}
         </button>
         <span v-if="saveSuccess" class="Form-success">✓ 保存成功</span>
+        <span v-if="errorMessage" class="Form-error">{{ errorMessage }}</span>
       </div>
 
       <div v-if="showGroupModal" class="Modal" @click.self="closeGroupModal">
@@ -102,20 +103,9 @@
           </div>
 
           <div class="Modal-body">
-            <div class="Form-group">
+            <div class="Form-group Form-group--groupName">
               <label>名称</label>
               <input v-model="groupForm.name" type="text" class="FormControl" placeholder="例如：Moderator" />
-            </div>
-
-            <div class="FormRow">
-              <div class="Form-group">
-                <label>单数名称</label>
-                <input v-model="groupForm.name_singular" type="text" class="FormControl" />
-              </div>
-              <div class="Form-group">
-                <label>复数名称</label>
-                <input v-model="groupForm.name_plural" type="text" class="FormControl" />
-              </div>
             </div>
 
             <div class="FormRow">
@@ -126,10 +116,6 @@
                   <input v-model="groupForm.color" type="text" class="FormControl" placeholder="#4d698e" />
                 </div>
               </div>
-              <div class="Form-group">
-                <label>图标</label>
-                <input v-model="groupForm.icon" type="text" class="FormControl" placeholder="例如：fas fa-shield-alt" />
-              </div>
             </div>
 
             <label class="CheckboxField">
@@ -138,13 +124,25 @@
             </label>
           </div>
 
-          <div class="Modal-footer">
-            <button @click="closeGroupModal" class="Button Button--secondary">
-              取消
+          <div class="Modal-footer Modal-footer--split">
+            <button
+              v-if="editingGroup && canDeleteGroup(editingGroup)"
+              @click="deleteGroup"
+              class="Button Button--danger"
+              :disabled="groupSaving || deletingGroup"
+            >
+              {{ deletingGroup ? '删除中...' : '删除用户组' }}
             </button>
-            <button @click="saveGroup" class="Button Button--primary" :disabled="groupSaving">
-              {{ groupSaving ? '保存中...' : '保存' }}
-            </button>
+            <span v-else-if="editingGroup" class="Modal-footerNote">系统默认用户组不允许删除</span>
+            <span v-else class="Modal-footerNote"></span>
+            <div class="Modal-footerActions">
+              <button @click="closeGroupModal" class="Button Button--secondary">
+                取消
+              </button>
+              <button @click="saveGroup" class="Button Button--primary" :disabled="groupSaving || deletingGroup">
+                {{ groupSaving ? '保存中...' : '保存' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -161,8 +159,10 @@ const groups = ref([])
 const permissions = ref({})
 const saving = ref(false)
 const saveSuccess = ref(false)
+const errorMessage = ref('')
 const showGroupModal = ref(false)
 const groupSaving = ref(false)
+const deletingGroup = ref(false)
 const editingGroup = ref(null)
 const groupForm = ref(getEmptyGroupForm())
 
@@ -172,39 +172,46 @@ const permissionSections = [
     label: '查看权限',
     permissions: [
       { name: 'viewForum', label: '查看论坛', icon: 'fas fa-eye' },
-      { name: 'viewDiscussions', label: '查看讨论', icon: 'fas fa-comments' },
       { name: 'viewUserList', label: '查看用户列表', icon: 'fas fa-users' },
+      { name: 'searchUsers', label: '搜索用户', icon: 'fas fa-search' },
     ],
   },
   {
     name: 'start',
-    label: '发起权限',
+    label: '发帖权限',
     permissions: [
       { name: 'startDiscussion', label: '发起讨论', icon: 'fas fa-edit' },
       { name: 'startDiscussionWithoutApproval', label: '发起讨论免审核', icon: 'fas fa-user-check' },
-      { name: 'uploadFiles', label: '上传文件', icon: 'fas fa-upload' },
     ],
   },
   {
     name: 'reply',
     label: '回复权限',
     permissions: [
-      { name: 'reply', label: '回复讨论', icon: 'fas fa-reply' },
+      { name: 'discussion.reply', label: '回复讨论', icon: 'fas fa-reply' },
       { name: 'replyWithoutApproval', label: '回复免审核', icon: 'fas fa-user-check' },
-      { name: 'editOwnPosts', label: '编辑自己的帖子', icon: 'fas fa-pencil-alt' },
-      { name: 'deleteOwnPosts', label: '删除自己的帖子', icon: 'fas fa-times' },
+      { name: 'discussion.editOwn', label: '编辑自己的帖子', icon: 'fas fa-pencil-alt' },
+      { name: 'discussion.deleteOwn', label: '删除自己的帖子', icon: 'fas fa-times' },
     ],
   },
   {
     name: 'moderate',
-    label: '管理权限',
+    label: '内容管理',
     permissions: [
-      { name: 'editPosts', label: '编辑帖子', icon: 'fas fa-pencil-alt' },
-      { name: 'deletePosts', label: '删除帖子', icon: 'fas fa-trash' },
-      { name: 'lockDiscussions', label: '锁定讨论', icon: 'fas fa-lock' },
-      { name: 'stickyDiscussions', label: '置顶讨论', icon: 'fas fa-thumbtack' },
-      { name: 'hideDiscussions', label: '隐藏讨论', icon: 'fas fa-eye-slash' },
-      { name: 'viewHiddenGroups', label: '查看隐藏用户组', icon: 'fas fa-users-slash' },
+      { name: 'discussion.edit', label: '编辑任意帖子', icon: 'fas fa-pencil-alt' },
+      { name: 'discussion.delete', label: '删除任意帖子', icon: 'fas fa-trash' },
+      { name: 'discussion.hide', label: '隐藏内容', icon: 'fas fa-eye-slash' },
+      { name: 'discussion.rename', label: '重命名讨论', icon: 'fas fa-heading' },
+      { name: 'discussion.lock', label: '锁定讨论', icon: 'fas fa-lock' },
+      { name: 'discussion.sticky', label: '置顶讨论', icon: 'fas fa-thumbtack' },
+    ],
+  },
+  {
+    name: 'user',
+    label: '用户管理',
+    permissions: [
+      { name: 'user.edit', label: '编辑用户资料', icon: 'fas fa-user-edit' },
+      { name: 'user.suspend', label: '封禁用户', icon: 'fas fa-user-slash' },
     ],
   },
 ]
@@ -218,8 +225,10 @@ async function loadGroups() {
   try {
     const data = await api.get('/admin/groups')
     groups.value = data
+    errorMessage.value = ''
   } catch (error) {
     console.error('加载用户组失败:', error)
+    errorMessage.value = '加载用户组失败'
   }
 }
 
@@ -227,8 +236,10 @@ async function loadPermissions() {
   try {
     const data = await api.get('/admin/permissions')
     permissions.value = data
+    errorMessage.value = ''
   } catch (error) {
     console.error('加载权限失败:', error)
+    errorMessage.value = '加载权限失败'
   }
 }
 
@@ -259,6 +270,7 @@ function togglePermission(groupId, permissionName, event) {
 async function savePermissions() {
   saving.value = true
   saveSuccess.value = false
+  errorMessage.value = ''
 
   try {
     await api.post('/admin/permissions', permissions.value)
@@ -268,6 +280,7 @@ async function savePermissions() {
     }, 3000)
   } catch (error) {
     console.error('保存权限失败:', error)
+    errorMessage.value = error.response?.data?.error || '保存权限失败'
   } finally {
     saving.value = false
   }
@@ -283,10 +296,7 @@ function editGroup(group) {
   editingGroup.value = group
   groupForm.value = {
     name: group.name || '',
-    name_singular: group.name_singular || '',
-    name_plural: group.name_plural || '',
     color: group.color || '#4d698e',
-    icon: group.icon || '',
     is_hidden: Boolean(group.is_hidden),
   }
   showGroupModal.value = true
@@ -303,9 +313,6 @@ async function saveGroup() {
     const payload = {
       ...groupForm.value,
       name: groupForm.value.name.trim(),
-      name_singular: (groupForm.value.name_singular || '').trim(),
-      name_plural: (groupForm.value.name_plural || '').trim(),
-      icon: (groupForm.value.icon || '').trim(),
     }
 
     if (editingGroup.value) {
@@ -316,6 +323,7 @@ async function saveGroup() {
 
     closeGroupModal()
     await loadGroups()
+    await loadPermissions()
   } catch (error) {
     console.error('保存用户组失败:', error)
     alert('保存失败: ' + (error.response?.data?.error || error.message || '未知错误'))
@@ -324,20 +332,45 @@ async function saveGroup() {
   }
 }
 
+function canDeleteGroup(group) {
+  return group && !group.is_system
+}
+
+async function deleteGroup() {
+  if (!editingGroup.value || !canDeleteGroup(editingGroup.value)) {
+    return
+  }
+
+  if (!window.confirm(`确定删除用户组“${editingGroup.value.name}”吗？现有成员会失去该用户组权限。`)) {
+    return
+  }
+
+  deletingGroup.value = true
+  try {
+    await api.delete(`/admin/groups/${editingGroup.value.id}`)
+    closeGroupModal()
+    await loadGroups()
+    await loadPermissions()
+  } catch (error) {
+    console.error('删除用户组失败:', error)
+    alert('删除失败: ' + (error.response?.data?.error || error.message || '未知错误'))
+  } finally {
+    deletingGroup.value = false
+  }
+}
+
 function closeGroupModal() {
   showGroupModal.value = false
   editingGroup.value = null
   groupSaving.value = false
+  deletingGroup.value = false
   groupForm.value = getEmptyGroupForm()
 }
 
 function getEmptyGroupForm() {
   return {
     name: '',
-    name_singular: '',
-    name_plural: '',
     color: '#4d698e',
-    icon: '',
     is_hidden: false,
   }
 }
@@ -538,6 +571,11 @@ function getEmptyGroupForm() {
   font-weight: 500;
 }
 
+.Form-error {
+  color: #c0392b;
+  font-size: 14px;
+}
+
 .Button--secondary {
   background: #f5f8fa;
   border: 1px solid #ddd;
@@ -546,6 +584,18 @@ function getEmptyGroupForm() {
 
 .Button--secondary:hover {
   background: #e8eef5;
+}
+
+.Button--danger {
+  background: #fff1f0;
+  border: 1px solid #f0c5c0;
+  color: #c0392b;
+  padding: 10px 16px;
+}
+
+.Button--danger:hover:not(:disabled) {
+  background: #fde2de;
+  border-color: #e39a91;
 }
 
 .Modal {
@@ -591,6 +641,21 @@ function getEmptyGroupForm() {
   border-top: 1px solid #e3e8ed;
 }
 
+.Modal-footer--split {
+  justify-content: space-between;
+}
+
+.Modal-footerActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.Modal-footerNote {
+  color: #7f8c8d;
+  font-size: 13px;
+}
+
 .Modal-header h3 {
   margin: 0;
   font-size: 18px;
@@ -614,6 +679,10 @@ function getEmptyGroupForm() {
 .Form-group {
   margin-bottom: 20px;
   min-width: 0;
+}
+
+.Form-group--groupName {
+  max-width: 360px;
 }
 
 .Form-group:last-child {
@@ -692,6 +761,10 @@ function getEmptyGroupForm() {
     grid-template-columns: 1fr;
   }
 
+  .Form-group--groupName {
+    max-width: none;
+  }
+
   .Modal-content--group {
     min-width: 0;
   }
@@ -700,6 +773,16 @@ function getEmptyGroupForm() {
   .Modal-footer,
   .Modal-body {
     padding: 16px;
+  }
+
+  .Modal-footer--split {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .Modal-footerActions {
+    width: 100%;
+    justify-content: flex-end;
   }
 }
 </style>

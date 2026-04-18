@@ -14,6 +14,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from typing import List, Dict, Any
+from django.db import transaction
 from django.db.models import Count, Max, Q
 from django.core.cache import cache
 
@@ -40,6 +41,44 @@ from apps.notifications.services import NotificationService
 
 router = Router()
 
+BUILTIN_GROUPS = {
+    1: "Admin",
+    2: "Guest",
+    3: "Member",
+    4: "Moderator",
+}
+
+VALID_PERMISSION_CODES = {
+    "viewForum",
+    "viewUserList",
+    "searchUsers",
+    "startDiscussion",
+    "startDiscussionWithoutApproval",
+    "discussion.reply",
+    "replyWithoutApproval",
+    "discussion.editOwn",
+    "discussion.deleteOwn",
+    "discussion.edit",
+    "discussion.delete",
+    "discussion.hide",
+    "discussion.rename",
+    "discussion.lock",
+    "discussion.sticky",
+    "user.edit",
+    "user.suspend",
+}
+
+PERMISSION_ALIASES = {
+    "reply": "discussion.reply",
+    "editOwnPosts": "discussion.editOwn",
+    "deleteOwnPosts": "discussion.deleteOwn",
+    "editPosts": "discussion.edit",
+    "deletePosts": "discussion.delete",
+    "hideDiscussions": "discussion.hide",
+    "lockDiscussions": "discussion.lock",
+    "stickyDiscussions": "discussion.sticky",
+}
+
 
 class AuthBearer(HttpBearer):
     """JWT认证"""
@@ -60,11 +99,9 @@ def serialize_group(group: Group) -> Dict[str, Any]:
     return {
         "id": group.id,
         "name": group.name,
-        "name_singular": group.name_singular,
-        "name_plural": group.name_plural,
         "color": group.color,
-        "icon": group.icon,
         "is_hidden": group.is_hidden,
+        "is_system": is_builtin_group(group),
     }
 
 
@@ -122,12 +159,23 @@ def validate_group_payload(payload: Dict[str, Any], group: Group = None):
 
     return {
         "name": name,
-        "name_singular": (payload.get("name_singular") or name).strip(),
-        "name_plural": (payload.get("name_plural") or f"{name}s").strip(),
+        "name_singular": name,
+        "name_plural": name,
         "color": payload.get("color") or "#4d698e",
-        "icon": (payload.get("icon") or "").strip(),
+        "icon": "",
         "is_hidden": bool(payload.get("is_hidden", False)),
     }
+
+
+def is_builtin_group(group: Group) -> bool:
+    return BUILTIN_GROUPS.get(group.id) == group.name
+
+
+def normalize_permission_code(permission: str):
+    normalized = PERMISSION_ALIASES.get(permission, permission)
+    if normalized in VALID_PERMISSION_CODES:
+        return normalized
+    return None
 
 
 def serialize_admin_user(user: User, include_details: bool = False) -> Dict[str, Any]:
@@ -429,6 +477,19 @@ def update_group(request, group_id: int, payload: Dict[str, Any] = Body(...)):
     return serialize_group(group)
 
 
+@router.delete("/groups/{group_id}", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def delete_group(request, group_id: int):
+    """删除用户组"""
+    group = get_object_or_404(Group, id=group_id)
+
+    if is_builtin_group(group):
+        return admin_error("系统默认用户组不允许删除", status=400)
+
+    group.delete()
+    return {"message": "用户组删除成功"}
+
+
 def serialize_post_flag(flag: PostFlag) -> Dict[str, Any]:
     return {
         "id": flag.id,
@@ -527,7 +588,9 @@ def get_permissions(request):
         group_id = perm.group.id
         if group_id not in result:
             result[group_id] = []
-        result[group_id].append(perm.permission)
+        normalized = normalize_permission_code(perm.permission)
+        if normalized and normalized not in result[group_id]:
+            result[group_id].append(normalized)
 
     return result
 
@@ -536,17 +599,41 @@ def get_permissions(request):
 @require_staff
 def save_permissions(request, payload: Dict[int, List[str]] = Body(...)):
     """保存权限配置"""
-    # 删除所有现有权限
-    Permission.objects.all().delete()
+    normalized_payload = {}
 
-    # 创建新权限
-    for group_id, permissions in payload.items():
-        group = Group.objects.get(id=group_id)
-        for permission in permissions:
-            Permission.objects.create(
-                group=group,
-                permission=permission
-            )
+    for raw_group_id, permission_names in payload.items():
+        try:
+            group_id = int(raw_group_id)
+        except (TypeError, ValueError):
+            return admin_error("用户组参数无效", status=400)
+
+        try:
+            group = Group.objects.get(id=group_id)
+        except Group.DoesNotExist:
+            return admin_error(f"用户组不存在: {group_id}", status=400)
+
+        normalized_permissions = []
+        for permission_name in permission_names or []:
+            normalized_permission = normalize_permission_code(permission_name)
+            if not normalized_permission:
+                return admin_error(f"未知权限: {permission_name}", status=400)
+            if normalized_permission not in normalized_permissions:
+                normalized_permissions.append(normalized_permission)
+
+        normalized_payload[group.id] = {
+            "group": group,
+            "permissions": normalized_permissions,
+        }
+
+    with transaction.atomic():
+        Permission.objects.all().delete()
+
+        for entry in normalized_payload.values():
+            for permission in entry["permissions"]:
+                Permission.objects.create(
+                    group=entry["group"],
+                    permission=permission,
+                )
 
     return {"message": "权限保存成功"}
 
@@ -658,6 +745,22 @@ def update_admin_user(request, user_id: int, payload: Dict[str, Any] = Body(...)
 
     user.refresh_from_db()
     return serialize_admin_user(user, include_details=True)
+
+
+@router.delete("/users/{user_id}", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def delete_admin_user(request, user_id: int):
+    """删除用户"""
+    user = get_object_or_404(User, id=user_id)
+
+    if user.id == request.auth.id:
+        return admin_error("不能删除当前登录的管理员账号", status=400)
+
+    if user.is_staff and User.objects.filter(is_staff=True).exclude(id=user.id).count() == 0:
+        return admin_error("至少需要保留一个管理员账号", status=400)
+
+    user.delete()
+    return {"message": "用户删除成功"}
 
 
 @router.get("/flags", auth=AuthBearer(), tags=["Admin"])

@@ -196,13 +196,24 @@
           </div>
         </div>
 
-        <div class="Modal-footer">
-          <button @click="closeModal" class="Button">
-            取消
+        <div class="Modal-footer Modal-footer--split">
+          <button
+            v-if="canDeleteCurrentUser"
+            @click="deleteUser"
+            class="Button Button--danger"
+            :disabled="saving || deleting"
+          >
+            {{ deleting ? '删除中...' : '删除用户' }}
           </button>
-          <button @click="saveUser" class="Button Button--primary" :disabled="saving">
-            {{ saving ? '保存中...' : '保存' }}
-          </button>
+          <span v-else class="Modal-footerNote">当前登录管理员账号不允许删除</span>
+          <div class="Modal-footerActions">
+            <button @click="closeModal" class="Button">
+              取消
+            </button>
+            <button @click="saveUser" class="Button Button--primary" :disabled="saving || deleting">
+              {{ saving ? '保存中...' : '保存' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -210,10 +221,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import AdminPage from '../components/AdminPage.vue'
 import api from '../../api'
+import { useAuthStore } from '../../stores/auth'
 
+const authStore = useAuthStore()
 const users = ref([])
 const loading = ref(true)
 const searchQuery = ref('')
@@ -225,11 +238,13 @@ const showEditModal = ref(false)
 const loadingDetails = ref(false)
 const savingDetails = ref(false)
 const saving = ref(false)
+const deleting = ref(false)
 const editingUserId = ref(null)
 
 let searchTimeout = null
 
 const formData = ref(getEmptyForm())
+const currentAdminId = computed(() => authStore.user?.id ?? null)
 
 onMounted(() => {
   loadGroups()
@@ -336,10 +351,33 @@ async function saveUser() {
   }
 }
 
+async function deleteUser() {
+  if (!editingUserId.value || !canDeleteCurrentUser.value) return
+
+  if (!window.confirm(`确定删除用户“${formData.value.username || editingUserId.value}”吗？该操作不可撤销。`)) {
+    return
+  }
+
+  deleting.value = true
+  savingDetails.value = true
+  try {
+    await api.delete(`/admin/users/${editingUserId.value}`)
+    closeModal()
+    await loadUsers()
+  } catch (error) {
+    console.error('删除用户失败:', error)
+    alert('删除失败: ' + (error.response?.data?.error || error.message || '未知错误'))
+  } finally {
+    deleting.value = false
+    savingDetails.value = false
+  }
+}
+
 function closeModal() {
   showEditModal.value = false
   loadingDetails.value = false
   saving.value = false
+  deleting.value = false
   editingUserId.value = null
   formData.value = getEmptyForm()
 }
@@ -386,6 +424,12 @@ function formatDateTimeLocal(dateString) {
   const localDate = new Date(date.getTime() - offset * 60000)
   return localDate.toISOString().slice(0, 16)
 }
+
+const canDeleteCurrentUser = computed(() => {
+  if (!editingUserId.value) return false
+  if (!currentAdminId.value) return true
+  return Number(editingUserId.value) !== Number(currentAdminId.value)
+})
 </script>
 
 <style scoped>
@@ -557,6 +601,17 @@ function formatDateTimeLocal(dateString) {
   font-size: 12px;
 }
 
+.Button--danger {
+  background: #fff1f0;
+  border-color: #f0c5c0;
+  color: #c0392b;
+}
+
+.Button--danger:hover:not(:disabled) {
+  background: #fde2de;
+  border-color: #e39a91;
+}
+
 .UsersPage-pagination {
   display: flex;
   align-items: center;
@@ -611,6 +666,21 @@ function formatDateTimeLocal(dateString) {
 .Modal-footer {
   justify-content: flex-end;
   border-top: 1px solid #e3e8ed;
+}
+
+.Modal-footer--split {
+  justify-content: space-between;
+}
+
+.Modal-footerActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.Modal-footerNote {
+  color: #7f8c8d;
+  font-size: 13px;
 }
 
 .Modal-header h3 {
@@ -719,6 +789,16 @@ function formatDateTimeLocal(dateString) {
   .Modal-body,
   .Modal-loading {
     padding: 16px;
+  }
+
+  .Modal-footer--split {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .Modal-footerActions {
+    width: 100%;
+    justify-content: flex-end;
   }
 }
 </style>
