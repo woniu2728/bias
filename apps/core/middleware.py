@@ -1,9 +1,9 @@
 import logging
 
+from asgiref.sync import iscoroutinefunction, markcoroutinefunction, sync_to_async
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.utils.html import escape
-from django.utils.deprecation import MiddlewareMixin
 from ninja_jwt.authentication import JWTAuth
 
 from apps.core.settings_service import (
@@ -16,8 +16,20 @@ from apps.core.settings_service import (
 sql_logger = logging.getLogger("bias.sql")
 
 
-class QueryLoggingMiddleware(MiddlewareMixin):
+class QueryLoggingMiddleware:
+    sync_capable = True
+    async_capable = True
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self._is_async = iscoroutinefunction(get_response)
+        if self._is_async:
+            markcoroutinefunction(self)
+
     def __call__(self, request):
+        if self._is_async:
+            return self.__acall__(request)
+
         if not is_query_logging_enabled():
             return self.get_response(request)
 
@@ -67,15 +79,34 @@ class QueryLoggingMiddleware(MiddlewareMixin):
 
         return response
 
+    async def __acall__(self, request):
+        if not await sync_to_async(is_query_logging_enabled, thread_sensitive=True)():
+            return await self.get_response(request)
 
-class MaintenanceModeMiddleware(MiddlewareMixin):
+        # Async endpoints should still work when query logging is enabled.
+        # Detailed per-query capture remains on the sync path.
+        return await self.get_response(request)
+
+
+class MaintenanceModeMiddleware:
+    sync_capable = True
+    async_capable = True
     allowed_public_paths = {
         "/api/forum",
         "/api/health",
         "/api/users/login",
     }
 
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self._is_async = iscoroutinefunction(get_response)
+        if self._is_async:
+            markcoroutinefunction(self)
+
     def __call__(self, request):
+        if self._is_async:
+            return self.__acall__(request)
+
         if not is_maintenance_mode_enabled():
             return self.get_response(request)
 
@@ -83,6 +114,15 @@ class MaintenanceModeMiddleware(MiddlewareMixin):
             return self.get_response(request)
 
         return self._maintenance_response(request)
+
+    async def __acall__(self, request):
+        if not await sync_to_async(is_maintenance_mode_enabled, thread_sensitive=True)():
+            return await self.get_response(request)
+
+        if await sync_to_async(self._is_exempt, thread_sensitive=True)(request):
+            return await self.get_response(request)
+
+        return await sync_to_async(self._maintenance_response, thread_sensitive=True)(request)
 
     def _is_exempt(self, request) -> bool:
         path = request.path or "/"

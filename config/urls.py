@@ -12,7 +12,7 @@ api = NinjaAPI(
     title="Bias API",
     version="1.0.0",
     description="Flarum 风格论坛的 Python RESTful API",
-    docs_url="/api/docs",
+    docs_url="/docs",
 )
 
 # 导入路由
