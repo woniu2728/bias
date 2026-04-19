@@ -87,6 +87,11 @@ ADVANCED_SETTINGS_DEFAULTS = {
     "storage_imagebed_headers": "{}",
     "storage_imagebed_form_data": "{}",
     "storage_imagebed_url_path": "data.url",
+    "auth_human_verification_provider": "off",
+    "auth_turnstile_site_key": "",
+    "auth_turnstile_secret_key": "",
+    "auth_human_verification_login_enabled": True,
+    "auth_human_verification_register_enabled": True,
 }
 
 
@@ -197,7 +202,26 @@ def get_public_forum_settings() -> dict:
     forum_settings.update({
         "maintenance_mode": bool(advanced_settings.get("maintenance_mode", False)),
         "maintenance_message": get_maintenance_message(),
+        "auth_human_verification_provider": "off",
+        "auth_turnstile_site_key": "",
+        "auth_human_verification_login_enabled": False,
+        "auth_human_verification_register_enabled": False,
     })
+
+    provider = str(advanced_settings.get("auth_human_verification_provider") or "off").strip().lower()
+    site_key = str(advanced_settings.get("auth_turnstile_site_key") or "").strip()
+    secret_key = str(advanced_settings.get("auth_turnstile_secret_key") or "").strip()
+    if provider == "turnstile" and site_key and secret_key:
+        forum_settings.update({
+            "auth_human_verification_provider": "turnstile",
+            "auth_turnstile_site_key": site_key,
+            "auth_human_verification_login_enabled": bool(
+                advanced_settings.get("auth_human_verification_login_enabled", True)
+            ),
+            "auth_human_verification_register_enabled": bool(
+                advanced_settings.get("auth_human_verification_register_enabled", True)
+            ),
+        })
 
     if cache_lifetime > 0:
         _cache_set(PUBLIC_FORUM_SETTINGS_CACHE_KEY, forum_settings, cache_lifetime)

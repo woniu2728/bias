@@ -1,5 +1,6 @@
 import json
 from io import BytesIO
+import httpx
 from unittest.mock import patch
 
 from django.core import mail
@@ -11,6 +12,7 @@ from PIL import Image
 from ninja_jwt.tokens import RefreshToken
 
 from apps.core.models import Setting
+from apps.core.settings_service import clear_runtime_setting_caches
 from apps.users.models import Group
 from apps.users.models import EmailToken, PasswordToken, User
 
@@ -178,6 +180,131 @@ class SuspendedUserAuthTests(TestCase):
         self.assertEqual(response.status_code, 401, response.content)
         self.assertIn("账号已被封禁", response.json()["error"])
         self.assertIn("请联系管理员申诉", response.json()["error"])
+
+
+class HumanVerificationAuthTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="human-check-user",
+            email="human-check@example.com",
+            password="password123",
+        )
+
+    def tearDown(self):
+        clear_runtime_setting_caches()
+        super().tearDown()
+
+    def enable_turnstile(self, *, login_enabled=True, register_enabled=True):
+        Setting.objects.update_or_create(
+            key="advanced.auth_human_verification_provider",
+            defaults={"value": json.dumps("turnstile")},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.auth_turnstile_site_key",
+            defaults={"value": json.dumps("site-key")},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.auth_turnstile_secret_key",
+            defaults={"value": json.dumps("secret-key")},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.auth_human_verification_login_enabled",
+            defaults={"value": json.dumps(login_enabled)},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.auth_human_verification_register_enabled",
+            defaults={"value": json.dumps(register_enabled)},
+        )
+        clear_runtime_setting_caches()
+
+    def test_login_requires_human_verification_when_enabled(self):
+        self.enable_turnstile(login_enabled=True, register_enabled=False)
+
+        response = self.client.post(
+            "/api/users/login",
+            data=json.dumps({
+                "identification": "human-check-user",
+                "password": "password123",
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(response.json()["error"], "请先完成真人验证")
+
+    @patch("apps.core.human_verification.httpx.post")
+    def test_login_accepts_valid_human_verification_token(self, mock_post):
+        self.enable_turnstile(login_enabled=True, register_enabled=False)
+        mock_post.return_value = self._build_turnstile_response({"success": True})
+
+        response = self.client.post(
+            "/api/users/login",
+            data=json.dumps({
+                "identification": "human-check-user",
+                "password": "password123",
+                "human_verification_token": "turnstile-ok",
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["access"])
+        self.assertTrue(response.json()["refresh"])
+        mock_post.assert_called_once()
+        self.assertEqual(mock_post.call_args.kwargs["data"]["secret"], "secret-key")
+        self.assertEqual(mock_post.call_args.kwargs["data"]["response"], "turnstile-ok")
+
+    @patch("apps.core.human_verification.httpx.post")
+    def test_register_accepts_valid_human_verification_token(self, mock_post):
+        self.enable_turnstile(login_enabled=False, register_enabled=True)
+        mock_post.return_value = self._build_turnstile_response({"success": True})
+
+        response = self.client.post(
+            "/api/users/register",
+            data=json.dumps({
+                "username": "verified-register",
+                "email": "verified-register@example.com",
+                "password": "password123",
+                "human_verification_token": "turnstile-register",
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["username"], "verified-register")
+        self.assertTrue(User.objects.filter(username="verified-register").exists())
+
+    @patch("apps.core.human_verification.httpx.post")
+    def test_login_returns_service_unavailable_when_turnstile_verification_breaks(self, mock_post):
+        self.enable_turnstile(login_enabled=True, register_enabled=False)
+        mock_post.side_effect = httpx.ConnectError("boom")
+
+        response = self.client.post(
+            "/api/users/login",
+            data=json.dumps({
+                "identification": "human-check-user",
+                "password": "password123",
+                "human_verification_token": "turnstile-ok",
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 503, response.content)
+        self.assertEqual(response.json()["error"], "真人验证服务暂时不可用，请稍后再试")
+
+    @staticmethod
+    def _build_turnstile_response(payload):
+        class MockResponse:
+            def __init__(self, body):
+                self._body = body
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return self._body
+
+        return MockResponse(payload)
 
 
 @override_settings(

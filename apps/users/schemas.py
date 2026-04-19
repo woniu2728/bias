@@ -11,12 +11,14 @@ class UserRegisterSchema(Schema):
     username: str
     email: str
     password: str
+    human_verification_token: Optional[str] = None
 
 
 class UserLoginSchema(Schema):
     """用户登录Schema"""
     identification: str  # 用户名或邮箱
     password: str
+    human_verification_token: Optional[str] = None
 
 
 class TokenSchema(Schema):

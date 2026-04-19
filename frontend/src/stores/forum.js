@@ -22,6 +22,10 @@ const DEFAULT_SETTINGS = {
   custom_header: '',
   maintenance_mode: false,
   maintenance_message: '论坛正在维护中，请稍后再试...',
+  auth_human_verification_provider: 'off',
+  auth_turnstile_site_key: '',
+  auth_human_verification_login_enabled: false,
+  auth_human_verification_register_enabled: false,
 }
 
 const CUSTOM_CSS_STYLE_ID = 'forum-custom-css'

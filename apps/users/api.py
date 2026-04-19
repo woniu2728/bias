@@ -10,6 +10,7 @@ from django.conf import settings
 from django.http import JsonResponse
 from typing import List
 
+from apps.core.human_verification import HumanVerificationError, verify_human_verification
 from .models import User
 from apps.core.file_service import FileUploadService
 from apps.users.group_utils import get_primary_group, serialize_group_badge
@@ -63,12 +64,15 @@ class AuthBearer(HttpBearer):
 def register(request, payload: UserRegisterSchema):
     """用户注册"""
     try:
+        verify_human_verification(request, "register", payload.human_verification_token)
         user = UserService.create_user(
             username=payload.username,
             email=payload.email,
             password=payload.password,
         )
         return user
+    except HumanVerificationError as e:
+        return JsonResponse({"error": str(e)}, status=e.status_code)
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=400)
 
@@ -77,6 +81,7 @@ def register(request, payload: UserRegisterSchema):
 def login(request, payload: UserLoginSchema):
     """用户登录"""
     try:
+        verify_human_verification(request, "login", payload.human_verification_token)
         user = UserService.authenticate_user(
             identification=payload.identification,
             password=payload.password,
@@ -88,6 +93,8 @@ def login(request, payload: UserLoginSchema):
             "access": str(refresh.access_token),
             "refresh": str(refresh),
         }
+    except HumanVerificationError as e:
+        return JsonResponse({"error": str(e)}, status=e.status_code)
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=401)
 

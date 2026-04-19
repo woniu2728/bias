@@ -10,11 +10,12 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!accessToken.value)
 
   // 登录
-  async function login(identification, password) {
+  async function login(identification, password, humanVerificationToken = '') {
     try {
       const data = await api.post('/users/login', {
         identification,
-        password
+        password,
+        human_verification_token: humanVerificationToken || undefined
       })
 
       accessToken.value = data.access
@@ -35,12 +36,13 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // 注册
-  async function register(username, email, password) {
+  async function register(username, email, password, humanVerificationToken = '') {
     try {
       await api.post('/users/register', {
         username,
         email,
-        password
+        password,
+        human_verification_token: humanVerificationToken || undefined
       })
 
       return { success: true }

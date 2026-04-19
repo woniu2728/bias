@@ -292,6 +292,34 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(payload["storage_r2_bucket"], "forum-assets")
         self.assertEqual(payload["storage_r2_public_url"], "https://cdn.example.com")
 
+    def test_advanced_settings_persist_human_verification_config(self):
+        response = self.client.post(
+            "/api/admin/advanced",
+            data=json.dumps({
+                "auth_human_verification_provider": "turnstile",
+                "auth_turnstile_site_key": "site-key",
+                "auth_turnstile_secret_key": "secret-key",
+                "auth_human_verification_login_enabled": True,
+                "auth_human_verification_register_enabled": False,
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="advanced.auth_human_verification_provider").value),
+            "turnstile",
+        )
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="advanced.auth_turnstile_site_key").value),
+            "site-key",
+        )
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="advanced.auth_human_verification_register_enabled").value),
+            False,
+        )
+
     def test_debug_mode_setting_is_read_only_runtime_value(self):
         response = self.client.post(
             "/api/admin/advanced",
@@ -367,6 +395,26 @@ class AdminSettingsApiTests(TestCase):
             key="appearance.logo_url",
             defaults={"value": json.dumps("/media/runtime-logo.png")},
         )
+        Setting.objects.update_or_create(
+            key="advanced.auth_human_verification_provider",
+            defaults={"value": json.dumps("turnstile")},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.auth_turnstile_site_key",
+            defaults={"value": json.dumps("public-site-key")},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.auth_turnstile_secret_key",
+            defaults={"value": json.dumps("private-secret-key")},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.auth_human_verification_login_enabled",
+            defaults={"value": json.dumps(True)},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.auth_human_verification_register_enabled",
+            defaults={"value": json.dumps(False)},
+        )
 
         response = self.client.get("/api/forum")
 
@@ -381,6 +429,11 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(payload["welcome_title"], "欢迎来到运行时论坛")
         self.assertEqual(payload["primary_color"], "#123456")
         self.assertEqual(payload["logo_url"], "/media/runtime-logo.png")
+        self.assertEqual(payload["auth_human_verification_provider"], "turnstile")
+        self.assertEqual(payload["auth_turnstile_site_key"], "public-site-key")
+        self.assertTrue(payload["auth_human_verification_login_enabled"])
+        self.assertFalse(payload["auth_human_verification_register_enabled"])
+        self.assertNotIn("auth_turnstile_secret_key", payload)
 
     @patch("apps.core.admin_api.FileUploadService.upload_site_asset")
     def test_admin_can_upload_appearance_logo(self, upload_site_asset):

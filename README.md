@@ -144,7 +144,17 @@ docker compose restart web celery
 - API 文档：`http://localhost:8080/api/docs`
 - 系统状态：`http://localhost:8080/api/system/status`
 
-### 5. Docker 升级
+### 5. 登录/注册真人验证
+
+如果需要防止机器人批量注册，可在后台 `高级设置` 中开启：
+
+- `验证提供方` 选择 `Cloudflare Turnstile`
+- 填写 `Site Key` 和 `Secret Key`
+- 勾选要拦截的场景：`登录`、`注册`
+
+开启后，前台登录/注册弹窗会自动显示真人验证组件，服务端也会强制校验 token，仅前端绕不过去。
+
+### 6. Docker 升级
 
 ```bash
 git pull

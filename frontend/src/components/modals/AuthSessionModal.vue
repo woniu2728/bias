@@ -57,6 +57,16 @@
             </button>
           </div>
 
+          <div v-if="loginHumanVerificationRequired" class="Form-group">
+            <label>真人验证</label>
+            <div
+              ref="turnstileContainer"
+              class="AuthSessionTurnstile"
+              :class="{ 'AuthSessionTurnstile--loading': turnstileLoading }"
+            ></div>
+            <p v-if="turnstileStatusMessage" class="AuthSessionTurnstileStatus">{{ turnstileStatusMessage }}</p>
+          </div>
+
           <div v-if="errorMessage" class="AuthSessionAlert AuthSessionAlert--error">{{ errorMessage }}</div>
 
           <button type="submit" class="Button Button--primary Button--block" :disabled="loading">
@@ -130,6 +140,16 @@
               :disabled="loading"
               required
             />
+          </div>
+
+          <div v-if="registerHumanVerificationRequired" class="Form-group">
+            <label>真人验证</label>
+            <div
+              ref="turnstileContainer"
+              class="AuthSessionTurnstile"
+              :class="{ 'AuthSessionTurnstile--loading': turnstileLoading }"
+            ></div>
+            <p v-if="turnstileStatusMessage" class="AuthSessionTurnstileStatus">{{ turnstileStatusMessage }}</p>
           </div>
 
           <div v-if="errorMessage" class="AuthSessionAlert AuthSessionAlert--error">{{ errorMessage }}</div>
@@ -212,9 +232,11 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useForumStore } from '@/stores/forum'
 import { useModalStore } from '@/stores/modal'
 import { useNotificationStore } from '@/stores/notification'
 import { sanitizeRedirectPath } from '@/utils/authModal'
+import { ensureTurnstileScript } from '@/utils/turnstile'
 
 const props = defineProps({
   showing: {
@@ -249,12 +271,14 @@ const props = defineProps({
 
 const router = useRouter()
 const authStore = useAuthStore()
+const forumStore = useForumStore()
 const modalStore = useModalStore()
 const notificationStore = useNotificationStore()
 
 const loginIdentificationInput = ref(null)
 const registerUsernameInput = ref(null)
 const forgotPasswordInput = ref(null)
+const turnstileContainer = ref(null)
 
 const activeMode = ref(normalizeMode(props.mode))
 const loading = ref(false)
@@ -262,7 +286,12 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const forgotPasswordSuccess = ref(false)
 const debugResetUrl = ref('')
+const turnstileLoading = ref(false)
+const turnstileError = ref('')
+const turnstileToken = ref('')
 let registerSwitchTimer = null
+let turnstileWidgetId = null
+let turnstileRenderNonce = 0
 
 const loginForm = ref({
   identification: props.initialIdentification || '',
@@ -278,6 +307,30 @@ const registerForm = ref({
 })
 
 const forgotPasswordEmail = ref(props.initialEmail || '')
+
+const turnstileProvider = computed(() => forumStore.settings.auth_human_verification_provider || 'off')
+const turnstileSiteKey = computed(() => forumStore.settings.auth_turnstile_site_key || '')
+const loginHumanVerificationRequired = computed(() => (
+  turnstileProvider.value === 'turnstile'
+  && !!turnstileSiteKey.value
+  && !!forumStore.settings.auth_human_verification_login_enabled
+))
+const registerHumanVerificationRequired = computed(() => (
+  turnstileProvider.value === 'turnstile'
+  && !!turnstileSiteKey.value
+  && !!forumStore.settings.auth_human_verification_register_enabled
+))
+const activeHumanVerificationRequired = computed(() => {
+  if (activeMode.value === 'login') return loginHumanVerificationRequired.value
+  if (activeMode.value === 'register') return registerHumanVerificationRequired.value
+  return false
+})
+const turnstileStatusMessage = computed(() => {
+  if (turnstileError.value) return turnstileError.value
+  if (turnstileLoading.value) return '真人验证加载中...'
+  if (activeHumanVerificationRequired.value && !turnstileToken.value) return '请完成真人验证后再继续。'
+  return ''
+})
 
 const titleText = computed(() => {
   if (activeMode.value === 'register') return '加入讨论'
@@ -322,15 +375,32 @@ watch(
   value => {
     if (value) {
       queueFocus()
+      syncTurnstileWidget()
+      return
     }
+
+    resetTurnstileWidget()
   },
   { immediate: true }
+)
+
+watch(
+  () => [
+    activeMode.value,
+    props.showing,
+    activeHumanVerificationRequired.value,
+    turnstileSiteKey.value
+  ],
+  () => {
+    syncTurnstileWidget()
+  }
 )
 
 onBeforeUnmount(() => {
   if (registerSwitchTimer) {
     clearTimeout(registerSwitchTimer)
   }
+  resetTurnstileWidget()
 })
 
 function normalizeMode(value) {
@@ -343,6 +413,43 @@ function resetMessages() {
   forgotPasswordSuccess.value = false
   debugResetUrl.value = ''
   loading.value = false
+}
+
+function resetTurnstileWidget(invalidatePendingRender = true) {
+  if (invalidatePendingRender) {
+    turnstileRenderNonce += 1
+  }
+  turnstileToken.value = ''
+  turnstileError.value = ''
+  turnstileLoading.value = false
+
+  if (typeof window === 'undefined' || !window.turnstile || turnstileWidgetId === null) {
+    turnstileWidgetId = null
+    return
+  }
+
+  try {
+    window.turnstile.remove(turnstileWidgetId)
+  } catch (error) {
+    console.warn('清理真人验证组件失败:', error)
+  } finally {
+    turnstileWidgetId = null
+  }
+}
+
+function refreshTurnstileWidget() {
+  turnstileToken.value = ''
+  turnstileError.value = ''
+
+  if (typeof window === 'undefined' || !window.turnstile || turnstileWidgetId === null) {
+    return
+  }
+
+  try {
+    window.turnstile.reset(turnstileWidgetId)
+  } catch (error) {
+    console.warn('重置真人验证组件失败:', error)
+  }
 }
 
 function queueFocus() {
@@ -364,6 +471,7 @@ function queueFocus() {
 function switchToLogin(payload = {}) {
   activeMode.value = 'login'
   resetMessages()
+  turnstileError.value = ''
   if (payload.identification) {
     loginForm.value.identification = payload.identification
   } else if (!loginForm.value.identification) {
@@ -375,6 +483,7 @@ function switchToLogin(payload = {}) {
 function switchToRegister() {
   activeMode.value = 'register'
   resetMessages()
+  turnstileError.value = ''
 
   const identification = loginForm.value.identification.trim()
   if (identification) {
@@ -394,10 +503,63 @@ function switchToRegister() {
 function switchToForgotPassword() {
   activeMode.value = 'forgot-password'
   resetMessages()
+  resetTurnstileWidget()
   if (!forgotPasswordEmail.value && loginForm.value.identification.includes('@')) {
     forgotPasswordEmail.value = loginForm.value.identification
   }
   queueFocus()
+}
+
+async function syncTurnstileWidget() {
+  const renderNonce = turnstileRenderNonce + 1
+  turnstileRenderNonce = renderNonce
+  resetTurnstileWidget(false)
+
+  if (!props.showing || !activeHumanVerificationRequired.value) {
+    return
+  }
+
+  await nextTick()
+  if (!turnstileContainer.value) {
+    return
+  }
+
+  turnstileLoading.value = true
+  turnstileError.value = ''
+
+  try {
+    const turnstile = await ensureTurnstileScript()
+    if (
+      renderNonce !== turnstileRenderNonce
+      || !turnstile
+      || !turnstileContainer.value
+      || !props.showing
+      || !activeHumanVerificationRequired.value
+    ) {
+      turnstileLoading.value = false
+      return
+    }
+
+    turnstileWidgetId = turnstile.render(turnstileContainer.value, {
+      sitekey: turnstileSiteKey.value,
+      callback(token) {
+        turnstileToken.value = token || ''
+        turnstileError.value = ''
+      },
+      'expired-callback'() {
+        turnstileToken.value = ''
+        turnstileError.value = '真人验证已过期，请重新完成验证。'
+      },
+      'error-callback'() {
+        turnstileToken.value = ''
+        turnstileError.value = '真人验证加载失败，请稍后重试。'
+      }
+    })
+  } catch (error) {
+    turnstileError.value = error.message || '真人验证加载失败，请稍后重试。'
+  } finally {
+    turnstileLoading.value = false
+  }
 }
 
 async function handleLogin() {
@@ -405,10 +567,17 @@ async function handleLogin() {
   errorMessage.value = ''
 
   try {
-    const result = await authStore.login(loginForm.value.identification, loginForm.value.password)
+    const result = await authStore.login(
+      loginForm.value.identification,
+      loginForm.value.password,
+      turnstileToken.value
+    )
     if (!result.success) {
       errorMessage.value = result.error || '登录失败，请检查用户名和密码'
       loginForm.value.password = ''
+      if (loginHumanVerificationRequired.value) {
+        refreshTurnstileWidget()
+      }
       return
     }
 
@@ -422,6 +591,9 @@ async function handleLogin() {
   } catch (error) {
     errorMessage.value = error.response?.data?.error || '登录失败，请检查用户名和密码'
     loginForm.value.password = ''
+    if (loginHumanVerificationRequired.value) {
+      refreshTurnstileWidget()
+    }
   } finally {
     loading.value = false
   }
@@ -442,11 +614,15 @@ async function handleRegister() {
     const result = await authStore.register(
       registerForm.value.username,
       registerForm.value.email,
-      registerForm.value.password
+      registerForm.value.password,
+      turnstileToken.value
     )
 
     if (!result.success) {
       errorMessage.value = result.error || '注册失败，请稍后重试'
+      if (registerHumanVerificationRequired.value) {
+        refreshTurnstileWidget()
+      }
       return
     }
 
@@ -467,6 +643,9 @@ async function handleRegister() {
       errorMessage.value = `密码: ${data.password[0]}`
     } else {
       errorMessage.value = data.detail || data.error || '注册失败，请稍后重试'
+    }
+    if (registerHumanVerificationRequired.value) {
+      refreshTurnstileWidget()
     }
   } finally {
     loading.value = false
@@ -645,6 +824,25 @@ async function handleForgotPassword() {
 
 .AuthSessionDebugLink {
   word-break: break-all;
+}
+
+.AuthSessionTurnstile {
+  min-height: 68px;
+  padding: 8px;
+  border: 1px solid #d7e0e8;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.AuthSessionTurnstile--loading {
+  opacity: 0.75;
+}
+
+.AuthSessionTurnstileStatus {
+  margin: 8px 0 0;
+  color: #708191;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 @media (max-width: 768px) {

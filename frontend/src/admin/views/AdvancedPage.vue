@@ -78,6 +78,71 @@
       </div>
 
       <div class="Form-section">
+        <h3 class="Section-title">安全与真人验证</h3>
+
+        <div class="Form-group">
+          <label>验证提供方</label>
+          <select v-model="settings.auth_human_verification_provider" class="FormControl">
+            <option value="off">关闭</option>
+            <option value="turnstile">Cloudflare Turnstile</option>
+          </select>
+          <p class="Form-help">建议正式环境开启，优先拦截登录和注册机器人。</p>
+        </div>
+
+        <template v-if="settings.auth_human_verification_provider === 'turnstile'">
+          <div class="Form-grid">
+            <div class="Form-group">
+              <label>Site Key</label>
+              <input
+                v-model="settings.auth_turnstile_site_key"
+                type="text"
+                class="FormControl"
+                placeholder="0x4AAAA..."
+              />
+            </div>
+
+            <div class="Form-group">
+              <label>Secret Key</label>
+              <input
+                v-model="settings.auth_turnstile_secret_key"
+                type="password"
+                class="FormControl"
+                placeholder="0x4AAAA..."
+              />
+            </div>
+          </div>
+
+          <div class="Form-grid">
+            <div class="Form-group Form-group--checkbox">
+              <label>
+                <input
+                  v-model="settings.auth_human_verification_login_enabled"
+                  type="checkbox"
+                  class="FormControl-checkbox"
+                />
+                登录时启用真人验证
+              </label>
+            </div>
+
+            <div class="Form-group Form-group--checkbox">
+              <label>
+                <input
+                  v-model="settings.auth_human_verification_register_enabled"
+                  type="checkbox"
+                  class="FormControl-checkbox"
+                />
+                注册时启用真人验证
+              </label>
+            </div>
+          </div>
+
+          <p v-if="turnstileMisconfigured" class="Form-warning">
+            已选择 Turnstile，但 Site Key 或 Secret Key 仍为空，当前不会真正启用验证。
+          </p>
+        </template>
+      </div>
+
+      <div class="Form-section">
         <h3 class="Section-title">文件存储</h3>
 
         <div class="Form-group">
@@ -431,7 +496,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import AdminPage from '../components/AdminPage.vue'
 import api from '../../api'
 
@@ -444,6 +509,11 @@ const settings = ref({
   maintenance_message: '',
   debug_mode: false,
   log_queries: false,
+  auth_human_verification_provider: 'off',
+  auth_turnstile_site_key: '',
+  auth_turnstile_secret_key: '',
+  auth_human_verification_login_enabled: true,
+  auth_human_verification_register_enabled: true,
   storage_driver: 'local',
   storage_attachments_dir: 'attachments',
   storage_avatars_dir: 'avatars',
@@ -481,6 +551,10 @@ const saving = ref(false)
 const clearing = ref(false)
 const saveSuccess = ref(false)
 const saveError = ref(false)
+const turnstileMisconfigured = computed(() => (
+  settings.value.auth_human_verification_provider === 'turnstile'
+  && (!settings.value.auth_turnstile_site_key || !settings.value.auth_turnstile_secret_key)
+))
 
 onMounted(async () => {
   try {
@@ -673,6 +747,13 @@ async function clearCache() {
   color: #e74c3c;
   font-size: 14px;
   font-weight: 500;
+}
+
+.Form-warning {
+  margin: 0;
+  color: #b7791f;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 @media (max-width: 768px) {
