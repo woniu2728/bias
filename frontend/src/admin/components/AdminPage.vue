@@ -91,9 +91,15 @@ defineProps({
 }
 
 @media (max-width: 768px) {
+  .AdminPage {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
   .AdminPage-header {
     gap: 14px;
     padding: 18px 16px;
+    background: #f4f6f8;
   }
 
   .AdminPage-headerIcon {

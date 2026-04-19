@@ -1,66 +1,86 @@
 <template>
-  <nav class="AdminNav">
-    <div class="AdminNav-section">
-      <h4 class="AdminNav-title">核心</h4>
-      <ul class="AdminNav-list">
-        <li v-for="item in coreItems" :key="item.path">
-          <router-link
-            :to="item.path"
-            class="AdminNav-item"
-            :class="{ active: isActive(item.path) }"
-          >
-            <i :class="item.icon"></i>
-            <span>{{ item.label }}</span>
-          </router-link>
-        </li>
-      </ul>
-    </div>
+  <nav class="AdminNav" :class="{ 'is-mobile-open': mobileOpen }">
+    <div v-if="mobileOpen" class="AdminNav-backdrop" @click="$emit('close')"></div>
+    <div class="AdminNav-panel">
+      <div class="AdminNav-mobileHeader">
+        <strong>后台导航</strong>
+        <button type="button" class="AdminNav-close" @click="$emit('close')">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
 
-    <div class="AdminNav-section">
-      <h4 class="AdminNav-title">功能</h4>
-      <ul class="AdminNav-list">
-        <li v-for="item in featureItems" :key="item.path">
-          <router-link
-            :to="item.path"
-            class="AdminNav-item"
-            :class="{ active: isActive(item.path) }"
-          >
-            <i :class="item.icon"></i>
-            <span>{{ item.label }}</span>
-          </router-link>
-        </li>
-      </ul>
+      <div class="AdminNav-section">
+        <h4 class="AdminNav-title">核心</h4>
+        <ul class="AdminNav-list">
+          <li v-for="item in coreItems" :key="item.path">
+            <router-link
+              :to="item.path"
+              class="AdminNav-item"
+              :class="{ active: isActive(item.path) }"
+              @click="$emit('close')"
+            >
+              <i :class="item.icon"></i>
+              <span>{{ item.label }}</span>
+            </router-link>
+          </li>
+        </ul>
+      </div>
+
+      <div class="AdminNav-section">
+        <h4 class="AdminNav-title">功能</h4>
+        <ul class="AdminNav-list">
+          <li v-for="item in featureItems" :key="item.path">
+            <router-link
+              :to="item.path"
+              class="AdminNav-item"
+              :class="{ active: isActive(item.path) }"
+              @click="$emit('close')"
+            >
+              <i :class="item.icon"></i>
+              <span>{{ item.label }}</span>
+            </router-link>
+          </li>
+        </ul>
+      </div>
+
+      <div class="AdminNav-mobileFooter">
+        <a href="/" class="AdminNav-item" @click="$emit('close')">
+          <i class="fas fa-arrow-left"></i>
+          <span>返回论坛</span>
+        </a>
+        <button type="button" class="AdminNav-item AdminNav-item--danger" @click="handleLogout">
+          <i class="fas fa-sign-out-alt"></i>
+          <span>登出</span>
+        </button>
+      </div>
     </div>
   </nav>
 </template>
 
 <script setup>
-import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useAuthStore } from '../../stores/auth'
+import { coreItems, featureItems, isAdminPathActive } from '../navigation'
+
+defineProps({
+  mobileOpen: {
+    type: Boolean,
+    default: false
+  }
+})
+
+defineEmits(['close'])
 
 const route = useRoute()
-
-const coreItems = [
-  { path: '/admin', icon: 'fas fa-chart-bar', label: '仪表盘' },
-  { path: '/admin/basics', icon: 'fas fa-pencil-alt', label: '基础设置' },
-  { path: '/admin/permissions', icon: 'fas fa-key', label: '权限管理' },
-  { path: '/admin/appearance', icon: 'fas fa-paint-brush', label: '外观设置' },
-  { path: '/admin/users', icon: 'fas fa-users', label: '用户管理' },
-]
-
-const featureItems = [
-  { path: '/admin/approval', icon: 'fas fa-user-check', label: '审核队列' },
-  { path: '/admin/flags', icon: 'fas fa-flag', label: '举报管理' },
-  { path: '/admin/tags', icon: 'fas fa-tags', label: '标签管理' },
-  { path: '/admin/mail', icon: 'fas fa-envelope', label: '邮件设置' },
-  { path: '/admin/advanced', icon: 'fas fa-cog', label: '高级设置' },
-]
+const authStore = useAuthStore()
 
 function isActive(path) {
-  if (path === '/admin') {
-    return route.path === '/admin'
-  }
-  return route.path.startsWith(path)
+  return isAdminPathActive(route.path, path)
+}
+
+function handleLogout() {
+  authStore.logout()
+  window.location.href = '/login'
 }
 </script>
 
@@ -68,6 +88,11 @@ function isActive(path) {
 .AdminNav {
   width: 220px;
   flex-shrink: 0;
+}
+
+.AdminNav-mobileHeader,
+.AdminNav-backdrop {
+  display: none;
 }
 
 .AdminNav-section {
@@ -123,65 +148,115 @@ function isActive(path) {
   background: #3d5875;
 }
 
+.AdminNav-item--danger {
+  border: 0;
+  width: 100%;
+  background: #fff4f3;
+  color: #b34c45;
+  cursor: pointer;
+}
+
 @media (max-width: 960px) {
   .AdminNav {
     width: 100%;
   }
+}
+
+@media (max-width: 768px) {
+  .AdminNav {
+    width: 0;
+  }
+
+  .AdminNav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 56px 0 0;
+    background: rgba(24, 38, 54, 0.38);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 119;
+  }
+
+  .AdminNav-panel {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    bottom: 0;
+    width: min(320px, calc(100vw - 44px));
+    padding: 14px 14px 20px;
+    background: #fff;
+    box-shadow: 0 18px 40px rgba(31, 45, 61, 0.18);
+    transform: translateX(calc(-100% - 12px));
+    transition: transform 0.22s ease;
+    z-index: 120;
+    overflow-y: auto;
+  }
+
+  .AdminNav.is-mobile-open .AdminNav-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .AdminNav.is-mobile-open .AdminNav-panel {
+    transform: translateX(0);
+  }
+
+  .AdminNav-mobileHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #e7edf3;
+    color: #31465d;
+    font-size: 15px;
+  }
+
+  .AdminNav-close {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: #f4f7fa;
+    color: #607285;
+  }
 
   .AdminNav-section {
-    margin-bottom: 16px;
+    margin-bottom: 18px;
   }
 
   .AdminNav-title {
     padding: 0 4px;
-  }
-
-  .AdminNav-list {
-    display: flex;
-    gap: 10px;
-    overflow-x: auto;
-    padding-bottom: 6px;
-    scrollbar-width: thin;
-  }
-
-  .AdminNav-list li {
-    flex: 0 0 auto;
-  }
-
-  .AdminNav-item {
-    min-width: max-content;
-    padding: 11px 14px;
-    border: 1px solid #d9e3ed;
-    background: #fff;
-    border-radius: 999px;
-    white-space: nowrap;
-  }
-
-  .AdminNav-item.active {
-    border-color: #4d698e;
-    box-shadow: 0 8px 18px rgba(77, 105, 142, 0.16);
-  }
-}
-
-@media (max-width: 640px) {
-  .AdminNav-section {
-    margin-bottom: 12px;
-  }
-
-  .AdminNav-title {
     margin-bottom: 8px;
     font-size: 11px;
   }
 
-  .AdminNav-item {
-    gap: 8px;
-    padding: 10px 12px;
-    font-size: 13px;
+  .AdminNav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
-  .AdminNav-item i {
-    width: 16px;
-    font-size: 13px;
+  .AdminNav-item {
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 12px;
+    background: transparent;
+  }
+
+  .AdminNav-item.active {
+    box-shadow: none;
+  }
+
+  .AdminNav-mobileFooter {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 14px;
+    border-top: 1px solid #e7edf3;
   }
 }
 </style>

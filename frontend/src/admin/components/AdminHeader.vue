@@ -2,11 +2,19 @@
   <header class="AdminHeader">
     <div class="container">
       <div class="AdminHeader-logo">
-        <router-link to="/admin">
+        <router-link to="/admin" class="AdminHeader-logoLink">
           <span class="icon">⚙️</span>
           <span class="text">管理后台</span>
         </router-link>
       </div>
+
+      <div class="AdminHeader-mobileTitle">
+        {{ activeMeta.label }}
+      </div>
+
+      <a :href="forumUrl" class="AdminHeader-mobileBack Button Button--icon" aria-label="返回论坛">
+        <i class="fas fa-angle-left"></i>
+      </a>
 
       <div class="AdminHeader-actions">
         <a :href="forumUrl" class="Button Button--link">
@@ -19,17 +27,42 @@
           <button @click="handleLogout" class="Button Button--link">登出</button>
         </div>
       </div>
+
+      <div class="AdminHeader-mobileActions">
+        <button
+          type="button"
+          class="Button Button--icon AdminHeader-mobileMenuButton"
+          :aria-expanded="mobileNavOpen"
+          aria-label="打开后台菜单"
+          @click="$emit('toggle-nav')"
+        >
+          <i class="fas fa-ellipsis-h"></i>
+        </button>
+      </div>
     </div>
   </header>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { getAdminRouteMeta } from '../navigation'
+
+defineProps({
+  mobileNavOpen: {
+    type: Boolean,
+    default: false
+  }
+})
+
+defineEmits(['toggle-nav', 'close-nav'])
 
 const authStore = useAuthStore()
+const route = useRoute()
 
 const forumUrl = computed(() => '/')
+const activeMeta = computed(() => getAdminRouteMeta(route.path))
 
 function handleLogout() {
   authStore.logout()
@@ -69,6 +102,12 @@ function handleLogout() {
   text-decoration: none;
 }
 
+.AdminHeader-mobileTitle,
+.AdminHeader-mobileActions,
+.AdminHeader-mobileBack {
+  display: none;
+}
+
 .AdminHeader-logo .icon {
   font-size: 20px;
 }
@@ -105,10 +144,27 @@ function handleLogout() {
   text-decoration: none;
 }
 
+.Button--icon {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 @media (max-width: 768px) {
   .AdminHeader {
     height: 56px;
     min-height: 56px;
+    background: var(--forum-primary-color, #4d698e);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.14);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+    color: #fff;
   }
 
   .AdminHeader .container {
@@ -116,56 +172,63 @@ function handleLogout() {
     align-items: center;
     flex-direction: row;
     gap: 12px;
+    justify-content: center;
   }
 
-  .AdminHeader-actions {
-    margin-left: auto;
-    width: auto;
-    justify-content: flex-end;
-    gap: 12px;
+  .AdminHeader-logo {
+    display: none;
   }
 
-  .AdminHeader-user {
-    min-width: 0;
-    justify-content: flex-end;
-    gap: 6px;
-  }
-
-  .AdminHeader-user span {
-    max-width: 92px;
+  .AdminHeader-mobileTitle {
+    display: block;
+    max-width: calc(100vw - 120px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 56px;
+    text-align: center;
+    color: #fff;
+    text-shadow: 0 1px 1px rgba(15, 23, 42, 0.16);
   }
 
-  .Button--link {
-    min-height: 34px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: #f4f7fa;
+  .AdminHeader-mobileBack {
+    position: absolute;
+    left: 10px;
+    top: 8px;
+    display: inline-flex;
+  }
+
+  .AdminHeader-actions {
+    display: none;
+  }
+
+  .AdminHeader-mobileActions {
+    position: absolute;
+    inset: 8px 10px 8px auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .AdminHeader-mobileBack.Button--icon,
+  .AdminHeader-mobileMenuButton {
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .AdminHeader-mobileBack.Button--icon:hover,
+  .AdminHeader-mobileMenuButton:hover {
+    background: rgba(255, 255, 255, 0.22);
   }
 }
 
 @media (max-width: 480px) {
-  .AdminHeader-logo a {
-    font-size: 15px;
-  }
-
-  .AdminHeader-logo .text {
-    display: none;
-  }
-
-  .AdminHeader-user {
-    font-size: 12px;
-  }
-
-  .AdminHeader-user span {
-    display: none;
-  }
-
-  .Button--link {
-    padding: 6px 9px;
-    font-size: 12px;
+  .AdminHeader-mobileTitle {
+    max-width: calc(100vw - 108px);
   }
 }
 </style>

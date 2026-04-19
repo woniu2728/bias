@@ -1,9 +1,9 @@
 <template>
   <div id="admin-app">
-    <AdminHeader />
+    <AdminHeader :mobile-nav-open="showMobileNav" @toggle-nav="toggleMobileNav" @close-nav="closeMobileNav" />
     <div class="Admin-content">
       <div class="container">
-        <AdminNav />
+        <AdminNav :mobile-open="showMobileNav" @close="closeMobileNav" />
         <div class="Admin-main">
           <router-view />
         </div>
@@ -13,7 +13,7 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import AdminHeader from './components/AdminHeader.vue'
 import AdminNav from './components/AdminNav.vue'
 import { useAuthStore } from '../stores/auth'
@@ -22,6 +22,15 @@ import { useRouter, useRoute } from 'vue-router'
 const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
+const showMobileNav = ref(false)
+
+function toggleMobileNav() {
+  showMobileNav.value = !showMobileNav.value
+}
+
+function closeMobileNav() {
+  showMobileNav.value = false
+}
 
 onMounted(async () => {
   // 检查认证状态
@@ -39,6 +48,13 @@ onMounted(async () => {
     router.replace('/admin')
   }
 })
+
+watch(
+  () => route.fullPath,
+  () => {
+    closeMobileNav()
+  }
+)
 </script>
 
 <style>
@@ -75,12 +91,12 @@ onMounted(async () => {
 
 @media (max-width: 768px) {
   .Admin-content {
-    padding-top: 72px;
+    padding-top: 56px;
   }
 
   .Admin-content .container {
-    padding: 14px 12px 24px;
-    gap: 14px;
+    padding: 0 0 24px;
+    gap: 0;
   }
 }
 </style>
