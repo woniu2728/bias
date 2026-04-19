@@ -320,6 +320,19 @@ class AdminSettingsApiTests(TestCase):
             False,
         )
 
+        response = self.client.get(
+            "/api/admin/advanced",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["auth_human_verification_provider"], "turnstile")
+        self.assertEqual(payload["auth_turnstile_site_key"], "site-key")
+        self.assertEqual(payload["auth_turnstile_secret_key"], "secret-key")
+        self.assertTrue(payload["auth_human_verification_login_enabled"])
+        self.assertFalse(payload["auth_human_verification_register_enabled"])
+
     def test_debug_mode_setting_is_read_only_runtime_value(self):
         response = self.client.post(
             "/api/admin/advanced",

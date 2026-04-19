@@ -571,7 +571,10 @@ async function saveSettings() {
   saveError.value = false
 
   try {
-    await api.post('/admin/advanced', settings.value)
+    const response = await api.post('/admin/advanced', settings.value)
+    if (response?.settings) {
+      settings.value = { ...settings.value, ...response.settings }
+    }
     saveSuccess.value = true
     setTimeout(() => {
       saveSuccess.value = false
@@ -652,6 +655,10 @@ async function clearCache() {
   gap: 0 16px;
 }
 
+.Form-grid > * {
+  min-width: 0;
+}
+
 .Form-group {
   margin-bottom: 20px;
 }
@@ -673,6 +680,8 @@ async function clearCache() {
 }
 
 .FormControl {
+  box-sizing: border-box;
+  max-width: 100%;
   width: 100%;
   padding: 10px 12px;
   border: 1px solid #ddd;

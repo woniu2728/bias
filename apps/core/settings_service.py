@@ -140,13 +140,8 @@ def _cache_delete(key):
 
 
 def get_advanced_settings() -> dict:
-    cached = _cache_get(ADVANCED_SETTINGS_CACHE_KEY)
-    if cached is not None:
-        return cached
-
     advanced_settings = get_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS)
     advanced_settings["debug_mode"] = settings.DEBUG
-    _cache_set(ADVANCED_SETTINGS_CACHE_KEY, advanced_settings, None)
     return advanced_settings
 
 
