@@ -1175,34 +1175,150 @@ function isSidebarTagActive(tag) {
 
 /* 响应式 */
 @media (max-width: 768px) {
+  .index-page {
+    min-height: calc(100vh - 56px);
+  }
+
   .index-container {
-    flex-direction: column;
+    display: block;
   }
 
   .index-nav {
-    width: 100%;
-    position: static;
-    min-height: auto;
-    border-right: 0;
-    border-bottom: 1px solid #e3e8ed;
+    display: none;
+  }
+
+  .tag-hero-inner {
+    padding: 18px 15px;
+  }
+
+  .tag-hero h1 {
+    font-size: 24px;
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+
+  .tag-hero p {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .index-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 15px;
+  }
+
+  .index-toolbar-view,
+  .index-toolbar-action {
+    flex-wrap: wrap;
+  }
+
+  .btn-view,
+  .btn-refresh,
+  .btn-mark-read {
+    min-height: 34px;
+    border-radius: 999px;
+  }
+
+  .btn-view {
+    padding: 6px 11px;
+    font-size: 12px;
   }
 
   .discussion-list-item-content {
-    padding: 12px 15px;
+    gap: 12px;
+    padding: 12px 15px 14px;
+  }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }
+
+  .discussion-list-item-badges {
+    top: -12px;
+    left: -4px;
+  }
+
+  .badge {
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+  }
+
+  .discussion-list-item-main {
+    padding-right: 52px;
+  }
+
+  .discussion-title-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 6px;
+    margin-bottom: 5px;
   }
 
   .discussion-list-item-title {
     font-size: 14px;
+    line-height: 1.35;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .approval-note {
+    margin-bottom: 8px;
+    font-size: 11px;
+  }
+
+  .discussion-list-item-info {
+    gap: 6px 8px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .discussion-list-item-info > li {
+    max-width: 100%;
+  }
+
+  .item-tags {
+    flex-wrap: wrap;
+  }
+
+  .tag-label,
+  .subscription-pill,
+  .approval-pill,
+  .unread-pill {
+    font-size: 10px;
   }
 
   .discussion-list-item-stats {
+    width: auto;
     position: absolute;
     top: 12px;
-    right: 12px;
+    right: 15px;
   }
 
-  .index-nav-list {
-    padding-bottom: 18px;
+  .discussion-list-item-count {
+    min-width: 34px;
+    justify-content: center;
+    padding: 3px 8px;
+    gap: 0;
+    border-radius: 999px;
+    background: #edf2f6;
+    color: #647384;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .discussion-list-item-count i {
+    display: none;
+  }
+
+  .discussion-list-item.is-unread .discussion-list-item-count {
+    background: var(--forum-primary-color);
+    color: #fff;
   }
 }
 </style>

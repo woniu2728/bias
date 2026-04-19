@@ -7,7 +7,7 @@
         <!-- 主内容区 -->
         <main class="main-content">
           <!-- 讨论标题 -->
-          <div class="discussion-header">
+          <div class="discussion-header" :style="discussionHeaderStyle">
             <div class="discussion-badges">
               <span v-if="discussion.is_sticky" class="badge badge-pinned">置顶</span>
               <span v-if="discussion.is_locked" class="badge badge-locked">锁定</span>
@@ -50,6 +50,47 @@
                   修改后重新提交
                 </button>
               </div>
+            </div>
+          </div>
+
+          <div ref="discussionMobileNavRef" class="discussion-mobile-nav discussion-actions-scope" :class="{ 'is-open': showDiscussionMenu }">
+            <div v-if="showDiscussionMenu" class="discussion-actions-menu discussion-actions-menu--mobile">
+              <button
+                v-if="canReplyFromMenu"
+                type="button"
+                @click="handleDiscussionMenuAction(openComposer)"
+              >
+                {{ hasActiveComposer ? '继续回复' : '回复讨论' }}
+              </button>
+              <button
+                v-else
+                type="button"
+                @click="handleDiscussionMenuAction(goToLoginForReply)"
+              >
+                登录后回复
+              </button>
+              <button
+                v-if="authStore.isAuthenticated && !isSuspended"
+                type="button"
+                @click="handleDiscussionMenuAction(toggleSubscription)"
+              >
+                {{ togglingSubscription ? '提交中...' : (discussion.is_subscribed ? '取消关注' : '关注讨论') }}
+              </button>
+              <button v-if="canEditDiscussion" type="button" @click="handleDiscussionMenuAction(editDiscussion)">
+                编辑讨论
+              </button>
+              <button v-if="canModerateDiscussionSettings" type="button" @click="handleDiscussionMenuAction(togglePin)">
+                {{ discussion.is_sticky ? '取消置顶' : '置顶讨论' }}
+              </button>
+              <button v-if="canModerateDiscussionSettings" type="button" @click="handleDiscussionMenuAction(toggleLock)">
+                {{ discussion.is_locked ? '解除锁定' : '锁定讨论' }}
+              </button>
+              <button v-if="canModerateDiscussionSettings" type="button" @click="handleDiscussionMenuAction(toggleHide)">
+                {{ discussion.is_hidden ? '恢复显示' : '隐藏讨论' }}
+              </button>
+              <button v-if="canModerateDiscussionSettings" type="button" class="is-danger" @click="handleDiscussionMenuAction(deleteDiscussion)">
+                删除讨论
+              </button>
             </div>
           </div>
 
@@ -293,7 +334,7 @@
           <div
             v-if="discussion"
             ref="discussionActionsRef"
-            class="sidebar-section sidebar-section--actions"
+            class="sidebar-section sidebar-section--actions discussion-actions-scope"
           >
             <button
               v-if="authStore.isAuthenticated"
@@ -479,6 +520,7 @@ const nextTrigger = ref(null)
 const scrubberPanel = ref(null)
 const scrubberTrack = ref(null)
 const discussionActionsRef = ref(null)
+const discussionMobileNavRef = ref(null)
 
 const togglingSubscription = ref(false)
 const highlightedPostNumber = ref(null)
@@ -504,8 +546,23 @@ const canEditDiscussion = computed(() => Boolean(
   && discussion.value?.can_edit
   && !isSuspended.value
 ))
+const canReplyFromMenu = computed(() => Boolean(
+  authStore.isAuthenticated
+  && discussion.value?.can_reply
+  && !discussion.value?.is_locked
+  && !isSuspended.value
+))
 const canModerateDiscussionSettings = computed(() => Boolean(authStore.user?.is_staff))
 const canShowDiscussionMenu = computed(() => canEditDiscussion.value || canModerateDiscussionSettings.value)
+const hasMobileDiscussionMenuActions = computed(() => Boolean(
+  !discussion.value
+  ? false
+  : (!authStore.isAuthenticated)
+      || canReplyFromMenu.value
+      || (authStore.isAuthenticated && !isSuspended.value)
+      || canEditDiscussion.value
+      || canModerateDiscussionSettings.value
+))
 const canModeratePendingDiscussion = computed(() => {
   return Boolean(authStore.user?.is_staff && discussion.value?.approval_status === 'pending')
 })
@@ -553,6 +610,18 @@ const maxPostNumber = computed(() => {
 })
 const unreadCount = computed(() => {
   return Math.max(Number(discussion.value?.unread_count || 0), 0)
+})
+const discussionHeroColor = computed(() => {
+  const primaryTag = discussion.value?.tags?.find(tag => tag?.color)
+  return primaryTag?.color || '#f2554b'
+})
+const discussionHeaderStyle = computed(() => {
+  const color = discussionHeroColor.value
+  return {
+    '--discussion-hero-color': color,
+    '--discussion-hero-color-dark': shadeColor(color, -12),
+    '--discussion-hero-contrast': getContrastColor(color)
+  }
 })
 const unreadStartPostNumber = computed(() => {
   if (!unreadCount.value) return null
@@ -628,6 +697,7 @@ onMounted(async () => {
   window.addEventListener('scroll', handlePostScroll, { passive: true })
   window.addEventListener('resize', handlePostScroll, { passive: true })
   window.addEventListener('resize', syncScrubberTrackMetrics, { passive: true })
+  window.addEventListener('bias:mobile-header-action', handleMobileHeaderAction)
   window.addEventListener('bias:reply-created', handleReplyCreated)
   window.addEventListener('bias:post-updated', handlePostUpdated)
   window.addEventListener('bias:discussion-updated', handleDiscussionUpdated)
@@ -636,18 +706,21 @@ onMounted(async () => {
   syncScrubberTrackMetrics()
   attachScrubberObserver()
   updateVisiblePostFromScroll()
+  syncMobileHeader()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', handlePostScroll)
   window.removeEventListener('resize', handlePostScroll)
   window.removeEventListener('resize', syncScrubberTrackMetrics)
+  window.removeEventListener('bias:mobile-header-action', handleMobileHeaderAction)
   window.removeEventListener('bias:reply-created', handleReplyCreated)
   window.removeEventListener('bias:post-updated', handlePostUpdated)
   window.removeEventListener('bias:discussion-updated', handleDiscussionUpdated)
   document.removeEventListener('mousedown', handleDocumentMouseDown)
   detachScrubberDragListeners()
   detachScrubberObserver()
+  resetMobileHeader()
   if (scrollFrame) {
     cancelAnimationFrame(scrollFrame)
   }
@@ -662,9 +735,17 @@ onBeforeUnmount(() => {
 watch(
   () => [route.params.id, route.query.near],
   async () => {
+    resetMobileHeader()
     resetPostStream()
     loading.value = true
     await refreshDiscussion()
+  }
+)
+
+watch(
+  () => [currentVisiblePostProgress.value, maxPostNumber.value, discussion.value?.title],
+  () => {
+    syncMobileHeader()
   }
 )
 
@@ -861,13 +942,48 @@ function showUnreadDivider(post) {
 }
 
 function handleDocumentMouseDown(event) {
-  if (showDiscussionMenu.value && !discussionActionsRef.value?.contains(event.target)) {
+  if (showDiscussionMenu.value && !(event.target instanceof Element && event.target.closest('.discussion-actions-scope'))) {
     showDiscussionMenu.value = false
   }
 
   if (activePostMenuId.value && !(event.target instanceof Element && event.target.closest('.post-controls'))) {
     activePostMenuId.value = null
   }
+}
+
+function handleMobileHeaderAction(event) {
+  if (event.detail?.action !== 'discussion-menu') return
+
+  showDiscussionMenu.value = !showDiscussionMenu.value
+
+  if (!showDiscussionMenu.value) return
+
+  nextTick(() => {
+    discussionMobileNavRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
+
+function syncMobileHeader() {
+  if (typeof window === 'undefined' || !discussion.value) return
+
+  window.dispatchEvent(new CustomEvent('bias:mobile-header-update', {
+    detail: {
+      route: 'discussion-detail',
+      title: `${sanitizePostNumber(currentVisiblePostProgress.value)} / ${maxPostNumber.value} 回复`,
+      leftAction: 'back',
+      rightAction: hasMobileDiscussionMenuActions.value ? 'discussion-menu' : 'none'
+    }
+  }))
+}
+
+function resetMobileHeader() {
+  if (typeof window === 'undefined') return
+
+  window.dispatchEvent(new CustomEvent('bias:mobile-header-reset', {
+    detail: {
+      route: 'discussion-detail'
+    }
+  }))
 }
 
 function updateVisiblePostFromScroll() {
@@ -1086,6 +1202,36 @@ function getUserPrimaryGroupColor(user) {
 
 function getUserPrimaryGroupLabel(user) {
   return getUserPrimaryGroup(user)?.name || ''
+}
+
+function getContrastColor(color) {
+  const hex = String(color || '').trim().replace('#', '')
+  if (!/^[\da-fA-F]{6}$/.test(hex)) return '#ffffff'
+
+  const red = parseInt(hex.slice(0, 2), 16)
+  const green = parseInt(hex.slice(2, 4), 16)
+  const blue = parseInt(hex.slice(4, 6), 16)
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000
+
+  return brightness >= 150 ? '#223245' : '#ffffff'
+}
+
+function shadeColor(color, percent) {
+  const hex = String(color || '').trim().replace('#', '')
+  if (!/^[\da-fA-F]{6}$/.test(hex)) return color || '#f2554b'
+
+  const amount = Number(percent) / 100
+  const channel = start => {
+    const value = parseInt(hex.slice(start, start + 2), 16)
+    const adjusted = amount >= 0
+      ? value + (255 - value) * amount
+      : value * (1 + amount)
+    return Math.max(0, Math.min(255, Math.round(adjusted)))
+      .toString(16)
+      .padStart(2, '0')
+  }
+
+  return `#${channel(0)}${channel(2)}${channel(4)}`
 }
 
 function toggleDiscussionMenu() {
@@ -1769,6 +1915,10 @@ function formatAbsoluteDate(value) {
   border-color: #f1c3c3;
   background: #fdf1f1;
   color: #9a4b4b;
+}
+
+.discussion-mobile-nav {
+  display: none;
 }
 
 .tag {
@@ -2499,11 +2649,11 @@ function formatAbsoluteDate(value) {
   margin-bottom: 14px;
 }
 
-.sidebar-section button {
+.sidebar-section > button {
   margin-bottom: 10px;
 }
 
-.sidebar-section button:last-child {
+.sidebar-section > button:last-child {
   margin-bottom: 0;
 }
 
@@ -2865,20 +3015,83 @@ function formatAbsoluteDate(value) {
 }
 
 @media (max-width: 768px) {
+  .discussion-detail-page {
+    padding: 0 0 24px;
+  }
+
   .layout {
-    grid-template-columns: 1fr;
+    display: block;
+  }
+
+  .main-content {
+    padding: 0 0 20px;
+    border-radius: 0;
+    background: #fff;
+  }
+
+  .discussion-header {
+    margin: 0 0 14px;
+    padding: 18px 18px 22px;
+    border-bottom: 0;
+    background: linear-gradient(180deg, var(--discussion-hero-color) 0%, var(--discussion-hero-color-dark) 100%);
+    text-align: center;
+  }
+
+  .discussion-badges,
+  .discussion-tags {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .discussion-badges {
+    margin-bottom: 12px;
+  }
+
+  .discussion-header h1 {
+    font-size: 24px;
+    line-height: 1.24;
+    margin-bottom: 10px;
+    color: var(--discussion-hero-contrast);
+  }
+
+  .tag {
+    padding: 5px 12px;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.96) !important;
+    color: var(--discussion-hero-color-dark);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  }
+
+  .discussion-badges .badge {
+    background: rgba(255, 255, 255, 0.22);
+    color: var(--discussion-hero-contrast);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+  }
+
+  .discussion-mobile-nav {
+    display: block;
+    margin: 0 15px;
+  }
+
+  .discussion-actions-menu--mobile {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    margin-top: 0;
   }
 
   .sidebar {
-    position: static;
+    display: none;
   }
 
   .post-item {
-    padding: 18px 0 20px;
+    padding: 16px 0 18px;
   }
 
   .post-item::after {
     width: 100%;
+    margin-left: 0;
   }
 
   .post-item.is-target .post-main {
@@ -2887,24 +3100,29 @@ function formatAbsoluteDate(value) {
   }
 
   .post-container {
-    grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-columns: 42px minmax(0, 1fr);
     gap: 10px;
   }
 
+  .post-side {
+    padding-top: 4px;
+  }
+
   .post-avatar {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
   }
 
   .avatar-placeholder.post-avatar {
-    font-size: 16px;
+    font-size: 14px;
   }
 
   .post-avatar-badge {
-    width: 18px;
-    height: 18px;
-    right: -1px;
-    bottom: -1px;
+    width: 16px;
+    height: 16px;
+    right: -2px;
+    bottom: -2px;
+    border-width: 1.5px;
   }
 
   .post-avatar-badge i {
@@ -2914,33 +3132,114 @@ function formatAbsoluteDate(value) {
   .post-header {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: 10px;
     margin-bottom: 12px;
+  }
+
+  .post-header-main {
+    gap: 6px 8px;
+    font-size: 12px;
+  }
+
+  .post-author {
+    font-size: 14px;
+  }
+
+  .post-meta-link,
+  .post-time,
+  .post-edited {
+    font-size: 12px;
+  }
+
+  .post-status {
+    padding: 2px 7px;
+    font-size: 10px;
   }
 
   .post-actions {
     opacity: 1;
     margin-top: 0;
     flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .post-action {
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: #eef3f7;
+  }
+
+  .post-action--icon {
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+
+  .post-controls-menu {
+    min-width: 150px;
+  }
+
+  .post-body {
+    font-size: 13px;
+  }
+
+  .post-footer {
+    margin-top: 10px;
+    margin-bottom: 0;
+  }
+
+  .posts,
+  .load-more,
+  .reply-placeholder,
+  .locked-notice,
+  .login-notice,
+  .suspended-notice {
+    margin-left: 15px;
+    margin-right: 15px;
+  }
+
+  .reply-placeholder {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px 15px;
+    gap: 8px;
+  }
+
+  .locked-notice,
+  .login-notice,
+  .suspended-notice {
+    padding: 14px 15px;
+    font-size: 13px;
   }
 
   .floating-composer {
     bottom: 0;
     width: 100vw;
-    border-radius: 10px 10px 0 0;
+    border-radius: 14px 14px 0 0;
   }
 
   .floating-composer.is-expanded {
     width: 100vw;
   }
 
+  .composer-header {
+    padding: 0 16px 8px;
+  }
+
+  .composer-body {
+    padding: 0 16px 0;
+  }
+
   .composer-toolbar {
     align-items: stretch;
     flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 -16px;
+    padding: 10px 16px 14px;
   }
 
-  .scrubber-scrollbar {
-    height: 42vh;
+  .composer-submit,
+  .composer-secondary {
+    min-height: 38px;
   }
 
   .composer-submit,

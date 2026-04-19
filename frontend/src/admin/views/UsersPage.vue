@@ -42,8 +42,8 @@
                 <td colspan="9" class="UserTable-empty">暂无用户</td>
               </tr>
               <tr v-else v-for="user in users" :key="user.id">
-                <td>{{ user.id }}</td>
-                <td>
+                <td data-label="ID">{{ user.id }}</td>
+                <td data-label="用户名">
                   <strong>{{ user.username }}</strong>
                   <div v-if="getUserGroupBadges(user).length" class="UserGroups">
                     <span
@@ -58,12 +58,12 @@
                     </span>
                   </div>
                 </td>
-                <td>{{ user.email }}</td>
-                <td>{{ user.display_name }}</td>
-                <td>{{ user.discussion_count }}</td>
-                <td>{{ user.comment_count }}</td>
-                <td>{{ formatDate(user.joined_at) }}</td>
-                <td>
+                <td data-label="邮箱">{{ user.email }}</td>
+                <td data-label="显示名称">{{ user.display_name }}</td>
+                <td data-label="讨论">{{ user.discussion_count }}</td>
+                <td data-label="回复">{{ user.comment_count }}</td>
+                <td data-label="加入时间">{{ formatDate(user.joined_at) }}</td>
+                <td data-label="状态">
                   <span
                     class="UserStatus"
                     :class="statusClass(user)"
@@ -71,7 +71,7 @@
                     {{ statusLabel(user) }}
                   </span>
                 </td>
-                <td>
+                <td data-label="操作">
                   <button @click="editUser(user)" class="Button Button--small" :disabled="savingDetails">
                     编辑
                   </button>
@@ -804,6 +804,11 @@ const canDeleteCurrentUser = computed(() => {
     max-width: none;
   }
 
+  .UsersPage-pagination {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
   .FormRow {
     grid-template-columns: 1fr;
   }
@@ -827,6 +832,66 @@ const canDeleteCurrentUser = computed(() => {
   .Modal-footerActions {
     width: 100%;
     justify-content: flex-end;
+  }
+}
+
+@media (max-width: 680px) {
+  .UserTable {
+    min-width: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .UserTable thead {
+    display: none;
+  }
+
+  .UserTable tbody,
+  .UserTable tr,
+  .UserTable td {
+    display: block;
+    width: 100%;
+  }
+
+  .UserTable tbody tr {
+    margin-bottom: 12px;
+    padding: 14px;
+    border-bottom: 0;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 10px 26px rgba(28, 46, 67, 0.06);
+  }
+
+  .UserTable tbody td {
+    padding: 8px 0;
+    border-bottom: 1px solid #eef2f6;
+  }
+
+  .UserTable tbody td:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .UserTable tbody td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 6px;
+    color: #7b8996;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .UserTable-loading,
+  .UserTable-empty {
+    display: block;
+    padding: 28px 16px;
+  }
+
+  .UserTable tbody td[data-label='操作'] .Button {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

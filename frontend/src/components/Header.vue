@@ -2,6 +2,15 @@
   <header class="header">
     <div class="container">
       <div class="header-left">
+        <button
+          type="button"
+          class="mobile-nav-toggle"
+          :aria-expanded="showMobileDrawer"
+          :aria-label="mobileLeftActionLabel"
+          @click.stop="handleMobileLeftAction"
+        >
+          <i :class="mobileLeftActionIcon"></i>
+        </button>
         <div class="logo">
           <router-link to="/">
             <img
@@ -13,6 +22,10 @@
             <span v-else>{{ forumStore.settings.forum_title }}</span>
           </router-link>
         </div>
+      </div>
+
+      <div class="mobile-header-title">
+        {{ mobilePageTitle }}
       </div>
 
       <div class="header-right">
@@ -44,6 +57,16 @@
             <i class="fas fa-times-circle"></i>
           </button>
         </div>
+
+        <button
+          v-if="showMobileRightAction"
+          type="button"
+          class="mobile-primary-action"
+          :aria-label="mobileRightActionLabel"
+          @click="handleMobileRightAction"
+        >
+          <i :class="mobileRightActionIcon"></i>
+        </button>
 
         <template v-if="authStore.isAuthenticated">
           <!-- 通知 -->
@@ -190,11 +213,148 @@
         </template>
       </div>
     </div>
+
+    <transition name="mobile-drawer-fade">
+      <div
+        v-if="showMobileDrawer"
+        class="mobile-drawer-backdrop"
+        @click="closeMobileDrawer"
+      ></div>
+    </transition>
+
+    <aside class="mobile-drawer" :class="{ 'is-open': showMobileDrawer }">
+      <div class="mobile-drawer-header">
+        <div class="mobile-drawer-brand">
+          <img
+            v-if="forumStore.settings.logo_url"
+            :src="forumStore.settings.logo_url"
+            :alt="forumStore.settings.forum_title"
+            class="mobile-drawer-logo"
+          />
+          <span v-else>{{ forumStore.settings.forum_title }}</span>
+        </div>
+        <button
+          type="button"
+          class="mobile-drawer-close"
+          aria-label="关闭导航菜单"
+          @click="closeMobileDrawer"
+        >
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="mobile-drawer-section">
+        <button type="button" class="mobile-drawer-search" @click="openSearchFromDrawer">
+          <i class="fas fa-search"></i>
+          <span>{{ currentSearchQuery ? `搜索：${currentSearchQuery}` : '搜索论坛' }}</span>
+        </button>
+
+        <button
+          v-if="authStore.isAuthenticated"
+          type="button"
+          class="mobile-drawer-compose"
+          @click="startDiscussionFromDrawer"
+        >
+          <i class="fas fa-pen-to-square"></i>
+          <span>发起讨论</span>
+        </button>
+      </div>
+
+      <nav class="mobile-drawer-nav">
+        <router-link
+          to="/"
+          class="mobile-drawer-link"
+          :class="{ active: isMobileNavActive('home') }"
+          @click="closeMobileDrawer"
+        >
+          <i class="far fa-comments"></i>
+          <span>全部讨论</span>
+        </router-link>
+        <router-link
+          v-if="authStore.isAuthenticated"
+          to="/following"
+          class="mobile-drawer-link"
+          :class="{ active: isMobileNavActive('following') }"
+          @click="closeMobileDrawer"
+        >
+          <i class="fas fa-bell"></i>
+          <span>关注中</span>
+        </router-link>
+        <router-link
+          to="/tags"
+          class="mobile-drawer-link"
+          :class="{ active: isMobileNavActive('tags') }"
+          @click="closeMobileDrawer"
+        >
+          <i class="fas fa-th-large"></i>
+          <span>标签</span>
+        </router-link>
+        <router-link
+          v-if="authStore.isAuthenticated"
+          :to="profilePath()"
+          class="mobile-drawer-link"
+          :class="{ active: isMobileNavActive('profile') }"
+          @click="closeMobileDrawer"
+        >
+          <i class="fas fa-user"></i>
+          <span>我的主页</span>
+        </router-link>
+        <router-link
+          v-if="authStore.isAuthenticated"
+          to="/notifications"
+          class="mobile-drawer-link"
+          :class="{ active: isMobileNavActive('notifications') }"
+          @click="closeMobileDrawer"
+        >
+          <i class="fas fa-bell"></i>
+          <span>通知</span>
+          <span v-if="notificationStore.unreadCount > 0" class="mobile-drawer-badge">
+            {{ notificationStore.unreadCount }}
+          </span>
+        </router-link>
+      </nav>
+
+      <div v-if="authStore.isAuthenticated" class="mobile-drawer-user">
+        <div class="mobile-drawer-userCard">
+          <img
+            v-if="authStore.user?.avatar_url"
+            :src="authStore.user.avatar_url"
+            :alt="authStore.user?.username"
+            class="avatar avatar-image"
+          />
+          <div v-else class="avatar" :style="{ backgroundColor: getUserAvatarColor(authStore.user) }">
+            {{ getUserInitial(authStore.user) }}
+          </div>
+          <div class="mobile-drawer-userMeta">
+            <strong>{{ authStore.user?.display_name || authStore.user?.username }}</strong>
+            <span>@{{ authStore.user?.username }}</span>
+          </div>
+        </div>
+        <a
+          v-if="authStore.user?.is_staff"
+          href="/admin.html"
+          class="mobile-drawer-link"
+          @click="closeMobileDrawer"
+        >
+          <i class="fas fa-cog"></i>
+          <span>管理后台</span>
+        </a>
+        <button type="button" class="mobile-drawer-link mobile-drawer-link--danger" @click="logoutFromDrawer">
+          <i class="fas fa-sign-out-alt"></i>
+          <span>登出</span>
+        </button>
+      </div>
+
+      <div v-else class="mobile-drawer-auth">
+        <button type="button" class="btn-login" @click="openLoginFromDrawer">登录</button>
+        <button type="button" class="btn-signup" @click="openRegisterFromDrawer">注册</button>
+      </div>
+    </aside>
   </header>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
 import { useForumStore } from '@/stores/forum'
@@ -223,11 +383,78 @@ const router = useRouter()
 
 const showUserMenu = ref(false)
 const showNotifications = ref(false)
+const showMobileDrawer = ref(false)
+const mobileHeaderOverride = ref(null)
 
 const notificationItems = computed(() => notificationStore.notifications.slice(0, 8))
 const hasReadNotifications = computed(() => notificationItems.value.some(notification => notification.is_read))
 const currentSearchQuery = computed(() => String(route.query.q ?? route.query.search ?? '').trim())
 const searchPreviewText = computed(() => currentSearchQuery.value || '')
+const isOwnProfileRoute = computed(() => {
+  if (!authStore.user) return false
+
+  return route.name === 'profile'
+    || (route.name === 'user-profile' && String(route.params.id) === String(authStore.user.id))
+})
+const mobilePageTitle = computed(() => {
+  if (mobileHeaderOverride.value?.title) {
+    return mobileHeaderOverride.value.title
+  }
+
+  switch (route.name) {
+    case 'home':
+      return '全部讨论'
+    case 'following':
+      return '关注中'
+    case 'tags':
+      return '标签'
+    case 'profile':
+    case 'user-profile':
+      return '个人主页'
+    case 'notifications':
+      return '通知'
+    case 'search':
+      return '搜索结果'
+    case 'discussion-detail':
+      return '讨论详情'
+    case 'login':
+      return '登录'
+    case 'register':
+      return '注册'
+    default:
+      return forumStore.settings.forum_title || 'Bias'
+  }
+})
+const mobileLeftActionIcon = computed(() => mobileHeaderOverride.value?.leftAction === 'back' ? 'fas fa-angle-left' : 'fas fa-bars')
+const mobileLeftActionLabel = computed(() => mobileHeaderOverride.value?.leftAction === 'back' ? '返回上一页' : '打开导航菜单')
+const mobileRightActionType = computed(() => {
+  if (mobileHeaderOverride.value?.rightAction) {
+    return mobileHeaderOverride.value.rightAction
+  }
+
+  return authStore.isAuthenticated ? 'compose-discussion' : 'login'
+})
+const showMobileRightAction = computed(() => mobileRightActionType.value !== 'none')
+const mobileRightActionIcon = computed(() => {
+  switch (mobileRightActionType.value) {
+    case 'discussion-menu':
+      return 'fas fa-ellipsis-v'
+    case 'login':
+      return 'fas fa-right-to-bracket'
+    default:
+      return 'fas fa-pen-to-square'
+  }
+})
+const mobileRightActionLabel = computed(() => {
+  switch (mobileRightActionType.value) {
+    case 'discussion-menu':
+      return '讨论操作菜单'
+    case 'login':
+      return '登录'
+    default:
+      return '发起讨论'
+  }
+})
 const notificationGroups = computed(() => {
   const groups = []
   const seen = new Map()
@@ -257,9 +484,60 @@ function profilePath() {
   return authStore.user ? buildUserPath(authStore.user) : '/profile'
 }
 
+function isMobileNavActive(key) {
+  if (key === 'home') {
+    return route.name === 'home' || route.name === 'tag-detail'
+  }
+
+  if (key === 'profile') {
+    return isOwnProfileRoute.value
+  }
+
+  return route.name === key
+}
+
 function toggleUserMenu() {
   showNotifications.value = false
   showUserMenu.value = !showUserMenu.value
+}
+
+function toggleMobileDrawer() {
+  showUserMenu.value = false
+  showNotifications.value = false
+  showMobileDrawer.value = !showMobileDrawer.value
+}
+
+function closeMobileDrawer() {
+  showMobileDrawer.value = false
+}
+
+function handleMobileLeftAction() {
+  if (mobileHeaderOverride.value?.leftAction === 'back') {
+    if (window.history.length > 1) {
+      router.back()
+      return
+    }
+
+    router.push('/')
+    return
+  }
+
+  toggleMobileDrawer()
+}
+
+function handleMobileRightAction() {
+  switch (mobileRightActionType.value) {
+    case 'discussion-menu':
+      window.dispatchEvent(new CustomEvent('bias:mobile-header-action', {
+        detail: { action: 'discussion-menu' }
+      }))
+      return
+    case 'login':
+      openLogin()
+      return
+    default:
+      startDiscussionFromHeader()
+  }
 }
 
 async function toggleNotifications() {
@@ -343,6 +621,22 @@ function openNotificationGroup(group) {
 function openNotificationsPage() {
   showNotifications.value = false
   router.push('/notifications')
+}
+
+function startDiscussionFromHeader() {
+  composerStore.openDiscussionComposer({
+    source: `header:${String(route.name || 'unknown')}`
+  })
+}
+
+function startDiscussionFromDrawer() {
+  closeMobileDrawer()
+  startDiscussionFromHeader()
+}
+
+function openSearchFromDrawer() {
+  closeMobileDrawer()
+  openSearchModal()
 }
 
 function getNotificationIconClass(type) {
@@ -438,8 +732,20 @@ watch(
   () => {
     showNotifications.value = false
     showUserMenu.value = false
+    showMobileDrawer.value = false
+    if (route.name !== 'discussion-detail') {
+      mobileHeaderOverride.value = null
+    }
   }
 )
+
+function handleMobileHeaderUpdate(event) {
+  mobileHeaderOverride.value = event.detail || null
+}
+
+function handleMobileHeaderReset() {
+  mobileHeaderOverride.value = null
+}
 
 function openSearchModal() {
   modalStore.show(
@@ -463,6 +769,21 @@ function openRegister() {
   openRegisterModal({ redirectPath: route.fullPath })
 }
 
+function openLoginFromDrawer() {
+  closeMobileDrawer()
+  openLogin()
+}
+
+function openRegisterFromDrawer() {
+  closeMobileDrawer()
+  openRegister()
+}
+
+async function logoutFromDrawer() {
+  closeMobileDrawer()
+  await handleLogout()
+}
+
 function handleWindowClick(e) {
   if (!e.target.closest('.user-dropdown')) {
     showUserMenu.value = false
@@ -475,6 +796,12 @@ function handleWindowClick(e) {
 if (typeof window !== 'undefined') {
   window.addEventListener('click', handleWindowClick)
 }
+
+onMounted(() => {
+  if (typeof window === 'undefined') return
+  window.addEventListener('bias:mobile-header-update', handleMobileHeaderUpdate)
+  window.addEventListener('bias:mobile-header-reset', handleMobileHeaderReset)
+})
 
 function clearSearch() {
   if (route.name === 'search') {
@@ -499,6 +826,8 @@ function clearSearch() {
 onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('click', handleWindowClick)
+    window.removeEventListener('bias:mobile-header-update', handleMobileHeaderUpdate)
+    window.removeEventListener('bias:mobile-header-reset', handleMobileHeaderReset)
   }
 })
 </script>
@@ -582,6 +911,206 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.mobile-nav-toggle,
+.mobile-primary-action,
+.mobile-header-title,
+.mobile-drawer,
+.mobile-drawer-backdrop {
+  display: none;
+}
+
+.mobile-nav-toggle,
+.mobile-primary-action,
+.mobile-drawer-close {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #62758a;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(320px, calc(100vw - 44px));
+  padding: 16px 14px 20px;
+  background: #fff;
+  box-shadow: 0 18px 40px rgba(31, 45, 61, 0.22);
+  transform: translateX(calc(-100% - 12px));
+  transition: transform 0.22s ease;
+  z-index: 121;
+  overflow-y: auto;
+}
+
+.mobile-drawer.is-open {
+  transform: translateX(0);
+}
+
+.mobile-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 40, 55, 0.38);
+  z-index: 120;
+}
+
+.mobile-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mobile-drawer-brand {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  color: #31465d;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.mobile-drawer-logo {
+  max-width: 168px;
+  max-height: 32px;
+  object-fit: contain;
+}
+
+.mobile-drawer-section,
+.mobile-drawer-user,
+.mobile-drawer-auth {
+  padding-top: 14px;
+  border-top: 1px solid #e7edf3;
+}
+
+.mobile-drawer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.mobile-drawer-search,
+.mobile-drawer-compose,
+.mobile-drawer-link {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.mobile-drawer-search {
+  background: #f4f7fa;
+  color: #5d6e81;
+}
+
+.mobile-drawer-compose {
+  background: var(--forum-accent-color);
+  color: #fff;
+}
+
+.mobile-drawer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.mobile-drawer-link {
+  background: transparent;
+  color: #4d5f72;
+  justify-content: flex-start;
+}
+
+.mobile-drawer-link.active {
+  background: #edf3f8;
+  color: var(--forum-primary-color);
+}
+
+.mobile-drawer-link--danger {
+  color: #b54b4b;
+}
+
+.mobile-drawer-badge {
+  margin-left: auto;
+  min-width: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e86f2d;
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+}
+
+.mobile-drawer-user {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-drawer-userCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px 6px;
+}
+
+.mobile-drawer-userMeta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mobile-drawer-userMeta strong,
+.mobile-drawer-userMeta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-drawer-userMeta strong {
+  color: #2b3b4d;
+  font-size: 14px;
+}
+
+.mobile-drawer-userMeta span {
+  color: #7a8997;
+  font-size: 12px;
+}
+
+.mobile-drawer-auth {
+  display: flex;
+  gap: 10px;
+}
+
+.mobile-drawer-auth .btn-login,
+.mobile-drawer-auth .btn-signup {
+  flex: 1;
+}
+
+.mobile-drawer-fade-enter-active,
+.mobile-drawer-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.mobile-drawer-fade-enter-from,
+.mobile-drawer-fade-leave-to {
+  opacity: 0;
 }
 
 /* 搜索框 */
@@ -1026,22 +1555,59 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
-  .nav-item span,
-  .btn-compose span {
+  .container {
+    position: relative;
+    padding: 0 10px;
+  }
+
+  .header-left {
+    gap: 0;
+  }
+
+  .mobile-nav-toggle,
+  .mobile-primary-action {
+    display: inline-flex;
+  }
+
+  .mobile-header-title {
+    display: block;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(220px, calc(100vw - 120px));
+    color: #de6c2b;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 56px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+
+  .mobile-drawer,
+  .mobile-drawer-backdrop {
+    display: block;
+  }
+
+  .logo,
+  .search-box,
+  .notifications-dropdown,
+  .user-dropdown,
+  .btn-login,
+  .btn-signup {
     display: none;
   }
 
-  .username {
-    display: none;
+  .header-right {
+    gap: 0;
   }
 
-  .search-box {
-    width: 160px;
-  }
-
-  .notifications-menu {
-    width: min(420px, calc(100vw - 24px));
-    right: -8px;
+  .mobile-nav-toggle:hover,
+  .mobile-primary-action:hover,
+  .mobile-drawer-close:hover {
+    background: #f4f7fa;
   }
 }
 </style>

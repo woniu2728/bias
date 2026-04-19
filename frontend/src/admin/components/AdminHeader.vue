@@ -107,27 +107,42 @@ function handleLogout() {
 
 @media (max-width: 768px) {
   .AdminHeader {
-    height: auto;
-    min-height: 72px;
+    height: 56px;
+    min-height: 56px;
   }
 
   .AdminHeader .container {
-    padding: 10px 12px;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 10px;
+    padding: 0 12px;
+    align-items: center;
+    flex-direction: row;
+    gap: 12px;
   }
 
   .AdminHeader-actions {
-    width: 100%;
-    justify-content: space-between;
+    margin-left: auto;
+    width: auto;
+    justify-content: flex-end;
     gap: 12px;
   }
 
   .AdminHeader-user {
     min-width: 0;
-    flex: 1;
     justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .AdminHeader-user span {
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .Button--link {
+    min-height: 34px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #f4f7fa;
   }
 }
 
@@ -136,24 +151,20 @@ function handleLogout() {
     font-size: 15px;
   }
 
-  .AdminHeader-actions {
-    align-items: center;
+  .AdminHeader-logo .text {
+    display: none;
   }
 
   .AdminHeader-user {
-    gap: 8px;
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .AdminHeader-user span {
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: none;
   }
 
   .Button--link {
-    padding: 6px 8px;
+    padding: 6px 9px;
     font-size: 12px;
   }
 }

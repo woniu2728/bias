@@ -53,13 +53,13 @@
               <td colspan="7" class="TagTable-empty">暂无标签</td>
             </tr>
             <tr v-for="row in tagRows" v-else :key="row.tag.id">
-              <td>
+              <td data-label="预览">
                 <span class="TagBadgePreview" :style="getTagBadgeStyle(row.tag)">
                   <i v-if="row.tag.icon" :class="row.tag.icon"></i>
                   <span>{{ row.tag.name }}</span>
                 </span>
               </td>
-              <td>
+              <td data-label="标签名称">
                 <div class="TagNameCell" :style="{ '--tag-depth': row.depth }">
                   <span class="TagNameCell-line" :class="{ 'is-child': row.depth > 0 }"></span>
                   <div class="TagNameCell-main">
@@ -68,16 +68,16 @@
                   </div>
                 </div>
               </td>
-              <td>
+              <td data-label="别名">
                 <code class="TagSlug">{{ row.tag.slug }}</code>
               </td>
-              <td>
+              <td data-label="层级">
                 <div class="TagHierarchy">
                   <span>{{ row.depth > 0 ? '子标签' : '顶级标签' }}</span>
                   <small v-if="row.parentName">隶属 {{ row.parentName }}</small>
                 </div>
               </td>
-              <td>
+              <td data-label="状态">
                 <div class="TagStatusList">
                   <span v-if="row.tag.is_hidden" class="TagStatus TagStatus--muted">隐藏</span>
                   <span v-if="row.tag.is_restricted" class="TagStatus TagStatus--warning">限制发帖</span>
@@ -87,8 +87,8 @@
                   <span v-if="!row.tag.is_hidden && !row.tag.is_restricted" class="TagStatus">公开</span>
                 </div>
               </td>
-              <td>{{ row.tag.discussion_count }}</td>
-              <td>
+              <td data-label="讨论数">{{ row.tag.discussion_count }}</td>
+              <td data-label="操作">
                 <button @click="editTag(row.tag)" class="Button Button--small">
                   编辑
                 </button>
@@ -793,6 +793,10 @@ function getNextPosition(sourceTags, parentId) {
   justify-content: flex-end;
 }
 
+.TagsPage-list {
+  min-width: 0;
+}
+
 .TagSummaryGrid,
 .TagConfigSummary {
   display: grid;
@@ -1337,6 +1341,15 @@ function getNextPosition(sourceTags, parentId) {
 }
 
 @media (max-width: 768px) {
+  .TagsPage-toolbar {
+    justify-content: stretch;
+  }
+
+  .TagsPage-toolbar .Button {
+    width: 100%;
+    justify-content: center;
+  }
+
   .Modal-content {
     width: calc(100vw - 24px);
   }
@@ -1357,6 +1370,83 @@ function getNextPosition(sourceTags, parentId) {
 
   .IconPicker {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .TagTable {
+    border: 0;
+    background: transparent;
+  }
+
+  .TagTable thead {
+    display: none;
+  }
+
+  .TagTable tbody,
+  .TagTable tr,
+  .TagTable td {
+    display: block;
+    width: 100%;
+  }
+
+  .TagTable tbody tr {
+    margin-bottom: 12px;
+    padding: 14px;
+    border: 1px solid #e3e8ed;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 10px 26px rgba(28, 46, 67, 0.06);
+  }
+
+  .TagTable tbody td {
+    padding: 8px 0;
+    border-bottom: 1px solid #eef2f6;
+  }
+
+  .TagTable tbody td:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .TagTable tbody td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 6px;
+    color: #7b8996;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .TagTable-loading,
+  .TagTable-empty {
+    display: block;
+    padding: 28px 16px;
+  }
+
+  .TagNameCell {
+    padding-left: 0;
+  }
+
+  .TagStatusList {
+    gap: 6px;
+  }
+
+  .TagTable tbody td[data-label='操作'] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .TagTable tbody td[data-label='操作']::before {
+    width: 100%;
+  }
+
+  .TagTable tbody td[data-label='操作'] .Button {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: center;
   }
 }
 
