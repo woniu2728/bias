@@ -5,7 +5,6 @@ import shutil
 from subprocess import CompletedProcess
 import uuid
 from datetime import timedelta
-from tempfile import TemporaryDirectory
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
@@ -17,6 +16,7 @@ from django.utils import timezone
 from ninja_jwt.tokens import RefreshToken
 from unittest.mock import patch
 
+from apps.core.bootstrap_config import read_site_config
 from apps.core.models import Setting
 from apps.core.file_service import FileUploadService
 from apps.core.settings_service import clear_runtime_setting_caches
@@ -28,6 +28,12 @@ from apps.posts.models import PostFlag
 from apps.posts.services import PostService
 from apps.tags.models import Tag
 from apps.users.models import Group, Permission, User
+
+
+def make_workspace_temp_dir() -> Path:
+    path = Path.cwd() / f"tmp-test-{uuid.uuid4().hex}"
+    path.mkdir(parents=True, exist_ok=False)
+    return path
 
 
 class ChineseSearchTests(TestCase):
@@ -833,19 +839,20 @@ class InitForumCommandTests(TestCase):
         return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
 
     @patch("apps.core.management.commands.init_forum.run_manage_py")
-    def test_init_forum_command_writes_sqlite_env_and_invokes_manage_steps(self, mock_run_manage_py):
+    def test_init_forum_command_writes_site_config_and_invokes_manage_steps(self, mock_run_manage_py):
         mock_run_manage_py.side_effect = lambda args, env: self._success_result(args)
 
-        with TemporaryDirectory() as temp_dir:
-            env_path = Path(temp_dir) / ".env.test"
+        temp_dir = make_workspace_temp_dir()
+        try:
+            config_path = Path(temp_dir) / "instance" / "site.json"
             with patch.dict(os.environ, {}, clear=False):
                 with override_settings(BASE_DIR=Path(temp_dir)):
                     call_command(
                         "init_forum",
                         "--database",
                         "sqlite",
-                        "--env-file",
-                        str(env_path),
+                        "--config",
+                        str(config_path),
                         "--skip-migrate",
                         "--admin-username",
                         "forum-admin",
@@ -856,50 +863,59 @@ class InitForumCommandTests(TestCase):
                         "--non-interactive",
                     )
 
-            self.assertTrue(env_path.exists())
-            env_content = env_path.read_text(encoding="utf-8")
-            self.assertIn("DB_MODE=sqlite", env_content)
-            self.assertIn("SQLITE_NAME=db.sqlite3", env_content)
-            self.assertIn("USE_REDIS=False", env_content)
-            self.assertIn("FRONTEND_URL=http://localhost:5173", env_content)
-            self.assertIn("SECRET_KEY=", env_content)
-            self.assertIn("JWT_SECRET_KEY=", env_content)
+            self.assertTrue(config_path.exists())
+            config = read_site_config(config_path)
+            self.assertEqual(config.database_mode, "sqlite")
+            self.assertEqual(config.sqlite_name, "db.sqlite3")
+            self.assertFalse(config.use_redis)
+            self.assertEqual(config.resolved_frontend_url(), "http://localhost:5173")
+            self.assertTrue(config.secret_key)
+            self.assertTrue(config.jwt_secret_key)
 
-            self.assertEqual(mock_run_manage_py.call_count, 2)
-            first_args, first_env = mock_run_manage_py.call_args_list[0].args
-            second_args, second_env = mock_run_manage_py.call_args_list[1].args
-
-            self.assertEqual(first_args, ["init_groups"])
+            self.assertEqual(mock_run_manage_py.call_count, 4)
+            invoked_steps = [call.args[0] for call in mock_run_manage_py.call_args_list]
             self.assertEqual(
-                second_args,
+                invoked_steps,
                 [
-                    "ensure_admin",
-                    "--username",
-                    "forum-admin",
-                    "--email",
-                    "forum-admin@example.com",
-                    "--password",
-                    "password123",
+                    ["init_groups"],
+                    ["sync_forum_version"],
+                    ["collectstatic", "--noinput"],
+                    [
+                        "ensure_admin",
+                        "--username",
+                        "forum-admin",
+                        "--email",
+                        "forum-admin@example.com",
+                        "--password",
+                        "password123",
+                    ],
                 ],
             )
-            self.assertEqual(first_env["BIAS_ENV_FILE"], str(env_path))
-            self.assertEqual(first_env["USE_REDIS"], "False")
-            self.assertEqual(second_env["DB_MODE"], "sqlite")
+
+            first_args, first_env = mock_run_manage_py.call_args_list[0].args
+            self.assertEqual(first_args, ["init_groups"])
+            self.assertEqual(
+                first_env["BIAS_SITE_CONFIG"],
+                str(config_path),
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     @patch("apps.core.management.commands.init_forum.run_manage_py")
-    def test_init_forum_command_writes_postgres_env_values(self, mock_run_manage_py):
+    def test_init_forum_command_writes_postgres_site_config_values(self, mock_run_manage_py):
         mock_run_manage_py.side_effect = lambda args, env: self._success_result(args)
 
-        with TemporaryDirectory() as temp_dir:
-            env_path = Path(temp_dir) / ".env.postgres"
+        temp_dir = make_workspace_temp_dir()
+        try:
+            config_path = Path(temp_dir) / "instance" / "site.json"
             with patch.dict(os.environ, {}, clear=False):
                 with override_settings(BASE_DIR=Path(temp_dir)):
                     call_command(
                         "init_forum",
                         "--database",
                         "postgres",
-                        "--env-file",
-                        str(env_path),
+                        "--config",
+                        str(config_path),
                         "--skip-migrate",
                         "--skip-admin",
                         "--db-name",
@@ -917,30 +933,32 @@ class InitForumCommandTests(TestCase):
                         "--non-interactive",
                     )
 
-            self.assertTrue(env_path.exists())
-            env_content = env_path.read_text(encoding="utf-8")
-            self.assertIn("DB_MODE=postgres", env_content)
-            self.assertIn("DEBUG=False", env_content)
-            self.assertIn("USE_REDIS=True", env_content)
-            self.assertIn("DB_NAME=community", env_content)
-            self.assertIn("DB_USER=community_user", env_content)
-            self.assertIn("DB_PASSWORD=community_pass", env_content)
-            self.assertIn("DB_HOST=db.internal", env_content)
-            self.assertIn("DB_PORT=5433", env_content)
-            self.assertIn("FRONTEND_URL=http://forum.example.com", env_content)
+            self.assertTrue(config_path.exists())
+            config = read_site_config(config_path)
+            self.assertEqual(config.database_mode, "postgres")
+            self.assertFalse(config.debug)
+            self.assertTrue(config.use_redis)
+            self.assertEqual(config.db_name, "community")
+            self.assertEqual(config.db_user, "community_user")
+            self.assertEqual(config.db_password, "community_pass")
+            self.assertEqual(config.db_host, "db.internal")
+            self.assertEqual(config.db_port, "5433")
+            self.assertEqual(config.resolved_frontend_url(), "http://forum.example.com")
 
-            self.assertEqual(mock_run_manage_py.call_count, 1)
+            self.assertEqual(mock_run_manage_py.call_count, 3)
             group_args, group_env = mock_run_manage_py.call_args_list[0].args
             self.assertEqual(group_args, ["init_groups"])
-            self.assertEqual(group_env["USE_REDIS"], "True")
-            self.assertEqual(group_env["DB_MODE"], "postgres")
+            self.assertEqual(group_env["BIAS_SITE_CONFIG"], str(config_path))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     @patch("apps.core.management.commands.init_forum.run_manage_py")
     def test_init_forum_command_allows_explicit_redis_override(self, mock_run_manage_py):
         mock_run_manage_py.side_effect = lambda args, env: self._success_result(args)
 
-        with TemporaryDirectory() as temp_dir:
-            env_path = Path(temp_dir) / ".env.override"
+        temp_dir = make_workspace_temp_dir()
+        try:
+            config_path = Path(temp_dir) / "instance" / "site.json"
             with patch.dict(os.environ, {}, clear=False):
                 with override_settings(BASE_DIR=Path(temp_dir)):
                     call_command(
@@ -955,18 +973,75 @@ class InitForumCommandTests(TestCase):
                         "6380",
                         "--redis-db",
                         "5",
-                        "--env-file",
-                        str(env_path),
+                        "--config",
+                        str(config_path),
                         "--skip-migrate",
                         "--skip-admin",
                         "--non-interactive",
                     )
 
-            env_content = env_path.read_text(encoding="utf-8")
-            self.assertIn("USE_REDIS=True", env_content)
-            self.assertIn("REDIS_HOST=cache.internal", env_content)
-            self.assertIn("REDIS_PORT=6380", env_content)
-            self.assertIn("REDIS_DB=5", env_content)
+            config = read_site_config(config_path)
+            self.assertTrue(config.use_redis)
+            self.assertEqual(config.redis_host, "cache.internal")
+            self.assertEqual(config.redis_port, "6380")
+            self.assertEqual(config.redis_db, "5")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    @patch("apps.core.management.commands.init_forum.run_manage_py")
+    def test_init_forum_overwrite_preserves_existing_secrets(self, mock_run_manage_py):
+        mock_run_manage_py.side_effect = lambda args, env: self._success_result(args)
+
+        temp_dir = make_workspace_temp_dir()
+        try:
+            config_path = Path(temp_dir) / "instance" / "site.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "installed": True,
+                        "source": "file",
+                        "secret_key": "secret-1",
+                        "jwt_secret_key": "jwt-secret-1",
+                        "database_mode": "postgres",
+                        "db_name": "bias",
+                        "db_user": "postgres",
+                        "db_password": "postgres",
+                        "db_host": "db",
+                        "db_port": "5432",
+                        "use_redis": True,
+                        "redis_host": "redis",
+                        "redis_port": "6379",
+                        "redis_db": "0",
+                        "site_domains": ["old.example.com"],
+                        "site_scheme": "https",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command(
+                    "init_forum",
+                    "--config",
+                    str(config_path),
+                    "--site-domains",
+                    "bias.chat,www.bias.chat",
+                    "--skip-migrate",
+                    "--skip-admin",
+                    "--overwrite",
+                    "--non-interactive",
+                )
+
+            config = read_site_config(config_path)
+            self.assertEqual(config.secret_key, "secret-1")
+            self.assertEqual(config.jwt_secret_key, "jwt-secret-1")
+            self.assertEqual(config.site_domains, ["bias.chat", "www.bias.chat"])
+            self.assertEqual(config.db_host, "db")
+            self.assertEqual(config.resolved_frontend_url(), "https://bias.chat")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 class EnsureAdminCommandTests(TestCase):
@@ -999,15 +1074,19 @@ class UpgradeForumCommandTests(TestCase):
     def test_upgrade_forum_runs_default_upgrade_steps(self, mock_run_manage_py):
         mock_run_manage_py.side_effect = lambda args, env: self._success_result(args)
 
-        with TemporaryDirectory() as temp_dir:
-            env_path = Path(temp_dir) / ".env"
-            env_path.write_text(
-                "\n".join(
-                    [
-                        "DB_MODE=sqlite",
-                        "SQLITE_NAME=db.sqlite3",
-                        "USE_REDIS=False",
-                    ]
+        temp_dir = make_workspace_temp_dir()
+        try:
+            config_path = Path(temp_dir) / "instance" / "site.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "installed": True,
+                        "source": "file",
+                        "database_mode": "sqlite",
+                        "sqlite_name": "db.sqlite3",
+                        "use_redis": False,
+                    }
                 )
                 + "\n",
                 encoding="utf-8",
@@ -1015,12 +1094,14 @@ class UpgradeForumCommandTests(TestCase):
 
             call_command(
                 "upgrade_forum",
-                "--env-file",
-                str(env_path),
+                "--config",
+                str(config_path),
                 "--non-interactive",
             )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
-        self.assertEqual(mock_run_manage_py.call_count, 4)
+        self.assertEqual(mock_run_manage_py.call_count, 6)
         invoked_steps = [call.args[0] for call in mock_run_manage_py.call_args_list]
         self.assertEqual(
             invoked_steps,
@@ -1028,60 +1109,100 @@ class UpgradeForumCommandTests(TestCase):
                 ["check"],
                 ["migrate", "--noinput"],
                 ["init_groups"],
+                ["sync_forum_version"],
                 ["clear_runtime_cache"],
+                ["collectstatic", "--noinput"],
             ],
         )
-        self.assertEqual(mock_run_manage_py.call_args_list[0].args[1]["BIAS_ENV_FILE"], str(env_path))
+        self.assertEqual(mock_run_manage_py.call_args_list[0].args[1]["BIAS_SITE_CONFIG"], str(config_path))
 
     @patch("apps.core.management.commands.upgrade_forum.run_manage_py")
     def test_upgrade_forum_dry_run_does_not_execute_steps(self, mock_run_manage_py):
-        with TemporaryDirectory() as temp_dir:
-            env_path = Path(temp_dir) / ".env"
-            env_path.write_text("DB_MODE=sqlite\nSQLITE_NAME=db.sqlite3\n", encoding="utf-8")
-
-            call_command(
-                "upgrade_forum",
-                "--env-file",
-                str(env_path),
-                "--dry-run",
-                "--non-interactive",
-            )
-
-        mock_run_manage_py.assert_not_called()
-
-    def test_upgrade_forum_requires_existing_env_file(self):
-        with TemporaryDirectory() as temp_dir:
-            missing_env_path = Path(temp_dir) / ".env.missing"
-            with self.assertRaisesMessage(CommandError, f"环境文件不存在: {missing_env_path}"):
-                call_command(
-                    "upgrade_forum",
-                    "--env-file",
-                    str(missing_env_path),
-                    "--non-interactive",
-                )
-
-    def test_upgrade_forum_validates_postgres_required_fields(self):
-        with TemporaryDirectory() as temp_dir:
-            env_path = Path(temp_dir) / ".env"
-            env_path.write_text(
-                "\n".join(
-                    [
-                        "DB_MODE=postgres",
-                        "DB_NAME=bias",
-                        "DB_USER=postgres",
-                    ]
+        temp_dir = make_workspace_temp_dir()
+        try:
+            config_path = Path(temp_dir) / "instance" / "site.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "installed": True,
+                        "source": "file",
+                        "database_mode": "sqlite",
+                        "sqlite_name": "db.sqlite3",
+                        "use_redis": False,
+                    }
                 )
                 + "\n",
                 encoding="utf-8",
             )
 
-            with self.assertRaisesMessage(CommandError, "PostgreSQL 模式缺少必要配置: DB_HOST, DB_PORT"):
+            call_command(
+                "upgrade_forum",
+                "--config",
+                str(config_path),
+                "--dry-run",
+                "--non-interactive",
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+        mock_run_manage_py.assert_not_called()
+
+    def test_upgrade_forum_requires_existing_site_config(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            missing_config_path = Path(temp_dir) / "instance" / "site.json"
+            with self.assertRaisesMessage(CommandError, f"站点配置不存在: {missing_config_path}。请先执行 python manage.py install_forum"):
                 call_command(
                     "upgrade_forum",
-                    "--env-file",
-                    str(env_path),
+                    "--config",
+                    str(missing_config_path),
                     "--non-interactive",
                 )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_upgrade_forum_validates_postgres_required_fields(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            config_path = Path(temp_dir) / "instance" / "site.json"
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "installed": True,
+                        "source": "file",
+                        "database_mode": "postgres",
+                        "db_name": "",
+                        "db_user": "",
+                        "db_host": "",
+                        "db_port": "",
+                        "use_redis": False,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesMessage(CommandError, "PostgreSQL 模式缺少必要配置: db_name, db_user, db_host, db_port"):
+                call_command(
+                    "upgrade_forum",
+                    "--config",
+                    str(config_path),
+                    "--non-interactive",
+                )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+class SystemStatusApiTests(TestCase):
+    def test_system_status_endpoint_returns_ready_state(self):
+        response = self.client.get("/api/system/status")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["state"], "ready")
+        self.assertIn("current_version", payload)
 
 
 class LocalStorageSettingsTests(TestCase):

@@ -6,6 +6,7 @@ from django.http import HttpResponse, JsonResponse
 from django.utils.html import escape
 from ninja_jwt.authentication import JWTAuth
 
+from apps.core.runtime_state import get_runtime_status
 from apps.core.settings_service import (
     get_maintenance_message,
     is_maintenance_mode_enabled,
@@ -14,6 +15,80 @@ from apps.core.settings_service import (
 
 
 sql_logger = logging.getLogger("bias.sql")
+
+
+class StartupStateMiddleware:
+    sync_capable = True
+    async_capable = True
+    exempt_paths = {
+        "/api/health",
+        "/api/system/status",
+        "/api/docs",
+        "/api/openapi.json",
+    }
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self._is_async = iscoroutinefunction(get_response)
+        if self._is_async:
+            markcoroutinefunction(self)
+
+    def __call__(self, request):
+        if self._is_async:
+            return self.__acall__(request)
+
+        if self._is_exempt(request):
+            return self.get_response(request)
+
+        status = get_runtime_status()
+        if status.state == "ready":
+            return self.get_response(request)
+
+        return self._build_response(request, status)
+
+    async def __acall__(self, request):
+        if await sync_to_async(self._is_exempt, thread_sensitive=True)(request):
+            return await self.get_response(request)
+
+        status = await sync_to_async(get_runtime_status, thread_sensitive=True)()
+        if status.state == "ready":
+            return await self.get_response(request)
+
+        return await sync_to_async(self._build_response, thread_sensitive=True)(request, status)
+
+    def _is_exempt(self, request) -> bool:
+        path = request.path or "/"
+        if path in self.exempt_paths:
+            return True
+
+        static_url = getattr(settings, "STATIC_URL", None)
+        media_url = getattr(settings, "MEDIA_URL", None)
+        if static_url and path.startswith(static_url):
+            return True
+        if media_url and path.startswith(media_url):
+            return True
+        return False
+
+    def _build_response(self, request, status):
+        payload = {
+            "state": status.state,
+            "message": status.message,
+            "current_version": status.current_version,
+            "installed_version": status.installed_version,
+        }
+
+        if request.path.startswith("/api/") or request.headers.get("Accept", "").startswith("application/json"):
+            return JsonResponse(payload, status=503)
+
+        title = "Bias 尚未安装" if status.state == "uninstalled" else "Bias 需要升级"
+        body = (
+            f"<h1>{escape(title)}</h1>"
+            f"<p>{escape(status.message)}</p>"
+            f"<p>当前代码版本: {escape(status.current_version)}</p>"
+        )
+        if status.installed_version:
+            body += f"<p>已安装版本: {escape(status.installed_version)}</p>"
+        return HttpResponse(body, status=503, content_type="text/html; charset=utf-8")
 
 
 class QueryLoggingMiddleware:

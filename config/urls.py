@@ -7,10 +7,13 @@ from django.conf import settings
 from django.conf.urls.static import static
 from ninja import NinjaAPI
 
+from apps.core.runtime_state import get_runtime_status
+from apps.core.version import APP_VERSION
+
 # 创建API实例
 api = NinjaAPI(
     title="Bias API",
-    version="1.0.0",
+    version=APP_VERSION,
     description="Flarum 风格论坛的 Python RESTful API",
     docs_url="/docs",
 )
@@ -37,7 +40,14 @@ api.add_router("/admin", admin_router, tags=["Admin"])
 @api.get("/health", tags=["System"])
 def health_check(request):
     """健康检查"""
-    return {"status": "ok", "message": "Bias API is running"}
+    runtime = get_runtime_status()
+    return {
+        "status": "ok" if runtime.state == "ready" else "degraded",
+        "message": "Bias API is running",
+        "state": runtime.state,
+        "current_version": runtime.current_version,
+        "installed_version": runtime.installed_version,
+    }
 
 urlpatterns = [
     path('admin/', admin.site.urls),

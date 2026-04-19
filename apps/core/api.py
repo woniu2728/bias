@@ -20,6 +20,7 @@ from apps.core.auth import AuthBearer
 from apps.core.auth import get_optional_user
 from apps.core.file_service import FileUploadService
 from apps.core.markdown_service import MarkdownService
+from apps.core.runtime_state import get_runtime_status
 from apps.core.settings_service import get_public_forum_settings
 from apps.core.services import SearchService
 
@@ -30,6 +31,18 @@ router = Router()
 def get_forum_settings(request):
     """获取前台公开论坛设置"""
     return get_public_forum_settings()
+
+
+@router.get("/system/status", tags=["System"])
+def get_system_status(request):
+    """获取论坛安装/升级状态"""
+    status = get_runtime_status()
+    return {
+        "state": status.state,
+        "message": status.message,
+        "current_version": status.current_version,
+        "installed_version": status.installed_version,
+    }
 
 
 @router.post("/preview", response=MarkdownPreviewOutSchema, tags=["Forum"])

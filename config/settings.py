@@ -4,112 +4,21 @@ Django settings for bias project.
 
 from pathlib import Path
 import os
-from urllib.parse import urlparse
-from dotenv import load_dotenv
+
+from apps.core.bootstrap_config import load_site_bootstrap
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+BOOTSTRAP = load_site_bootstrap(BASE_DIR)
 
-# Load environment variables. Explicit env files are primarily used by
-# installation/upgrade commands that need to re-run Django in a subprocess.
-load_dotenv(os.getenv('BIAS_ENV_FILE') or BASE_DIR / '.env')
-
-
-def env_flag(name: str, default: bool) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
-
-
-def env_csv(name: str, default: str = "") -> list[str]:
-    value = os.getenv(name, default)
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
-def append_unique(items: list[str], value: str | None) -> list[str]:
-    if value and value not in items:
-        items.append(value)
-    return items
-
-
-def default_url_scheme(host: str) -> str:
-    normalized = (host or "").strip().lower()
-    if normalized in {"localhost", "127.0.0.1"}:
-        return "http"
-    return os.getenv("SITE_SCHEME", "https").strip().lower() or "https"
-
-
-def get_url_origin(url: str) -> str | None:
-    if not url:
-        return None
-
-    parsed = urlparse(url.strip())
-    if not parsed.scheme or not parsed.netloc:
-        return None
-
-    return f"{parsed.scheme}://{parsed.netloc}"
-
-
-def get_url_host(url: str) -> str | None:
-    if not url:
-        return None
-
-    parsed = urlparse(url.strip())
-    return parsed.hostname
-
-
-def normalize_origin_from_host(value: str) -> str | None:
-    raw = (value or "").strip()
-    if not raw:
-        return None
-
-    if "://" in raw:
-        return get_url_origin(raw)
-
-    host = raw.split("/", 1)[0].strip()
-    if not host:
-        return None
-
-    return f"{default_url_scheme(host)}://{host}"
-
-
-def normalize_host(value: str) -> str | None:
-    raw = (value or "").strip()
-    if not raw:
-        return None
-
-    if "://" in raw:
-        return get_url_host(raw)
-
-    return raw.split("/", 1)[0].split(":", 1)[0].strip() or None
-
-
-def resolve_site_domains() -> tuple[list[str], list[str]]:
-    hosts: list[str] = []
-    origins: list[str] = []
-
-    for value in env_csv("SITE_DOMAINS"):
-        append_unique(hosts, normalize_host(value))
-        append_unique(origins, normalize_origin_from_host(value))
-
-    return hosts, origins
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
+SECRET_KEY = BOOTSTRAP.secret_key
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
+DEBUG = BOOTSTRAP.debug
 
-site_hosts, site_origins = resolve_site_domains()
-default_frontend_url = 'http://localhost:5173' if DEBUG else 'http://localhost:8080'
-FRONTEND_URL = (os.getenv('FRONTEND_URL') or (site_origins[0] if site_origins else default_frontend_url)).strip()
-
-ALLOWED_HOSTS = env_csv('ALLOWED_HOSTS', 'localhost,127.0.0.1')
-for host in site_hosts:
-    append_unique(ALLOWED_HOSTS, host)
-ALLOWED_HOSTS = append_unique(ALLOWED_HOSTS, get_url_host(FRONTEND_URL))
+FRONTEND_URL = BOOTSTRAP.resolved_frontend_url()
+ALLOWED_HOSTS = BOOTSTRAP.resolved_allowed_hosts()
 
 # Application definition
 INSTALLED_APPS = [
@@ -142,6 +51,7 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'apps.core.middleware.StartupStateMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'apps.core.middleware.QueryLoggingMiddleware',
@@ -172,10 +82,10 @@ WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 
 # Database
-DB_MODE = os.getenv('DB_MODE', 'sqlite' if DEBUG else 'postgres').strip().lower()
+DB_MODE = BOOTSTRAP.database_mode.strip().lower()
 
 if DB_MODE in {'sqlite', 'sqlite3'}:
-    sqlite_name = os.getenv('SQLITE_NAME', 'db.sqlite3')
+    sqlite_name = BOOTSTRAP.sqlite_name or 'db.sqlite3'
     sqlite_path = Path(sqlite_name)
     if not sqlite_path.is_absolute():
         sqlite_path = BASE_DIR / sqlite_path
@@ -191,12 +101,12 @@ if DB_MODE in {'sqlite', 'sqlite3'}:
 else:
     DATABASES = {
         'default': {
-            'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-            'NAME': os.getenv('DB_NAME', 'bias'),
-            'USER': os.getenv('DB_USER', 'postgres'),
-            'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
-            'HOST': os.getenv('DB_HOST', 'localhost'),
-            'PORT': os.getenv('DB_PORT', '5432'),
+            'ENGINE': BOOTSTRAP.db_engine or 'django.db.backends.postgresql',
+            'NAME': BOOTSTRAP.db_name or 'bias',
+            'USER': BOOTSTRAP.db_user or 'postgres',
+            'PASSWORD': BOOTSTRAP.db_password or 'postgres',
+            'HOST': BOOTSTRAP.db_host or 'localhost',
+            'PORT': BOOTSTRAP.db_port or '5432',
         }
     }
 
@@ -226,37 +136,28 @@ USE_I18N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = '/static/'
+STATIC_URL = BOOTSTRAP.static_url or '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
 
 # Media files
-MEDIA_URL = '/media/'
+MEDIA_URL = BOOTSTRAP.media_url or '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS Settings
-CORS_ALLOWED_ORIGINS = env_csv(
-    'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://localhost:5173'
-)
-for origin in site_origins:
-    append_unique(CORS_ALLOWED_ORIGINS, origin)
-CORS_ALLOWED_ORIGINS = append_unique(CORS_ALLOWED_ORIGINS, get_url_origin(FRONTEND_URL))
+CORS_ALLOWED_ORIGINS = BOOTSTRAP.resolved_cors_origins()
 CORS_ALLOW_CREDENTIALS = True
 
-CSRF_TRUSTED_ORIGINS = env_csv('CSRF_TRUSTED_ORIGINS')
-for origin in site_origins:
-    append_unique(CSRF_TRUSTED_ORIGINS, origin)
-CSRF_TRUSTED_ORIGINS = append_unique(CSRF_TRUSTED_ORIGINS, get_url_origin(FRONTEND_URL))
+CSRF_TRUSTED_ORIGINS = BOOTSTRAP.resolved_csrf_origins()
 
 # Redis Configuration
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = os.getenv('REDIS_PORT', '6379')
-REDIS_DB = os.getenv('REDIS_DB', '0')
-USE_REDIS = env_flag('USE_REDIS', not DEBUG)
+REDIS_HOST = BOOTSTRAP.redis_host or 'localhost'
+REDIS_PORT = BOOTSTRAP.redis_port or '6379'
+REDIS_DB = BOOTSTRAP.redis_db or '0'
+USE_REDIS = BOOTSTRAP.use_redis
 
 # Cache Configuration
 CACHES = (
@@ -279,12 +180,10 @@ CACHES = (
 )
 
 # Celery Configuration
-CELERY_BROKER_URL = os.getenv(
-    'CELERY_BROKER_URL',
+CELERY_BROKER_URL = BOOTSTRAP.celery_broker_url or (
     f'redis://{REDIS_HOST}:{REDIS_PORT}/1' if USE_REDIS else 'memory://'
 )
-CELERY_RESULT_BACKEND = os.getenv(
-    'CELERY_RESULT_BACKEND',
+CELERY_RESULT_BACKEND = BOOTSTRAP.celery_result_backend or (
     f'redis://{REDIS_HOST}:{REDIS_PORT}/2' if USE_REDIS else 'cache+memory://'
 )
 CELERY_ACCEPT_CONTENT = ['json']
@@ -311,20 +210,20 @@ CHANNEL_LAYERS = (
 )
 
 # Email Configuration
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@bias.local')
+EMAIL_BACKEND = BOOTSTRAP.email_backend or 'django.core.mail.backends.console.EmailBackend'
+EMAIL_HOST = BOOTSTRAP.email_host or 'smtp.gmail.com'
+EMAIL_PORT = int(BOOTSTRAP.email_port or 587)
+EMAIL_USE_TLS = BOOTSTRAP.email_use_tls
+EMAIL_HOST_USER = BOOTSTRAP.email_host_user or ''
+EMAIL_HOST_PASSWORD = BOOTSTRAP.email_host_password or ''
+DEFAULT_FROM_EMAIL = BOOTSTRAP.default_from_email or 'noreply@bias.local'
 
 # JWT Settings
 NINJA_JWT = {
-    'ACCESS_TOKEN_LIFETIME': int(os.getenv('JWT_ACCESS_TOKEN_LIFETIME', '3600')),
-    'REFRESH_TOKEN_LIFETIME': int(os.getenv('JWT_REFRESH_TOKEN_LIFETIME', '86400')),
-    'ALGORITHM': os.getenv('JWT_ALGORITHM', 'HS256'),
-    'SIGNING_KEY': os.getenv('JWT_SECRET_KEY', SECRET_KEY),
+    'ACCESS_TOKEN_LIFETIME': int(BOOTSTRAP.jwt_access_token_lifetime or 3600),
+    'REFRESH_TOKEN_LIFETIME': int(BOOTSTRAP.jwt_refresh_token_lifetime or 86400),
+    'ALGORITHM': BOOTSTRAP.jwt_algorithm or 'HS256',
+    'SIGNING_KEY': BOOTSTRAP.jwt_secret_key or SECRET_KEY,
 }
 
 # Logging Configuration
@@ -365,7 +264,7 @@ LOGGING = {
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
 
 # Debug Toolbar (only in DEBUG mode)
-ENABLE_DEBUG_TOOLBAR = DEBUG and os.getenv('ENABLE_DEBUG_TOOLBAR', 'False') == 'True'
+ENABLE_DEBUG_TOOLBAR = DEBUG and False
 
 if ENABLE_DEBUG_TOOLBAR:
     INSTALLED_APPS += ['debug_toolbar']
