@@ -159,9 +159,10 @@ docker compose restart web celery
 ```bash
 git pull
 docker compose build web celery
-docker compose up -d db redis frontend nginx web celery
+docker compose up -d db redis web celery nginx
+docker compose restart frontend
 docker compose exec web python manage.py upgrade_forum --non-interactive
-docker compose restart web celery
+docker compose restart web celery nginx
 ```
 
 `upgrade_forum` 默认会执行：
@@ -172,6 +173,20 @@ docker compose restart web celery
 4. 写入当前安装版本
 5. 运行时缓存清理
 6. `collectstatic`
+
+说明：
+
+- `web` / `celery` 挂载的是项目目录，`git pull` 后代码会直接出现在容器里；`docker compose build web celery` 主要用于同步新的 Python 依赖或镜像层变更。
+- 前端页面由 `frontend` 容器执行 `npm run build` 产出到 `frontend/dist`，Nginx 直接读取这个目录。
+- `docker compose up -d frontend` 对已存在且正在运行的 `frontend` 容器通常不会重新执行构建命令，所以升级后网页可能还是旧版本。
+- 因此升级时必须额外执行一次 `docker compose restart frontend`，让它重新跑 `npm install && npm run build`。
+
+如果只更新了前端代码，也至少需要执行：
+
+```bash
+git pull
+docker compose restart frontend nginx
+```
 
 升级前建议备份：
 
