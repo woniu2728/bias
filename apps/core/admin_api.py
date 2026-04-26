@@ -1,6 +1,7 @@
 """
 管理后台API端点
 """
+import json
 import sys
 import functools
 from pathlib import Path
@@ -17,18 +18,29 @@ from typing import List, Dict, Any
 from django.db import transaction
 from django.db.models import Count, Max, Q
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 
 from apps.core.email_service import EmailService
+from apps.core.mail_drivers import (
+    can_mail_driver_send,
+    get_driver_definitions,
+    parse_mail_from,
+    serialize_mail_settings,
+    validate_mail_settings,
+)
 from apps.core.file_service import FileUploadService
 from apps.core.settings_service import (
     ADVANCED_SETTINGS_DEFAULTS,
     APPEARANCE_SETTINGS_DEFAULTS,
     BASIC_SETTINGS_DEFAULTS,
-    MAIL_SETTINGS_DEFAULTS,
     clear_runtime_setting_caches,
     get_advanced_settings as get_runtime_advanced_settings,
+    get_mail_settings as get_runtime_mail_settings,
+    get_mail_settings_defaults,
     get_setting_group,
     save_setting_group,
+    sync_mail_settings_to_site_config,
 )
 from apps.users.models import User, Group, Permission
 from apps.discussions.models import Discussion
@@ -264,6 +276,28 @@ def detect_realtime_driver() -> str:
     return backend or "未知"
 
 
+def build_mail_settings_response(admin_email: str = "") -> Dict[str, Any]:
+    settings_data = get_runtime_mail_settings()
+    errors = validate_mail_settings(settings_data)
+    driver_definitions = get_driver_definitions()
+    effective_test_to_email = (
+        str(settings_data.get("mail_test_recipient") or "").strip()
+        or str(admin_email or "").strip()
+    )
+    settings_data.update({
+        "drivers": driver_definitions,
+        "driver_options": [
+            {"value": key, "label": value.get("label") or key}
+            for key, value in driver_definitions.items()
+        ],
+        "sending": can_mail_driver_send(settings_data, errors),
+        "errors": errors,
+        "mail_test_recipient": str(settings_data.get("mail_test_recipient") or "").strip(),
+        "test_to_email": effective_test_to_email,
+    })
+    return settings_data
+
+
 def detect_queue_driver_label(queue_enabled: bool, queue_driver: str) -> str:
     if not queue_enabled:
         return "同步执行"
@@ -383,30 +417,79 @@ def upload_appearance_asset(request, target: str):
 @require_staff
 def get_mail_settings(request):
     """获取邮件设置"""
-    return get_setting_group("mail", MAIL_SETTINGS_DEFAULTS)
+    return build_mail_settings_response(request.auth.email if request.auth else "")
 
 
 @router.post("/mail", auth=AuthBearer(), tags=["Admin"])
 @require_staff
 def save_mail_settings(request, payload: Dict[str, Any] = Body(...)):
     """保存邮件设置"""
-    settings_data = save_setting_group("mail", MAIL_SETTINGS_DEFAULTS, payload)
-    return {"message": "邮件设置保存成功", "settings": settings_data}
+    normalized_payload = dict(payload)
+    if "mail_from" in normalized_payload:
+        mail_from_address, mail_from_name = parse_mail_from(normalized_payload.pop("mail_from"))
+        normalized_payload["mail_from_address"] = mail_from_address
+        normalized_payload["mail_from_name"] = mail_from_name
+
+    defaults = get_mail_settings_defaults()
+    settings_data = save_setting_group("mail", defaults, normalized_payload)
+    expected_settings = serialize_mail_settings(settings_data)
+    try:
+        config_path = sync_mail_settings_to_site_config(settings_data)
+    except Exception as exc:
+        return admin_error(f"邮件设置写入站点配置失败: {exc}", status=500)
+
+    response = build_mail_settings_response(request.auth.email if request.auth else "")
+    if response.get("mail_from") != expected_settings.get("mail_from"):
+        location = config_path or "数据库设置"
+        return admin_error(
+            "邮件设置保存后校验失败，运行时读取到的发件地址与刚保存的不一致。"
+            f" 期望值: {expected_settings.get('mail_from') or '(空)'};"
+            f" 实际值: {response.get('mail_from') or '(空)'};"
+            f" 配置来源: {location}",
+            status=500,
+        )
+    response["message"] = "邮件设置保存成功"
+    response["settings"] = serialize_mail_settings(settings_data)
+    return response
 
 
 @router.post("/mail/test", auth=AuthBearer(), tags=["Admin"])
 @require_staff
 def send_test_email(request):
     """发送测试邮件"""
-    if not request.auth.email:
-        return admin_error("当前管理员没有邮箱地址", status=400)
+    payload = {}
+    if request.body:
+        raw_body = request.body.decode("utf-8", errors="ignore").strip()
+        content_type = str(request.headers.get("content-type") or "")
+        should_parse_json = "application/json" in content_type or raw_body[:1] in {"{", "["}
+        if should_parse_json:
+            try:
+                payload = json.loads(raw_body) if raw_body else {}
+            except json.JSONDecodeError:
+                return admin_error("测试邮件请求格式无效", status=400)
+            if not isinstance(payload, dict):
+                payload = {}
+
+    mail_settings = get_setting_group("mail", get_mail_settings_defaults())
+    to_email = (
+        str(payload.get("to_email") or "").strip()
+        or str(mail_settings.get("mail_test_recipient") or "").strip()
+        or str(request.auth.email or "").strip()
+    )
+    if not to_email:
+        return admin_error("请先填写测试收件箱", status=400)
 
     try:
-        sent_count = EmailService.send_test_email(request.auth.email)
+        validate_email(to_email)
+    except ValidationError:
+        return admin_error("测试收件箱格式无效", status=400)
+
+    try:
+        sent_count = EmailService.send_test_email(to_email)
     except Exception as e:
         return admin_error(str(e), status=400)
 
-    return {"message": "测试邮件已发送", "sent_count": sent_count}
+    return {"message": "测试邮件已发送", "sent_count": sent_count, "to_email": to_email}
 
 
 @router.get("/advanced", auth=AuthBearer(), tags=["Admin"])

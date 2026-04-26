@@ -24,6 +24,14 @@ def _env_csv(value: str | None) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _env_first(*keys: str) -> str:
+    for key in keys:
+        value = os.getenv(key)
+        if value is not None and value.strip():
+            return value.strip()
+    return ""
+
+
 def _normalize_frontend_url(value: str, scheme: str, domains: list[str]) -> str:
     raw = (value or "").strip()
     if raw:
@@ -164,9 +172,67 @@ def load_site_bootstrap(base_dir: str | Path) -> SiteBootstrapConfig:
             use_redis=False,
         )
 
+    env_config = _load_env_bootstrap()
+    if env_config is not None:
+        return env_config
+
     return SiteBootstrapConfig(installed=False, source="none", debug=False, database_mode="sqlite")
 
 
 def _is_test_process() -> bool:
     argv = set(sys.argv)
     return "test" in argv or bool(os.getenv("PYTEST_CURRENT_TEST"))
+
+
+def _load_env_bootstrap() -> SiteBootstrapConfig | None:
+    db_name = _env_first("DB_NAME")
+    db_user = _env_first("DB_USER")
+    db_password = _env_first("DB_PASSWORD")
+
+    if not (db_name and db_user and db_password):
+        return None
+
+    site_domains = _env_csv(_env_first("SITE_DOMAINS"))
+    if any(domain.startswith("localhost") or domain.startswith("127.0.0.1") for domain in site_domains):
+        default_scheme = "http"
+    else:
+        default_scheme = _env_first("SITE_SCHEME") or ("https" if site_domains else "http")
+
+    config = SiteBootstrapConfig(
+        installed=True,
+        source="env",
+        debug=_env_flag(os.getenv("DEBUG"), default=False),
+        secret_key=_env_first("SECRET_KEY") or "django-insecure-change-this-in-production",
+        jwt_secret_key=_env_first("JWT_SECRET_KEY") or _env_first("SECRET_KEY") or "jwt-secret-key-change-this",
+        jwt_algorithm=_env_first("JWT_ALGORITHM") or "HS256",
+        jwt_access_token_lifetime=int(_env_first("JWT_ACCESS_TOKEN_LIFETIME") or 3600),
+        jwt_refresh_token_lifetime=int(_env_first("JWT_REFRESH_TOKEN_LIFETIME") or 86400),
+        site_domains=site_domains,
+        site_scheme=default_scheme,
+        frontend_url=_env_first("FRONTEND_URL"),
+        database_mode="postgres",
+        sqlite_name="db.sqlite3",
+        db_engine=_env_first("DB_ENGINE") or "django.db.backends.postgresql",
+        db_name=db_name,
+        db_user=db_user,
+        db_password=db_password,
+        db_host=_env_first("DB_HOST") or "db",
+        db_port=_env_first("DB_PORT") or "5432",
+        use_redis=_env_flag(os.getenv("USE_REDIS"), default=bool(_env_first("REDIS_HOST"))),
+        redis_host=_env_first("REDIS_HOST") or "redis",
+        redis_port=_env_first("REDIS_PORT") or "6379",
+        redis_db=_env_first("REDIS_DB") or "0",
+        celery_broker_url=_env_first("CELERY_BROKER_URL"),
+        celery_result_backend=_env_first("CELERY_RESULT_BACKEND"),
+        email_backend=_env_first("EMAIL_BACKEND") or "django.core.mail.backends.console.EmailBackend",
+        email_host=_env_first("EMAIL_HOST") or "smtp.gmail.com",
+        email_port=int(_env_first("EMAIL_PORT") or 587),
+        email_use_tls=_env_flag(os.getenv("EMAIL_USE_TLS"), default=True),
+        email_host_user=_env_first("EMAIL_HOST_USER"),
+        email_host_password=_env_first("EMAIL_HOST_PASSWORD"),
+        default_from_email=_env_first("DEFAULT_FROM_EMAIL") or "noreply@bias.local",
+        media_url=_env_first("MEDIA_URL") or "/media/",
+        static_url=_env_first("STATIC_URL") or "/static/",
+    )
+    config.frontend_url = config.resolved_frontend_url()
+    return config

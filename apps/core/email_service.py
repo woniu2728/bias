@@ -1,15 +1,24 @@
 """
 邮件发送服务
 """
-import json
-from email.utils import formataddr
-
-from django.core.mail import EmailMultiAlternatives, get_connection
-from django.conf import settings
-from typing import Optional
 import logging
+import re
+from email.utils import formataddr
+from typing import Optional
 
-from apps.core.models import Setting
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives, get_connection
+
+from apps.core.mail_templates import (
+    DEFAULT_PASSWORD_RESET_HTML,
+    DEFAULT_PASSWORD_RESET_SUBJECT,
+    DEFAULT_PASSWORD_RESET_TEXT,
+    DEFAULT_VERIFICATION_HTML,
+    DEFAULT_VERIFICATION_SUBJECT,
+    DEFAULT_VERIFICATION_TEXT,
+)
+from apps.core.mail_drivers import can_mail_driver_send, normalize_mail_driver
+from apps.core.settings_service import BASIC_SETTINGS_DEFAULTS, get_mail_settings, get_setting_group
 
 logger = logging.getLogger(__name__)
 
@@ -19,35 +28,39 @@ class EmailService:
 
     @staticmethod
     def get_runtime_mail_settings() -> dict:
-        defaults = {
-            "mail_driver": "smtp",
-            "mail_host": getattr(settings, "EMAIL_HOST", ""),
-            "mail_port": getattr(settings, "EMAIL_PORT", 587),
-            "mail_encryption": "tls" if getattr(settings, "EMAIL_USE_TLS", False) else "",
-            "mail_username": getattr(settings, "EMAIL_HOST_USER", ""),
-            "mail_password": "",
-            "mail_from_address": getattr(settings, "DEFAULT_FROM_EMAIL", ""),
-            "mail_from_name": "Bias",
-            "_customized": False,
+        mail_settings = get_mail_settings()
+        if not mail_settings["mail_password"]:
+            mail_settings["mail_password"] = getattr(settings, "EMAIL_HOST_PASSWORD", "")
+        return mail_settings
+
+    @staticmethod
+    def get_site_name() -> str:
+        forum_settings = get_setting_group("basic", BASIC_SETTINGS_DEFAULTS)
+        return str(forum_settings.get("forum_title") or BASIC_SETTINGS_DEFAULTS["forum_title"]).strip()
+
+    @staticmethod
+    def render_template(template: str, context: dict) -> str:
+        def replace(match):
+            key = match.group(1)
+            return str(context.get(key, ""))
+
+        return re.sub(r"{{\s*([a-zA-Z0-9_]+)\s*}}", replace, template)
+
+    @staticmethod
+    def build_mail_context(**extra) -> dict:
+        context = {
+            "site_name": EmailService.get_site_name(),
+            "site_url": getattr(settings, "FRONTEND_URL", "").rstrip("/"),
         }
+        context.update({key: value for key, value in extra.items() if value is not None})
+        return context
 
-        stored_settings = Setting.objects.filter(
-            key__in=[f"mail.{key}" for key in defaults.keys()]
-        )
-
-        defaults["_customized"] = stored_settings.exists()
-
-        for setting in stored_settings:
-            key = setting.key.split(".", 1)[1]
-            try:
-                defaults[key] = json.loads(setting.value)
-            except json.JSONDecodeError:
-                defaults[key] = setting.value
-
-        if not defaults["mail_password"]:
-            defaults["mail_password"] = getattr(settings, "EMAIL_HOST_PASSWORD", "")
-
-        return defaults
+    @staticmethod
+    def resolve_mail_template(mail_settings: dict, field: str, default_template: str, context: dict) -> str:
+        template = str(mail_settings.get(field) or "").strip()
+        if not template:
+            template = default_template
+        return EmailService.render_template(template, context)
 
     @staticmethod
     def build_from_email(from_address: str, from_name: str) -> str:
@@ -58,24 +71,22 @@ class EmailService:
     @staticmethod
     def build_connection():
         mail_settings = EmailService.get_runtime_mail_settings()
-        driver = mail_settings.get("mail_driver") or "smtp"
+        mail_settings["mail_driver"] = normalize_mail_driver(mail_settings.get("mail_driver"))
+        return get_connection(
+            backend=getattr(settings, "EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend"),
+            host=mail_settings.get("mail_host") or getattr(settings, "EMAIL_HOST", ""),
+            port=int(mail_settings.get("mail_port") or getattr(settings, "EMAIL_PORT", 587)),
+            username=mail_settings.get("mail_username") or getattr(settings, "EMAIL_HOST_USER", ""),
+            password=mail_settings.get("mail_password") or getattr(settings, "EMAIL_HOST_PASSWORD", ""),
+            use_tls=(mail_settings.get("mail_encryption") == "tls"),
+            use_ssl=(mail_settings.get("mail_encryption") == "ssl"),
+            fail_silently=False,
+        )
 
-        if not mail_settings.get("_customized"):
-            return get_connection(backend=getattr(settings, "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"))
-
-        if driver == "smtp":
-            return get_connection(
-                backend="django.core.mail.backends.smtp.EmailBackend",
-                host=mail_settings.get("mail_host") or getattr(settings, "EMAIL_HOST", ""),
-                port=int(mail_settings.get("mail_port") or getattr(settings, "EMAIL_PORT", 587)),
-                username=mail_settings.get("mail_username") or getattr(settings, "EMAIL_HOST_USER", ""),
-                password=mail_settings.get("mail_password") or getattr(settings, "EMAIL_HOST_PASSWORD", ""),
-                use_tls=(mail_settings.get("mail_encryption") == "tls"),
-                use_ssl=(mail_settings.get("mail_encryption") == "ssl"),
-                fail_silently=False,
-            )
-
-        return get_connection(backend=getattr(settings, "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"))
+    @staticmethod
+    def get_mail_format(mail_settings: dict) -> str:
+        mail_format = str(mail_settings.get("mail_format") or "multipart").strip().lower()
+        return mail_format if mail_format in {"multipart", "plain", "html"} else "multipart"
 
     @staticmethod
     def send_verification_email(user_email: str, username: str, token: str) -> bool:
@@ -90,65 +101,31 @@ class EmailService:
         Returns:
             bool: 是否发送成功
         """
-        subject = '验证您的邮箱 - Bias'
-
-        # 生成验证链接
         verification_url = f"{settings.FRONTEND_URL}/verify-email?token={token}"
-
-        # 纯文本内容
-        text_content = f"""
-        您好 {username}，
-
-        感谢您注册 Bias！
-
-        请点击以下链接验证您的邮箱：
-        {verification_url}
-
-        如果您没有注册 Bias 账号，请忽略此邮件。
-
-        此链接将在24小时后失效。
-
-        ---
-        Bias 团队
-        """
-
-        # HTML内容
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: #3498db; color: white; padding: 20px; text-align: center; }}
-                .content {{ padding: 20px; background: #f9f9f9; }}
-                .button {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 4px; margin: 20px 0; }}
-                .footer {{ padding: 20px; text-align: center; color: #666; font-size: 12px; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Bias</h1>
-                </div>
-                <div class="content">
-                    <h2>您好 {username}，</h2>
-                    <p>感谢您注册 Bias！</p>
-                    <p>请点击下方按钮验证您的邮箱：</p>
-                    <a href="{verification_url}" class="button">验证邮箱</a>
-                    <p>或复制以下链接到浏览器：</p>
-                    <p style="word-break: break-all; color: #666;">{verification_url}</p>
-                    <p>如果您没有注册 Bias 账号，请忽略此邮件。</p>
-                    <p style="color: #999; font-size: 14px;">此链接将在24小时后失效。</p>
-                </div>
-                <div class="footer">
-                    <p>Bias 团队</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+        mail_settings = EmailService.get_runtime_mail_settings()
+        context = EmailService.build_mail_context(
+            username=username,
+            verification_url=verification_url,
+            expires_in="24小时",
+        )
+        subject = EmailService.resolve_mail_template(
+            mail_settings,
+            "mail_verification_subject",
+            DEFAULT_VERIFICATION_SUBJECT,
+            context,
+        )
+        text_content = EmailService.resolve_mail_template(
+            mail_settings,
+            "mail_verification_text",
+            DEFAULT_VERIFICATION_TEXT,
+            context,
+        )
+        html_content = EmailService.resolve_mail_template(
+            mail_settings,
+            "mail_verification_html",
+            DEFAULT_VERIFICATION_HTML,
+            context,
+        )
 
         return EmailService._send_email(
             subject=subject,
@@ -170,68 +147,31 @@ class EmailService:
         Returns:
             bool: 是否发送成功
         """
-        subject = '重置您的密码 - Bias'
-
-        # 生成重置链接
         reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}"
-
-        # 纯文本内容
-        text_content = f"""
-        您好 {username}，
-
-        我们收到了重置您密码的请求。
-
-        请点击以下链接重置密码：
-        {reset_url}
-
-        如果您没有请求重置密码，请忽略此邮件，您的密码不会被更改。
-
-        此链接将在1小时后失效。
-
-        ---
-        Bias 团队
-        """
-
-        # HTML内容
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: #e74c3c; color: white; padding: 20px; text-align: center; }}
-                .content {{ padding: 20px; background: #f9f9f9; }}
-                .button {{ display: inline-block; padding: 12px 24px; background: #e74c3c; color: white; text-decoration: none; border-radius: 4px; margin: 20px 0; }}
-                .footer {{ padding: 20px; text-align: center; color: #666; font-size: 12px; }}
-                .warning {{ background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>Bias</h1>
-                </div>
-                <div class="content">
-                    <h2>您好 {username}，</h2>
-                    <p>我们收到了重置您密码的请求。</p>
-                    <p>请点击下方按钮重置密码：</p>
-                    <a href="{reset_url}" class="button">重置密码</a>
-                    <p>或复制以下链接到浏览器：</p>
-                    <p style="word-break: break-all; color: #666;">{reset_url}</p>
-                    <div class="warning">
-                        <strong>注意：</strong>如果您没有请求重置密码，请忽略此邮件，您的密码不会被更改。
-                    </div>
-                    <p style="color: #999; font-size: 14px;">此链接将在1小时后失效。</p>
-                </div>
-                <div class="footer">
-                    <p>Bias 团队</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+        mail_settings = EmailService.get_runtime_mail_settings()
+        context = EmailService.build_mail_context(
+            username=username,
+            reset_url=reset_url,
+            expires_in="1小时",
+        )
+        subject = EmailService.resolve_mail_template(
+            mail_settings,
+            "mail_password_reset_subject",
+            DEFAULT_PASSWORD_RESET_SUBJECT,
+            context,
+        )
+        text_content = EmailService.resolve_mail_template(
+            mail_settings,
+            "mail_password_reset_text",
+            DEFAULT_PASSWORD_RESET_TEXT,
+            context,
+        )
+        html_content = EmailService.resolve_mail_template(
+            mail_settings,
+            "mail_password_reset_html",
+            DEFAULT_PASSWORD_RESET_HTML,
+            context,
+        )
 
         return EmailService._send_email(
             subject=subject,
@@ -394,7 +334,11 @@ class EmailService:
         """
         try:
             mail_settings = EmailService.get_runtime_mail_settings()
+            if not can_mail_driver_send(mail_settings):
+                logger.warning("邮件发送被跳过，当前邮件驱动不可发送")
+                return False
             connection = EmailService.build_connection()
+            mail_format = EmailService.get_mail_format(mail_settings)
 
             if from_email is None:
                 from_email = EmailService.build_from_email(
@@ -411,8 +355,11 @@ class EmailService:
                 connection=connection,
             )
 
-            # 添加HTML内容
-            email.attach_alternative(html_content, "text/html")
+            if mail_format == "html":
+                email.body = html_content
+                email.content_subtype = "html"
+            elif mail_format == "multipart":
+                email.attach_alternative(html_content, "text/html")
 
             # 发送邮件
             email.send()
@@ -427,10 +374,13 @@ class EmailService:
     @staticmethod
     def send_test_email(to_email: str) -> int:
         mail_settings = EmailService.get_runtime_mail_settings()
+        if not can_mail_driver_send(mail_settings):
+            raise ValueError("当前邮件配置不可发送，请先完成邮件设置")
         from_email = EmailService.build_from_email(
             mail_settings.get("mail_from_address") or settings.DEFAULT_FROM_EMAIL,
             mail_settings.get("mail_from_name") or "",
         )
+        mail_format = EmailService.get_mail_format(mail_settings)
 
         email = EmailMultiAlternatives(
             subject="Bias 测试邮件",
@@ -439,4 +389,9 @@ class EmailService:
             to=[to_email],
             connection=EmailService.build_connection(),
         )
+        if mail_format == "html":
+            email.body = "<p>如果你收到这封邮件，说明 Bias 的邮件发送链路可用。</p>"
+            email.content_subtype = "html"
+        elif mail_format == "multipart":
+            email.attach_alternative("<p>如果你收到这封邮件，说明 Bias 的邮件发送链路可用。</p>", "text/html")
         return email.send()

@@ -5,7 +5,24 @@ import json
 
 from django.conf import settings
 from django.core.cache import cache
+from django.db import OperationalError, ProgrammingError
 
+from apps.core.bootstrap_config import (
+    _is_test_process,
+    get_site_config_path,
+    load_site_bootstrap,
+    read_site_config,
+    write_site_config,
+)
+from apps.core.mail_drivers import serialize_mail_settings
+from apps.core.mail_templates import (
+    DEFAULT_PASSWORD_RESET_HTML,
+    DEFAULT_PASSWORD_RESET_SUBJECT,
+    DEFAULT_PASSWORD_RESET_TEXT,
+    DEFAULT_VERIFICATION_HTML,
+    DEFAULT_VERIFICATION_SUBJECT,
+    DEFAULT_VERIFICATION_TEXT,
+)
 from apps.core.models import Setting
 
 
@@ -36,15 +53,18 @@ APPEARANCE_SETTINGS_DEFAULTS = {
     "custom_header": "",
 }
 
-MAIL_SETTINGS_DEFAULTS = {
+MAIL_SETTINGS_STATIC_DEFAULTS = {
     "mail_driver": "smtp",
-    "mail_host": getattr(settings, "EMAIL_HOST", ""),
-    "mail_port": getattr(settings, "EMAIL_PORT", 587),
-    "mail_encryption": "tls" if getattr(settings, "EMAIL_USE_TLS", False) else "",
-    "mail_username": getattr(settings, "EMAIL_HOST_USER", ""),
+    "mail_format": "multipart",
     "mail_password": "",
-    "mail_from_address": getattr(settings, "DEFAULT_FROM_EMAIL", ""),
     "mail_from_name": "Bias",
+    "mail_test_recipient": "",
+    "mail_verification_subject": DEFAULT_VERIFICATION_SUBJECT,
+    "mail_verification_text": DEFAULT_VERIFICATION_TEXT,
+    "mail_verification_html": DEFAULT_VERIFICATION_HTML,
+    "mail_password_reset_subject": DEFAULT_PASSWORD_RESET_SUBJECT,
+    "mail_password_reset_text": DEFAULT_PASSWORD_RESET_TEXT,
+    "mail_password_reset_html": DEFAULT_PASSWORD_RESET_HTML,
 }
 
 ADVANCED_SETTINGS_DEFAULTS = {
@@ -97,18 +117,91 @@ ADVANCED_SETTINGS_DEFAULTS = {
 
 def get_setting_group(prefix: str, defaults: dict) -> dict:
     values = defaults.copy()
-    stored_settings = Setting.objects.filter(
-        key__in=[f"{prefix}.{key}" for key in defaults.keys()]
-    )
+    try:
+        stored_settings = Setting.objects.filter(
+            key__in=[f"{prefix}.{key}" for key in defaults.keys()]
+        )
+    except (OperationalError, ProgrammingError):
+        return values
 
-    for setting in stored_settings:
-        key = setting.key.split(".", 1)[1]
-        try:
-            values[key] = json.loads(setting.value)
-        except json.JSONDecodeError:
-            values[key] = setting.value
+    try:
+        for setting in stored_settings:
+            key = setting.key.split(".", 1)[1]
+            try:
+                values[key] = json.loads(setting.value)
+            except json.JSONDecodeError:
+                values[key] = setting.value
+    except (OperationalError, ProgrammingError):
+        return defaults.copy()
 
     return values
+
+
+def get_mail_settings_defaults() -> dict:
+    mail_defaults = MAIL_SETTINGS_STATIC_DEFAULTS.copy()
+
+    site_config = None
+    try:
+        config_path = get_site_config_path(settings.BASE_DIR)
+        if config_path.exists():
+            site_config = read_site_config(config_path)
+    except Exception:
+        site_config = None
+
+    if site_config is not None:
+        mail_defaults.update({
+            "mail_host": site_config.email_host or "smtp.gmail.com",
+            "mail_port": int(site_config.email_port or 587),
+            "mail_encryption": "tls" if site_config.email_use_tls else "",
+            "mail_username": site_config.email_host_user or "",
+            "mail_from_address": site_config.default_from_email or "",
+        })
+    else:
+        mail_defaults.update({
+            "mail_host": getattr(settings, "EMAIL_HOST", "smtp.gmail.com") or "smtp.gmail.com",
+            "mail_port": getattr(settings, "EMAIL_PORT", 587) or 587,
+            "mail_encryption": (
+                "ssl"
+                if getattr(settings, "EMAIL_USE_SSL", False)
+                else "tls"
+            ),
+            "mail_username": getattr(settings, "EMAIL_HOST_USER", ""),
+            "mail_from_address": getattr(settings, "DEFAULT_FROM_EMAIL", ""),
+        })
+
+    return mail_defaults
+
+
+def get_mail_settings() -> dict:
+    return serialize_mail_settings(get_setting_group("mail", get_mail_settings_defaults()))
+
+
+def sync_mail_settings_to_site_config(mail_settings: dict) -> str | None:
+    config_path = get_site_config_path(settings.BASE_DIR)
+    if config_path.exists():
+        site_config = read_site_config(config_path)
+    else:
+        if _is_test_process():
+            return None
+        site_config = load_site_bootstrap(settings.BASE_DIR)
+
+    encryption = str(mail_settings.get("mail_encryption") or "").strip().lower()
+
+    site_config.email_backend = "django.core.mail.backends.smtp.EmailBackend"
+    site_config.email_host = str(mail_settings.get("mail_host") or site_config.email_host or "smtp.gmail.com").strip()
+    try:
+        site_config.email_port = int(mail_settings.get("mail_port") or site_config.email_port or 587)
+    except (TypeError, ValueError):
+        site_config.email_port = 587
+    site_config.email_use_tls = encryption == "tls"
+    site_config.email_host_user = str(mail_settings.get("mail_username") or "").strip()
+    site_config.email_host_password = str(mail_settings.get("mail_password") or "").strip()
+    site_config.default_from_email = str(
+        mail_settings.get("mail_from_address") or site_config.default_from_email or ""
+    ).strip()
+
+    write_site_config(config_path, site_config)
+    return str(config_path)
 
 
 def clear_runtime_setting_caches():

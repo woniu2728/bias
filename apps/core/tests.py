@@ -11,15 +11,16 @@ from django.contrib.auth.models import AnonymousUser
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command, CommandError
+from django.db import OperationalError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from ninja_jwt.tokens import RefreshToken
 from unittest.mock import patch
 
-from apps.core.bootstrap_config import read_site_config
+from apps.core.bootstrap_config import load_site_bootstrap, read_site_config
 from apps.core.models import Setting
 from apps.core.file_service import FileUploadService
-from apps.core.settings_service import clear_runtime_setting_caches
+from apps.core.settings_service import clear_runtime_setting_caches, get_setting_group
 from apps.core.services import SearchService
 from apps.core.websocket_auth import get_user_from_token
 from apps.discussions.services import DiscussionService
@@ -352,9 +353,8 @@ class AdminSettingsApiTests(TestCase):
         response = self.client.post(
             "/api/admin/mail",
             data=json.dumps({
-                "mail_driver": "sendmail",
-                "mail_from_address": "service@example.com",
-                "mail_from_name": "Bias Mailer",
+                "mail_driver": "smtp",
+                "mail_from": "Bias Mailer <service@example.com>",
             }),
             content_type="application/json",
             **self.auth_header(),
@@ -369,7 +369,145 @@ class AdminSettingsApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(response.json()["to_email"], "admin@example.com")
+        self.assertEqual(mail.outbox[0].to, ["admin@example.com"])
         self.assertEqual(mail.outbox[0].from_email, "Bias Mailer <service@example.com>")
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_mail_test_endpoint_sends_to_current_admin_email(self):
+        response = self.client.post(
+            "/api/admin/mail",
+            data=json.dumps({
+                "mail_from": "Bias Mailer <service@example.com>",
+                "mail_driver": "smtp",
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+
+        response = self.client.post(
+            "/api/admin/mail/test",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["to_email"], "admin@example.com")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["admin@example.com"])
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_mail_test_endpoint_accepts_custom_recipient(self):
+        response = self.client.post(
+            "/api/admin/mail",
+            data=json.dumps({
+                "mail_from": "Bias Mailer <service@example.com>",
+                "mail_driver": "smtp",
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+
+        response = self.client.post(
+            "/api/admin/mail/test",
+            data=json.dumps({"to_email": "real-recipient@example.com"}),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["to_email"], "real-recipient@example.com")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["real-recipient@example.com"])
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_mail_test_endpoint_uses_saved_test_recipient(self):
+        response = self.client.post(
+            "/api/admin/mail",
+            data=json.dumps({
+                "mail_from": "Bias Mailer <service@example.com>",
+                "mail_driver": "smtp",
+                "mail_test_recipient": "saved-recipient@example.com",
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+
+        response = self.client.post(
+            "/api/admin/mail/test",
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["to_email"], "saved-recipient@example.com")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["saved-recipient@example.com"])
+
+    def test_mail_settings_persist_mail_from_and_saved_test_recipient(self):
+        response = self.client.post(
+            "/api/admin/mail",
+            data=json.dumps({
+                "mail_driver": "smtp",
+                "mail_from": "Bias Mailer <service@example.com>",
+                "mail_test_recipient": "saved-recipient@example.com",
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["settings"]["mail_from"], "Bias Mailer <service@example.com>")
+
+        response = self.client.get(
+            "/api/admin/mail",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["mail_from"], "Bias Mailer <service@example.com>")
+        self.assertEqual(response.json()["mail_test_recipient"], "saved-recipient@example.com")
+        self.assertEqual(response.json()["test_to_email"], "saved-recipient@example.com")
+
+    def test_mail_settings_expose_default_templates(self):
+        response = self.client.get(
+            "/api/admin/mail",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertIn("{{ site_name }}", payload["mail_verification_subject"])
+        self.assertIn("{{ verification_url }}", payload["mail_verification_text"])
+        self.assertIn("{{ reset_url }}", payload["mail_password_reset_html"])
+        self.assertTrue(payload["mail_from"])
+        self.assertEqual(list(payload["drivers"].keys()), ["smtp"])
+        self.assertEqual(payload["driver_options"], [{"value": "smtp", "label": "SMTP"}])
+        self.assertEqual(payload["mail_host"], "smtp.gmail.com")
+        self.assertEqual(payload["mail_encryption"], "tls")
+        self.assertIn("sending", payload)
+
+    def test_smtp_driver_requires_host_before_sending(self):
+        response = self.client.post(
+            "/api/admin/mail",
+            data=json.dumps({
+                "mail_from": "Bias Mailer <service@example.com>",
+                "mail_driver": "smtp",
+                "mail_host": "",
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertFalse(payload["sending"])
+        self.assertIn("mail_host", payload["errors"])
 
     def test_public_forum_settings_include_basic_and_appearance(self):
         Setting.objects.update_or_create(
@@ -1270,6 +1408,48 @@ class InstallForumCommandTests(TestCase):
             self.assertIn("旧数据库名", message)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+class BootstrapConfigFallbackTests(TestCase):
+    def test_load_site_bootstrap_prefers_database_env_when_site_config_missing(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with patch("apps.core.bootstrap_config._is_test_process", return_value=False):
+                with patch.dict(
+                    os.environ,
+                    {
+                        "DB_NAME": "bias",
+                        "DB_USER": "postgres",
+                        "DB_PASSWORD": "postgres",
+                        "DB_HOST": "db",
+                        "DB_PORT": "5432",
+                        "REDIS_HOST": "redis",
+                        "REDIS_PORT": "6379",
+                        "REDIS_DB": "0",
+                    },
+                    clear=False,
+                ):
+                    config = load_site_bootstrap(temp_dir)
+
+            self.assertTrue(config.installed)
+            self.assertEqual(config.source, "env")
+            self.assertEqual(config.database_mode, "postgres")
+            self.assertEqual(config.db_name, "bias")
+            self.assertEqual(config.db_user, "postgres")
+            self.assertEqual(config.db_host, "db")
+            self.assertTrue(config.use_redis)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+class SettingsServiceFallbackTests(TestCase):
+    def test_get_setting_group_returns_defaults_when_settings_table_is_unavailable(self):
+        defaults = {"log_queries": False, "maintenance_mode": False}
+
+        with patch("apps.core.settings_service.Setting.objects.filter", side_effect=OperationalError("no such table")):
+            values = get_setting_group("advanced", defaults)
+
+        self.assertEqual(values, defaults)
 
 
 class EnsureAdminCommandTests(TestCase):

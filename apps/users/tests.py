@@ -46,10 +46,6 @@ class PasswordResetApiTests(TestCase):
 
     def test_forgot_password_uses_runtime_mail_settings(self):
         Setting.objects.update_or_create(
-            key="mail.mail_driver",
-            defaults={"value": json.dumps("sendmail")},
-        )
-        Setting.objects.update_or_create(
             key="mail.mail_from_address",
             defaults={"value": json.dumps("reset@example.com")},
         )
@@ -67,6 +63,37 @@ class PasswordResetApiTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].from_email, "Reset Service <reset@example.com>")
+
+    def test_forgot_password_uses_runtime_mail_templates(self):
+        Setting.objects.update_or_create(
+            key="basic.forum_title",
+            defaults={"value": json.dumps("Bias 社区")},
+        )
+        Setting.objects.update_or_create(
+            key="mail.mail_password_reset_subject",
+            defaults={"value": json.dumps("重置 {{ site_name }} 密码")},
+        )
+        Setting.objects.update_or_create(
+            key="mail.mail_password_reset_text",
+            defaults={"value": json.dumps("你好 {{ username }}，请访问 {{ reset_url }}")},
+        )
+        Setting.objects.update_or_create(
+            key="mail.mail_password_reset_html",
+            defaults={"value": json.dumps("<p>{{ username }}</p><a href=\"{{ reset_url }}\">重置 {{ site_name }}</a>")},
+        )
+
+        response = self.client.post(
+            "/api/users/forgot-password",
+            data=json.dumps({"email": self.user.email}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].subject, "重置 Bias 社区 密码")
+        self.assertIn("你好 reset-user", mail.outbox[0].body)
+        self.assertIn("/reset-password?token=", mail.outbox[0].body)
+        self.assertIn("重置 Bias 社区", mail.outbox[0].alternatives[0][0])
 
 
 class AvatarUploadApiTests(TestCase):
@@ -333,6 +360,36 @@ class EmailVerificationApiTests(TestCase):
         self.assertEqual(EmailToken.objects.filter(user=self.user).count(), 1)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("/verify-email?token=", mail.outbox[0].body)
+
+    def test_resend_email_verification_uses_runtime_templates(self):
+        Setting.objects.update_or_create(
+            key="basic.forum_title",
+            defaults={"value": json.dumps("Bias 社区")},
+        )
+        Setting.objects.update_or_create(
+            key="mail.mail_verification_subject",
+            defaults={"value": json.dumps("验证 {{ site_name }} 邮箱")},
+        )
+        Setting.objects.update_or_create(
+            key="mail.mail_verification_text",
+            defaults={"value": json.dumps("你好 {{ username }}，请访问 {{ verification_url }}")},
+        )
+        Setting.objects.update_or_create(
+            key="mail.mail_verification_html",
+            defaults={"value": json.dumps("<p>{{ username }}</p><a href=\"{{ verification_url }}\">验证 {{ site_name }}</a>")},
+        )
+
+        response = self.client.post(
+            "/api/users/me/resend-email-verification",
+            HTTP_AUTHORIZATION=f"Bearer {self.token}",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].subject, "验证 Bias 社区 邮箱")
+        self.assertIn("你好 verify-user", mail.outbox[0].body)
+        self.assertIn("/verify-email?token=", mail.outbox[0].body)
+        self.assertIn("验证 Bias 社区", mail.outbox[0].alternatives[0][0])
 
     def test_resend_email_verification_rejects_confirmed_user(self):
         self.user.is_email_confirmed = True
