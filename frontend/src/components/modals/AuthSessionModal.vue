@@ -211,7 +211,7 @@
             返回登录
           </button>
 
-          <p class="AuthSessionFooter">
+          <p v-if="!forgotPasswordSuccess" class="AuthSessionFooter">
             <button
               type="button"
               class="AuthSessionLink"
