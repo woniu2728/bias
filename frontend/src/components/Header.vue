@@ -224,7 +224,11 @@
 
     <aside class="mobile-drawer" :class="{ 'is-open': showMobileDrawer }">
       <div class="mobile-drawer-header">
-        <div class="mobile-drawer-brand">
+        <router-link
+          to="/"
+          class="mobile-drawer-brand"
+          @click="closeMobileDrawer"
+        >
           <img
             v-if="forumStore.settings.logo_url"
             :src="forumStore.settings.logo_url"
@@ -232,7 +236,7 @@
             class="mobile-drawer-logo"
           />
           <span v-else>{{ forumStore.settings.forum_title }}</span>
-        </div>
+        </router-link>
         <button
           type="button"
           class="mobile-drawer-close"
@@ -976,6 +980,11 @@ onBeforeUnmount(() => {
   color: #31465d;
   font-size: 18px;
   font-weight: 700;
+  text-decoration: none;
+}
+
+.mobile-drawer-brand:hover {
+  text-decoration: none;
 }
 
 .mobile-drawer-logo {
