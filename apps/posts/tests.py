@@ -21,6 +21,7 @@ class PostPaginationTests(TestCase):
             username="poster",
             email="poster@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
 
     def test_get_page_for_near_post(self):
@@ -104,6 +105,7 @@ class PostFlagApiTests(TestCase):
             username="author",
             email="author@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.admin = User.objects.create_superuser(
             username="flag-admin",
@@ -114,6 +116,7 @@ class PostFlagApiTests(TestCase):
             username="reporter",
             email="reporter@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.discussion = DiscussionService.create_discussion(
             title="Flag discussion",
@@ -246,6 +249,20 @@ class PostFlagApiTests(TestCase):
         self.assertEqual(response.status_code, 403, response.content)
         self.assertIn("封禁期间不可互动", response.json()["error"])
 
+    def test_unverified_user_cannot_reply(self):
+        self.reporter.is_email_confirmed = False
+        self.reporter.save(update_fields=["is_email_confirmed"])
+
+        response = self.client.post(
+            f"/api/discussions/{self.discussion.id}/posts",
+            data='{"content":"尝试回复"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(response.json()["error"], "请先完成邮箱验证后再回复讨论")
+
     def test_post_can_enter_approval_queue(self):
         trusted_group = Group.objects.create(name="Trusted", color="#4d698e")
         Permission.objects.create(group=trusted_group, permission="replyWithoutApproval")
@@ -308,6 +325,7 @@ class PostFlagApiTests(TestCase):
             username="reader-posts",
             email="reader-posts@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         token = RefreshToken.for_user(reader).access_token
 
@@ -354,6 +372,7 @@ class PostFlagApiTests(TestCase):
             username="reader-posts-pending",
             email="reader-posts-pending@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         token = RefreshToken.for_user(reader).access_token
         reader_detail_response = self.client.get(
@@ -394,6 +413,7 @@ class PostFlagApiTests(TestCase):
             username="reader-posts-visible",
             email="reader-posts-visible@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         token = RefreshToken.for_user(reader).access_token
 
@@ -448,11 +468,13 @@ class PostLikeTests(TestCase):
             username="like_author",
             email="like_author@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.liker = User.objects.create_user(
             username="like_user",
             email="like_user@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.discussion = DiscussionService.create_discussion(
             title="Like discussion",

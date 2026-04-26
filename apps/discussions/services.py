@@ -64,6 +64,7 @@ class DiscussionService:
             Discussion: 创建的讨论对象
         """
         UserService.ensure_not_suspended(user, "发布讨论")
+        UserService.ensure_email_confirmed(user, "发布讨论")
         requires_approval = UserService.requires_content_approval(user, "startDiscussionWithoutApproval")
         approval_status = Discussion.APPROVAL_PENDING if requires_approval else Discussion.APPROVAL_APPROVED
         approved_at = None if requires_approval else timezone.now()

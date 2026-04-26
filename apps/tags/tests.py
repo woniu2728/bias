@@ -13,6 +13,7 @@ class TagStatsTests(TestCase):
             username="tagger",
             email="tagger@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.tag = Tag.objects.create(
             name="生活",
@@ -60,6 +61,7 @@ class TagAccessApiTests(TestCase):
             username="member",
             email="member@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.admin = User.objects.create_superuser(
             username="tag-admin",

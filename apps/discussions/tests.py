@@ -21,11 +21,13 @@ class DiscussionApiTests(TestCase):
             username="author",
             email="author@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.reader = User.objects.create_user(
             username="reader",
             email="reader@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
 
     def auth_header(self, user):
@@ -224,6 +226,24 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(response.status_code, 403, response.content)
         self.assertIn("账号已被封禁", response.json()["error"])
         self.assertIn("封禁期间不可发帖", response.json()["error"])
+
+    def test_unverified_user_cannot_create_discussion(self):
+        self.author.is_email_confirmed = False
+        self.author.save(update_fields=["is_email_confirmed"])
+
+        response = self.client.post(
+            "/api/discussions/",
+            data=json.dumps({
+                "title": "Should fail",
+                "content": "Blocked until email verification",
+                "tag_ids": [],
+            }),
+            content_type="application/json",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(response.json()["error"], "请先完成邮箱验证后再发布讨论")
 
     def test_discussion_can_enter_approval_queue(self):
         trusted_group = Group.objects.create(name="Trusted", color="#4d698e")

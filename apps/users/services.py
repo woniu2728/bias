@@ -42,6 +42,20 @@ class UserService:
             raise PermissionDenied(UserService.build_suspension_notice(user, action_label))
 
     @staticmethod
+    def ensure_email_confirmed(user: User, action_label: str = ""):
+        """禁止未验证邮箱的普通用户执行需要实名邮箱的写操作"""
+        if not user or not user.is_authenticated:
+            return
+        if user.is_staff or user.is_superuser:
+            return
+        if user.is_email_confirmed:
+            return
+
+        if action_label:
+            raise PermissionDenied(f"请先完成邮箱验证后再{action_label}")
+        raise PermissionDenied("请先完成邮箱验证")
+
+    @staticmethod
     def has_forum_permission(user: User, permission_names) -> bool:
         if not user or not user.is_authenticated:
             return False

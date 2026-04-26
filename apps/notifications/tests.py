@@ -13,21 +13,25 @@ class NotificationServiceTests(TestCase):
             username="author",
             email="author@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.replier = User.objects.create_user(
             username="replier",
             email="replier@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.participant = User.objects.create_user(
             username="participant",
             email="participant@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.mentioned = User.objects.create_user(
             username="mentioned",
             email="mentioned@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
 
         self.discussion = DiscussionService.create_discussion(

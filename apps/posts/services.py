@@ -98,6 +98,7 @@ class PostService:
             ValueError: 讨论不存在或已锁定
         """
         UserService.ensure_not_suspended(user, "回复讨论")
+        UserService.ensure_email_confirmed(user, "回复讨论")
         requires_approval = UserService.requires_content_approval(user, "replyWithoutApproval")
 
         try:

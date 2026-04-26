@@ -43,6 +43,7 @@ class ChineseSearchTests(TestCase):
             username="searcher",
             email="searcher@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
 
     def auth_header(self, user=None):
@@ -100,6 +101,7 @@ class ChineseSearchTests(TestCase):
             email="search-keyword@example.com",
             password="password123",
             bio="搜索用户简介",
+            is_email_confirmed=True,
         )
 
         response = self.client.get("/api/search", {"q": "搜索", "type": "all"})
@@ -1807,11 +1809,13 @@ class AdminFlagManagementApiTests(TestCase):
             username="flag-author",
             email="flag-author@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.reporter = User.objects.create_user(
             username="flag-reporter",
             email="flag-reporter@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         discussion = DiscussionService.create_discussion(
             title="Flag target",
@@ -2095,17 +2099,20 @@ class AdminApprovalQueueApiTests(TestCase):
             username="approval-author",
             email="approval-author@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.author.user_groups.add(self.trusted_group)
         self.pending_author = User.objects.create_user(
             username="approval-pending-author",
             email="approval-pending-author@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
         self.replier = User.objects.create_user(
             username="approval-replier",
             email="approval-replier@example.com",
             password="password123",
+            is_email_confirmed=True,
         )
 
         self.pending_discussion = DiscussionService.create_discussion(
