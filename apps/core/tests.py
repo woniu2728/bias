@@ -107,7 +107,11 @@ class ChineseSearchTests(TestCase):
             is_email_confirmed=True,
         )
 
-        response = self.client.get("/api/search", {"q": "搜索", "type": "all"})
+        response = self.client.get(
+            "/api/search",
+            {"q": "搜索", "type": "all"},
+            **self.auth_header(),
+        )
 
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
@@ -153,7 +157,11 @@ class ChineseSearchTests(TestCase):
             is_email_confirmed=True,
         )
 
-        response = self.client.get("/api/search", {"q": unique_keyword, "type": "users"})
+        response = self.client.get(
+            "/api/search",
+            {"q": unique_keyword, "type": "users"},
+            **self.auth_header(),
+        )
 
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
@@ -162,6 +170,25 @@ class ChineseSearchTests(TestCase):
         self.assertEqual(payload["total"], 1)
         self.assertEqual(len(payload["users"]), 1)
         self.assertEqual(payload["users"][0]["username"], "isolated-user")
+
+    def test_search_api_users_type_requires_search_permission(self):
+        restricted_user = User.objects.create_user(
+            username="search-no-user-permission",
+            email="search-no-user-permission@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        restricted_group = Group.objects.create(name="NoUserSearch", color="#95a5a6")
+        restricted_user.user_groups.add(restricted_group)
+
+        response = self.client.get(
+            "/api/search",
+            {"q": "搜索", "type": "users"},
+            **self.auth_header(restricted_user),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(response.json()["error"], "没有权限搜索用户")
 
     def test_search_api_hides_discussions_in_staff_only_tags(self):
         admin = User.objects.create_superuser(
@@ -2354,6 +2381,7 @@ class AdminApprovalQueueApiTests(TestCase):
             name_plural="Trusted",
             color="#4d698e",
         )
+        Permission.objects.create(group=self.trusted_group, permission="startDiscussion")
         Permission.objects.create(group=self.trusted_group, permission="startDiscussionWithoutApproval")
         Permission.objects.create(group=self.trusted_group, permission="replyWithoutApproval")
 

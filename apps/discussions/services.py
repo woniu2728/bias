@@ -70,6 +70,7 @@ class DiscussionService:
         """
         UserService.ensure_not_suspended(user, "发布讨论")
         UserService.ensure_email_confirmed(user, "发布讨论")
+        UserService.ensure_forum_permission(user, "startDiscussion", "没有权限发起讨论")
         requires_approval = UserService.requires_content_approval(user, "startDiscussionWithoutApproval")
         approval_status = Discussion.APPROVAL_PENDING if requires_approval else Discussion.APPROVAL_APPROVED
         approved_at = None if requires_approval else timezone.now()
@@ -629,10 +630,10 @@ class DiscussionService:
             return False
         if user.is_suspended:
             return False
-        if user.is_staff or user.is_superuser:
+        if UserService.has_forum_permission(user, "discussion.edit"):
             return True
         if discussion.user_id == user.id:
-            return True
+            return UserService.has_forum_permission(user, "discussion.editOwn")
         return False
 
     @staticmethod
@@ -642,11 +643,10 @@ class DiscussionService:
             return False
         if user.is_suspended:
             return False
-        if discussion.approval_status == Discussion.APPROVAL_REJECTED and not user.is_staff:
-            return False
-        if user.is_staff or user.is_superuser:
+        if UserService.has_forum_permission(user, "discussion.delete"):
             return True
-        # 只有管理员可以删除讨论
+        if discussion.user_id == user.id:
+            return UserService.has_forum_permission(user, "discussion.deleteOwn")
         return False
 
     @staticmethod
@@ -655,6 +655,8 @@ class DiscussionService:
         if not user or not user.is_authenticated:
             return False
         if user.is_suspended:
+            return False
+        if not UserService.has_forum_permission(user, "discussion.reply"):
             return False
         if discussion.approval_status != Discussion.APPROVAL_APPROVED and not user.is_staff:
             return False

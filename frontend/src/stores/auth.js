@@ -8,6 +8,8 @@ export const useAuthStore = defineStore('auth', () => {
   const refreshToken = ref(localStorage.getItem('refresh_token'))
 
   const isAuthenticated = computed(() => !!accessToken.value)
+  const forumPermissions = computed(() => Array.isArray(user.value?.forum_permissions) ? user.value.forum_permissions : [])
+  const canStartDiscussion = computed(() => hasPermission('startDiscussion'))
 
   // 登录
   async function login(identification, password, humanVerificationToken = '') {
@@ -91,9 +93,18 @@ export const useAuthStore = defineStore('auth', () => {
     return null
   }
 
+  function hasPermission(permission) {
+    if (!isAuthenticated.value) return false
+    if (user.value?.is_staff) return true
+    return forumPermissions.value.includes(permission)
+  }
+
   return {
     user,
     isAuthenticated,
+    forumPermissions,
+    canStartDiscussion,
+    hasPermission,
     login,
     register,
     logout,

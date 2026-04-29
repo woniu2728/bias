@@ -128,6 +128,7 @@ class PostService:
         """
         UserService.ensure_not_suspended(user, "回复讨论")
         UserService.ensure_email_confirmed(user, "回复讨论")
+        UserService.ensure_forum_permission(user, "discussion.reply", "没有权限回复讨论")
         requires_approval = UserService.requires_content_approval(user, "replyWithoutApproval")
 
         try:
@@ -687,10 +688,10 @@ class PostService:
             return False
         if user.is_suspended:
             return False
-        if user.is_staff or user.is_superuser:
+        if UserService.has_forum_permission(user, "discussion.edit"):
             return True
         if post.user_id == user.id:
-            return True
+            return UserService.has_forum_permission(user, "discussion.editOwn")
         return False
 
     @staticmethod
@@ -700,11 +701,10 @@ class PostService:
             return False
         if user.is_suspended:
             return False
-        if user.is_staff or user.is_superuser:
+        if UserService.has_forum_permission(user, "discussion.delete"):
             return True
-        # 普通用户只能删除自己的帖子
         if post.user_id == user.id:
-            return True
+            return UserService.has_forum_permission(user, "discussion.deleteOwn")
         return False
 
     @staticmethod

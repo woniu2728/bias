@@ -12,7 +12,7 @@
           <span class="icon">💬</span>
           <span>浏览讨论</span>
         </router-link>
-        <button v-if="authStore.isAuthenticated" type="button" class="action-btn" @click="handleStartDiscussion">
+        <button v-if="authStore.canStartDiscussion" type="button" class="action-btn" @click="handleStartDiscussion">
           <span class="icon">✏️</span>
           <span>发起讨论</span>
         </button>
@@ -33,6 +33,7 @@ const authStore = useAuthStore()
 const composerStore = useComposerStore()
 
 function handleStartDiscussion() {
+  if (!authStore.canStartDiscussion) return
   composerStore.openDiscussionComposer({
     source: 'home'
   })

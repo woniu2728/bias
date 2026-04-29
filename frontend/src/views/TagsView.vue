@@ -3,6 +3,7 @@
     <div class="page-container">
       <aside class="tags-sidebar">
         <button
+          v-if="!authStore.isAuthenticated || authStore.canStartDiscussion"
           class="btn-start-discussion"
           @click="handleStartDiscussion"
         >
@@ -146,6 +147,7 @@ function handleStartDiscussion() {
     router.push('/login')
     return
   }
+  if (!authStore.canStartDiscussion) return
 
   composerStore.openDiscussionComposer({
     source: 'tags'

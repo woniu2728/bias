@@ -47,6 +47,13 @@ def _attach_primary_groups(users):
     return users
 
 
+def _attach_current_user_context(user):
+    user = _attach_primary_group(user)
+    if user:
+        user.forum_permissions = UserService.get_serialized_forum_permissions(user)
+    return user
+
+
 class AuthBearer(HttpBearer):
     """JWT认证"""
     def authenticate(self, request, token):
@@ -163,7 +170,7 @@ def reset_password(request, payload: PasswordResetSchema):
 @router.get("/me", response=CurrentUserSchema, auth=AuthBearer(), tags=["Users"])
 def get_current_user(request):
     """获取当前用户信息"""
-    return _attach_primary_group(request.auth)
+    return _attach_current_user_context(request.auth)
 
 
 @router.get("/me/preferences", response=UserPreferencesSchema, auth=AuthBearer(), tags=["Users"])
@@ -196,6 +203,14 @@ def update_preferences(request, payload: UserPreferencesSchema):
 @router.get("", response=List[UserOutSchema], tags=["Users"])
 def list_users(request, page: int = 1, limit: int = 20, q: str = None):
     """获取用户列表"""
+    user = _attach_current_user_context(request.auth) if getattr(request, "auth", None) else None
+
+    if q:
+        if not UserService.has_forum_permission(user, "searchUsers"):
+            return JsonResponse({"error": "没有权限搜索用户"}, status=403)
+    elif not UserService.has_forum_permission(user, "viewUserList"):
+        return JsonResponse({"error": "没有权限查看用户列表"}, status=403)
+
     queryset = User.objects.prefetch_related("user_groups").all()
 
     # 搜索

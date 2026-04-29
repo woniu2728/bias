@@ -23,6 +23,7 @@ from apps.core.markdown_service import MarkdownService
 from apps.core.runtime_state import get_runtime_status
 from apps.core.settings_service import get_public_forum_settings
 from apps.core.services import SearchService
+from apps.users.services import UserService
 
 router = Router()
 
@@ -148,10 +149,11 @@ def search(
 
     query = q.strip()
     user = get_optional_user(request)
-    totals = SearchService.get_search_totals(query, user=user)
+    can_search_users = bool(user and UserService.has_forum_permission(user, "searchUsers"))
+    totals = SearchService.get_search_totals(query, user=user, include_users=can_search_users)
 
     if type == 'all':
-        result = SearchService.search_all(query, page, limit, user=user)
+        result = SearchService.search_all(query, page, limit, user=user, include_users=can_search_users)
         return {
             **result,
             'discussions': [serialize_discussion_search_result(item) for item in result['discussions']],
@@ -193,6 +195,9 @@ def search(
         }
 
     elif type == 'users':
+        if not can_search_users:
+            return JsonResponse({"error": "没有权限搜索用户"}, status=403)
+
         users, total = SearchService.search_users(query, page, limit)
 
         return {

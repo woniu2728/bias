@@ -4,6 +4,7 @@
       <aside class="index-nav">
         <div class="index-nav-header">
           <button
+            v-if="!authStore.isAuthenticated || authStore.canStartDiscussion"
             class="btn-start-discussion"
             :class="{ 'btn-start-discussion--tag': Boolean(currentTag?.color) }"
             :style="startDiscussionButtonStyle"
@@ -467,6 +468,7 @@ function handleStartDiscussion() {
     router.push('/login')
     return
   }
+  if (!authStore.canStartDiscussion) return
 
   composerStore.openDiscussionComposer({
     tagId: currentTag.value?.id,

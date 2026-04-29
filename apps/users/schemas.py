@@ -109,6 +109,7 @@ class CurrentUserSchema(UserDetailSchema):
     suspended_until: Optional[datetime] = None
     suspend_reason: str = ""
     suspend_message: str = ""
+    forum_permissions: List[str] = []
 
 
 class UserPreferencesSchema(Schema):

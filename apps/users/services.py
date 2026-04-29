@@ -18,6 +18,36 @@ from apps.core.email_service import EmailService
 class UserService:
     """用户服务类"""
 
+    DEFAULT_MEMBER_FORUM_PERMISSIONS = {
+        "viewForum",
+        "viewUserList",
+        "searchUsers",
+        "startDiscussion",
+        "discussion.reply",
+        "discussion.editOwn",
+        "discussion.deleteOwn",
+    }
+
+    STAFF_FORUM_PERMISSIONS = {
+        "viewForum",
+        "viewUserList",
+        "searchUsers",
+        "startDiscussion",
+        "startDiscussionWithoutApproval",
+        "discussion.reply",
+        "replyWithoutApproval",
+        "discussion.editOwn",
+        "discussion.deleteOwn",
+        "discussion.edit",
+        "discussion.delete",
+        "discussion.hide",
+        "discussion.rename",
+        "discussion.lock",
+        "discussion.sticky",
+        "user.edit",
+        "user.suspend",
+    }
+
     @staticmethod
     def build_suspension_notice(user: User, action_label: str = "") -> str:
         """构建封禁提示语"""
@@ -56,19 +86,54 @@ class UserService:
         raise PermissionDenied("请先完成邮箱验证")
 
     @staticmethod
+    def get_forum_permission_set(user: User):
+        if not user or not user.is_authenticated:
+            return set()
+
+        cached_permissions = getattr(user, "_forum_permission_cache", None)
+        if cached_permissions is not None:
+            return cached_permissions
+
+        if user.is_staff or user.is_superuser:
+            permissions = set(UserService.STAFF_FORUM_PERMISSIONS)
+            user._forum_permission_cache = permissions
+            return permissions
+
+        prefetched_groups = getattr(user, "_prefetched_objects_cache", {}).get("user_groups")
+        if prefetched_groups is not None:
+            group_ids = [group.id for group in prefetched_groups]
+        else:
+            group_ids = list(user.user_groups.values_list("id", flat=True))
+
+        if not group_ids:
+            permissions = set(UserService.DEFAULT_MEMBER_FORUM_PERMISSIONS)
+        else:
+            permissions = set(
+                Permission.objects.filter(group_id__in=group_ids).values_list("permission", flat=True)
+            )
+
+        user._forum_permission_cache = permissions
+        return permissions
+
+    @staticmethod
+    def get_serialized_forum_permissions(user: User):
+        return sorted(UserService.get_forum_permission_set(user))
+
+    @staticmethod
     def has_forum_permission(user: User, permission_names) -> bool:
         if not user or not user.is_authenticated:
             return False
-        if user.is_staff or user.is_superuser:
-            return True
 
         if isinstance(permission_names, str):
             permission_names = [permission_names]
 
-        return Permission.objects.filter(
-            group__users=user,
-            permission__in=permission_names,
-        ).exists()
+        permissions = UserService.get_forum_permission_set(user)
+        return any(permission in permissions for permission in permission_names)
+
+    @staticmethod
+    def ensure_forum_permission(user: User, permission_names, message: str):
+        if not UserService.has_forum_permission(user, permission_names):
+            raise PermissionDenied(message)
 
     @staticmethod
     def requires_content_approval(user: User, bypass_permission: str) -> bool:

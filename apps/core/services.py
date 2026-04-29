@@ -70,10 +70,10 @@ class SearchService:
         )
 
     @staticmethod
-    def get_search_totals(query: str, user=None) -> Dict[str, int]:
+    def get_search_totals(query: str, user=None, include_users: bool = True) -> Dict[str, int]:
         discussion_total = SearchService._discussion_queryset(query, user=user).count()
         post_total = SearchService._post_queryset(query, user=user).count()
-        user_total = SearchService._user_queryset(query).count()
+        user_total = SearchService._user_queryset(query).count() if include_users else 0
         return {
             "discussion_total": discussion_total,
             "post_total": post_total,
@@ -87,6 +87,7 @@ class SearchService:
         page: int = 1,
         limit: int = 20,
         user=None,
+        include_users: bool = True,
     ) -> Dict:
         """
         全局搜索
@@ -101,7 +102,7 @@ class SearchService:
         """
         discussion_queryset = SearchService._discussion_queryset(query, user=user)
         post_queryset = SearchService._post_queryset(query, user=user)
-        totals = SearchService.get_search_totals(query, user=user)
+        totals = SearchService.get_search_totals(query, user=user, include_users=include_users)
         discussion_total = totals["discussion_total"]
         post_total = totals["post_total"]
         user_total = totals["user_total"]
@@ -123,7 +124,7 @@ class SearchService:
         )
 
         # 搜索用户
-        users = SearchService._search_users(query, limit=min(limit, 5))
+        users = SearchService._search_users(query, limit=min(limit, 5)) if include_users else []
 
         return {
             'total': totals["total"],

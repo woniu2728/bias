@@ -14,7 +14,7 @@ from ninja_jwt.tokens import RefreshToken
 from apps.core.models import Setting
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.users.models import Group
-from apps.users.models import EmailToken, PasswordToken, User
+from apps.users.models import EmailToken, PasswordToken, Permission, User
 
 
 @override_settings(
@@ -182,6 +182,70 @@ class UserProfileApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["primary_group"]["name"], "Support")
         self.assertEqual(payload["primary_group"]["icon"], "fas fa-life-ring")
+
+    def test_current_user_exposes_forum_permissions(self):
+        user = User.objects.create_user(
+            username="permission-profile",
+            email="permission-profile@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        group = Group.objects.create(name="PermissionGroup", color="#27ae60", icon="fas fa-key")
+        Permission.objects.create(group=group, permission="startDiscussion")
+        Permission.objects.create(group=group, permission="discussion.reply")
+        user.user_groups.add(group)
+        token = str(RefreshToken.for_user(user).access_token)
+
+        response = self.client.get(
+            "/api/users/me",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            set(response.json()["forum_permissions"]),
+            {"startDiscussion", "discussion.reply"},
+        )
+
+    def test_list_users_requires_view_user_list_permission(self):
+        user = User.objects.create_user(
+            username="no-user-list",
+            email="no-user-list@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        group = Group.objects.create(name="NoUserListPermission", color="#95a5a6")
+        user.user_groups.add(group)
+        token = str(RefreshToken.for_user(user).access_token)
+
+        response = self.client.get(
+            "/api/users",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(response.json()["error"], "没有权限查看用户列表")
+
+    def test_search_users_requires_search_users_permission(self):
+        user = User.objects.create_user(
+            username="no-user-search",
+            email="no-user-search@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        group = Group.objects.create(name="NoSearchUsersPermission", color="#95a5a6")
+        Permission.objects.create(group=group, permission="viewUserList")
+        user.user_groups.add(group)
+        token = str(RefreshToken.for_user(user).access_token)
+
+        response = self.client.get(
+            "/api/users",
+            {"q": "profile"},
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(response.json()["error"], "没有权限搜索用户")
 
 
 class SuspendedUserAuthTests(TestCase):

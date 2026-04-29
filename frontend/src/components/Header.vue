@@ -254,7 +254,7 @@
         </button>
 
         <button
-          v-if="authStore.isAuthenticated"
+          v-if="authStore.canStartDiscussion"
           type="button"
           class="mobile-drawer-compose"
           @click="startDiscussionFromDrawer"
@@ -436,7 +436,8 @@ const mobileRightActionType = computed(() => {
     return mobileHeaderOverride.value.rightAction
   }
 
-  return authStore.isAuthenticated ? 'compose-discussion' : 'login'
+  if (!authStore.isAuthenticated) return 'login'
+  return authStore.canStartDiscussion ? 'compose-discussion' : 'none'
 })
 const showMobileRightAction = computed(() => mobileRightActionType.value !== 'none')
 const mobileRightActionIcon = computed(() => {
@@ -628,6 +629,7 @@ function openNotificationsPage() {
 }
 
 function startDiscussionFromHeader() {
+  if (!authStore.canStartDiscussion) return
   composerStore.openDiscussionComposer({
     source: `header:${String(route.name || 'unknown')}`
   })

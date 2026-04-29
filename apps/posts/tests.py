@@ -129,13 +129,15 @@ class PostFlagApiTests(TestCase):
             user=self.author,
         )
 
-    def auth_header(self):
-        token = RefreshToken.for_user(self.reporter).access_token
+    def auth_header_for(self, user):
+        token = RefreshToken.for_user(user).access_token
         return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
+    def auth_header(self):
+        return self.auth_header_for(self.reporter)
+
     def admin_auth_header(self):
-        token = RefreshToken.for_user(self.admin).access_token
-        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+        return self.auth_header_for(self.admin)
 
     def test_report_post_creates_flag(self):
         response = self.client.post(
@@ -262,6 +264,20 @@ class PostFlagApiTests(TestCase):
 
         self.assertEqual(response.status_code, 403, response.content)
         self.assertEqual(response.json()["error"], "请先完成邮箱验证后再回复讨论")
+
+    def test_cannot_reply_without_discussion_reply_permission(self):
+        restricted_group = Group.objects.create(name="ReplyDisabledGroup", color="#95a5a6")
+        self.reporter.user_groups.add(restricted_group)
+
+        response = self.client.post(
+            f"/api/discussions/{self.discussion.id}/posts",
+            data='{"content":"尝试回复"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(response.json()["error"], "没有权限回复讨论")
 
     def test_delete_last_approved_reply_rebuilds_discussion_last_post_stats(self):
         trailing_reply = PostService.create_post(
@@ -518,6 +534,72 @@ class PostFlagApiTests(TestCase):
 
         self.assertEqual(response.status_code, 403, response.content)
         self.assertIn("没有权限", response.json()["error"])
+
+    def test_owner_without_edit_own_permission_cannot_edit_reply(self):
+        member_group = Group.objects.create(name="ReplyAuthorNoEdit", color="#4d698e")
+        Permission.objects.create(group=member_group, permission="discussion.reply")
+        self.reporter.user_groups.add(member_group)
+
+        reply = PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="需要权限才能编辑",
+            user=self.reporter,
+        )
+
+        response = self.client.patch(
+            f"/api/posts/{reply.id}",
+            data='{"content":"尝试修改"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(response.json()["error"], "没有权限编辑此帖子")
+
+    def test_owner_with_delete_own_permission_can_delete_reply(self):
+        member_group = Group.objects.create(name="ReplyAuthorDeleteOwn", color="#4d698e")
+        Permission.objects.create(group=member_group, permission="discussion.reply")
+        Permission.objects.create(group=member_group, permission="discussion.deleteOwn")
+        self.reporter.user_groups.add(member_group)
+
+        reply = PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="允许删除自己的回复",
+            user=self.reporter,
+        )
+
+        response = self.client.delete(
+            f"/api/posts/{reply.id}",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(Post.objects.filter(id=reply.id).exists())
+
+    def test_user_with_global_delete_permission_can_delete_others_reply(self):
+        moderator = User.objects.create_user(
+            username="reply-moderator",
+            email="reply-moderator@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        moderator_group = Group.objects.create(name="ReplyDeleteModerator", color="#4d698e")
+        Permission.objects.create(group=moderator_group, permission="discussion.delete")
+        moderator.user_groups.add(moderator_group)
+
+        reply = PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="会被全局删除权限用户删除",
+            user=self.author,
+        )
+
+        response = self.client.delete(
+            f"/api/posts/{reply.id}",
+            **self.auth_header_for(moderator),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(Post.objects.filter(id=reply.id).exists())
 
 
 class PostLikeTests(TestCase):

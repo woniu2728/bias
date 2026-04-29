@@ -245,6 +245,24 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(response.status_code, 403, response.content)
         self.assertEqual(response.json()["error"], "请先完成邮箱验证后再发布讨论")
 
+    def test_cannot_create_discussion_without_start_discussion_permission(self):
+        restricted_group = Group.objects.create(name="ReadOnlyDiscussionMember", color="#95a5a6")
+        self.author.user_groups.add(restricted_group)
+
+        response = self.client.post(
+            "/api/discussions/",
+            data=json.dumps({
+                "title": "Should fail",
+                "content": "Blocked by forum permission",
+                "tag_ids": [],
+            }),
+            content_type="application/json",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(response.json()["error"], "没有权限发起讨论")
+
     def test_discussion_can_enter_approval_queue(self):
         trusted_group = Group.objects.create(name="Trusted", color="#4d698e")
         Permission.objects.create(group=trusted_group, permission="startDiscussionWithoutApproval")
@@ -503,6 +521,74 @@ class DiscussionApiTests(TestCase):
 
         guest_detail = self.client.get(f"/api/discussions/{discussion.id}")
         self.assertEqual(guest_detail.status_code, 200, guest_detail.content)
+
+    def test_owner_without_edit_own_permission_cannot_edit_discussion(self):
+        member_group = Group.objects.create(name="DiscussionAuthorNoEdit", color="#4d698e")
+        Permission.objects.create(group=member_group, permission="startDiscussion")
+        self.author.user_groups.add(member_group)
+
+        discussion = DiscussionService.create_discussion(
+            title="Original title",
+            content="Original content",
+            user=self.author,
+        )
+
+        response = self.client.patch(
+            f"/api/discussions/{discussion.id}",
+            data=json.dumps({
+                "title": "Updated title",
+                "content": "Updated content",
+            }),
+            content_type="application/json",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(response.json()["error"], "没有权限编辑此讨论")
+
+    def test_owner_with_delete_own_permission_can_delete_discussion(self):
+        member_group = Group.objects.create(name="DiscussionAuthorDeleteOwn", color="#4d698e")
+        Permission.objects.create(group=member_group, permission="startDiscussion")
+        Permission.objects.create(group=member_group, permission="discussion.deleteOwn")
+        self.author.user_groups.add(member_group)
+
+        discussion = DiscussionService.create_discussion(
+            title="Delete own discussion",
+            content="Allowed by permission",
+            user=self.author,
+        )
+
+        response = self.client.delete(
+            f"/api/discussions/{discussion.id}",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(Discussion.objects.filter(id=discussion.id).exists())
+
+    def test_user_with_global_edit_permission_can_edit_others_discussion(self):
+        editor_group = Group.objects.create(name="DiscussionEditor", color="#4d698e")
+        Permission.objects.create(group=editor_group, permission="discussion.edit")
+        self.reader.user_groups.add(editor_group)
+
+        discussion = DiscussionService.create_discussion(
+            title="Original title",
+            content="Original content",
+            user=self.author,
+        )
+
+        response = self.client.patch(
+            f"/api/discussions/{discussion.id}",
+            data=json.dumps({
+                "title": "Edited by moderator",
+                "content": "Edited content",
+            }),
+            content_type="application/json",
+            **self.auth_header(self.reader),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["title"], "Edited by moderator")
 
     def test_delete_pending_discussion_does_not_decrement_author_discussion_count(self):
         admin = User.objects.create_superuser(

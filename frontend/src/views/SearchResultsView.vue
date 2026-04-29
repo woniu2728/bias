@@ -2,7 +2,11 @@
   <div class="search-page">
     <div class="search-container">
       <aside class="search-sidebar">
-        <button class="btn-start-discussion" @click="handleStartDiscussion">
+        <button
+          v-if="!authStore.isAuthenticated || authStore.canStartDiscussion"
+          class="btn-start-discussion"
+          @click="handleStartDiscussion"
+        >
           <i class="fas fa-edit"></i>
           发起讨论
         </button>
@@ -263,6 +267,7 @@ function handleStartDiscussion() {
     router.push('/login')
     return
   }
+  if (!authStore.canStartDiscussion) return
 
   composerStore.openDiscussionComposer({
     source: 'search'
