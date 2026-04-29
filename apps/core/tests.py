@@ -8,6 +8,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
+from django.core.cache import cache
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command, CommandError
@@ -20,6 +21,7 @@ from unittest.mock import patch
 from apps.core.bootstrap_config import load_site_bootstrap, read_site_config
 from apps.core.models import Setting
 from apps.core.file_service import FileUploadService
+from apps.core.online_service import OnlineUserService
 from apps.core.settings_service import clear_runtime_setting_caches, get_setting_group
 from apps.core.services import SearchService
 from apps.core.test_runner import BiasDiscoverRunner
@@ -336,6 +338,62 @@ class TestRunnerTests(TestCase):
 
         for label in labels:
             self.assertIn(label, discovered)
+
+
+@override_settings(CACHES={
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'bias-online-tests',
+    }
+})
+class OnlineUserServiceTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(
+            username="online-user",
+            email="online-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        self.other_user = User.objects.create_user(
+            username="online-other",
+            email="online-other@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+
+    def test_multiple_connections_only_go_offline_after_last_disconnect(self):
+        self.assertTrue(OnlineUserService.mark_user_online(self.user.id))
+        self.assertFalse(OnlineUserService.mark_user_online(self.user.id))
+        self.assertEqual(OnlineUserService.get_online_user_ids(), [self.user.id])
+
+        self.assertFalse(OnlineUserService.mark_user_offline(self.user.id))
+        self.assertEqual(OnlineUserService.get_online_user_ids(), [self.user.id])
+
+        self.assertTrue(OnlineUserService.mark_user_offline(self.user.id))
+        self.assertEqual(OnlineUserService.get_online_user_ids(), [])
+
+    def test_touch_extends_presence_ttl(self):
+        with patch.object(OnlineUserService, "_now_ts", return_value=100):
+            OnlineUserService.mark_user_online(self.user.id)
+
+        with patch.object(OnlineUserService, "_now_ts", return_value=150):
+            self.assertTrue(OnlineUserService.touch_user_online(self.user.id))
+
+        with patch.object(OnlineUserService, "_now_ts", return_value=200):
+            self.assertEqual(OnlineUserService.get_online_user_ids(), [self.user.id])
+
+        with patch.object(OnlineUserService, "_now_ts", return_value=241):
+            self.assertEqual(OnlineUserService.get_online_user_ids(), [])
+
+    def test_get_online_users_returns_only_marked_users(self):
+        OnlineUserService.mark_user_online(self.other_user.id)
+        OnlineUserService.mark_user_online(self.user.id)
+
+        users = OnlineUserService.get_online_users(limit=10)
+
+        self.assertEqual({item["id"] for item in users}, {self.user.id, self.other_user.id})
+        self.assertTrue(all("username" in item for item in users))
 
 
 class WebSocketJwtAuthTests(TestCase):

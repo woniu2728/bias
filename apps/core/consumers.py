@@ -7,6 +7,8 @@ from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from typing import Optional
 
+from apps.core.online_service import OnlineUserService
+
 
 class NotificationConsumer(AsyncWebsocketConsumer):
     """通知WebSocket消费者"""
@@ -104,16 +106,17 @@ class OnlineUsersConsumer(AsyncWebsocketConsumer):
 
         # 如果是认证用户，广播上线消息
         if not isinstance(self.user, AnonymousUser):
-            await self.set_user_online(True)
-            await self.channel_layer.group_send(
-                self.online_group_name,
-                {
-                    'type': 'user_status',
-                    'user_id': self.user.id,
-                    'username': self.user.username,
-                    'status': 'online'
-                }
-            )
+            became_online = await self.mark_user_online()
+            if became_online:
+                await self.channel_layer.group_send(
+                    self.online_group_name,
+                    {
+                        'type': 'user_status',
+                        'user_id': self.user.id,
+                        'username': self.user.username,
+                        'status': 'online'
+                    }
+                )
 
         # 发送当前在线用户列表
         online_users = await self.get_online_users()
@@ -126,16 +129,17 @@ class OnlineUsersConsumer(AsyncWebsocketConsumer):
         """断开连接时"""
         # 如果是认证用户，广播下线消息
         if not isinstance(self.user, AnonymousUser):
-            await self.set_user_online(False)
-            await self.channel_layer.group_send(
-                self.online_group_name,
-                {
-                    'type': 'user_status',
-                    'user_id': self.user.id,
-                    'username': self.user.username,
-                    'status': 'offline'
-                }
-            )
+            became_offline = await self.mark_user_offline()
+            if became_offline:
+                await self.channel_layer.group_send(
+                    self.online_group_name,
+                    {
+                        'type': 'user_status',
+                        'user_id': self.user.id,
+                        'username': self.user.username,
+                        'status': 'offline'
+                    }
+                )
 
         await self.channel_layer.group_discard(
             self.online_group_name,
@@ -150,6 +154,8 @@ class OnlineUsersConsumer(AsyncWebsocketConsumer):
 
             if message_type == 'ping':
                 # 心跳检测
+                if not isinstance(self.user, AnonymousUser):
+                    await self.touch_user_online()
                 await self.send(text_data=json.dumps({
                     'type': 'pong'
                 }))
@@ -167,36 +173,18 @@ class OnlineUsersConsumer(AsyncWebsocketConsumer):
         }))
 
     @database_sync_to_async
-    def set_user_online(self, is_online: bool):
-        """设置用户在线状态"""
-        from apps.users.models import User
-        from django.core.cache import cache
+    def mark_user_online(self):
+        return OnlineUserService.mark_user_online(self.user.id)
 
-        if is_online:
-            # 设置在线状态（缓存30分钟）
-            cache.set(f'user_online_{self.user.id}', True, 1800)
-        else:
-            # 移除在线状态
-            cache.delete(f'user_online_{self.user.id}')
+    @database_sync_to_async
+    def touch_user_online(self):
+        return OnlineUserService.touch_user_online(self.user.id)
+
+    @database_sync_to_async
+    def mark_user_offline(self):
+        return OnlineUserService.mark_user_offline(self.user.id)
 
     @database_sync_to_async
     def get_online_users(self):
         """获取在线用户列表"""
-        from django.core.cache import cache
-        from apps.users.models import User
-
-        online_users = []
-        # 这里简化处理，实际应该从缓存中获取所有在线用户
-        # 可以使用Redis的Set来存储在线用户ID
-        users = User.objects.filter(is_active=True)[:50]
-
-        for user in users:
-            if cache.get(f'user_online_{user.id}'):
-                online_users.append({
-                    'id': user.id,
-                    'username': user.username,
-                    'display_name': user.display_name,
-                    'avatar_url': user.avatar_url,
-                })
-
-        return online_users
+        return OnlineUserService.get_online_users(limit=50)
