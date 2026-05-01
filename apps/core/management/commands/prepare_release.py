@@ -8,6 +8,7 @@ from django.core.management.base import CommandParser
 
 from apps.core.release import (
     ensure_release_versions_aligned,
+    run_git_command,
     update_frontend_versions,
     validate_release_tag,
     validate_semver,
@@ -74,13 +75,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("[OK] 已同步 VERSION 与前端版本号"))
 
     def _ensure_clean_git_state(self) -> None:
-        result = subprocess.run(
-            ["git", "status", "--short"],
-            cwd=str(settings.BASE_DIR),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        result = run_git_command(settings.BASE_DIR, "status", "--short")
         output = result.stdout.strip()
         if output:
             raise CommandError("Git 工作区不干净，请先提交或 stash 改动；如需跳过请传 --allow-dirty")

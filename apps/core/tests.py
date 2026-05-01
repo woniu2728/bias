@@ -22,7 +22,7 @@ from apps.core.bootstrap_config import load_site_bootstrap, read_site_config
 from apps.core.models import Setting
 from apps.core.file_service import FileUploadService
 from apps.core.online_service import OnlineUserService
-from apps.core.release import ensure_release_versions_aligned
+from apps.core.release import build_git_command, ensure_release_versions_aligned
 from apps.core.settings_service import clear_runtime_setting_caches, get_setting_group
 from apps.core.services import SearchService
 from apps.core.test_runner import BiasDiscoverRunner
@@ -1972,9 +1972,14 @@ class ReleaseVersionControlTests(TestCase):
 
     @patch("apps.core.management.commands.prepare_release.subprocess.run")
     def test_prepare_release_syncs_version_and_frontend_package_files(self, mock_run):
-        mock_run.return_value = CompletedProcess(args=["git", "status", "--short"], returncode=0, stdout="", stderr="")
-
         temp_dir = make_workspace_temp_dir()
+        mock_run.return_value = CompletedProcess(
+            args=build_git_command(Path(temp_dir), "status", "--short"),
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+
         try:
             base_dir = Path(temp_dir)
             (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
@@ -2020,14 +2025,13 @@ class ReleaseVersionControlTests(TestCase):
 
     @patch("apps.core.management.commands.prepare_release.subprocess.run")
     def test_prepare_release_requires_clean_git_state_by_default(self, mock_run):
+        temp_dir = make_workspace_temp_dir()
         mock_run.return_value = CompletedProcess(
-            args=["git", "status", "--short"],
+            args=build_git_command(Path(temp_dir), "status", "--short"),
             returncode=0,
             stdout=" M README.md\n",
             stderr="",
         )
-
-        temp_dir = make_workspace_temp_dir()
         try:
             base_dir = Path(temp_dir)
             (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
@@ -2052,15 +2056,19 @@ class ReleaseVersionControlTests(TestCase):
 
     @patch("apps.core.management.commands.finalize_release.subprocess.run")
     def test_finalize_release_creates_git_tag_when_versions_match(self, mock_run):
-        mock_run.side_effect = [
-            CompletedProcess(args=["git", "status", "--short"], returncode=0, stdout="", stderr=""),
-            CompletedProcess(args=["git", "tag", "--list", "v1.2.3"], returncode=0, stdout="", stderr=""),
-            CompletedProcess(args=["git", "tag", "-a", "v1.2.3", "-m", "Release v1.2.3"], returncode=0, stdout="", stderr=""),
-        ]
-
         temp_dir = make_workspace_temp_dir()
+        base_dir = Path(temp_dir)
+        mock_run.side_effect = [
+            CompletedProcess(args=build_git_command(base_dir, "status", "--short"), returncode=0, stdout="", stderr=""),
+            CompletedProcess(args=build_git_command(base_dir, "tag", "--list", "v1.2.3"), returncode=0, stdout="", stderr=""),
+            CompletedProcess(
+                args=build_git_command(base_dir, "tag", "-a", "v1.2.3", "-m", "Release v1.2.3"),
+                returncode=0,
+                stdout="",
+                stderr="",
+            ),
+        ]
         try:
-            base_dir = Path(temp_dir)
             (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
             (base_dir / "VERSION").write_text("1.2.3\n", encoding="utf-8")
             (base_dir / "frontend" / "package.json").write_text(
@@ -2075,7 +2083,10 @@ class ReleaseVersionControlTests(TestCase):
             with override_settings(BASE_DIR=base_dir):
                 call_command("finalize_release", "--tag", "v1.2.3")
 
-            self.assertEqual(mock_run.call_args_list[2].args[0], ["git", "tag", "-a", "v1.2.3", "-m", "Release v1.2.3"])
+            self.assertEqual(
+                mock_run.call_args_list[2].args[0],
+                build_git_command(base_dir, "tag", "-a", "v1.2.3", "-m", "Release v1.2.3"),
+            )
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -2108,14 +2119,13 @@ class ReleaseVersionControlTests(TestCase):
 
     @patch("apps.core.management.commands.finalize_release.subprocess.run")
     def test_finalize_release_requires_clean_git_state_by_default(self, mock_run):
+        temp_dir = make_workspace_temp_dir()
         mock_run.return_value = CompletedProcess(
-            args=["git", "status", "--short"],
+            args=build_git_command(Path(temp_dir), "status", "--short"),
             returncode=0,
             stdout=" M VERSION\n",
             stderr="",
         )
-
-        temp_dir = make_workspace_temp_dir()
         try:
             base_dir = Path(temp_dir)
             (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
@@ -2140,14 +2150,18 @@ class ReleaseVersionControlTests(TestCase):
 
     @patch("apps.core.management.commands.finalize_release.subprocess.run")
     def test_finalize_release_rejects_existing_git_tag(self, mock_run):
-        mock_run.side_effect = [
-            CompletedProcess(args=["git", "status", "--short"], returncode=0, stdout="", stderr=""),
-            CompletedProcess(args=["git", "tag", "--list", "v1.2.3"], returncode=0, stdout="v1.2.3\n", stderr=""),
-        ]
-
         temp_dir = make_workspace_temp_dir()
+        base_dir = Path(temp_dir)
+        mock_run.side_effect = [
+            CompletedProcess(args=build_git_command(base_dir, "status", "--short"), returncode=0, stdout="", stderr=""),
+            CompletedProcess(
+                args=build_git_command(base_dir, "tag", "--list", "v1.2.3"),
+                returncode=0,
+                stdout="v1.2.3\n",
+                stderr="",
+            ),
+        ]
         try:
-            base_dir = Path(temp_dir)
             (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
             (base_dir / "VERSION").write_text("1.2.3\n", encoding="utf-8")
             (base_dir / "frontend" / "package.json").write_text(
@@ -2188,6 +2202,7 @@ class ReleaseVersionControlTests(TestCase):
     @patch("apps.core.management.commands.publish_release.subprocess.run")
     @patch("apps.core.management.commands.publish_release.call_command")
     def test_publish_release_commits_then_tags_and_pushes(self, mock_call_command, mock_subprocess_run):
+        base_dir = settings.BASE_DIR
         call_command(
             "publish_release",
             "--set-version",
@@ -2205,11 +2220,44 @@ class ReleaseVersionControlTests(TestCase):
         self.assertEqual(
             [call.args[0] for call in mock_subprocess_run.call_args_list],
             [
-                ["git", "add", "VERSION", "frontend/package.json", "frontend/package-lock.json"],
-                ["git", "commit", "-m", "发布 1.2.3"],
-                ["git", "push", "origin", "main", "--tags"],
+                build_git_command(base_dir, "add", "VERSION", "frontend/package.json", "frontend/package-lock.json"),
+                build_git_command(base_dir, "commit", "-m", "发布 1.2.3"),
+                build_git_command(base_dir, "push", "origin", "main", "--tags"),
             ],
         )
+
+    @patch("apps.core.management.commands.finalize_release.subprocess.run")
+    def test_finalize_release_uses_safe_directory_git_commands(self, mock_run):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            base_dir = Path(temp_dir)
+            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
+            (base_dir / "VERSION").write_text("1.2.3\n", encoding="utf-8")
+            (base_dir / "frontend" / "package.json").write_text(
+                json.dumps({"name": "bias-frontend", "version": "1.2.3"}) + "\n",
+                encoding="utf-8",
+            )
+            (base_dir / "frontend" / "package-lock.json").write_text(
+                json.dumps({"name": "bias-frontend", "version": "1.2.3", "packages": {"": {"version": "1.2.3"}}}) + "\n",
+                encoding="utf-8",
+            )
+            mock_run.side_effect = [
+                CompletedProcess(args=build_git_command(base_dir, "status", "--short"), returncode=0, stdout="", stderr=""),
+                CompletedProcess(args=build_git_command(base_dir, "tag", "--list", "v1.2.3"), returncode=0, stdout="", stderr=""),
+                CompletedProcess(args=build_git_command(base_dir, "tag", "-a", "v1.2.3", "-m", "Release v1.2.3"), returncode=0, stdout="", stderr=""),
+            ]
+
+            with override_settings(BASE_DIR=base_dir):
+                call_command("finalize_release", "--tag", "v1.2.3")
+
+            self.assertEqual(mock_run.call_args_list[0].args[0], build_git_command(base_dir, "status", "--short"))
+            self.assertEqual(mock_run.call_args_list[1].args[0], build_git_command(base_dir, "tag", "--list", "v1.2.3"))
+            self.assertEqual(
+                mock_run.call_args_list[2].args[0],
+                build_git_command(base_dir, "tag", "-a", "v1.2.3", "-m", "Release v1.2.3"),
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 class SystemStatusApiTests(TestCase):
     def test_system_status_endpoint_returns_ready_state(self):

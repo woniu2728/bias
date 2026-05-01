@@ -6,7 +6,12 @@ from django.conf import settings
 from django.core.management import BaseCommand, CommandError
 from django.core.management.base import CommandParser
 
-from apps.core.release import ensure_release_versions_aligned, validate_release_tag, version_from_tag
+from apps.core.release import (
+    ensure_release_versions_aligned,
+    run_git_command,
+    validate_release_tag,
+    version_from_tag,
+)
 
 
 class Command(BaseCommand):
@@ -49,33 +54,15 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("[DRY-RUN] 未创建 Git tag"))
             return
 
-        subprocess.run(
-            ["git", "tag", "-a", tag, "-m", message],
-            cwd=str(settings.BASE_DIR),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        run_git_command(settings.BASE_DIR, "tag", "-a", tag, "-m", message)
         self.stdout.write(self.style.SUCCESS(f"[OK] 已创建 Git tag: {tag}"))
 
     def _ensure_clean_git_state(self) -> None:
-        result = subprocess.run(
-            ["git", "status", "--short"],
-            cwd=str(settings.BASE_DIR),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        result = run_git_command(settings.BASE_DIR, "status", "--short")
         if result.stdout.strip():
             raise CommandError("Git 工作区不干净，请先提交或 stash 改动；如需跳过请传 --allow-dirty")
 
     def _ensure_tag_not_exists(self, tag: str) -> None:
-        result = subprocess.run(
-            ["git", "tag", "--list", tag],
-            cwd=str(settings.BASE_DIR),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        result = run_git_command(settings.BASE_DIR, "tag", "--list", tag)
         if result.stdout.strip():
             raise CommandError(f"Git tag 已存在: {tag}")

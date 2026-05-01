@@ -6,6 +6,8 @@ from django.conf import settings
 from django.core.management import BaseCommand, call_command
 from django.core.management.base import CommandParser
 
+from apps.core.release import run_git_command
+
 
 class Command(BaseCommand):
     help = "一键准备版本、提交发布 commit，并创建 Git tag。"
@@ -73,10 +75,4 @@ class Command(BaseCommand):
                 self.stdout.write("- 下一步请执行 git push origin main --tags")
 
     def _run_git_command(self, command: list[str]) -> None:
-        subprocess.run(
-            command,
-            cwd=str(settings.BASE_DIR),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        run_git_command(settings.BASE_DIR, *command[1:])

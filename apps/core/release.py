@@ -4,6 +4,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+import subprocess
 
 
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:[-+][0-9A-Za-z.-]+)?$")
@@ -26,6 +27,27 @@ def get_frontend_package_json_path(base_dir: Path) -> Path:
 
 def get_frontend_package_lock_path(base_dir: Path) -> Path:
     return base_dir / "frontend" / "package-lock.json"
+
+
+def build_git_command(base_dir: Path, *args: str) -> list[str]:
+    resolved_base_dir = str(base_dir.resolve())
+    return ["git", "-c", f"safe.directory={resolved_base_dir}", *args]
+
+
+def run_git_command(
+    base_dir: Path,
+    *args: str,
+    capture_output: bool = True,
+    text: bool = True,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        build_git_command(base_dir, *args),
+        cwd=str(base_dir),
+        capture_output=capture_output,
+        text=text,
+        check=check,
+    )
 
 
 def load_release_version_state(base_dir: Path) -> ReleaseVersionState:
