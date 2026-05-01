@@ -2,8 +2,10 @@
   <div class="notification-page">
     <ForumPageWithSidebar>
       <template #sidebar>
-        <ForumStartDiscussionButton
+        <DiscussionListSidebarStartButton
           v-if="!authStore.isAuthenticated || authStore.canStartDiscussion"
+          :current-tag="null"
+          :start-discussion-button-style="{}"
           @click="handleStartDiscussion"
         />
 
@@ -84,8 +86,8 @@ import ForumNotificationList from '@/components/forum/ForumNotificationList.vue'
 import ForumPagination from '@/components/forum/ForumPagination.vue'
 import ForumPageWithSidebar from '@/components/forum/ForumPageWithSidebar.vue'
 import ForumPrimaryNav from '@/components/forum/ForumPrimaryNav.vue'
-import ForumStartDiscussionButton from '@/components/forum/ForumStartDiscussionButton.vue'
 import ForumStateBlock from '@/components/forum/ForumStateBlock.vue'
+import DiscussionListSidebarStartButton from '@/components/discussion/DiscussionListSidebarStartButton.vue'
 import { useNotificationPage } from '@/composables/useNotificationPage'
 import { useComposerStore } from '@/stores/composer'
 import { useAuthStore } from '@/stores/auth'

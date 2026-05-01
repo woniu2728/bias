@@ -2,8 +2,10 @@
   <div class="tags-page">
     <ForumPageWithSidebar>
       <template #sidebar>
-        <ForumStartDiscussionButton
+        <DiscussionListSidebarStartButton
           v-if="!authStore.isAuthenticated || authStore.canStartDiscussion"
+          :current-tag="null"
+          :start-discussion-button-style="{}"
           @click="handleStartDiscussion"
         />
 
@@ -39,10 +41,10 @@ import { useRouter } from 'vue-router'
 import ForumHeroPanel from '@/components/forum/ForumHeroPanel.vue'
 import ForumPageWithSidebar from '@/components/forum/ForumPageWithSidebar.vue'
 import ForumPrimaryNav from '@/components/forum/ForumPrimaryNav.vue'
-import ForumStartDiscussionButton from '@/components/forum/ForumStartDiscussionButton.vue'
 import ForumStateBlock from '@/components/forum/ForumStateBlock.vue'
 import ForumTagCloud from '@/components/forum/ForumTagCloud.vue'
 import ForumTagTile from '@/components/forum/ForumTagTile.vue'
+import DiscussionListSidebarStartButton from '@/components/discussion/DiscussionListSidebarStartButton.vue'
 import { useStartDiscussionAction } from '@/composables/useStartDiscussionAction'
 import { useTagsPage } from '@/composables/useTagsPage'
 
