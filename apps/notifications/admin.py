@@ -41,13 +41,21 @@ class NotificationAdmin(admin.ModelAdmin):
     def mark_as_read(self, request, queryset):
         """批量标记为已读"""
         from django.utils import timezone
+        from apps.notifications.services import NotificationService
+
+        user_ids = list(queryset.values_list('user_id', flat=True).distinct())
         count = queryset.update(is_read=True, read_at=timezone.now())
+        NotificationService.invalidate_unread_counts(user_ids)
         self.message_user(request, f'成功标记 {count} 条通知为已读')
     mark_as_read.short_description = '标记为已读'
 
     def mark_as_unread(self, request, queryset):
         """批量标记为未读"""
+        from apps.notifications.services import NotificationService
+
+        user_ids = list(queryset.values_list('user_id', flat=True).distinct())
         count = queryset.update(is_read=False, read_at=None)
+        NotificationService.invalidate_unread_counts(user_ids)
         self.message_user(request, f'成功标记 {count} 条通知为未读')
     mark_as_unread.short_description = '标记为未读'
 

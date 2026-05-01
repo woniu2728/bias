@@ -8,6 +8,7 @@ from apps.core.models import Setting
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.discussions.services import DiscussionService
 from apps.notifications.models import Notification
+from apps.notifications.admin import NotificationAdmin
 from apps.notifications.services import NotificationService
 from apps.posts.services import PostService
 from apps.users.models import User
@@ -333,3 +334,54 @@ class NotificationServiceTests(TestCase):
         new_notification = Notification.objects.filter(user=self.author, is_read=False).latest("id")
         NotificationService.delete_notification(new_notification.id, self.author)
         self.assertEqual(NotificationService.get_unread_count(self.author), unread_before)
+
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "notification-signal-test"}})
+    def test_unread_count_cache_is_invalidated_by_model_signals(self):
+        cache.clear()
+        unread_before = Notification.objects.filter(user=self.author, is_read=False).count()
+
+        notification = Notification.objects.create(
+            user=self.author,
+            from_user=self.replier,
+            type="postLiked",
+            subject_type="post",
+            subject_id=self.initial_reply.id,
+            data={"post_id": self.initial_reply.id},
+        )
+        self.assertEqual(NotificationService.get_unread_count(self.author), unread_before + 1)
+
+        notification.is_read = True
+        notification.read_at = None
+        notification.save(update_fields=["is_read", "read_at"])
+        self.assertEqual(NotificationService.get_unread_count(self.author), unread_before)
+
+        notification.is_read = False
+        notification.save(update_fields=["is_read"])
+        self.assertEqual(NotificationService.get_unread_count(self.author), unread_before + 1)
+
+        notification.delete()
+        self.assertEqual(NotificationService.get_unread_count(self.author), unread_before)
+
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "notification-admin-test"}})
+    def test_admin_bulk_actions_invalidate_unread_count_cache(self):
+        cache.clear()
+        notification = Notification.objects.create(
+            user=self.author,
+            from_user=self.replier,
+            type="postLiked",
+            subject_type="post",
+            subject_id=self.initial_reply.id,
+            data={"post_id": self.initial_reply.id},
+        )
+        unread_before = Notification.objects.filter(user=self.author, is_read=False).exclude(id=notification.id).count()
+        self.assertEqual(NotificationService.get_unread_count(self.author), unread_before + 1)
+
+        admin = NotificationAdmin(Notification, None)
+        request = type("Request", (), {})()
+        admin.message_user = lambda *args, **kwargs: None
+
+        admin.mark_as_read(request, Notification.objects.filter(id=notification.id))
+        self.assertEqual(NotificationService.get_unread_count(self.author), unread_before)
+
+        admin.mark_as_unread(request, Notification.objects.filter(id=notification.id))
+        self.assertEqual(NotificationService.get_unread_count(self.author), unread_before + 1)
