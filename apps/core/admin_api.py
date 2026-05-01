@@ -365,6 +365,17 @@ def get_stats(request):
     }
 
 
+@router.post("/queue/metrics/reset", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def reset_queue_metrics(request):
+    """重置队列运行指标"""
+    metrics = QueueService.reset_metrics()
+    return {
+        "message": "队列运行指标已重置",
+        "metrics": metrics,
+    }
+
+
 # ==================== 设置管理 ====================
 
 @router.get("/settings", auth=AuthBearer(), tags=["Admin"])

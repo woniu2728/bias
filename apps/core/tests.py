@@ -1279,6 +1279,48 @@ class AdminDashboardStatsApiTests(TestCase):
         self.assertFalse(payload["queueWorkerAvailable"])
         self.assertFalse(payload["redisEnabled"])
 
+    @override_settings(
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "queue-reset-test"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
+        CELERY_BROKER_URL="memory://",
+    )
+    def test_admin_can_reset_queue_metrics(self):
+        from apps.core.queue_service import QueueService
+
+        class DummyTask:
+            name = "tests.reset_metric_task"
+
+            def delay(self):
+                raise AssertionError("queue should be disabled")
+
+        QueueService.reset_metrics()
+        QueueService.dispatch_celery_task(DummyTask(), fallback=lambda: "done")
+        self.assertEqual(QueueService.get_metrics()["sync_count"], 1)
+
+        response = self.client.post("/api/admin/queue/metrics/reset", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["message"], "队列运行指标已重置")
+        self.assertEqual(payload["metrics"]["sync_count"], 0)
+        self.assertEqual(payload["metrics"]["enqueued_count"], 0)
+        self.assertEqual(payload["metrics"]["fallback_count"], 0)
+
+    def test_non_staff_cannot_reset_queue_metrics(self):
+        member = User.objects.create_user(
+            username="queue-reset-member",
+            email="queue-reset-member@example.com",
+            password="password123",
+        )
+        token = RefreshToken.for_user(member).access_token
+
+        response = self.client.post(
+            "/api/admin/queue/metrics/reset",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+
 
 class QueueServiceTests(TestCase):
     def tearDown(self):

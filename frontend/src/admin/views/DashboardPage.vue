@@ -91,6 +91,24 @@
                 {{ stats.queueMetrics.last_error }}
               </span>
             </div>
+            <div class="QueueMetrics-actions">
+              <button
+                type="button"
+                class="QueueMetrics-reset"
+                :disabled="resettingQueueMetrics"
+                @click="resetQueueMetrics"
+              >
+                <i class="fas fa-redo-alt"></i>
+                <span>{{ resettingQueueMetrics ? '重置中...' : '重置指标' }}</span>
+              </button>
+              <span
+                v-if="queueMetricsMessage"
+                class="QueueMetrics-message"
+                :class="{ 'QueueMetrics-message--error': queueMetricsMessageTone === 'error' }"
+              >
+                {{ queueMetricsMessage }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -229,6 +247,9 @@ const stats = ref({
 })
 const loading = ref(true)
 const loadError = ref('')
+const resettingQueueMetrics = ref(false)
+const queueMetricsMessage = ref('')
+const queueMetricsMessageTone = ref('success')
 const queueWorkerBadgeClass = computed(() => {
   if (!stats.value.queueEnabled || ['disabled', 'sync'].includes(stats.value.queueWorkerStatus)) {
     return 'StatusBadge--neutral'
@@ -236,8 +257,9 @@ const queueWorkerBadgeClass = computed(() => {
   return stats.value.queueWorkerAvailable ? 'StatusBadge--success' : 'StatusBadge--warning'
 })
 
-onMounted(async () => {
+async function loadStats() {
   try {
+    loadError.value = ''
     const data = await api.get('/admin/stats')
     stats.value = data
   } catch (error) {
@@ -246,6 +268,35 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+}
+
+async function resetQueueMetrics() {
+  if (resettingQueueMetrics.value) {
+    return
+  }
+
+  resettingQueueMetrics.value = true
+  queueMetricsMessage.value = ''
+  queueMetricsMessageTone.value = 'success'
+
+  try {
+    const data = await api.post('/admin/queue/metrics/reset')
+    stats.value = {
+      ...stats.value,
+      queueMetrics: data.metrics || stats.value.queueMetrics
+    }
+    queueMetricsMessage.value = data.message || '队列运行指标已重置'
+  } catch (error) {
+    console.error('重置队列指标失败:', error)
+    queueMetricsMessageTone.value = 'error'
+    queueMetricsMessage.value = error.response?.data?.error || '重置失败，请稍后重试'
+  } finally {
+    resettingQueueMetrics.value = false
+  }
+}
+
+onMounted(async () => {
+  await loadStats()
 })
 </script>
 
@@ -391,7 +442,7 @@ onMounted(async () => {
 
 .QueueMetrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(110px, 0.5fr)) minmax(220px, 1.5fr);
+  grid-template-columns: repeat(3, minmax(110px, 0.5fr)) minmax(220px, 1.5fr) minmax(150px, 0.6fr);
   gap: 12px;
   margin-top: 20px;
   padding: 14px;
@@ -427,6 +478,43 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.QueueMetrics-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.QueueMetrics-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: var(--forum-radius-sm);
+  background: var(--forum-bg-elevated);
+  color: var(--forum-text-color);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.QueueMetrics-reset:hover:not(:disabled) {
+  border-color: var(--forum-border-strong);
+  background: #eef3f7;
+}
+
+.QueueMetrics-message {
+  color: var(--forum-success-color);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.QueueMetrics-message--error {
+  color: var(--forum-danger-color);
 }
 
 /* 统计小部件 */
