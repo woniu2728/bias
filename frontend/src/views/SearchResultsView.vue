@@ -2,16 +2,20 @@
   <div class="search-page">
     <ForumPageWithSidebar>
       <template #sidebar>
-        <ForumStartDiscussionButton
-          v-if="!authStore.isAuthenticated || authStore.canStartDiscussion"
-          @click="handleStartDiscussion"
-        />
+        <div class="search-sidebar-stack">
+          <DiscussionListSidebarStartButton
+            v-if="!authStore.isAuthenticated || authStore.canStartDiscussion"
+            :current-tag="null"
+            :start-discussion-button-style="{}"
+            @click="handleStartDiscussion"
+          />
 
-        <ForumSearchFilterNav
-          :items="filterItems"
-          :active-value="searchType"
-          @change="changeType"
-        />
+          <ForumSearchFilterNav
+            :items="filterItems"
+            :active-value="searchType"
+            @change="changeType"
+          />
+        </div>
       </template>
 
       <main class="search-content">
@@ -94,8 +98,8 @@ import ForumSearchFilterNav from '@/components/forum/ForumSearchFilterNav.vue'
 import ForumSearchPostSection from '@/components/forum/ForumSearchPostSection.vue'
 import ForumSearchStats from '@/components/forum/ForumSearchStats.vue'
 import ForumSearchUserSection from '@/components/forum/ForumSearchUserSection.vue'
-import ForumStartDiscussionButton from '@/components/forum/ForumStartDiscussionButton.vue'
 import ForumStateBlock from '@/components/forum/ForumStateBlock.vue'
+import DiscussionListSidebarStartButton from '@/components/discussion/DiscussionListSidebarStartButton.vue'
 import { useSearchResultsPage } from '@/composables/useSearchResultsPage'
 import { useStartDiscussionAction } from '@/composables/useStartDiscussionAction'
 import { formatRelativeTime } from '@/utils/forum'
@@ -156,6 +160,12 @@ function handleStartDiscussion() {
 
 .search-content {
   padding: 24px 28px 40px;
+}
+
+.search-sidebar-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 </style>

@@ -196,6 +196,10 @@
               <i class="fas fa-flag"></i>
               <span>处理举报</span>
             </router-link>
+            <router-link to="/admin/audit-logs" class="ActionsWidget-item">
+              <i class="fas fa-clipboard-list"></i>
+              <span>查看审计</span>
+            </router-link>
             <router-link to="/admin/appearance" class="ActionsWidget-item">
               <i class="fas fa-paint-brush"></i>
               <span>自定义外观</span>

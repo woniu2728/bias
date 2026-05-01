@@ -5,6 +5,7 @@ import PermissionsPage from './views/PermissionsPage.vue'
 import UsersPage from './views/UsersPage.vue'
 import FlagsPage from './views/FlagsPage.vue'
 import ApprovalQueuePage from './views/ApprovalQueuePage.vue'
+import AuditLogsPage from './views/AuditLogsPage.vue'
 import AppearancePage from './views/AppearancePage.vue'
 import TagsPage from './views/TagsPage.vue'
 import MailPage from './views/MailPage.vue'
@@ -49,6 +50,11 @@ const routes = [
     path: '/admin/approval',
     name: 'admin-approval',
     component: ApprovalQueuePage,
+  },
+  {
+    path: '/admin/audit-logs',
+    name: 'admin-audit-logs',
+    component: AuditLogsPage,
   },
   {
     path: '/admin/tags',

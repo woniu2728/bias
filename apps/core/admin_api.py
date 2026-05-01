@@ -43,6 +43,7 @@ from apps.core.settings_service import (
     save_setting_group,
     sync_mail_settings_to_site_config,
 )
+from apps.core.models import AuditLog
 from apps.users.models import User, Group, Permission
 from apps.discussions.models import Discussion
 from apps.discussions.services import DiscussionService
@@ -107,6 +108,50 @@ class AuthBearer(HttpBearer):
 
 def admin_error(message: str, status: int = 400):
     return JsonResponse({"error": message}, status=status)
+
+
+def get_client_ip(request) -> str:
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
+
+
+def log_admin_action(
+    request,
+    action: str,
+    target_type: str = "",
+    target_id: int = None,
+    data: Dict[str, Any] = None,
+):
+    """Record an admin operation without coupling callers to AuditLog fields."""
+    return AuditLog.objects.create(
+        user=request.auth if getattr(request, "auth", None) and request.auth.is_authenticated else None,
+        action=action,
+        target_type=target_type or "",
+        target_id=target_id,
+        ip_address=get_client_ip(request) or None,
+        user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        data=data or {},
+    )
+
+
+def serialize_audit_log(log: AuditLog) -> Dict[str, Any]:
+    return {
+        "id": log.id,
+        "action": log.action,
+        "target_type": log.target_type,
+        "target_id": log.target_id,
+        "ip_address": log.ip_address,
+        "user_agent": log.user_agent,
+        "data": log.data,
+        "created_at": log.created_at,
+        "user": {
+            "id": log.user.id,
+            "username": log.user.username,
+            "display_name": log.user.display_name,
+        } if log.user else None,
+    }
 
 
 def serialize_group(group: Group) -> Dict[str, Any]:
@@ -370,6 +415,7 @@ def get_stats(request):
 def reset_queue_metrics(request):
     """重置队列运行指标"""
     metrics = QueueService.reset_metrics()
+    log_admin_action(request, "admin.queue_metrics.reset", data={"metrics": metrics})
     return {
         "message": "队列运行指标已重置",
         "metrics": metrics,
@@ -390,6 +436,12 @@ def get_settings(request):
 def save_settings(request, payload: Dict[str, Any] = Body(...)):
     """保存论坛设置"""
     settings_data = save_setting_group("basic", BASIC_SETTINGS_DEFAULTS, payload)
+    log_admin_action(
+        request,
+        "admin.settings.update",
+        target_type="settings",
+        data={"group": "basic", "keys": sorted(payload.keys())},
+    )
     return {"message": "设置保存成功", "settings": settings_data}
 
 
@@ -405,6 +457,12 @@ def get_appearance_settings(request):
 def save_appearance_settings(request, payload: Dict[str, Any] = Body(...)):
     """保存外观设置"""
     settings_data = save_setting_group("appearance", APPEARANCE_SETTINGS_DEFAULTS, payload)
+    log_admin_action(
+        request,
+        "admin.settings.update",
+        target_type="settings",
+        data={"group": "appearance", "keys": sorted(payload.keys())},
+    )
     return {"message": "外观设置保存成功", "settings": settings_data}
 
 
@@ -424,6 +482,17 @@ def upload_appearance_asset(request, target: str):
     except ValueError as e:
         return admin_error(str(e), status=400)
 
+    log_admin_action(
+        request,
+        "admin.appearance_asset.upload",
+        target_type="appearance_asset",
+        data={
+            "target": target,
+            "original_name": file_info.get("original_name") or file.name,
+            "size": file_info.get("size") or file.size,
+            "mime_type": file_info.get("mime_type") or file.content_type,
+        },
+    )
     return {
         "target": target,
         "url": file_url,
@@ -468,6 +537,12 @@ def save_mail_settings(request, payload: Dict[str, Any] = Body(...)):
             f" 配置来源: {location}",
             status=500,
         )
+    log_admin_action(
+        request,
+        "admin.settings.update",
+        target_type="settings",
+        data={"group": "mail", "keys": sorted(normalized_payload.keys())},
+    )
     response["message"] = "邮件设置保存成功"
     response["settings"] = serialize_mail_settings(settings_data)
     return response
@@ -509,6 +584,12 @@ def send_test_email(request):
     except Exception as e:
         return admin_error(str(e), status=400)
 
+    log_admin_action(
+        request,
+        "admin.mail.test",
+        target_type="mail",
+        data={"to_email": to_email, "sent_count": sent_count},
+    )
     return {"message": "测试邮件已发送", "sent_count": sent_count, "to_email": to_email}
 
 
@@ -528,6 +609,12 @@ def save_advanced_settings(request, payload: Dict[str, Any] = Body(...)):
 
     settings_data = save_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS, runtime_payload)
     settings_data["debug_mode"] = get_runtime_advanced_settings()["debug_mode"]
+    log_admin_action(
+        request,
+        "admin.settings.update",
+        target_type="settings",
+        data={"group": "advanced", "keys": sorted(runtime_payload.keys())},
+    )
     return {"message": "高级设置保存成功", "settings": settings_data}
 
 
@@ -541,6 +628,7 @@ def clear_cache(request):
     except Exception as e:
         return admin_error(f"缓存清理失败: {e}", status=503)
 
+    log_admin_action(request, "admin.cache.clear", target_type="cache")
     return {"message": "缓存已清除"}
 
 
@@ -561,6 +649,13 @@ def create_group(request, payload: Dict[str, Any] = Body(...)):
     try:
         validated = validate_group_payload(payload)
         group = Group.objects.create(**validated)
+        log_admin_action(
+            request,
+            "admin.group.create",
+            target_type="group",
+            target_id=group.id,
+            data={"name": group.name, "is_hidden": group.is_hidden},
+        )
         return serialize_group(group)
     except ValueError as e:
         return admin_error(str(e), status=400)
@@ -581,6 +676,13 @@ def update_group(request, group_id: int, payload: Dict[str, Any] = Body(...)):
         setattr(group, field, value)
     group.save()
 
+    log_admin_action(
+        request,
+        "admin.group.update",
+        target_type="group",
+        target_id=group.id,
+        data={"name": group.name, "changed_fields": sorted(validated.keys())},
+    )
     return serialize_group(group)
 
 
@@ -593,7 +695,15 @@ def delete_group(request, group_id: int):
     if is_builtin_group(group):
         return admin_error("系统默认用户组不允许删除", status=400)
 
+    group_snapshot = {"name": group.name, "permission_count": group.permissions.count()}
     group.delete()
+    log_admin_action(
+        request,
+        "admin.group.delete",
+        target_type="group",
+        target_id=group_id,
+        data=group_snapshot,
+    )
     return {"message": "用户组删除成功"}
 
 
@@ -742,6 +852,15 @@ def save_permissions(request, payload: Dict[int, List[str]] = Body(...)):
                     permission=permission,
                 )
 
+    log_admin_action(
+        request,
+        "admin.permissions.update",
+        target_type="permissions",
+        data={
+            "group_ids": sorted(normalized_payload.keys()),
+            "permission_count": sum(len(entry["permissions"]) for entry in normalized_payload.values()),
+        },
+    )
     return {"message": "权限保存成功"}
 
 
@@ -786,6 +905,7 @@ def update_admin_user(request, user_id: int, payload: Dict[str, Any] = Body(...)
     """更新用户信息（管理后台）"""
     user = get_object_or_404(User.objects.prefetch_related("user_groups"), id=user_id)
     was_suspended = user.is_suspended
+    previous_group_ids = set(user.user_groups.values_list("id", flat=True))
 
     if user.id == request.auth.id and "is_staff" in payload and not payload.get("is_staff"):
         return admin_error("不能取消自己的管理员权限", status=400)
@@ -851,6 +971,19 @@ def update_admin_user(request, user_id: int, payload: Dict[str, Any] = Body(...)
         user.user_groups.set(groups)
 
     user.refresh_from_db()
+    next_group_ids = set(user.user_groups.values_list("id", flat=True))
+    log_admin_action(
+        request,
+        "admin.user.update",
+        target_type="user",
+        target_id=user.id,
+        data={
+            "username": user.username,
+            "changed_fields": sorted(payload.keys()),
+            "suspension_changed": touched_suspension_fields and was_suspended != user.is_suspended,
+            "groups_changed": groups is not None and previous_group_ids != next_group_ids,
+        },
+    )
     return serialize_admin_user(user, include_details=True)
 
 
@@ -866,7 +999,19 @@ def delete_admin_user(request, user_id: int):
     if user.is_staff and User.objects.filter(is_staff=True).exclude(id=user.id).count() == 0:
         return admin_error("至少需要保留一个管理员账号", status=400)
 
+    user_snapshot = {
+        "username": user.username,
+        "email": user.email,
+        "is_staff": user.is_staff,
+    }
     user.delete()
+    log_admin_action(
+        request,
+        "admin.user.delete",
+        target_type="user",
+        target_id=user_id,
+        data=user_snapshot,
+    )
     return {"message": "用户删除成功"}
 
 
@@ -924,11 +1069,25 @@ def approve_content(request, content_type: str, content_id: int, payload: Dict[s
     if content_type == "discussion":
         discussion = get_object_or_404(Discussion, id=content_id, approval_status=Discussion.APPROVAL_PENDING)
         approved = DiscussionService.approve_discussion(discussion, request.auth, note=note)
+        log_admin_action(
+            request,
+            "admin.approval.approve",
+            target_type="discussion",
+            target_id=approved.id,
+            data={"note": note, "title": approved.title},
+        )
         return serialize_approval_item("discussion", approved)
 
     if content_type == "post":
         post = get_object_or_404(Post.objects.select_related("discussion", "user"), id=content_id, approval_status=Post.APPROVAL_PENDING)
         approved = PostService.approve_post(post, request.auth, note=note)
+        log_admin_action(
+            request,
+            "admin.approval.approve",
+            target_type="post",
+            target_id=approved.id,
+            data={"note": note, "discussion_id": approved.discussion_id},
+        )
         return serialize_approval_item("post", approved)
 
     return admin_error("无效的审核内容类型", status=400)
@@ -942,11 +1101,25 @@ def reject_content(request, content_type: str, content_id: int, payload: Dict[st
     if content_type == "discussion":
         discussion = get_object_or_404(Discussion, id=content_id, approval_status=Discussion.APPROVAL_PENDING)
         rejected = DiscussionService.reject_discussion(discussion, request.auth, note=note)
+        log_admin_action(
+            request,
+            "admin.approval.reject",
+            target_type="discussion",
+            target_id=rejected.id,
+            data={"note": note, "title": rejected.title},
+        )
         return serialize_approval_item("discussion", rejected)
 
     if content_type == "post":
         post = get_object_or_404(Post.objects.select_related("discussion", "user"), id=content_id, approval_status=Post.APPROVAL_PENDING)
         rejected = PostService.reject_post(post, request.auth, note=note)
+        log_admin_action(
+            request,
+            "admin.approval.reject",
+            target_type="post",
+            target_id=rejected.id,
+            data={"note": note, "discussion_id": rejected.discussion_id},
+        )
         return serialize_approval_item("post", rejected)
 
     return admin_error("无效的审核内容类型", status=400)
@@ -962,6 +1135,17 @@ def resolve_post_flag(request, flag_id: int, payload: Dict[str, Any] = Body(...)
             admin_user=request.auth,
             status=payload.get("status", PostFlag.STATUS_RESOLVED),
             resolution_note=payload.get("resolution_note", ""),
+        )
+        log_admin_action(
+            request,
+            "admin.flag.resolve",
+            target_type="post_flag",
+            target_id=flag.id,
+            data={
+                "status": flag.status,
+                "post_id": flag.post_id,
+                "resolution_note": flag.resolution_note,
+            },
         )
         return serialize_post_flag(flag)
     except PostFlag.DoesNotExist:
@@ -1006,6 +1190,13 @@ def create_admin_tag(request, payload: Dict[str, Any] = Body(...)):
             user=request.auth,
         )
         tag = Tag.objects.select_related("parent").get(id=tag.id)
+        log_admin_action(
+            request,
+            "admin.tag.create",
+            target_type="tag",
+            target_id=tag.id,
+            data={"name": tag.name, "slug": tag.slug, "parent_id": tag.parent_id},
+        )
         return serialize_admin_tag(tag)
     except ValueError as e:
         return admin_error(str(e), status=400)
@@ -1068,6 +1259,13 @@ def update_admin_tag(request, tag_id: int, payload: Dict[str, Any] = Body(...)):
         )
         tag.save()
         tag.refresh_from_db()
+        log_admin_action(
+            request,
+            "admin.tag.update",
+            target_type="tag",
+            target_id=tag.id,
+            data={"name": tag.name, "slug": tag.slug, "changed_fields": sorted(normalized.keys())},
+        )
         return serialize_admin_tag(tag)
     except ValueError as e:
         return admin_error(str(e), status=400)
@@ -1079,12 +1277,20 @@ def update_admin_tag(request, tag_id: int, payload: Dict[str, Any] = Body(...)):
 @require_staff
 def move_admin_tag(request, tag_id: int, payload: Dict[str, Any] = Body(...)):
     try:
+        tag = get_object_or_404(Tag, id=tag_id)
         moved = TagService.move_tag(
             tag_id=tag_id,
             direction=(payload.get("direction") or "").strip(),
             user=request.auth,
         )
         tags = Tag.objects.select_related("parent").all().order_by("position", "name")
+        log_admin_action(
+            request,
+            "admin.tag.move",
+            target_type="tag",
+            target_id=tag.id,
+            data={"name": tag.name, "direction": (payload.get("direction") or "").strip(), "moved": bool(moved)},
+        )
         return {
             "moved": moved,
             "data": [serialize_admin_tag(tag) for tag in tags],
@@ -1100,7 +1306,56 @@ def move_admin_tag(request, tag_id: int, payload: Dict[str, Any] = Body(...)):
 def delete_admin_tag(request, tag_id: int):
     """删除标签"""
     try:
+        tag = get_object_or_404(Tag, id=tag_id)
+        tag_snapshot = {"name": tag.name, "slug": tag.slug, "parent_id": tag.parent_id}
         TagService.delete_tag(tag_id, request.auth)
+        log_admin_action(
+            request,
+            "admin.tag.delete",
+            target_type="tag",
+            target_id=tag_id,
+            data=tag_snapshot,
+        )
         return {"message": "标签删除成功"}
     except ValueError as e:
         return admin_error(str(e), status=400)
+
+
+# ==================== 审计日志 ====================
+
+@router.get("/audit-logs", auth=AuthBearer(), tags=["Admin"])
+@require_staff
+def list_audit_logs(
+    request,
+    page: int = 1,
+    limit: int = 20,
+    action: str = "",
+    target_type: str = "",
+    user_id: int = None,
+):
+    """获取管理员操作审计日志"""
+    page = max(1, int(page or 1))
+    limit = min(max(1, int(limit or 20)), 100)
+    queryset = (
+        AuditLog.objects.select_related("user")
+        .filter(action__startswith="admin.")
+        .order_by("-created_at", "-id")
+    )
+
+    if action:
+        queryset = queryset.filter(action=action)
+    if target_type:
+        queryset = queryset.filter(target_type=target_type)
+    if user_id:
+        queryset = queryset.filter(user_id=user_id)
+
+    total = queryset.count()
+    offset = (page - 1) * limit
+    logs = queryset[offset:offset + limit]
+
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "data": [serialize_audit_log(log) for log in logs],
+    }

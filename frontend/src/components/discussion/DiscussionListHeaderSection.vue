@@ -4,6 +4,7 @@
     :auth-store="authStore"
     :sort-by="sortBy"
     :marking-all-read="markingAllRead"
+    :refreshing="refreshing"
     @change-sort="$emit('change-sort', $event)"
     @mark-all-read="$emit('mark-all-read')"
     @refresh="$emit('refresh')"
@@ -32,6 +33,10 @@ defineProps({
     default: 'latest'
   },
   markingAllRead: {
+    type: Boolean,
+    default: false
+  },
+  refreshing: {
     type: Boolean,
     default: false
   }

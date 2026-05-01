@@ -11,6 +11,7 @@ export function useDiscussionListData({
   const tags = ref([])
   const currentTag = ref(null)
   const loading = ref(true)
+  const refreshing = ref(false)
   const loadingMore = ref(false)
   const sortBy = ref('latest')
   const currentPage = ref(1)
@@ -42,6 +43,7 @@ export function useDiscussionListData({
 
   async function refreshPageData() {
     loading.value = true
+    refreshing.value = false
     try {
       await Promise.all([loadTags(), loadCurrentTag(), loadDiscussions(false)])
     } catch (error) {
@@ -50,6 +52,24 @@ export function useDiscussionListData({
       console.error('加载首页列表失败:', error)
     } finally {
       loading.value = false
+    }
+  }
+
+  async function refreshDiscussionList() {
+    if (loading.value || refreshing.value) return
+
+    refreshing.value = true
+    try {
+      await loadDiscussions(false)
+    } catch (error) {
+      console.error('刷新讨论列表失败:', error)
+      await modalStore.alert({
+        title: '刷新失败',
+        message: '请稍后重试',
+        tone: 'danger'
+      })
+    } finally {
+      refreshing.value = false
     }
   }
 
@@ -185,6 +205,8 @@ export function useDiscussionListData({
     markAllAsRead,
     markingAllRead,
     refreshPageData,
+    refreshDiscussionList,
+    refreshing,
     sortBy,
     tags
   }

@@ -27,6 +27,7 @@
         :sort-by="sortBy"
         :marking-all-read="markingAllRead"
         :loading="loading"
+        :refreshing="refreshing"
         :discussions="discussions"
         :empty-state-text="emptyStateText"
         :has-more="hasMore"
@@ -40,7 +41,7 @@
         :get-user-initial="getUserInitial"
         @change-sort="changeSortBy"
         @mark-all-read="markAllAsRead"
-        @refresh="refreshPageData"
+        @refresh="refreshDiscussionList"
         @load-more="loadMore"
       />
     </div>
@@ -74,6 +75,7 @@ const {
   discussions,
   currentTag,
   loading,
+  refreshing,
   loadingMore,
   sortBy,
   markingAllRead,
@@ -89,6 +91,7 @@ const {
   startDiscussionButtonStyle,
   emptyStateText,
   refreshPageData,
+  refreshDiscussionList,
   changeSortBy,
   loadMore,
   markAllAsRead,

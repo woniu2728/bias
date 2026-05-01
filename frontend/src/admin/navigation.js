@@ -9,6 +9,7 @@ export const coreItems = [
 export const featureItems = [
   { path: '/admin/approval', icon: 'fas fa-user-check', label: '审核队列' },
   { path: '/admin/flags', icon: 'fas fa-flag', label: '举报管理' },
+  { path: '/admin/audit-logs', icon: 'fas fa-clipboard-list', label: '审计日志' },
   { path: '/admin/tags', icon: 'fas fa-tags', label: '标签管理' },
   { path: '/admin/mail', icon: 'fas fa-envelope', label: '邮件设置' },
   { path: '/admin/advanced', icon: 'fas fa-cog', label: '高级设置' },

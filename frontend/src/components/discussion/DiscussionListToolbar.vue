@@ -20,8 +20,8 @@
         </button>
       </li>
       <li>
-        <button class="btn-refresh" title="刷新" @click="$emit('refresh')">
-          <i class="fas fa-sync-alt"></i>
+        <button class="btn-refresh" title="刷新" :disabled="refreshing" @click="$emit('refresh')">
+          <i class="fas fa-sync-alt" :class="{ 'fa-spin': refreshing }"></i>
         </button>
       </li>
     </ul>
@@ -45,6 +45,10 @@ defineProps({
     default: 'latest'
   },
   markingAllRead: {
+    type: Boolean,
+    default: false
+  },
+  refreshing: {
     type: Boolean,
     default: false
   }
@@ -110,6 +114,11 @@ defineEmits(['change-sort', 'mark-all-read', 'refresh'])
 .btn-mark-read:hover {
   background: var(--forum-bg-subtle);
   color: var(--forum-text-color);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .btn-mark-read:disabled {

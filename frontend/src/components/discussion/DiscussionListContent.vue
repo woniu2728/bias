@@ -6,6 +6,7 @@
       :is-following-page="isFollowingPage"
       :sort-by="sortBy"
       :marking-all-read="markingAllRead"
+      :refreshing="refreshing"
       @change-sort="$emit('change-sort', $event)"
       @mark-all-read="$emit('mark-all-read')"
       @refresh="$emit('refresh')"
@@ -15,33 +16,40 @@
       正在加载讨论...
     </ForumStateBlock>
 
-    <ForumStateBlock v-else-if="discussions.length === 0" class="discussion-list-state">
-      {{ emptyStateText }}
-    </ForumStateBlock>
-
     <template v-else>
-      <ul class="discussion-list">
-        <DiscussionListItem
-          v-for="discussion in discussions"
-          :key="discussion.id"
-          :discussion="discussion"
-          :build-discussion-path="buildDiscussionPath"
-          :build-tag-path="buildTagPath"
-          :build-user-path="buildUserPath"
-          :format-relative-time="formatRelativeTime"
-          :get-user-avatar-color="getUserAvatarColor"
-          :get-user-display-name="getUserDisplayName"
-          :get-user-initial="getUserInitial"
-        />
-      </ul>
+      <div v-if="refreshing" class="discussion-list-refreshing" aria-live="polite">
+        <i class="fas fa-sync-alt fa-spin"></i>
+        正在刷新讨论
+      </div>
 
-      <ForumLoadMoreButton
-        v-if="hasMore"
-        :loading="loadingMore"
-        text="加载更多讨论"
-        loading-text="正在加载讨论..."
-        @click="$emit('load-more')"
-      />
+      <ForumStateBlock v-if="discussions.length === 0" class="discussion-list-state">
+        {{ emptyStateText }}
+      </ForumStateBlock>
+
+      <template v-else>
+        <ul class="discussion-list">
+          <DiscussionListItem
+            v-for="discussion in discussions"
+            :key="discussion.id"
+            :discussion="discussion"
+            :build-discussion-path="buildDiscussionPath"
+            :build-tag-path="buildTagPath"
+            :build-user-path="buildUserPath"
+            :format-relative-time="formatRelativeTime"
+            :get-user-avatar-color="getUserAvatarColor"
+            :get-user-display-name="getUserDisplayName"
+            :get-user-initial="getUserInitial"
+          />
+        </ul>
+
+        <ForumLoadMoreButton
+          v-if="hasMore"
+          :loading="loadingMore"
+          text="加载更多讨论"
+          loading-text="正在加载讨论..."
+          @click="$emit('load-more')"
+        />
+      </template>
     </template>
   </main>
 </template>
@@ -70,6 +78,10 @@ defineProps({
     default: 'latest'
   },
   markingAllRead: {
+    type: Boolean,
+    default: false
+  },
+  refreshing: {
     type: Boolean,
     default: false
   },
@@ -130,6 +142,7 @@ defineEmits(['change-sort', 'mark-all-read', 'refresh', 'load-more'])
 .index-content {
   flex: 1;
   background: var(--forum-bg-elevated);
+  position: relative;
 }
 
 .discussion-list {
@@ -142,9 +155,30 @@ defineEmits(['change-sort', 'mark-all-read', 'refresh', 'load-more'])
   margin: 24px;
 }
 
+.discussion-list-refreshing {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--forum-radius-pill);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--forum-text-muted);
+  font-size: 13px;
+  box-shadow: var(--forum-shadow-sm);
+}
+
 @media (max-width: 768px) {
   .discussion-list-state {
     margin: 15px;
+  }
+
+  .discussion-list-refreshing {
+    top: 12px;
+    right: 15px;
   }
 }
 </style>

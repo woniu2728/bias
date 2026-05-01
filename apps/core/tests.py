@@ -19,7 +19,7 @@ from ninja_jwt.tokens import RefreshToken
 from unittest.mock import patch
 
 from apps.core.bootstrap_config import load_site_bootstrap, read_site_config
-from apps.core.models import Setting
+from apps.core.models import AuditLog, Setting
 from apps.core.file_service import FileUploadService
 from apps.core.online_service import OnlineUserService
 from apps.core.release import build_git_command, ensure_release_versions_aligned
@@ -1169,6 +1169,12 @@ class AdminUserManagementApiTests(TestCase):
         self.assertEqual(suspended_notification.data["suspend_reason"], "spam")
         self.assertEqual(suspended_notification.data["suspend_message"], "请联系管理员处理")
 
+        audit_log = AuditLog.objects.get(action="admin.user.update", target_id=self.user.id)
+        self.assertEqual(audit_log.user_id, self.admin.id)
+        self.assertEqual(audit_log.target_type, "user")
+        self.assertIn("is_staff", audit_log.data["changed_fields"])
+        self.assertTrue(audit_log.data["groups_changed"])
+
     def test_admin_unsuspending_user_creates_recovery_notification(self):
         self.user.suspended_until = timezone.now() + timedelta(days=2)
         self.user.suspend_reason = "temporary"
@@ -1205,6 +1211,9 @@ class AdminUserManagementApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertFalse(User.objects.filter(id=self.user.id).exists())
+        audit_log = AuditLog.objects.get(action="admin.user.delete", target_id=self.user.id)
+        self.assertEqual(audit_log.user_id, self.admin.id)
+        self.assertEqual(audit_log.data["username"], "managed-user")
 
     def test_admin_cannot_delete_self(self):
         response = self.client.delete(
@@ -1344,6 +1353,9 @@ class AdminDashboardStatsApiTests(TestCase):
         self.assertEqual(payload["metrics"]["sync_count"], 0)
         self.assertEqual(payload["metrics"]["enqueued_count"], 0)
         self.assertEqual(payload["metrics"]["fallback_count"], 0)
+        audit_log = AuditLog.objects.get(action="admin.queue_metrics.reset")
+        self.assertEqual(audit_log.user_id, self.admin.id)
+        self.assertEqual(audit_log.target_type, "")
 
     def test_non_staff_cannot_reset_queue_metrics(self):
         member = User.objects.create_user(
@@ -1356,6 +1368,69 @@ class AdminDashboardStatsApiTests(TestCase):
         response = self.client.post(
             "/api/admin/queue/metrics/reset",
             HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+
+
+class AdminAuditLogApiTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="audit-admin",
+            email="audit-admin@example.com",
+            password="password123",
+        )
+        self.member = User.objects.create_user(
+            username="audit-member",
+            email="audit-member@example.com",
+            password="password123",
+        )
+
+    def auth_header(self, user=None):
+        token = RefreshToken.for_user(user or self.admin).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_admin_can_list_audit_logs(self):
+        AuditLog.objects.create(
+            user=self.admin,
+            action="admin.cache.clear",
+            target_type="cache",
+            ip_address="127.0.0.1",
+            data={"source": "test"},
+        )
+        AuditLog.objects.create(
+            user=self.admin,
+            action="admin.user.delete",
+            target_type="user",
+            target_id=self.member.id,
+            data={"username": self.member.username},
+        )
+        AuditLog.objects.create(
+            user=self.member,
+            action="password_reset",
+            target_type="user",
+            target_id=self.member.id,
+            data={"source": "public"},
+        )
+
+        response = self.client.get(
+            "/api/admin/audit-logs",
+            {"target_type": "user"},
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["data"][0]["action"], "admin.user.delete")
+        self.assertEqual(payload["data"][0]["target_id"], self.member.id)
+        self.assertEqual(payload["data"][0]["user"]["username"], self.admin.username)
+        self.assertNotIn("password_reset", {item["action"] for item in payload["data"]})
+
+    def test_non_staff_cannot_list_audit_logs(self):
+        response = self.client.get(
+            "/api/admin/audit-logs",
+            **self.auth_header(self.member),
         )
 
         self.assertEqual(response.status_code, 403, response.content)
@@ -2589,6 +2664,10 @@ class AdminGroupManagementApiTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertFalse(Group.objects.filter(id=group.id).exists())
         self.assertFalse(Permission.objects.filter(group_id=group.id).exists())
+        audit_log = AuditLog.objects.get(action="admin.group.delete", target_id=group.id)
+        self.assertEqual(audit_log.user_id, self.admin.id)
+        self.assertEqual(audit_log.target_type, "group")
+        self.assertEqual(audit_log.data["name"], "Helpers")
 
     def test_admin_cannot_delete_builtin_group(self):
         response = self.client.delete(
@@ -2728,6 +2807,10 @@ class AdminFlagManagementApiTests(TestCase):
         self.assertEqual(self.flag.status, "resolved")
         self.assertEqual(self.flag.resolution_note, "已联系发帖人并隐藏内容")
         self.assertEqual(self.flag.resolved_by_id, self.admin.id)
+        audit_log = AuditLog.objects.get(action="admin.flag.resolve", target_id=self.flag.id)
+        self.assertEqual(audit_log.user_id, self.admin.id)
+        self.assertEqual(audit_log.target_type, "post_flag")
+        self.assertEqual(audit_log.data["status"], "resolved")
 
 
 class AdminTagManagementApiTests(TestCase):

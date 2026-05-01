@@ -2,11 +2,12 @@
   <aside class="index-nav">
     <div class="index-nav-header">
       <DiscussionListSidebarStartButton
-        v-if="!authStore.isAuthenticated || authStore.canStartDiscussion"
+        v-if="showStartDiscussionButton"
         :current-tag="currentTag"
         :start-discussion-button-style="startDiscussionButtonStyle"
         @click="$emit('start-discussion')"
       />
+      <div v-else class="index-nav-header-spacer" aria-hidden="true"></div>
     </div>
 
     <nav class="index-nav-list">
@@ -55,11 +56,12 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import DiscussionListSidebarNavLink from '@/components/discussion/DiscussionListSidebarNavLink.vue'
 import DiscussionListSidebarStartButton from '@/components/discussion/DiscussionListSidebarStartButton.vue'
 import DiscussionListSidebarTagLink from '@/components/discussion/DiscussionListSidebarTagLink.vue'
 
-defineProps({
+const props = defineProps({
   authStore: {
     type: Object,
     required: true
@@ -121,6 +123,13 @@ defineProps({
     required: true
   }
 })
+const showStartDiscussionButton = computed(() => {
+  if (props.authStore.isRestoringSession && props.authStore.isAuthenticated && !props.authStore.user) {
+    return false
+  }
+
+  return !props.authStore.isAuthenticated || props.authStore.canStartDiscussion
+})
 
 defineEmits(['start-discussion'])
 </script>
@@ -138,6 +147,10 @@ defineEmits(['start-discussion'])
 
 .index-nav-header {
   padding: 18px 18px 12px;
+}
+
+.index-nav-header-spacer {
+  min-height: 44px;
 }
 
 .index-nav-list {
