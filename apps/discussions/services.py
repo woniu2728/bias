@@ -4,6 +4,7 @@
 from typing import Optional, List, Tuple
 from django.db import transaction
 from django.db.models import Q, F, Count
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from apps.core.db import sqlite_write_retry
@@ -19,6 +20,32 @@ from apps.core.visibility import build_discussion_visibility_q
 
 class DiscussionService:
     """讨论服务"""
+
+    VIEW_COUNT_THROTTLE_SECONDS = 60 * 15
+
+    @staticmethod
+    def _viewer_cache_identity(user: Optional[User]) -> str:
+        if user and user.is_authenticated:
+            return f"user:{user.id}"
+        return "guest"
+
+    @staticmethod
+    def _view_count_cache_key(discussion_id: int, user: Optional[User]) -> str:
+        return f"discussion.viewed.{discussion_id}.{DiscussionService._viewer_cache_identity(user)}"
+
+    @staticmethod
+    def record_view(discussion: Discussion, user: Optional[User] = None) -> bool:
+        cache_key = DiscussionService._view_count_cache_key(discussion.id, user)
+        try:
+            if cache.get(cache_key):
+                return False
+            cache.set(cache_key, True, DiscussionService.VIEW_COUNT_THROTTLE_SECONDS)
+        except Exception:
+            pass
+
+        Discussion.objects.filter(id=discussion.id).update(view_count=F('view_count') + 1)
+        discussion.view_count = (discussion.view_count or 0) + 1
+        return True
 
     @staticmethod
     def _can_view_discussion(discussion: Discussion, user: Optional[User]) -> bool:
@@ -232,8 +259,8 @@ class DiscussionService:
             if not DiscussionService._can_view_discussion(discussion, user):
                 return None
 
-            # 增加浏览次数
-            discussion.increment_view_count()
+            # 增加浏览次数，同一访问者短时间内只计一次，减少热门讨论写压力。
+            DiscussionService.record_view(discussion, user)
 
             # 仅附加当前阅读状态，不在进入讨论页时直接清空未读
             if user and user.is_authenticated:

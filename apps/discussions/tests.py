@@ -1,7 +1,9 @@
 import json
 from unittest.mock import patch
 
+from django.core.cache import cache
 from django.test import TestCase, Client
+from django.test import override_settings
 from django.db import OperationalError
 from django.utils import timezone
 from datetime import timedelta
@@ -140,6 +142,25 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(payload["last_read_post_number"], 1)
         self.assertEqual(payload["unread_count"], 2)
         self.assertTrue(payload["is_unread"])
+
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "discussion-view-count-test"}})
+    def test_discussion_detail_throttles_view_count_per_viewer(self):
+        cache.clear()
+        discussion = DiscussionService.create_discussion(
+            title="View count throttle",
+            content="Initial post",
+            user=self.author,
+        )
+
+        DiscussionService.get_discussion_by_id(discussion.id, self.reader)
+        DiscussionService.get_discussion_by_id(discussion.id, self.reader)
+
+        discussion.refresh_from_db()
+        self.assertEqual(discussion.view_count, 1)
+
+        DiscussionService.get_discussion_by_id(discussion.id, self.author)
+        discussion.refresh_from_db()
+        self.assertEqual(discussion.view_count, 2)
 
     def test_update_discussion_read_state_advances_progress(self):
         discussion = DiscussionService.create_discussion(
