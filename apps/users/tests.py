@@ -95,6 +95,45 @@ class PasswordResetApiTests(TestCase):
         self.assertIn("/reset-password?token=", mail.outbox[0].body)
         self.assertIn("重置 Bias 社区", mail.outbox[0].alternatives[0][0])
 
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
+    def test_forgot_password_queues_email_when_queue_enabled(self):
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(True)},
+        )
+        clear_runtime_setting_caches()
+
+        with patch("apps.core.tasks.send_password_reset_email_task.delay") as delay:
+            response = self.client.post(
+                "/api/users/forgot-password",
+                data=json.dumps({"email": self.user.email}),
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(PasswordToken.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(len(mail.outbox), 0)
+        delay.assert_called_once()
+
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
+    def test_forgot_password_falls_back_to_sync_when_queue_enqueue_fails(self):
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(True)},
+        )
+        clear_runtime_setting_caches()
+
+        with patch("apps.core.tasks.send_password_reset_email_task.delay", side_effect=RuntimeError("queue down")):
+            response = self.client.post(
+                "/api/users/forgot-password",
+                data=json.dumps({"email": self.user.email}),
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(PasswordToken.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+
 
 class AvatarUploadApiTests(TestCase):
     def setUp(self):
@@ -454,6 +493,25 @@ class EmailVerificationApiTests(TestCase):
         self.assertIn("你好 verify-user", mail.outbox[0].body)
         self.assertIn("/verify-email?token=", mail.outbox[0].body)
         self.assertIn("验证 Bias 社区", mail.outbox[0].alternatives[0][0])
+
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
+    def test_resend_email_verification_queues_mail_when_queue_enabled(self):
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(True)},
+        )
+        clear_runtime_setting_caches()
+
+        with patch("apps.core.tasks.send_verification_email_task.delay") as delay:
+            response = self.client.post(
+                "/api/users/me/resend-email-verification",
+                HTTP_AUTHORIZATION=f"Bearer {self.token}",
+            )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(EmailToken.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(len(mail.outbox), 0)
+        delay.assert_called_once()
 
     def test_resend_email_verification_rejects_confirmed_user(self):
         self.user.is_email_confirmed = True

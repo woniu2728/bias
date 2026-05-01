@@ -255,7 +255,7 @@ class UserService:
             expires_at=expires_at,
         )
 
-        EmailService.send_verification_email(
+        EmailService.queue_verification_email(
             user_email=email_token.email,
             username=user.display_name or user.username,
             token=token,
@@ -314,7 +314,7 @@ class UserService:
             expires_at=expires_at,
         )
 
-        email_sent = EmailService.send_password_reset_email(
+        email_sent = EmailService.queue_password_reset_email(
             user_email=user.email,
             username=user.display_name or user.username,
             token=token,

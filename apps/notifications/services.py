@@ -100,11 +100,14 @@ class NotificationService:
             return
 
         def enqueue():
-            try:
-                from apps.notifications.tasks import dispatch_notification_batch
-                dispatch_notification_batch.delay(notification_ids)
-            except Exception:
-                NotificationService._send_notifications_batch(notification_ids)
+            from apps.core.queue_service import QueueService
+            from apps.notifications.tasks import dispatch_notification_batch
+
+            QueueService.dispatch_celery_task(
+                dispatch_notification_batch,
+                notification_ids,
+                fallback=lambda: NotificationService._send_notifications_batch(notification_ids),
+            )
 
         transaction.on_commit(enqueue)
 

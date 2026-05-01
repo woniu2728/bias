@@ -1208,6 +1208,8 @@ class AdminDashboardStatsApiTests(TestCase):
         self.assertEqual(payload["realtimeDriver"], "In-memory")
         self.assertEqual(payload["queueLabel"], "同步执行")
         self.assertFalse(payload["queueEnabled"])
+        self.assertEqual(payload["queueWorkerStatus"], "disabled")
+        self.assertFalse(payload["queueWorkerAvailable"])
         self.assertFalse(payload["redisEnabled"])
 
     @override_settings(
@@ -1215,7 +1217,15 @@ class AdminDashboardStatsApiTests(TestCase):
         CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {"hosts": [("localhost", 6379)]}}},
         CELERY_BROKER_URL="redis://localhost:6379/1",
     )
-    def test_admin_stats_marks_redis_and_queue_status(self):
+    @patch("apps.core.admin_api.QueueService.get_worker_status")
+    def test_admin_stats_marks_redis_and_queue_status(self, get_worker_status):
+        get_worker_status.return_value = {
+            "status": "available",
+            "label": "2 个 worker 在线",
+            "available": True,
+            "worker_count": 2,
+            "message": "Celery worker 可用。",
+        }
         Setting.objects.update_or_create(
             key="advanced.queue_enabled",
             defaults={"value": json.dumps(True)},
@@ -1231,6 +1241,10 @@ class AdminDashboardStatsApiTests(TestCase):
         self.assertEqual(payload["queueDriver"], "redis")
         self.assertEqual(payload["queueLabel"], "Redis")
         self.assertTrue(payload["queueEnabled"])
+        self.assertEqual(payload["queueWorkerStatus"], "available")
+        self.assertEqual(payload["queueWorkerLabel"], "2 个 worker 在线")
+        self.assertTrue(payload["queueWorkerAvailable"])
+        self.assertEqual(payload["queueWorkerCount"], 2)
         self.assertTrue(payload["redisEnabled"])
 
     @override_settings(
@@ -1258,7 +1272,62 @@ class AdminDashboardStatsApiTests(TestCase):
         self.assertEqual(payload["queueDriver"], "redis")
         self.assertEqual(payload["queueLabel"], "同步执行")
         self.assertFalse(payload["queueEnabled"])
+        self.assertEqual(payload["queueWorkerStatus"], "disabled")
+        self.assertFalse(payload["queueWorkerAvailable"])
         self.assertFalse(payload["redisEnabled"])
+
+
+class QueueServiceTests(TestCase):
+    def tearDown(self):
+        clear_runtime_setting_caches()
+        super().tearDown()
+
+    def test_queue_worker_status_reports_disabled_when_queue_is_off(self):
+        from apps.core.queue_service import QueueService
+
+        status = QueueService.get_worker_status()
+
+        self.assertEqual(status["status"], "disabled")
+        self.assertFalse(status["available"])
+
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
+    @patch("config.celery.app.control.inspect")
+    def test_queue_worker_status_reports_available_workers(self, inspect):
+        from apps.core.queue_service import QueueService
+
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(True)},
+        )
+        clear_runtime_setting_caches()
+        inspect.return_value.ping.return_value = {
+            "celery@worker-a": {"ok": "pong"},
+            "celery@worker-b": {"ok": "pong"},
+        }
+
+        status = QueueService.get_worker_status()
+
+        self.assertEqual(status["status"], "available")
+        self.assertTrue(status["available"])
+        self.assertEqual(status["worker_count"], 2)
+
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
+    @patch("config.celery.app.control.inspect")
+    def test_queue_worker_status_reports_unavailable_without_ping_response(self, inspect):
+        from apps.core.queue_service import QueueService
+
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(True)},
+        )
+        clear_runtime_setting_caches()
+        inspect.return_value.ping.return_value = None
+
+        status = QueueService.get_worker_status()
+
+        self.assertEqual(status["status"], "unavailable")
+        self.assertFalse(status["available"])
+        self.assertEqual(status["worker_count"], 0)
 
 
 class ComposerUploadApiTests(TestCase):

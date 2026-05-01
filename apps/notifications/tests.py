@@ -1,8 +1,10 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from ninja_jwt.tokens import RefreshToken
 from unittest.mock import patch
 
 from apps.discussions.models import DiscussionUser
+from apps.core.models import Setting
+from apps.core.settings_service import clear_runtime_setting_caches
 from apps.discussions.services import DiscussionService
 from apps.notifications.models import Notification
 from apps.notifications.services import NotificationService
@@ -47,6 +49,10 @@ class NotificationServiceTests(TestCase):
             content="First reply",
             user=self.participant,
         )
+
+    def tearDown(self):
+        clear_runtime_setting_caches()
+        super().tearDown()
 
     def test_reply_to_post_creates_post_reply_notification(self):
         PostService.create_post(
@@ -121,7 +127,50 @@ class NotificationServiceTests(TestCase):
             [2, 3, 4],
         )
 
-    def test_discussion_reply_notifications_use_bulk_create_for_author_and_subscribers(self):
+    def test_discussion_reply_notifications_dispatch_synchronously_when_queue_disabled(self):
+        subscriber = User.objects.create_user(
+            username="subscriber",
+            email="subscriber@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        DiscussionUser.objects.create(discussion=self.discussion, user=subscriber, is_subscribed=True)
+        new_post = PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="Sync reply",
+            user=self.replier,
+        )
+
+        with patch("apps.notifications.tasks.dispatch_notification_batch.delay") as delay:
+            with patch("apps.notifications.services.NotificationService._send_websocket_notification") as websocket_send:
+                with self.captureOnCommitCallbacks(execute=True):
+                    NotificationService.notify_discussion_reply(
+                        discussion_id=self.discussion.id,
+                        post_id=new_post.id,
+                        from_user=self.replier,
+                    )
+
+        created_notifications = Notification.objects.filter(
+            type="discussionReply",
+            subject_id=self.discussion.id,
+            data__post_id=new_post.id,
+        )
+        self.assertEqual({item.user_id for item in created_notifications}, {self.author.id, subscriber.id})
+        delay.assert_not_called()
+        self.assertEqual(websocket_send.call_count, 2)
+
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
+    def test_discussion_reply_notifications_use_queue_when_enabled(self):
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": "true"},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.queue_driver",
+            defaults={"value": '"redis"'},
+        )
+        clear_runtime_setting_caches()
+
         subscriber = User.objects.create_user(
             username="subscriber",
             email="subscriber@example.com",
@@ -159,7 +208,18 @@ class NotificationServiceTests(TestCase):
         self.assertEqual({item.user_id for item in created_notifications}, {self.author.id, subscriber.id})
         delay.assert_called_once()
 
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
     def test_bulk_notifications_fallback_to_local_dispatch_when_task_enqueue_fails(self):
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": "true"},
+        )
+        Setting.objects.update_or_create(
+            key="advanced.queue_driver",
+            defaults={"value": '"redis"'},
+        )
+        clear_runtime_setting_caches()
+
         first = Notification(
             user=self.author,
             from_user=self.replier,

@@ -15,7 +15,7 @@
           </div>
           <div>
             <h4>需额外部署或重启</h4>
-            <p>`debug_mode` 由 Django 配置文件或环境变量控制；`queue_enabled` / `queue_driver` 目前只声明目标执行方式，完整异步 worker 链路仍待接入。</p>
+            <p>`debug_mode` 由 Django 配置文件或环境变量控制；`queue_enabled` / `queue_driver` 会控制已接入队列入口的任务，新 worker 配置需重启服务后生效。</p>
           </div>
         </div>
       </div>
@@ -61,7 +61,7 @@
             <option value="database">数据库</option>
             <option value="redis">Redis</option>
           </select>
-          <p class="Form-help">当前用于声明目标执行器。未部署 worker 时，耗时任务仍按同步方式执行。</p>
+          <p class="Form-help">当前通知实时投递已接入统一队列入口。选择 Redis 并部署 worker 后会尝试异步投递。</p>
         </div>
 
         <div class="Form-group">
@@ -73,7 +73,7 @@
             />
             启用队列处理
           </label>
-          <p class="Form-help">关闭时强制同步执行。开启后仅保留运行目标配置，完整异步任务链路后续再补。</p>
+          <p class="Form-help">关闭时强制同步执行。开启后，已接入任务会入队执行；入队失败时会同步回退，避免影响主流程。</p>
         </div>
       </div>
 

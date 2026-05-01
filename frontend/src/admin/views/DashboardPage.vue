@@ -32,6 +32,9 @@
               <span class="StatusBadge" :class="stats.redisEnabled ? 'StatusBadge--success' : 'StatusBadge--neutral'">
                 {{ stats.redisEnabled ? 'Redis 已启用' : 'Redis 未启用' }}
               </span>
+              <span class="StatusBadge" :class="queueWorkerBadgeClass">
+                {{ stats.queueWorkerLabel || '队列未检测' }}
+              </span>
             </div>
           </div>
           <div class="StatusWidget-items">
@@ -58,6 +61,13 @@
             <div class="StatusWidget-item">
               <div class="StatusWidget-label">队列执行</div>
               <div class="StatusWidget-value">{{ stats.queueLabel || '-' }}</div>
+            </div>
+            <div class="StatusWidget-item">
+              <div class="StatusWidget-label">队列 Worker</div>
+              <div class="StatusWidget-value">
+                {{ stats.queueWorkerLabel || '-' }}
+                <span v-if="stats.queueWorkerMessage" class="StatusWidget-help">{{ stats.queueWorkerMessage }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -158,7 +168,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import api from '../../api'
@@ -172,6 +182,11 @@ const stats = ref({
   queueDriver: null,
   queueEnabled: false,
   queueLabel: null,
+  queueWorkerStatus: 'disabled',
+  queueWorkerLabel: null,
+  queueWorkerAvailable: false,
+  queueWorkerCount: 0,
+  queueWorkerMessage: '',
   realtimeDriver: null,
   redisEnabled: false,
   debugMode: false,
@@ -184,6 +199,12 @@ const stats = ref({
 })
 const loading = ref(true)
 const loadError = ref('')
+const queueWorkerBadgeClass = computed(() => {
+  if (!stats.value.queueEnabled || ['disabled', 'sync'].includes(stats.value.queueWorkerStatus)) {
+    return 'StatusBadge--neutral'
+  }
+  return stats.value.queueWorkerAvailable ? 'StatusBadge--success' : 'StatusBadge--warning'
+})
 
 onMounted(async () => {
   try {
@@ -327,6 +348,15 @@ onMounted(async () => {
   font-size: 16px;
   font-weight: 600;
   color: #333;
+}
+
+.StatusWidget-help {
+  display: block;
+  margin-top: 4px;
+  color: #7c8795;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 /* 统计小部件 */

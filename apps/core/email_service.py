@@ -135,6 +135,19 @@ class EmailService:
         )
 
     @staticmethod
+    def queue_verification_email(user_email: str, username: str, token: str):
+        from apps.core.queue_service import QueueService
+        from apps.core.tasks import send_verification_email_task
+
+        return QueueService.dispatch_celery_task(
+            send_verification_email_task,
+            user_email,
+            username,
+            token,
+            fallback=lambda: EmailService.send_verification_email(user_email, username, token),
+        )
+
+    @staticmethod
     def send_password_reset_email(user_email: str, username: str, token: str) -> bool:
         """
         发送密码重置邮件
@@ -178,6 +191,19 @@ class EmailService:
             text_content=text_content,
             html_content=html_content,
             to_email=user_email
+        )
+
+    @staticmethod
+    def queue_password_reset_email(user_email: str, username: str, token: str):
+        from apps.core.queue_service import QueueService
+        from apps.core.tasks import send_password_reset_email_task
+
+        return QueueService.dispatch_celery_task(
+            send_password_reset_email_task,
+            user_email,
+            username,
+            token,
+            fallback=lambda: EmailService.send_password_reset_email(user_email, username, token),
         )
 
     @staticmethod

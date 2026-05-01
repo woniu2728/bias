@@ -29,6 +29,7 @@ from apps.core.mail_drivers import (
     serialize_mail_settings,
     validate_mail_settings,
 )
+from apps.core.queue_service import QueueService
 from apps.core.file_service import FileUploadService
 from apps.core.settings_service import (
     ADVANCED_SETTINGS_DEFAULTS,
@@ -327,6 +328,7 @@ def get_stats(request):
     advanced_settings = get_runtime_advanced_settings()
     queue_driver = advanced_settings.get("queue_driver", "sync")
     queue_enabled = bool(advanced_settings.get("queue_enabled", False))
+    queue_worker_status = QueueService.get_worker_status()
 
     return {
         "runtimeName": "Python",
@@ -337,6 +339,11 @@ def get_stats(request):
         "queueDriver": queue_driver,
         "queueEnabled": queue_enabled,
         "queueLabel": detect_queue_driver_label(queue_enabled, queue_driver),
+        "queueWorkerStatus": queue_worker_status["status"],
+        "queueWorkerLabel": queue_worker_status["label"],
+        "queueWorkerAvailable": queue_worker_status["available"],
+        "queueWorkerCount": queue_worker_status["worker_count"],
+        "queueWorkerMessage": queue_worker_status["message"],
         "realtimeDriver": detect_realtime_driver(),
         "redisEnabled": is_redis_enabled(queue_enabled=queue_enabled, queue_driver=queue_driver),
         "debugMode": settings.DEBUG,
