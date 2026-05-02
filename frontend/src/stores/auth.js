@@ -5,7 +5,6 @@ import api from '@/api'
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const accessToken = ref(localStorage.getItem('access_token'))
-  const refreshToken = ref(localStorage.getItem('refresh_token'))
   const isRestoringSession = ref(Boolean(accessToken.value))
 
   const isAuthenticated = computed(() => !!accessToken.value)
@@ -23,10 +22,9 @@ export const useAuthStore = defineStore('auth', () => {
       })
 
       accessToken.value = data.access
-      refreshToken.value = data.refresh
 
       localStorage.setItem('access_token', data.access)
-      localStorage.setItem('refresh_token', data.refresh)
+      localStorage.removeItem('refresh_token')
 
       await fetchUser()
 
@@ -61,9 +59,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 登出
   function logout() {
+    api.post('/users/logout', null, {
+      skipAuthRefresh: true,
+      skipAuthInvalidation: true
+    }).catch(() => {})
+
     user.value = null
     accessToken.value = null
-    refreshToken.value = null
     isRestoringSession.value = false
 
     localStorage.removeItem('access_token')

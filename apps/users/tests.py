@@ -312,6 +312,83 @@ class SuspendedUserAuthTests(TestCase):
         self.assertIn("请联系管理员申诉", response.json()["error"])
 
 
+@override_settings(DEBUG=False)
+class TokenCookieAuthTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="token-cookie-user",
+            email="token-cookie@example.com",
+            password="password123",
+        )
+
+    def test_login_sets_refresh_token_cookie_without_exposing_refresh_body(self):
+        response = self.client.post(
+            "/api/users/login",
+            data=json.dumps({
+                "identification": "token-cookie-user",
+                "password": "password123",
+            }),
+            content_type="application/json",
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertTrue(payload["access"])
+        self.assertNotIn("refresh", payload)
+
+        cookie = response.cookies.get("bias_refresh_token")
+        self.assertIsNotNone(cookie)
+        self.assertTrue(cookie["httponly"])
+        self.assertTrue(cookie["secure"])
+        self.assertEqual(cookie["samesite"], "Lax")
+        self.assertEqual(cookie["path"], "/api/users")
+
+    def test_refresh_access_token_uses_cookie(self):
+        login_response = self.client.post(
+            "/api/users/login",
+            data=json.dumps({
+                "identification": "token-cookie-user",
+                "password": "password123",
+            }),
+            content_type="application/json",
+            secure=True,
+        )
+        self.assertEqual(login_response.status_code, 200, login_response.content)
+
+        response = self.client.post("/api/users/token/refresh", secure=True)
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["access"])
+        self.assertNotIn("refresh", response.json())
+
+    def test_refresh_access_token_requires_cookie(self):
+        response = self.client.post("/api/users/token/refresh", secure=True)
+
+        self.assertEqual(response.status_code, 401, response.content)
+        self.assertEqual(response.json()["error"], "登录状态已过期，请重新登录")
+
+    def test_logout_clears_refresh_token_cookie(self):
+        login_response = self.client.post(
+            "/api/users/login",
+            data=json.dumps({
+                "identification": "token-cookie-user",
+                "password": "password123",
+            }),
+            content_type="application/json",
+            secure=True,
+        )
+        self.assertEqual(login_response.status_code, 200, login_response.content)
+
+        response = self.client.post("/api/users/logout", secure=True)
+
+        self.assertEqual(response.status_code, 200, response.content)
+        cookie = response.cookies.get("bias_refresh_token")
+        self.assertIsNotNone(cookie)
+        self.assertEqual(cookie.value, "")
+        self.assertEqual(cookie["path"], "/api/users")
+
+
 class HumanVerificationAuthTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -379,7 +456,8 @@ class HumanVerificationAuthTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertTrue(response.json()["access"])
-        self.assertTrue(response.json()["refresh"])
+        self.assertNotIn("refresh", response.json())
+        self.assertIsNotNone(response.cookies.get("bias_refresh_token"))
         mock_post.assert_called_once()
         self.assertEqual(mock_post.call_args.kwargs["data"]["secret"], "secret-key")
         self.assertEqual(mock_post.call_args.kwargs["data"]["response"], "turnstile-ok")

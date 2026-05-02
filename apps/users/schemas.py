@@ -24,7 +24,6 @@ class UserLoginSchema(Schema):
 class TokenSchema(Schema):
     """Token响应Schema"""
     access: str
-    refresh: str
 
 
 class UserOutSchema(Schema):

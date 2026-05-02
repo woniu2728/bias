@@ -4,6 +4,7 @@ User API endpoints
 from ninja import Router
 from ninja.security import HttpBearer
 from ninja_jwt.controller import NinjaJWTDefaultController
+from ninja_jwt.exceptions import TokenError
 from ninja_jwt.tokens import RefreshToken
 from django.shortcuts import get_object_or_404
 from django.conf import settings
@@ -31,6 +32,35 @@ from .schemas import (
 from .services import UserService
 
 router = Router()
+REFRESH_TOKEN_COOKIE_NAME = "bias_refresh_token"
+REFRESH_TOKEN_COOKIE_PATH = "/api/users"
+
+
+def _refresh_token_max_age() -> int:
+    lifetime = settings.NINJA_JWT.get("REFRESH_TOKEN_LIFETIME", 86400)
+    return int(lifetime.total_seconds() if hasattr(lifetime, "total_seconds") else lifetime)
+
+
+def _set_refresh_token_cookie(response: JsonResponse, refresh: RefreshToken) -> JsonResponse:
+    response.set_cookie(
+        REFRESH_TOKEN_COOKIE_NAME,
+        str(refresh),
+        max_age=_refresh_token_max_age(),
+        path=REFRESH_TOKEN_COOKIE_PATH,
+        secure=not settings.DEBUG,
+        httponly=True,
+        samesite="Lax",
+    )
+    return response
+
+
+def _clear_refresh_token_cookie(response: JsonResponse) -> JsonResponse:
+    response.delete_cookie(
+        REFRESH_TOKEN_COOKIE_NAME,
+        path=REFRESH_TOKEN_COOKIE_PATH,
+        samesite="Lax",
+    )
+    return response
 
 
 def _attach_primary_group(user):
@@ -96,21 +126,34 @@ def login(request, payload: UserLoginSchema):
 
         # 生成JWT Token
         refresh = RefreshToken.for_user(user)
-        return {
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-        }
+        response = JsonResponse({"access": str(refresh.access_token)})
+        return _set_refresh_token_cookie(response, refresh)
     except HumanVerificationError as e:
         return JsonResponse({"error": str(e)}, status=e.status_code)
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=401)
 
 
-@router.post("/logout", auth=AuthBearer(), tags=["Auth"])
+@router.post("/token/refresh", response=TokenSchema, tags=["Auth"])
+def refresh_access_token(request):
+    """使用 HttpOnly Cookie 中的 refresh token 换取新的 access token"""
+    refresh_token = request.COOKIES.get(REFRESH_TOKEN_COOKIE_NAME)
+    if not refresh_token:
+        return JsonResponse({"error": "登录状态已过期，请重新登录"}, status=401)
+
+    try:
+        refresh = RefreshToken(refresh_token)
+        return {"access": str(refresh.access_token)}
+    except TokenError:
+        response = JsonResponse({"error": "登录状态已过期，请重新登录"}, status=401)
+        return _clear_refresh_token_cookie(response)
+
+
+@router.post("/logout", tags=["Auth"])
 def logout(request):
     """用户登出"""
-    # JWT是无状态的，客户端删除token即可
-    return {"message": "登出成功"}
+    response = JsonResponse({"message": "登出成功"})
+    return _clear_refresh_token_cookie(response)
 
 
 @router.post("/verify-email", response=UserOutSchema, tags=["Auth"])
