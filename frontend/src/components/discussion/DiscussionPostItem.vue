@@ -55,52 +55,52 @@
             </span>
           </div>
 
-          <aside class="post-actions" :class="{ 'is-open': isPostMenuOpen }">
-            <button
-              v-if="canLikePost(post)"
-              type="button"
-              class="post-action"
-              :class="{ 'is-active': post.is_liked }"
-              :disabled="likePending"
-              @click="$emit('toggle-like', post)"
-            >
-              <i class="fas fa-thumbs-up"></i>
-              <span>赞</span>
-            </button>
-            <button
-              v-if="authStore.isAuthenticated && !discussion.is_locked && !isSuspended"
-              type="button"
-              class="post-action"
-              @click="$emit('reply-to-post', post)"
-            >
-              <i class="fas fa-reply"></i>
-              <span>回复</span>
-            </button>
-            <div v-if="hasPostControls(post)" class="post-controls" :class="{ 'is-open': isPostMenuOpen }">
-              <button
-                type="button"
-                class="post-action post-action--icon"
-                :aria-expanded="isPostMenuOpen"
-                @click.stop="$emit('toggle-post-menu', post.id)"
-              >
-                <i class="fas fa-ellipsis-h"></i>
-              </button>
-              <div v-if="isPostMenuOpen" class="post-controls-menu">
-                <button v-if="canEditPost(post)" type="button" @click="handleMenuAction('edit-post', post)">
-                  编辑
-                </button>
-                <button v-if="canDeletePost(post)" type="button" class="is-danger" @click="handleMenuAction('delete-post', post)">
-                  删除
-                </button>
-                <button v-if="canReportPost(post)" type="button" @click="handleMenuAction('open-report-modal', post)">
-                  举报
-                </button>
-              </div>
-            </div>
-          </aside>
         </header>
 
         <div class="post-body" v-html="post.content_html"></div>
+        <aside class="post-actions" :class="{ 'is-open': isPostMenuOpen }">
+          <button
+            v-if="canLikePost(post)"
+            type="button"
+            class="post-action"
+            :class="{ 'is-active': post.is_liked }"
+            :disabled="likePending"
+            @click="$emit('toggle-like', post)"
+          >
+            <i class="fas fa-thumbs-up"></i>
+            <span>赞</span>
+          </button>
+          <button
+            v-if="authStore.isAuthenticated && !discussion.is_locked && !isSuspended"
+            type="button"
+            class="post-action"
+            @click="$emit('reply-to-post', post)"
+          >
+            <i class="fas fa-reply"></i>
+            <span>回复</span>
+          </button>
+          <div v-if="hasPostControls(post)" class="post-controls" :class="{ 'is-open': isPostMenuOpen }">
+            <button
+              type="button"
+              class="post-action post-action--icon"
+              :aria-expanded="isPostMenuOpen"
+              @click.stop="$emit('toggle-post-menu', post.id)"
+            >
+              <i class="fas fa-ellipsis-h"></i>
+            </button>
+            <div v-if="isPostMenuOpen" class="post-controls-menu">
+              <button v-if="canEditPost(post)" type="button" @click="handleMenuAction('edit-post', post)">
+                编辑
+              </button>
+              <button v-if="canDeletePost(post)" type="button" class="is-danger" @click="handleMenuAction('delete-post', post)">
+                删除
+              </button>
+              <button v-if="canReportPost(post)" type="button" @click="handleMenuAction('open-report-modal', post)">
+                举报
+              </button>
+            </div>
+          </div>
+        </aside>
         <div
           v-if="post.approval_status === 'pending' || post.approval_status === 'rejected'"
           class="post-review-banner"
@@ -316,6 +316,7 @@ function handleMenuAction(eventName, payload) {
 }
 
 .post-main {
+  position: relative;
   min-width: 0;
   padding-top: 2px;
 }
@@ -330,6 +331,7 @@ function handleMenuAction(eventName, payload) {
 
 .post-header-main {
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -342,6 +344,11 @@ function handleMenuAction(eventName, payload) {
   color: var(--forum-text-color);
   font-weight: 700;
   font-size: 15px;
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .post-author:hover {
@@ -400,6 +407,7 @@ function handleMenuAction(eventName, payload) {
   position: relative;
   overflow: auto;
   overflow-wrap: break-word;
+  word-break: break-word;
   color: var(--forum-text-color);
   font-size: var(--forum-font-size-md);
   line-height: 1.7;
@@ -465,6 +473,7 @@ function handleMenuAction(eventName, payload) {
   font-size: 100%;
   overflow-x: auto;
   max-height: max(50vh, 250px);
+  word-break: normal;
 }
 
 .post-body :deep(h1),
@@ -485,6 +494,7 @@ function handleMenuAction(eventName, payload) {
 .post-body :deep(img),
 .post-body :deep(iframe) {
   max-width: 100%;
+  height: auto;
 }
 
 .post-review-banner {
@@ -638,10 +648,11 @@ function handleMenuAction(eventName, payload) {
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-top: -4px;
+  position: absolute;
+  top: -4px;
+  right: 0;
   opacity: 0;
   transition: opacity 0.2s;
-  position: relative;
 }
 
 .post-item:hover .post-actions,
@@ -794,10 +805,8 @@ function handleMenuAction(eventName, payload) {
   }
 
   .post-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
     margin-bottom: 12px;
+    padding-right: 0;
   }
 
   .post-header-main {
@@ -807,6 +816,7 @@ function handleMenuAction(eventName, payload) {
 
   .post-author {
     font-size: 14px;
+    max-width: min(58vw, 220px);
   }
 
   .post-meta-link,
@@ -821,25 +831,44 @@ function handleMenuAction(eventName, payload) {
   }
 
   .post-actions {
+    position: relative;
+    top: auto;
+    right: auto;
     opacity: 1;
-    margin-top: 0;
-    flex-wrap: wrap;
-    gap: 6px;
+    justify-content: flex-end;
+    margin-top: 14px;
+    gap: 8px;
   }
 
   .post-action {
-    padding: 5px 9px;
-    border-radius: var(--forum-radius-pill);
-    background: var(--forum-bg-subtle);
+    min-width: 44px;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 3px;
+    background: transparent;
+    border: 1px solid var(--forum-border-color);
+    color: var(--forum-text-muted);
+  }
+
+  .post-action span {
+    display: none;
   }
 
   .post-action--icon {
-    padding-left: 9px;
-    padding-right: 9px;
+    min-width: 40px;
+    width: 44px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .post-controls {
+    min-width: 0;
   }
 
   .post-controls-menu {
     min-width: 150px;
+    right: 0;
   }
 
   .post-body {

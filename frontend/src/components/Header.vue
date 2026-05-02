@@ -40,6 +40,7 @@
           v-if="showMobileRightAction"
           type="button"
           class="mobile-primary-action"
+          :class="{ 'discussion-actions-scope': mobileRightActionType === 'discussion-menu' }"
           :aria-label="mobileRightActionLabel"
           @click="handleMobileRightAction"
         >

@@ -99,6 +99,7 @@ defineProps({
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .discussion-list-item-title:hover {
@@ -127,19 +128,28 @@ defineProps({
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 
 .item-tags {
   display: flex;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .tag-label {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 160px;
   padding: 2px 8px;
   border-radius: 3px;
   color: white;
   font-size: 11px;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .subscription-pill {
@@ -193,6 +203,11 @@ defineProps({
 .username {
   font-weight: bold;
   color: #666;
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .item-last-post i {
@@ -218,6 +233,7 @@ defineProps({
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+    word-break: break-word;
   }
 
   .approval-note {
@@ -237,6 +253,19 @@ defineProps({
 
   .item-tags {
     flex-wrap: wrap;
+  }
+
+  .item-author,
+  .item-last-post {
+    flex: 1 1 100%;
+  }
+
+  .username {
+    max-width: min(58vw, 220px);
+  }
+
+  .tag-label {
+    max-width: min(52vw, 180px);
   }
 
   .tag-label,

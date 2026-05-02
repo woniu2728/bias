@@ -128,14 +128,17 @@ defineEmits(['change-sort', 'mark-all-read', 'refresh'])
 
 @media (max-width: 768px) {
   .index-toolbar {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 10px;
     padding: 12px 15px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .index-toolbar-view,
   .index-toolbar-action {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
   }
 
   .btn-view,
@@ -148,6 +151,7 @@ defineEmits(['change-sort', 'mark-all-read', 'refresh'])
   .btn-view {
     padding: 6px 11px;
     font-size: 12px;
+    white-space: nowrap;
   }
 }
 </style>

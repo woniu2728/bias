@@ -434,7 +434,7 @@ export function useDiscussionDetailPage({
     window.dispatchEvent(new CustomEvent('bias:mobile-header-update', {
       detail: {
         route: 'discussion-detail',
-        title: `${sanitizePostNumber(currentVisiblePostProgress.value)} / ${maxPostNumber.value} 回复`,
+        title: `${sanitizePostNumber(currentVisiblePostProgress.value)} / ${maxPostNumber.value}`,
         leftAction: 'back',
         rightAction: hasMobileDiscussionMenuActions.value ? 'discussion-menu' : 'none'
       }

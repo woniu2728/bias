@@ -82,6 +82,7 @@ defineEmits(['moderate-discussion', 'edit-discussion'])
 
 .discussion-badges {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 15px;
 }
@@ -117,10 +118,13 @@ defineEmits(['moderate-discussion', 'edit-discussion'])
   font-size: var(--forum-font-size-3xl);
   color: var(--forum-text-color);
   margin-bottom: 15px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .discussion-tags {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -180,10 +184,16 @@ defineEmits(['moderate-discussion', 'edit-discussion'])
 }
 
 .tag {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 220px;
   padding: var(--forum-space-1) var(--forum-space-3);
   border-radius: var(--forum-radius-sm);
   color: var(--forum-text-inverse);
   font-size: var(--forum-font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tag:hover {
@@ -218,6 +228,7 @@ defineEmits(['moderate-discussion', 'edit-discussion'])
   }
 
   .tag {
+    max-width: min(78vw, 260px);
     padding: 5px 12px;
     font-size: 12px;
     background: rgba(255, 255, 255, 0.96) !important;
