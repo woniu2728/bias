@@ -6,6 +6,7 @@ from django.utils import timezone
 from datetime import timedelta
 from ninja_jwt.tokens import RefreshToken
 
+from apps.core.models import AuditLog
 from apps.discussions.models import DiscussionUser
 from apps.discussions.services import DiscussionService
 from apps.posts.models import Post
@@ -629,6 +630,7 @@ class PostFlagApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertFalse(Post.objects.filter(id=reply.id).exists())
+        self.assertFalse(AuditLog.objects.filter(action="admin.post.delete").exists())
 
     def test_user_with_global_delete_permission_can_delete_others_reply(self):
         moderator = User.objects.create_user(
@@ -654,6 +656,10 @@ class PostFlagApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertFalse(Post.objects.filter(id=reply.id).exists())
+        audit_log = AuditLog.objects.get(action="admin.post.delete", target_id=reply.id)
+        self.assertEqual(audit_log.user_id, moderator.id)
+        self.assertEqual(audit_log.target_type, "post")
+        self.assertEqual(audit_log.data["discussion_id"], self.discussion.id)
 
 
 class PostLikeTests(TestCase):

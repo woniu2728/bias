@@ -19,6 +19,7 @@ from apps.discussions.schemas import (
 )
 from apps.discussions.services import DiscussionService
 from apps.posts.models import Post
+from apps.core.audit import log_admin_action
 from apps.core.auth import AuthBearer, get_optional_user
 from apps.users.group_utils import get_primary_group, serialize_group_badge
 
@@ -253,7 +254,21 @@ def delete_discussion(request, discussion_id: int):
     需要认证和权限（仅管理员）
     """
     try:
+        discussion = Discussion.objects.select_related("user").get(id=discussion_id)
+        snapshot = {
+            "title": discussion.title,
+            "author_id": discussion.user_id,
+            "deleted_by_owner": discussion.user_id == request.auth.id,
+        }
         DiscussionService.delete_discussion(discussion_id, request.auth)
+        if request.auth.is_staff or not snapshot["deleted_by_owner"]:
+            log_admin_action(
+                request,
+                "admin.discussion.delete",
+                target_type="discussion",
+                target_id=discussion_id,
+                data=snapshot,
+            )
         return {"message": "讨论已删除"}
     except Discussion.DoesNotExist:
         return JsonResponse({"error": "讨论不存在"}, status=404)
@@ -275,6 +290,13 @@ def toggle_pin_discussion(request, discussion_id: int):
         discussion = Discussion.objects.get(id=discussion_id)
         discussion.is_sticky = not discussion.is_sticky
         discussion.save(update_fields=['is_sticky'])
+        log_admin_action(
+            request,
+            "admin.discussion.sticky" if discussion.is_sticky else "admin.discussion.unsticky",
+            target_type="discussion",
+            target_id=discussion.id,
+            data={"title": discussion.title, "is_sticky": discussion.is_sticky},
+        )
         return {"message": "操作成功", "is_sticky": discussion.is_sticky}
     except Discussion.DoesNotExist:
         return JsonResponse({"error": "讨论不存在"}, status=404)
@@ -294,6 +316,13 @@ def toggle_lock_discussion(request, discussion_id: int):
         discussion = Discussion.objects.get(id=discussion_id)
         discussion.is_locked = not discussion.is_locked
         discussion.save(update_fields=['is_locked'])
+        log_admin_action(
+            request,
+            "admin.discussion.lock" if discussion.is_locked else "admin.discussion.unlock",
+            target_type="discussion",
+            target_id=discussion.id,
+            data={"title": discussion.title, "is_locked": discussion.is_locked},
+        )
         return {"message": "操作成功", "is_locked": discussion.is_locked}
     except Discussion.DoesNotExist:
         return JsonResponse({"error": "讨论不存在"}, status=404)
@@ -311,8 +340,16 @@ def toggle_hide_discussion(request, discussion_id: int):
 
     try:
         discussion = Discussion.objects.get(id=discussion_id)
-        DiscussionService.set_hidden_state(discussion, request.auth, not discussion.is_hidden)
+        next_hidden = not discussion.is_hidden
+        DiscussionService.set_hidden_state(discussion, request.auth, next_hidden)
         discussion.refresh_from_db()
+        log_admin_action(
+            request,
+            "admin.discussion.hide" if discussion.is_hidden else "admin.discussion.restore",
+            target_type="discussion",
+            target_id=discussion.id,
+            data={"title": discussion.title, "is_hidden": discussion.is_hidden},
+        )
         return {"message": "操作成功", "is_hidden": discussion.is_hidden}
     except Discussion.DoesNotExist:
         return JsonResponse({"error": "讨论不存在"}, status=404)

@@ -19,6 +19,7 @@ from apps.posts.schemas import (
 )
 from apps.posts.services import PostService
 from apps.tags.services import TagService
+from apps.core.audit import log_admin_action
 from apps.core.auth import AuthBearer, get_optional_user
 from apps.users.group_utils import get_primary_group, serialize_group_badge
 
@@ -291,7 +292,23 @@ def delete_post(request, post_id: int):
     需要认证和权限
     """
     try:
+        post = Post.objects.select_related("discussion", "user").get(id=post_id)
+        snapshot = {
+            "discussion_id": post.discussion_id,
+            "discussion_title": post.discussion.title if post.discussion else "",
+            "number": post.number,
+            "author_id": post.user_id,
+            "deleted_by_owner": post.user_id == request.auth.id,
+        }
         PostService.delete_post(post_id, request.auth)
+        if request.auth.is_staff or not snapshot["deleted_by_owner"]:
+            log_admin_action(
+                request,
+                "admin.post.delete",
+                target_type="post",
+                target_id=post_id,
+                data=snapshot,
+            )
         return {"message": "帖子已删除"}
     except Post.DoesNotExist:
         return JsonResponse({"error": "帖子不存在"}, status=404)
@@ -364,6 +381,17 @@ def resolve_post_flags(request, post_id: int, payload: PostFlagResolveSchema):
             admin_user=request.auth,
             status=payload.status,
             resolution_note=payload.resolution_note,
+        )
+        log_admin_action(
+            request,
+            "admin.flag.resolve",
+            target_type="post",
+            target_id=post_id,
+            data={
+                "status": payload.status,
+                "resolved_count": resolved_count,
+                "resolution_note": payload.resolution_note,
+            },
         )
         post = PostService.get_post_by_id(post_id, request.auth)
         if not post:

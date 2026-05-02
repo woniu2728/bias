@@ -11,6 +11,7 @@ from datetime import timedelta
 from io import StringIO
 from ninja_jwt.tokens import RefreshToken
 
+from apps.core.models import AuditLog
 from apps.discussions.models import Discussion
 from apps.discussions.services import DiscussionService
 from apps.posts.services import PostService
@@ -638,6 +639,9 @@ class DiscussionApiTests(TestCase):
             **self.auth_header(admin),
         )
         self.assertEqual(hide_response.status_code, 200, hide_response.content)
+        hide_log = AuditLog.objects.get(action="admin.discussion.hide", target_id=discussion.id)
+        self.assertEqual(hide_log.target_type, "discussion")
+        self.assertEqual(hide_log.data["title"], "隐藏测试讨论")
 
         discussion.refresh_from_db()
         self.assertTrue(discussion.is_hidden)
@@ -661,6 +665,8 @@ class DiscussionApiTests(TestCase):
             **self.auth_header(admin),
         )
         self.assertEqual(restore_response.status_code, 200, restore_response.content)
+        restore_log = AuditLog.objects.get(action="admin.discussion.restore", target_id=discussion.id)
+        self.assertEqual(restore_log.target_type, "discussion")
 
         discussion.refresh_from_db()
         self.assertFalse(discussion.is_hidden)
@@ -716,6 +722,34 @@ class DiscussionApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertFalse(Discussion.objects.filter(id=discussion.id).exists())
+        self.assertFalse(AuditLog.objects.filter(action="admin.discussion.delete").exists())
+
+    def test_global_delete_discussion_permission_writes_admin_audit_log(self):
+        moderator = User.objects.create_user(
+            username="discussion-delete-moderator",
+            email="discussion-delete-moderator@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        moderator_group = Group.objects.create(name="DiscussionDeleteModerator", color="#4d698e")
+        Permission.objects.create(group=moderator_group, permission="discussion.delete")
+        moderator.user_groups.add(moderator_group)
+        discussion = DiscussionService.create_discussion(
+            title="Moderator deletes discussion",
+            content="Allowed by global permission",
+            user=self.author,
+        )
+
+        response = self.client.delete(
+            f"/api/discussions/{discussion.id}",
+            **self.auth_header(moderator),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        audit_log = AuditLog.objects.get(action="admin.discussion.delete", target_id=discussion.id)
+        self.assertEqual(audit_log.user_id, moderator.id)
+        self.assertEqual(audit_log.target_type, "discussion")
+        self.assertEqual(audit_log.data["title"], "Moderator deletes discussion")
 
     def test_user_with_global_edit_permission_can_edit_others_discussion(self):
         editor_group = Group.objects.create(name="DiscussionEditor", color="#4d698e")
