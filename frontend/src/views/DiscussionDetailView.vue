@@ -150,9 +150,11 @@
 </template>
 
 <script setup>
+import { watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ForumLoadMoreButton from '@/components/forum/ForumLoadMoreButton.vue'
 import ForumStateBlock from '@/components/forum/ForumStateBlock.vue'
+import { useForumStore } from '@/stores/forum'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
 import { useModalStore } from '@/stores/modal'
@@ -177,6 +179,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
+const forumStore = useForumStore()
 const modalStore = useModalStore()
 
 const {
@@ -299,6 +302,22 @@ const {
   togglePin,
   toggleSubscription
 })
+
+watch(
+  discussion,
+  value => {
+    if (!value) return
+    const firstPostText = String(value.first_post?.content || value.excerpt || '').replace(/\s+/g, ' ').trim()
+    forumStore.setPageMeta({
+      title: value.title,
+      description: firstPostText.slice(0, 160),
+      ogType: 'article',
+      canonicalUrl: `/d/${value.id}`,
+    })
+  },
+  { immediate: true }
+)
+
 </script>
 
 <style scoped>

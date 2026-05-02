@@ -71,6 +71,11 @@ export const useForumStore = defineStore('forum', () => {
     document.documentElement.style.setProperty('--forum-primary-color', settings.value.primary_color || DEFAULT_SETTINGS.primary_color)
     document.documentElement.style.setProperty('--forum-accent-color', settings.value.accent_color || DEFAULT_SETTINGS.accent_color)
 
+    applyPageMeta()
+    applyRuntimeAssets()
+  }
+
+  function buildDefaultMeta() {
     const title = settings.value.seo_title || settings.value.forum_title || DEFAULT_SETTINGS.forum_title
     const description = settings.value.seo_description
       || settings.value.forum_description
@@ -81,6 +86,27 @@ export const useForumStore = defineStore('forum', () => {
       settings.value.seo_robots_index === false ? 'noindex' : 'index',
       settings.value.seo_robots_follow === false ? 'nofollow' : 'follow',
     ].join(', ')
+
+    return {
+      title,
+      description,
+      keywords,
+      robots,
+      ogTitle: title,
+      ogDescription: description,
+    }
+  }
+
+  function applyPageMeta(meta = {}) {
+    if (typeof document === 'undefined') return
+
+    const defaults = buildDefaultMeta()
+    const pageTitle = normalizeMetaText(meta.title)
+    const siteTitle = settings.value.forum_title || DEFAULT_SETTINGS.forum_title
+    const title = pageTitle && pageTitle !== siteTitle ? `${pageTitle} - ${siteTitle}` : (pageTitle || defaults.title)
+    const description = normalizeMetaText(meta.description) || defaults.description
+    const keywords = normalizeMetaText(meta.keywords) || defaults.keywords
+    const robots = normalizeMetaText(meta.robots) || defaults.robots
 
     document.title = title
 
@@ -105,6 +131,13 @@ export const useForumStore = defineStore('forum', () => {
     })
     metaRobots.setAttribute('content', robots)
 
+    const canonical = upsertHeadTag('link[rel="canonical"]', () => {
+      const element = document.createElement('link')
+      element.setAttribute('rel', 'canonical')
+      return element
+    })
+    canonical.setAttribute('href', normalizeCanonicalUrl(meta.canonicalUrl))
+
     const ogTitle = upsertHeadTag('meta[property="og:title"]', () => {
       const element = document.createElement('meta')
       element.setAttribute('property', 'og:title')
@@ -118,6 +151,96 @@ export const useForumStore = defineStore('forum', () => {
       return element
     })
     ogDescription.setAttribute('content', description)
+
+    const twitterCard = upsertHeadTag('meta[name="twitter:card"]', () => {
+      const element = document.createElement('meta')
+      element.setAttribute('name', 'twitter:card')
+      return element
+    })
+    twitterCard.setAttribute('content', normalizeMetaText(meta.image || settings.value.logo_url) ? 'summary_large_image' : 'summary')
+
+    const twitterTitle = upsertHeadTag('meta[name="twitter:title"]', () => {
+      const element = document.createElement('meta')
+      element.setAttribute('name', 'twitter:title')
+      return element
+    })
+    twitterTitle.setAttribute('content', title)
+
+    const twitterDescription = upsertHeadTag('meta[name="twitter:description"]', () => {
+      const element = document.createElement('meta')
+      element.setAttribute('name', 'twitter:description')
+      return element
+    })
+    twitterDescription.setAttribute('content', description)
+
+    const ogType = upsertHeadTag('meta[property="og:type"]', () => {
+      const element = document.createElement('meta')
+      element.setAttribute('property', 'og:type')
+      return element
+    })
+    ogType.setAttribute('content', normalizeMetaText(meta.ogType) || 'website')
+
+    const ogUrl = upsertHeadTag('meta[property="og:url"]', () => {
+      const element = document.createElement('meta')
+      element.setAttribute('property', 'og:url')
+      return element
+    })
+    ogUrl.setAttribute('content', normalizeCanonicalUrl(meta.canonicalUrl))
+
+    const ogSiteName = upsertHeadTag('meta[property="og:site_name"]', () => {
+      const element = document.createElement('meta')
+      element.setAttribute('property', 'og:site_name')
+      return element
+    })
+    ogSiteName.setAttribute('content', siteTitle)
+
+    const ogImage = normalizeMetaText(meta.image || settings.value.logo_url)
+    const existingOgImage = document.head.querySelector('meta[property="og:image"]')
+    if (ogImage) {
+      const tag = existingOgImage || upsertHeadTag('meta[property="og:image"]', () => {
+        const element = document.createElement('meta')
+        element.setAttribute('property', 'og:image')
+        return element
+      })
+      tag.setAttribute('content', absoluteUrl(ogImage))
+
+      const twitterImage = upsertHeadTag('meta[name="twitter:image"]', () => {
+        const element = document.createElement('meta')
+        element.setAttribute('name', 'twitter:image')
+        return element
+      })
+      twitterImage.setAttribute('content', absoluteUrl(ogImage))
+    } else if (existingOgImage) {
+      existingOgImage.remove()
+      document.head.querySelector('meta[name="twitter:image"]')?.remove()
+    }
+  }
+
+  function setPageMeta(meta = {}) {
+    applyPageMeta(meta)
+  }
+
+  function resetPageMeta() {
+    applyPageMeta()
+  }
+
+  function normalizeMetaText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim()
+  }
+
+  function normalizeCanonicalUrl(value) {
+    if (typeof window === 'undefined') return normalizeMetaText(value)
+    return absoluteUrl(value || `${window.location.pathname}${window.location.search}`)
+  }
+
+  function absoluteUrl(value) {
+    const normalized = normalizeMetaText(value)
+    if (!normalized || typeof window === 'undefined') return normalized
+    return new URL(normalized, window.location.origin).href
+  }
+
+  function applyRuntimeAssets() {
+    if (typeof document === 'undefined') return
 
     let favicon = document.querySelector('link[rel="icon"]')
     if (!favicon) {
@@ -150,5 +273,7 @@ export const useForumStore = defineStore('forum', () => {
     initialized,
     initialize,
     fetchSettings,
+    resetPageMeta,
+    setPageMeta,
   }
 })

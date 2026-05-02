@@ -87,9 +87,11 @@
 </template>
 
 <script setup>
+import { watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
+import { useForumStore } from '@/stores/forum'
 import ForumHeroPanel from '@/components/forum/ForumHeroPanel.vue'
 import ForumPagination from '@/components/forum/ForumPagination.vue'
 import ForumPageWithSidebar from '@/components/forum/ForumPageWithSidebar.vue'
@@ -108,6 +110,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
+const forumStore = useForumStore()
 const { startDiscussion } = useStartDiscussionAction({
   authStore,
   composerStore,
@@ -143,6 +146,23 @@ const {
   route,
   router
 })
+
+watch(
+  () => [normalizedQuery.value, searchType.value, discussionTotal.value, postTotal.value, userTotal.value],
+  () => {
+    const query = normalizedQuery.value
+    const title = query ? `搜索：${query}` : '搜索'
+    const description = query
+      ? `查看“${query}”相关的讨论、回复和用户结果。`
+      : '搜索论坛中的讨论、回复和用户。'
+    forumStore.setPageMeta({
+      title,
+      description,
+      canonicalUrl: `/search${query ? `?q=${encodeURIComponent(query)}&type=${encodeURIComponent(searchType.value)}` : ''}`,
+    })
+  },
+  { immediate: true }
+)
 
 function handleStartDiscussion() {
   startDiscussion({

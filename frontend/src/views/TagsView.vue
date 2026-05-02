@@ -35,8 +35,10 @@
 </template>
 
 <script setup>
+import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
+import { useForumStore } from '@/stores/forum'
 import { useRouter } from 'vue-router'
 import ForumHeroPanel from '@/components/forum/ForumHeroPanel.vue'
 import ForumPageWithSidebar from '@/components/forum/ForumPageWithSidebar.vue'
@@ -50,6 +52,7 @@ import { useTagsPage } from '@/composables/useTagsPage'
 
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
+const forumStore = useForumStore()
 const router = useRouter()
 const { startDiscussion } = useStartDiscussionAction({
   authStore,
@@ -58,6 +61,18 @@ const { startDiscussion } = useStartDiscussionAction({
 })
 
 const { cloudTags, loading, tags } = useTagsPage()
+
+watch(
+  tags,
+  value => {
+    forumStore.setPageMeta({
+      title: '全部标签',
+      description: value.length ? `浏览 ${value.length} 个论坛标签，按主题发现相关讨论。` : '浏览论坛标签，按主题发现相关讨论。',
+      canonicalUrl: '/tags',
+    })
+  },
+  { immediate: true }
+)
 
 function handleStartDiscussion() {
   startDiscussion({

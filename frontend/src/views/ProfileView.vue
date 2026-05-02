@@ -84,8 +84,10 @@
 </template>
 
 <script setup>
+import { watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useForumStore } from '@/stores/forum'
 import { useModalStore } from '@/stores/modal'
 import ForumStateBlock from '@/components/forum/ForumStateBlock.vue'
 import ProfileDiscussionSection from '@/components/profile/ProfileDiscussionSection.vue'
@@ -103,6 +105,7 @@ import {
 
 const route = useRoute()
 const authStore = useAuthStore()
+const forumStore = useForumStore()
 const modalStore = useModalStore()
 const {
   user,
@@ -151,6 +154,22 @@ const {
   formatJoinDate,
   formatLastSeen
 } = useProfilePresentation(user)
+
+watch(
+  user,
+  value => {
+    if (!value) return
+    const displayName = value.display_name || value.username
+    const bio = String(value.bio || '').replace(/\s+/g, ' ').trim()
+    forumStore.setPageMeta({
+      title: `${displayName} 的主页`,
+      description: bio || `${displayName} 在论坛发布了 ${value.discussion_count || 0} 个讨论和 ${value.comment_count || 0} 条回复。`,
+      canonicalUrl: `/u/${value.username || value.id}`,
+    })
+  },
+  { immediate: true }
+)
+
 </script>
 
 <style scoped>

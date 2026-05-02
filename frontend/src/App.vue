@@ -113,6 +113,7 @@ function handleAuthInvalidated() {
 
 onMounted(async () => {
   await forumStore.initialize()
+  applyRouteMeta()
   loadDismissedAnnouncementKey()
 
   window.addEventListener('beforeunload', handleBeforeUnload)
@@ -150,6 +151,26 @@ watch(
     notificationStore.resetState()
   }
 )
+
+watch(
+  () => route.fullPath,
+  () => {
+    applyRouteMeta()
+  },
+  { immediate: true }
+)
+
+function applyRouteMeta() {
+  if (route.meta?.title || route.meta?.description) {
+    forumStore.setPageMeta({
+      title: route.meta.title,
+      description: route.meta.description,
+    })
+    return
+  }
+
+  forumStore.resetPageMeta()
+}
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
