@@ -631,6 +631,11 @@ class DiscussionService:
 
     @staticmethod
     def approve_discussion(discussion: Discussion, admin_user: User, note: str = "") -> Discussion:
+        was_counted = discussion.approval_status == Discussion.APPROVAL_APPROVED
+        approved_reply_counts = {}
+        if not was_counted:
+            approved_reply_counts = DiscussionService._approved_reply_counts_by_author(discussion)
+
         with transaction.atomic():
             discussion.approval_status = Discussion.APPROVAL_APPROVED
             discussion.approved_at = timezone.now()
@@ -651,12 +656,15 @@ class DiscussionService:
                 hidden_user=None,
             )
 
-            if discussion.user:
-                discussion.user.discussion_count = F('discussion_count') + 1
-                discussion.user.save(update_fields=['discussion_count'])
+            if not was_counted:
+                if discussion.user:
+                    User.objects.filter(id=discussion.user_id).update(discussion_count=F('discussion_count') + 1)
+                for user_id, total in approved_reply_counts.items():
+                    User.objects.filter(id=user_id).update(comment_count=F("comment_count") + total)
 
-            from apps.notifications.services import NotificationService
-            NotificationService.notify_discussion_approved(discussion, admin_user, note=note)
+            if not was_counted:
+                from apps.notifications.services import NotificationService
+                NotificationService.notify_discussion_approved(discussion, admin_user, note=note)
             TagService.refresh_discussion_tag_stats(discussion.id)
 
         discussion.refresh_from_db()
@@ -665,6 +673,12 @@ class DiscussionService:
     @staticmethod
     def reject_discussion(discussion: Discussion, admin_user: User, note: str = "") -> Discussion:
         rejected_at = timezone.now()
+        previous_status = discussion.approval_status
+        was_counted = discussion.approval_status == Discussion.APPROVAL_APPROVED
+        approved_reply_counts = {}
+        if was_counted:
+            approved_reply_counts = DiscussionService._approved_reply_counts_by_author(discussion)
+
         with transaction.atomic():
             discussion.approval_status = Discussion.APPROVAL_REJECTED
             discussion.approved_at = rejected_at
@@ -685,12 +699,35 @@ class DiscussionService:
                 hidden_user=admin_user,
             )
 
-            from apps.notifications.services import NotificationService
-            NotificationService.notify_discussion_rejected(discussion, admin_user, note=note)
+            if was_counted:
+                if discussion.user:
+                    User.objects.filter(id=discussion.user_id).update(discussion_count=F('discussion_count') - 1)
+                for user_id, total in approved_reply_counts.items():
+                    User.objects.filter(id=user_id).update(comment_count=F("comment_count") - total)
+
+            if previous_status != Discussion.APPROVAL_REJECTED:
+                from apps.notifications.services import NotificationService
+                NotificationService.notify_discussion_rejected(discussion, admin_user, note=note)
             TagService.refresh_discussion_tag_stats(discussion.id)
 
         discussion.refresh_from_db()
         return discussion
+
+    @staticmethod
+    def _approved_reply_counts_by_author(discussion: Discussion) -> dict:
+        approved_replies = (
+            Post.objects.filter(
+                discussion=discussion,
+                type="comment",
+                approval_status=Post.APPROVAL_APPROVED,
+                hidden_at__isnull=True,
+                number__gt=1,
+            )
+            .exclude(user_id__isnull=True)
+            .values("user_id")
+            .annotate(total=Count("id"))
+        )
+        return {row["user_id"]: row["total"] for row in approved_replies}
 
     @staticmethod
     def delete_discussion(discussion_id: int, user: User) -> bool:
@@ -717,19 +754,21 @@ class DiscussionService:
         with transaction.atomic():
             approved_discussion = discussion.approval_status == Discussion.APPROVAL_APPROVED
             approved_reply_counts = {}
-            approved_replies = (
-                Post.objects.filter(
-                    discussion=discussion,
-                    type="comment",
-                    approval_status=Post.APPROVAL_APPROVED,
-                    number__gt=1,
+            if approved_discussion:
+                approved_replies = (
+                    Post.objects.filter(
+                        discussion=discussion,
+                        type="comment",
+                        approval_status=Post.APPROVAL_APPROVED,
+                        hidden_at__isnull=True,
+                        number__gt=1,
+                    )
+                    .exclude(user_id__isnull=True)
+                    .values("user_id")
+                    .annotate(total=Count("id"))
                 )
-                .exclude(user_id__isnull=True)
-                .values("user_id")
-                .annotate(total=Count("id"))
-            )
-            for row in approved_replies:
-                approved_reply_counts[row["user_id"]] = row["total"]
+                for row in approved_replies:
+                    approved_reply_counts[row["user_id"]] = row["total"]
 
             # 删除相关帖子
             Post.objects.filter(discussion=discussion).delete()

@@ -524,6 +524,41 @@ class PostFlagApiTests(TestCase):
         self.assertEqual(list_response.status_code, 200, list_response.content)
         self.assertTrue(any(item["id"] == pending_post.id for item in list_response.json()["data"]))
 
+    def test_post_approval_transitions_keep_discussion_and_author_counts_consistent(self):
+        trusted_group = Group.objects.create(name="TrustedReplyCounts", color="#4d698e")
+        Permission.objects.create(group=trusted_group, permission="replyWithoutApproval")
+        pending_post = PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="需要审核的计数回复",
+            user=self.reporter,
+        )
+
+        self.discussion.refresh_from_db()
+        self.reporter.refresh_from_db()
+        self.assertEqual(self.discussion.comment_count, 2)
+        self.assertEqual(self.reporter.comment_count, 0)
+
+        PostService.approve_post(pending_post, self.admin, note="通过")
+        self.discussion.refresh_from_db()
+        self.reporter.refresh_from_db()
+        self.assertEqual(self.discussion.comment_count, 3)
+        self.assertEqual(self.reporter.comment_count, 1)
+        self.assertEqual(self.discussion.last_post_id, pending_post.id)
+
+        pending_post.refresh_from_db()
+        PostService.approve_post(pending_post, self.admin, note="重复通过")
+        self.discussion.refresh_from_db()
+        self.reporter.refresh_from_db()
+        self.assertEqual(self.discussion.comment_count, 3)
+        self.assertEqual(self.reporter.comment_count, 1)
+
+        PostService.reject_post(pending_post, self.admin, note="下架")
+        self.discussion.refresh_from_db()
+        self.reporter.refresh_from_db()
+        self.assertEqual(self.discussion.comment_count, 2)
+        self.assertEqual(self.reporter.comment_count, 0)
+        self.assertEqual(self.discussion.last_post_id, self.post.id)
+
     def test_cannot_reply_in_tag_without_reply_permission(self):
         admin = User.objects.create_superuser(
             username="reply-admin",

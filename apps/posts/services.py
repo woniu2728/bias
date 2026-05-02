@@ -590,6 +590,11 @@ class PostService:
 
     @staticmethod
     def approve_post(post: Post, admin_user: User, note: str = "") -> Post:
+        was_counted = (
+            post.approval_status == Post.APPROVAL_APPROVED
+            and post.hidden_at is None
+        )
+
         with transaction.atomic():
             now = timezone.now()
             post.approval_status = Post.APPROVAL_APPROVED
@@ -603,39 +608,40 @@ class PostService:
             ])
 
             discussion = post.discussion
-            discussion.comment_count = F('comment_count') + 1
-            if not discussion.last_post_number or post.number >= discussion.last_post_number:
-                discussion.last_posted_at = now
-                discussion.last_posted_user = post.user
-                discussion.last_post_id = post.id
-                discussion.last_post_number = post.number
-            discussion.save()
+            if not was_counted:
+                discussion.comment_count = F('comment_count') + 1
+                if not discussion.last_post_number or post.number >= discussion.last_post_number:
+                    discussion.last_posted_at = now
+                    discussion.last_posted_user = post.user
+                    discussion.last_post_id = post.id
+                    discussion.last_post_number = post.number
+                discussion.save()
 
-            if post.user:
-                post.user.comment_count = F('comment_count') + 1
-                post.user.save(update_fields=['comment_count'])
-                follow_after_reply = post.user.preferences.get('follow_after_reply', False)
-                approval_defaults = {
-                    'last_read_at': now,
-                    'last_read_post_number': post.number,
-                }
-                if follow_after_reply:
-                    approval_defaults['is_subscribed'] = True
-                DiscussionUser.objects.update_or_create(
-                    discussion=discussion,
-                    user=post.user,
-                    defaults=approval_defaults,
+                if post.user:
+                    post.user.comment_count = F('comment_count') + 1
+                    post.user.save(update_fields=['comment_count'])
+                    follow_after_reply = post.user.preferences.get('follow_after_reply', False)
+                    approval_defaults = {
+                        'last_read_at': now,
+                        'last_read_post_number': post.number,
+                    }
+                    if follow_after_reply:
+                        approval_defaults['is_subscribed'] = True
+                    DiscussionUser.objects.update_or_create(
+                        discussion=discussion,
+                        user=post.user,
+                        defaults=approval_defaults,
+                    )
+
+                PostService._process_mentions(post, post.content)
+
+                from apps.notifications.services import NotificationService
+                NotificationService.notify_discussion_reply(
+                    discussion_id=discussion.id,
+                    post_id=post.id,
+                    from_user=post.user
                 )
-
-            PostService._process_mentions(post, post.content)
-
-            from apps.notifications.services import NotificationService
-            NotificationService.notify_discussion_reply(
-                discussion_id=discussion.id,
-                post_id=post.id,
-                from_user=post.user
-            )
-            NotificationService.notify_post_approved(post, admin_user, note=note)
+                NotificationService.notify_post_approved(post, admin_user, note=note)
             TagService.refresh_discussion_tag_stats(discussion.id)
 
         post.refresh_from_db()
@@ -644,18 +650,32 @@ class PostService:
     @staticmethod
     def reject_post(post: Post, admin_user: User, note: str = "") -> Post:
         rejected_at = timezone.now()
-        post.approval_status = Post.APPROVAL_REJECTED
-        post.approved_at = rejected_at
-        post.approved_by = admin_user
-        post.approval_note = note
-        post.hidden_at = rejected_at
-        post.hidden_user = admin_user
-        post.save(update_fields=[
-            'approval_status', 'approved_at', 'approved_by', 'approval_note', 'hidden_at', 'hidden_user'
-        ])
+        previous_status = post.approval_status
+        was_counted = (
+            post.approval_status == Post.APPROVAL_APPROVED
+            and post.hidden_at is None
+        )
 
-        from apps.notifications.services import NotificationService
-        NotificationService.notify_post_rejected(post, admin_user, note=note)
+        with transaction.atomic():
+            post.approval_status = Post.APPROVAL_REJECTED
+            post.approved_at = rejected_at
+            post.approved_by = admin_user
+            post.approval_note = note
+            post.hidden_at = rejected_at
+            post.hidden_user = admin_user
+            post.save(update_fields=[
+                'approval_status', 'approved_at', 'approved_by', 'approval_note', 'hidden_at', 'hidden_user'
+            ])
+
+            if was_counted:
+                PostService._refresh_discussion_approved_stats(post.discussion)
+                if post.user:
+                    post.user.comment_count = F('comment_count') - 1
+                    post.user.save(update_fields=['comment_count'])
+
+            if previous_status != Post.APPROVAL_REJECTED:
+                from apps.notifications.services import NotificationService
+                NotificationService.notify_post_rejected(post, admin_user, note=note)
         return post
 
     @staticmethod

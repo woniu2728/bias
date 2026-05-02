@@ -512,6 +512,49 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(list_response.status_code, 200, list_response.content)
         self.assertTrue(any(item["id"] == discussion.id for item in list_response.json()["data"]))
 
+    def test_discussion_approval_transitions_keep_author_counts_consistent(self):
+        admin = User.objects.create_superuser(
+            username="approval-count-admin",
+            email="approval-count-admin@example.com",
+            password="password123",
+        )
+        discussion = DiscussionService.create_discussion(
+            title="Approval count discussion",
+            content="First post",
+            user=self.author,
+        )
+        reply = PostService.create_post(
+            discussion_id=discussion.id,
+            content="Counted reply",
+            user=self.reader,
+        )
+
+        self.author.refresh_from_db()
+        self.reader.refresh_from_db()
+        self.assertEqual(self.author.discussion_count, 1)
+        self.assertEqual(self.reader.comment_count, 1)
+
+        DiscussionService.approve_discussion(discussion, admin)
+        self.author.refresh_from_db()
+        self.reader.refresh_from_db()
+        self.assertEqual(self.author.discussion_count, 1)
+        self.assertEqual(self.reader.comment_count, 1)
+
+        DiscussionService.reject_discussion(discussion, admin, note="下架")
+        self.author.refresh_from_db()
+        self.reader.refresh_from_db()
+        self.assertEqual(self.author.discussion_count, 0)
+        self.assertEqual(self.reader.comment_count, 0)
+
+        discussion.refresh_from_db()
+        DiscussionService.approve_discussion(discussion, admin, note="恢复")
+        self.author.refresh_from_db()
+        self.reader.refresh_from_db()
+        reply.refresh_from_db()
+        self.assertEqual(self.author.discussion_count, 1)
+        self.assertEqual(self.reader.comment_count, 1)
+        self.assertEqual(reply.approval_status, "approved")
+
     def test_discussion_list_hides_staff_only_tag_for_non_staff(self):
         staff_tag = Tag.objects.create(
             name="Staff",
@@ -702,6 +745,33 @@ class DiscussionApiTests(TestCase):
 
         pending_author.refresh_from_db()
         self.assertEqual(pending_author.discussion_count, 0)
+
+    def test_delete_rejected_discussion_does_not_decrement_reply_author_counts_again(self):
+        admin = User.objects.create_superuser(
+            username="delete-rejected-discussion-admin",
+            email="delete-rejected-discussion-admin@example.com",
+            password="password123",
+        )
+        discussion = DiscussionService.create_discussion(
+            title="Rejected delete discussion",
+            content="First post",
+            user=self.author,
+        )
+        PostService.create_post(
+            discussion_id=discussion.id,
+            content="Counted reply before rejection",
+            user=self.reader,
+        )
+
+        DiscussionService.reject_discussion(discussion, admin, note="下架")
+        self.reader.refresh_from_db()
+        self.assertEqual(self.reader.comment_count, 0)
+
+        discussion.refresh_from_db()
+        DiscussionService.delete_discussion(discussion.id, admin)
+
+        self.reader.refresh_from_db()
+        self.assertEqual(self.reader.comment_count, 0)
 
     def test_cannot_create_discussion_with_secondary_tag_only(self):
         parent_tag = Tag.objects.create(name="开发", slug="dev")
