@@ -24,8 +24,13 @@
         <h3 class="Section-title">缓存设置</h3>
 
         <div class="Form-group">
-          <label>缓存驱动</label>
-          <select v-model="settings.cache_driver" class="FormControl">
+          <label for="advanced-cache-driver">缓存驱动</label>
+          <select
+            id="advanced-cache-driver"
+            v-model="settings.cache_driver"
+            name="cache_driver"
+            class="FormControl"
+          >
             <option value="file">文件</option>
             <option value="redis">Redis</option>
             <option value="memcached">Memcached</option>
@@ -34,9 +39,11 @@
         </div>
 
         <div class="Form-group">
-          <label>缓存时间（秒）</label>
+          <label for="advanced-cache-lifetime">缓存时间（秒）</label>
           <input
+            id="advanced-cache-lifetime"
             v-model.number="settings.cache_lifetime"
+            name="cache_lifetime"
             type="number"
             class="FormControl"
             placeholder="3600"
@@ -45,7 +52,7 @@
         </div>
 
         <div class="Form-actions">
-          <button @click="clearCache" class="Button" :disabled="clearing">
+          <button type="button" @click="clearCache" class="Button" :disabled="clearing">
             {{ clearing ? '清除中...' : '清除缓存' }}
           </button>
         </div>
@@ -60,7 +67,12 @@
         </div>
 
         <div class="Form-actions">
-          <button @click="rebuildSearchIndexes" class="Button" :disabled="rebuildingSearchIndexes">
+          <button
+            type="button"
+            @click="rebuildSearchIndexes"
+            class="Button"
+            :disabled="rebuildingSearchIndexes"
+          >
             {{ rebuildingSearchIndexes ? '重建中...' : '重建搜索索引' }}
           </button>
         </div>
@@ -70,8 +82,13 @@
         <h3 class="Section-title">队列设置</h3>
 
         <div class="Form-group">
-          <label>队列驱动</label>
-          <select v-model="settings.queue_driver" class="FormControl">
+          <label for="advanced-queue-driver">队列驱动</label>
+          <select
+            id="advanced-queue-driver"
+            v-model="settings.queue_driver"
+            name="queue_driver"
+            class="FormControl"
+          >
             <option value="sync">同步</option>
             <option value="database">数据库</option>
             <option value="redis">Redis</option>
@@ -82,7 +99,9 @@
         <div class="Form-group">
           <label>
             <input
+              id="advanced-queue-enabled"
               v-model="settings.queue_enabled"
+              name="queue_enabled"
               type="checkbox"
               class="FormControl-checkbox"
             />
@@ -96,8 +115,13 @@
         <h3 class="Section-title">安全与真人验证</h3>
 
         <div class="Form-group">
-          <label>验证提供方</label>
-          <select v-model="settings.auth_human_verification_provider" class="FormControl">
+          <label for="advanced-human-verification-provider">验证提供方</label>
+          <select
+            id="advanced-human-verification-provider"
+            v-model="settings.auth_human_verification_provider"
+            name="auth_human_verification_provider"
+            class="FormControl"
+          >
             <option value="off">关闭</option>
             <option value="turnstile">Cloudflare Turnstile</option>
           </select>
@@ -107,9 +131,11 @@
         <template v-if="settings.auth_human_verification_provider === 'turnstile'">
           <div class="Form-grid">
             <div class="Form-group">
-              <label>Site Key</label>
+              <label for="advanced-turnstile-site-key">Site Key</label>
               <input
+                id="advanced-turnstile-site-key"
                 v-model="settings.auth_turnstile_site_key"
+                name="auth_turnstile_site_key"
                 type="text"
                 class="FormControl"
                 placeholder="0x4AAAA..."
@@ -117,9 +143,11 @@
             </div>
 
             <div class="Form-group">
-              <label>Secret Key</label>
+              <label for="advanced-turnstile-secret-key">Secret Key</label>
               <input
+                id="advanced-turnstile-secret-key"
                 v-model="settings.auth_turnstile_secret_key"
+                name="auth_turnstile_secret_key"
                 type="password"
                 class="FormControl"
                 placeholder="0x4AAAA..."
@@ -131,7 +159,9 @@
             <div class="Form-group Form-group--checkbox">
               <label>
                 <input
+                  id="advanced-human-verification-login-enabled"
                   v-model="settings.auth_human_verification_login_enabled"
+                  name="auth_human_verification_login_enabled"
                   type="checkbox"
                   class="FormControl-checkbox"
                 />
@@ -142,7 +172,9 @@
             <div class="Form-group Form-group--checkbox">
               <label>
                 <input
+                  id="advanced-human-verification-register-enabled"
                   v-model="settings.auth_human_verification_register_enabled"
+                  name="auth_human_verification_register_enabled"
                   type="checkbox"
                   class="FormControl-checkbox"
                 />
@@ -161,8 +193,13 @@
         <h3 class="Section-title">文件存储</h3>
 
         <div class="Form-group">
-          <label>存储驱动</label>
-          <select v-model="settings.storage_driver" class="FormControl">
+          <label for="advanced-storage-driver">存储驱动</label>
+          <select
+            id="advanced-storage-driver"
+            v-model="settings.storage_driver"
+            name="storage_driver"
+            class="FormControl"
+          >
             <option value="local">本地存储</option>
             <option value="s3">Amazon S3 / S3 兼容</option>
             <option value="r2">Cloudflare R2</option>
@@ -174,9 +211,11 @@
 
         <div class="Form-grid">
           <div class="Form-group">
-            <label>附件目录</label>
+            <label for="advanced-storage-attachments-dir">附件目录</label>
             <input
+              id="advanced-storage-attachments-dir"
               v-model="settings.storage_attachments_dir"
+              name="storage_attachments_dir"
               type="text"
               class="FormControl"
               placeholder="attachments"
@@ -185,9 +224,11 @@
           </div>
 
           <div class="Form-group">
-            <label>头像目录</label>
+            <label for="advanced-storage-avatars-dir">头像目录</label>
             <input
+              id="advanced-storage-avatars-dir"
               v-model="settings.storage_avatars_dir"
+              name="storage_avatars_dir"
               type="text"
               class="FormControl"
               placeholder="avatars"
@@ -204,9 +245,11 @@
 
           <div class="Form-grid">
             <div class="Form-group">
-              <label>头像最大体积（MB）</label>
+              <label for="advanced-upload-avatar-max-size">头像最大体积（MB）</label>
               <input
+                id="advanced-upload-avatar-max-size"
                 v-model.number="settings.upload_avatar_max_size_mb"
+                name="upload_avatar_max_size_mb"
                 type="number"
                 min="1"
                 max="100"
@@ -215,9 +258,11 @@
             </div>
 
             <div class="Form-group">
-              <label>附件最大体积（MB）</label>
+              <label for="advanced-upload-attachment-max-size">附件最大体积（MB）</label>
               <input
+                id="advanced-upload-attachment-max-size"
                 v-model.number="settings.upload_attachment_max_size_mb"
+                name="upload_attachment_max_size_mb"
                 type="number"
                 min="1"
                 max="100"
@@ -226,9 +271,11 @@
             </div>
 
             <div class="Form-group">
-              <label>站点资源最大体积（MB）</label>
+              <label for="advanced-upload-site-asset-max-size">站点资源最大体积（MB）</label>
               <input
+                id="advanced-upload-site-asset-max-size"
                 v-model.number="settings.upload_site_asset_max_size_mb"
+                name="upload_site_asset_max_size_mb"
                 type="number"
                 min="1"
                 max="100"
@@ -243,9 +290,11 @@
         <template v-if="settings.storage_driver === 'local'">
           <div class="Form-grid">
             <div class="Form-group">
-              <label>本地保存目录</label>
+              <label for="advanced-storage-local-path">本地保存目录</label>
               <input
+                id="advanced-storage-local-path"
                 v-model="settings.storage_local_path"
+                name="storage_local_path"
                 type="text"
                 class="FormControl"
                 placeholder="D:\\data\\bias\\media"
@@ -254,9 +303,11 @@
             </div>
 
             <div class="Form-group">
-              <label>本地访问基地址</label>
+              <label for="advanced-storage-local-base-url">本地访问基地址</label>
               <input
+                id="advanced-storage-local-base-url"
                 v-model="settings.storage_local_base_url"
+                name="storage_local_base_url"
                 type="text"
                 class="FormControl"
                 placeholder="/media/"
