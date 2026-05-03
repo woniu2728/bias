@@ -2953,6 +2953,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("admin_pages", payload)
         self.assertIn("notification_types", payload)
         self.assertIn("event_listeners", payload)
+        self.assertIn("resource_fields", payload)
         module_ids = {module["id"] for module in payload["modules"]}
         self.assertIn("core", module_ids)
         self.assertIn("tags", module_ids)
@@ -2961,10 +2962,14 @@ class AdminPermissionsApiTests(TestCase):
 
         core_module = next(module for module in payload["modules"] if module["id"] == "core")
         notifications_module = next(module for module in payload["modules"] if module["id"] == "notifications")
+        tags_module = next(module for module in payload["modules"] if module["id"] == "tags")
         admin_page_paths = {page["path"] for page in payload["admin_pages"]}
         self.assertIn("/admin/modules", admin_page_paths)
         self.assertTrue(core_module["is_core"])
         self.assertIn("permissions", core_module)
+        self.assertIn("resource_fields", tags_module)
+        self.assertTrue(any(item["field"] == "can_start_discussion" for item in tags_module["resource_fields"]))
+        self.assertTrue(any(item["resource"] == "search_post" and item["field"] == "user" for item in payload["resource_fields"]))
         self.assertTrue(any(item["code"] == "discussionReply" for item in notifications_module["notification_types"]))
         self.assertTrue(any(item["event"] == "DiscussionApprovedEvent" for item in notifications_module["event_listeners"]))
 

@@ -99,6 +99,17 @@
                 </ul>
                 <p v-else class="ModuleEmpty">暂无事件监听</p>
               </div>
+
+              <div>
+                <h5>资源字段</h5>
+                <ul v-if="module.resource_fields.length" class="ModuleList">
+                  <li v-for="resourceField in module.resource_fields" :key="`${resourceField.resource}:${resourceField.field}`">
+                    <code>{{ resourceField.resource }}.{{ resourceField.field }}</code>
+                    <span>{{ resourceField.description || '已注册资源扩展字段' }}</span>
+                  </li>
+                </ul>
+                <p v-else class="ModuleEmpty">暂无资源字段</p>
+              </div>
             </div>
           </article>
         </div>
@@ -182,6 +193,34 @@
           </article>
         </div>
       </section>
+
+      <section class="ModulesPage-section">
+        <div class="ModulesPage-sectionHeader">
+          <h3>资源字段注册</h3>
+          <p>这里汇总 Discussion、Post、Tag、Search 等资源上的扩展字段，作为统一 Resource 协议的当前快照。</p>
+        </div>
+
+        <div class="AdminTableWrap">
+          <table class="AdminTable">
+            <thead>
+              <tr>
+                <th>资源</th>
+                <th>字段</th>
+                <th>归属模块</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="resourceField in resourceFields" :key="`${resourceField.resource}:${resourceField.field}:${resourceField.module_id}`">
+                <td><code>{{ resourceField.resource }}</code></td>
+                <td><code>{{ resourceField.field }}</code></td>
+                <td>{{ moduleNameMap[resourceField.module_id] || resourceField.module_id }}</td>
+                <td>{{ resourceField.description || '已注册资源扩展字段' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   </AdminPage>
 </template>
@@ -199,6 +238,7 @@ const modules = ref([])
 const adminPages = ref([])
 const notificationTypes = ref([])
 const eventListeners = ref([])
+const resourceFields = ref([])
 
 const summaryItems = computed(() => {
   const moduleList = modules.value
@@ -213,6 +253,7 @@ const summaryItems = computed(() => {
     { label: '后台入口', value: String(adminPageCount) },
     { label: '通知类型', value: String(notificationTypes.value.length) },
     { label: '事件监听', value: String(eventListeners.value.length) },
+    { label: '资源字段', value: String(resourceFields.value.length) },
   ]
 })
 
@@ -237,6 +278,7 @@ async function loadModules() {
     adminPages.value = data.admin_pages || []
     notificationTypes.value = data.notification_types || []
     eventListeners.value = data.event_listeners || []
+    resourceFields.value = data.resource_fields || []
   } catch (error) {
     console.error('加载模块信息失败:', error)
     errorMessage.value = error.response?.data?.error || '加载模块信息失败，请稍后重试'
@@ -259,6 +301,7 @@ function buildModuleSummary(module) {
     { label: '能力项', value: String(module.capabilities?.length || 0) },
     { label: '通知数', value: String(module.notification_types?.length || 0) },
     { label: '监听器', value: String(module.event_listeners?.length || 0) },
+    { label: '资源字段', value: String(module.resource_fields?.length || 0) },
   ]
 }
 </script>

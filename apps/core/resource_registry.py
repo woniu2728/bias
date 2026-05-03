@@ -36,6 +36,12 @@ class ResourceRegistry:
     def get_fields(self, resource: str) -> List[ResourceFieldDefinition]:
         return list(self._fields.get(resource, []))
 
+    def get_all_fields(self) -> List[ResourceFieldDefinition]:
+        definitions: List[ResourceFieldDefinition] = []
+        for resource in sorted(self._fields.keys()):
+            definitions.extend(self.get_fields(resource))
+        return definitions
+
     def serialize(self, resource: str, instance: Any, context: dict | None = None) -> dict:
         payload = {}
         resolved_context = context or {}

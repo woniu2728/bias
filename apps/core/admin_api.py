@@ -32,6 +32,7 @@ from apps.core.mail_drivers import (
 )
 from apps.core.queue_service import QueueService
 from apps.core.forum_registry import get_forum_registry
+from apps.core.resource_registry import get_resource_registry
 from apps.core.search_index_service import SearchIndexService
 from apps.core.file_service import FileUploadService
 from apps.core.settings_service import (
@@ -60,6 +61,7 @@ from apps.users.group_utils import get_primary_group, serialize_group_badge
 router = Router()
 
 REGISTRY = get_forum_registry()
+RESOURCE_REGISTRY = get_resource_registry()
 
 BUILTIN_GROUPS = {
     1: "Admin",
@@ -209,6 +211,15 @@ def serialize_admin_user(user: User, include_details: bool = False) -> Dict[str,
 
 
 def serialize_module_definition(module) -> Dict[str, Any]:
+    resource_fields = [
+        {
+            "resource": definition.resource,
+            "field": definition.field,
+            "description": definition.description,
+        }
+        for definition in RESOURCE_REGISTRY.get_all_fields()
+        if definition.module_id == module.module_id
+    ]
     return {
         "id": module.module_id,
         "name": module.name,
@@ -235,6 +246,7 @@ def serialize_module_definition(module) -> Dict[str, Any]:
             }
             for listener in module.event_listeners
         ],
+        "resource_fields": resource_fields,
         "permissions": [
             {
                 "code": permission.code,
@@ -848,11 +860,21 @@ def list_admin_modules(request):
         }
         for listener in REGISTRY.get_event_listeners()
     ]
+    resource_fields = [
+        {
+            "resource": definition.resource,
+            "field": definition.field,
+            "module_id": definition.module_id,
+            "description": definition.description,
+        }
+        for definition in RESOURCE_REGISTRY.get_all_fields()
+    ]
     return {
         "modules": modules,
         "admin_pages": pages,
         "notification_types": notification_types,
         "event_listeners": event_listeners,
+        "resource_fields": resource_fields,
         "permission_aliases": REGISTRY.get_permission_aliases(),
     }
 
