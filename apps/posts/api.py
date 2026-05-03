@@ -21,7 +21,7 @@ from apps.posts.services import PostService
 from apps.tags.services import TagService
 from apps.core.audit import log_admin_action
 from apps.core.auth import AuthBearer, get_optional_user
-from apps.core.forum_resources import serialize_user_summary
+from apps.core.forum_resources import serialize_user_payload
 from apps.core.resource_registry import get_resource_registry
 
 router = Router()
@@ -33,14 +33,14 @@ def _serialize_post(post, user=None):
         "id": post.id,
         "discussion_id": post.discussion_id,
         "number": post.number,
-        "user": _serialize_user_summary(post.user),
+        "user": serialize_user_payload(post.user, resource="post_user"),
         "type": post.type,
         "content": post.content,
         "content_html": post.content_html,
         "created_at": post.created_at,
         "updated_at": post.updated_at,
         "edited_at": post.edited_at,
-        "edited_user": _serialize_user_summary(post.edited_user),
+        "edited_user": serialize_user_payload(post.edited_user, resource="post_user"),
         "discussion": {
             "id": post.discussion.id,
             "title": post.discussion.title,

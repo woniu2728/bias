@@ -140,6 +140,16 @@ class PostFlagApiTests(TestCase):
     def admin_auth_header(self):
         return self.auth_header_for(self.admin)
 
+    def test_post_detail_exposes_user_primary_group_via_resource_payload(self):
+        group = Group.objects.create(name="Post Authors", color="#8e44ad", icon="fas fa-comment")
+        self.author.user_groups.add(group)
+
+        response = self.client.get(f"/api/posts/{self.post.id}")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["user"]["primary_group"]["name"], group.name)
+
     def test_report_post_creates_flag(self):
         response = self.client.post(
             f"/api/posts/{self.post.id}/report",

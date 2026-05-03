@@ -56,6 +56,22 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(payload["title"], "JWT backed discussion")
         self.assertEqual(payload["user"]["id"], self.author.id)
 
+    def test_discussion_detail_exposes_user_primary_group_via_resource_payload(self):
+        group = Group.objects.create(name="Authors", color="#2980b9", icon="fas fa-pen")
+        Permission.objects.create(group=group, permission="startDiscussion")
+        self.author.user_groups.add(group)
+        discussion = DiscussionService.create_discussion(
+            title="Primary group discussion",
+            content="First post",
+            user=self.author,
+        )
+
+        response = self.client.get(f"/api/discussions/{discussion.id}")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["user"]["primary_group"]["name"], group.name)
+
     def test_create_discussion_retries_on_transient_sqlite_lock(self):
         original_create = Discussion.objects.create
         state = {"failed": False}

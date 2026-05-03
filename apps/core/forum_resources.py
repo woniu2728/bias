@@ -196,6 +196,24 @@ def bootstrap_forum_resource_fields() -> None:
             description="搜索用户结果中的主用户组徽章。",
         )
     )
+    registry.register_field(
+        ResourceFieldDefinition(
+            resource="discussion_user",
+            field="primary_group",
+            module_id="users",
+            resolver=_resolve_user_primary_group,
+            description="讨论作者摘要中的主用户组徽章。",
+        )
+    )
+    registry.register_field(
+        ResourceFieldDefinition(
+            resource="post_user",
+            field="primary_group",
+            module_id="users",
+            resolver=_resolve_user_primary_group,
+            description="帖子作者摘要中的主用户组徽章。",
+        )
+    )
 
     _resources_bootstrapped = True
 

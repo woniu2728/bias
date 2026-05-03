@@ -21,11 +21,26 @@ from apps.discussions.services import DiscussionService
 from apps.posts.models import Post
 from apps.core.audit import log_admin_action
 from apps.core.auth import AuthBearer, get_optional_user
-from apps.core.forum_resources import serialize_user_summary
+from apps.core.forum_resources import serialize_user_payload, serialize_user_summary
 from apps.core.resource_registry import get_resource_registry
 
 router = Router()
 RESOURCE_REGISTRY = get_resource_registry()
+
+
+def _serialize_discussion_payload(discussion, user=None):
+    payload = DiscussionOutSchema.from_orm(discussion).dict()
+    payload["user"] = serialize_user_payload(getattr(discussion, "user", None), resource="discussion_user")
+    payload["last_posted_user"] = serialize_user_payload(
+        getattr(discussion, "last_posted_user", None),
+        resource="discussion_user",
+    )
+    payload["tags"] = RESOURCE_REGISTRY.serialize(
+        "discussion",
+        discussion,
+        {"user": user},
+    ).get("tags", [])
+    return payload
 
 
 @router.post("/", response=DiscussionOutSchema, auth=AuthBearer(), tags=["Discussions"])
@@ -42,7 +57,7 @@ def create_discussion(request, payload: DiscussionCreateSchema):
             user=request.auth,
             tag_ids=payload.tag_ids,
         )
-        return discussion
+        return _serialize_discussion_payload(discussion, user=request.auth)
     except PermissionDenied as e:
         return JsonResponse({"error": str(e)}, status=403)
     except ValueError as e:
@@ -84,19 +99,11 @@ def list_discussions(
         user=user,
     )
 
-    # 为每个讨论添加标签数据
-    for discussion in discussions:
-        discussion.tags = RESOURCE_REGISTRY.serialize(
-            "discussion",
-            discussion,
-            {"user": user},
-        ).get("tags", [])
-
     return {
         "total": total,
         "page": page,
         "limit": limit,
-        "data": discussions,
+        "data": [_serialize_discussion_payload(discussion, user=user) for discussion in discussions],
     }
 
 
@@ -170,7 +177,7 @@ def get_discussion(request, discussion_id: int):
     )
 
     # 构建响应
-    response_data = DiscussionOutSchema.from_orm(discussion).dict()
+    response_data = _serialize_discussion_payload(discussion, user=user)
     response_data['first_post'] = first_post
     response_data.update(resource_fields)
 
@@ -195,7 +202,7 @@ def update_discussion(request, discussion_id: int, payload: DiscussionUpdateSche
             is_sticky=payload.is_sticky,
             is_hidden=payload.is_hidden,
         )
-        return discussion
+        return _serialize_discussion_payload(discussion, user=request.auth)
     except Discussion.DoesNotExist:
         return JsonResponse({"error": "讨论不存在"}, status=404)
     except PermissionDenied as e:
