@@ -17,23 +17,23 @@
       </div>
 
       <div class="Modal-body">
-        <p class="ModerationActionModal-description">{{ description }}</p>
+        <p class="modal-form-description">{{ description }}</p>
 
-        <div v-if="errorMessage" class="ModerationActionModal-error">
+        <div v-if="errorMessage" class="modal-form-error">
           {{ errorMessage }}
         </div>
 
-        <div class="form-group">
+        <div class="modal-form-group">
           <label for="moderation-action-note">处理备注</label>
           <textarea
             id="moderation-action-note"
             v-model="note"
             name="note"
             rows="4"
-            class="moderation-textarea"
+            class="modal-form-control modal-form-control--textarea"
             :placeholder="placeholder"
           ></textarea>
-          <p class="ModerationActionModal-help">备注会同步显示给内容作者，建议简明说明处理原因。</p>
+          <p class="modal-form-help">备注会同步显示给内容作者，建议简明说明处理原因。</p>
         </div>
       </div>
 
@@ -110,53 +110,3 @@ async function submit() {
   }
 }
 </script>
-
-<style scoped>
-.ModerationActionModal-description {
-  margin: 0 0 18px;
-  color: #6a7886;
-  line-height: 1.7;
-}
-
-.ModerationActionModal-error {
-  margin-bottom: 16px;
-  border-radius: 8px;
-  padding: 11px 12px;
-  background: #fdf1f1;
-  color: #b33a3a;
-  line-height: 1.6;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  color: #30404f;
-  font-weight: 600;
-}
-
-.moderation-textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d7dee6;
-  border-radius: 8px;
-  font-size: 14px;
-  font-family: inherit;
-  resize: vertical;
-  min-height: 112px;
-}
-
-.ModerationActionModal-help {
-  margin: 8px 0 0;
-  color: #748292;
-  font-size: 12px;
-  line-height: 1.6;
-}
-</style>

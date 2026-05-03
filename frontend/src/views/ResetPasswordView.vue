@@ -7,32 +7,41 @@
 
         <form @submit.prevent="handleSubmit">
           <div class="form-group">
-            <label>重置令牌</label>
+            <label for="reset-password-token">重置令牌</label>
             <input
+              id="reset-password-token"
               v-model="form.token"
+              name="token"
               type="text"
               placeholder="请输入邮件中的重置令牌"
+              autocomplete="one-time-code"
               required
             />
           </div>
 
           <div class="form-group">
-            <label>新密码</label>
+            <label for="reset-password-new">新密码</label>
             <input
+              id="reset-password-new"
               v-model="form.password"
+              name="password"
               type="password"
               placeholder="请输入新密码"
+              autocomplete="new-password"
               minlength="6"
               required
             />
           </div>
 
           <div class="form-group">
-            <label>确认新密码</label>
+            <label for="reset-password-confirm">确认新密码</label>
             <input
+              id="reset-password-confirm"
               v-model="form.passwordConfirm"
+              name="password_confirm"
               type="password"
               placeholder="请再次输入新密码"
+              autocomplete="new-password"
               minlength="6"
               required
             />

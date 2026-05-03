@@ -180,7 +180,8 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
-.Modal {
+.Modal,
+.ModalManager :deep(.Modal) {
   position: relative;
   width: min(100% - 32px, 600px);
   margin: 72px auto;
@@ -191,34 +192,40 @@ onBeforeUnmount(() => {
   box-shadow: 0 22px 48px rgba(15, 23, 42, 0.24);
 }
 
-.Modal.in {
+.Modal.in,
+.ModalManager :deep(.Modal.in) {
   transform: scale(1) translateY(0);
   opacity: 1;
 }
 
-.Modal--small {
+.Modal--small,
+.ModalManager :deep(.Modal--small) {
   width: min(100% - 32px, 420px);
 }
 
-.Modal--large {
+.Modal--large,
+.ModalManager :deep(.Modal--large) {
   width: min(100% - 32px, 760px);
 }
 
-.Modal-content {
+.Modal-content,
+.ModalManager :deep(.Modal-content) {
   position: relative;
   overflow: hidden;
   border-radius: 12px;
   background: #fff;
 }
 
-.Modal-close {
+.Modal-close,
+.ModalManager :deep(.Modal-close) {
   position: absolute;
   top: 12px;
   right: 12px;
   z-index: 2;
 }
 
-.Button.Button--icon.Button--link {
+.Button.Button--icon.Button--link,
+.ModalManager :deep(.Button.Button--icon.Button--link) {
   width: 34px;
   height: 34px;
   padding: 0;
@@ -227,24 +234,28 @@ onBeforeUnmount(() => {
   color: #7b8794;
 }
 
-.Button.Button--icon.Button--link:hover {
+.Button.Button--icon.Button--link:hover,
+.ModalManager :deep(.Button.Button--icon.Button--link:hover) {
   background: #eef2f6;
   color: #415061;
 }
 
-.Modal-header {
+.Modal-header,
+.ModalManager :deep(.Modal-header) {
   padding: 24px 28px 0;
   text-align: center;
 }
 
-.Modal-header h3 {
+.Modal-header h3,
+.ModalManager :deep(.Modal-header h3) {
   margin: 0;
   font-size: 22px;
   font-weight: 600;
   color: #22303d;
 }
 
-.Modal-body {
+.Modal-body,
+.ModalManager :deep(.Modal-body) {
   padding: 18px 28px 22px;
   color: #526170;
 }
@@ -256,18 +267,21 @@ onBeforeUnmount(() => {
   white-space: pre-line;
 }
 
-.Modal-footer {
+.Modal-footer,
+.ModalManager :deep(.Modal-footer) {
   padding: 0 28px 26px;
   text-align: center;
 }
 
-.Modal-footer--split {
+.Modal-footer--split,
+.ModalManager :deep(.Modal-footer--split) {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
 }
 
-.Button {
+.Button,
+.ModalManager :deep(.Button) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -277,30 +291,36 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.Button--primary {
+.Button--primary,
+.ModalManager :deep(.Button--primary) {
   background: #4d698e;
   color: #fff;
 }
 
-.Button--primary:hover {
+.Button--primary:hover,
+.ModalManager :deep(.Button--primary:hover) {
   filter: brightness(0.95);
 }
 
-.Button--secondary {
+.Button--secondary,
+.ModalManager :deep(.Button--secondary) {
   background: #e7edf3;
   color: #536274;
 }
 
-.Button--secondary:hover {
+.Button--secondary:hover,
+.ModalManager :deep(.Button--secondary:hover) {
   background: #dde5ed;
 }
 
-.Button--danger {
+.Button--danger,
+.ModalManager :deep(.Button--danger) {
   background: #c94d3f;
   color: #fff;
 }
 
-.Button--danger:hover {
+.Button--danger:hover,
+.ModalManager :deep(.Button--danger:hover) {
   background: #b64337;
 }
 
@@ -310,7 +330,8 @@ onBeforeUnmount(() => {
     align-items: stretch;
   }
 
-  .Modal {
+  .Modal,
+  .ModalManager :deep(.Modal) {
     width: 100%;
     min-height: 100dvh;
     margin: 0;
@@ -318,33 +339,40 @@ onBeforeUnmount(() => {
     transform: translateY(100dvh);
   }
 
-  .Modal.in {
+  .Modal.in,
+  .ModalManager :deep(.Modal.in) {
     transform: translateY(0);
   }
 
-  .Modal-content {
+  .Modal-content,
+  .ModalManager :deep(.Modal-content) {
     min-height: 100dvh;
     border-radius: 0;
   }
 
-  .Modal-header {
+  .Modal-header,
+  .ModalManager :deep(.Modal-header) {
     padding: 22px 20px 0;
     text-align: left;
   }
 
-  .Modal-body {
+  .Modal-body,
+  .ModalManager :deep(.Modal-body) {
     padding: 18px 20px 20px;
   }
 
-  .Modal-footer {
+  .Modal-footer,
+  .ModalManager :deep(.Modal-footer) {
     padding: 0 20px 24px;
   }
 
-  .Modal-footer--split {
+  .Modal-footer--split,
+  .ModalManager :deep(.Modal-footer--split) {
     flex-direction: column-reverse;
   }
 
-  .Modal-footer--split .Button {
+  .Modal-footer--split .Button,
+  .ModalManager :deep(.Modal-footer--split .Button) {
     width: 100%;
   }
 }

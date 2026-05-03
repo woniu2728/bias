@@ -21,10 +21,12 @@
       <div class="Modal-body AuthSessionModal-body">
         <form v-if="activeMode === 'login'" class="AuthSessionForm" @submit.prevent="handleLogin">
           <div class="Form-group">
-            <label>用户名或邮箱</label>
+            <label for="auth-login-identification">用户名或邮箱</label>
             <input
+              id="auth-login-identification"
               ref="loginIdentificationInput"
               v-model.trim="loginForm.identification"
+              name="identification"
               class="FormControl"
               type="text"
               placeholder="请输入用户名或邮箱"
@@ -35,9 +37,11 @@
           </div>
 
           <div class="Form-group">
-            <label>密码</label>
+            <label for="auth-login-password">密码</label>
             <input
+              id="auth-login-password"
               v-model="loginForm.password"
+              name="password"
               class="FormControl"
               type="password"
               placeholder="请输入密码"
@@ -49,7 +53,12 @@
 
           <div class="AuthSessionRow">
             <label class="AuthSessionCheckbox">
-              <input v-model="loginForm.remember" type="checkbox" :disabled="loading" />
+              <input
+                v-model="loginForm.remember"
+                name="remember"
+                type="checkbox"
+                :disabled="loading"
+              />
               <span>记住我</span>
             </label>
             <button type="button" class="AuthSessionLink" :disabled="loading" @click="switchToForgotPassword()">
@@ -58,7 +67,7 @@
           </div>
 
           <div v-if="loginHumanVerificationRequired" class="Form-group">
-            <label>真人验证</label>
+            <div class="AuthSessionFieldLabel">真人验证</div>
             <div
               ref="turnstileContainer"
               class="AuthSessionTurnstile"
@@ -88,13 +97,16 @@
 
         <form v-else-if="activeMode === 'register'" class="AuthSessionForm" @submit.prevent="handleRegister">
           <div class="Form-group">
-            <label>用户名</label>
+            <label for="auth-register-username">用户名</label>
             <input
+              id="auth-register-username"
               ref="registerUsernameInput"
               v-model.trim="registerForm.username"
+              name="username"
               class="FormControl"
               type="text"
               placeholder="3-30 个字符"
+              autocomplete="username"
               minlength="3"
               maxlength="30"
               :disabled="loading"
@@ -103,9 +115,11 @@
           </div>
 
           <div class="Form-group">
-            <label>邮箱</label>
+            <label for="auth-register-email">邮箱</label>
             <input
+              id="auth-register-email"
               v-model.trim="registerForm.email"
+              name="email"
               class="FormControl"
               type="email"
               placeholder="请输入邮箱"
@@ -116,9 +130,11 @@
           </div>
 
           <div class="Form-group">
-            <label>密码</label>
+            <label for="auth-register-password">密码</label>
             <input
+              id="auth-register-password"
               v-model="registerForm.password"
+              name="password"
               class="FormControl"
               type="password"
               placeholder="至少 6 个字符"
@@ -130,9 +146,11 @@
           </div>
 
           <div class="Form-group">
-            <label>确认密码</label>
+            <label for="auth-register-password-confirm">确认密码</label>
             <input
+              id="auth-register-password-confirm"
               v-model="registerForm.passwordConfirm"
+              name="password_confirm"
               class="FormControl"
               type="password"
               placeholder="请再次输入密码"
@@ -143,7 +161,7 @@
           </div>
 
           <div v-if="registerHumanVerificationRequired" class="Form-group">
-            <label>真人验证</label>
+            <div class="AuthSessionFieldLabel">真人验证</div>
             <div
               ref="turnstileContainer"
               class="AuthSessionTurnstile"
@@ -177,10 +195,12 @@
             {{ successMessage || '重置链接已发送，请检查邮箱。' }}
           </div>
           <div v-else class="Form-group">
-            <label>邮箱</label>
+            <label for="auth-forgot-email">邮箱</label>
             <input
+              id="auth-forgot-email"
               ref="forgotPasswordInput"
               v-model.trim="forgotPasswordEmail"
+              name="email"
               class="FormControl"
               type="email"
               placeholder="请输入注册邮箱"
@@ -723,6 +743,13 @@ async function handleForgotPassword() {
 
 .Form-group label {
   display: block;
+  margin-bottom: 8px;
+  color: #324456;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.AuthSessionFieldLabel {
   margin-bottom: 8px;
   color: #324456;
   font-size: 13px;

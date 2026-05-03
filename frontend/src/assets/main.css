@@ -295,6 +295,69 @@ select:focus {
   overflow-wrap: anywhere;
 }
 
+.modal-form-group {
+  margin-bottom: 16px;
+  min-width: 0;
+}
+
+.modal-form-group:last-child {
+  margin-bottom: 0;
+}
+
+.modal-form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--forum-text-color);
+  font-weight: 600;
+}
+
+.modal-form-control {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: var(--forum-radius-md);
+  background: var(--forum-bg-elevated);
+  font-size: var(--forum-font-size-md);
+  font-family: inherit;
+}
+
+.modal-form-control:focus {
+  border-color: var(--forum-primary-color);
+  box-shadow: 0 0 0 3px rgba(77, 105, 142, 0.12);
+}
+
+.modal-form-control--textarea {
+  resize: vertical;
+  min-height: 112px;
+}
+
+.modal-form-help {
+  margin: 8px 0 0;
+  color: var(--forum-text-muted);
+  font-size: var(--forum-font-size-xs);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.modal-form-description {
+  margin: 0 0 18px;
+  color: var(--forum-text-muted);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.modal-form-error {
+  margin-bottom: 16px;
+  border-radius: var(--forum-radius-md);
+  padding: 11px 12px;
+  background: var(--forum-danger-bg);
+  color: #b33a3a;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 768px) {
   .profile-section {
     padding: 18px;

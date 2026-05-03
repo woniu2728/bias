@@ -17,21 +17,21 @@
       </div>
 
       <div class="Modal-body">
-        <p class="PostReportModal-description">
+        <p class="modal-form-description">
           帖子 #{{ post?.number || '?' }} 会进入举报队列，版主可以直接在讨论页或后台查看并处理。
         </p>
 
-        <div v-if="errorMessage" class="PostReportModal-error">
+        <div v-if="errorMessage" class="modal-form-error">
           {{ errorMessage }}
         </div>
 
-        <div class="form-group">
+        <div class="modal-form-group">
           <label for="post-report-reason">举报原因</label>
           <select
             id="post-report-reason"
             v-model="form.reason"
             name="reason"
-            class="report-select"
+            class="modal-form-control"
           >
             <option v-for="option in REPORT_REASON_OPTIONS" :key="option" :value="option">
               {{ option }}
@@ -39,9 +39,9 @@
           </select>
         </div>
 
-        <div class="form-group">
+        <div class="modal-form-group">
           <label for="post-report-message">补充说明</label>
-          <p class="PostReportModal-help">
+          <p class="modal-form-help">
             {{ form.reason === '其他' ? '请尽量写清楚问题背景，方便版主快速判断。' : '可补充上下文、受影响内容或希望的处理方式。' }}
           </p>
           <textarea
@@ -49,7 +49,7 @@
             v-model="form.message"
             name="message"
             rows="4"
-            class="report-textarea"
+            class="modal-form-control modal-form-control--textarea"
             placeholder="告诉管理员这条帖子为什么需要处理"
           ></textarea>
         </div>
@@ -120,57 +120,3 @@ async function submit() {
   }
 }
 </script>
-
-<style scoped>
-.PostReportModal-description {
-  margin: 0 0 18px;
-  color: #6a7886;
-  line-height: 1.7;
-}
-
-.PostReportModal-error {
-  margin-bottom: 16px;
-  border-radius: 8px;
-  padding: 11px 12px;
-  background: #fdf1f1;
-  color: #b33a3a;
-  line-height: 1.6;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  color: #30404f;
-  font-weight: 600;
-}
-
-.PostReportModal-help {
-  margin: -2px 0 8px;
-  color: #748292;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.report-select,
-.report-textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d7dee6;
-  border-radius: 8px;
-  font-size: 14px;
-  font-family: inherit;
-}
-
-.report-textarea {
-  resize: vertical;
-  min-height: 112px;
-}
-</style>
