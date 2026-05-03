@@ -196,6 +196,7 @@
 
             <label class="CheckboxField CheckboxField--toggle GroupHiddenToggle">
               <input
+                id="group-is-hidden"
                 v-model="groupForm.is_hidden"
                 name="group_is_hidden"
                 type="checkbox"

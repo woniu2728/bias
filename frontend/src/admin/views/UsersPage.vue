@@ -8,6 +8,7 @@
     <div class="UsersPage-content">
       <!-- 搜索栏 -->
       <div class="UsersPage-search">
+        <label class="sr-only" for="user-search">搜索用户</label>
         <input
           id="user-search"
           v-model="searchQuery"
@@ -648,6 +649,18 @@ const canDeleteCurrentUser = computed(() => {
 
 .UsersPage-search {
   max-width: 400px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .UsersPage-list {

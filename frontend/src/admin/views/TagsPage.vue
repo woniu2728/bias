@@ -288,6 +288,7 @@
             </div>
 
             <div class="Form-help">标签仍然保存为 Font Awesome 类名，但现在可以直接搜索和点选。</div>
+            <label class="sr-only" for="tag-icon">手动输入图标类名</label>
             <input
               id="tag-icon"
               v-model.trim="formData.icon"
@@ -299,13 +300,14 @@
           </div>
 
           <div class="Form-group">
-            <label>显示与发帖限制</label>
+            <span id="tag-visibility-controls" class="Form-label">显示与发帖限制</span>
             <div class="CheckboxRow">
               <label class="CheckboxChip">
                 <input
                   v-model="formData.is_hidden"
                   name="tag_is_hidden"
                   type="checkbox"
+                  aria-describedby="tag-visibility-controls"
                 />
                 <span>隐藏标签</span>
               </label>
@@ -315,6 +317,7 @@
                   v-model="formData.is_restricted"
                   name="tag_is_restricted"
                   type="checkbox"
+                  aria-describedby="tag-visibility-controls"
                 />
                 <span>限制发帖</span>
               </label>
@@ -1207,6 +1210,25 @@ function getNextPosition(sourceTags, parentId) {
 .LinkButton:hover {
   color: var(--forum-primary-strong);
   text-decoration: underline;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.Form-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--forum-text-color);
+  font-weight: 600;
 }
 
 .CheckboxRow {
