@@ -305,6 +305,33 @@ class ChineseSearchTests(TestCase):
         self.assertEqual(admin_response.status_code, 200, admin_response.content)
         self.assertGreaterEqual(admin_response.json()["discussion_total"], 1)
 
+    def test_search_api_supports_registered_tag_filter_syntax(self):
+        target_tag = Tag.objects.create(name="扩展搜索标签", slug="extension-search-tag")
+        other_tag = Tag.objects.create(name="其他标签", slug="other-search-tag")
+        matched = DiscussionService.create_discussion(
+            title="模块搜索过滤命中",
+            content="使用注册式过滤器检索标签。",
+            user=self.user,
+            tag_ids=[target_tag.id],
+        )
+        DiscussionService.create_discussion(
+            title="模块搜索过滤未命中",
+            content="同样包含搜索关键字，但标签不同。",
+            user=self.user,
+            tag_ids=[other_tag.id],
+        )
+
+        response = self.client.get(
+            "/api/search",
+            {"q": "搜索 tag:extension-search-tag", "type": "discussions"},
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["discussion_total"], 1)
+        self.assertEqual([item["id"] for item in payload["discussions"]], [matched.id])
+
     def test_search_api_respects_discussion_approval_visibility(self):
         admin = User.objects.create_superuser(
             username="search-approval-admin",
@@ -2953,6 +2980,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("admin_pages", payload)
         self.assertIn("notification_types", payload)
         self.assertIn("event_listeners", payload)
+        self.assertIn("search_filters", payload)
         self.assertIn("resource_fields", payload)
         module_ids = {module["id"] for module in payload["modules"]}
         self.assertIn("core", module_ids)
@@ -2968,6 +2996,9 @@ class AdminPermissionsApiTests(TestCase):
         self.assertTrue(core_module["is_core"])
         self.assertIn("permissions", core_module)
         self.assertIn("resource_fields", tags_module)
+        self.assertIn("search_filters", tags_module)
+        self.assertTrue(any(item["code"] == "tag" and item["syntax"] == "tag:<slug>" for item in tags_module["search_filters"]))
+        self.assertTrue(any(item["module_id"] == "tags" and item["code"] == "tag" for item in payload["search_filters"]))
         self.assertTrue(any(item["field"] == "can_start_discussion" for item in tags_module["resource_fields"]))
         self.assertTrue(any(item["resource"] == "search_post" and item["field"] == "user" for item in payload["resource_fields"]))
         self.assertTrue(any(item["code"] == "discussionReply" for item in notifications_module["notification_types"]))

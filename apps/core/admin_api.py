@@ -246,6 +246,16 @@ def serialize_module_definition(module) -> Dict[str, Any]:
             }
             for listener in module.event_listeners
         ],
+        "search_filters": [
+            {
+                "code": search_filter.code,
+                "label": search_filter.label,
+                "target": search_filter.target,
+                "syntax": search_filter.syntax,
+                "description": search_filter.description,
+            }
+            for search_filter in module.search_filters
+        ],
         "resource_fields": resource_fields,
         "permissions": [
             {
@@ -860,6 +870,17 @@ def list_admin_modules(request):
         }
         for listener in REGISTRY.get_event_listeners()
     ]
+    search_filters = [
+        {
+            "code": search_filter.code,
+            "label": search_filter.label,
+            "module_id": search_filter.module_id,
+            "target": search_filter.target,
+            "syntax": search_filter.syntax,
+            "description": search_filter.description,
+        }
+        for search_filter in REGISTRY.get_search_filters()
+    ]
     resource_fields = [
         {
             "resource": definition.resource,
@@ -874,6 +895,7 @@ def list_admin_modules(request):
         "admin_pages": pages,
         "notification_types": notification_types,
         "event_listeners": event_listeners,
+        "search_filters": search_filters,
         "resource_fields": resource_fields,
         "permission_aliases": REGISTRY.get_permission_aliases(),
     }

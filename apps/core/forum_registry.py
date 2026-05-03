@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 from apps.core.version import APP_VERSION
 
@@ -45,6 +45,22 @@ class EventListenerDefinition:
     description: str = ""
 
 
+SearchFilterParser = Callable[[str], Any | None]
+SearchFilterApplier = Callable[[Any, Any, dict], Any]
+
+
+@dataclass(frozen=True)
+class SearchFilterDefinition:
+    code: str
+    label: str
+    module_id: str
+    target: str
+    parser: SearchFilterParser
+    applier: SearchFilterApplier
+    syntax: str = ""
+    description: str = ""
+
+
 @dataclass(frozen=True)
 class ForumModuleDefinition:
     module_id: str
@@ -60,6 +76,7 @@ class ForumModuleDefinition:
     capabilities: Tuple[str, ...] = ()
     notification_types: Tuple[NotificationTypeDefinition, ...] = ()
     event_listeners: Tuple[EventListenerDefinition, ...] = ()
+    search_filters: Tuple[SearchFilterDefinition, ...] = ()
 
 
 class ForumRegistry:
@@ -70,6 +87,7 @@ class ForumRegistry:
         self._admin_pages: List[AdminPageDefinition] = []
         self._notification_types: Dict[str, NotificationTypeDefinition] = {}
         self._event_listeners: List[EventListenerDefinition] = []
+        self._search_filters: List[SearchFilterDefinition] = []
 
     def register_module(self, module: ForumModuleDefinition) -> ForumModuleDefinition:
         self._modules[module.module_id] = module
@@ -88,8 +106,12 @@ class ForumRegistry:
         for event_listener in module.event_listeners:
             self._event_listeners.append(event_listener)
 
+        for search_filter in module.search_filters:
+            self._search_filters.append(search_filter)
+
         self._admin_pages.sort(key=lambda item: (item.nav_section, item.label, item.path))
         self._event_listeners.sort(key=lambda item: (item.event, item.module_id, item.listener))
+        self._search_filters.sort(key=lambda item: (item.target, item.module_id, item.code))
         return module
 
     def get_modules(self) -> List[ForumModuleDefinition]:
@@ -132,6 +154,12 @@ class ForumRegistry:
 
     def get_event_listeners(self) -> List[EventListenerDefinition]:
         return list(self._event_listeners)
+
+    def get_search_filters(self, target: str | None = None) -> List[SearchFilterDefinition]:
+        filters = list(self._search_filters)
+        if target is not None:
+            filters = [definition for definition in filters if definition.target == target]
+        return filters
 
     def get_permission_sections(self) -> List[dict]:
         sections: Dict[str, dict] = {}
@@ -482,6 +510,18 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                 ),
             ),
             capabilities=("tagging", "tag-permissions", "tag-hierarchy"),
+            search_filters=(
+                SearchFilterDefinition(
+                    code="tag",
+                    label="按标签过滤",
+                    module_id="tags",
+                    target="discussion",
+                    parser=_parse_tag_search_filter,
+                    applier=_apply_discussion_tag_search_filter,
+                    syntax="tag:<slug>",
+                    description="按标签 slug 过滤讨论搜索结果。",
+                ),
+            ),
         )
     )
 
@@ -716,3 +756,19 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
             ),
         )
     )
+
+
+def _parse_tag_search_filter(token: str) -> str | None:
+    if not token or ":" not in token:
+        return None
+
+    prefix, value = token.split(":", 1)
+    if prefix.lower() != "tag":
+        return None
+
+    normalized = value.strip().lower()
+    return normalized or None
+
+
+def _apply_discussion_tag_search_filter(queryset, tag_slug: str, context: dict):
+    return queryset.filter(discussion_tags__tag__slug=tag_slug)

@@ -11,6 +11,7 @@ from django.db.models import OuterRef, Q, Subquery
 
 from apps.discussions.models import Discussion
 from apps.posts.models import Post
+from apps.core.forum_registry import get_forum_registry
 from apps.tags.services import TagService
 from apps.users.models import User
 from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
@@ -25,6 +26,7 @@ CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 TOKEN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+|[A-Za-z0-9_]+")
 ASCII_TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 POSTGRES_FULL_TEXT_CONFIG = "simple"
+FORUM_REGISTRY = get_forum_registry()
 
 
 @dataclass
@@ -102,6 +104,26 @@ class SearchService:
         return text_query if text_query else Q(pk__in=[])
 
     @staticmethod
+    def extract_filter_tokens(query: str) -> tuple[str, dict[str, list]]:
+        text_tokens: List[str] = []
+        filters: dict[str, list] = {}
+
+        for raw_token in (query or "").split():
+            matched = False
+            for definition in FORUM_REGISTRY.get_search_filters():
+                parsed_value = definition.parser(raw_token)
+                if parsed_value is None:
+                    continue
+                filters.setdefault(definition.target, []).append((definition, parsed_value))
+                matched = True
+                break
+
+            if not matched:
+                text_tokens.append(raw_token)
+
+        return " ".join(text_tokens).strip(), filters
+
+    @staticmethod
     def build_discussion_search_query(query: str) -> Q:
         return (
             SearchService.build_text_query(['title', 'slug'], query) |
@@ -120,16 +142,24 @@ class SearchService:
 
     @staticmethod
     def apply_discussion_search(queryset, query: str, user=None):
-        if SearchService.should_use_postgres_full_text(query):
-            return SearchService._apply_postgres_discussion_search(queryset, query, user=user)
+        text_query, parsed_filters = SearchService.extract_filter_tokens(query)
 
-        title_match_q = SearchService.build_text_query(['title', 'slug'], query)
-        visible_post_match_q = (
-            SearchService.build_text_query(['posts__content'], query)
-            & Q(posts__type='comment')
-            & build_post_visibility_q(user, prefix="posts__")
-        )
-        return queryset.filter(title_match_q | visible_post_match_q)
+        if text_query:
+            if SearchService.should_use_postgres_full_text(text_query):
+                queryset = SearchService._apply_postgres_discussion_search(queryset, text_query, user=user)
+            else:
+                title_match_q = SearchService.build_text_query(['title', 'slug'], text_query)
+                visible_post_match_q = (
+                    SearchService.build_text_query(['posts__content'], text_query)
+                    & Q(posts__type='comment')
+                    & build_post_visibility_q(user, prefix="posts__")
+                )
+                queryset = queryset.filter(title_match_q | visible_post_match_q)
+
+        for definition, parsed_value in parsed_filters.get("discussion", []):
+            queryset = definition.applier(queryset, parsed_value, {"user": user, "query": query, "text_query": text_query})
+
+        return queryset
 
     @staticmethod
     def apply_post_search(queryset, query: str):

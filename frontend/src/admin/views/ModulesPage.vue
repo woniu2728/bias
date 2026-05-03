@@ -110,6 +110,17 @@
                 </ul>
                 <p v-else class="ModuleEmpty">暂无资源字段</p>
               </div>
+
+              <div>
+                <h5>搜索过滤器</h5>
+                <ul v-if="module.search_filters.length" class="ModuleList">
+                  <li v-for="searchFilter in module.search_filters" :key="`${searchFilter.target}:${searchFilter.code}`">
+                    <code>{{ searchFilter.syntax || searchFilter.code }}</code>
+                    <span>{{ searchFilter.description || searchFilter.label }}</span>
+                  </li>
+                </ul>
+                <p v-else class="ModuleEmpty">暂无搜索过滤器</p>
+              </div>
             </div>
           </article>
         </div>
@@ -221,6 +232,34 @@
           </table>
         </div>
       </section>
+
+      <section class="ModulesPage-section">
+        <div class="ModulesPage-sectionHeader">
+          <h3>搜索过滤器注册</h3>
+          <p>这里列出模块通过注册中心声明的搜索过滤语法，作为搜索扩展点的当前快照。</p>
+        </div>
+
+        <div class="AdminTableWrap">
+          <table class="AdminTable">
+            <thead>
+              <tr>
+                <th>语法</th>
+                <th>目标资源</th>
+                <th>归属模块</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="searchFilter in searchFilters" :key="`${searchFilter.module_id}:${searchFilter.target}:${searchFilter.code}`">
+                <td><code>{{ searchFilter.syntax || searchFilter.code }}</code></td>
+                <td><code>{{ searchFilter.target }}</code></td>
+                <td>{{ moduleNameMap[searchFilter.module_id] || searchFilter.module_id }}</td>
+                <td>{{ searchFilter.description || searchFilter.label }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   </AdminPage>
 </template>
@@ -239,6 +278,7 @@ const adminPages = ref([])
 const notificationTypes = ref([])
 const eventListeners = ref([])
 const resourceFields = ref([])
+const searchFilters = ref([])
 
 const summaryItems = computed(() => {
   const moduleList = modules.value
@@ -254,6 +294,7 @@ const summaryItems = computed(() => {
     { label: '通知类型', value: String(notificationTypes.value.length) },
     { label: '事件监听', value: String(eventListeners.value.length) },
     { label: '资源字段', value: String(resourceFields.value.length) },
+    { label: '搜索过滤', value: String(searchFilters.value.length) },
   ]
 })
 
@@ -279,6 +320,7 @@ async function loadModules() {
     notificationTypes.value = data.notification_types || []
     eventListeners.value = data.event_listeners || []
     resourceFields.value = data.resource_fields || []
+    searchFilters.value = data.search_filters || []
   } catch (error) {
     console.error('加载模块信息失败:', error)
     errorMessage.value = error.response?.data?.error || '加载模块信息失败，请稍后重试'
@@ -302,6 +344,7 @@ function buildModuleSummary(module) {
     { label: '通知数', value: String(module.notification_types?.length || 0) },
     { label: '监听器', value: String(module.event_listeners?.length || 0) },
     { label: '资源字段', value: String(module.resource_fields?.length || 0) },
+    { label: '搜索过滤', value: String(module.search_filters?.length || 0) },
   ]
 }
 </script>
