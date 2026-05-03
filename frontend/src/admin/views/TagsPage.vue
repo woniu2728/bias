@@ -7,11 +7,11 @@
   >
     <div class="TagsPage-content">
       <AdminToolbar align="end">
-        <button @click="openCreateModal" class="Button Button--primary">
+        <button type="button" @click="openCreateModal" class="Button Button--primary">
           <i class="fas fa-plus"></i>
           创建标签
         </button>
-        <button @click="refreshTagStats" class="Button" :disabled="refreshingStats">
+        <button type="button" @click="refreshTagStats" class="Button" :disabled="refreshingStats">
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': refreshingStats }"></i>
           {{ refreshingStats ? '刷新中...' : '刷新统计' }}
         </button>
@@ -80,10 +80,11 @@
               </td>
               <td data-label="讨论数">{{ row.tag.discussion_count }}</td>
               <td data-label="操作">
-                <button @click="editTag(row.tag)" class="Button Button--small">
+                <button type="button" @click="editTag(row.tag)" class="Button Button--small">
                   编辑
                 </button>
                 <button
+                  type="button"
                   @click="moveTag(row.tag, 'up')"
                   class="Button Button--small"
                   :disabled="!canMoveTag(row.tag, 'up') || movingTagId === row.tag.id"
@@ -91,13 +92,14 @@
                   上移
                 </button>
                 <button
+                  type="button"
                   @click="moveTag(row.tag, 'down')"
                   class="Button Button--small"
                   :disabled="!canMoveTag(row.tag, 'down') || movingTagId === row.tag.id"
                 >
                   下移
                 </button>
-                <button @click="deleteTag(row.tag)" class="Button Button--small Button--danger">
+                <button type="button" @click="deleteTag(row.tag)" class="Button Button--small Button--danger">
                   删除
                 </button>
               </td>
@@ -114,7 +116,7 @@
             <h3>{{ showEditModal ? '编辑标签' : '创建标签' }}</h3>
             <p class="Modal-subtitle">参考 Flarum 的标签编辑流程，并补齐父子层级、排序和显示状态配置。</p>
           </div>
-          <button @click="closeModal" class="Modal-close">
+          <button type="button" @click="closeModal" class="Modal-close">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -141,9 +143,11 @@
 
           <div class="FormRow">
             <div class="Form-group">
-              <label>标签名称 *</label>
+              <label for="tag-name">标签名称 *</label>
               <input
+                id="tag-name"
                 v-model.trim="formData.name"
+                name="tag_name"
                 type="text"
                 class="FormControl"
                 placeholder="例如：技术讨论"
@@ -151,9 +155,11 @@
             </div>
 
             <div class="Form-group">
-              <label>别名 / Slug</label>
+              <label for="tag-slug">别名 / Slug</label>
               <input
+                id="tag-slug"
                 v-model.trim="formData.slug"
+                name="tag_slug"
                 type="text"
                 class="FormControl"
                 placeholder="例如：tech-talk"
@@ -163,9 +169,11 @@
           </div>
 
           <div class="Form-group">
-            <label>描述</label>
+            <label for="tag-description">描述</label>
             <textarea
+              id="tag-description"
               v-model.trim="formData.description"
+              name="tag_description"
               class="FormControl"
               rows="3"
               placeholder="标签的简短描述"
@@ -174,8 +182,14 @@
 
           <div class="FormRow">
             <div class="Form-group">
-              <label>父标签</label>
-              <select v-model="formData.parent_id" class="FormControl" :disabled="editingTagHasChildren">
+              <label for="tag-parent">父标签</label>
+              <select
+                id="tag-parent"
+                v-model="formData.parent_id"
+                name="tag_parent_id"
+                class="FormControl"
+                :disabled="editingTagHasChildren"
+              >
                 <option :value="null">作为顶级标签</option>
                 <option
                   v-for="option in availableParentOptions"
@@ -193,9 +207,11 @@
             </div>
 
             <div class="Form-group">
-              <label>排序位置</label>
+              <label for="tag-position">排序位置</label>
               <input
+                id="tag-position"
                 v-model.number="formData.position"
+                name="tag_position"
                 type="number"
                 min="0"
                 class="FormControl"
@@ -206,15 +222,20 @@
           </div>
 
           <div class="Form-group">
-            <label>颜色</label>
+            <label for="tag-color-text">颜色</label>
             <div class="ColorPicker">
               <input
+                id="tag-color-picker"
                 v-model="formData.color"
+                name="tag_color_picker"
                 type="color"
                 class="ColorPicker-input"
+                aria-label="标签颜色选择器"
               />
               <input
+                id="tag-color-text"
                 v-model="formData.color"
+                name="tag_color"
                 type="text"
                 class="FormControl ColorPicker-text"
                 placeholder="#888888"
@@ -235,12 +256,14 @@
 
           <div class="Form-group">
             <div class="Form-group-header">
-              <label>图标</label>
+              <label for="tag-icon-search">图标</label>
               <button type="button" class="LinkButton" @click="formData.icon = ''">清除图标</button>
             </div>
 
             <input
+              id="tag-icon-search"
               v-model.trim="iconSearch"
+              name="tag_icon_search"
               type="text"
               class="FormControl"
               placeholder="搜索图标，例如 code、comments、tag"
@@ -266,7 +289,9 @@
 
             <div class="Form-help">标签仍然保存为 Font Awesome 类名，但现在可以直接搜索和点选。</div>
             <input
+              id="tag-icon"
               v-model.trim="formData.icon"
+              name="tag_icon"
               type="text"
               class="FormControl FormControl--subtle"
               placeholder="高级模式：手动输入 Font Awesome 类名"
@@ -277,12 +302,20 @@
             <label>显示与发帖限制</label>
             <div class="CheckboxRow">
               <label class="CheckboxChip">
-                <input v-model="formData.is_hidden" type="checkbox" />
+                <input
+                  v-model="formData.is_hidden"
+                  name="tag_is_hidden"
+                  type="checkbox"
+                />
                 <span>隐藏标签</span>
               </label>
 
               <label class="CheckboxChip">
-                <input v-model="formData.is_restricted" type="checkbox" />
+                <input
+                  v-model="formData.is_restricted"
+                  name="tag_is_restricted"
+                  type="checkbox"
+                />
                 <span>限制发帖</span>
               </label>
             </div>
@@ -290,8 +323,13 @@
 
           <div class="FormRow">
             <div class="Form-group">
-              <label>查看权限</label>
-              <select v-model="formData.view_scope" class="FormControl">
+              <label for="tag-view-scope">查看权限</label>
+              <select
+                id="tag-view-scope"
+                v-model="formData.view_scope"
+                name="tag_view_scope"
+                class="FormControl"
+              >
                 <option v-for="option in TAG_SCOPE_OPTIONS" :key="`view-${option.value}`" :value="option.value">
                   {{ option.label }}
                 </option>
@@ -299,8 +337,13 @@
             </div>
 
             <div class="Form-group">
-              <label>发帖权限</label>
-              <select v-model="formData.start_discussion_scope" class="FormControl">
+              <label for="tag-start-scope">发帖权限</label>
+              <select
+                id="tag-start-scope"
+                v-model="formData.start_discussion_scope"
+                name="tag_start_discussion_scope"
+                class="FormControl"
+              >
                 <option v-for="option in availableStartScopeOptions" :key="`start-${option.value}`" :value="option.value">
                   {{ option.label }}
                 </option>
@@ -310,8 +353,13 @@
           </div>
 
           <div class="Form-group">
-            <label>回帖权限</label>
-            <select v-model="formData.reply_scope" class="FormControl">
+            <label for="tag-reply-scope">回帖权限</label>
+            <select
+              id="tag-reply-scope"
+              v-model="formData.reply_scope"
+              name="tag_reply_scope"
+              class="FormControl"
+            >
               <option v-for="option in availableReplyScopeOptions" :key="`reply-${option.value}`" :value="option.value">
                 {{ option.label }}
               </option>
@@ -325,10 +373,10 @@
         </div>
 
         <div class="Modal-footer">
-          <button @click="closeModal" class="Button">
+          <button type="button" @click="closeModal" class="Button">
             取消
           </button>
-          <button @click="saveTag" class="Button Button--primary" :disabled="saving">
+          <button type="button" @click="saveTag" class="Button Button--primary" :disabled="saving">
             {{ saving ? '保存中...' : '保存' }}
           </button>
         </div>
@@ -499,7 +547,6 @@ const tagConfigSummaryItems = computed(() => [
   { label: '查看范围', value: visibilitySummary.value },
   { label: '发帖 / 回帖', value: postingSummary.value },
 ])
-
 onMounted(() => {
   loadTags()
 })

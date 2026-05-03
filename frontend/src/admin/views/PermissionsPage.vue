@@ -18,6 +18,7 @@
             <i v-if="group.icon" :class="group.icon" class="GroupBar-icon"></i>
             <span class="GroupBar-name">{{ group.name }}</span>
             <button
+              type="button"
               @click="editGroup(group)"
               class="GroupBar-edit"
               title="编辑用户组"
@@ -25,7 +26,7 @@
               <i class="fas fa-edit"></i>
             </button>
           </div>
-          <button @click="createGroup" class="GroupBar-add">
+          <button type="button" @click="createGroup" class="GroupBar-add">
             <i class="fas fa-plus"></i>
             添加用户组
           </button>
@@ -125,6 +126,7 @@
 
       <div class="PermissionsPage-actions">
         <button
+          type="button"
           @click="savePermissions"
           class="Button Button--primary"
           :disabled="saving"
@@ -139,39 +141,72 @@
         <div class="Modal-content Modal-content--group">
           <div class="Modal-header">
             <h3>{{ editingGroup ? '编辑用户组' : '创建用户组' }}</h3>
-            <button @click="closeGroupModal" class="Modal-close">
+            <button type="button" @click="closeGroupModal" class="Modal-close">
               <i class="fas fa-times"></i>
             </button>
           </div>
 
           <div class="Modal-body">
             <div class="Form-group Form-group--groupName">
-              <label>名称</label>
-              <input v-model="groupForm.name" type="text" class="FormControl" placeholder="例如：Moderator" />
+              <label for="group-name">名称</label>
+              <input
+                id="group-name"
+                v-model="groupForm.name"
+                name="group_name"
+                type="text"
+                class="FormControl"
+                placeholder="例如：Moderator"
+              />
             </div>
 
             <div class="FormRow">
               <div class="Form-group">
-                <label>图标</label>
-                <input v-model="groupForm.icon" type="text" class="FormControl" placeholder="例如：fas fa-shield-alt" />
+                <label for="group-icon">图标</label>
+                <input
+                  id="group-icon"
+                  v-model="groupForm.icon"
+                  name="group_icon"
+                  type="text"
+                  class="FormControl"
+                  placeholder="例如：fas fa-shield-alt"
+                />
               </div>
               <div class="Form-group">
-                <label>颜色</label>
+                <label for="group-color-text">颜色</label>
                 <div class="ColorField">
-                  <input v-model="groupForm.color" type="color" class="ColorField-picker" />
-                  <input v-model="groupForm.color" type="text" class="FormControl" placeholder="#4d698e" />
+                  <input
+                    id="group-color-picker"
+                    v-model="groupForm.color"
+                    name="group_color_picker"
+                    type="color"
+                    class="ColorField-picker"
+                    aria-label="用户组颜色选择器"
+                  />
+                  <input
+                    id="group-color-text"
+                    v-model="groupForm.color"
+                    name="group_color"
+                    type="text"
+                    class="FormControl"
+                    placeholder="#4d698e"
+                  />
                 </div>
               </div>
             </div>
 
-            <label class="CheckboxField">
-              <input v-model="groupForm.is_hidden" type="checkbox" />
+            <label class="CheckboxField CheckboxField--toggle GroupHiddenToggle">
+              <input
+                v-model="groupForm.is_hidden"
+                name="group_is_hidden"
+                type="checkbox"
+              />
               <span>隐藏用户组</span>
             </label>
           </div>
 
           <div class="Modal-footer Modal-footer--split">
             <button
+              type="button"
               v-if="editingGroup && canDeleteGroup(editingGroup)"
               @click="deleteGroup"
               class="Button Button--danger"
@@ -182,10 +217,10 @@
             <span v-else-if="editingGroup" class="Modal-footerNote">系统默认用户组不允许删除</span>
             <span v-else class="Modal-footerNote"></span>
             <div class="Modal-footerActions">
-              <button @click="closeGroupModal" class="Button Button--secondary">
+              <button type="button" @click="closeGroupModal" class="Button Button--secondary">
                 取消
               </button>
-              <button @click="saveGroup" class="Button Button--primary" :disabled="groupSaving || deletingGroup">
+              <button type="button" @click="saveGroup" class="Button Button--primary" :disabled="groupSaving || deletingGroup">
                 {{ groupSaving ? '保存中...' : '保存' }}
               </button>
             </div>
@@ -663,6 +698,16 @@ function getEmptyGroupForm() {
   min-width: 0;
 }
 
+.GroupHiddenToggle {
+  width: fit-content;
+  min-width: 160px;
+  justify-content: flex-start;
+}
+
+.GroupHiddenToggle span {
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
   .GroupBar {
     padding: 14px;
@@ -683,6 +728,10 @@ function getEmptyGroupForm() {
 
   .Modal-content--group {
     min-width: 0;
+  }
+
+  .GroupHiddenToggle {
+    width: 100%;
   }
 
   .PermissionGrid-wrap {

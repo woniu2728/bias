@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
 })
 </script>
 
-<style>
+<style scoped>
 .Modal-backdrop {
   --modal-backdrop-color: rgba(31, 41, 51, 0.56);
   position: fixed;
