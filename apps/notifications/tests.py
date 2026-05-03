@@ -281,6 +281,49 @@ class NotificationServiceTests(TestCase):
         self.assertEqual(Notification.objects.filter(user=self.author, is_read=True).count(), 0)
         self.assertEqual(Notification.objects.filter(user=self.author, is_read=False).count(), unread_before + 1)
 
+    def test_notification_detail_exposes_registered_from_user_summary(self):
+        group = self.replier.user_groups.create(name="Notifier", color="#1abc9c", icon="fas fa-bell")
+        notification = Notification.objects.create(
+            user=self.author,
+            from_user=self.replier,
+            type="postLiked",
+            subject_type="post",
+            subject_id=self.initial_reply.id,
+            data={"post_id": self.initial_reply.id},
+        )
+
+        response = self.client.get(
+            f"/api/notifications/{notification.id}",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["from_user"]["username"], self.replier.username)
+        self.assertEqual(payload["from_user"]["primary_group"]["name"], group.name)
+
+    def test_notification_list_exposes_registered_from_user_summary(self):
+        group = self.replier.user_groups.create(name="NotifyList", color="#9b59b6", icon="fas fa-star")
+        Notification.objects.create(
+            user=self.author,
+            from_user=self.replier,
+            type="postReply",
+            subject_type="post",
+            subject_id=self.initial_reply.id,
+            data={"post_id": self.initial_reply.id},
+        )
+
+        response = self.client.get(
+            "/api/notifications",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertGreaterEqual(payload["total"], 1)
+        self.assertEqual(payload["data"][0]["from_user"]["username"], self.replier.username)
+        self.assertEqual(payload["data"][0]["from_user"]["primary_group"]["name"], group.name)
+
     @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "notification-cache-test"}})
     def test_notification_stats_reuses_cached_unread_count(self):
         cache.clear()

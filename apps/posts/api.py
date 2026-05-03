@@ -21,24 +21,11 @@ from apps.posts.services import PostService
 from apps.tags.services import TagService
 from apps.core.audit import log_admin_action
 from apps.core.auth import AuthBearer, get_optional_user
+from apps.core.forum_resources import serialize_user_summary
 from apps.core.resource_registry import get_resource_registry
-from apps.users.group_utils import get_primary_group, serialize_group_badge
 
 router = Router()
 RESOURCE_REGISTRY = get_resource_registry()
-
-
-def _serialize_user_summary(user):
-    if not user:
-        return None
-
-    return {
-        "id": user.id,
-        "username": user.username,
-        "display_name": user.display_name,
-        "avatar_url": user.avatar_url,
-        "primary_group": serialize_group_badge(get_primary_group(user)),
-    }
 
 
 def _serialize_post(post, user=None):

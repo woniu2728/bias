@@ -169,8 +169,40 @@ def bootstrap_forum_resource_fields() -> None:
             description="搜索结果中的回复作者摘要。",
         )
     )
+    registry.register_field(
+        ResourceFieldDefinition(
+            resource="user_summary",
+            field="primary_group",
+            module_id="users",
+            resolver=_resolve_user_primary_group,
+            description="用户摘要中的主用户组徽章。",
+        )
+    )
+    registry.register_field(
+        ResourceFieldDefinition(
+            resource="notification",
+            field="from_user",
+            module_id="notifications",
+            resolver=_resolve_notification_from_user,
+            description="通知来源用户摘要。",
+        )
+    )
 
     _resources_bootstrapped = True
+
+
+def serialize_user_summary(user) -> dict | None:
+    if not user:
+        return None
+
+    payload = {
+        "id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "avatar_url": user.avatar_url,
+    }
+    payload.update(get_resource_registry().serialize("user_summary", user))
+    return payload
 
 
 def _resolve_discussion_tags(discussion, context: dict) -> list[dict]:
@@ -295,26 +327,18 @@ def _resolve_tag_last_posted_discussion(tag, context: dict) -> dict | None:
 
 
 def _resolve_search_discussion_user(discussion, context: dict) -> dict | None:
-    user = getattr(discussion, "user", None)
-    if not user:
-        return None
-
-    return {
-        "id": user.id,
-        "username": user.username,
-        "display_name": user.display_name,
-        "avatar_url": user.avatar_url,
-    }
+    return serialize_user_summary(getattr(discussion, "user", None))
 
 
 def _resolve_search_post_user(post, context: dict) -> dict | None:
-    user = getattr(post, "user", None)
-    if not user:
-        return None
+    return serialize_user_summary(getattr(post, "user", None))
 
-    return {
-        "id": user.id,
-        "username": user.username,
-        "display_name": user.display_name,
-        "avatar_url": user.avatar_url,
-    }
+
+def _resolve_user_primary_group(user, context: dict) -> dict | None:
+    from apps.users.group_utils import get_primary_group, serialize_group_badge
+
+    return serialize_group_badge(get_primary_group(user))
+
+
+def _resolve_notification_from_user(notification, context: dict) -> dict | None:
+    return serialize_user_summary(getattr(notification, "from_user", None))

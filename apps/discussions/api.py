@@ -21,31 +21,11 @@ from apps.discussions.services import DiscussionService
 from apps.posts.models import Post
 from apps.core.audit import log_admin_action
 from apps.core.auth import AuthBearer, get_optional_user
+from apps.core.forum_resources import serialize_user_summary
 from apps.core.resource_registry import get_resource_registry
-from apps.users.group_utils import get_primary_group, serialize_group_badge
 
 router = Router()
 RESOURCE_REGISTRY = get_resource_registry()
-
-
-def _serialize_user_summary(user):
-    if not user:
-        return None
-
-    return {
-        "id": user.id,
-        "username": user.username,
-        "display_name": user.display_name,
-        "avatar_url": user.avatar_url,
-        "primary_group": serialize_group_badge(get_primary_group(user)),
-    }
-
-
-def _attach_discussion_user_badges(discussion):
-    if discussion.user:
-        discussion.user.primary_group = serialize_group_badge(get_primary_group(discussion.user))
-    if discussion.last_posted_user:
-        discussion.last_posted_user.primary_group = serialize_group_badge(get_primary_group(discussion.last_posted_user))
 
 
 @router.post("/", response=DiscussionOutSchema, auth=AuthBearer(), tags=["Discussions"])
@@ -62,7 +42,6 @@ def create_discussion(request, payload: DiscussionCreateSchema):
             user=request.auth,
             tag_ids=payload.tag_ids,
         )
-        _attach_discussion_user_badges(discussion)
         return discussion
     except PermissionDenied as e:
         return JsonResponse({"error": str(e)}, status=403)
@@ -107,7 +86,6 @@ def list_discussions(
 
     # 为每个讨论添加标签数据
     for discussion in discussions:
-        _attach_discussion_user_badges(discussion)
         discussion.tags = RESOURCE_REGISTRY.serialize(
             "discussion",
             discussion,
@@ -166,8 +144,6 @@ def get_discussion(request, discussion_id: int):
     if not discussion:
         return JsonResponse({"error": "讨论不存在"}, status=404)
 
-    _attach_discussion_user_badges(discussion)
-
     # 获取第一条帖子
     first_post = None
     if discussion.first_post_id:
@@ -178,7 +154,7 @@ def get_discussion(request, discussion_id: int):
                 "number": post.number,
                 "content": post.content,
                 "content_html": post.content_html,
-                "user": _serialize_user_summary(post.user),
+                "user": serialize_user_summary(post.user),
                 "created_at": post.created_at,
                 "updated_at": post.updated_at,
                 "approval_status": post.approval_status,
@@ -219,7 +195,6 @@ def update_discussion(request, discussion_id: int, payload: DiscussionUpdateSche
             is_sticky=payload.is_sticky,
             is_hidden=payload.is_hidden,
         )
-        _attach_discussion_user_badges(discussion)
         return discussion
     except Discussion.DoesNotExist:
         return JsonResponse({"error": "讨论不存在"}, status=404)

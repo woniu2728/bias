@@ -12,8 +12,26 @@ from apps.notifications.schemas import (
 )
 from apps.notifications.services import NotificationService
 from apps.core.auth import AuthBearer
+from apps.core.resource_registry import get_resource_registry
 
 router = Router()
+RESOURCE_REGISTRY = get_resource_registry()
+
+
+def _serialize_notification(notification):
+    payload = {
+        "id": notification.id,
+        "user_id": notification.user_id,
+        "type": notification.type,
+        "subject_type": notification.subject_type,
+        "subject_id": notification.subject_id,
+        "data": notification.data,
+        "is_read": notification.is_read,
+        "read_at": notification.read_at,
+        "created_at": notification.created_at,
+    }
+    payload.update(RESOURCE_REGISTRY.serialize("notification", notification))
+    return payload
 
 
 @router.get("/notifications", response=NotificationListSchema, auth=AuthBearer(), tags=["Notifications"])
@@ -48,7 +66,7 @@ def list_notifications(
         "unread_count": unread_count,
         "page": page,
         "limit": limit,
-        "data": notifications,
+        "data": [_serialize_notification(notification) for notification in notifications],
     }
 
 
@@ -114,7 +132,7 @@ def get_notification(request, notification_id: int):
     if not notification:
         return JsonResponse({"error": "通知不存在"}, status=404)
 
-    return notification
+    return _serialize_notification(notification)
 
 
 @router.delete("/notifications/{notification_id}", auth=AuthBearer(), tags=["Notifications"])
