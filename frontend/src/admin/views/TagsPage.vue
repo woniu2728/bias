@@ -17,24 +17,7 @@
         </button>
       </AdminToolbar>
 
-      <div class="TagSummaryGrid">
-        <article class="TagSummaryCard">
-          <small>标签总数</small>
-          <strong>{{ tagSummary.total }}</strong>
-        </article>
-        <article class="TagSummaryCard">
-          <small>顶级 / 子标签</small>
-          <strong>{{ tagSummary.root }} / {{ tagSummary.child }}</strong>
-        </article>
-        <article class="TagSummaryCard">
-          <small>隐藏标签</small>
-          <strong>{{ tagSummary.hidden }}</strong>
-        </article>
-        <article class="TagSummaryCard">
-          <small>限制发帖</small>
-          <strong>{{ tagSummary.restricted }}</strong>
-        </article>
-      </div>
+      <AdminSummaryGrid :items="tagSummaryItems" />
 
       <div class="TagsPage-list">
         <table class="TagTable">
@@ -154,24 +137,7 @@
             </div>
           </div>
 
-          <div class="TagConfigSummary">
-            <article class="TagConfigCard">
-              <small>层级</small>
-              <strong>{{ hierarchySummary }}</strong>
-            </article>
-            <article class="TagConfigCard">
-              <small>排序</small>
-              <strong>{{ positionSummary }}</strong>
-            </article>
-            <article class="TagConfigCard">
-              <small>查看范围</small>
-              <strong>{{ visibilitySummary }}</strong>
-            </article>
-            <article class="TagConfigCard">
-              <small>发帖 / 回帖</small>
-              <strong>{{ postingSummary }}</strong>
-            </article>
-          </div>
+          <AdminSummaryGrid class="TagConfigSummary" :items="tagConfigSummaryItems" />
 
           <div class="FormRow">
             <div class="Form-group">
@@ -375,6 +341,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
+import AdminSummaryGrid from '../components/AdminSummaryGrid.vue'
 import AdminToolbar from '../components/AdminToolbar.vue'
 import api from '../../api'
 import { useModalStore } from '../../stores/modal'
@@ -470,6 +437,12 @@ const tagSummary = computed(() => ({
   hidden: tags.value.filter(tag => tag.is_hidden).length,
   restricted: tags.value.filter(tag => tag.is_restricted).length,
 }))
+const tagSummaryItems = computed(() => [
+  { label: '标签总数', value: tagSummary.value.total },
+  { label: '顶级 / 子标签', value: `${tagSummary.value.root} / ${tagSummary.value.child}` },
+  { label: '隐藏标签', value: tagSummary.value.hidden },
+  { label: '限制发帖', value: tagSummary.value.restricted },
+])
 const editingTagHasChildren = computed(() => {
   if (!editingTag.value) return false
   return tags.value.some(tag => tag.parent_id === editingTag.value.id)
@@ -520,6 +493,12 @@ const positionHelpText = computed(() => {
   const parentText = formData.value.parent_id ? '当前父标签下' : '顶级标签层'
   return `${parentText}数字越小越靠前；${positionSummary.value}。`
 })
+const tagConfigSummaryItems = computed(() => [
+  { label: '层级', value: hierarchySummary.value },
+  { label: '排序', value: positionSummary.value },
+  { label: '查看范围', value: visibilitySummary.value },
+  { label: '发帖 / 回帖', value: postingSummary.value },
+])
 
 onMounted(() => {
   loadTags()
@@ -858,39 +837,6 @@ function getNextPosition(sourceTags, parentId) {
 
 .TagsPage-list {
   min-width: 0;
-}
-
-.TagSummaryGrid,
-.TagConfigSummary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.TagSummaryCard,
-.TagConfigCard {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px 18px;
-  border: 1px solid var(--forum-border-color);
-  border-radius: 12px;
-  background: linear-gradient(180deg, var(--forum-bg-elevated), #f6f9fc);
-  box-shadow: var(--forum-shadow-sm);
-}
-
-.TagSummaryCard small,
-.TagConfigCard small {
-  color: var(--forum-text-soft);
-  font-size: var(--forum-font-size-xs);
-  font-weight: 600;
-}
-
-.TagSummaryCard strong,
-.TagConfigCard strong {
-  color: var(--forum-text-muted);
-  font-size: 16px;
-  line-height: 1.5;
 }
 
 .Button--small {
@@ -1264,11 +1210,6 @@ function getNextPosition(sourceTags, parentId) {
     max-height: calc(100vh - 56px);
   }
 
-  .TagSummaryGrid,
-  .TagConfigSummary {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .ColorPicker {
     flex-direction: column;
     align-items: stretch;
@@ -1365,10 +1306,4 @@ function getNextPosition(sourceTags, parentId) {
   }
 }
 
-@media (max-width: 560px) {
-  .TagSummaryGrid,
-  .TagConfigSummary {
-    grid-template-columns: 1fr;
-  }
-}
 </style>
