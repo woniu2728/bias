@@ -47,6 +47,8 @@ defineEmits(['show-more'])
 .section-header h2 {
   font-size: 20px;
   color: var(--forum-text-color);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .section-link {
@@ -61,5 +63,20 @@ defineEmits(['show-more'])
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .section-header {
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .section-header h2 {
+    font-size: 18px;
+  }
+
+  .section-link {
+    flex: 0 0 auto;
+  }
 }
 </style>

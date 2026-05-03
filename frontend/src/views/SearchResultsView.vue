@@ -188,4 +188,13 @@ function handleStartDiscussion() {
   gap: 16px;
 }
 
+@media (max-width: 768px) {
+  .search-content {
+    padding: 18px 14px 32px;
+  }
+
+  .search-sidebar-stack {
+    gap: 12px;
+  }
+}
 </style>

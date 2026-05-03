@@ -119,12 +119,14 @@ defineEmits(['click'])
   color: var(--forum-text-color);
   margin-bottom: 6px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .result-card-main p {
   color: var(--forum-text-muted);
   line-height: 1.7;
   margin-bottom: 8px;
+  overflow-wrap: anywhere;
 }
 
 .result-card-main :deep(mark) {
@@ -144,5 +146,21 @@ defineEmits(['click'])
 
 .user-card {
   align-items: center;
+}
+
+@media (max-width: 520px) {
+  .result-card {
+    gap: 12px;
+    padding: 15px;
+  }
+
+  .result-card-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .result-card-main h3 {
+    font-size: 16px;
+  }
 }
 </style>
