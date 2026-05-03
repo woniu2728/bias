@@ -448,9 +448,11 @@ onMounted(async () => {
 }
 
 .StatusWidget-value {
+  min-width: 0;
   font-size: 16px;
   font-weight: 600;
   color: #333;
+  overflow-wrap: anywhere;
 }
 
 .StatusWidget-help {
@@ -489,17 +491,14 @@ onMounted(async () => {
 .QueueMetrics strong {
   color: #25364a;
   font-size: 15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .QueueMetrics-error {
   color: var(--forum-danger-color);
   font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .QueueMetrics-actions {
@@ -533,6 +532,7 @@ onMounted(async () => {
   color: var(--forum-success-color);
   font-size: 12px;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .QueueMetrics-message--error {

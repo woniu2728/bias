@@ -239,6 +239,8 @@ function formatData(data) {
   border-bottom: 1px solid var(--forum-border-soft);
   text-align: left;
   vertical-align: top;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .AuditLogTable th {
@@ -313,12 +315,14 @@ function formatData(data) {
     grid-template-columns: 96px minmax(0, 1fr);
     gap: 10px;
     border-bottom: 1px solid var(--forum-border-soft);
+    align-items: start;
   }
 
   .AuditLogTable td::before {
     content: attr(data-label);
     color: var(--forum-text-muted);
     font-weight: 600;
+    min-width: 0;
   }
 
   .AuditLogTable pre {
