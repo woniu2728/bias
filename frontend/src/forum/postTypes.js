@@ -1,4 +1,5 @@
 import DiscussionPostItem from '@/components/discussion/DiscussionPostItem.vue'
+import DiscussionLockedPostItem from '@/components/discussion/DiscussionLockedPostItem.vue'
 import DiscussionRenamedPostItem from '@/components/discussion/DiscussionRenamedPostItem.vue'
 
 const postTypeDefinitions = []
@@ -46,4 +47,11 @@ registerPostType({
   label: '讨论改标题',
   component: DiscussionRenamedPostItem,
   order: 20
+})
+
+registerPostType({
+  type: 'discussionLocked',
+  label: '讨论锁定状态变更',
+  component: DiscussionLockedPostItem,
+  order: 30
 })

@@ -279,8 +279,8 @@ def toggle_lock_discussion(request, discussion_id: int):
 
     try:
         discussion = Discussion.objects.get(id=discussion_id)
-        discussion.is_locked = not discussion.is_locked
-        discussion.save(update_fields=['is_locked'])
+        DiscussionService.set_locked_state(discussion, request.auth, not discussion.is_locked)
+        discussion.refresh_from_db()
         log_admin_action(
             request,
             "admin.discussion.lock" if discussion.is_locked else "admin.discussion.unlock",

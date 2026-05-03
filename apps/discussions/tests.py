@@ -764,6 +764,45 @@ class DiscussionApiTests(TestCase):
             },
         )
 
+    def test_locking_discussion_creates_discussion_locked_event_post(self):
+        discussion = DiscussionService.create_discussion(
+            title="Lock me",
+            content="Original content",
+            user=self.author,
+        )
+        admin = User.objects.create_superuser(
+            username="discussion-lock-admin",
+            email="discussion-lock-admin@example.com",
+            password="password123",
+        )
+
+        response = self.client.post(
+            f"/api/discussions/{discussion.id}/lock",
+            **self.auth_header(admin),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        discussion.refresh_from_db()
+        self.assertTrue(discussion.is_locked)
+        locked_post = Post.objects.get(discussion=discussion, number=2)
+        self.assertEqual(locked_post.type, "discussionLocked")
+        self.assertEqual(locked_post.content, "locked")
+        self.assertEqual(discussion.last_post_id, locked_post.id)
+        self.assertEqual(discussion.comment_count, 1)
+
+        posts_response = self.client.get(f"/api/discussions/{discussion.id}/posts")
+        self.assertEqual(posts_response.status_code, 200, posts_response.content)
+        payload = posts_response.json()["data"]
+        event_post = next(item for item in payload if item["id"] == locked_post.id)
+        self.assertEqual(event_post["type"], "discussionLocked")
+        self.assertEqual(
+            event_post["event_data"],
+            {
+                "kind": "discussionLocked",
+                "is_locked": True,
+            },
+        )
+
     def test_owner_with_delete_own_permission_can_delete_discussion(self):
         member_group = Group.objects.create(name="DiscussionAuthorDeleteOwn", color="#4d698e")
         Permission.objects.create(group=member_group, permission="startDiscussion")

@@ -26,6 +26,7 @@ DEFAULT_POST_TYPE = FORUM_REGISTRY.get_default_post_type_code()
 DISCUSSION_COUNTED_POST_TYPES = FORUM_REGISTRY.get_discussion_counted_post_type_codes()
 USER_COUNTED_POST_TYPES = FORUM_REGISTRY.get_user_counted_post_type_codes()
 DISCUSSION_RENAMED_POST_TYPE = "discussionRenamed"
+DISCUSSION_LOCKED_POST_TYPE = "discussionLocked"
 
 
 class DiscussionService:
@@ -631,11 +632,11 @@ class DiscussionService:
 
             discussion.save()
             if title is not None and title != previous_title:
-                DiscussionService._create_discussion_renamed_post(
+                DiscussionService._create_system_event_post(
                     discussion=discussion,
                     actor=user,
-                    previous_title=previous_title,
-                    current_title=title,
+                    post_type=DISCUSSION_RENAMED_POST_TYPE,
+                    content=f"from: {previous_title}\nto: {title}",
                 )
             if is_hidden is not None or tag_ids is not None:
                 refreshed_tag_ids = set(previous_tag_ids) | set(discussion.discussion_tags.values_list('tag_id', flat=True))
@@ -848,28 +849,46 @@ class DiscussionService:
         return True
 
     @staticmethod
-    def _create_discussion_renamed_post(
+    def set_locked_state(discussion: Discussion, actor: User, is_locked: bool) -> Discussion:
+        if not actor.is_staff:
+            raise PermissionDenied("没有权限锁定/解锁讨论")
+
+        if discussion.is_locked == is_locked:
+            return discussion
+
+        discussion.is_locked = is_locked
+        discussion.save(update_fields=["is_locked"])
+        DiscussionService._create_system_event_post(
+            discussion=discussion,
+            actor=actor,
+            post_type=DISCUSSION_LOCKED_POST_TYPE,
+            content="locked" if is_locked else "unlocked",
+        )
+        return discussion
+
+    @staticmethod
+    def _create_system_event_post(
         discussion: Discussion,
         actor: User,
-        previous_title: str,
-        current_title: str,
+        post_type: str,
+        content: str,
     ) -> Post:
         last_post = Post.objects.filter(discussion=discussion).order_by("-number").first()
         next_number = (last_post.number + 1) if last_post else 1
-        renamed_post = Post.objects.create(
+        event_post = Post.objects.create(
             discussion=discussion,
             number=next_number,
             user=actor,
-            type=DISCUSSION_RENAMED_POST_TYPE,
-            content=f"from: {previous_title}\nto: {current_title}",
+            type=post_type,
+            content=content,
             content_html="",
             approval_status=Post.APPROVAL_APPROVED,
             approved_at=timezone.now(),
             approved_by=actor,
         )
-        discussion.last_post_id = renamed_post.id
-        discussion.last_post_number = renamed_post.number
-        discussion.last_posted_at = renamed_post.created_at
+        discussion.last_post_id = event_post.id
+        discussion.last_post_number = event_post.number
+        discussion.last_posted_at = event_post.created_at
         discussion.last_posted_user = actor
         discussion.save(update_fields=[
             "last_post_id",
@@ -877,7 +896,7 @@ class DiscussionService:
             "last_posted_at",
             "last_posted_user",
         ])
-        return renamed_post
+        return event_post
 
     @staticmethod
     def can_edit_discussion(discussion: Discussion, user: User) -> bool:

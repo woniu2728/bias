@@ -573,6 +573,18 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     counts_toward_user=False,
                     searchable=False,
                 ),
+                PostTypeDefinition(
+                    code="discussionLocked",
+                    label="讨论锁定状态变更",
+                    module_id="discussions",
+                    description="记录讨论被锁定或解除锁定的系统事件帖，不计入回复统计和全文搜索。",
+                    icon="fas fa-lock",
+                    is_default=False,
+                    is_stream_visible=True,
+                    counts_toward_discussion=False,
+                    counts_toward_user=False,
+                    searchable=False,
+                ),
             ),
         )
     )

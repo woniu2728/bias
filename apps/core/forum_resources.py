@@ -354,27 +354,38 @@ def _resolve_post_can_moderate_flags(post, context: dict) -> bool:
 
 
 def _resolve_post_event_data(post, context: dict) -> dict | None:
-    if getattr(post, "type", "") != "discussionRenamed":
-        return None
+    post_type = getattr(post, "type", "")
+    if post_type == "discussionRenamed":
+        lines = [
+            line.strip()
+            for line in (getattr(post, "content", "") or "").splitlines()
+            if line.strip()
+        ]
+        if len(lines) < 2:
+            return None
 
-    lines = [
-        line.strip()
-        for line in (getattr(post, "content", "") or "").splitlines()
-        if line.strip()
-    ]
-    if len(lines) < 2:
-        return None
+        previous_title = lines[0].removeprefix("from:").strip()
+        current_title = lines[1].removeprefix("to:").strip()
+        if not previous_title or not current_title:
+            return None
 
-    previous_title = lines[0].removeprefix("from:").strip()
-    current_title = lines[1].removeprefix("to:").strip()
-    if not previous_title or not current_title:
-        return None
+        return {
+            "kind": "discussionRenamed",
+            "old_title": previous_title,
+            "new_title": current_title,
+        }
 
-    return {
-        "kind": "discussionRenamed",
-        "old_title": previous_title,
-        "new_title": current_title,
-    }
+    if post_type == "discussionLocked":
+        normalized = (getattr(post, "content", "") or "").strip().lower()
+        if normalized not in {"locked", "unlocked"}:
+            return None
+
+        return {
+            "kind": "discussionLocked",
+            "is_locked": normalized == "locked",
+        }
+
+    return None
 
 
 def _resolve_tag_can_start_discussion(tag, context: dict) -> bool:
