@@ -37,8 +37,8 @@
           </div>
 
           <div class="ApprovalCard-actions">
-            <button @click="openAction(item, 'approve')" class="Button Button--primary">审核通过</button>
-            <button @click="openAction(item, 'reject')" class="Button Button--secondary">拒绝并隐藏</button>
+            <button type="button" @click="openAction(item, 'approve')" class="Button Button--primary">审核通过</button>
+            <button type="button" @click="openAction(item, 'reject')" class="Button Button--secondary">拒绝并隐藏</button>
           </div>
         </article>
       </div>

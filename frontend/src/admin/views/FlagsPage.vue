@@ -46,8 +46,8 @@
           </div>
 
           <div v-if="flag.status === 'open'" class="FlagCard-actions">
-            <button @click="openResolve(flag, 'resolved')" class="Button Button--primary">标记已处理</button>
-            <button @click="openResolve(flag, 'ignored')" class="Button Button--secondary">忽略举报</button>
+            <button type="button" @click="openResolve(flag, 'resolved')" class="Button Button--primary">标记已处理</button>
+            <button type="button" @click="openResolve(flag, 'ignored')" class="Button Button--secondary">忽略举报</button>
           </div>
           <div v-else class="FlagCard-footer">
             处理人：{{ flag.resolved_by?.display_name || flag.resolved_by?.username || '未知' }}

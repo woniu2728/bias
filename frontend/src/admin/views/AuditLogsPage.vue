@@ -6,13 +6,27 @@
     description="查看管理员关键操作记录"
   >
     <AdminToolbar class="AuditLogsPage-toolbar">
-      <select v-model="filters.action" class="FormControl" @change="reloadFromFirstPage">
+      <select
+        id="audit-action-filter"
+        v-model="filters.action"
+        name="action"
+        class="FormControl"
+        aria-label="筛选操作"
+        @change="reloadFromFirstPage"
+      >
         <option value="">全部操作</option>
         <option v-for="option in actionOptions" :key="option.value" :value="option.value">
           {{ option.label }}
         </option>
       </select>
-      <select v-model="filters.target_type" class="FormControl" @change="reloadFromFirstPage">
+      <select
+        id="audit-target-type-filter"
+        v-model="filters.target_type"
+        name="target_type"
+        class="FormControl"
+        aria-label="筛选对象"
+        @change="reloadFromFirstPage"
+      >
         <option value="">全部对象</option>
         <option v-for="option in targetOptions" :key="option.value" :value="option.value">
           {{ option.label }}
