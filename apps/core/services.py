@@ -104,13 +104,16 @@ class SearchService:
         return text_query if text_query else Q(pk__in=[])
 
     @staticmethod
-    def extract_filter_tokens(query: str) -> tuple[str, dict[str, list]]:
+    def extract_filter_tokens(query: str, targets: tuple[str, ...] | None = None) -> tuple[str, dict[str, list]]:
         text_tokens: List[str] = []
         filters: dict[str, list] = {}
+        allowed_targets = set(targets or ())
 
         for raw_token in (query or "").split():
             matched = False
             for definition in FORUM_REGISTRY.get_search_filters():
+                if allowed_targets and definition.target not in allowed_targets:
+                    continue
                 parsed_value = definition.parser(raw_token)
                 if parsed_value is None:
                     continue
@@ -142,7 +145,7 @@ class SearchService:
 
     @staticmethod
     def apply_discussion_search(queryset, query: str, user=None):
-        text_query, parsed_filters = SearchService.extract_filter_tokens(query)
+        text_query, parsed_filters = SearchService.extract_filter_tokens(query, targets=("discussion",))
 
         if text_query:
             if SearchService.should_use_postgres_full_text(text_query):
@@ -162,16 +165,23 @@ class SearchService:
         return queryset
 
     @staticmethod
-    def apply_post_search(queryset, query: str):
-        if SearchService.should_use_postgres_full_text(query):
-            search_query = SearchService._postgres_search_query(query)
+    def apply_post_search(queryset, query: str, user=None):
+        text_query, parsed_filters = SearchService.extract_filter_tokens(query, targets=("post",))
+
+        if text_query and SearchService.should_use_postgres_full_text(text_query):
+            search_query = SearchService._postgres_search_query(text_query)
             search_vector = SearchVector('content', config=POSTGRES_FULL_TEXT_CONFIG)
-            return queryset.annotate(
+            queryset = queryset.annotate(
                 search_vector=search_vector,
                 search_rank=SearchRank(search_vector, search_query),
             ).filter(search_vector=search_query)
+        elif text_query:
+            queryset = queryset.filter(SearchService.build_text_query(['content'], text_query))
 
-        return queryset.filter(SearchService.build_text_query(['content'], query))
+        for definition, parsed_value in parsed_filters.get("post", []):
+            queryset = definition.applier(queryset, parsed_value, {"user": user, "query": query, "text_query": text_query})
+
+        return queryset
 
     @staticmethod
     def apply_user_search(queryset, query: str):
@@ -469,7 +479,7 @@ class SearchService:
 
     @staticmethod
     def _post_queryset(query: str, user=None):
-        queryset = SearchService.apply_post_search(Post.objects.filter(type='comment'), query)
+        queryset = SearchService.apply_post_search(Post.objects.filter(type='comment'), query, user=user)
         queryset = queryset.filter(
             build_post_visibility_q(user),
             build_discussion_visibility_q(user, prefix="discussion__"),

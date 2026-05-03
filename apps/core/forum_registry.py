@@ -444,6 +444,16 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="按讨论作者用户名过滤搜索结果。",
                 ),
                 SearchFilterDefinition(
+                    code="author",
+                    label="按作者过滤",
+                    module_id="discussions",
+                    target="post",
+                    parser=_parse_author_search_filter,
+                    applier=_apply_post_author_search_filter,
+                    syntax="author:<username>",
+                    description="按回复作者用户名过滤搜索结果。",
+                ),
+                SearchFilterDefinition(
                     code="is_sticky",
                     label="仅置顶讨论",
                     module_id="discussions",
@@ -819,6 +829,10 @@ def _parse_author_search_filter(token: str) -> str | None:
 
 
 def _apply_discussion_author_search_filter(queryset, username: str, context: dict):
+    return queryset.filter(user__username__iexact=username)
+
+
+def _apply_post_author_search_filter(queryset, username: str, context: dict):
     return queryset.filter(user__username__iexact=username)
 
 
