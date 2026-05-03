@@ -10,37 +10,22 @@
       </div>
 
       <div class="AdminNav-section">
-        <h4 class="AdminNav-title">核心</h4>
-        <ul class="AdminNav-list">
-          <li v-for="item in coreItems" :key="item.path">
-            <router-link
-              :to="item.path"
-              class="AdminNav-item"
-              :class="{ active: isActive(item.path) }"
-              @click="$emit('close')"
-            >
-              <i :class="item.icon"></i>
-              <span>{{ item.label }}</span>
-            </router-link>
-          </li>
-        </ul>
-      </div>
-
-      <div class="AdminNav-section">
-        <h4 class="AdminNav-title">功能</h4>
-        <ul class="AdminNav-list">
-          <li v-for="item in featureItems" :key="item.path">
-            <router-link
-              :to="item.path"
-              class="AdminNav-item"
-              :class="{ active: isActive(item.path) }"
-              @click="$emit('close')"
-            >
-              <i :class="item.icon"></i>
-              <span>{{ item.label }}</span>
-            </router-link>
-          </li>
-        </ul>
+        <template v-for="section in navSections" :key="section.key">
+          <h4 class="AdminNav-title">{{ section.title }}</h4>
+          <ul class="AdminNav-list">
+            <li v-for="item in section.items" :key="item.path">
+              <router-link
+                :to="item.path"
+                class="AdminNav-item"
+                :class="{ active: isActive(item.path) }"
+                @click="$emit('close')"
+              >
+                <i :class="item.icon"></i>
+                <span>{{ item.label }}</span>
+              </router-link>
+            </li>
+          </ul>
+        </template>
       </div>
 
       <div class="AdminNav-mobileFooter">
@@ -58,9 +43,10 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import { coreItems, featureItems, isAdminPathActive } from '../navigation'
+import { getAdminNavSections, isAdminPathActive } from '../navigation'
 
 defineProps({
   mobileOpen: {
@@ -73,6 +59,7 @@ defineEmits(['close'])
 
 const route = useRoute()
 const authStore = useAuthStore()
+const navSections = computed(() => getAdminNavSections())
 
 function isActive(path) {
   return isAdminPathActive(route.path, path)

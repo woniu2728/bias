@@ -11,6 +11,7 @@
       :can-moderate-discussion-settings="canModerateDiscussionSettings"
       :show-discussion-menu="showDiscussionMenu"
       :toggling-subscription="togglingSubscription"
+      :menu-items="menuItems"
       @primary-action="$emit('primary-action')"
       @login-action="$emit('login-action')"
       @toggle-subscription="$emit('toggle-subscription')"
@@ -88,6 +89,10 @@ defineProps({
   togglingSubscription: {
     type: Boolean,
     default: false
+  },
+  menuItems: {
+    type: Array,
+    default: () => []
   },
   scrubberScrollbarStyle: {
     type: Object,

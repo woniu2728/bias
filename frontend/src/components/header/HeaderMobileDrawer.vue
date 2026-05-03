@@ -51,53 +51,16 @@
 
     <nav class="mobile-drawer-nav">
       <router-link
-        to="/"
+        v-for="item in navItems"
+        :key="item.key"
+        :to="item.to"
         class="mobile-drawer-link"
-        :class="{ active: isMobileNavActive('home') }"
+        :class="{ active: isMobileNavActive(item.key) }"
         @click="$emit('close')"
       >
-        <i class="far fa-comments"></i>
-        <span>全部讨论</span>
-      </router-link>
-      <router-link
-        v-if="authStore.isAuthenticated && authStore.user"
-        to="/following"
-        class="mobile-drawer-link"
-        :class="{ active: isMobileNavActive('following') }"
-        @click="$emit('close')"
-      >
-        <i class="fas fa-bell"></i>
-        <span>关注中</span>
-      </router-link>
-      <router-link
-        to="/tags"
-        class="mobile-drawer-link"
-        :class="{ active: isMobileNavActive('tags') }"
-        @click="$emit('close')"
-      >
-        <i class="fas fa-th-large"></i>
-        <span>标签</span>
-      </router-link>
-      <router-link
-        v-if="authStore.isAuthenticated && authStore.user"
-        :to="profilePath()"
-        class="mobile-drawer-link"
-        :class="{ active: isMobileNavActive('profile') }"
-        @click="$emit('close')"
-      >
-        <i class="fas fa-user"></i>
-        <span>我的主页</span>
-      </router-link>
-      <router-link
-        v-if="authStore.isAuthenticated && authStore.user"
-        to="/notifications"
-        class="mobile-drawer-link"
-        :class="{ active: isMobileNavActive('notifications') }"
-        @click="$emit('close')"
-      >
-        <i class="fas fa-bell"></i>
-        <span>通知</span>
-        <span v-if="notificationStore.unreadCount > 0" class="mobile-drawer-badge">
+        <i :class="item.icon"></i>
+        <span>{{ item.label }}</span>
+        <span v-if="item.key === 'notifications' && notificationStore.unreadCount > 0" class="mobile-drawer-badge">
           {{ notificationStore.unreadCount }}
         </span>
       </router-link>
@@ -142,7 +105,10 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+import { getForumNavItems } from '@/forum/registry'
+
+const props = defineProps({
   showMobileDrawer: {
     type: Boolean,
     default: false
@@ -189,6 +155,11 @@ defineEmits([
   'open-login',
   'open-register'
 ])
+
+const navItems = computed(() => getForumNavItems({
+  authStore: props.authStore,
+  showNotifications: props.authStore.isAuthenticated && Boolean(props.authStore.user),
+}))
 </script>
 
 <style scoped>

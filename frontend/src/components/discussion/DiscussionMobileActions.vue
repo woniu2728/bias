@@ -2,40 +2,13 @@
   <div ref="rootEl" class="discussion-mobile-nav discussion-actions-scope" :class="{ 'is-open': showDiscussionMenu }">
     <div v-if="showDiscussionMenu" class="discussion-actions-menu discussion-actions-menu--mobile">
       <button
-        v-if="canReplyFromMenu"
+        v-for="item in menuItems"
+        :key="item.key"
         type="button"
-        @click="$emit('menu-action', 'reply')"
+        :class="{ 'is-danger': item.tone === 'danger' }"
+        @click="$emit('menu-action', item.key)"
       >
-        {{ hasActiveComposer ? '继续回复' : '回复讨论' }}
-      </button>
-      <button
-        v-else
-        type="button"
-        @click="$emit('menu-action', 'login')"
-      >
-        登录后回复
-      </button>
-      <button
-        v-if="authStore.isAuthenticated && !isSuspended"
-        type="button"
-        @click="$emit('menu-action', 'toggle-subscription')"
-      >
-        {{ togglingSubscription ? '提交中...' : (discussion.is_subscribed ? '取消关注' : '关注讨论') }}
-      </button>
-      <button v-if="canEditDiscussion" type="button" @click="$emit('menu-action', 'edit')">
-        编辑讨论
-      </button>
-      <button v-if="canModerateDiscussionSettings" type="button" @click="$emit('menu-action', 'toggle-pin')">
-        {{ discussion.is_sticky ? '取消置顶' : '置顶讨论' }}
-      </button>
-      <button v-if="canModerateDiscussionSettings" type="button" @click="$emit('menu-action', 'toggle-lock')">
-        {{ discussion.is_locked ? '解除锁定' : '锁定讨论' }}
-      </button>
-      <button v-if="canModerateDiscussionSettings" type="button" @click="$emit('menu-action', 'toggle-hide')">
-        {{ discussion.is_hidden ? '恢复显示' : '隐藏讨论' }}
-      </button>
-      <button v-if="canModerateDiscussionSettings" type="button" class="is-danger" @click="$emit('menu-action', 'delete')">
-        删除讨论
+        {{ item.label }}
       </button>
     </div>
   </div>
@@ -80,6 +53,10 @@ defineProps({
   canModerateDiscussionSettings: {
     type: Boolean,
     default: false
+  },
+  menuItems: {
+    type: Array,
+    default: () => []
   }
 })
 

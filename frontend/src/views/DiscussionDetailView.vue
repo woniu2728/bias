@@ -27,6 +27,7 @@
             :toggling-subscription="togglingSubscription"
             :can-edit-discussion="canEditDiscussion"
             :can-moderate-discussion-settings="canModerateDiscussionSettings"
+            :menu-items="discussionMenuItems"
             @menu-action="handleDiscussionMenuSelection"
           />
 
@@ -75,6 +76,7 @@
                 :format-absolute-date="formatAbsoluteDate"
                 :format-date="formatDate"
                 :format-like-summary="formatLikeSummary"
+                :post-menu-items="getPostMenuOptions(post)"
                 @jump-to-post="jumpToPost"
                 @toggle-like="toggleLike"
                 @reply-to-post="replyToPost"
@@ -123,6 +125,7 @@
           :can-moderate-discussion-settings="canModerateDiscussionSettings"
           :show-discussion-menu="showDiscussionMenu"
           :toggling-subscription="togglingSubscription"
+          :menu-items="discussionMenuItems"
           :scrubber-scrollbar-style="scrubberScrollbarStyle"
           :scrubber-before-percent="scrubberBeforePercent"
           :scrubber-after-percent="scrubberAfterPercent"
@@ -283,20 +286,30 @@ const {
   getUserPrimaryGroupLabel
 } = useDiscussionDetailPresentation(discussion)
 const {
+  discussionMenuItems,
+  getPostMenuOptions,
   handleDiscussionMenuSelection,
   hasPostControls,
   handleOpenReportModal
 } = useDiscussionDetailMenus({
   activePostMenuId,
+  authStore,
   canDeletePost,
   canEditPost,
   canReportPost,
+  canEditDiscussion,
+  canModerateDiscussionSettings,
+  canReplyFromMenu,
+  discussion,
   deleteDiscussion,
   editDiscussion,
   goToLoginForReply,
+  hasActiveComposer,
+  isSuspended,
   openComposer,
   openReportModal,
   showDiscussionMenu,
+  togglingSubscription,
   toggleHide,
   toggleLock,
   togglePin,

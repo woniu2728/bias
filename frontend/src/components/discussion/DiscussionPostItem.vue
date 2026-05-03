@@ -89,14 +89,14 @@
               <i class="fas fa-ellipsis-h"></i>
             </button>
             <div v-if="isPostMenuOpen" class="post-controls-menu">
-              <button v-if="canEditPost(post)" type="button" @click="handleMenuAction('edit-post', post)">
-                编辑
-              </button>
-              <button v-if="canDeletePost(post)" type="button" class="is-danger" @click="handleMenuAction('delete-post', post)">
-                删除
-              </button>
-              <button v-if="canReportPost(post)" type="button" @click="handleMenuAction('open-report-modal', post)">
-                举报
+              <button
+                v-for="item in postMenuItems"
+                :key="item.key"
+                type="button"
+                :class="{ 'is-danger': item.tone === 'danger' }"
+                @click="handleMenuAction(item.key, post)"
+              >
+                {{ item.label }}
               </button>
             </div>
           </div>
@@ -209,6 +209,7 @@ const props = defineProps({
   formatAbsoluteDate: { type: Function, required: true },
   formatDate: { type: Function, required: true },
   formatLikeSummary: { type: Function, required: true },
+  postMenuItems: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits([

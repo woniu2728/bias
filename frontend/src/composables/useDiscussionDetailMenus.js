@@ -1,14 +1,25 @@
+import { computed } from 'vue'
+import { getDiscussionMenuItems, getPostMenuItems } from '@/forum/discussionActions'
+
 export function useDiscussionDetailMenus({
   activePostMenuId,
+  authStore,
   canDeletePost,
   canEditPost,
   canReportPost,
+  canEditDiscussion,
+  canModerateDiscussionSettings,
+  canReplyFromMenu,
+  discussion,
   deleteDiscussion,
   editDiscussion,
   goToLoginForReply,
+  hasActiveComposer,
+  isSuspended,
   openComposer,
   openReportModal,
   showDiscussionMenu,
+  togglingSubscription,
   toggleHide,
   toggleLock,
   togglePin,
@@ -32,8 +43,24 @@ export function useDiscussionDetailMenus({
     await handler()
   }
 
+  const discussionMenuItems = computed(() => getDiscussionMenuItems({
+    authStore,
+    canEditDiscussion: canEditDiscussion.value,
+    canModerateDiscussionSettings: canModerateDiscussionSettings.value,
+    canReplyFromMenu: canReplyFromMenu.value,
+    discussion: discussion.value || {},
+    hasActiveComposer: hasActiveComposer.value,
+    isSuspended: isSuspended.value,
+    togglingSubscription: togglingSubscription.value
+  }))
+
   function hasPostControls(post) {
-    return canEditPost(post) || canDeletePost(post) || canReportPost(post)
+    return getPostMenuItems({
+      canDeletePost,
+      canEditPost,
+      canReportPost,
+      post
+    }).length > 0
   }
 
   async function handleOpenReportModal(post) {
@@ -41,7 +68,18 @@ export function useDiscussionDetailMenus({
     await openReportModal(post)
   }
 
+  function getPostMenuOptions(post) {
+    return getPostMenuItems({
+      canDeletePost,
+      canEditPost,
+      canReportPost,
+      post
+    })
+  }
+
   return {
+    discussionMenuItems,
+    getPostMenuOptions,
     handleDiscussionMenuSelection,
     hasPostControls,
     handleOpenReportModal

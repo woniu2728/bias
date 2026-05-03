@@ -49,20 +49,14 @@
       v-if="showDiscussionMenu && canShowDiscussionMenu"
       class="discussion-actions-menu"
     >
-      <button v-if="canEditDiscussion" type="button" @click="$emit('menu-action', 'edit')">
-        编辑讨论
-      </button>
-      <button v-if="canModerateDiscussionSettings" type="button" @click="$emit('menu-action', 'toggle-pin')">
-        {{ discussion.is_sticky ? '取消置顶' : '置顶讨论' }}
-      </button>
-      <button v-if="canModerateDiscussionSettings" type="button" @click="$emit('menu-action', 'toggle-lock')">
-        {{ discussion.is_locked ? '解除锁定' : '锁定讨论' }}
-      </button>
-      <button v-if="canModerateDiscussionSettings" type="button" @click="$emit('menu-action', 'toggle-hide')">
-        {{ discussion.is_hidden ? '恢复显示' : '隐藏讨论' }}
-      </button>
-      <button v-if="canModerateDiscussionSettings" type="button" class="is-danger" @click="$emit('menu-action', 'delete')">
-        删除讨论
+      <button
+        v-for="item in menuItems"
+        :key="item.key"
+        type="button"
+        :class="{ 'is-danger': item.tone === 'danger' }"
+        @click="$emit('menu-action', item.key)"
+      >
+        {{ item.label }}
       </button>
     </div>
 
@@ -122,6 +116,10 @@ defineProps({
   togglingSubscription: {
     type: Boolean,
     default: false
+  },
+  menuItems: {
+    type: Array,
+    default: () => []
   }
 })
 

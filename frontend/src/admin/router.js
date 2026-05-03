@@ -1,82 +1,16 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import DashboardPage from './views/DashboardPage.vue'
-import ModulesPage from './views/ModulesPage.vue'
-import BasicsPage from './views/BasicsPage.vue'
-import PermissionsPage from './views/PermissionsPage.vue'
-import UsersPage from './views/UsersPage.vue'
-import FlagsPage from './views/FlagsPage.vue'
-import ApprovalQueuePage from './views/ApprovalQueuePage.vue'
-import AuditLogsPage from './views/AuditLogsPage.vue'
-import AppearancePage from './views/AppearancePage.vue'
-import TagsPage from './views/TagsPage.vue'
-import MailPage from './views/MailPage.vue'
-import AdvancedPage from './views/AdvancedPage.vue'
+import { getAdminRoutes } from './registry'
 
 const routes = [
   {
     path: '/',
     redirect: '/admin',
   },
-  {
-    path: '/admin',
-    name: 'admin-dashboard',
-    component: DashboardPage,
-  },
-  {
-    path: '/admin/modules',
-    name: 'admin-modules',
-    component: ModulesPage,
-  },
-  {
-    path: '/admin/basics',
-    name: 'admin-basics',
-    component: BasicsPage,
-  },
-  {
-    path: '/admin/permissions',
-    name: 'admin-permissions',
-    component: PermissionsPage,
-  },
-  {
-    path: '/admin/appearance',
-    name: 'admin-appearance',
-    component: AppearancePage,
-  },
-  {
-    path: '/admin/users',
-    name: 'admin-users',
-    component: UsersPage,
-  },
-  {
-    path: '/admin/flags',
-    name: 'admin-flags',
-    component: FlagsPage,
-  },
-  {
-    path: '/admin/approval',
-    name: 'admin-approval',
-    component: ApprovalQueuePage,
-  },
-  {
-    path: '/admin/audit-logs',
-    name: 'admin-audit-logs',
-    component: AuditLogsPage,
-  },
-  {
-    path: '/admin/tags',
-    name: 'admin-tags',
-    component: TagsPage,
-  },
-  {
-    path: '/admin/mail',
-    name: 'admin-mail',
-    component: MailPage,
-  },
-  {
-    path: '/admin/advanced',
-    name: 'admin-advanced',
-    component: AdvancedPage,
-  },
+  ...getAdminRoutes().map(route => ({
+    path: route.path,
+    name: route.name,
+    component: route.component,
+  })),
   {
     path: '/:pathMatch(.*)*',
     redirect: '/admin',

@@ -1,47 +1,23 @@
 <template>
   <nav class="forum-primary-nav">
-    <router-link to="/" class="forum-primary-nav__item" :class="{ active: activeKey === 'home' }">
-      <i class="far fa-comments"></i>
-      全部讨论
-    </router-link>
     <router-link
-      v-if="authStore.user"
-      to="/following"
+      v-for="item in navItems"
+      :key="item.key"
+      :to="item.to"
       class="forum-primary-nav__item"
-      :class="{ active: activeKey === 'following' }"
+      :class="{ active: activeKey === item.key }"
     >
-      <i class="fas fa-bell"></i>
-      关注中
-    </router-link>
-    <router-link to="/tags" class="forum-primary-nav__item" :class="{ active: activeKey === 'tags' }">
-      <i class="fas fa-tags"></i>
-      全部标签
-    </router-link>
-    <router-link
-      v-if="showNotifications"
-      to="/notifications"
-      class="forum-primary-nav__item"
-      :class="{ active: activeKey === 'notifications' }"
-    >
-      <i class="fas fa-inbox"></i>
-      通知
-    </router-link>
-    <router-link
-      v-if="authStore.user"
-      :to="buildUserPath(authStore.user)"
-      class="forum-primary-nav__item"
-      :class="{ active: activeKey === 'profile' }"
-    >
-      <i class="fas fa-user"></i>
-      我的主页
+      <i :class="item.icon"></i>
+      {{ item.label }}
     </router-link>
   </nav>
 </template>
 
 <script setup>
-import { buildUserPath } from '@/utils/forum'
+import { computed } from 'vue'
+import { getForumNavItems } from '@/forum/registry'
 
-defineProps({
+const props = defineProps({
   activeKey: {
     type: String,
     default: 'home'
@@ -55,6 +31,11 @@ defineProps({
     default: true
   }
 })
+
+const navItems = computed(() => getForumNavItems({
+  authStore: props.authStore,
+  showNotifications: props.showNotifications,
+}))
 </script>
 
 <style scoped>
