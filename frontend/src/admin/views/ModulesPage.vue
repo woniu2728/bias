@@ -101,6 +101,17 @@
               </div>
 
               <div>
+                <h5>帖子类型</h5>
+                <ul v-if="module.post_types.length" class="ModuleList">
+                  <li v-for="postType in module.post_types" :key="postType.code">
+                    <code>{{ postType.code }}</code>
+                    <span>{{ postType.label }}</span>
+                  </li>
+                </ul>
+                <p v-else class="ModuleEmpty">暂无帖子类型</p>
+              </div>
+
+              <div>
                 <h5>资源字段</h5>
                 <ul v-if="module.resource_fields.length" class="ModuleList">
                   <li v-for="resourceField in module.resource_fields" :key="`${resourceField.resource}:${resourceField.field}`">
@@ -207,6 +218,34 @@
 
       <section class="ModulesPage-section">
         <div class="ModulesPage-sectionHeader">
+          <h3>帖子类型注册</h3>
+          <p>这里列出帖子流中可扩展的类型定义，用于承接系统事件帖、状态变更帖和普通回复的统一协议。</p>
+        </div>
+
+        <div class="AdminTableWrap">
+          <table class="AdminTable">
+            <thead>
+              <tr>
+                <th>类型</th>
+                <th>归属模块</th>
+                <th>能力</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="postType in postTypes" :key="`${postType.module_id}:${postType.code}`">
+                <td><code>{{ postType.code }}</code></td>
+                <td>{{ moduleNameMap[postType.module_id] || postType.module_id }}</td>
+                <td>{{ formatPostTypeCapabilities(postType) }}</td>
+                <td>{{ postType.description || postType.label }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="ModulesPage-section">
+        <div class="ModulesPage-sectionHeader">
           <h3>资源字段注册</h3>
           <p>这里汇总 Discussion、Post、Tag、Search 等资源上的扩展字段，作为统一 Resource 协议的当前快照。</p>
         </div>
@@ -277,6 +316,7 @@ const modules = ref([])
 const adminPages = ref([])
 const notificationTypes = ref([])
 const eventListeners = ref([])
+const postTypes = ref([])
 const resourceFields = ref([])
 const searchFilters = ref([])
 
@@ -293,6 +333,7 @@ const summaryItems = computed(() => {
     { label: '后台入口', value: String(adminPageCount) },
     { label: '通知类型', value: String(notificationTypes.value.length) },
     { label: '事件监听', value: String(eventListeners.value.length) },
+    { label: '帖子类型', value: String(postTypes.value.length) },
     { label: '资源字段', value: String(resourceFields.value.length) },
     { label: '搜索过滤', value: String(searchFilters.value.length) },
   ]
@@ -319,6 +360,7 @@ async function loadModules() {
     adminPages.value = data.admin_pages || []
     notificationTypes.value = data.notification_types || []
     eventListeners.value = data.event_listeners || []
+    postTypes.value = data.post_types || []
     resourceFields.value = data.resource_fields || []
     searchFilters.value = data.search_filters || []
   } catch (error) {
@@ -343,9 +385,20 @@ function buildModuleSummary(module) {
     { label: '能力项', value: String(module.capabilities?.length || 0) },
     { label: '通知数', value: String(module.notification_types?.length || 0) },
     { label: '监听器', value: String(module.event_listeners?.length || 0) },
+    { label: '帖子类型', value: String(module.post_types?.length || 0) },
     { label: '资源字段', value: String(module.resource_fields?.length || 0) },
     { label: '搜索过滤', value: String(module.search_filters?.length || 0) },
   ]
+}
+
+function formatPostTypeCapabilities(postType) {
+  const labels = []
+  if (postType.is_default) labels.push('默认')
+  if (postType.is_stream_visible) labels.push('帖流可见')
+  if (postType.counts_toward_discussion) labels.push('计入讨论')
+  if (postType.counts_toward_user) labels.push('计入用户')
+  if (postType.searchable) labels.push('可搜索')
+  return labels.join(' / ') || '无'
 }
 </script>
 

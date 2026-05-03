@@ -11,6 +11,7 @@ from django.utils import timezone
 from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
 from apps.core.forum_events import PostApprovedEvent, PostCreatedEvent
+from apps.core.forum_registry import get_forum_registry
 from apps.posts.models import Post, PostLike, PostMentionsUser, PostFlag
 from apps.discussions.models import Discussion
 from apps.discussions.models import DiscussionUser
@@ -19,6 +20,13 @@ from apps.users.models import User
 from apps.users.services import UserService
 from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
 import re
+
+
+FORUM_REGISTRY = get_forum_registry()
+DEFAULT_POST_TYPE = FORUM_REGISTRY.get_default_post_type_code()
+STREAM_POST_TYPES = FORUM_REGISTRY.get_stream_post_type_codes()
+DISCUSSION_COUNTED_POST_TYPES = FORUM_REGISTRY.get_discussion_counted_post_type_codes()
+USER_COUNTED_POST_TYPES = FORUM_REGISTRY.get_user_counted_post_type_codes()
 
 
 class PostService:
@@ -165,7 +173,7 @@ class PostService:
                 user=user,
                 content=content,
                 content_html=PostService._render_markdown(content),
-                type='comment',
+                type=DEFAULT_POST_TYPE,
                 approval_status=Post.APPROVAL_PENDING if requires_approval else Post.APPROVAL_APPROVED,
                 approved_at=None if requires_approval else timezone.now(),
                 approved_by=None if requires_approval else user,
@@ -232,7 +240,8 @@ class PostService:
             Tuple[List[Post], int]: (帖子列表, 总数)
         """
         queryset = Post.objects.filter(
-            discussion_id=discussion_id
+            discussion_id=discussion_id,
+            type__in=STREAM_POST_TYPES,
         ).select_related(
             'user', 'edited_user'
         ).prefetch_related(
@@ -280,6 +289,7 @@ class PostService:
         queryset = Post.objects.filter(
             discussion_id=discussion_id,
             number__lte=near,
+            type__in=STREAM_POST_TYPES,
         )
 
         queryset = PostService.apply_visibility_filters(queryset, user)
@@ -413,7 +423,10 @@ class PostService:
 
         with transaction.atomic():
             discussion = post.discussion
-            counted_post = post.approval_status == Post.APPROVAL_APPROVED
+            counted_post = (
+                post.approval_status == Post.APPROVAL_APPROVED
+                and post.type in DISCUSSION_COUNTED_POST_TYPES
+            )
 
             # 删除帖子
             post.delete()
@@ -421,7 +434,7 @@ class PostService:
             if counted_post:
                 PostService._refresh_discussion_approved_stats(discussion)
 
-                if post.user:
+                if post.user and post.type in USER_COUNTED_POST_TYPES:
                     post.user.comment_count = F('comment_count') - 1
                     post.user.save(update_fields=['comment_count'])
 
@@ -431,7 +444,7 @@ class PostService:
     def _refresh_discussion_approved_stats(discussion: Discussion) -> Discussion:
         approved_posts = Post.objects.filter(
             discussion=discussion,
-            type="comment",
+            type__in=DISCUSSION_COUNTED_POST_TYPES,
             approval_status=Post.APPROVAL_APPROVED,
             hidden_at__isnull=True,
         ).order_by("number")
@@ -590,6 +603,7 @@ class PostService:
         was_counted = (
             post.approval_status == Post.APPROVAL_APPROVED
             and post.hidden_at is None
+            and post.type in DISCUSSION_COUNTED_POST_TYPES
         )
 
         with transaction.atomic():
@@ -614,7 +628,7 @@ class PostService:
                     discussion.last_post_number = post.number
                 discussion.save()
 
-                if post.user:
+                if post.user and post.type in USER_COUNTED_POST_TYPES:
                     post.user.comment_count = F('comment_count') + 1
                     post.user.save(update_fields=['comment_count'])
                     follow_after_reply = post.user.preferences.get('follow_after_reply', False)
@@ -654,6 +668,7 @@ class PostService:
         was_counted = (
             post.approval_status == Post.APPROVAL_APPROVED
             and post.hidden_at is None
+            and post.type in DISCUSSION_COUNTED_POST_TYPES
         )
 
         with transaction.atomic():
@@ -669,7 +684,7 @@ class PostService:
 
             if was_counted:
                 PostService._refresh_discussion_approved_stats(post.discussion)
-                if post.user:
+                if post.user and post.type in USER_COUNTED_POST_TYPES:
                     post.user.comment_count = F('comment_count') - 1
                     post.user.save(update_fields=['comment_count'])
 

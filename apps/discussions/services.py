@@ -10,6 +10,7 @@ from django.utils import timezone
 from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
 from apps.core.forum_events import DiscussionApprovedEvent, DiscussionCreatedEvent
+from apps.core.forum_registry import get_forum_registry
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post
 from apps.users.models import User
@@ -18,6 +19,12 @@ from apps.tags.models import Tag, DiscussionTag
 from apps.tags.services import TagService
 from apps.core.services import SearchService
 from apps.core.visibility import build_discussion_visibility_q
+
+
+FORUM_REGISTRY = get_forum_registry()
+DEFAULT_POST_TYPE = FORUM_REGISTRY.get_default_post_type_code()
+DISCUSSION_COUNTED_POST_TYPES = FORUM_REGISTRY.get_discussion_counted_post_type_codes()
+USER_COUNTED_POST_TYPES = FORUM_REGISTRY.get_user_counted_post_type_codes()
 
 
 class DiscussionService:
@@ -232,7 +239,7 @@ class DiscussionService:
                 user=user,
                 content=content,
                 content_html=DiscussionService._render_markdown(content),
-                type='comment',
+                type=DEFAULT_POST_TYPE,
                 approval_status=Post.APPROVAL_PENDING if requires_approval else Post.APPROVAL_APPROVED,
                 approved_at=approved_at,
                 approved_by=approved_by,
@@ -754,7 +761,7 @@ class DiscussionService:
         approved_replies = (
             Post.objects.filter(
                 discussion=discussion,
-                type="comment",
+                type__in=USER_COUNTED_POST_TYPES,
                 approval_status=Post.APPROVAL_APPROVED,
                 hidden_at__isnull=True,
                 number__gt=1,
@@ -797,7 +804,7 @@ class DiscussionService:
                 approved_replies = (
                     Post.objects.filter(
                         discussion=discussion,
-                        type="comment",
+                        type__in=USER_COUNTED_POST_TYPES,
                         approval_status=Post.APPROVAL_APPROVED,
                         hidden_at__isnull=True,
                         number__gt=1,

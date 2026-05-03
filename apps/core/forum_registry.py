@@ -45,6 +45,20 @@ class EventListenerDefinition:
     description: str = ""
 
 
+@dataclass(frozen=True)
+class PostTypeDefinition:
+    code: str
+    label: str
+    module_id: str
+    description: str = ""
+    icon: str = "far fa-comment"
+    is_default: bool = False
+    is_stream_visible: bool = True
+    counts_toward_discussion: bool = True
+    counts_toward_user: bool = True
+    searchable: bool = True
+
+
 SearchFilterParser = Callable[[str], Any | None]
 SearchFilterApplier = Callable[[Any, Any, dict], Any]
 
@@ -76,6 +90,7 @@ class ForumModuleDefinition:
     capabilities: Tuple[str, ...] = ()
     notification_types: Tuple[NotificationTypeDefinition, ...] = ()
     event_listeners: Tuple[EventListenerDefinition, ...] = ()
+    post_types: Tuple[PostTypeDefinition, ...] = ()
     search_filters: Tuple[SearchFilterDefinition, ...] = ()
 
 
@@ -87,6 +102,7 @@ class ForumRegistry:
         self._admin_pages: List[AdminPageDefinition] = []
         self._notification_types: Dict[str, NotificationTypeDefinition] = {}
         self._event_listeners: List[EventListenerDefinition] = []
+        self._post_types: Dict[str, PostTypeDefinition] = {}
         self._search_filters: List[SearchFilterDefinition] = []
 
     def register_module(self, module: ForumModuleDefinition) -> ForumModuleDefinition:
@@ -105,6 +121,9 @@ class ForumRegistry:
 
         for event_listener in module.event_listeners:
             self._event_listeners.append(event_listener)
+
+        for post_type in module.post_types:
+            self._post_types[post_type.code] = post_type
 
         for search_filter in module.search_filters:
             self._search_filters.append(search_filter)
@@ -154,6 +173,49 @@ class ForumRegistry:
 
     def get_event_listeners(self) -> List[EventListenerDefinition]:
         return list(self._event_listeners)
+
+    def get_post_types(self) -> List[PostTypeDefinition]:
+        return sorted(
+            self._post_types.values(),
+            key=lambda item: (item.module_id, item.label, item.code),
+        )
+
+    def get_post_type(self, code: str) -> PostTypeDefinition | None:
+        return self._post_types.get(code)
+
+    def get_default_post_type_code(self) -> str:
+        for definition in self.get_post_types():
+            if definition.is_default:
+                return definition.code
+        return "comment"
+
+    def get_stream_post_type_codes(self) -> Tuple[str, ...]:
+        return tuple(
+            definition.code
+            for definition in self.get_post_types()
+            if definition.is_stream_visible
+        )
+
+    def get_searchable_post_type_codes(self) -> Tuple[str, ...]:
+        return tuple(
+            definition.code
+            for definition in self.get_post_types()
+            if definition.searchable
+        )
+
+    def get_discussion_counted_post_type_codes(self) -> Tuple[str, ...]:
+        return tuple(
+            definition.code
+            for definition in self.get_post_types()
+            if definition.counts_toward_discussion
+        )
+
+    def get_user_counted_post_type_codes(self) -> Tuple[str, ...]:
+        return tuple(
+            definition.code
+            for definition in self.get_post_types()
+            if definition.counts_toward_user
+        )
 
     def get_search_filters(self, target: str | None = None) -> List[SearchFilterDefinition]:
         filters = list(self._search_filters)
@@ -432,6 +494,7 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                 ),
             ),
             capabilities=("discussion-list", "discussion-detail", "composer", "moderation"),
+            dependencies=("posts",),
             search_filters=(
                 SearchFilterDefinition(
                     code="author",
@@ -472,6 +535,31 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     applier=_apply_discussion_locked_search_filter,
                     syntax="is:locked",
                     description="仅返回已锁定的讨论。",
+                ),
+            ),
+        )
+    )
+
+    registry.register_module(
+        ForumModuleDefinition(
+            module_id="posts",
+            name="Posts",
+            description="帖子流、回复实体、帖子类型与楼层内容输出。",
+            category="feature",
+            dependencies=("users",),
+            capabilities=("post-stream", "post-detail", "post-types"),
+            post_types=(
+                PostTypeDefinition(
+                    code="comment",
+                    label="普通回复",
+                    module_id="posts",
+                    description="默认的讨论回复帖子类型，会参与回复统计、帖子流与全文搜索。",
+                    icon="far fa-comment",
+                    is_default=True,
+                    is_stream_visible=True,
+                    counts_toward_discussion=True,
+                    counts_toward_user=True,
+                    searchable=True,
                 ),
             ),
         )

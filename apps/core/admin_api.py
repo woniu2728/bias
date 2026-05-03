@@ -246,6 +246,20 @@ def serialize_module_definition(module) -> Dict[str, Any]:
             }
             for listener in module.event_listeners
         ],
+        "post_types": [
+            {
+                "code": post_type.code,
+                "label": post_type.label,
+                "description": post_type.description,
+                "icon": post_type.icon,
+                "is_default": post_type.is_default,
+                "is_stream_visible": post_type.is_stream_visible,
+                "counts_toward_discussion": post_type.counts_toward_discussion,
+                "counts_toward_user": post_type.counts_toward_user,
+                "searchable": post_type.searchable,
+            }
+            for post_type in module.post_types
+        ],
         "search_filters": [
             {
                 "code": search_filter.code,
@@ -870,6 +884,21 @@ def list_admin_modules(request):
         }
         for listener in REGISTRY.get_event_listeners()
     ]
+    post_types = [
+        {
+            "code": post_type.code,
+            "label": post_type.label,
+            "module_id": post_type.module_id,
+            "description": post_type.description,
+            "icon": post_type.icon,
+            "is_default": post_type.is_default,
+            "is_stream_visible": post_type.is_stream_visible,
+            "counts_toward_discussion": post_type.counts_toward_discussion,
+            "counts_toward_user": post_type.counts_toward_user,
+            "searchable": post_type.searchable,
+        }
+        for post_type in REGISTRY.get_post_types()
+    ]
     search_filters = [
         {
             "code": search_filter.code,
@@ -895,6 +924,7 @@ def list_admin_modules(request):
         "admin_pages": pages,
         "notification_types": notification_types,
         "event_listeners": event_listeners,
+        "post_types": post_types,
         "search_filters": search_filters,
         "resource_fields": resource_fields,
         "permission_aliases": REGISTRY.get_permission_aliases(),

@@ -22,10 +22,13 @@ from apps.tags.services import TagService
 from apps.core.audit import log_admin_action
 from apps.core.auth import AuthBearer, get_optional_user
 from apps.core.forum_resources import serialize_user_payload
+from apps.core.forum_registry import get_forum_registry
 from apps.core.resource_registry import get_resource_registry
 
 router = Router()
 RESOURCE_REGISTRY = get_resource_registry()
+FORUM_REGISTRY = get_forum_registry()
+STREAM_POST_TYPES = FORUM_REGISTRY.get_stream_post_type_codes()
 
 
 def _serialize_post(post, user=None):
@@ -116,7 +119,7 @@ def list_all_posts(
     ).annotate(
         like_count=Count("likes", distinct=True)
     ).filter(
-        type="comment",
+        type__in=STREAM_POST_TYPES,
     )
 
     queryset = PostService.apply_visibility_filters(queryset, user)

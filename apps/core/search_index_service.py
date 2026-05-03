@@ -5,6 +5,13 @@ from typing import Dict, List
 
 from django.db import connection
 
+from apps.core.forum_registry import get_forum_registry
+
+
+FORUM_REGISTRY = get_forum_registry()
+SEARCHABLE_POST_TYPES = FORUM_REGISTRY.get_searchable_post_type_codes()
+SEARCHABLE_POST_TYPES_SQL = ", ".join(f"'{code}'" for code in SEARCHABLE_POST_TYPES) or "'comment'"
+
 
 SEARCH_INDEX_DEFINITIONS = [
     {
@@ -23,8 +30,8 @@ SEARCH_INDEX_DEFINITIONS = [
             CREATE INDEX CONCURRENTLY IF NOT EXISTS posts_content_fts_idx
             ON posts
             USING GIN (to_tsvector('simple', coalesce(content, '')))
-            WHERE type = 'comment'
-        """,
+            WHERE type IN ({searchable_post_types})
+        """.format(searchable_post_types=SEARCHABLE_POST_TYPES_SQL),
     },
     {
         "name": "users_profile_fts_idx",

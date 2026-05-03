@@ -27,6 +27,7 @@ TOKEN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+|[A-Za-z0-9_]+
 ASCII_TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 POSTGRES_FULL_TEXT_CONFIG = "simple"
 FORUM_REGISTRY = get_forum_registry()
+SEARCHABLE_POST_TYPES = FORUM_REGISTRY.get_searchable_post_type_codes()
 
 
 @dataclass
@@ -154,7 +155,7 @@ class SearchService:
                 title_match_q = SearchService.build_text_query(['title', 'slug'], text_query)
                 visible_post_match_q = (
                     SearchService.build_text_query(['posts__content'], text_query)
-                    & Q(posts__type='comment')
+                    & Q(posts__type__in=SEARCHABLE_POST_TYPES)
                     & build_post_visibility_q(user, prefix="posts__")
                 )
                 queryset = queryset.filter(title_match_q | visible_post_match_q)
@@ -479,7 +480,11 @@ class SearchService:
 
     @staticmethod
     def _post_queryset(query: str, user=None):
-        queryset = SearchService.apply_post_search(Post.objects.filter(type='comment'), query, user=user)
+        queryset = SearchService.apply_post_search(
+            Post.objects.filter(type__in=SEARCHABLE_POST_TYPES),
+            query,
+            user=user,
+        )
         queryset = queryset.filter(
             build_post_visibility_q(user),
             build_discussion_visibility_q(user, prefix="discussion__"),
@@ -559,7 +564,7 @@ class SearchService:
             + SearchVector('slug', weight='B', config=POSTGRES_FULL_TEXT_CONFIG)
         )
         visible_post_discussion_ids = SearchService.apply_post_search(
-            Post.objects.filter(type='comment'),
+            Post.objects.filter(type__in=SEARCHABLE_POST_TYPES),
             query,
         ).filter(
             build_post_visibility_q(user),

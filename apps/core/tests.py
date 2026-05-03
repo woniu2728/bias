@@ -20,12 +20,14 @@ from unittest.mock import patch
 
 from apps.core.domain_events import DomainEventBus
 from apps.core.forum_events import DiscussionCreatedEvent
+from apps.core.forum_registry import get_forum_registry
 from apps.core.resource_registry import ResourceFieldDefinition, ResourceRegistry
 from apps.core.bootstrap_config import load_site_bootstrap, read_site_config
 from apps.core.models import AuditLog, Setting
 from apps.core.file_service import FileUploadService
 from apps.core.online_service import OnlineUserService
 from apps.core.release import build_git_command, ensure_release_versions_aligned
+from apps.core.search_index_service import SEARCH_INDEX_DEFINITIONS
 from apps.core.settings_service import clear_runtime_setting_caches, get_setting_group
 from apps.core.services import SearchService
 from apps.core.test_runner import BiasDiscoverRunner
@@ -84,6 +86,17 @@ class ResourceRegistryTests(TestCase):
 
         payload = registry.serialize("discussion", Target(), {"suffix": "ok"})
         self.assertEqual(payload, {"summary": "3:ok"})
+
+
+class ForumRegistryTests(TestCase):
+    def test_builtin_registry_exposes_default_comment_post_type(self):
+        registry = get_forum_registry()
+
+        self.assertEqual(registry.get_default_post_type_code(), "comment")
+        self.assertIn("comment", registry.get_stream_post_type_codes())
+        self.assertIn("comment", registry.get_searchable_post_type_codes())
+        self.assertIn("comment", registry.get_discussion_counted_post_type_codes())
+        self.assertIn("comment", registry.get_user_counted_post_type_codes())
 
 
 class ChineseSearchTests(TestCase):
@@ -3084,15 +3097,18 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("admin_pages", payload)
         self.assertIn("notification_types", payload)
         self.assertIn("event_listeners", payload)
+        self.assertIn("post_types", payload)
         self.assertIn("search_filters", payload)
         self.assertIn("resource_fields", payload)
         module_ids = {module["id"] for module in payload["modules"]}
         self.assertIn("core", module_ids)
+        self.assertIn("posts", module_ids)
         self.assertIn("tags", module_ids)
         self.assertIn("approval", module_ids)
         self.assertIn("notifications", module_ids)
 
         core_module = next(module for module in payload["modules"] if module["id"] == "core")
+        posts_module = next(module for module in payload["modules"] if module["id"] == "posts")
         notifications_module = next(module for module in payload["modules"] if module["id"] == "notifications")
         tags_module = next(module for module in payload["modules"] if module["id"] == "tags")
         admin_page_paths = {page["path"] for page in payload["admin_pages"]}
@@ -3113,6 +3129,12 @@ class AdminPermissionsApiTests(TestCase):
         self.assertTrue(any(item["resource"] == "search_post" and item["field"] == "user" for item in payload["resource_fields"]))
         self.assertTrue(any(item["code"] == "discussionReply" for item in notifications_module["notification_types"]))
         self.assertTrue(any(item["event"] == "DiscussionApprovedEvent" for item in notifications_module["event_listeners"]))
+        self.assertTrue(any(item["code"] == "comment" and item["is_default"] for item in posts_module["post_types"]))
+        self.assertTrue(any(item["module_id"] == "posts" and item["code"] == "comment" for item in payload["post_types"]))
+
+    def test_search_index_definition_limits_post_index_to_registered_searchable_types(self):
+        post_index = next(definition for definition in SEARCH_INDEX_DEFINITIONS if definition["name"] == "posts_content_fts_idx")
+        self.assertIn("WHERE type IN ('comment')", post_index["create"])
 
 
 class AdminFlagManagementApiTests(TestCase):
