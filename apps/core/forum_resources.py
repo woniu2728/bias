@@ -123,6 +123,53 @@ def bootstrap_forum_resource_fields() -> None:
         )
     )
 
+    registry.register_field(
+        ResourceFieldDefinition(
+            resource="tag",
+            field="can_start_discussion",
+            module_id="tags",
+            resolver=_resolve_tag_can_start_discussion,
+            description="当前用户是否可以在该标签下发起讨论。",
+        )
+    )
+    registry.register_field(
+        ResourceFieldDefinition(
+            resource="tag",
+            field="can_reply",
+            module_id="tags",
+            resolver=_resolve_tag_can_reply,
+            description="当前用户是否可以在该标签下回复。",
+        )
+    )
+    registry.register_field(
+        ResourceFieldDefinition(
+            resource="tag",
+            field="last_posted_discussion",
+            module_id="tags",
+            resolver=_resolve_tag_last_posted_discussion,
+            description="标签下最后活跃讨论摘要。",
+        )
+    )
+
+    registry.register_field(
+        ResourceFieldDefinition(
+            resource="search_discussion",
+            field="user",
+            module_id="discussions",
+            resolver=_resolve_search_discussion_user,
+            description="搜索结果中的讨论作者摘要。",
+        )
+    )
+    registry.register_field(
+        ResourceFieldDefinition(
+            resource="search_post",
+            field="user",
+            module_id="posts",
+            resolver=_resolve_search_post_user,
+            description="搜索结果中的回复作者摘要。",
+        )
+    )
+
     _resources_bootstrapped = True
 
 
@@ -217,3 +264,57 @@ def _resolve_post_open_flags(post, context: dict) -> list[dict]:
 def _resolve_post_can_moderate_flags(post, context: dict) -> bool:
     user = context.get("user")
     return bool(user and user.is_staff)
+
+
+def _resolve_tag_can_start_discussion(tag, context: dict) -> bool:
+    from apps.tags.services import TagService
+
+    user = context.get("user")
+    return TagService.can_start_discussion_in_tag(tag, user)
+
+
+def _resolve_tag_can_reply(tag, context: dict) -> bool:
+    from apps.tags.services import TagService
+
+    user = context.get("user")
+    return TagService.can_reply_in_tag(tag, user)
+
+
+def _resolve_tag_last_posted_discussion(tag, context: dict) -> dict | None:
+    discussion = getattr(tag, "last_posted_discussion", None)
+    if not discussion:
+        return None
+
+    return {
+        "id": discussion.id,
+        "title": discussion.title,
+        "slug": discussion.slug,
+        "last_post_number": discussion.last_post_number,
+        "last_posted_at": discussion.last_posted_at,
+    }
+
+
+def _resolve_search_discussion_user(discussion, context: dict) -> dict | None:
+    user = getattr(discussion, "user", None)
+    if not user:
+        return None
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "avatar_url": user.avatar_url,
+    }
+
+
+def _resolve_search_post_user(post, context: dict) -> dict | None:
+    user = getattr(post, "user", None)
+    if not user:
+        return None
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "avatar_url": user.avatar_url,
+    }

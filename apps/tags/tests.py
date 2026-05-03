@@ -188,6 +188,25 @@ class TagAccessApiTests(TestCase):
         slugs = {tag["slug"] for tag in response.json()["data"]}
         self.assertEqual(slugs, {"public-tag", "members-tag"})
 
+    def test_tag_detail_exposes_registered_resource_fields(self):
+        discussion = DiscussionService.create_discussion(
+            title="标签详情附加字段",
+            content="用于验证资源注册输出",
+            user=self.admin,
+            tag_ids=[self.members_tag.id],
+        )
+
+        response = self.client.get(
+            f"/api/tags/{self.members_tag.id}",
+            **self.auth_header(self.admin),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertTrue(payload["can_start_discussion"])
+        self.assertTrue(payload["can_reply"])
+        self.assertEqual(payload["last_posted_discussion"]["id"], discussion.id)
+
     def test_guest_cannot_view_staff_tag_detail(self):
         response = self.client.get(f"/api/tags/{self.staff_tag.id}")
 

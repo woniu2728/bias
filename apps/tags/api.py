@@ -17,21 +17,10 @@ from apps.tags.schemas import (
 )
 from apps.tags.services import TagService
 from apps.core.auth import AuthBearer, get_optional_user
+from apps.core.resource_registry import get_resource_registry
 
 router = Router()
-
-
-def _serialize_discussion_summary(discussion):
-    if not discussion:
-        return None
-
-    return {
-        "id": discussion.id,
-        "title": discussion.title,
-        "slug": discussion.slug,
-        "last_post_number": discussion.last_post_number,
-        "last_posted_at": discussion.last_posted_at,
-    }
+RESOURCE_REGISTRY = get_resource_registry()
 
 
 def _build_tag_serialize_context(user=None, action="view"):
@@ -49,6 +38,11 @@ def _get_prefetched_children(tag):
 def _serialize_tag(tag, user=None, include_children=False, action="view", context=None):
     context = context or _build_tag_serialize_context(user, action=action)
     forbidden_tag_ids = context["forbidden_tag_ids"]
+    resource_fields = RESOURCE_REGISTRY.serialize(
+        "tag",
+        tag,
+        {"user": user, "action": action},
+    )
     children = []
     if include_children:
         children = [
@@ -63,7 +57,7 @@ def _serialize_tag(tag, user=None, include_children=False, action="view", contex
             if not child.is_hidden and child.id not in forbidden_tag_ids
         ]
 
-    return {
+    payload = {
         'id': tag.id,
         'name': tag.name,
         'slug': tag.slug,
@@ -78,15 +72,14 @@ def _serialize_tag(tag, user=None, include_children=False, action="view", contex
         'view_scope': tag.view_scope,
         'start_discussion_scope': tag.start_discussion_scope,
         'reply_scope': tag.reply_scope,
-        'can_start_discussion': TagService.can_start_discussion_in_tag(tag, user),
-        'can_reply': TagService.can_reply_in_tag(tag, user),
         'discussion_count': tag.discussion_count,
         'last_posted_at': tag.last_posted_at,
-        'last_posted_discussion': _serialize_discussion_summary(tag.last_posted_discussion),
         'created_at': tag.created_at,
         'updated_at': tag.updated_at,
         'children': children,
     }
+    payload.update(resource_fields)
+    return payload
 
 
 @router.post("/tags", response=TagOutSchema, auth=AuthBearer(), tags=["Tags"])
