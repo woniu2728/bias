@@ -5,7 +5,7 @@
     title="审计日志"
     description="查看管理员关键操作记录"
   >
-    <div class="AuditLogsPage-toolbar">
+    <AdminToolbar class="AuditLogsPage-toolbar">
       <select v-model="filters.action" class="FormControl" @change="reloadFromFirstPage">
         <option value="">全部操作</option>
         <option v-for="option in actionOptions" :key="option.value" :value="option.value">
@@ -22,7 +22,7 @@
         <i class="fas fa-sync-alt"></i>
         <span>刷新</span>
       </button>
-    </div>
+    </AdminToolbar>
 
     <div class="AuditLogsPage-list">
       <AdminStateBlock v-if="loading" tone="subtle">加载中...</AdminStateBlock>
@@ -82,6 +82,7 @@ import { onMounted, reactive, ref } from 'vue'
 import AdminPage from '../components/AdminPage.vue'
 import AdminPagination from '../components/AdminPagination.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
+import AdminToolbar from '../components/AdminToolbar.vue'
 import api from '../../api'
 
 const logs = ref([])
@@ -199,9 +200,6 @@ function formatData(data) {
 
 <style scoped>
 .AuditLogsPage-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
   margin-bottom: 18px;
 }
 
@@ -270,15 +268,6 @@ function formatData(data) {
 }
 
 @media (max-width: 768px) {
-  .AuditLogsPage-toolbar {
-    flex-direction: column;
-  }
-
-  .AuditLogsPage-toolbar .FormControl,
-  .AuditLogsPage-toolbar .Button {
-    width: 100%;
-  }
-
   .AuditLogTable-wrap {
     border: 0;
     overflow: visible;

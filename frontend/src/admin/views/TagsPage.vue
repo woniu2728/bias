@@ -6,7 +6,7 @@
     description="管理讨论标签和分类"
   >
     <div class="TagsPage-content">
-      <div class="TagsPage-toolbar">
+      <AdminToolbar align="end">
         <button @click="openCreateModal" class="Button Button--primary">
           <i class="fas fa-plus"></i>
           创建标签
@@ -15,7 +15,7 @@
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': refreshingStats }"></i>
           {{ refreshingStats ? '刷新中...' : '刷新统计' }}
         </button>
-      </div>
+      </AdminToolbar>
 
       <div class="TagSummaryGrid">
         <article class="TagSummaryCard">
@@ -375,6 +375,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
+import AdminToolbar from '../components/AdminToolbar.vue'
 import api from '../../api'
 import { useModalStore } from '../../stores/modal'
 
@@ -855,11 +856,6 @@ function getNextPosition(sourceTags, parentId) {
   gap: 20px;
 }
 
-.TagsPage-toolbar {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .TagsPage-list {
   min-width: 0;
 }
@@ -1262,15 +1258,6 @@ function getNextPosition(sourceTags, parentId) {
 }
 
 @media (max-width: 768px) {
-  .TagsPage-toolbar {
-    justify-content: stretch;
-  }
-
-  .TagsPage-toolbar .Button {
-    width: 100%;
-    justify-content: center;
-  }
-
   .Modal-content {
     width: 100%;
     max-width: none;
