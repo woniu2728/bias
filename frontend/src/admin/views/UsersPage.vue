@@ -9,7 +9,9 @@
       <!-- 搜索栏 -->
       <div class="UsersPage-search">
         <input
+          id="user-search"
           v-model="searchQuery"
+          name="user_search"
           type="text"
           class="FormControl"
           placeholder="搜索用户名或邮箱..."
@@ -76,7 +78,7 @@
                   </span>
                 </td>
                 <td data-label="操作">
-                  <button @click="editUser(user)" class="Button Button--small" :disabled="savingDetails">
+                  <button type="button" @click="editUser(user)" class="Button Button--small" :disabled="savingDetails">
                     编辑
                   </button>
                 </td>
@@ -117,7 +119,7 @@
                 </div>
               </div>
 
-              <button @click="editUser(user)" class="Button Button--small UserMobileCard-edit" :disabled="savingDetails">
+              <button type="button" @click="editUser(user)" class="Button Button--small UserMobileCard-edit" :disabled="savingDetails">
                 编辑
               </button>
             </div>
@@ -161,7 +163,7 @@
       <div class="Modal-content Modal-content--user">
         <div class="Modal-header">
           <h3>编辑用户</h3>
-          <button @click="closeModal" class="Modal-close">
+          <button type="button" @click="closeModal" class="Modal-close">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -169,25 +171,45 @@
         <AdminStateBlock v-if="loadingDetails" class="Modal-loading" tone="subtle">加载中...</AdminStateBlock>
         <div v-else class="Modal-body">
           <div class="Form-group">
-            <label>用户名</label>
-            <input v-model="formData.username" type="text" class="FormControl" />
+            <label for="user-username">用户名</label>
+            <input
+              id="user-username"
+              v-model="formData.username"
+              name="user_username"
+              type="text"
+              class="FormControl"
+            />
           </div>
 
           <div class="FormRow">
             <div class="Form-group">
-              <label>邮箱</label>
-              <input v-model="formData.email" type="email" class="FormControl" />
+              <label for="user-email">邮箱</label>
+              <input
+                id="user-email"
+                v-model="formData.email"
+                name="user_email"
+                type="email"
+                class="FormControl"
+              />
             </div>
             <div class="Form-group">
-              <label>显示名称</label>
-              <input v-model="formData.display_name" type="text" class="FormControl" />
+              <label for="user-display-name">显示名称</label>
+              <input
+                id="user-display-name"
+                v-model="formData.display_name"
+                name="user_display_name"
+                type="text"
+                class="FormControl"
+              />
             </div>
           </div>
 
           <div class="Form-group">
-            <label>个人简介</label>
+            <label for="user-bio">个人简介</label>
             <textarea
+              id="user-bio"
               v-model="formData.bio"
+              name="user_bio"
               class="FormControl"
               rows="3"
               placeholder="管理员后台可直接维护用户简介"
@@ -196,11 +218,19 @@
 
           <div class="FormRow FormRow--toggles">
             <label class="CheckboxField CheckboxField--toggle">
-              <input v-model="formData.is_staff" type="checkbox" />
+              <input
+                v-model="formData.is_staff"
+                name="user_is_staff"
+                type="checkbox"
+              />
               <span>管理员</span>
             </label>
             <label class="CheckboxField CheckboxField--toggle">
-              <input v-model="formData.is_email_confirmed" type="checkbox" />
+              <input
+                v-model="formData.is_email_confirmed"
+                name="user_is_email_confirmed"
+                type="checkbox"
+              />
               <span>邮箱已验证</span>
             </label>
           </div>
@@ -211,6 +241,7 @@
               <label v-for="group in availableGroups" :key="group.id" class="CheckboxField CheckboxField--card">
                 <input
                   :checked="formData.group_ids.includes(group.id)"
+                  :name="`user_group_${group.id}`"
                   type="checkbox"
                   @change="toggleGroup(group.id, $event)"
                 />
@@ -220,9 +251,11 @@
           </div>
 
           <div class="Form-group">
-            <label>封禁截止时间</label>
+            <label for="user-suspended-until">封禁截止时间</label>
             <input
+              id="user-suspended-until"
               v-model="formData.suspended_until"
+              name="user_suspended_until"
               type="datetime-local"
               class="FormControl"
             />
@@ -230,9 +263,11 @@
           </div>
 
           <div class="Form-group">
-            <label>封禁原因</label>
+            <label for="user-suspend-reason">封禁原因</label>
             <input
+              id="user-suspend-reason"
               v-model="formData.suspend_reason"
+              name="user_suspend_reason"
               type="text"
               class="FormControl"
               placeholder="例如：垃圾广告、违规内容"
@@ -240,9 +275,11 @@
           </div>
 
           <div class="Form-group">
-            <label>对用户显示的信息</label>
+            <label for="user-suspend-message">对用户显示的信息</label>
             <textarea
+              id="user-suspend-message"
               v-model="formData.suspend_message"
+              name="user_suspend_message"
               class="FormControl"
               rows="3"
               placeholder="显示给被封禁用户的提示"
@@ -252,6 +289,7 @@
 
         <div class="Modal-footer Modal-footer--split">
           <button
+            type="button"
             v-if="canDeleteCurrentUser"
             @click="deleteUser"
             class="Button Button--danger"
@@ -261,10 +299,10 @@
           </button>
           <span v-else class="Modal-footerNote">当前登录管理员账号不允许删除</span>
           <div class="Modal-footerActions">
-            <button @click="closeModal" class="Button">
+            <button type="button" @click="closeModal" class="Button">
               取消
             </button>
-            <button @click="saveUser" class="Button Button--primary" :disabled="saving || deleting">
+            <button type="button" @click="saveUser" class="Button Button--primary" :disabled="saving || deleting">
               {{ saving ? '保存中...' : '保存' }}
             </button>
           </div>
