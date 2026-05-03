@@ -8,6 +8,8 @@ from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from apps.core.db import sqlite_write_retry
+from apps.core.domain_events import get_forum_event_bus
+from apps.core.forum_events import DiscussionApprovedEvent, DiscussionCreatedEvent
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post
 from apps.users.models import User
@@ -248,7 +250,6 @@ class DiscussionService:
             if tags:
                 for tag in tags:
                     DiscussionTag.objects.create(discussion=discussion, tag=tag)
-                TagService.dispatch_refresh_tag_stats([tag.id for tag in tags])
 
             # 更新用户统计
             if not requires_approval:
@@ -264,6 +265,14 @@ class DiscussionService:
                 is_subscribed=user.preferences.get('follow_after_create', False),
             )
 
+            get_forum_event_bus().dispatch(
+                DiscussionCreatedEvent(
+                    discussion_id=discussion.id,
+                    actor_user_id=user.id,
+                    tag_ids=tuple(tag.id for tag in tags),
+                    is_approved=not requires_approval,
+                )
+            )
             return discussion
 
     @staticmethod
@@ -684,9 +693,15 @@ class DiscussionService:
                     User.objects.filter(id=user_id).update(comment_count=F("comment_count") + total)
 
             if not was_counted:
-                from apps.notifications.services import NotificationService
-                NotificationService.notify_discussion_approved(discussion, admin_user, note=note)
-            TagService.refresh_discussion_tag_stats(discussion.id)
+                get_forum_event_bus().dispatch(
+                    DiscussionApprovedEvent(
+                        discussion_id=discussion.id,
+                        admin_user_id=admin_user.id,
+                        note=note,
+                    )
+                )
+            else:
+                TagService.refresh_discussion_tag_stats(discussion.id)
 
         discussion.refresh_from_db()
         return discussion

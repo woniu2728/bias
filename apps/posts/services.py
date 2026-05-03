@@ -9,6 +9,8 @@ from django.db.models import Q, F, Count, Exists, OuterRef, Prefetch
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from apps.core.db import sqlite_write_retry
+from apps.core.domain_events import get_forum_event_bus
+from apps.core.forum_events import PostApprovedEvent, PostCreatedEvent
 from apps.posts.models import Post, PostLike, PostMentionsUser, PostFlag
 from apps.discussions.models import Discussion
 from apps.discussions.models import DiscussionUser
@@ -198,20 +200,15 @@ class PostService:
                 # 处理@提及
                 PostService._process_mentions(post, content)
 
-                # 发送通知：讨论有新回复
-                from apps.notifications.services import NotificationService
-                NotificationService.notify_discussion_reply(
-                    discussion_id=discussion.id,
-                    post_id=post.id,
-                    from_user=user
-                )
-                if reply_target:
-                    NotificationService.notify_post_reply(
-                        reply_to_post_id=reply_target.id,
+                get_forum_event_bus().dispatch(
+                    PostCreatedEvent(
                         post_id=post.id,
-                        from_user=user,
+                        discussion_id=discussion.id,
+                        actor_user_id=user.id,
+                        reply_to_post_id=reply_target.id if reply_target else None,
+                        is_approved=True,
                     )
-                TagService.refresh_discussion_tag_stats(discussion.id)
+                )
 
             return post
 
@@ -635,14 +632,17 @@ class PostService:
 
                 PostService._process_mentions(post, post.content)
 
-                from apps.notifications.services import NotificationService
-                NotificationService.notify_discussion_reply(
-                    discussion_id=discussion.id,
-                    post_id=post.id,
-                    from_user=post.user
+                get_forum_event_bus().dispatch(
+                    PostApprovedEvent(
+                        post_id=post.id,
+                        discussion_id=discussion.id,
+                        actor_user_id=post.user_id,
+                        admin_user_id=admin_user.id,
+                        note=note,
+                    )
                 )
-                NotificationService.notify_post_approved(post, admin_user, note=note)
-            TagService.refresh_discussion_tag_stats(discussion.id)
+            else:
+                TagService.refresh_discussion_tag_stats(discussion.id)
 
         post.refresh_from_db()
         return post

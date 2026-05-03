@@ -18,6 +18,8 @@ from django.utils import timezone
 from ninja_jwt.tokens import RefreshToken
 from unittest.mock import patch
 
+from apps.core.domain_events import DomainEventBus
+from apps.core.forum_events import DiscussionCreatedEvent
 from apps.core.bootstrap_config import load_site_bootstrap, read_site_config
 from apps.core.models import AuditLog, Setting
 from apps.core.file_service import FileUploadService
@@ -39,6 +41,27 @@ def make_workspace_temp_dir() -> Path:
     path = Path.cwd() / f"tmp-test-{uuid.uuid4().hex}"
     path.mkdir(parents=True, exist_ok=False)
     return path
+
+
+class DomainEventBusTests(TestCase):
+    def test_dispatches_registered_event_handlers(self):
+        bus = DomainEventBus()
+        received = []
+
+        def handle_created(event):
+            received.append((event.discussion_id, event.actor_user_id, event.tag_ids))
+
+        bus.register(DiscussionCreatedEvent, handle_created)
+        bus.dispatch(
+            DiscussionCreatedEvent(
+                discussion_id=7,
+                actor_user_id=3,
+                tag_ids=(11, 12),
+                is_approved=True,
+            )
+        )
+
+        self.assertEqual(received, [(7, 3, (11, 12))])
 
 
 class ChineseSearchTests(TestCase):
