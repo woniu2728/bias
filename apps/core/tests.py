@@ -20,6 +20,7 @@ from unittest.mock import patch
 
 from apps.core.domain_events import DomainEventBus
 from apps.core.forum_events import DiscussionCreatedEvent
+from apps.core.resource_registry import ResourceFieldDefinition, ResourceRegistry
 from apps.core.bootstrap_config import load_site_bootstrap, read_site_config
 from apps.core.models import AuditLog, Setting
 from apps.core.file_service import FileUploadService
@@ -62,6 +63,27 @@ class DomainEventBusTests(TestCase):
         )
 
         self.assertEqual(received, [(7, 3, (11, 12))])
+
+
+class ResourceRegistryTests(TestCase):
+    def test_serializes_registered_resource_fields(self):
+        registry = ResourceRegistry()
+
+        class Target:
+            id = 3
+            title = "hello"
+
+        registry.register_field(
+            ResourceFieldDefinition(
+                resource="discussion",
+                field="summary",
+                module_id="test",
+                resolver=lambda instance, context: f"{instance.id}:{context['suffix']}",
+            )
+        )
+
+        payload = registry.serialize("discussion", Target(), {"suffix": "ok"})
+        self.assertEqual(payload, {"summary": "3:ok"})
 
 
 class ChineseSearchTests(TestCase):

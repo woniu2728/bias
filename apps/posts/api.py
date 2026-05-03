@@ -21,9 +21,11 @@ from apps.posts.services import PostService
 from apps.tags.services import TagService
 from apps.core.audit import log_admin_action
 from apps.core.auth import AuthBearer, get_optional_user
+from apps.core.resource_registry import get_resource_registry
 from apps.users.group_utils import get_primary_group, serialize_group_badge
 
 router = Router()
+RESOURCE_REGISTRY = get_resource_registry()
 
 
 def _serialize_user_summary(user):
@@ -40,8 +42,7 @@ def _serialize_user_summary(user):
 
 
 def _serialize_post(post, user=None):
-    open_flags = getattr(post, "open_flags_cache", [])
-    return {
+    response = {
         "id": post.id,
         "discussion_id": post.discussion_id,
         "number": post.number,
@@ -63,27 +64,9 @@ def _serialize_post(post, user=None):
         "approval_note": post.approval_note,
         "like_count": getattr(post, "like_count", 0),
         "is_liked": getattr(post, "is_liked", False),
-        "can_edit": PostService.can_edit_post(post, user) if user else False,
-        "can_delete": PostService.can_delete_post(post, user) if user else False,
-        "can_like": PostService.can_like_post(post, user) if user else False,
-        "viewer_has_open_flag": bool(getattr(post, "viewer_has_open_flag", False)),
-        "open_flag_count": int(getattr(post, "open_flag_count", 0) or 0),
-        "open_flags": [
-            {
-                "id": flag.id,
-                "reason": flag.reason,
-                "message": flag.message,
-                "created_at": flag.created_at,
-                "user": {
-                    "id": flag.user.id,
-                    "username": flag.user.username,
-                    "display_name": flag.user.display_name,
-                } if flag.user else None,
-            }
-            for flag in open_flags
-        ],
-        "can_moderate_flags": bool(user and user.is_staff),
     }
+    response.update(RESOURCE_REGISTRY.serialize("post", post, {"user": user}))
+    return response
 
 
 def _serialize_flag(flag):

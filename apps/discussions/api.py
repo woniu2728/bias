@@ -21,9 +21,11 @@ from apps.discussions.services import DiscussionService
 from apps.posts.models import Post
 from apps.core.audit import log_admin_action
 from apps.core.auth import AuthBearer, get_optional_user
+from apps.core.resource_registry import get_resource_registry
 from apps.users.group_utils import get_primary_group, serialize_group_badge
 
 router = Router()
+RESOURCE_REGISTRY = get_resource_registry()
 
 
 def _serialize_user_summary(user):
@@ -106,16 +108,11 @@ def list_discussions(
     # 为每个讨论添加标签数据
     for discussion in discussions:
         _attach_discussion_user_badges(discussion)
-        tags = []
-        for dt in discussion.discussion_tags.all():
-            tags.append({
-                'id': dt.tag.id,
-                'name': dt.tag.name,
-                'slug': dt.tag.slug,
-                'color': dt.tag.color,
-                'icon': dt.tag.icon,
-            })
-        discussion.tags = tags
+        discussion.tags = RESOURCE_REGISTRY.serialize(
+            "discussion",
+            discussion,
+            {"user": user},
+        ).get("tags", [])
 
     return {
         "total": total,
@@ -190,30 +187,16 @@ def get_discussion(request, discussion_id: int):
         except Post.DoesNotExist:
             pass
 
-    # 权限检查
-    can_edit = DiscussionService.can_edit_discussion(discussion, user) if user else False
-    can_delete = DiscussionService.can_delete_discussion(discussion, user) if user else False
-    can_reply = DiscussionService.can_reply_discussion(discussion, user) if user else False
-
-    # 获取标签
-    tags = []
-    for dt in discussion.discussion_tags.all():
-        tags.append({
-            'id': dt.tag.id,
-            'name': dt.tag.name,
-            'slug': dt.tag.slug,
-            'color': dt.tag.color,
-            'icon': dt.tag.icon,
-        })
+    resource_fields = RESOURCE_REGISTRY.serialize(
+        "discussion",
+        discussion,
+        {"user": user},
+    )
 
     # 构建响应
     response_data = DiscussionOutSchema.from_orm(discussion).dict()
     response_data['first_post'] = first_post
-    response_data['can_edit'] = can_edit
-    response_data['can_delete'] = can_delete
-    response_data['can_reply'] = can_reply
-    response_data['tags'] = tags
-    response_data['is_subscribed'] = DiscussionService.get_subscription_state(discussion, user)
+    response_data.update(resource_fields)
 
     return response_data
 
