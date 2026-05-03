@@ -432,6 +432,38 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                 ),
             ),
             capabilities=("discussion-list", "discussion-detail", "composer", "moderation"),
+            search_filters=(
+                SearchFilterDefinition(
+                    code="author",
+                    label="按作者过滤",
+                    module_id="discussions",
+                    target="discussion",
+                    parser=_parse_author_search_filter,
+                    applier=_apply_discussion_author_search_filter,
+                    syntax="author:<username>",
+                    description="按讨论作者用户名过滤搜索结果。",
+                ),
+                SearchFilterDefinition(
+                    code="is_sticky",
+                    label="仅置顶讨论",
+                    module_id="discussions",
+                    target="discussion",
+                    parser=_parse_sticky_search_filter,
+                    applier=_apply_discussion_sticky_search_filter,
+                    syntax="is:sticky",
+                    description="仅返回已置顶的讨论。",
+                ),
+                SearchFilterDefinition(
+                    code="is_locked",
+                    label="仅锁定讨论",
+                    module_id="discussions",
+                    target="discussion",
+                    parser=_parse_locked_search_filter,
+                    applier=_apply_discussion_locked_search_filter,
+                    syntax="is:locked",
+                    description="仅返回已锁定的讨论。",
+                ),
+            ),
         )
     )
 
@@ -772,3 +804,46 @@ def _parse_tag_search_filter(token: str) -> str | None:
 
 def _apply_discussion_tag_search_filter(queryset, tag_slug: str, context: dict):
     return queryset.filter(discussion_tags__tag__slug=tag_slug)
+
+
+def _parse_author_search_filter(token: str) -> str | None:
+    if not token or ":" not in token:
+        return None
+
+    prefix, value = token.split(":", 1)
+    if prefix.lower() != "author":
+        return None
+
+    normalized = value.strip()
+    return normalized or None
+
+
+def _apply_discussion_author_search_filter(queryset, username: str, context: dict):
+    return queryset.filter(user__username__iexact=username)
+
+
+def _parse_sticky_search_filter(token: str) -> bool | None:
+    return _parse_is_search_filter(token, expected="sticky")
+
+
+def _apply_discussion_sticky_search_filter(queryset, enabled: bool, context: dict):
+    return queryset.filter(is_sticky=enabled)
+
+
+def _parse_locked_search_filter(token: str) -> bool | None:
+    return _parse_is_search_filter(token, expected="locked")
+
+
+def _apply_discussion_locked_search_filter(queryset, enabled: bool, context: dict):
+    return queryset.filter(is_locked=enabled)
+
+
+def _parse_is_search_filter(token: str, expected: str) -> bool | None:
+    if not token or ":" not in token:
+        return None
+
+    prefix, value = token.split(":", 1)
+    if prefix.lower() != "is":
+        return None
+
+    return True if value.strip().lower() == expected else None

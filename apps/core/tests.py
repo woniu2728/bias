@@ -332,6 +332,73 @@ class ChineseSearchTests(TestCase):
         self.assertEqual(payload["discussion_total"], 1)
         self.assertEqual([item["id"] for item in payload["discussions"]], [matched.id])
 
+    def test_search_api_supports_registered_author_filter_syntax(self):
+        other_user = User.objects.create_user(
+            username="other-search-author",
+            email="other-search-author@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        matched = DiscussionService.create_discussion(
+            title="作者过滤命中",
+            content="作者过滤扩展关键字",
+            user=self.user,
+        )
+        DiscussionService.create_discussion(
+            title="作者过滤未命中",
+            content="作者过滤扩展关键字",
+            user=other_user,
+        )
+
+        response = self.client.get(
+            "/api/search",
+            {"q": f"关键字 author:{self.user.username}", "type": "discussions"},
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["discussion_total"], 1)
+        self.assertEqual([item["id"] for item in payload["discussions"]], [matched.id])
+
+    def test_search_api_supports_registered_state_filter_syntax(self):
+        sticky = DiscussionService.create_discussion(
+            title="置顶过滤讨论",
+            content="置顶过滤关键字",
+            user=self.user,
+        )
+        locked = DiscussionService.create_discussion(
+            title="锁定过滤讨论",
+            content="锁定过滤关键字",
+            user=self.user,
+        )
+        DiscussionService.create_discussion(
+            title="普通过滤讨论",
+            content="过滤关键字",
+            user=self.user,
+        )
+
+        sticky.is_sticky = True
+        sticky.save(update_fields=["is_sticky"])
+        locked.is_locked = True
+        locked.save(update_fields=["is_locked"])
+
+        sticky_response = self.client.get(
+            "/api/search",
+            {"q": "过滤关键字 is:sticky", "type": "discussions"},
+            **self.auth_header(),
+        )
+        locked_response = self.client.get(
+            "/api/search",
+            {"q": "过滤关键字 is:locked", "type": "discussions"},
+            **self.auth_header(),
+        )
+
+        self.assertEqual(sticky_response.status_code, 200, sticky_response.content)
+        self.assertEqual(locked_response.status_code, 200, locked_response.content)
+        self.assertEqual([item["id"] for item in sticky_response.json()["discussions"]], [sticky.id])
+        self.assertEqual([item["id"] for item in locked_response.json()["discussions"]], [locked.id])
+
     def test_search_api_respects_discussion_approval_visibility(self):
         admin = User.objects.create_superuser(
             username="search-approval-admin",
@@ -2997,8 +3064,13 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("permissions", core_module)
         self.assertIn("resource_fields", tags_module)
         self.assertIn("search_filters", tags_module)
+        discussions_module = next(module for module in payload["modules"] if module["id"] == "discussions")
+        self.assertTrue(any(item["code"] == "author" and item["syntax"] == "author:<username>" for item in discussions_module["search_filters"]))
+        self.assertTrue(any(item["code"] == "is_sticky" and item["syntax"] == "is:sticky" for item in discussions_module["search_filters"]))
+        self.assertTrue(any(item["code"] == "is_locked" and item["syntax"] == "is:locked" for item in discussions_module["search_filters"]))
         self.assertTrue(any(item["code"] == "tag" and item["syntax"] == "tag:<slug>" for item in tags_module["search_filters"]))
         self.assertTrue(any(item["module_id"] == "tags" and item["code"] == "tag" for item in payload["search_filters"]))
+        self.assertTrue(any(item["module_id"] == "discussions" and item["code"] == "author" for item in payload["search_filters"]))
         self.assertTrue(any(item["field"] == "can_start_discussion" for item in tags_module["resource_fields"]))
         self.assertTrue(any(item["resource"] == "search_post" and item["field"] == "user" for item in payload["resource_fields"]))
         self.assertTrue(any(item["code"] == "discussionReply" for item in notifications_module["notification_types"]))
