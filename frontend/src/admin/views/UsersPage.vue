@@ -148,26 +148,13 @@
         </div>
       </div>
 
-      <!-- 分页 -->
-      <div v-if="total > limit" class="UsersPage-pagination">
-        <button
-          @click="changePage(page - 1)"
-          :disabled="page === 1"
-          class="Button"
-        >
-          上一页
-        </button>
-        <span class="Pagination-info">
-          第 {{ page }} 页，共 {{ Math.ceil(total / limit) }} 页
-        </span>
-        <button
-          @click="changePage(page + 1)"
-          :disabled="page >= Math.ceil(total / limit)"
-          class="Button"
-        >
-          下一页
-        </button>
-      </div>
+      <AdminPagination
+        :page="page"
+        :total="total"
+        :limit="limit"
+        :disabled="loading"
+        @change="changePage"
+      />
     </div>
 
     <div v-if="showEditModal" class="Modal" @click.self="closeModal">
@@ -289,8 +276,9 @@
 
 <script setup>
 import { computed, ref, onMounted } from 'vue'
-import AdminStateBlock from '../components/AdminStateBlock.vue'
 import AdminPage from '../components/AdminPage.vue'
+import AdminPagination from '../components/AdminPagination.vue'
+import AdminStateBlock from '../components/AdminStateBlock.vue'
 import api from '../../api'
 import { useAuthStore } from '../../stores/auth'
 import { useModalStore } from '../../stores/modal'
@@ -736,19 +724,6 @@ const canDeleteCurrentUser = computed(() => {
   font-size: var(--forum-font-size-xs);
 }
 
-.UsersPage-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-  padding: 20px 0;
-}
-
-.Pagination-info {
-  font-size: var(--forum-font-size-md);
-  color: var(--forum-text-muted);
-}
-
 .Modal-content--user {
   min-width: min(860px, calc(100vw - 24px));
 }
@@ -762,21 +737,6 @@ const canDeleteCurrentUser = computed(() => {
 @media (max-width: 768px) {
   .UsersPage-search {
     max-width: none;
-  }
-
-  .UsersPage-pagination {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .UsersPage-pagination .Button {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .UsersPage-pagination {
-    flex-wrap: wrap;
-    gap: 10px;
   }
 
   .FormRow--toggles {

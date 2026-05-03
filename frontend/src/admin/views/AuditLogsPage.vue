@@ -67,21 +67,20 @@
       </div>
     </div>
 
-    <div v-if="total > limit" class="AuditLogsPage-pagination">
-      <button type="button" class="Button" :disabled="page === 1 || loading" @click="changePage(page - 1)">
-        上一页
-      </button>
-      <span>第 {{ page }} 页，共 {{ totalPages }} 页</span>
-      <button type="button" class="Button" :disabled="page >= totalPages || loading" @click="changePage(page + 1)">
-        下一页
-      </button>
-    </div>
+    <AdminPagination
+      :page="page"
+      :total="total"
+      :limit="limit"
+      :disabled="loading"
+      @change="changePage"
+    />
   </AdminPage>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import AdminPage from '../components/AdminPage.vue'
+import AdminPagination from '../components/AdminPagination.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import api from '../../api'
 
@@ -144,8 +143,6 @@ const targetLabels = {
 
 const actionOptions = Object.entries(actionLabels).map(([value, label]) => ({ value, label }))
 const targetOptions = Object.entries(targetLabels).map(([value, label]) => ({ value, label }))
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)))
-
 onMounted(() => {
   loadLogs()
 })
@@ -272,15 +269,6 @@ function formatData(data) {
   line-height: 1.5;
 }
 
-.AuditLogsPage-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 18px;
-  color: var(--forum-text-muted);
-}
-
 @media (max-width: 768px) {
   .AuditLogsPage-toolbar {
     flex-direction: column;
@@ -334,9 +322,5 @@ function formatData(data) {
     max-width: none;
   }
 
-  .AuditLogsPage-pagination {
-    flex-direction: column;
-    align-items: stretch;
-  }
 }
 </style>
