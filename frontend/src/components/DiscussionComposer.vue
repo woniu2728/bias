@@ -28,43 +28,7 @@
       />
 
       <div v-show="!composerStore.isMinimized" class="composer-body">
-        <div v-if="isSuspended" class="composer-notice composer-notice-warning">
-          {{ suspensionNotice }}
-        </div>
-        <div
-          v-else-if="draftMessage"
-          class="composer-notice"
-          :class="{
-            'composer-notice-success': draftNoticeTone === 'success',
-            'composer-notice-warning': draftNoticeTone === 'warning',
-            'composer-notice-error': draftNoticeTone === 'error'
-          }"
-        >
-          {{ draftMessage }}
-        </div>
-        <div
-          v-if="uploadNotice"
-          class="composer-notice"
-          :class="{
-            'composer-notice-success': uploadNoticeTone === 'success',
-            'composer-notice-error': uploadNoticeTone === 'error'
-          }"
-        >
-          {{ uploadNotice }}
-        </div>
-        <div v-if="previewError" class="composer-notice composer-notice-error">
-          {{ previewError }}
-        </div>
-        <div
-          v-if="submitNotice"
-          class="composer-notice"
-          :class="{
-            'composer-notice-success': submitNoticeTone === 'success',
-            'composer-notice-error': submitNoticeTone === 'error'
-          }"
-        >
-          {{ submitNotice }}
-        </div>
+        <ComposerNoticeStack :notices="composerNotices" />
 
         <input
           ref="titleInput"
@@ -104,9 +68,15 @@
           </select>
           <span class="composer-counter">{{ form.title.length }}/200</span>
         </div>
-        <div v-if="!loadingTags && !hasStartableTags" class="composer-notice composer-notice-warning">
-          当前没有可发帖的标签，请联系管理员开放标签权限。
-        </div>
+        <ComposerNoticeStack
+          v-if="!loadingTags && !hasStartableTags"
+          :notices="[{
+            key: 'tag-permission',
+            label: '标签',
+            tone: 'warning',
+            message: '当前没有可发帖的标签，请联系管理员开放标签权限。'
+          }]"
+        />
 
         <textarea
           v-show="!showPreview"
@@ -227,6 +197,7 @@ import ComposerEmojiAutocomplete from '@/components/ComposerEmojiAutocomplete.vu
 import ComposerEmojiPicker from '@/components/ComposerEmojiPicker.vue'
 import ComposerActionBar from '@/components/composer/ComposerActionBar.vue'
 import ComposerHeaderBar from '@/components/composer/ComposerHeaderBar.vue'
+import ComposerNoticeStack from '@/components/composer/ComposerNoticeStack.vue'
 import ComposerPreviewPanel from '@/components/composer/ComposerPreviewPanel.vue'
 import ComposerMentionPicker from '@/components/ComposerMentionPicker.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -407,6 +378,40 @@ const previewStatusText = computed(() => {
   if (previewLoading.value) return '同步中'
   if (!form.value.content.trim()) return '暂无内容'
   return '按论坛最终渲染效果预览'
+})
+const composerNotices = computed(() => {
+  return [
+    {
+      key: 'suspended',
+      label: '账号',
+      tone: 'warning',
+      message: isSuspended.value ? suspensionNotice.value : ''
+    },
+    {
+      key: 'draft',
+      label: '草稿',
+      tone: draftNoticeTone.value,
+      message: isSuspended.value ? '' : draftMessage.value
+    },
+    {
+      key: 'upload',
+      label: '上传',
+      tone: uploadNoticeTone.value,
+      message: uploadNotice.value
+    },
+    {
+      key: 'preview',
+      label: '预览',
+      tone: 'error',
+      message: previewError.value
+    },
+    {
+      key: 'submit',
+      label: isEditingDiscussion.value ? '保存' : '发布',
+      tone: submitNoticeTone.value,
+      message: submitNotice.value
+    }
+  ]
 })
 const emojiPickerStyle = computed(() => {
   const anchor = emojiToolRef.value
@@ -1436,30 +1441,6 @@ function clearComposerViewportEffects() {
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.composer-notice {
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: #edf4fb;
-  color: #325b88;
-  line-height: 1.6;
-}
-
-.composer-notice-warning {
-  background: #fff3cd;
-  color: #856404;
-}
-
-.composer-notice-success {
-  background: #edf9f1;
-  color: #256b3c;
-}
-
-.composer-notice-error {
-  background: #fdf0f0;
-  color: #b33a3a;
 }
 
 .composer-field {

@@ -34,39 +34,7 @@
       </ComposerHeaderBar>
 
       <div v-show="!composerStore.isMinimized" class="composer-body">
-        <div
-          v-if="draftNotice"
-          class="composer-notice"
-          :class="{
-            'composer-notice-success': draftNoticeTone === 'success',
-            'composer-notice-error': draftNoticeTone === 'error'
-          }"
-        >
-          {{ draftNotice }}
-        </div>
-        <div
-          v-if="uploadNotice"
-          class="composer-notice"
-          :class="{
-            'composer-notice-success': uploadNoticeTone === 'success',
-            'composer-notice-error': uploadNoticeTone === 'error'
-          }"
-        >
-          {{ uploadNotice }}
-        </div>
-        <div v-if="previewError" class="composer-notice composer-notice-error">
-          {{ previewError }}
-        </div>
-        <div
-          v-if="submitNotice"
-          class="composer-notice"
-          :class="{
-            'composer-notice-success': submitNoticeTone === 'success',
-            'composer-notice-error': submitNoticeTone === 'error'
-          }"
-        >
-          {{ submitNotice }}
-        </div>
+        <ComposerNoticeStack :notices="composerNotices" />
         <textarea
           v-show="!showPreview"
           ref="composerTextarea"
@@ -191,6 +159,7 @@ import ComposerEmojiAutocomplete from '@/components/ComposerEmojiAutocomplete.vu
 import ComposerEmojiPicker from '@/components/ComposerEmojiPicker.vue'
 import ComposerActionBar from '@/components/composer/ComposerActionBar.vue'
 import ComposerHeaderBar from '@/components/composer/ComposerHeaderBar.vue'
+import ComposerNoticeStack from '@/components/composer/ComposerNoticeStack.vue'
 import ComposerPreviewPanel from '@/components/composer/ComposerPreviewPanel.vue'
 import ComposerMentionPicker from '@/components/ComposerMentionPicker.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -340,6 +309,34 @@ const previewStatusText = computed(() => {
   if (previewLoading.value) return '同步中'
   if (!replyContent.value.trim()) return '暂无内容'
   return '按论坛最终渲染效果预览'
+})
+const composerNotices = computed(() => {
+  return [
+    {
+      key: 'draft',
+      label: '草稿',
+      tone: draftNoticeTone.value,
+      message: draftNotice.value
+    },
+    {
+      key: 'upload',
+      label: '上传',
+      tone: uploadNoticeTone.value,
+      message: uploadNotice.value
+    },
+    {
+      key: 'preview',
+      label: '预览',
+      tone: 'error',
+      message: previewError.value
+    },
+    {
+      key: 'submit',
+      label: isEditing.value ? '保存' : '发布',
+      tone: submitNoticeTone.value,
+      message: submitNotice.value
+    }
+  ]
 })
 const emojiPickerStyle = computed(() => {
   const anchor = emojiToolRef.value
@@ -1271,25 +1268,6 @@ function clearComposerViewportEffects() {
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.composer-notice {
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: #edf4fb;
-  color: #325b88;
-  line-height: 1.6;
-}
-
-.composer-notice-success {
-  background: #edf9f1;
-  color: #256b3c;
-}
-
-.composer-notice-error {
-  background: #fdf0f0;
-  color: #b33a3a;
 }
 
 .composer-body textarea {
