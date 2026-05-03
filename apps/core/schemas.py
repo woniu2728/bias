@@ -19,6 +19,16 @@ class SearchQuerySchema(BaseModel):
 
 class UserSearchResultSchema(BaseModel):
     """用户搜索结果"""
+    class GroupBadgeSchema(BaseModel):
+        id: int
+        name: str
+        color: str = ""
+        icon: str = ""
+        is_hidden: bool = False
+
+        class Config:
+            from_attributes = True
+
     id: int
     username: str
     display_name: str
@@ -27,6 +37,7 @@ class UserSearchResultSchema(BaseModel):
     discussion_count: int
     comment_count: int
     joined_at: datetime
+    primary_group: Optional[GroupBadgeSchema] = None
 
     class Config:
         from_attributes = True

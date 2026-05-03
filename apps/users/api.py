@@ -9,12 +9,14 @@ from ninja_jwt.tokens import RefreshToken
 from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.http import JsonResponse
+from django.db.models import Q
 from typing import List
 
+from apps.core.auth import get_optional_user
+from apps.core.forum_resources import serialize_user_payload
 from apps.core.human_verification import HumanVerificationError, verify_human_verification
 from .models import User
 from apps.core.file_service import FileUploadService
-from apps.users.group_utils import get_primary_group, serialize_group_badge
 from .schemas import (
     UserRegisterSchema,
     UserLoginSchema,
@@ -63,25 +65,41 @@ def _clear_refresh_token_cookie(response: JsonResponse) -> JsonResponse:
     return response
 
 
-def _attach_primary_group(user):
-    if not user:
-        return None
-
-    user.primary_group = serialize_group_badge(get_primary_group(user))
-    return user
-
-
-def _attach_primary_groups(users):
-    for user in users:
-        _attach_primary_group(user)
-    return users
-
-
 def _attach_current_user_context(user):
-    user = _attach_primary_group(user)
     if user:
         user.forum_permissions = UserService.get_serialized_forum_permissions(user)
     return user
+
+
+def _serialize_user_detail_payload(user, include_forum_permissions: bool = False):
+    payload = serialize_user_payload(user, resource="user_summary") or {}
+    payload.update(
+        {
+            "email": user.email,
+            "is_email_confirmed": user.is_email_confirmed,
+            "is_suspended": user.is_suspended,
+            "is_staff": user.is_staff,
+        }
+    )
+    if hasattr(user, "groups"):
+        payload["groups"] = user.groups
+    if hasattr(user, "preferences"):
+        payload["preferences"] = user.preferences or {}
+    if include_forum_permissions:
+        payload["forum_permissions"] = getattr(user, "forum_permissions", [])
+        payload["suspended_until"] = user.suspended_until
+        payload["suspend_reason"] = user.suspend_reason
+        payload["suspend_message"] = user.suspend_message
+    return payload
+
+
+def _serialize_user_out_payload(user):
+    payload = _serialize_user_detail_payload(user)
+    payload.setdefault("email", user.email)
+    payload.setdefault("is_email_confirmed", user.is_email_confirmed)
+    payload.setdefault("is_suspended", user.is_suspended)
+    payload.setdefault("is_staff", user.is_staff)
+    return payload
 
 
 class AuthBearer(HttpBearer):
@@ -213,7 +231,8 @@ def reset_password(request, payload: PasswordResetSchema):
 @router.get("/me", response=CurrentUserSchema, auth=AuthBearer(), tags=["Users"])
 def get_current_user(request):
     """获取当前用户信息"""
-    return _attach_current_user_context(request.auth)
+    user = _attach_current_user_context(request.auth)
+    return _serialize_user_detail_payload(user, include_forum_permissions=True)
 
 
 @router.get("/me/preferences", response=UserPreferencesSchema, auth=AuthBearer(), tags=["Users"])
@@ -246,7 +265,9 @@ def update_preferences(request, payload: UserPreferencesSchema):
 @router.get("", response=List[UserOutSchema], tags=["Users"])
 def list_users(request, page: int = 1, limit: int = 20, q: str = None):
     """获取用户列表"""
-    user = _attach_current_user_context(request.auth) if getattr(request, "auth", None) else None
+    user = get_optional_user(request)
+    if user:
+        user = _attach_current_user_context(user)
 
     if q:
         if not UserService.has_forum_permission(user, "searchUsers"):
@@ -258,27 +279,28 @@ def list_users(request, page: int = 1, limit: int = 20, q: str = None):
 
     # 搜索
     if q:
-        queryset = queryset.filter(username__icontains=q) | queryset.filter(display_name__icontains=q)
+        queryset = queryset.filter(Q(username__icontains=q) | Q(display_name__icontains=q))
 
     # 分页
     start = (page - 1) * limit
     end = start + limit
 
-    return _attach_primary_groups(list(queryset[start:end]))
+    users = list(queryset[start:end])
+    return [_serialize_user_out_payload(item) for item in users]
 
 
 @router.get("/by-username/{username}", response=UserDetailSchema, tags=["Users"])
 def get_user_by_username(request, username: str):
     """按用户名获取用户详情，兼容旧版 @提及 链接"""
     user = get_object_or_404(User.objects.prefetch_related("user_groups"), username=username)
-    return _attach_primary_group(user)
+    return _serialize_user_detail_payload(user)
 
 
 @router.get("/{user_id}", response=UserDetailSchema, tags=["Users"])
 def get_user(request, user_id: int):
     """获取用户详情"""
     user = get_object_or_404(User.objects.prefetch_related("user_groups"), id=user_id)
-    return _attach_primary_group(user)
+    return _serialize_user_detail_payload(user)
 
 
 @router.patch("/{user_id}", response=UserOutSchema, auth=AuthBearer(), tags=["Users"])
@@ -298,7 +320,7 @@ def update_user(request, user_id: int, payload: UserUpdateSchema):
             email=payload.email,
         )
         user = User.objects.prefetch_related("user_groups").get(id=user.id)
-        return _attach_primary_group(user)
+        return _serialize_user_detail_payload(user)
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=400)
 

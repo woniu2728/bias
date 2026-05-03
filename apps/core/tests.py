@@ -231,13 +231,15 @@ class ChineseSearchTests(TestCase):
 
     def test_search_api_users_type_returns_user_totals(self):
         unique_keyword = "独有用户搜索键12345"
-        User.objects.create_user(
+        matched_user = User.objects.create_user(
             username="isolated-user",
             email="search-user-only@example.com",
             password="password123",
             bio=f"这是一个{unique_keyword}",
             is_email_confirmed=True,
         )
+        group = Group.objects.create(name="SearchUserGroup", color="#16a085", icon="fas fa-user-tag")
+        matched_user.user_groups.add(group)
 
         response = self.client.get(
             "/api/search",
@@ -252,6 +254,7 @@ class ChineseSearchTests(TestCase):
         self.assertEqual(payload["total"], 1)
         self.assertEqual(len(payload["users"]), 1)
         self.assertEqual(payload["users"][0]["username"], "isolated-user")
+        self.assertEqual(payload["users"][0]["primary_group"]["name"], group.name)
 
     def test_search_api_users_type_requires_search_permission(self):
         restricted_user = User.objects.create_user(

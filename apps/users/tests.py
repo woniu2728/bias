@@ -286,6 +286,73 @@ class UserProfileApiTests(TestCase):
         self.assertEqual(response.status_code, 403, response.content)
         self.assertEqual(response.json()["error"], "没有权限搜索用户")
 
+    def test_list_users_exposes_primary_group(self):
+        viewer = User.objects.create_user(
+            username="user-list-viewer",
+            email="user-list-viewer@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        viewer_group = Group.objects.create(name="Viewers", color="#2ecc71")
+        Permission.objects.create(group=viewer_group, permission="viewUserList")
+        Permission.objects.create(group=viewer_group, permission="viewForum")
+        viewer.user_groups.add(viewer_group)
+
+        listed_user = User.objects.create_user(
+            username="listed-user",
+            email="listed-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        support_group = Group.objects.create(name="Support", color="#3498db", icon="fas fa-life-ring")
+        listed_user.user_groups.add(support_group)
+        token = str(RefreshToken.for_user(viewer).access_token)
+
+        response = self.client.get(
+            "/api/users",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        listed_payload = next(item for item in payload if item["username"] == "listed-user")
+        self.assertEqual(listed_payload["primary_group"]["name"], support_group.name)
+
+    def test_search_users_exposes_primary_group(self):
+        viewer = User.objects.create_user(
+            username="user-search-viewer",
+            email="user-search-viewer@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        viewer_group = Group.objects.create(name="Searchers", color="#9b59b6")
+        Permission.objects.create(group=viewer_group, permission="viewForum")
+        Permission.objects.create(group=viewer_group, permission="viewUserList")
+        Permission.objects.create(group=viewer_group, permission="searchUsers")
+        viewer.user_groups.add(viewer_group)
+
+        matched_user = User.objects.create_user(
+            username="search-profile-user",
+            email="search-profile-user@example.com",
+            password="password123",
+            display_name="Search Profile User",
+            is_email_confirmed=True,
+        )
+        support_group = Group.objects.create(name="Search Support", color="#f39c12", icon="fas fa-headset")
+        matched_user.user_groups.add(support_group)
+        token = str(RefreshToken.for_user(viewer).access_token)
+
+        response = self.client.get(
+            "/api/users",
+            {"q": "Search Profile"},
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        matched_payload = next(item for item in payload if item["username"] == "search-profile-user")
+        self.assertEqual(matched_payload["primary_group"]["name"], support_group.name)
+
 
 class SuspendedUserAuthTests(TestCase):
     def setUp(self):

@@ -187,6 +187,15 @@ def bootstrap_forum_resource_fields() -> None:
             description="通知来源用户摘要。",
         )
     )
+    registry.register_field(
+        ResourceFieldDefinition(
+            resource="search_user",
+            field="primary_group",
+            module_id="users",
+            resolver=_resolve_user_primary_group,
+            description="搜索用户结果中的主用户组徽章。",
+        )
+    )
 
     _resources_bootstrapped = True
 
@@ -202,6 +211,25 @@ def serialize_user_summary(user) -> dict | None:
         "avatar_url": user.avatar_url,
     }
     payload.update(get_resource_registry().serialize("user_summary", user))
+    return payload
+
+
+def serialize_user_payload(user, resource: str = "user_summary") -> dict | None:
+    if not user:
+        return None
+
+    payload = {
+        "id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "avatar_url": user.avatar_url,
+        "bio": getattr(user, "bio", ""),
+        "discussion_count": getattr(user, "discussion_count", 0),
+        "comment_count": getattr(user, "comment_count", 0),
+        "joined_at": getattr(user, "joined_at", None),
+        "last_seen_at": getattr(user, "last_seen_at", None),
+    }
+    payload.update(get_resource_registry().serialize(resource, user))
     return payload
 
 

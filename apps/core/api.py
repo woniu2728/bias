@@ -19,6 +19,7 @@ from apps.core.schemas import (
 from apps.core.auth import AuthBearer
 from apps.core.auth import get_optional_user
 from apps.core.file_service import FileUploadService
+from apps.core.forum_resources import serialize_user_payload
 from apps.core.markdown_service import MarkdownService
 from apps.core.runtime_state import get_runtime_status
 from apps.core.settings_service import get_public_forum_settings
@@ -114,6 +115,10 @@ def serialize_post_search_result(post):
     }
     payload.update(RESOURCE_REGISTRY.serialize("search_post", post))
     return payload
+
+
+def serialize_user_search_result(user):
+    return serialize_user_payload(user, resource="search_user")
 
 
 @router.get("/search", response=SearchResultSchema, tags=["Search"])
@@ -220,7 +225,7 @@ def search(
             'user_total': total,
             'discussions': [],
             'posts': [],
-            'users': users,
+            'users': [serialize_user_search_result(item) for item in users],
         }
 
     else:
