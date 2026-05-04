@@ -266,6 +266,7 @@ const {
   toggleLike,
   toggleLock,
   togglePin,
+  togglePostHidden,
   toggleSubscription,
   togglingSubscription
 } = useDiscussionDetailInteractions({
