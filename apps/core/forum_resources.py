@@ -455,6 +455,28 @@ def _resolve_post_event_data(post, context: dict) -> dict | None:
             "removed_tags": removed,
         }
 
+    if post_type in {"discussionApproved", "discussionRejected", "discussionResubmitted"}:
+        lines = [
+            line.strip()
+            for line in (getattr(post, "content", "") or "").splitlines()
+            if line.strip()
+        ]
+        note = ""
+        previous_status = ""
+        for line in lines:
+            if line.startswith("note:"):
+                note = line.removeprefix("note:").strip()
+            elif line.startswith("previous_status:"):
+                previous_status = line.removeprefix("previous_status:").strip()
+
+        event_data = {
+            "kind": post_type,
+            "note": note,
+        }
+        if previous_status:
+            event_data["previous_status"] = previous_status
+        return event_data
+
     return None
 
 

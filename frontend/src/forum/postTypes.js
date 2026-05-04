@@ -5,6 +5,9 @@ import DiscussionHiddenPostItem from '@/components/discussion/DiscussionHiddenPo
 import DiscussionStickyPostItem from '@/components/discussion/DiscussionStickyPostItem.vue'
 import DiscussionTaggedPostItem from '@/components/discussion/DiscussionTaggedPostItem.vue'
 import DiscussionGenericEventPostItem from '@/components/discussion/DiscussionGenericEventPostItem.vue'
+import DiscussionApprovedPostItem from '@/components/discussion/DiscussionApprovedPostItem.vue'
+import DiscussionRejectedPostItem from '@/components/discussion/DiscussionRejectedPostItem.vue'
+import DiscussionResubmittedPostItem from '@/components/discussion/DiscussionResubmittedPostItem.vue'
 
 const postTypeDefinitions = []
 const postTypeComponents = {
@@ -13,7 +16,10 @@ const postTypeComponents = {
   discussionLocked: DiscussionLockedPostItem,
   discussionSticky: DiscussionStickyPostItem,
   discussionTagged: DiscussionTaggedPostItem,
-  discussionHidden: DiscussionHiddenPostItem
+  discussionHidden: DiscussionHiddenPostItem,
+  discussionApproved: DiscussionApprovedPostItem,
+  discussionRejected: DiscussionRejectedPostItem,
+  discussionResubmitted: DiscussionResubmittedPostItem
 }
 
 export function registerPostType(definition) {
@@ -105,5 +111,20 @@ syncPostTypes([
     code: 'discussionHidden',
     label: '讨论隐藏状态变更',
     order: 60
+  },
+  {
+    code: 'discussionApproved',
+    label: '讨论审核通过',
+    order: 70
+  },
+  {
+    code: 'discussionRejected',
+    label: '讨论审核拒绝',
+    order: 80
+  },
+  {
+    code: 'discussionResubmitted',
+    label: '讨论重新提交审核',
+    order: 90
   }
 ])

@@ -30,6 +30,9 @@ DISCUSSION_LOCKED_POST_TYPE = "discussionLocked"
 DISCUSSION_STICKY_POST_TYPE = "discussionSticky"
 DISCUSSION_TAGGED_POST_TYPE = "discussionTagged"
 DISCUSSION_HIDDEN_POST_TYPE = "discussionHidden"
+DISCUSSION_APPROVED_POST_TYPE = "discussionApproved"
+DISCUSSION_REJECTED_POST_TYPE = "discussionRejected"
+DISCUSSION_RESUBMITTED_POST_TYPE = "discussionResubmitted"
 
 
 class DiscussionService:
@@ -622,6 +625,7 @@ class DiscussionService:
                 and not user.is_staff
                 and discussion.user_id == user.id
             ):
+                previous_approval_status = discussion.approval_status
                 discussion.approval_status = Discussion.APPROVAL_PENDING
                 discussion.approved_at = None
                 discussion.approved_by = None
@@ -640,6 +644,15 @@ class DiscussionService:
                 first_post.save(update_fields=[
                     'approval_status', 'approved_at', 'approved_by', 'approval_note', 'hidden_at', 'hidden_user'
                 ])
+                DiscussionService._create_system_event_post(
+                    discussion=discussion,
+                    actor=user,
+                    post_type=DISCUSSION_RESUBMITTED_POST_TYPE,
+                    content=(
+                        f"previous_status: {previous_approval_status}\n"
+                        "note:"
+                    ),
+                )
 
             if should_persist_discussion:
                 discussion.save()
@@ -714,6 +727,7 @@ class DiscussionService:
 
     @staticmethod
     def approve_discussion(discussion: Discussion, admin_user: User, note: str = "") -> Discussion:
+        previous_status = discussion.approval_status
         was_counted = discussion.approval_status == Discussion.APPROVAL_APPROVED
         approved_reply_counts = {}
         if not was_counted:
@@ -755,6 +769,16 @@ class DiscussionService:
                 )
             else:
                 TagService.refresh_discussion_tag_stats(discussion.id)
+
+            DiscussionService._create_system_event_post(
+                discussion=discussion,
+                actor=admin_user,
+                post_type=DISCUSSION_APPROVED_POST_TYPE,
+                content=(
+                    f"previous_status: {previous_status}\n"
+                    f"note: {note}"
+                ),
+            )
 
         discussion.refresh_from_db()
         return discussion
@@ -798,6 +822,15 @@ class DiscussionService:
                 from apps.notifications.services import NotificationService
                 NotificationService.notify_discussion_rejected(discussion, admin_user, note=note)
             TagService.refresh_discussion_tag_stats(discussion.id)
+            DiscussionService._create_system_event_post(
+                discussion=discussion,
+                actor=admin_user,
+                post_type=DISCUSSION_REJECTED_POST_TYPE,
+                content=(
+                    f"previous_status: {previous_status}\n"
+                    f"note: {note}"
+                ),
+            )
 
         discussion.refresh_from_db()
         return discussion

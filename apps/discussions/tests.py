@@ -523,6 +523,18 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(payload["approval_status"], "approved")
         self.assertEqual(payload["first_post"]["approval_status"], "approved")
 
+        posts_response = self.client.get(f"/api/discussions/{discussion.id}/posts")
+        self.assertEqual(posts_response.status_code, 200, posts_response.content)
+        event_post = next(item for item in posts_response.json()["data"] if item["type"] == "discussionApproved")
+        self.assertEqual(
+            event_post["event_data"],
+            {
+                "kind": "discussionApproved",
+                "note": "已通过审核",
+                "previous_status": "pending",
+            },
+        )
+
         list_response = self.client.get(
             "/api/discussions/",
             **self.auth_header(self.reader),
@@ -572,6 +584,73 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(self.author.discussion_count, 1)
         self.assertEqual(self.reader.comment_count, 1)
         self.assertEqual(reply.approval_status, "approved")
+
+    def test_rejecting_discussion_creates_discussion_rejected_event_post(self):
+        discussion = DiscussionService.create_discussion(
+            title="Reject me",
+            content="Needs rejection",
+            user=self.author,
+        )
+        admin = User.objects.create_superuser(
+            username="discussion-reject-admin",
+            email="discussion-reject-admin@example.com",
+            password="password123",
+        )
+
+        DiscussionService.reject_discussion(discussion, admin, note="内容不符合要求")
+
+        posts_response = self.client.get(
+            f"/api/discussions/{discussion.id}/posts",
+            **self.auth_header(admin),
+        )
+        self.assertEqual(posts_response.status_code, 200, posts_response.content)
+        event_post = next(item for item in posts_response.json()["data"] if item["type"] == "discussionRejected")
+        self.assertEqual(
+            event_post["event_data"],
+            {
+                "kind": "discussionRejected",
+                "note": "内容不符合要求",
+                "previous_status": "approved",
+            },
+        )
+
+    def test_editing_rejected_discussion_creates_resubmitted_event_post(self):
+        discussion = DiscussionService.create_discussion(
+            title="Resubmit me",
+            content="Original content",
+            user=self.author,
+        )
+        admin = User.objects.create_superuser(
+            username="discussion-resubmit-admin",
+            email="discussion-resubmit-admin@example.com",
+            password="password123",
+        )
+        DiscussionService.reject_discussion(discussion, admin, note="请补充细节")
+
+        response = self.client.patch(
+            f"/api/discussions/{discussion.id}",
+            data=json.dumps({
+                "content": "Updated content for review",
+            }),
+            content_type="application/json",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        posts_response = self.client.get(
+            f"/api/discussions/{discussion.id}/posts",
+            **self.auth_header(self.author),
+        )
+        self.assertEqual(posts_response.status_code, 200, posts_response.content)
+        event_post = next(item for item in posts_response.json()["data"] if item["type"] == "discussionResubmitted")
+        self.assertEqual(
+            event_post["event_data"],
+            {
+                "kind": "discussionResubmitted",
+                "note": "",
+                "previous_status": "rejected",
+            },
+        )
 
     def test_discussion_list_hides_staff_only_tag_for_non_staff(self):
         staff_tag = Tag.objects.create(
