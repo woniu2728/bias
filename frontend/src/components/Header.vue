@@ -63,6 +63,7 @@
               :notification-store="notificationStore"
               :notification-items="notificationItems"
               :notification-groups="notificationGroups"
+              :notification-type-summaries="notificationTypeSummaries"
               :has-read-notifications="hasReadNotifications"
               :action-message="actionMessage"
               :action-tone="actionTone"
@@ -75,6 +76,7 @@
               @mark-all-read="markAllNotificationsAsRead"
               @clear-read="clearReadNotifications"
               @open-group="openNotificationGroup"
+              @open-type="openNotificationsPageByType"
               @notification-click="handleNotificationClick"
               @open-page="openNotificationsPage"
             />
@@ -188,6 +190,7 @@ const {
   notificationItems,
   hasReadNotifications,
   notificationGroups,
+  notificationTypeSummaries,
   actionMessage,
   actionTone,
   markingAllRead,
@@ -198,6 +201,7 @@ const {
   handleNotificationClick,
   openNotificationGroup,
   openNotificationsPage,
+  openNotificationsPageByType,
   closeNotifications
 } = useHeaderNotifications({
   modalStore,

@@ -1,7 +1,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import api from '@/api'
 import { getRegisteredNotificationTypes } from '@/forum/notificationTypes'
-import { resolveNotificationPath } from '@/composables/useNotificationPresentation'
+import { resolveNotificationPath, useNotificationGroups } from '@/composables/useNotificationPresentation'
 import { unwrapList } from '@/utils/forum'
 
 export function useNotificationPage({
@@ -17,9 +17,10 @@ export function useNotificationPage({
   const currentPage = ref(1)
   const totalPages = ref(1)
   const activeType = ref('')
+  const unreadOnly = ref(false)
+  const viewMode = ref('timeline')
   const totalCount = ref(0)
-  const typeCounts = ref({})
-  const unreadTypeCounts = ref({})
+  const groupedNotifications = useNotificationGroups(notifications, '论坛')
 
   const notificationTypeItems = computed(() => {
     const registeredItems = getRegisteredNotificationTypes().map(item => ({
@@ -29,14 +30,28 @@ export function useNotificationPage({
     }))
 
     return [
-      { value: '', label: '全部通知', count: String(totalCount.value || notifications.value.length || 0) },
+      { value: '', label: '全部通知', count: formatSummaryCount() },
       ...registeredItems,
     ]
   })
 
+  const viewModeItems = computed(() => {
+    return [
+      { value: 'timeline', label: '时间流' },
+      { value: 'grouped', label: '按讨论分组' },
+    ]
+  })
+
+  function formatSummaryCount() {
+    if (unreadOnly.value) {
+      return `${notifications.value.length || 0} 未读`
+    }
+    return String(totalCount.value || notifications.value.length || 0)
+  }
+
   function formatTypeCount(type) {
-    const total = Number(typeCounts.value[type] || 0)
-    const unread = Number(unreadTypeCounts.value[type] || 0)
+    const total = Number(notificationStore.typeCounts?.[type] || 0)
+    const unread = Number(notificationStore.unreadTypeCounts?.[type] || 0)
 
     if (unread > 0) {
       return `${total} / ${unread} 未读`
@@ -75,6 +90,30 @@ export function useNotificationPage({
     }
   )
 
+  watch(
+    () => route.query.state,
+    async () => {
+      const nextUnreadOnly = String(route.query.state || '').trim() === 'unread'
+      if (nextUnreadOnly === unreadOnly.value) {
+        return
+      }
+      unreadOnly.value = nextUnreadOnly
+      currentPage.value = 1
+      await loadNotifications()
+    }
+  )
+
+  watch(
+    () => route.query.view,
+    async () => {
+      const nextViewMode = String(route.query.view || '').trim() === 'grouped' ? 'grouped' : 'timeline'
+      if (nextViewMode === viewMode.value) {
+        return
+      }
+      viewMode.value = nextViewMode
+    }
+  )
+
   async function loadNotifications() {
     loading.value = true
     loadError.value = ''
@@ -83,13 +122,14 @@ export function useNotificationPage({
       const data = await api.get('/notifications', {
         params: {
           page: currentPage.value,
-          ...(activeType.value ? { type: activeType.value } : {})
+          ...(activeType.value ? { type: activeType.value } : {}),
+          ...(unreadOnly.value ? { is_read: false } : {})
         }
       })
       notifications.value = unwrapList(data)
       totalCount.value = Number(data.total || notifications.value.length || 0)
-      typeCounts.value = { ...(data.type_counts || {}) }
-      unreadTypeCounts.value = { ...(data.unread_type_counts || {}) }
+      notificationStore.typeCounts.value = { ...(data.type_counts || {}) }
+      notificationStore.unreadTypeCounts.value = { ...(data.unread_type_counts || {}) }
       totalPages.value = Math.max(1, Math.ceil((data.total || notifications.value.length) / (data.limit || 20)))
       notificationStore.unreadCount = data.unread_count || 0
     } catch (error) {
@@ -97,8 +137,8 @@ export function useNotificationPage({
       loadError.value = error.response?.data?.error || error.message || '加载通知失败，请稍后重试'
       notifications.value = []
       totalCount.value = 0
-      typeCounts.value = {}
-      unreadTypeCounts.value = {}
+      notificationStore.typeCounts.value = {}
+      notificationStore.unreadTypeCounts.value = {}
     } finally {
       loading.value = false
     }
@@ -116,6 +156,25 @@ export function useNotificationPage({
   function syncStateFromRoute() {
     activeType.value = normalizeTypeFilter(route.query.type)
     currentPage.value = normalizePage(route.query.page)
+    unreadOnly.value = String(route.query.state || '').trim() === 'unread'
+    viewMode.value = String(route.query.view || '').trim() === 'grouped' ? 'grouped' : 'timeline'
+  }
+
+  function buildQueryState({ type, page }) {
+    const query = {}
+    if (type) {
+      query.type = type
+    }
+    if (unreadOnly.value) {
+      query.state = 'unread'
+    }
+    if (viewMode.value === 'grouped') {
+      query.view = 'grouped'
+    }
+    if (page > 1) {
+      query.page = String(page)
+    }
+    return query
   }
 
   async function changeType(type) {
@@ -128,7 +187,39 @@ export function useNotificationPage({
     currentPage.value = 1
     await router.push({
       name: 'notifications',
-      query: nextType ? { type: nextType } : {}
+      query: buildQueryState({
+        type: nextType,
+        page: 1,
+      })
+    })
+  }
+
+  async function toggleUnreadOnly() {
+    unreadOnly.value = !unreadOnly.value
+    currentPage.value = 1
+    await router.push({
+      name: 'notifications',
+      query: buildQueryState({
+        type: activeType.value,
+        page: 1,
+      })
+    })
+    await loadNotifications()
+  }
+
+  async function changeViewMode(mode) {
+    const nextMode = mode === 'grouped' ? 'grouped' : 'timeline'
+    if (nextMode === viewMode.value) {
+      return
+    }
+    viewMode.value = nextMode
+    currentPage.value = 1
+    await router.push({
+      name: 'notifications',
+      query: buildQueryState({
+        type: activeType.value,
+        page: 1,
+      })
     })
   }
 
@@ -214,16 +305,12 @@ export function useNotificationPage({
 
   async function changePage(page) {
     currentPage.value = page
-    const query = {}
-    if (activeType.value) {
-      query.type = activeType.value
-    }
-    if (page > 1) {
-      query.page = String(page)
-    }
     await router.push({
       name: 'notifications',
-      query
+      query: buildQueryState({
+        type: activeType.value,
+        page,
+      })
     })
 
     if (typeof window !== 'undefined') {
@@ -239,12 +326,18 @@ export function useNotificationPage({
     currentPage,
     totalPages,
     activeType,
+    unreadOnly,
+    viewMode,
     notificationTypeItems,
+    viewModeItems,
+    groupedNotifications,
     markAsRead,
     markAllAsRead,
     deleteNotification,
     handleNotificationClick,
     changeType,
+    changeViewMode,
+    toggleUnreadOnly,
     changePage
   }
 }

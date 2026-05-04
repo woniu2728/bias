@@ -46,6 +46,19 @@
         {{ actionMessage }}
       </div>
 
+      <div v-if="notificationTypeSummaries.length" class="notifications-summary-strip">
+        <button
+          v-for="item in notificationTypeSummaries"
+          :key="item.type"
+          type="button"
+          class="notifications-summary-chip"
+          @click="$emit('open-type', item.type)"
+        >
+          <span>{{ item.label }}</span>
+          <strong>{{ item.unread > 0 ? `${item.unread} 未读` : item.total }}</strong>
+        </button>
+      </div>
+
       <div v-if="notificationStore.loading" class="notifications-menu-state">
         加载中...
       </div>
@@ -118,6 +131,10 @@ defineProps({
     type: Array,
     default: () => []
   },
+  notificationTypeSummaries: {
+    type: Array,
+    default: () => []
+  },
   hasReadNotifications: {
     type: Boolean,
     default: false
@@ -157,6 +174,7 @@ defineEmits([
   'mark-all-read',
   'clear-read',
   'open-group',
+  'open-type',
   'notification-click',
   'open-page'
 ])
@@ -279,6 +297,30 @@ defineEmits([
 .notifications-menu-feedback--danger {
   background: #fdf1f0;
   color: #b24b47;
+}
+
+.notifications-summary-strip {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 0;
+  overflow-x: auto;
+}
+
+.notifications-summary-chip {
+  border: 1px solid #dbe5ee;
+  background: #f8fbfd;
+  color: #42576c;
+  border-radius: 999px;
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.notifications-summary-chip strong {
+  font-size: 12px;
+  color: #1f3d5c;
 }
 
 .notifications-menu-state {

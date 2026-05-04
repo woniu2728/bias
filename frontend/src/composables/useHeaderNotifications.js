@@ -3,6 +3,7 @@ import {
   resolveNotificationPath,
   useNotificationGroups
 } from '@/composables/useNotificationPresentation'
+import { getRegisteredNotificationTypes } from '@/forum/notificationTypes'
 
 export function useHeaderNotifications({
   modalStore,
@@ -18,6 +19,17 @@ export function useHeaderNotifications({
   const notificationItems = computed(() => notificationStore.notifications.slice(0, 8))
   const hasReadNotifications = computed(() => notificationStore.readCount > 0)
   const notificationGroups = useNotificationGroups(notificationItems, forumTitle || '论坛')
+  const notificationTypeSummaries = computed(() => {
+    return getRegisteredNotificationTypes()
+      .map(item => ({
+        type: item.type,
+        label: item.label,
+        total: Number(notificationStore.typeCounts?.[item.type] || 0),
+        unread: Number(notificationStore.unreadTypeCounts?.[item.type] || 0),
+      }))
+      .filter(item => item.total > 0 || item.unread > 0)
+      .slice(0, 4)
+  })
 
   async function refreshMenuNotifications() {
     await notificationStore.fetchNotifications({ limit: 8 })
@@ -118,6 +130,11 @@ export function useHeaderNotifications({
     router.push('/notifications')
   }
 
+  function openNotificationsPageByType(type) {
+    showNotifications.value = false
+    router.push(type ? `/notifications?type=${encodeURIComponent(type)}` : '/notifications')
+  }
+
   function closeNotifications() {
     showNotifications.value = false
   }
@@ -127,6 +144,7 @@ export function useHeaderNotifications({
     notificationItems,
     hasReadNotifications,
     notificationGroups,
+    notificationTypeSummaries,
     actionMessage,
     actionTone,
     markingAllRead,
@@ -137,6 +155,7 @@ export function useHeaderNotifications({
     handleNotificationClick,
     openNotificationGroup,
     openNotificationsPage,
+    openNotificationsPageByType,
     closeNotifications
   }
 }

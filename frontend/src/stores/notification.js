@@ -10,6 +10,8 @@ export const useNotificationStore = defineStore('notification', () => {
   const unreadCount = ref(0)
   const readCount = ref(0)
   const totalCount = ref(0)
+  const typeCounts = ref({})
+  const unreadTypeCounts = ref({})
   const loading = ref(false)
   const initialized = ref(false)
   const ws = ref(null)
@@ -139,19 +141,25 @@ export const useNotificationStore = defineStore('notification', () => {
   async function fetchNotifications(params = {}) {
     const page = params.page || 1
     const limit = params.limit || 20
+    const type = typeof params.type === 'string' ? params.type.trim() : ''
+    const isRead = typeof params.is_read === 'boolean' ? params.is_read : null
 
     loading.value = true
     try {
       const data = await api.get('/notifications', {
         params: {
           page,
-          limit
+          limit,
+          ...(type ? { type } : {}),
+          ...(isRead === null ? {} : { is_read: isRead })
         }
       })
       notifications.value = unwrapList(data)
       totalCount.value = Number(data.total || notifications.value.length || 0)
       unreadCount.value = Number(data.unread_count || 0)
       readCount.value = Math.max(0, totalCount.value - unreadCount.value)
+      typeCounts.value = { ...(data.type_counts || {}) }
+      unreadTypeCounts.value = { ...(data.unread_type_counts || {}) }
       initialized.value = true
       return data
     } finally {
@@ -234,6 +242,8 @@ export const useNotificationStore = defineStore('notification', () => {
     unreadCount.value = 0
     readCount.value = 0
     totalCount.value = 0
+    typeCounts.value = {}
+    unreadTypeCounts.value = {}
     loading.value = false
     initialized.value = false
     websocketDisabled.value = false
@@ -257,6 +267,8 @@ export const useNotificationStore = defineStore('notification', () => {
     unreadCount,
     readCount,
     totalCount,
+    typeCounts,
+    unreadTypeCounts,
     loading,
     initialized,
     connect,
