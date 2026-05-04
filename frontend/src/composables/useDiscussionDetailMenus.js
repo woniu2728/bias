@@ -6,6 +6,7 @@ export function useDiscussionDetailMenus({
   authStore,
   canDeletePost,
   canEditPost,
+  canModeratePostVisibility,
   canReportPost,
   canEditDiscussion,
   canModerateDiscussionSettings,
@@ -58,6 +59,7 @@ export function useDiscussionDetailMenus({
     return getPostMenuItems({
       canDeletePost,
       canEditPost,
+      canModeratePostVisibility,
       canReportPost,
       post
     }).length > 0
@@ -72,6 +74,7 @@ export function useDiscussionDetailMenus({
     return getPostMenuItems({
       canDeletePost,
       canEditPost,
+      canModeratePostVisibility,
       canReportPost,
       post
     })

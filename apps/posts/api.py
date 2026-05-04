@@ -291,6 +291,37 @@ def delete_post(request, post_id: int):
         return JsonResponse({"error": str(e)}, status=400)
 
 
+@router.post("/posts/{post_id}/hide", auth=AuthBearer(), tags=["Posts"])
+def toggle_hide_post(request, post_id: int):
+    try:
+        post = Post.objects.select_related("discussion", "user").get(id=post_id)
+        next_hidden = post.hidden_at is None
+        PostService.set_hidden_state(post, request.auth, next_hidden)
+        post.refresh_from_db()
+        log_admin_action(
+            request,
+            "admin.post.hide" if post.hidden_at else "admin.post.restore",
+            target_type="post",
+            target_id=post.id,
+            data={
+                "discussion_id": post.discussion_id,
+                "discussion_title": post.discussion.title if post.discussion else "",
+                "number": post.number,
+                "is_hidden": bool(post.hidden_at),
+            },
+        )
+        return {
+            "message": "操作成功",
+            "is_hidden": bool(post.hidden_at),
+        }
+    except Post.DoesNotExist:
+        return JsonResponse({"error": "帖子不存在"}, status=404)
+    except PermissionDenied as e:
+        return JsonResponse({"error": str(e)}, status=403)
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
+
+
 @router.post("/posts/{post_id}/like", auth=AuthBearer(), tags=["Posts"])
 def like_post(request, post_id: int):
     """

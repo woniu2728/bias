@@ -348,6 +348,67 @@ class PostFlagApiTests(TestCase):
         self.reporter.refresh_from_db()
         self.assertEqual(self.reporter.comment_count, 0)
 
+    def test_hiding_post_creates_post_hidden_event_post_and_updates_counts(self):
+        self.author.refresh_from_db()
+        self.assertEqual(self.author.comment_count, 1)
+
+        hidden_post = PostService.set_hidden_state(self.post, self.admin, True)
+
+        hidden_post.refresh_from_db()
+        self.assertTrue(hidden_post.is_hidden)
+        self.discussion.refresh_from_db()
+        self.author.refresh_from_db()
+        self.assertEqual(self.discussion.comment_count, 1)
+        self.assertEqual(self.author.comment_count, 0)
+
+        posts_response = self.client.get(
+            f"/api/discussions/{self.discussion.id}/posts",
+            **self.admin_auth_header(),
+        )
+        self.assertEqual(posts_response.status_code, 200, posts_response.content)
+        event_post = next(item for item in posts_response.json()["data"] if item["type"] == "postHidden")
+        self.assertEqual(
+            event_post["event_data"],
+            {
+                "kind": "postHidden",
+                "is_hidden": True,
+                "target_post_id": self.post.id,
+                "target_post_number": self.post.number,
+            },
+        )
+
+        PostService.set_hidden_state(self.post, self.admin, False)
+        self.discussion.refresh_from_db()
+        self.author.refresh_from_db()
+        self.assertEqual(self.discussion.comment_count, 2)
+        self.assertEqual(self.author.comment_count, 1)
+
+    def test_post_hide_endpoint_toggles_hidden_state_for_admin(self):
+        response = self.client.post(
+            f"/api/posts/{self.post.id}/hide",
+            **self.admin_auth_header(),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["is_hidden"])
+
+        self.post.refresh_from_db()
+        self.assertTrue(self.post.is_hidden)
+
+        response = self.client.post(
+            f"/api/posts/{self.post.id}/hide",
+            **self.admin_auth_header(),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(response.json()["is_hidden"])
+
+    def test_non_staff_cannot_hide_post(self):
+        response = self.client.post(
+            f"/api/posts/{self.post.id}/hide",
+            **self.auth_header(),
+        )
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertIn("只有管理员", response.json()["error"])
+
     def test_all_posts_list_respects_hidden_discussion_visibility(self):
         DiscussionService.set_hidden_state(self.discussion, self.admin, True)
 

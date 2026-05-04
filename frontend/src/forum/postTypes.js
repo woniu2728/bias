@@ -11,6 +11,7 @@ import DiscussionResubmittedPostItem from '@/components/discussion/DiscussionRes
 import PostApprovedPostItem from '@/components/discussion/PostApprovedPostItem.vue'
 import PostRejectedPostItem from '@/components/discussion/PostRejectedPostItem.vue'
 import PostResubmittedPostItem from '@/components/discussion/PostResubmittedPostItem.vue'
+import PostHiddenPostItem from '@/components/discussion/PostHiddenPostItem.vue'
 
 const postTypeDefinitions = []
 const postTypeComponents = {
@@ -25,7 +26,8 @@ const postTypeComponents = {
   discussionResubmitted: DiscussionResubmittedPostItem,
   postApproved: PostApprovedPostItem,
   postRejected: PostRejectedPostItem,
-  postResubmitted: PostResubmittedPostItem
+  postResubmitted: PostResubmittedPostItem,
+  postHidden: PostHiddenPostItem
 }
 
 export function registerPostType(definition) {
@@ -147,5 +149,10 @@ syncPostTypes([
     code: 'postResubmitted',
     label: '回复重新提交审核',
     order: 120
+  },
+  {
+    code: 'postHidden',
+    label: '回复隐藏状态变更',
+    order: 130
   }
 ])

@@ -241,6 +241,12 @@ export function useDiscussionDetailInteractions({
     return true
   }
 
+  function canModeratePostVisibility(post) {
+    if (!authStore.user?.is_staff) return false
+    if (!post) return false
+    return post.number > 1
+  }
+
   function canModeratePendingPost(post) {
     return Boolean(authStore.user?.is_staff && post?.approval_status === 'pending')
   }
@@ -307,6 +313,32 @@ export function useDiscussionDetailInteractions({
       title: isApprove ? '回复已通过' : '回复已拒绝',
       message: isApprove ? '这条回复现在已经加入讨论流。' : '作者现在可以在前台看到你的审核反馈。'
     })
+  }
+
+  async function togglePostHidden(post) {
+    if (!canModeratePostVisibility(post)) return
+
+    const nextActionLabel = post.is_hidden ? '恢复显示' : '隐藏回复'
+    const confirmed = await modalStore.confirm({
+      title: nextActionLabel,
+      message: post.is_hidden ? `确定恢复显示 #${post.number} 吗？` : `确定隐藏 #${post.number} 吗？`,
+      confirmText: nextActionLabel,
+      cancelText: '取消',
+      tone: post.is_hidden ? 'primary' : 'warning'
+    })
+    if (!confirmed) return
+
+    try {
+      await api.post(`/posts/${post.id}/hide`)
+      await refreshDiscussion()
+    } catch (error) {
+      console.error('切换回复隐藏状态失败:', error)
+      await modalStore.alert({
+        title: '操作失败',
+        message: getUiErrorMessage(error, '请稍后重试'),
+        tone: 'danger'
+      })
+    }
   }
 
   async function openReportModal(post) {
@@ -493,6 +525,7 @@ export function useDiscussionDetailInteractions({
     canEditPost,
     canLikePost,
     canModerateDiscussionSettings,
+    canModeratePostVisibility,
     canModeratePendingDiscussion,
     canModeratePendingPost,
     canReplyFromMenu,
@@ -521,6 +554,7 @@ export function useDiscussionDetailInteractions({
     toggleLike,
     toggleLock,
     togglePin,
+    togglePostHidden,
     toggleSubscription,
     togglingSubscription
   }

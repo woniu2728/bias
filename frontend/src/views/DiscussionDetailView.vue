@@ -84,6 +84,7 @@
                 @toggle-post-menu="togglePostMenu"
                 @edit-post="editPost"
                 @delete-post="deletePost"
+                @toggle-hide-post="togglePostHidden"
                 @open-report-modal="handleOpenReportModal"
                 @moderate-post="({ post: targetPost, action }) => moderatePost(targetPost, action)"
                 @resolve-post-flags="({ post: targetPost, status }) => resolvePostFlags(targetPost, status)"
@@ -237,6 +238,7 @@ const {
   canEditPost,
   canLikePost,
   canModerateDiscussionSettings,
+  canModeratePostVisibility,
   canModeratePendingDiscussion,
   canModeratePendingPost,
   canReplyFromMenu,
@@ -264,6 +266,7 @@ const {
   toggleLike,
   toggleLock,
   togglePin,
+  togglePostHidden,
   toggleSubscription,
   togglingSubscription
 } = useDiscussionDetailInteractions({
@@ -297,6 +300,7 @@ const {
   authStore,
   canDeletePost,
   canEditPost,
+  canModeratePostVisibility,
   canReportPost,
   canEditDiscussion,
   canModerateDiscussionSettings,

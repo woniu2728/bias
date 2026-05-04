@@ -30,6 +30,7 @@ USER_COUNTED_POST_TYPES = FORUM_REGISTRY.get_user_counted_post_type_codes()
 POST_APPROVED_EVENT_TYPE = "postApproved"
 POST_REJECTED_EVENT_TYPE = "postRejected"
 POST_RESUBMITTED_EVENT_TYPE = "postResubmitted"
+POST_HIDDEN_EVENT_TYPE = "postHidden"
 
 
 class PostService:
@@ -457,6 +458,49 @@ class PostService:
                     post.user.save(update_fields=['comment_count'])
 
         return True
+
+    @staticmethod
+    def set_hidden_state(post: Post, admin_user: User, is_hidden: bool) -> Post:
+        if not admin_user.is_staff:
+            raise PermissionDenied("只有管理员可以隐藏或恢复回复")
+        if post.number == 1:
+            raise ValueError("不能直接隐藏首贴，请改为隐藏讨论")
+
+        was_hidden = post.hidden_at is not None
+        if was_hidden == is_hidden:
+            return post
+
+        should_adjust_counts = (
+            post.approval_status == Post.APPROVAL_APPROVED
+            and post.type in DISCUSSION_COUNTED_POST_TYPES
+        )
+        hidden_at = timezone.now() if is_hidden else None
+
+        with transaction.atomic():
+            post.hidden_at = hidden_at
+            post.hidden_user = admin_user if is_hidden else None
+            post.save(update_fields=["hidden_at", "hidden_user"])
+
+            if should_adjust_counts:
+                PostService._refresh_discussion_approved_stats(post.discussion)
+                if post.user and post.type in USER_COUNTED_POST_TYPES:
+                    delta = -1 if is_hidden else 1
+                    post.user.comment_count = F("comment_count") + delta
+                    post.user.save(update_fields=["comment_count"])
+
+            PostService._create_moderation_event_post(
+                discussion=post.discussion,
+                actor=admin_user,
+                event_type=POST_HIDDEN_EVENT_TYPE,
+                content=(
+                    f"state: {'hidden' if is_hidden else 'restored'}\n"
+                    f"target_post_id: {post.id}\n"
+                    f"target_post_number: {post.number}"
+                ),
+            )
+
+        post.refresh_from_db()
+        return post
 
     @staticmethod
     def _refresh_discussion_approved_stats(discussion: Discussion) -> Discussion:

@@ -435,6 +435,42 @@ def _resolve_post_event_data(post, context: dict) -> dict | None:
             "is_hidden": normalized == "hidden",
         }
 
+    if post_type == "postHidden":
+        lines = [
+            line.strip()
+            for line in (getattr(post, "content", "") or "").splitlines()
+            if line.strip()
+        ]
+        is_hidden = None
+        target_post_id = None
+        target_post_number = None
+        for line in lines:
+            if line.startswith("state:"):
+                normalized = line.removeprefix("state:").strip().lower()
+                if normalized in {"hidden", "restored"}:
+                    is_hidden = normalized == "hidden"
+            elif line.startswith("target_post_id:"):
+                raw_value = line.removeprefix("target_post_id:").strip()
+                if raw_value.isdigit():
+                    target_post_id = int(raw_value)
+            elif line.startswith("target_post_number:"):
+                raw_value = line.removeprefix("target_post_number:").strip()
+                if raw_value.isdigit():
+                    target_post_number = int(raw_value)
+
+        if is_hidden is None:
+            return None
+
+        event_data = {
+            "kind": "postHidden",
+            "is_hidden": is_hidden,
+        }
+        if target_post_id is not None:
+            event_data["target_post_id"] = target_post_id
+        if target_post_number is not None:
+            event_data["target_post_number"] = target_post_number
+        return event_data
+
     if post_type == "discussionTagged":
         lines = [
             line.strip()

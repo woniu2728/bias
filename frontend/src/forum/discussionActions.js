@@ -115,6 +115,15 @@ registerPostMenuItem(({ post, canDeletePost }) => {
   }
 })
 
+registerPostMenuItem(({ post, canModeratePostVisibility }) => {
+  if (!canModeratePostVisibility?.(post)) return null
+  return {
+    key: 'toggle-hide-post',
+    label: post.is_hidden ? '恢复显示' : '隐藏回复',
+    order: 25
+  }
+})
+
 registerPostMenuItem(({ post, canReportPost }) => {
   if (!canReportPost(post)) return null
   return {
