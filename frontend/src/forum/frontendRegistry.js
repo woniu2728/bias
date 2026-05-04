@@ -2,6 +2,7 @@ const forumNavItems = []
 const discussionActionItems = []
 const postActionItems = []
 const headerItems = []
+const forumNavSections = []
 
 function upsertByKey(target, key, value) {
   const existingIndex = target.findIndex(item => item.key === key)
@@ -58,11 +59,48 @@ export function registerForumNavItem(item) {
   return upsertByKey(forumNavItems, normalizedItem.key, normalizedItem)
 }
 
+export function registerForumNavSection(section) {
+  const normalizedSection = {
+    order: 100,
+    ...section,
+  }
+  return upsertByKey(forumNavSections, normalizedSection.key, normalizedSection)
+}
+
 export function getForumNavItems(context = {}) {
   return [...forumNavItems]
     .sort((left, right) => (left.order || 100) - (right.order || 100))
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
+}
+
+export function getForumNavSections(context = {}) {
+  const items = getForumNavItems(context)
+  const sectionMap = new Map(
+    [...forumNavSections]
+      .sort((left, right) => (left.order || 100) - (right.order || 100))
+      .map(section => [section.key, { ...section, items: [] }])
+  )
+
+  if (!sectionMap.has('primary')) {
+    sectionMap.set('primary', { key: 'primary', title: '', order: 10, items: [] })
+  }
+
+  for (const item of items) {
+    const sectionKey = item.section || 'primary'
+    if (!sectionMap.has(sectionKey)) {
+      sectionMap.set(sectionKey, { key: sectionKey, title: '', order: 100, items: [] })
+    }
+    sectionMap.get(sectionKey).items.push(item)
+  }
+
+  return [...sectionMap.values()]
+    .filter(section => section.items.length > 0)
+    .sort((left, right) => (left.order || 100) - (right.order || 100))
+    .map(section => ({
+      ...section,
+      items: section.items.sort((left, right) => (left.order || 100) - (right.order || 100)),
+    }))
 }
 
 export function registerDiscussionAction(item) {

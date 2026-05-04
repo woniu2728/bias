@@ -10,22 +10,17 @@
       </div>
 
       <div class="AdminNav-section">
-        <template v-for="section in navSections" :key="section.key">
-          <h4 class="AdminNav-title">{{ section.title }}</h4>
-          <ul class="AdminNav-list">
-            <li v-for="item in section.items" :key="item.path">
-              <router-link
-                :to="item.path"
-                class="AdminNav-item"
-                :class="{ active: isActive(item.path) }"
-                @click="$emit('close')"
-              >
-                <i :class="item.icon"></i>
-                <span>{{ item.label }}</span>
-              </router-link>
-            </li>
-          </ul>
-        </template>
+        <ForumNavList
+          :sections="navSections"
+          root-class="AdminNav-sections"
+          section-title-class="AdminNav-title"
+          section-list-class="AdminNav-list"
+          item-wrapper-class="AdminNav-itemWrap"
+          item-class="AdminNav-item"
+          item-description-class="AdminNav-description"
+          item-badge-class="AdminNav-badge"
+          @select="$emit('close')"
+        />
       </div>
 
       <div class="AdminNav-mobileFooter">
@@ -45,6 +40,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import ForumNavList from '@/components/forum/ForumNavList.vue'
 import { useAuthStore } from '../../stores/auth'
 import { getAdminNavSections, isAdminPathActive } from '../navigation'
 
@@ -59,7 +55,14 @@ defineEmits(['close'])
 
 const route = useRoute()
 const authStore = useAuthStore()
-const navSections = computed(() => getAdminNavSections())
+const navSections = computed(() => getAdminNavSections().map(section => ({
+  ...section,
+  items: section.items.map(item => ({
+    ...item,
+    to: item.path,
+    active: isActive(item.path),
+  }))
+})))
 
 function isActive(path) {
   return isAdminPathActive(route.path, path)
@@ -87,6 +90,12 @@ function handleLogout() {
   margin-bottom: var(--forum-space-7);
 }
 
+.AdminNav-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--forum-space-7);
+}
+
 .AdminNav-title {
   font-size: var(--forum-font-size-xs);
   font-weight: 600;
@@ -98,15 +107,12 @@ function handleLogout() {
 }
 
 .AdminNav-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .AdminNav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   padding: 10px 12px;
   color: var(--forum-text-muted);
   text-decoration: none;
@@ -135,6 +141,21 @@ function handleLogout() {
 
 .AdminNav-item.active:hover {
   background: var(--forum-primary-strong);
+}
+
+.AdminNav-description {
+  display: block;
+  margin-left: 28px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: inherit;
+  opacity: 0.78;
+}
+
+.AdminNav-badge {
+  margin-left: auto;
+  background: rgba(77, 105, 142, 0.12);
+  color: inherit;
 }
 
 .AdminNav-item--danger {

@@ -18,6 +18,8 @@ export function registerAdminRoute(route) {
     navSection: 'feature',
     navOrder: 100,
     showInNavigation: true,
+    navDescription: '',
+    navBadge: '',
     ...route
   }
 
@@ -55,6 +57,8 @@ export function getAdminNavSections() {
       path: route.path,
       icon: route.icon,
       label: route.label,
+      description: route.navDescription || '',
+      badge: route.navBadge || '',
       moduleId: route.moduleId || 'core',
       navOrder: route.navOrder || 100
     })
@@ -74,6 +78,7 @@ registerAdminRoute({
   component: DashboardPage,
   icon: 'fas fa-chart-bar',
   label: '仪表盘',
+  navDescription: '查看论坛运行状态、模块概况和系统入口。',
   navSection: 'core',
   navOrder: 10,
   moduleId: 'core'
@@ -85,6 +90,7 @@ registerAdminRoute({
   component: ModulesPage,
   icon: 'fas fa-cubes',
   label: '模块中心',
+  navDescription: '查看内置模块、扩展能力和注册快照。',
   navSection: 'core',
   navOrder: 20,
   moduleId: 'core'
@@ -96,6 +102,7 @@ registerAdminRoute({
   component: BasicsPage,
   icon: 'fas fa-pencil-alt',
   label: '基础设置',
+  navDescription: '维护论坛标题、公告和基础信息。',
   navSection: 'core',
   navOrder: 30,
   moduleId: 'core'
@@ -107,6 +114,7 @@ registerAdminRoute({
   component: PermissionsPage,
   icon: 'fas fa-key',
   label: '权限管理',
+  navDescription: '管理用户组和访问权限矩阵。',
   navSection: 'core',
   navOrder: 40,
   moduleId: 'core'
@@ -118,6 +126,7 @@ registerAdminRoute({
   component: AppearancePage,
   icon: 'fas fa-paint-brush',
   label: '外观设置',
+  navDescription: '调整主题、Logo 和界面外观。',
   navSection: 'core',
   navOrder: 50,
   moduleId: 'core'
@@ -129,6 +138,7 @@ registerAdminRoute({
   component: UsersPage,
   icon: 'fas fa-users',
   label: '用户管理',
+  navDescription: '查看用户资料、分组和封禁状态。',
   navSection: 'core',
   navOrder: 60,
   moduleId: 'users'
@@ -140,6 +150,7 @@ registerAdminRoute({
   component: ApprovalQueuePage,
   icon: 'fas fa-user-check',
   label: '审核队列',
+  navDescription: '集中处理待审核讨论和回复。',
   navSection: 'feature',
   navOrder: 110,
   moduleId: 'approval'
@@ -151,6 +162,7 @@ registerAdminRoute({
   component: FlagsPage,
   icon: 'fas fa-flag',
   label: '举报管理',
+  navDescription: '查看和处理社区举报内容。',
   navSection: 'feature',
   navOrder: 120,
   moduleId: 'flags'
@@ -162,6 +174,7 @@ registerAdminRoute({
   component: AuditLogsPage,
   icon: 'fas fa-clipboard-list',
   label: '审计日志',
+  navDescription: '追踪后台关键操作记录。',
   navSection: 'feature',
   navOrder: 130,
   moduleId: 'core'
@@ -173,6 +186,7 @@ registerAdminRoute({
   component: TagsPage,
   icon: 'fas fa-tags',
   label: '标签管理',
+  navDescription: '维护标签结构、排序和可见范围。',
   navSection: 'feature',
   navOrder: 140,
   moduleId: 'tags'
@@ -184,6 +198,7 @@ registerAdminRoute({
   component: MailPage,
   icon: 'fas fa-envelope',
   label: '邮件设置',
+  navDescription: '配置邮件服务和发信能力。',
   navSection: 'feature',
   navOrder: 150,
   moduleId: 'core'
@@ -195,6 +210,7 @@ registerAdminRoute({
   component: AdvancedPage,
   icon: 'fas fa-cog',
   label: '高级设置',
+  navDescription: '管理缓存、队列和系统级能力。',
   navSection: 'feature',
   navOrder: 160,
   moduleId: 'core'

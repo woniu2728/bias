@@ -11,25 +11,18 @@
     </div>
 
     <nav class="index-nav-list">
-      <ul>
-        <li>
-          <DiscussionListSidebarNavLink to="/" icon="far fa-comments" label="全部讨论" :active="isAllDiscussionsPage" />
-        </li>
-        <li v-if="authStore.user">
-          <DiscussionListSidebarNavLink to="/following" icon="fas fa-bell" label="关注中" :active="isFollowingPage" />
-        </li>
-        <li v-if="authStore.user">
-          <DiscussionListSidebarNavLink
-            :to="buildUserPath(authStore.user)"
-            icon="fas fa-user"
-            label="我的主页"
-            :active="isOwnProfilePage"
-          />
-        </li>
-        <li v-if="hasSidebarTagNavigation" class="nav-separator" aria-hidden="true"></li>
-        <li v-if="hasSidebarTagNavigation">
-          <DiscussionListSidebarNavLink to="/tags" icon="fas fa-th-large" label="标签" :active="isTagsPage" />
-        </li>
+      <ForumNavList
+        :sections="baseNavSections"
+        root-class="index-nav-sections"
+        section-title-class="index-nav-title"
+        section-list-class="index-nav-base-list"
+        item-wrapper-class="index-nav-item-wrap"
+        item-class="index-nav-base-link"
+        item-description-class="index-nav-description"
+        item-badge-class="index-nav-badge"
+      />
+
+      <ul v-if="hasSidebarTagNavigation" class="index-nav-tag-list">
         <li v-for="tag in sidebarPrimaryTagItems" :key="`tag-${tag.id}`">
           <DiscussionListSidebarTagLink
             :tag="tag"
@@ -57,6 +50,8 @@
 
 <script setup>
 import { computed } from 'vue'
+import ForumNavList from '@/components/forum/ForumNavList.vue'
+import { getForumNavSections } from '@/forum/registry'
 import DiscussionListSidebarNavLink from '@/components/discussion/DiscussionListSidebarNavLink.vue'
 import DiscussionListSidebarStartButton from '@/components/discussion/DiscussionListSidebarStartButton.vue'
 import DiscussionListSidebarTagLink from '@/components/discussion/DiscussionListSidebarTagLink.vue'
@@ -131,6 +126,25 @@ const showStartDiscussionButton = computed(() => {
   return !props.authStore.isAuthenticated || props.authStore.canStartDiscussion
 })
 
+const baseNavSections = computed(() => getForumNavSections({
+  authStore: props.authStore,
+  showNotifications: false,
+  notificationStore: null,
+}).map(section => ({
+  ...section,
+  title: section.key === 'primary' ? '' : section.title,
+  items: section.items
+    .filter(item => item.key !== 'notifications')
+    .map(item => ({
+      ...item,
+      active: (
+        (item.key === 'home' && props.isAllDiscussionsPage)
+        || (item.key === 'following' && props.isFollowingPage)
+        || (item.key === 'profile' && props.isOwnProfilePage)
+      ),
+    }))
+})).filter(section => section.items.length > 0))
+
 defineEmits(['start-discussion'])
 </script>
 
@@ -163,8 +177,53 @@ defineEmits(['start-discussion'])
   margin: 0;
 }
 
+.index-nav-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.index-nav-base-list,
+.index-nav-tag-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
 .index-nav-list li {
   margin-bottom: 10px;
+}
+
+.index-nav-base-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--forum-radius-sm);
+  color: var(--forum-text-muted);
+  text-decoration: none;
+}
+
+.index-nav-base-link:hover,
+.index-nav-base-link.active {
+  background: var(--forum-primary-color);
+  color: var(--forum-text-inverse);
+  text-decoration: none;
+}
+
+.index-nav-description {
+  display: block;
+  margin-left: 28px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: inherit;
+  opacity: 0.78;
+}
+
+.index-nav-badge {
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.18);
+  color: inherit;
 }
 
 .nav-separator {

@@ -9,7 +9,7 @@
           @click="handleStartDiscussion"
         />
 
-        <ForumPrimaryNav :auth-store="authStore" active-key="notifications" />
+        <ForumPrimaryNav :auth-store="authStore" :notification-store="notificationStore" active-key="notifications" />
       </template>
 
       <main class="notification-content">

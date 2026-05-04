@@ -49,22 +49,17 @@
       </button>
     </div>
 
-    <nav class="mobile-drawer-nav">
-      <router-link
-        v-for="item in navItems"
-        :key="item.key"
-        :to="item.to"
-        class="mobile-drawer-link"
-        :class="{ active: isMobileNavActive(item.key) }"
-        @click="$emit('close')"
-      >
-        <i :class="item.icon"></i>
-        <span>{{ item.label }}</span>
-        <span v-if="item.key === 'notifications' && notificationStore.unreadCount > 0" class="mobile-drawer-badge">
-          {{ notificationStore.unreadCount }}
-        </span>
-      </router-link>
-    </nav>
+    <ForumNavList
+      :sections="navSections"
+      root-class="mobile-drawer-nav"
+      section-title-class="mobile-drawer-title"
+      section-list-class="mobile-drawer-nav-section"
+      item-wrapper-class="mobile-drawer-item-wrap"
+      item-class="mobile-drawer-link"
+      item-description-class="mobile-drawer-description"
+      item-badge-class="mobile-drawer-badge"
+      @select="$emit('close')"
+    />
 
     <div v-if="authStore.isAuthenticated && authStore.user" class="mobile-drawer-user">
       <div class="mobile-drawer-userCard">
@@ -97,7 +92,8 @@
 
 <script setup>
 import { computed } from 'vue'
-import { getForumNavItems } from '@/forum/registry'
+import ForumNavList from '@/components/forum/ForumNavList.vue'
+import { getForumNavSections } from '@/forum/registry'
 
 const props = defineProps({
   showMobileDrawer: {
@@ -147,10 +143,17 @@ defineEmits([
   'open-register'
 ])
 
-const navItems = computed(() => getForumNavItems({
+const navSections = computed(() => getForumNavSections({
   authStore: props.authStore,
   showNotifications: props.authStore.isAuthenticated && Boolean(props.authStore.user),
-}))
+  notificationStore: props.notificationStore,
+}).map(section => ({
+  ...section,
+  items: section.items.map(item => ({
+    ...item,
+    active: props.isMobileNavActive(item.key),
+  }))
+})))
 </script>
 
 <style scoped>
@@ -267,8 +270,28 @@ const navItems = computed(() => getForumNavItems({
 .mobile-drawer-nav {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 14px;
   margin-bottom: 16px;
+}
+
+.mobile-drawer-title {
+  margin: 0 0 6px;
+  padding: 0 2px;
+  color: #7d8d9d;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.mobile-drawer-nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mobile-drawer-item-wrap {
+  list-style: none;
 }
 
 .mobile-drawer-link {
@@ -280,6 +303,15 @@ const navItems = computed(() => getForumNavItems({
 .mobile-drawer-link.active {
   background: #edf3f8;
   color: var(--forum-primary-color);
+}
+
+.mobile-drawer-description {
+  display: block;
+  margin-left: 28px;
+  margin-top: 2px;
+  color: inherit;
+  font-size: 12px;
+  opacity: 0.78;
 }
 
 .mobile-drawer-link--danger {

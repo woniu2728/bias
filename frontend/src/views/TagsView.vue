@@ -9,7 +9,7 @@
           @click="handleStartDiscussion"
         />
 
-        <ForumPrimaryNav :auth-store="authStore" active-key="tags" />
+        <ForumPrimaryNav :auth-store="authStore" :notification-store="null" active-key="tags" />
       </template>
 
       <main class="tags-content">
