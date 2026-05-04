@@ -3,7 +3,6 @@ import {
   getForumNavItems,
   registerDiscussionAction,
   registerForumNavItem,
-  registerHeaderItem,
   registerPostAction,
 } from '@/forum/frontendRegistry'
 
@@ -11,7 +10,6 @@ export {
   getForumNavItems,
   registerDiscussionAction,
   registerForumNavItem,
-  registerHeaderItem,
   registerPostAction,
 }
 
@@ -47,36 +45,6 @@ registerForumNavItem({
   label: '通知',
   order: 40,
   isVisible: ({ showNotifications }) => Boolean(showNotifications)
-})
-
-registerHeaderItem({
-  key: 'notifications-shortcut',
-  placement: 'account-start',
-  order: 10,
-  icon: 'fas fa-inbox',
-  label: '通知中心',
-  to: '/notifications',
-  isVisible: ({ authStore }) => Boolean(authStore?.isAuthenticated && authStore?.user)
-})
-
-registerHeaderItem({
-  key: 'admin-shortcut',
-  placement: 'account-start',
-  order: 20,
-  icon: 'fas fa-cubes',
-  label: '模块中心',
-  href: '/admin.html#/admin/modules',
-  isVisible: ({ authStore }) => Boolean(authStore?.user?.is_staff)
-})
-
-registerHeaderItem({
-  key: 'mobile-admin-shortcut',
-  placement: 'mobile-user',
-  order: 10,
-  icon: 'fas fa-cubes',
-  label: '模块中心',
-  href: '/admin.html#/admin/modules',
-  isVisible: ({ authStore }) => Boolean(authStore?.user?.is_staff)
 })
 
 registerForumNavItem({

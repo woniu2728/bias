@@ -36,19 +36,6 @@
           @clear-search="clearSearch"
         />
 
-        <component
-          v-for="item in headerAccountStartItems"
-          :key="item.key"
-          :is="item.href ? 'a' : 'router-link'"
-          :to="item.href ? undefined : item.to"
-          :href="item.href || undefined"
-          class="header-shortcut-link"
-        >
-          <i :class="item.icon"></i>
-          <span>{{ item.label }}</span>
-          <span v-if="item.badge" class="header-shortcut-badge">{{ item.badge }}</span>
-        </component>
-
         <button
           v-if="showMobileRightAction"
           type="button"
@@ -144,7 +131,6 @@ import HeaderMobileDrawer from '@/components/header/HeaderMobileDrawer.vue'
 import HeaderNotificationsMenu from '@/components/header/HeaderNotificationsMenu.vue'
 import HeaderSearchBox from '@/components/header/HeaderSearchBox.vue'
 import HeaderUserMenu from '@/components/header/HeaderUserMenu.vue'
-import { getHeaderItems } from '@/forum/frontendRegistry'
 import { useHeaderActions } from '@/composables/useHeaderActions'
 import { useHeaderMobileState } from '@/composables/useHeaderMobileState'
 import { useHeaderNotifications } from '@/composables/useHeaderNotifications'
@@ -242,15 +228,6 @@ const currentSearchQuery = computed(() => String(route.query.q ?? route.query.se
 const searchPreviewText = computed(() => currentSearchQuery.value || '')
 const showAuthenticatedUi = computed(() => authStore.isAuthenticated && Boolean(authStore.user) && !authStore.isRestoringSession)
 const showSessionPlaceholder = computed(() => authStore.isRestoringSession && authStore.isAuthenticated && !authStore.user)
-const headerAccountStartItems = computed(() => getHeaderItems({
-  authStore,
-  notificationStore,
-}, 'account-start').map(item => ({
-  ...item,
-  badge: item.key === 'notifications-shortcut' && notificationStore.unreadCount > 0
-    ? notificationStore.unreadCount
-    : item.badge,
-})))
 const {
   showUserMenu,
   toggleUserMenu,
@@ -404,36 +381,6 @@ function openSearchFromDrawer() {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.header-shortcut-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: #f5f8fb;
-  color: #52667a;
-  font-size: 13px;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.header-shortcut-link:hover {
-  background: #ebf1f6;
-  color: #364b60;
-  text-decoration: none;
-}
-
-.header-shortcut-badge {
-  min-width: 18px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: #e67a34;
-  color: #fff;
-  font-size: 11px;
-  text-align: center;
 }
 
 .header-account-cluster {
@@ -590,7 +537,6 @@ function openSearchFromDrawer() {
 
   .logo,
   .search-box,
-  .header-shortcut-link,
   .notifications-dropdown,
   .user-dropdown,
   .header-account-cluster,

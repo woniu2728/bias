@@ -82,19 +82,6 @@
           <span>@{{ authStore.user?.username }}</span>
         </div>
       </div>
-      <component
-        v-for="item in mobileUserItems"
-        :key="item.key"
-        :is="item.href ? 'a' : 'router-link'"
-        :to="item.href ? undefined : item.to"
-        :href="item.href || undefined"
-        class="mobile-drawer-link"
-        @click="$emit('close')"
-      >
-        <i :class="item.icon"></i>
-        <span>{{ item.label }}</span>
-        <span v-if="item.badge" class="mobile-drawer-badge">{{ item.badge }}</span>
-      </component>
       <button type="button" class="mobile-drawer-link mobile-drawer-link--danger" @click="$emit('logout')">
         <i class="fas fa-sign-out-alt"></i>
         <span>登出</span>
@@ -111,7 +98,6 @@
 <script setup>
 import { computed } from 'vue'
 import { getForumNavItems } from '@/forum/registry'
-import { getHeaderItems } from '@/forum/frontendRegistry'
 
 const props = defineProps({
   showMobileDrawer: {
@@ -165,14 +151,6 @@ const navItems = computed(() => getForumNavItems({
   authStore: props.authStore,
   showNotifications: props.authStore.isAuthenticated && Boolean(props.authStore.user),
 }))
-
-const mobileUserItems = computed(() => getHeaderItems({
-  authStore: props.authStore,
-  notificationStore: props.notificationStore,
-}, 'mobile-user').map(item => ({
-  ...item,
-  badge: item.key === 'mobile-admin-shortcut' ? '' : item.badge,
-})))
 </script>
 
 <style scoped>
