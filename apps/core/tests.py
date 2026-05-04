@@ -1206,7 +1206,24 @@ class AdminSettingsApiTests(TestCase):
                 item["code"] == "discussionReply"
                 and item["icon"] == "fas fa-reply"
                 and item["navigation_scope"] == "post"
+                and item["preference_key"] == "notify_new_post"
                 for item in payload["notification_types"]
+            )
+        )
+        self.assertIn("user_preferences", payload)
+        self.assertTrue(
+            any(
+                item["key"] == "notify_user_mentioned"
+                and item["category"] == "notification"
+                and item["default_value"] is True
+                for item in payload["user_preferences"]
+            )
+        )
+        self.assertTrue(
+            any(
+                item["key"] == "follow_after_reply"
+                and item["category"] == "behavior"
+                for item in payload["user_preferences"]
             )
         )
         self.assertTrue(

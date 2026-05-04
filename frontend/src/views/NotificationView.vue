@@ -41,6 +41,20 @@
           {{ loadError }}
         </ForumInlineMessage>
 
+        <section class="notification-filters-card">
+          <div class="notification-filters-header">
+            <div>
+              <h2>{{ activeNotificationLabel }}</h2>
+              <p>按通知类型筛选消息流，方便集中处理提及、点赞、审核和账号状态通知。</p>
+            </div>
+          </div>
+          <ForumSearchFilterNav
+            :items="notificationTypeItems"
+            :active-value="activeType"
+            @change="changeType"
+          />
+        </section>
+
         <ForumStateBlock v-if="loading" class="notification-state">
           正在加载通知...
         </ForumStateBlock>
@@ -75,7 +89,8 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   getNotificationIconClass,
   getNotificationTextHtml
@@ -86,6 +101,7 @@ import ForumNotificationList from '@/components/forum/ForumNotificationList.vue'
 import ForumPagination from '@/components/forum/ForumPagination.vue'
 import ForumPageWithSidebar from '@/components/forum/ForumPageWithSidebar.vue'
 import ForumPrimaryNav from '@/components/forum/ForumPrimaryNav.vue'
+import ForumSearchFilterNav from '@/components/forum/ForumSearchFilterNav.vue'
 import ForumStateBlock from '@/components/forum/ForumStateBlock.vue'
 import DiscussionListSidebarStartButton from '@/components/discussion/DiscussionListSidebarStartButton.vue'
 import { useNotificationPage } from '@/composables/useNotificationPage'
@@ -101,6 +117,7 @@ import {
   getUserInitial
 } from '@/utils/forum'
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
@@ -118,15 +135,24 @@ const {
   marking,
   currentPage,
   totalPages,
+  activeType,
+  notificationTypeItems,
   markAsRead,
   markAllAsRead,
   deleteNotification,
   handleNotificationClick,
+  changeType,
   changePage
 } = useNotificationPage({
   modalStore,
   notificationStore,
+  route,
   router
+})
+
+const activeNotificationLabel = computed(() => {
+  const activeItem = notificationTypeItems.value.find(item => item.value === activeType.value)
+  return activeItem?.label || '全部通知'
 })
 
 function handleStartDiscussion() {
@@ -162,6 +188,31 @@ function getNotificationAvatarColor(notification) {
   padding: 24px 28px 40px;
 }
 
+.notification-filters-card {
+  margin: 18px 0;
+  padding: 18px;
+  border: 1px solid #dde6ee;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 252, 0.98));
+  box-shadow: 0 14px 36px rgba(20, 36, 54, 0.06);
+}
+
+.notification-filters-header {
+  margin-bottom: 14px;
+}
+
+.notification-filters-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #1f2f3d;
+}
+
+.notification-filters-header p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #6d7d8c;
+}
+
 .hero-meta {
   display: flex;
   align-items: center;
@@ -188,6 +239,10 @@ function getNotificationAvatarColor(notification) {
 @media (max-width: 900px) {
   .notification-content {
     padding: 18px 15px 28px;
+  }
+
+  .notification-filters-card {
+    padding: 16px;
   }
 }
 

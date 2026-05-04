@@ -16,6 +16,7 @@ from apps.core.auth import get_optional_user
 from apps.core.forum_resources import serialize_user_payload
 from apps.core.human_verification import HumanVerificationError, verify_human_verification
 from .models import User
+from .preferences import normalize_user_preferences, serialize_user_preferences
 from apps.core.file_service import FileUploadService
 from .schemas import (
     UserRegisterSchema,
@@ -30,6 +31,7 @@ from .schemas import (
     PasswordResetSchema,
     EmailVerifySchema,
     UserPreferencesSchema,
+    UserPreferencesUpdateSchema,
 )
 from .services import UserService
 
@@ -237,29 +239,17 @@ def get_current_user(request):
 
 @router.get("/me/preferences", response=UserPreferencesSchema, auth=AuthBearer(), tags=["Users"])
 def get_preferences(request):
-    prefs = request.auth.preferences or {}
-    return {
-        "follow_after_reply": prefs.get("follow_after_reply", False),
-        "follow_after_create": prefs.get("follow_after_create", False),
-        "notify_new_post": prefs.get("notify_new_post", True),
-    }
+    return serialize_user_preferences(request.auth)
 
 
 @router.patch("/me/preferences", response=UserPreferencesSchema, auth=AuthBearer(), tags=["Users"])
-def update_preferences(request, payload: UserPreferencesSchema):
+def update_preferences(request, payload: UserPreferencesUpdateSchema):
     request.auth.preferences = {
         **(request.auth.preferences or {}),
-        "follow_after_reply": payload.follow_after_reply,
-        "follow_after_create": payload.follow_after_create,
-        "notify_new_post": payload.notify_new_post,
+        **normalize_user_preferences(payload.values),
     }
     request.auth.save(update_fields=["preferences"])
-
-    return {
-        "follow_after_reply": request.auth.preferences.get("follow_after_reply", False),
-        "follow_after_create": request.auth.preferences.get("follow_after_create", False),
-        "notify_new_post": request.auth.preferences.get("notify_new_post", True),
-    }
+    return serialize_user_preferences(request.auth)
 
 
 @router.get("", response=List[UserOutSchema], tags=["Users"])

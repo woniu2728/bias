@@ -37,6 +37,20 @@ class NotificationTypeDefinition:
     description: str = ""
     icon: str = "fas fa-bell"
     navigation_scope: str = "notifications"
+    preference_key: str = ""
+    preference_label: str = ""
+    preference_description: str = ""
+    preference_default_enabled: bool = True
+
+
+@dataclass(frozen=True)
+class UserPreferenceDefinition:
+    key: str
+    label: str
+    module_id: str
+    description: str = ""
+    category: str = "notification"
+    default_value: bool = False
 
 
 @dataclass(frozen=True)
@@ -91,6 +105,7 @@ class ForumModuleDefinition:
     admin_pages: Tuple[AdminPageDefinition, ...] = ()
     capabilities: Tuple[str, ...] = ()
     notification_types: Tuple[NotificationTypeDefinition, ...] = ()
+    user_preferences: Tuple[UserPreferenceDefinition, ...] = ()
     event_listeners: Tuple[EventListenerDefinition, ...] = ()
     post_types: Tuple[PostTypeDefinition, ...] = ()
     search_filters: Tuple[SearchFilterDefinition, ...] = ()
@@ -103,6 +118,7 @@ class ForumRegistry:
         self._permission_aliases: Dict[str, str] = {}
         self._admin_pages: List[AdminPageDefinition] = []
         self._notification_types: Dict[str, NotificationTypeDefinition] = {}
+        self._user_preferences: Dict[str, UserPreferenceDefinition] = {}
         self._event_listeners: List[EventListenerDefinition] = []
         self._post_types: Dict[str, PostTypeDefinition] = {}
         self._search_filters: List[SearchFilterDefinition] = []
@@ -120,6 +136,9 @@ class ForumRegistry:
 
         for notification_type in module.notification_types:
             self._notification_types[notification_type.code] = notification_type
+
+        for preference in module.user_preferences:
+            self._user_preferences[preference.key] = preference
 
         for event_listener in module.event_listeners:
             self._event_listeners.append(event_listener)
@@ -171,6 +190,18 @@ class ForumRegistry:
         return sorted(
             self._notification_types.values(),
             key=lambda item: (item.module_id, item.label, item.code),
+        )
+
+    def get_notification_type(self, code: str) -> NotificationTypeDefinition | None:
+        return self._notification_types.get(code)
+
+    def get_user_preferences(self, category: str | None = None) -> List[UserPreferenceDefinition]:
+        preferences = list(self._user_preferences.values())
+        if category is not None:
+            preferences = [item for item in preferences if item.category == category]
+        return sorted(
+            preferences,
+            key=lambda item: (item.category, item.module_id, item.label, item.key),
         )
 
     def get_event_listeners(self) -> List[EventListenerDefinition]:
@@ -827,6 +858,9 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="通知作者其讨论已通过审核。",
                     icon="fas fa-circle-check",
                     navigation_scope="discussion",
+                    preference_key="notify_discussion_approval",
+                    preference_label="讨论审核结果通知",
+                    preference_description="当你的讨论被审核通过或拒绝时通知你。",
                 ),
                 NotificationTypeDefinition(
                     code="discussionRejected",
@@ -835,6 +869,9 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="通知作者其讨论未通过审核。",
                     icon="fas fa-circle-xmark",
                     navigation_scope="discussion",
+                    preference_key="notify_discussion_approval",
+                    preference_label="讨论审核结果通知",
+                    preference_description="当你的讨论被审核通过或拒绝时通知你。",
                 ),
                 NotificationTypeDefinition(
                     code="postApproved",
@@ -843,6 +880,9 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="通知作者其回复已通过审核。",
                     icon="fas fa-check",
                     navigation_scope="post",
+                    preference_key="notify_post_approval",
+                    preference_label="回复审核结果通知",
+                    preference_description="当你的回复被审核通过或拒绝时通知你。",
                 ),
                 NotificationTypeDefinition(
                     code="postRejected",
@@ -851,6 +891,27 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="通知作者其回复未通过审核。",
                     icon="fas fa-xmark",
                     navigation_scope="post",
+                    preference_key="notify_post_approval",
+                    preference_label="回复审核结果通知",
+                    preference_description="当你的回复被审核通过或拒绝时通知你。",
+                ),
+            ),
+            user_preferences=(
+                UserPreferenceDefinition(
+                    key="notify_discussion_approval",
+                    label="讨论审核结果通知",
+                    module_id="approval",
+                    description="当你的讨论被审核通过或拒绝时通知你。",
+                    category="notification",
+                    default_value=True,
+                ),
+                UserPreferenceDefinition(
+                    key="notify_post_approval",
+                    label="回复审核结果通知",
+                    module_id="approval",
+                    description="当你的回复被审核通过或拒绝时通知你。",
+                    category="notification",
+                    default_value=True,
                 ),
             ),
         )
@@ -885,6 +946,32 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
             category="feature",
             dependencies=("discussions", "notifications"),
             capabilities=("follow-discussion", "following-feed"),
+            user_preferences=(
+                UserPreferenceDefinition(
+                    key="follow_after_reply",
+                    label="回复后自动关注",
+                    module_id="subscriptions",
+                    description="参与讨论后自动把该讨论加入关注列表。",
+                    category="behavior",
+                    default_value=False,
+                ),
+                UserPreferenceDefinition(
+                    key="follow_after_create",
+                    label="发起讨论后自动关注",
+                    module_id="subscriptions",
+                    description="你创建的新讨论默认加入关注列表。",
+                    category="behavior",
+                    default_value=False,
+                ),
+                UserPreferenceDefinition(
+                    key="notify_new_post",
+                    label="关注讨论有新回复时通知我",
+                    module_id="subscriptions",
+                    description="关闭后仍保留关注状态，但不再接收关注讨论的新回复通知。",
+                    category="notification",
+                    default_value=True,
+                ),
+            ),
             event_listeners=(
                 EventListenerDefinition(
                     event="PostCreatedEvent",
@@ -912,6 +999,19 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="通知回复作者其内容被点赞。",
                     icon="fas fa-thumbs-up",
                     navigation_scope="post",
+                    preference_key="notify_post_liked",
+                    preference_label="回复被点赞通知",
+                    preference_description="当你的回复被其他用户点赞时通知你。",
+                ),
+            ),
+            user_preferences=(
+                UserPreferenceDefinition(
+                    key="notify_post_liked",
+                    label="回复被点赞通知",
+                    module_id="likes",
+                    description="当你的回复被其他用户点赞时通知你。",
+                    category="notification",
+                    default_value=True,
                 ),
             ),
         )
@@ -933,6 +1033,19 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="通知用户其在回复中被提及。",
                     icon="fas fa-at",
                     navigation_scope="post",
+                    preference_key="notify_user_mentioned",
+                    preference_label="@提及通知",
+                    preference_description="当其他用户在回复中提及你时通知你。",
+                ),
+            ),
+            user_preferences=(
+                UserPreferenceDefinition(
+                    key="notify_user_mentioned",
+                    label="@提及通知",
+                    module_id="mentions",
+                    description="当其他用户在回复中提及你时通知你。",
+                    category="notification",
+                    default_value=True,
                 ),
             ),
         )
@@ -954,6 +1067,9 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="通知讨论作者和关注者有新回复。",
                     icon="fas fa-reply",
                     navigation_scope="post",
+                    preference_key="notify_new_post",
+                    preference_label="关注讨论有新回复时通知我",
+                    preference_description="关闭后仍保留关注状态，但不再接收关注讨论的新回复通知。",
                 ),
                 NotificationTypeDefinition(
                     code="postReply",
@@ -962,6 +1078,9 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="通知被回复的楼层作者。",
                     icon="fas fa-comment-dots",
                     navigation_scope="post",
+                    preference_key="notify_post_reply",
+                    preference_label="回复被回应通知",
+                    preference_description="当其他用户直接回复你的某条帖子时通知你。",
                 ),
                 NotificationTypeDefinition(
                     code="userSuspended",
@@ -970,6 +1089,9 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="通知用户账号已被管理员封禁。",
                     icon="fas fa-user-lock",
                     navigation_scope="profile",
+                    preference_key="notify_account_status",
+                    preference_label="账号状态通知",
+                    preference_description="当你的账号被封禁或解除封禁时通知你。",
                 ),
                 NotificationTypeDefinition(
                     code="userUnsuspended",
@@ -978,6 +1100,27 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="通知用户账号已恢复正常。",
                     icon="fas fa-user-check",
                     navigation_scope="profile",
+                    preference_key="notify_account_status",
+                    preference_label="账号状态通知",
+                    preference_description="当你的账号被封禁或解除封禁时通知你。",
+                ),
+            ),
+            user_preferences=(
+                UserPreferenceDefinition(
+                    key="notify_post_reply",
+                    label="回复被回应通知",
+                    module_id="notifications",
+                    description="当其他用户直接回复你的某条帖子时通知你。",
+                    category="notification",
+                    default_value=True,
+                ),
+                UserPreferenceDefinition(
+                    key="notify_account_status",
+                    label="账号状态通知",
+                    module_id="notifications",
+                    description="当你的账号被封禁或解除封禁时通知你。",
+                    category="notification",
+                    default_value=True,
                 ),
             ),
             event_listeners=(

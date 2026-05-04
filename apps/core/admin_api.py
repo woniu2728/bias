@@ -237,6 +237,10 @@ def serialize_module_definition(module) -> Dict[str, Any]:
                 "description": notification_type.description,
                 "icon": notification_type.icon,
                 "navigation_scope": notification_type.navigation_scope,
+                "preference_key": notification_type.preference_key,
+                "preference_label": notification_type.preference_label,
+                "preference_description": notification_type.preference_description,
+                "preference_default_enabled": notification_type.preference_default_enabled,
             }
             for notification_type in module.notification_types
         ],
@@ -876,6 +880,10 @@ def list_admin_modules(request):
             "description": notification_type.description,
             "icon": notification_type.icon,
             "navigation_scope": notification_type.navigation_scope,
+            "preference_key": notification_type.preference_key,
+            "preference_label": notification_type.preference_label,
+            "preference_description": notification_type.preference_description,
+            "preference_default_enabled": notification_type.preference_default_enabled,
         }
         for notification_type in REGISTRY.get_notification_types()
     ]

@@ -104,6 +104,55 @@ class NotificationServiceTests(TestCase):
         self.assertEqual(notification.data["post_id"], post.id)
         self.assertEqual(notification.data["post_number"], post.number)
 
+    def test_reply_notification_respects_post_reply_preference(self):
+        self.participant.preferences = {"notify_post_reply": False}
+        self.participant.save(update_fields=["preferences"])
+
+        PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="Reply without notify",
+            user=self.replier,
+            reply_to_post_id=self.initial_reply.id,
+        )
+
+        self.assertFalse(
+            Notification.objects.filter(
+                user=self.participant,
+                type="postReply",
+            ).exists()
+        )
+
+    def test_like_notification_respects_post_liked_preference(self):
+        self.participant.preferences = {"notify_post_liked": False}
+        self.participant.save(update_fields=["preferences"])
+
+        PostService.like_post(self.initial_reply.id, self.replier)
+
+        self.assertFalse(
+            Notification.objects.filter(
+                user=self.participant,
+                type="postLiked",
+                subject_id=self.initial_reply.id,
+            ).exists()
+        )
+
+    def test_mention_notification_respects_user_preference(self):
+        self.mentioned.preferences = {"notify_user_mentioned": False}
+        self.mentioned.save(update_fields=["preferences"])
+
+        PostService.create_post(
+            discussion_id=self.discussion.id,
+            content=f"Hello again @{self.mentioned.username}",
+            user=self.replier,
+        )
+
+        self.assertFalse(
+            Notification.objects.filter(
+                user=self.mentioned,
+                type="userMentioned",
+            ).exists()
+        )
+
     def test_multiple_replies_in_same_discussion_create_multiple_notifications(self):
         PostService.create_post(
             discussion_id=self.discussion.id,
@@ -280,6 +329,45 @@ class NotificationServiceTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(Notification.objects.filter(user=self.author, is_read=True).count(), 0)
         self.assertEqual(Notification.objects.filter(user=self.author, is_read=False).count(), unread_before + 1)
+
+    def test_notification_list_returns_type_count_metadata(self):
+        Notification.objects.create(
+            user=self.author,
+            from_user=self.replier,
+            type="postLiked",
+            subject_type="post",
+            subject_id=self.initial_reply.id,
+            data={"post_id": self.initial_reply.id},
+        )
+        Notification.objects.create(
+            user=self.author,
+            from_user=self.replier,
+            type="postLiked",
+            subject_type="post",
+            subject_id=self.initial_reply.id,
+            is_read=True,
+            data={"post_id": self.initial_reply.id},
+        )
+        Notification.objects.create(
+            user=self.author,
+            from_user=self.participant,
+            type="postReply",
+            subject_type="post",
+            subject_id=self.initial_reply.id,
+            data={"post_id": self.initial_reply.id},
+        )
+
+        response = self.client.get(
+            "/api/notifications",
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["type_counts"]["postLiked"], 2)
+        self.assertEqual(payload["type_counts"]["postReply"], 1)
+        self.assertEqual(payload["unread_type_counts"]["postLiked"], 1)
+        self.assertEqual(payload["unread_type_counts"]["postReply"], 1)
 
     def test_notification_detail_exposes_registered_from_user_summary(self):
         group = self.replier.user_groups.create(name="Notifier", color="#1abc9c", icon="fas fa-bell")

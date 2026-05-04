@@ -334,8 +334,24 @@ def get_public_forum_settings() -> dict:
             "icon": definition.icon,
             "module_id": definition.module_id,
             "navigation_scope": definition.navigation_scope,
+            "preference_key": definition.preference_key,
+            "preference_label": definition.preference_label,
+            "preference_description": definition.preference_description,
+            "preference_default_enabled": definition.preference_default_enabled,
         }
         for definition in FORUM_REGISTRY.get_notification_types()
+    ]
+
+    forum_settings["user_preferences"] = [
+        {
+            "key": definition.key,
+            "label": definition.label,
+            "description": definition.description,
+            "module_id": definition.module_id,
+            "category": definition.category,
+            "default_value": definition.default_value,
+        }
+        for definition in FORUM_REGISTRY.get_user_preferences()
     ]
 
     forum_settings["post_types"] = [

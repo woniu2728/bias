@@ -2,7 +2,7 @@
 通知系统的Pydantic Schema定义
 """
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 from pydantic import BaseModel, Field
 
 
@@ -59,6 +59,8 @@ class NotificationListSchema(BaseModel):
     unread_count: int
     page: int
     limit: int
+    type_counts: Dict[str, int] = {}
+    unread_type_counts: Dict[str, int] = {}
     data: List[NotificationOutSchema]
 
 

@@ -17,6 +17,7 @@ from apps.discussions.models import Discussion
 from apps.discussions.models import DiscussionUser
 from apps.tags.services import TagService
 from apps.users.models import User
+from apps.users.preferences import get_user_preference_value
 from apps.users.services import UserService
 from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
 import re
@@ -196,7 +197,7 @@ class PostService:
                 user.comment_count = F('comment_count') + 1
                 user.save(update_fields=['comment_count'])
 
-                follow_after_reply = user.preferences.get('follow_after_reply', False)
+                follow_after_reply = get_user_preference_value(user, 'follow_after_reply', fallback=False)
                 state_defaults = {
                     'last_read_at': timezone.now(),
                     'last_read_post_number': post.number,
@@ -694,7 +695,7 @@ class PostService:
                 if post.user and post.type in USER_COUNTED_POST_TYPES:
                     post.user.comment_count = F('comment_count') + 1
                     post.user.save(update_fields=['comment_count'])
-                    follow_after_reply = post.user.preferences.get('follow_after_reply', False)
+                    follow_after_reply = get_user_preference_value(post.user, 'follow_after_reply', fallback=False)
                     approval_defaults = {
                         'last_read_at': now,
                         'last_read_post_number': post.number,

@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS = {
   auth_human_verification_login_enabled: false,
   auth_human_verification_register_enabled: false,
   notification_types: [],
+  user_preferences: [],
   post_types: [],
 }
 

@@ -53,7 +53,7 @@ def list_notifications(
     - page: 页码
     - limit: 每页数量
     """
-    notifications, total, unread_count = NotificationService.get_notification_list(
+    notifications, total, unread_count, type_counts, unread_type_counts = NotificationService.get_notification_list(
         user=request.auth,
         is_read=is_read,
         type=type,
@@ -66,6 +66,8 @@ def list_notifications(
         "unread_count": unread_count,
         "page": page,
         "limit": limit,
+        "type_counts": type_counts,
+        "unread_type_counts": unread_type_counts,
         "data": [_serialize_notification(notification) for notification in notifications],
     }
 

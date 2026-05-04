@@ -61,7 +61,7 @@
       <div class="profile-card-header">
         <div>
           <h3>通知偏好</h3>
-          <p>按照 Flarum 的习惯，把自动关注和新回复通知放在个人设置中管理。</p>
+          <p>按模块统一管理自动关注和通知订阅，新增通知类型后可以直接从注册表接入这里。</p>
         </div>
         <button
           type="button"
@@ -76,52 +76,47 @@
       <ForumInlineMessage v-if="preferencesSuccess" tone="success">{{ preferencesSuccess }}</ForumInlineMessage>
       <ForumInlineMessage v-if="preferencesError" tone="danger">{{ preferencesError }}</ForumInlineMessage>
       <ForumStateBlock v-if="loadingPreferences" class="section-state-block section-state-block--compact">加载偏好中...</ForumStateBlock>
-      <div v-else class="preferences-list">
-        <label class="preference-item">
-          <span class="preference-copy">
-            <strong>回复后自动关注</strong>
-            <small>参与讨论后，自动把该讨论加入关注列表。</small>
-          </span>
-          <input
-            v-model="preferences.follow_after_reply"
-            name="follow_after_reply"
-            type="checkbox"
-          >
-        </label>
+      <div v-else class="preferences-groups">
+        <section
+          v-for="group in groupedPreferences"
+          :key="group.key"
+          class="preferences-group"
+        >
+          <header class="preferences-group-header">
+            <h4>{{ group.label }}</h4>
+            <p>{{ group.description }}</p>
+          </header>
 
-        <label class="preference-item">
-          <span class="preference-copy">
-            <strong>发起讨论后自动关注</strong>
-            <small>你创建的新讨论会默认出现在关注中。</small>
-          </span>
-          <input
-            v-model="preferences.follow_after_create"
-            name="follow_after_create"
-            type="checkbox"
-          >
-        </label>
-
-        <label class="preference-item">
-          <span class="preference-copy">
-            <strong>关注讨论有新回复时通知我</strong>
-            <small>关闭后，仍会保留关注状态，但不再接收新回复通知。</small>
-          </span>
-          <input
-            v-model="preferences.notify_new_post"
-            name="notify_new_post"
-            type="checkbox"
-          >
-        </label>
+          <div class="preferences-list">
+            <label
+              v-for="item in group.items"
+              :key="item.key"
+              class="preference-item"
+            >
+              <span class="preference-copy">
+                <strong>{{ item.label }}</strong>
+                <small>{{ item.description }}</small>
+              </span>
+              <input
+                :checked="Boolean(preferences.values?.[item.key])"
+                :name="item.key"
+                type="checkbox"
+                @change="setPreferenceValue(item.key, $event.target.checked)"
+              >
+            </label>
+          </div>
+        </section>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import ForumInlineMessage from '@/components/forum/ForumInlineMessage.vue'
 import ForumStateBlock from '@/components/forum/ForumStateBlock.vue'
 
-defineProps({
+const props = defineProps({
   user: {
     type: Object,
     required: true
@@ -164,6 +159,35 @@ defineProps({
   }
 })
 
+const groupedPreferences = computed(() => {
+  const items = Array.isArray(props.preferences?.definitions) ? props.preferences.definitions : []
+  const groups = new Map()
+
+  items.forEach(item => {
+    const category = String(item.category || 'notification')
+    if (!groups.has(category)) {
+      groups.set(category, {
+        key: category,
+        label: category === 'behavior' ? '自动关注' : '通知订阅',
+        description: category === 'behavior'
+          ? '控制发帖和回帖时的默认关注行为。'
+          : '控制哪些站内通知会推送给你。',
+        items: []
+      })
+    }
+    groups.get(category).items.push(item)
+  })
+
+  return Array.from(groups.values())
+})
+
+function setPreferenceValue(key, checked) {
+  props.preferences.values = {
+    ...(props.preferences.values || {}),
+    [key]: Boolean(checked)
+  }
+}
+
 defineEmits(['save-profile', 'save-preferences'])
 </script>
 
@@ -174,6 +198,30 @@ defineEmits(['save-profile', 'save-preferences'])
 
 .section-state-block--compact {
   padding: 18px 16px;
+}
+
+.preferences-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.preferences-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preferences-group-header h4 {
+  margin: 0;
+  font-size: 15px;
+  color: #203040;
+}
+
+.preferences-group-header p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #728090;
 }
 
 .preferences-list {

@@ -3,7 +3,7 @@ Pydantic schemas for User API
 """
 from ninja import Schema
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 
 class UserRegisterSchema(Schema):
@@ -111,8 +111,21 @@ class CurrentUserSchema(UserDetailSchema):
     forum_permissions: List[str] = []
 
 
+class UserPreferenceItemSchema(Schema):
+    key: str
+    label: str
+    description: str = ""
+    category: str = "notification"
+    module_id: str
+    value: bool = False
+    default_value: bool = False
+
+
 class UserPreferencesSchema(Schema):
     """用户偏好Schema"""
-    follow_after_reply: bool = False
-    follow_after_create: bool = False
-    notify_new_post: bool = True
+    values: Dict[str, bool] = {}
+    definitions: List[UserPreferenceItemSchema] = []
+
+
+class UserPreferencesUpdateSchema(Schema):
+    values: Dict[str, bool] = {}

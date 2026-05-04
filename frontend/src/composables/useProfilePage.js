@@ -47,9 +47,8 @@ export function useProfilePage({
   })
 
   const preferences = ref({
-    follow_after_reply: false,
-    follow_after_create: false,
-    notify_new_post: true
+    values: {},
+    definitions: []
   })
 
   const isOwnProfile = computed(() => authStore.user && user.value && authStore.user.id === user.value.id)
@@ -201,9 +200,8 @@ export function useProfilePage({
     try {
       const data = await api.get('/users/me/preferences')
       preferences.value = {
-        follow_after_reply: Boolean(data.follow_after_reply),
-        follow_after_create: Boolean(data.follow_after_create),
-        notify_new_post: Boolean(data.notify_new_post)
+        values: { ...(data.values || {}) },
+        definitions: Array.isArray(data.definitions) ? data.definitions : []
       }
       if (authStore.user) {
         authStore.user.preferences = { ...data }
@@ -222,12 +220,13 @@ export function useProfilePage({
 
     try {
       const data = await api.patch('/users/me/preferences', {
-        follow_after_reply: preferences.value.follow_after_reply,
-        follow_after_create: preferences.value.follow_after_create,
-        notify_new_post: preferences.value.notify_new_post
+        values: { ...(preferences.value.values || {}) }
       })
 
-      preferences.value = { ...data }
+      preferences.value = {
+        values: { ...(data.values || {}) },
+        definitions: Array.isArray(data.definitions) ? data.definitions : []
+      }
       if (authStore.user) {
         authStore.user.preferences = { ...data }
       }

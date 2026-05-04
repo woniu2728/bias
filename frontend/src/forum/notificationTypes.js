@@ -150,6 +150,12 @@ export function getNotificationTypeDefinition(type) {
   )
 }
 
+export function getRegisteredNotificationTypes() {
+  return [...notificationTypeDefinitions].sort((left, right) => {
+    return Number(left.order || 999) - Number(right.order || 999)
+  })
+}
+
 export function getNotificationIcon(type) {
   return getNotificationTypeDefinition(type).icon || 'fas fa-bell'
 }

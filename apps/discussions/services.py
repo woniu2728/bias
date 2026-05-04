@@ -14,6 +14,7 @@ from apps.core.forum_registry import get_forum_registry
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post
 from apps.users.models import User
+from apps.users.preferences import get_user_preference_value
 from apps.users.services import UserService
 from apps.tags.models import Tag, DiscussionTag
 from apps.tags.services import TagService
@@ -277,7 +278,7 @@ class DiscussionService:
                 user=user,
                 last_read_at=timezone.now(),
                 last_read_post_number=1,
-                is_subscribed=user.preferences.get('follow_after_create', False),
+                is_subscribed=get_user_preference_value(user, 'follow_after_create', fallback=False),
             )
 
             get_forum_event_bus().dispatch(

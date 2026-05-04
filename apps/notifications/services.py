@@ -8,6 +8,7 @@ from django.core.cache import cache
 from django.utils import timezone
 from apps.notifications.models import Notification
 from apps.users.models import User
+from apps.users.preferences import get_user_preference_value
 from apps.discussions.models import DiscussionUser
 
 
@@ -29,6 +30,23 @@ class NotificationService:
     TYPE_POST_REJECTED = 'postRejected'
     TYPE_USER_SUSPENDED = 'userSuspended'
     TYPE_USER_UNSUSPENDED = 'userUnsuspended'
+
+    @staticmethod
+    def is_notification_enabled(user: User | None, type_code: str) -> bool:
+        if not user:
+            return False
+
+        from apps.core.forum_registry import get_forum_registry
+
+        definition = get_forum_registry().get_notification_type(type_code)
+        if not definition or not definition.preference_key:
+            return True
+
+        return get_user_preference_value(
+            user,
+            definition.preference_key,
+            fallback=definition.preference_default_enabled,
+        )
 
     @staticmethod
     def _unread_count_cache_key(user_id: int) -> str:
@@ -74,6 +92,9 @@ class NotificationService:
         """
         # 不给自己发通知
         if from_user and from_user.id == user.id:
+            return None
+
+        if not NotificationService.is_notification_enabled(user, type):
             return None
 
         # 检查是否已存在相同通知（防止重复）
@@ -143,7 +164,7 @@ class NotificationService:
         type: Optional[str] = None,
         page: int = 1,
         limit: int = 20,
-    ) -> Tuple[List[Notification], int, int]:
+    ) -> Tuple[List[Notification], int, int, dict, dict]:
         """
         获取通知列表
 
@@ -155,11 +176,19 @@ class NotificationService:
             limit: 每页数量
 
         Returns:
-            Tuple[List[Notification], int, int]: (通知列表, 总数, 未读数)
+            Tuple[List[Notification], int, int, dict, dict]: (通知列表, 总数, 未读数, 各类型总数, 各类型未读数)
         """
-        queryset = Notification.objects.filter(
-            user=user
-        ).select_related('from_user')
+        base_queryset = Notification.objects.filter(user=user)
+        queryset = base_queryset.select_related('from_user')
+
+        type_counts = {
+            item["type"]: item["count"]
+            for item in base_queryset.values("type").annotate(count=Count("id"))
+        }
+        unread_type_counts = {
+            item["type"]: item["count"]
+            for item in base_queryset.filter(is_read=False).values("type").annotate(count=Count("id"))
+        }
 
         # 过滤已读状态
         if is_read is not None:
@@ -180,7 +209,7 @@ class NotificationService:
         offset = (page - 1) * limit
         notifications = list(queryset[offset:offset + limit])
 
-        return notifications, total, unread_count
+        return notifications, total, unread_count, type_counts, unread_type_counts
 
     @staticmethod
     def get_notification_by_id(notification_id: int, user: User) -> Optional[Notification]:
@@ -384,7 +413,7 @@ class NotificationService:
             if subscribed_user_ids:
                 subscribed_users = User.objects.filter(id__in=subscribed_user_ids)
                 for subscriber in subscribed_users:
-                    if subscriber.preferences.get('notify_new_post', True):
+                    if NotificationService.is_notification_enabled(subscriber, NotificationService.TYPE_DISCUSSION_REPLY):
                         notifications.append(
                             Notification(
                                 user=subscriber,
