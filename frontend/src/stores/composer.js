@@ -7,6 +7,8 @@ const EMPTY_STATE = {
   source: '',
   discussionId: null,
   discussionTitle: '',
+  approvalStatus: '',
+  approvalNote: '',
   initialTitle: '',
   postId: null,
   postNumber: null,
@@ -50,6 +52,8 @@ export const useComposerStore = defineStore('composer', () => {
       source: options.source || '',
       discussionId: options.discussionId ?? null,
       discussionTitle: options.discussionTitle || '',
+      approvalStatus: options.approvalStatus || '',
+      approvalNote: options.approvalNote || '',
       initialTitle: options.initialTitle || '',
       initialContent: options.initialContent || '',
       initialPrimaryTagId: options.initialPrimaryTagId ? String(options.initialPrimaryTagId) : '',
@@ -66,6 +70,8 @@ export const useComposerStore = defineStore('composer', () => {
       postId: options.postId ?? null,
       postNumber: options.postNumber ?? null,
       username: options.username || '',
+      approvalStatus: options.approvalStatus || '',
+      approvalNote: options.approvalNote || '',
       initialContent: options.initialContent || ''
     }, options)
   }

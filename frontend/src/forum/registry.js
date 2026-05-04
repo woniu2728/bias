@@ -1,9 +1,9 @@
 import { buildUserPath } from '@/utils/forum'
 import {
-  getForumNavItems,
-  getForumNavSections,
   getComposerNotices,
   getComposerTools,
+  getForumNavItems,
+  getForumNavSections,
   registerDiscussionAction,
   registerComposerNotice,
   registerComposerSubmitGuard,
@@ -96,4 +96,161 @@ registerForumNavItem({
   section: 'personal',
   order: 50,
   isVisible: ({ authStore }) => Boolean(authStore?.user)
+})
+
+function formatComposerSuspensionNotice(user = {}, fallbackMessage) {
+  if (!user?.is_suspended) return ''
+
+  if (user.suspend_message) {
+    return user.suspended_until
+      ? `账号已被封禁至 ${formatComposerDateTime(user.suspended_until)}。${user.suspend_message}`
+      : `账号当前已被封禁。${user.suspend_message}`
+  }
+
+  return user.suspended_until
+    ? `账号已被封禁至 ${formatComposerDateTime(user.suspended_until)}，${fallbackMessage}`
+    : `账号当前已被封禁，${fallbackMessage}`
+}
+
+function formatComposerDateTime(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '未知时间'
+  return date.toLocaleString('zh-CN')
+}
+
+registerComposerNotice({
+  key: 'suspension',
+  order: 10,
+  isVisible: ({ authStore }) => Boolean(authStore?.user?.is_suspended),
+  resolve: ({ authStore, type }) => ({
+    label: '账号',
+    tone: 'warning',
+    message: formatComposerSuspensionNotice(
+      authStore.user,
+      type === 'discussion' ? '暂时无法发布讨论。' : '暂时无法回复、编辑或上传附件。'
+    ),
+  }),
+})
+
+registerComposerNotice({
+  key: 'approval-feedback',
+  order: 20,
+  isVisible: ({ isEditing, composerStore }) => {
+    return Boolean(
+      isEditing
+      && composerStore?.current?.approvalStatus === 'rejected'
+      && composerStore?.current?.approvalNote
+    )
+  },
+  resolve: ({ type, composerStore }) => ({
+    label: type === 'discussion' ? '讨论审核反馈' : '回复审核反馈',
+    tone: 'warning',
+    message: composerStore.current.approvalNote,
+  }),
+})
+
+registerComposerNotice({
+  key: 'discussion-tag-permission',
+  order: 30,
+  isVisible: ({ type, availablePrimaryTagCount }) => {
+    return type === 'discussion' && Number(availablePrimaryTagCount || 0) <= 0
+  },
+  resolve: () => ({
+    label: '标签',
+    tone: 'warning',
+    message: '当前没有可发帖的标签，请联系管理员开放标签权限。',
+  }),
+})
+
+registerComposerNotice({
+  key: 'discussion-tag-selection',
+  order: 40,
+  isVisible: ({ type, availablePrimaryTagCount, primaryTagId }) => {
+    return type === 'discussion' && Number(availablePrimaryTagCount || 0) > 0 && !primaryTagId
+  },
+  resolve: () => ({
+    label: '标签',
+    tone: 'info',
+    message: '先选择主标签，再发布讨论。',
+  }),
+})
+
+registerComposerTool({
+  key: 'discussion-template',
+  order: 15,
+  isVisible: ({ type }) => type === 'discussion',
+  resolve: () => ({
+    title: '插入讨论模板',
+    icon: 'fas fa-clipboard-list',
+    async run({ content, insertText, selectionStart, selectionEnd }) {
+      const template = [
+        '## 背景',
+        '',
+        '简要说明当前问题或主题背景。',
+        '',
+        '## 现象',
+        '',
+        '描述你观察到的结果、错误或争议点。',
+        '',
+        '## 期望',
+        '',
+        '说明希望获得的帮助、答案或改进方向。'
+      ].join('\n')
+
+      const prefix = content.trim() ? '\n\n' : ''
+      const replacement = `${prefix}${template}`
+      const cursor = selectionStart + replacement.length
+      await insertText(replacement, {
+        start: selectionStart,
+        end: selectionEnd,
+        cursor,
+      })
+    },
+  }),
+})
+
+registerComposerSubmitGuard({
+  key: 'suspension',
+  order: 10,
+  isVisible: ({ authStore }) => Boolean(authStore?.user?.is_suspended),
+  check: ({ authStore, type }) => ({
+    tone: 'error',
+    message: formatComposerSuspensionNotice(
+      authStore.user,
+      type === 'discussion' ? '暂时无法发布讨论。' : '暂时无法回复、编辑或上传附件。'
+    ),
+  }),
+})
+
+registerComposerSubmitGuard({
+  key: 'discussion-start-permission',
+  order: 20,
+  isVisible: ({ type, mode }) => type === 'discussion' && mode === 'create',
+  check: ({ authStore }) => {
+    if (authStore?.canStartDiscussion) return null
+    return {
+      tone: 'error',
+      message: '当前账号没有发起讨论的权限。',
+    }
+  },
+})
+
+registerComposerSubmitGuard({
+  key: 'discussion-primary-tag',
+  order: 30,
+  isVisible: ({ type }) => type === 'discussion',
+  check: ({ availablePrimaryTagCount, primaryTagId }) => {
+    if (Number(availablePrimaryTagCount || 0) <= 0) {
+      return {
+        tone: 'error',
+        message: '当前没有可用主标签，暂时无法发布讨论。',
+      }
+    }
+
+    if (primaryTagId) return null
+    return {
+      tone: 'error',
+      message: '请选择主标签后再发布讨论。',
+    }
+  },
 })

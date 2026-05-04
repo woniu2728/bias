@@ -68,16 +68,6 @@
           </select>
           <span class="composer-counter">{{ form.title.length }}/200</span>
         </div>
-        <ComposerNoticeStack
-          v-if="!loadingTags && !hasStartableTags"
-          :notices="[{
-            key: 'tag-permission',
-            label: '标签',
-            tone: 'warning',
-            message: '当前没有可发帖的标签，请联系管理员开放标签权限。'
-          }]"
-        />
-
         <textarea
           v-show="!showPreview"
           ref="composerTextarea"
@@ -372,16 +362,10 @@ const composerTools = computed(() => {
 const composerNotices = computed(() => {
   return [
     {
-      key: 'suspended',
-      label: '账号',
-      tone: 'warning',
-      message: isSuspended.value ? suspensionNotice.value : ''
-    },
-    {
       key: 'draft',
       label: '草稿',
       tone: draftNoticeTone.value,
-      message: isSuspended.value ? '' : draftMessage.value
+      message: draftMessage.value
     },
     {
       key: 'upload',
@@ -1387,6 +1371,9 @@ function clearComposerViewportEffects() {
 
 function buildComposerExtensionContext() {
   return {
+    approvalNote: composerStore.current.approvalNote || '',
+    approvalStatus: composerStore.current.approvalStatus || '',
+    availablePrimaryTagCount: primaryTags.value.length,
     authStore,
     composerStore,
     content: form.value.content,
@@ -1394,6 +1381,7 @@ function buildComposerExtensionContext() {
     isEditing: isEditingDiscussion.value,
     mode: isEditingDiscussion.value ? 'edit' : 'create',
     primaryTagId: form.value.primary_tag_id,
+    source: composerStore.current.source || '',
     route: null,
     router,
     secondaryTagId: form.value.secondary_tag_id,

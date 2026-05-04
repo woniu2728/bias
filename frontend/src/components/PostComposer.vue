@@ -41,7 +41,7 @@
           v-model="replyContent"
           placeholder="输入你的回复... 支持 Markdown、@用户名 和代码块"
           rows="7"
-          :disabled="submitting || uploading"
+          :disabled="submitting || uploading || isSuspended"
           @input="handleEditorInteraction"
           @click="handleEditorInteraction"
           @keyup="handleEditorInteraction"
@@ -73,7 +73,7 @@
         />
 
         <ComposerActionBar
-          :submit-disabled="submitting || uploading || !replyContent.trim()"
+          :submit-disabled="submitting || uploading || !replyContent.trim() || isSuspended"
           :submit-text="submitting ? '提交中...' : (uploading ? '上传中...' : (isEditing ? '更新回复' : '发布回复'))"
           @submit="submitReply"
         >
@@ -92,7 +92,7 @@
                 <button
                   type="button"
                   :title="tool.title"
-                  :disabled="submitting || uploading"
+                  :disabled="submitting || uploading || isSuspended"
                   :class="{ 'is-active': showEmojiPicker }"
                   @click="applyComposerTool(tool)"
                 >
@@ -110,7 +110,7 @@
                 v-else
                 type="button"
                 :title="tool.title"
-                :disabled="submitting || uploading"
+                :disabled="submitting || uploading || isSuspended"
                 @click="applyComposerTool(tool)"
               >
                 <i v-if="tool.icon" :class="tool.icon"></i>
@@ -136,7 +136,7 @@
           ref="attachmentInput"
           type="file"
           class="composer-file-input"
-          :disabled="submitting || uploading"
+          :disabled="submitting || uploading || isSuspended"
           @change="handleAttachmentSelected"
         />
         <input
@@ -144,7 +144,7 @@
           type="file"
           accept="image/*"
           class="composer-file-input"
-          :disabled="submitting || uploading"
+          :disabled="submitting || uploading || isSuspended"
           @change="handleImageSelected"
         />
       </div>
@@ -238,6 +238,7 @@ const showComposer = computed(() => {
   return composerStore.isOpen && ['reply', 'edit'].includes(composerStore.current.type) && authStore.isAuthenticated
 })
 const isEditing = computed(() => composerStore.current.type === 'edit')
+const isSuspended = computed(() => Boolean(authStore.user?.is_suspended))
 const dirtyState = computed(() => {
   if (!showComposer.value) return false
   if (isEditing.value) {
@@ -381,6 +382,20 @@ const unsavedExitMessage = computed(() => {
   return isEditing.value
     ? '你有未保存的帖子编辑内容。确定要离开当前页面吗？'
     : '你有未发布的回复内容。确定要离开当前页面吗？'
+})
+const suspensionNotice = computed(() => {
+  if (!isSuspended.value) return ''
+
+  const user = authStore.user || {}
+  if (user.suspend_message) {
+    return user.suspended_until
+      ? `账号已被封禁至 ${formatAbsoluteDate(user.suspended_until)}。${user.suspend_message}`
+      : `账号当前已被封禁。${user.suspend_message}`
+  }
+
+  return user.suspended_until
+    ? `账号已被封禁至 ${formatAbsoluteDate(user.suspended_until)}，暂时无法回复、编辑或上传附件。`
+    : '账号当前已被封禁，暂时无法回复、编辑或上传附件。'
 })
 
 watch(
@@ -1203,8 +1218,16 @@ function clearComposerViewportEffects() {
   document.body.style.overflow = ''
 }
 
+function formatAbsoluteDate(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '未知时间'
+  return date.toLocaleString('zh-CN')
+}
+
 function buildComposerExtensionContext() {
   return {
+    approvalNote: composerStore.current.approvalNote || '',
+    approvalStatus: composerStore.current.approvalStatus || '',
     authStore,
     composerStore,
     content: replyContent.value,
@@ -1212,9 +1235,13 @@ function buildComposerExtensionContext() {
     discussionTitle: composerStore.current.discussionTitle || '',
     isEditing: isEditing.value,
     mode: isEditing.value ? 'edit' : 'reply',
+    postNumber: composerStore.current.postNumber ?? null,
     route,
     router,
+    source: composerStore.current.source || '',
+    suspensionNotice: suspensionNotice.value,
     type: 'post',
+    username: composerStore.current.username || '',
   }
 }
 

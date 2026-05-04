@@ -147,6 +147,8 @@ export function useDiscussionDetailInteractions({
       postId: post.id,
       postNumber: post.number,
       username: post.user.username,
+      approvalStatus: post.approval_status || '',
+      approvalNote: post.approval_note || '',
       initialContent: post.content
     })
   }
@@ -165,6 +167,8 @@ export function useDiscussionDetailInteractions({
       source: 'discussion-detail',
       discussionId: discussion.value.id,
       discussionTitle: discussion.value.title || '',
+      approvalStatus: discussion.value.approval_status || '',
+      approvalNote: discussion.value.approval_note || '',
       initialTitle: discussion.value.title || '',
       initialContent: discussion.value.first_post?.content || '',
       initialPrimaryTagId: primaryTag?.id || '',
