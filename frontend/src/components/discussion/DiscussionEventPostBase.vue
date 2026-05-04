@@ -21,6 +21,15 @@
           >
             #{{ post.number }}
           </button>
+          <button
+            v-if="targetPostNumber"
+            type="button"
+            class="event-post-number event-post-target"
+            :title="`跳转到相关的第 ${targetPostNumber} 楼`"
+            @click="$emit('jump-to-post', targetPostNumber)"
+          >
+            关联 #{{ targetPostNumber }}
+          </button>
           <time :datetime="post.created_at" :title="formatAbsoluteDate(post.created_at)">
             {{ formatDate(post.created_at) }}
           </time>
@@ -38,6 +47,7 @@ const props = defineProps({
   isTarget: { type: Boolean, default: false },
   icon: { type: String, required: true },
   variant: { type: String, default: 'default' },
+  targetPostNumber: { type: Number, default: null },
   formatAbsoluteDate: { type: Function, required: true },
   formatDate: { type: Function, required: true }
 })
@@ -133,6 +143,10 @@ const iconClassName = computed(() => `event-post-icon--${props.variant}`)
 
 .event-post-number:hover {
   color: var(--forum-text-muted);
+}
+
+.event-post-target {
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {

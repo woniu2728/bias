@@ -4,6 +4,7 @@
     :is-target="isTarget"
     :icon="isHidden ? 'fas fa-eye-slash' : 'fas fa-eye'"
     :variant="isHidden ? 'alert' : 'default'"
+    :target-post-number="targetPostNumber"
     :format-absolute-date="formatAbsoluteDate"
     :format-date="formatDate"
     @jump-to-post="$emit('jump-to-post', $event)"

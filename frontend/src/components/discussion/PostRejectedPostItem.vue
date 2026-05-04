@@ -4,6 +4,7 @@
     :is-target="isTarget"
     icon="fas fa-comment-slash"
     variant="alert"
+    :target-post-number="targetPostNumber"
     :format-absolute-date="formatAbsoluteDate"
     :format-date="formatDate"
     @jump-to-post="$emit('jump-to-post', $event)"

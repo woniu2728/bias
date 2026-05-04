@@ -409,6 +409,30 @@ class PostFlagApiTests(TestCase):
         self.assertEqual(response.status_code, 403, response.content)
         self.assertIn("只有管理员", response.json()["error"])
 
+    def test_hiding_post_writes_admin_audit_log(self):
+        response = self.client.post(
+            f"/api/posts/{self.post.id}/hide",
+            **self.admin_auth_header(),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+
+        audit_log = AuditLog.objects.get(action="admin.post.hide", target_id=self.post.id)
+        self.assertEqual(audit_log.user_id, self.admin.id)
+        self.assertEqual(audit_log.target_type, "post")
+        self.assertEqual(audit_log.data["discussion_id"], self.discussion.id)
+        self.assertEqual(audit_log.data["number"], self.post.number)
+        self.assertTrue(audit_log.data["is_hidden"])
+
+        response = self.client.post(
+            f"/api/posts/{self.post.id}/hide",
+            **self.admin_auth_header(),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+
+        restore_log = AuditLog.objects.get(action="admin.post.restore", target_id=self.post.id)
+        self.assertEqual(restore_log.user_id, self.admin.id)
+        self.assertFalse(restore_log.data["is_hidden"])
+
     def test_all_posts_list_respects_hidden_discussion_visibility(self):
         DiscussionService.set_hidden_state(self.discussion, self.admin, True)
 

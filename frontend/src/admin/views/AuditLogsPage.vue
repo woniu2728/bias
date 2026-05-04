@@ -129,6 +129,8 @@ const actionLabels = {
   'admin.mail.test': '发送测试邮件',
   'admin.permissions.update': '更新权限',
   'admin.post.delete': '删除回复',
+  'admin.post.hide': '隐藏回复',
+  'admin.post.restore': '恢复回复',
   'admin.queue_metrics.reset': '重置队列指标',
   'admin.search_indexes.rebuild': '重建搜索索引',
   'admin.settings.update': '更新设置',
