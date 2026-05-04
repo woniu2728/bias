@@ -1,7 +1,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { getRegisteredNotificationTypes } from '@/forum/notificationTypes'
 import { resolveNotificationPath, useNotificationGroups } from '@/composables/useNotificationPresentation'
-import { unwrapList } from '@/utils/forum'
 
 export function useNotificationPage({
   modalStore,
@@ -9,7 +8,6 @@ export function useNotificationPage({
   route,
   router
 }) {
-  const notifications = ref([])
   const loading = ref(true)
   const loadError = ref('')
   const marking = ref(false)
@@ -19,6 +17,7 @@ export function useNotificationPage({
   const unreadOnly = ref(false)
   const viewMode = ref('timeline')
   const totalCount = ref(0)
+  const notifications = computed(() => notificationStore.notifications)
   const groupedNotifications = useNotificationGroups(notifications, '论坛')
   const filteredUnreadCount = computed(() => notifications.value.filter(item => !item.is_read).length)
   const filteredReadCount = computed(() => notifications.value.length - filteredUnreadCount.value)
@@ -126,13 +125,11 @@ export function useNotificationPage({
         ...(activeType.value ? { type: activeType.value } : {}),
         ...(unreadOnly.value ? { is_read: false } : {})
       })
-      notifications.value = unwrapList(data)
       totalCount.value = Number(data.total || notifications.value.length || 0)
       totalPages.value = Math.max(1, Math.ceil((data.total || notifications.value.length) / (data.limit || 20)))
     } catch (error) {
       console.error('加载通知失败:', error)
       loadError.value = error.response?.data?.error || error.message || '加载通知失败，请稍后重试'
-      notifications.value = []
       totalCount.value = 0
       notificationStore.typeCounts = {}
       notificationStore.unreadTypeCounts = {}
@@ -397,7 +394,6 @@ export function useNotificationPage({
 
     try {
       await notificationStore.deleteNotification(notificationId)
-      notifications.value = notifications.value.filter(notification => notification.id !== notificationId)
     } catch (error) {
       console.error('删除失败:', error)
       await modalStore.alert({

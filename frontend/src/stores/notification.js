@@ -1,12 +1,14 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import api from '@/api'
 import { getNotificationText } from '@/composables/useNotificationPresentation'
 import { useAuthStore } from '@/stores/auth'
 import { unwrapList } from '@/utils/forum'
+import { useResourceStore } from '@/stores/resource'
 
 export const useNotificationStore = defineStore('notification', () => {
-  const notifications = ref([])
+  const resourceStore = useResourceStore()
+  const notificationIds = ref([])
   const unreadCount = ref(0)
   const readCount = ref(0)
   const totalCount = ref(0)
@@ -19,6 +21,15 @@ export const useNotificationStore = defineStore('notification', () => {
   let heartbeatTimer = null
   let reconnectTimer = null
   let consecutiveConnectFailures = 0
+
+  const notifications = computed(() => resourceStore.list('notifications', notificationIds.value))
+
+  function replaceNotificationList(items = []) {
+    const normalizedItems = resourceStore.upsertMany('notifications', items)
+    notificationIds.value = normalizedItems
+      .map(item => item?.id)
+      .filter(value => value !== null && value !== undefined && value !== '')
+  }
 
   function resolveWsBaseUrl() {
     const configured = import.meta.env.VITE_WS_BASE_URL?.trim()
@@ -74,11 +85,15 @@ export const useNotificationStore = defineStore('notification', () => {
 
       if (data.type === 'notification') {
         // 收到新通知
-        notifications.value.unshift(data.notification)
+        const notification = resourceStore.upsert('notifications', data.notification)
+        notificationIds.value = [
+          notification.id,
+          ...notificationIds.value.filter(id => String(id) !== String(notification.id))
+        ]
         unreadCount.value++
         initialized.value = true
 
-        if (['userSuspended', 'userUnsuspended'].includes(data.notification?.type)) {
+        if (['userSuspended', 'userUnsuspended'].includes(notification?.type)) {
           const authStore = useAuthStore()
           authStore.fetchUser().catch(() => {})
         }
@@ -86,7 +101,7 @@ export const useNotificationStore = defineStore('notification', () => {
         // 显示浏览器通知
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('新通知', {
-            body: getNotificationMessage(data.notification),
+            body: getNotificationMessage(notification),
             icon: '/favicon.ico'
           })
         }
@@ -154,7 +169,7 @@ export const useNotificationStore = defineStore('notification', () => {
           ...(isRead === null ? {} : { is_read: isRead })
         }
       })
-      notifications.value = unwrapList(data)
+      replaceNotificationList(unwrapList(data))
       totalCount.value = Number(data.total || notifications.value.length || 0)
       unreadCount.value = Number(data.unread_count || 0)
       readCount.value = Math.max(0, totalCount.value - unreadCount.value)
@@ -192,7 +207,7 @@ export const useNotificationStore = defineStore('notification', () => {
       }))
     }
 
-    const notification = notifications.value.find(n => n.id === notificationId)
+    const notification = notifications.value.find(n => String(n.id) === String(notificationId))
     if (notification?.is_read) {
       return
     }
@@ -230,9 +245,10 @@ export const useNotificationStore = defineStore('notification', () => {
   }
 
   async function deleteNotification(notificationId) {
-    const notification = notifications.value.find(n => n.id === notificationId)
+    const notification = notifications.value.find(n => String(n.id) === String(notificationId))
     await api.delete(`/notifications/${notificationId}`)
-    notifications.value = notifications.value.filter(n => n.id !== notificationId)
+    notificationIds.value = notificationIds.value.filter(id => String(id) !== String(notificationId))
+    resourceStore.remove('notifications', notificationId)
     totalCount.value = Math.max(0, totalCount.value - 1)
     if (notification && !notification.is_read) {
       unreadCount.value = Math.max(0, unreadCount.value - 1)
@@ -243,7 +259,11 @@ export const useNotificationStore = defineStore('notification', () => {
 
   async function clearReadNotifications() {
     const data = await api.delete('/notifications/read/clear')
-    notifications.value = notifications.value.filter(notification => !notification.is_read)
+    const removedIds = notifications.value
+      .filter(notification => notification.is_read)
+      .map(notification => notification.id)
+    notificationIds.value = notificationIds.value.filter(id => !removedIds.includes(id))
+    removedIds.forEach(id => resourceStore.remove('notifications', id))
     const removedCount = Number(data.count || 0)
     totalCount.value = Math.max(0, totalCount.value - removedCount)
     readCount.value = Math.max(0, readCount.value - removedCount)
@@ -264,7 +284,7 @@ export const useNotificationStore = defineStore('notification', () => {
   }
 
   function resetState() {
-    notifications.value = []
+    notificationIds.value = []
     unreadCount.value = 0
     readCount.value = 0
     totalCount.value = 0

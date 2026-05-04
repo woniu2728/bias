@@ -1,8 +1,10 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import api from '@/api'
+import { useResourceStore } from '@/stores/resource'
 import {
   normalizeDiscussion,
   normalizePost,
+  normalizeUser,
   unwrapList
 } from '@/utils/forum'
 
@@ -11,9 +13,13 @@ export function useProfilePage({
   modalStore,
   route
 }) {
-  const user = ref(null)
-  const discussions = ref([])
-  const posts = ref([])
+  const resourceStore = useResourceStore()
+  const userId = ref(null)
+  const discussionIds = ref([])
+  const postIds = ref([])
+  const user = computed(() => (userId.value ? resourceStore.get('users', userId.value) : null))
+  const discussions = computed(() => resourceStore.list('discussions', discussionIds.value))
+  const posts = computed(() => resourceStore.list('posts', postIds.value))
   const loading = ref(true)
   const loadingDiscussions = ref(false)
   const loadingPosts = ref(false)
@@ -58,8 +64,9 @@ export function useProfilePage({
   })
 
   watch(() => route.params.id, async () => {
-    posts.value = []
-    discussions.value = []
+    postIds.value = []
+    discussionIds.value = []
+    userId.value = null
     await refreshProfile()
   })
 
@@ -91,15 +98,16 @@ export function useProfilePage({
         data = await api.get('/users/me')
       }
 
-      user.value = data
+      const normalizedUser = resourceStore.upsert('users', normalizeUser(data))
+      userId.value = normalizedUser.id
 
       editForm.value = {
-        display_name: data.display_name || '',
-        bio: data.bio || '',
-        email: data.email || ''
+        display_name: normalizedUser.display_name || '',
+        bio: normalizedUser.bio || '',
+        email: normalizedUser.email || ''
       }
 
-      if (!authStore.user || authStore.user.id !== data.id) {
+      if (!authStore.user || authStore.user.id !== normalizedUser.id) {
         verificationSuccess.value = ''
         verificationError.value = ''
       }
@@ -122,7 +130,9 @@ export function useProfilePage({
           limit: 20
         }
       })
-      discussions.value = unwrapList(data).map(normalizeDiscussion)
+      discussionIds.value = unwrapList(data)
+        .map(normalizeDiscussion)
+        .map(item => resourceStore.upsert('discussions', item).id)
     } catch (error) {
       console.error('加载讨论失败:', error)
     } finally {
@@ -141,7 +151,9 @@ export function useProfilePage({
           limit: 20
         }
       })
-      posts.value = unwrapList(data).map(normalizePost)
+      postIds.value = unwrapList(data)
+        .map(normalizePost)
+        .map(item => resourceStore.upsert('posts', item).id)
     } catch (error) {
       console.error('加载回复失败:', error)
     } finally {
@@ -170,21 +182,22 @@ export function useProfilePage({
       const previousEmail = user.value.email
       const updatedUser = await api.patch(`/users/${user.value.id}`, editForm.value)
 
-      user.value = {
+      const nextUser = resourceStore.upsert('users', {
         ...user.value,
-        ...updatedUser
-      }
+        ...normalizeUser(updatedUser)
+      })
+      userId.value = nextUser.id
 
       editForm.value = {
-        display_name: updatedUser.display_name || '',
-        bio: updatedUser.bio || '',
-        email: updatedUser.email || ''
+        display_name: nextUser.display_name || '',
+        bio: nextUser.bio || '',
+        email: nextUser.email || ''
       }
 
       await authStore.fetchUser()
 
-      settingsSuccess.value = previousEmail !== updatedUser.email
-        ? `资料已保存，验证邮件已发送到 ${updatedUser.email}`
+      settingsSuccess.value = previousEmail !== nextUser.email
+        ? `资料已保存，验证邮件已发送到 ${nextUser.email}`
         : '资料已保存'
     } catch (error) {
       settingsError.value = error.response?.data?.error || error.message || '保存失败'
@@ -301,11 +314,12 @@ export function useProfilePage({
         }
       })
 
-      user.value = updatedUser
+      const nextUser = resourceStore.upsert('users', normalizeUser(updatedUser))
+      userId.value = nextUser.id
       editForm.value = {
-        display_name: updatedUser.display_name || '',
-        bio: updatedUser.bio || '',
-        email: updatedUser.email || ''
+        display_name: nextUser.display_name || '',
+        bio: nextUser.bio || '',
+        email: nextUser.email || ''
       }
       await authStore.fetchUser()
     } catch (error) {

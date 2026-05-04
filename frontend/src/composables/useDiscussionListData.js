@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import api from '@/api'
+import { useResourceStore } from '@/stores/resource'
 import { normalizeDiscussion, normalizeTag, unwrapList } from '@/utils/forum'
 
 export function useDiscussionListData({
@@ -7,9 +8,13 @@ export function useDiscussionListData({
   modalStore,
   route
 }) {
-  const discussions = ref([])
-  const tags = ref([])
-  const currentTag = ref(null)
+  const resourceStore = useResourceStore()
+  const discussionIds = ref([])
+  const tagIds = ref([])
+  const currentTagId = ref(null)
+  const discussions = computed(() => resourceStore.list('discussions', discussionIds.value))
+  const tags = computed(() => resourceStore.list('tags', tagIds.value))
+  const currentTag = computed(() => (currentTagId.value ? resourceStore.get('tags', currentTagId.value) : null))
   const loading = ref(true)
   const refreshing = ref(false)
   const loadingMore = ref(false)
@@ -36,6 +41,8 @@ export function useDiscussionListData({
   watch(
     () => [route.name, route.params.slug, route.query.search],
     async () => {
+      discussionIds.value = []
+      currentTagId.value = null
       currentPage.value = 1
       await refreshPageData()
     }
@@ -47,8 +54,8 @@ export function useDiscussionListData({
     try {
       await Promise.all([loadTags(), loadCurrentTag(), loadDiscussions(false)])
     } catch (error) {
-      discussions.value = []
-      currentTag.value = null
+      discussionIds.value = []
+      currentTagId.value = null
       console.error('加载首页列表失败:', error)
     } finally {
       loading.value = false
@@ -79,20 +86,23 @@ export function useDiscussionListData({
         include_children: true
       }
     })
-    tags.value = unwrapList(response).map(normalizeTag)
+    tagIds.value = unwrapList(response)
+      .map(normalizeTag)
+      .map(item => resourceStore.upsert('tags', item).id)
   }
 
   async function loadCurrentTag() {
     if (!currentTagSlug.value || isFollowingPage.value) {
-      currentTag.value = null
+      currentTagId.value = null
       return
     }
 
     try {
       const response = await api.get(`/tags/slug/${currentTagSlug.value}`)
-      currentTag.value = normalizeTag(response)
+      const tag = resourceStore.upsert('tags', normalizeTag(response))
+      currentTagId.value = tag.id
     } catch (error) {
-      currentTag.value = null
+      currentTagId.value = null
       console.error('加载标签详情失败:', error)
     }
   }
@@ -110,11 +120,12 @@ export function useDiscussionListData({
     })
 
     const items = unwrapList(response).map(normalizeDiscussion)
+    const ids = items.map(item => resourceStore.upsert('discussions', item).id)
 
     if (append) {
-      discussions.value.push(...items)
+      discussionIds.value = [...discussionIds.value, ...ids]
     } else {
-      discussions.value = items
+      discussionIds.value = ids
     }
 
     total.value = response.total || items.length
@@ -149,13 +160,17 @@ export function useDiscussionListData({
     markingAllRead.value = true
     try {
       const response = await api.post('/discussions/read-all')
-      discussions.value = discussions.value.map(discussion => ({
-        ...discussion,
-        is_unread: false,
-        unread_count: 0,
-        last_read_post_number: discussion.last_post_number || discussion.last_read_post_number || 0,
-        last_read_at: response.marked_all_as_read_at || discussion.last_read_at
-      }))
+      discussionIds.value.forEach(id => {
+        const discussion = resourceStore.get('discussions', id)
+        if (!discussion) return
+        resourceStore.upsert('discussions', {
+          ...discussion,
+          is_unread: false,
+          unread_count: 0,
+          last_read_post_number: discussion.last_post_number || discussion.last_read_post_number || 0,
+          last_read_at: response.marked_all_as_read_at || discussion.last_read_at
+        })
+      })
     } catch (error) {
       console.error('标记已读失败:', error)
       await modalStore.alert({
@@ -173,22 +188,21 @@ export function useDiscussionListData({
     const discussionId = Number(detail.discussionId)
     if (!discussionId) return
 
-    discussions.value = discussions.value.map(discussion => {
-      if (Number(discussion.id) !== discussionId) return discussion
+    const discussion = resourceStore.get('discussions', discussionId)
+    if (!discussion) return
 
-      const lastReadPostNumber = Math.max(
-        Number(discussion.last_read_post_number || 0),
-        Number(detail.lastReadPostNumber || 0)
-      )
-      const unreadCount = Math.max(Number(detail.unreadCount || 0), 0)
+    const lastReadPostNumber = Math.max(
+      Number(discussion.last_read_post_number || 0),
+      Number(detail.lastReadPostNumber || 0)
+    )
+    const unreadCount = Math.max(Number(detail.unreadCount || 0), 0)
 
-      return {
-        ...discussion,
-        last_read_post_number: lastReadPostNumber,
-        last_read_at: detail.lastReadAt || discussion.last_read_at,
-        unread_count: unreadCount,
-        is_unread: unreadCount > 0
-      }
+    resourceStore.upsert('discussions', {
+      ...discussion,
+      last_read_post_number: lastReadPostNumber,
+      last_read_at: detail.lastReadAt || discussion.last_read_at,
+      unread_count: unreadCount,
+      is_unread: unreadCount > 0
     })
   }
 
