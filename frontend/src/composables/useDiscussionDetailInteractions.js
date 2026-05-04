@@ -193,15 +193,6 @@ export function useDiscussionDetailInteractions({
   }
 
   async function deletePost(post) {
-    const confirmed = await modalStore.confirm({
-      title: '删除回复',
-      message: '确定要删除这条回复吗？',
-      confirmText: '删除',
-      cancelText: '取消',
-      tone: 'danger'
-    })
-    if (!confirmed) return
-
     try {
       await api.delete(`/posts/${post.id}`)
       posts.value = posts.value.filter(item => item.id !== post.id)
@@ -317,16 +308,6 @@ export function useDiscussionDetailInteractions({
 
   async function togglePostHidden(post) {
     if (!canModeratePostVisibility(post)) return
-
-    const nextActionLabel = post.is_hidden ? '恢复显示' : '隐藏回复'
-    const confirmed = await modalStore.confirm({
-      title: nextActionLabel,
-      message: post.is_hidden ? `确定恢复显示 #${post.number} 吗？` : `确定隐藏 #${post.number} 吗？`,
-      confirmText: nextActionLabel,
-      cancelText: '取消',
-      tone: post.is_hidden ? 'primary' : 'warning'
-    })
-    if (!confirmed) return
 
     try {
       await api.post(`/posts/${post.id}/hide`)
@@ -445,15 +426,6 @@ export function useDiscussionDetailInteractions({
   }
 
   async function deleteDiscussion() {
-    const confirmed = await modalStore.confirm({
-      title: '删除讨论',
-      message: '确定要删除这个讨论吗？此操作不可恢复！',
-      confirmText: '删除',
-      cancelText: '取消',
-      tone: 'danger'
-    })
-    if (!confirmed) return
-
     try {
       await api.delete(`/discussions/${discussion.value.id}`)
       router.push('/')

@@ -96,6 +96,13 @@ registerDiscussionAction({
     label: discussion.is_sticky ? '取消置顶' : '置顶讨论',
     icon: 'fas fa-thumbtack',
     description: discussion.is_sticky ? '把讨论恢复为普通排序。' : '把讨论固定到列表更靠前的位置。',
+    confirm: discussion.is_sticky ? null : {
+      title: '置顶讨论',
+      message: '确定将这条讨论置顶吗？',
+      confirmText: '置顶讨论',
+      cancelText: '取消',
+      tone: 'primary',
+    },
     order: 40
   })
 })
@@ -109,6 +116,13 @@ registerDiscussionAction({
     label: discussion.is_locked ? '解除锁定' : '锁定讨论',
     icon: discussion.is_locked ? 'fas fa-lock-open' : 'fas fa-lock',
     description: discussion.is_locked ? '恢复普通用户回复能力。' : '阻止普通用户继续回复。',
+    confirm: discussion.is_locked ? null : {
+      title: '锁定讨论',
+      message: '确定锁定当前讨论并阻止普通用户继续回复吗？',
+      confirmText: '锁定讨论',
+      cancelText: '取消',
+      tone: 'warning',
+    },
     order: 50
   })
 })
@@ -122,6 +136,13 @@ registerDiscussionAction({
     label: discussion.is_hidden ? '恢复显示' : '隐藏讨论',
     icon: discussion.is_hidden ? 'fas fa-eye' : 'fas fa-eye-slash',
     description: discussion.is_hidden ? '重新让讨论出现在前台列表。' : '临时从前台列表隐藏当前讨论。',
+    confirm: {
+      title: discussion.is_hidden ? '恢复显示' : '隐藏讨论',
+      message: discussion.is_hidden ? '确定恢复显示当前讨论吗？' : '确定从前台列表隐藏当前讨论吗？',
+      confirmText: discussion.is_hidden ? '恢复显示' : '隐藏讨论',
+      cancelText: '取消',
+      tone: discussion.is_hidden ? 'primary' : 'warning',
+    },
     order: 60
   })
 })
@@ -170,6 +191,13 @@ registerPostAction({
     icon: 'fas fa-trash',
     description: '永久删除这条回复。',
     tone: 'danger',
+    confirm: {
+      title: '删除回复',
+      message: '确定要删除这条回复吗？此操作不可恢复。',
+      confirmText: '删除',
+      cancelText: '取消',
+      tone: 'danger',
+    },
     order: 20
   })
 })

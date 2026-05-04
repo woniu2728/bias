@@ -89,27 +89,12 @@
               <i class="fas fa-ellipsis-h"></i>
             </button>
             <div v-if="isPostMenuOpen" class="post-controls-menu">
-              <button
-                v-for="item in postMenuItems"
-                :key="item.key"
-                type="button"
-                class="post-controls-menu-item"
-                :class="{
-                  'is-danger': item.tone === 'danger',
-                  'is-disabled': item.disabled
-                }"
-                :disabled="item.disabled"
-                :title="item.disabledReason || item.description || ''"
-                @click="handleMenuAction(item.key, post)"
-              >
-                <span class="post-controls-menu-item-main">
-                  <i v-if="item.icon" :class="item.icon"></i>
-                  <span>{{ item.label }}</span>
-                </span>
-                <small v-if="item.description || item.disabledReason">
-                  {{ item.disabledReason || item.description }}
-                </small>
-              </button>
+              <ForumActionMenu
+                :items="postMenuItems"
+                container-class="post-controls-menu-list"
+                item-class="post-controls-menu-item"
+                @select="handleMenuAction($event, post)"
+              />
             </div>
           </div>
         </aside>
@@ -196,6 +181,8 @@
 </template>
 
 <script setup>
+import ForumActionMenu from '@/components/forum/ForumActionMenu.vue'
+
 const props = defineProps({
   post: { type: Object, required: true },
   discussion: { type: Object, required: true },
@@ -726,53 +713,10 @@ function handleMenuAction(eventName, payload) {
   z-index: 8;
 }
 
-.post-controls-menu-item {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: var(--forum-text-muted);
-  text-align: left;
-  padding: 9px 10px;
-  border-radius: var(--forum-radius-sm);
-  font-size: var(--forum-font-size-sm);
-  cursor: pointer;
+.post-controls-menu-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.post-controls-menu-item-main {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-
-.post-controls-menu-item small {
-  color: var(--forum-text-soft);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.post-controls-menu-item:hover {
-  background: var(--forum-bg-subtle);
-}
-
-.post-controls-menu-item.is-danger {
-  color: var(--forum-danger-color);
-}
-
-.post-controls-menu-item.is-danger:hover {
-  background: var(--forum-danger-soft);
-}
-
-.post-controls-menu-item.is-disabled {
-  opacity: 0.58;
-  cursor: not-allowed;
-}
-
-.post-controls-menu-item.is-disabled:hover {
-  background: transparent;
+  gap: 0;
 }
 
 .post-footer {

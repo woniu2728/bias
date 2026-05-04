@@ -49,27 +49,12 @@
       v-if="showDiscussionMenu && canShowDiscussionMenu"
       class="discussion-actions-menu"
     >
-      <button
-        v-for="item in menuItems"
-        :key="item.key"
-        type="button"
-        class="discussion-actions-menu-item"
-        :class="{
-          'is-danger': item.tone === 'danger',
-          'is-disabled': item.disabled
-        }"
-        :disabled="item.disabled"
-        :title="item.disabledReason || item.description || ''"
-        @click="$emit('menu-action', item.key)"
-      >
-        <span class="discussion-actions-menu-item-main">
-          <i v-if="item.icon" :class="item.icon"></i>
-          <span>{{ item.label }}</span>
-        </span>
-        <small v-if="item.description || item.disabledReason">
-          {{ item.disabledReason || item.description }}
-        </small>
-      </button>
+      <ForumActionMenu
+        :items="menuItems"
+        container-class="discussion-actions-menu-list"
+        item-class="discussion-actions-menu-item"
+        @select="$emit('menu-action', $event)"
+      />
     </div>
 
     <p v-if="authStore.isAuthenticated && hasActiveComposer" class="discussion-action-copy">
@@ -88,6 +73,8 @@
 </template>
 
 <script setup>
+import ForumActionMenu from '@/components/forum/ForumActionMenu.vue'
+
 defineProps({
   discussion: {
     type: Object,
@@ -247,54 +234,10 @@ defineEmits([
   z-index: 5;
 }
 
-.discussion-actions-menu-item {
-  width: 100%;
-  margin: 0;
-  border: 0;
-  background: transparent;
-  color: var(--forum-text-muted);
-  padding: 9px 10px;
-  border-radius: var(--forum-radius-sm);
-  text-align: left;
-  font-size: var(--forum-font-size-sm);
-  cursor: pointer;
+.discussion-actions-menu-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.discussion-actions-menu-item-main {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-
-.discussion-actions-menu-item small {
-  color: var(--forum-text-soft);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.discussion-actions-menu-item:hover {
-  background: var(--forum-bg-subtle);
-}
-
-.discussion-actions-menu-item.is-danger {
-  color: var(--forum-danger-color);
-}
-
-.discussion-actions-menu-item.is-danger:hover {
-  background: var(--forum-danger-soft);
-}
-
-.discussion-actions-menu-item.is-disabled {
-  opacity: 0.58;
-  cursor: not-allowed;
-}
-
-.discussion-actions-menu-item.is-disabled:hover {
-  background: transparent;
+  gap: 0;
 }
 
 .discussion-action-copy {
