@@ -107,6 +107,16 @@ class ForumRegistryTests(TestCase):
         self.assertIn("unanswered", sort_codes)
         self.assertEqual(registry.get_default_discussion_sort_code(), "latest")
 
+    def test_builtin_registry_exposes_discussion_list_filter_catalog(self):
+        registry = get_forum_registry()
+
+        filter_codes = [item.code for item in registry.get_discussion_list_filters()]
+        self.assertIn("all", filter_codes)
+        self.assertIn("following", filter_codes)
+        self.assertIn("my", filter_codes)
+        self.assertIn("unread", filter_codes)
+        self.assertEqual(registry.get_default_discussion_list_filter_code(), "all")
+
 
 class ChineseSearchTests(TestCase):
     def setUp(self):
@@ -182,6 +192,71 @@ class ChineseSearchTests(TestCase):
         self.assertEqual(payload["sort"], "unanswered")
         self.assertTrue(any(item["code"] == "latest" and item["is_default"] for item in payload["available_sorts"]))
         self.assertTrue(any(item["code"] == "unanswered" for item in payload["available_sorts"]))
+
+    def test_discussions_api_returns_registered_filter_catalog(self):
+        DiscussionService.create_discussion(
+            title="过滤目录讨论",
+            content="用于测试过滤元数据",
+            user=self.user,
+        )
+
+        response = self.client.get("/api/discussions/", {"filter": "my"}, **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["filter"], "my")
+        self.assertTrue(any(item["code"] == "all" and item["is_default"] for item in payload["available_filters"]))
+        self.assertTrue(any(item["code"] == "following" and item["requires_authenticated_user"] for item in payload["available_filters"]))
+        self.assertTrue(any(item["code"] == "my" for item in payload["available_filters"]))
+
+    def test_discussion_list_supports_registered_my_and_unread_filters(self):
+        other_user = User.objects.create_user(
+            username="other-filter-user",
+            email="other-filter-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        my_discussion = DiscussionService.create_discussion(
+            title="我的讨论",
+            content="我发起的主题",
+            user=self.user,
+        )
+        unread_discussion = DiscussionService.create_discussion(
+            title="未读讨论",
+            content="稍后会产生未读回复",
+            user=other_user,
+        )
+        read_discussion = DiscussionService.create_discussion(
+            title="已读讨论",
+            content="稍后会被标记已读",
+            user=other_user,
+        )
+
+        from apps.discussions.models import DiscussionUser
+        DiscussionUser.objects.update_or_create(
+            discussion=unread_discussion,
+            user=self.user,
+            defaults={"last_read_post_number": 1, "is_subscribed": False},
+        )
+        DiscussionUser.objects.update_or_create(
+            discussion=read_discussion,
+            user=self.user,
+            defaults={"last_read_post_number": 1, "is_subscribed": False},
+        )
+
+        PostService.create_post(
+            discussion_id=unread_discussion.id,
+            content="生成未读回复",
+            user=other_user,
+        )
+
+        my_discussions, my_total = DiscussionService.get_discussion_list(list_filter="my", user=self.user)
+        unread_discussions, unread_total = DiscussionService.get_discussion_list(list_filter="unread", user=self.user)
+
+        self.assertEqual(my_total, 1)
+        self.assertEqual([item.id for item in my_discussions], [my_discussion.id])
+        self.assertEqual(unread_total, 1)
+        self.assertEqual([item.id for item in unread_discussions], [unread_discussion.id])
 
     def test_chinese_tokenizer_keeps_phrase_and_segments(self):
         tokens = SearchService.tokenize_query("中文搜索")
@@ -3306,6 +3381,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("post_types", payload)
         self.assertIn("search_filters", payload)
         self.assertIn("discussion_sorts", payload)
+        self.assertIn("discussion_list_filters", payload)
         self.assertIn("resource_fields", payload)
         module_ids = {module["id"] for module in payload["modules"]}
         self.assertIn("core", module_ids)
@@ -3333,6 +3409,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertEqual(core_module["dependency_status"], "healthy")
         discussions_module = next(module for module in payload["modules"] if module["id"] == "discussions")
         self.assertIn("discussion_sorts", discussions_module)
+        self.assertIn("discussion_list_filters", discussions_module)
         self.assertTrue(any(item["code"] == "author" and item["syntax"] == "author:<username>" for item in discussions_module["search_filters"]))
         self.assertTrue(any(item["code"] == "is_sticky" and item["syntax"] == "is:sticky" for item in discussions_module["search_filters"]))
         self.assertTrue(any(item["code"] == "is_locked" and item["syntax"] == "is:locked" for item in discussions_module["search_filters"]))
@@ -3341,6 +3418,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertTrue(any(item["module_id"] == "discussions" and item["code"] == "author" for item in payload["search_filters"]))
         self.assertTrue(any(item["module_id"] == "discussions" and item["target"] == "post" and item["code"] == "author" for item in payload["search_filters"]))
         self.assertTrue(any(item["module_id"] == "discussions" and item["code"] == "unanswered" for item in payload["discussion_sorts"]))
+        self.assertTrue(any(item["module_id"] == "discussions" and item["code"] == "unread" for item in payload["discussion_list_filters"]))
         self.assertTrue(any(item["field"] == "can_start_discussion" for item in tags_module["resource_fields"]))
         self.assertTrue(any(item["resource"] == "search_post" and item["field"] == "user" for item in payload["resource_fields"]))
         self.assertTrue(any(item["module_id"] == "notifications" for item in payload["user_preferences"]))

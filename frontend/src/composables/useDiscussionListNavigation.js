@@ -6,6 +6,7 @@ export function useDiscussionListNavigation({
   currentTag,
   currentTagSlug,
   isFollowingPage,
+  listFilter,
   route,
   tags
 }) {
@@ -28,6 +29,12 @@ export function useDiscussionListNavigation({
   const emptyStateText = computed(() => {
     if (isFollowingPage.value) {
       return '你还没有关注任何讨论。'
+    }
+    if (listFilter.value === 'my') {
+      return '你还没有发起任何讨论。'
+    }
+    if (listFilter.value === 'unread') {
+      return '当前没有未读讨论。'
     }
     if (currentTag.value) {
       return '这个标签下还没有讨论。'

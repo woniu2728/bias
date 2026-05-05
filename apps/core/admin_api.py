@@ -339,6 +339,17 @@ def serialize_module_definition(module, module_map: Dict[str, Any]) -> Dict[str,
             }
             for discussion_sort in module.discussion_sorts
         ],
+        "discussion_list_filters": [
+            {
+                "code": discussion_list_filter.code,
+                "label": discussion_list_filter.label,
+                "description": discussion_list_filter.description,
+                "icon": discussion_list_filter.icon,
+                "is_default": discussion_list_filter.is_default,
+                "requires_authenticated_user": discussion_list_filter.requires_authenticated_user,
+            }
+            for discussion_list_filter in module.discussion_list_filters
+        ],
         "resource_fields": resource_fields,
         "permissions": [
             {
@@ -372,6 +383,7 @@ def serialize_module_definition(module, module_map: Dict[str, Any]) -> Dict[str,
             "post_types": len(module.post_types),
             "search_filters": len(module.search_filters),
             "discussion_sorts": len(module.discussion_sorts),
+            "discussion_list_filters": len(module.discussion_list_filters),
             "resource_fields": len(resource_fields),
         },
     }
@@ -1038,6 +1050,18 @@ def list_admin_modules(request):
         }
         for discussion_sort in REGISTRY.get_discussion_sorts()
     ]
+    discussion_list_filters = [
+        {
+            "code": discussion_list_filter.code,
+            "label": discussion_list_filter.label,
+            "module_id": discussion_list_filter.module_id,
+            "description": discussion_list_filter.description,
+            "icon": discussion_list_filter.icon,
+            "is_default": discussion_list_filter.is_default,
+            "requires_authenticated_user": discussion_list_filter.requires_authenticated_user,
+        }
+        for discussion_list_filter in REGISTRY.get_discussion_list_filters()
+    ]
     resource_fields = [
         {
             "resource": definition.resource,
@@ -1084,6 +1108,7 @@ def list_admin_modules(request):
         "resource_field_count": len(resource_fields),
         "search_filter_count": len(search_filters),
         "discussion_sort_count": len(discussion_sorts),
+        "discussion_list_filter_count": len(discussion_list_filters),
         "dependency_issue_count": len(dependency_attention),
     }
     return {
@@ -1098,6 +1123,7 @@ def list_admin_modules(request):
         "post_types": post_types,
         "search_filters": search_filters,
         "discussion_sorts": discussion_sorts,
+        "discussion_list_filters": discussion_list_filters,
         "resource_fields": resource_fields,
         "permission_aliases": REGISTRY.get_permission_aliases(),
     }

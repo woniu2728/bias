@@ -47,7 +47,8 @@ class DiscussionFilterSchema(BaseModel):
     q: Optional[str] = Field(None, description="搜索关键词")
     tag: Optional[str] = Field(None, description="标签slug")
     author: Optional[str] = Field(None, description="作者用户名")
-    subscription: Optional[str] = Field(None, description="订阅过滤: following")
+    filter: Optional[str] = Field('all', description="列表过滤: all, following, my, unread")
+    subscription: Optional[str] = Field(None, description="兼容旧参数: following")
     sort: Optional[str] = Field('latest', description="排序方式: latest, top, oldest, newest")
     page: int = Field(1, ge=1, description="页码")
     limit: int = Field(20, ge=1, le=100, description="每页数量")
@@ -111,6 +112,8 @@ class DiscussionListSchema(BaseModel):
     total: int
     page: int
     limit: int
+    filter: str = "all"
+    available_filters: List[dict] = []
     sort: str = "latest"
     available_sorts: List[dict] = []
     data: List[DiscussionOutSchema]

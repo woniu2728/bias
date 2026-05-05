@@ -134,6 +134,71 @@ class DiscussionApiTests(TestCase):
         self.assertFalse(discussion_payload["is_unread"])
         self.assertEqual(discussion_payload["unread_count"], 0)
 
+    def test_discussion_list_api_supports_registered_filters_and_legacy_subscription(self):
+        followed = DiscussionService.create_discussion(
+            title="关注过滤 API",
+            content="关注过滤内容",
+            user=self.author,
+        )
+        my_discussion = DiscussionService.create_discussion(
+            title="我的过滤 API",
+            content="我的过滤内容",
+            user=self.reader,
+        )
+        unread_discussion = DiscussionService.create_discussion(
+            title="未读过滤 API",
+            content="未读过滤内容",
+            user=self.author,
+        )
+
+        from apps.discussions.models import DiscussionUser
+        DiscussionUser.objects.update_or_create(
+            discussion=followed,
+            user=self.reader,
+            defaults={"is_subscribed": True, "last_read_post_number": 1},
+        )
+        DiscussionUser.objects.update_or_create(
+            discussion=unread_discussion,
+            user=self.reader,
+            defaults={"is_subscribed": False, "last_read_post_number": 1},
+        )
+        PostService.create_post(
+            discussion_id=unread_discussion.id,
+            content="这会制造未读",
+            user=self.author,
+        )
+
+        following_response = self.client.get(
+            "/api/discussions/",
+            {"filter": "following"},
+            **self.auth_header(self.reader),
+        )
+        legacy_following_response = self.client.get(
+            "/api/discussions/",
+            {"subscription": "following"},
+            **self.auth_header(self.reader),
+        )
+        my_response = self.client.get(
+            "/api/discussions/",
+            {"filter": "my"},
+            **self.auth_header(self.reader),
+        )
+        unread_response = self.client.get(
+            "/api/discussions/",
+            {"filter": "unread"},
+            **self.auth_header(self.reader),
+        )
+
+        self.assertEqual(following_response.status_code, 200, following_response.content)
+        self.assertEqual(legacy_following_response.status_code, 200, legacy_following_response.content)
+        self.assertEqual(my_response.status_code, 200, my_response.content)
+        self.assertEqual(unread_response.status_code, 200, unread_response.content)
+
+        self.assertEqual([item["id"] for item in following_response.json()["data"]], [followed.id])
+        self.assertEqual([item["id"] for item in legacy_following_response.json()["data"]], [followed.id])
+        self.assertEqual([item["id"] for item in my_response.json()["data"]], [my_discussion.id])
+        self.assertEqual([item["id"] for item in unread_response.json()["data"]], [unread_discussion.id])
+
     def test_discussion_detail_does_not_mark_everything_read_immediately(self):
         discussion = DiscussionService.create_discussion(
             title="Unread detail",

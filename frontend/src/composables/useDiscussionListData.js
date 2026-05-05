@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import api from '@/api'
+import { useDiscussionListRouteState } from '@/composables/useDiscussionListRouteState'
 import { useResourceStore } from '@/stores/resource'
 import { normalizeDiscussion, normalizeTag, unwrapList } from '@/utils/forum'
 
@@ -10,6 +11,7 @@ export function useDiscussionListData({
   router,
 }) {
   const resourceStore = useResourceStore()
+  const routeState = useDiscussionListRouteState({ route, router })
   const discussionIds = ref([])
   const tagIds = ref([])
   const currentTagId = ref(null)
@@ -19,17 +21,19 @@ export function useDiscussionListData({
   const loading = ref(true)
   const refreshing = ref(false)
   const loadingMore = ref(false)
-  const sortBy = ref(String(route.query.sort || 'latest'))
   const sortOptions = ref([])
+  const filterOptions = ref([])
   const currentPage = ref(1)
   const total = ref(0)
   const markingAllRead = ref(false)
   const pageSize = 20
 
   const currentTagSlug = computed(() => route.params.slug || null)
-  const searchQuery = computed(() => route.query.search?.toString().trim() || '')
+  const searchQuery = routeState.searchQuery
+  const sortBy = routeState.sortBy
+  const listFilter = routeState.listFilter
   const hasMore = computed(() => currentPage.value * pageSize < total.value)
-  const isFollowingPage = computed(() => route.name === 'following')
+  const isFollowingPage = computed(() => route.name === 'following' || listFilter.value === 'following')
 
   onMounted(async () => {
     await refreshPageData()
@@ -41,12 +45,11 @@ export function useDiscussionListData({
   })
 
   watch(
-    () => [route.name, route.params.slug, route.query.search, route.query.sort],
+    () => [route.name, route.params.slug, route.query.q, route.query.sort, route.query.filter],
     async () => {
       discussionIds.value = []
       currentTagId.value = null
       currentPage.value = 1
-      sortBy.value = String(route.query.sort || sortBy.value || 'latest')
       await refreshPageData()
     }
   )
@@ -116,9 +119,9 @@ export function useDiscussionListData({
         page: currentPage.value,
         limit: pageSize,
         sort: sortBy.value,
+        filter: listFilter.value,
         q: searchQuery.value || undefined,
         tag: currentTagSlug.value || undefined,
-        subscription: isFollowingPage.value ? 'following' : undefined
       }
     })
 
@@ -132,19 +135,35 @@ export function useDiscussionListData({
     }
 
     total.value = response.total || items.length
-    sortBy.value = response.sort || sortBy.value || 'latest'
     sortOptions.value = Array.isArray(response.available_sorts) ? response.available_sorts : []
+    filterOptions.value = Array.isArray(response.available_filters) ? response.available_filters : []
   }
 
   async function changeSortBy(sort) {
     if (sortBy.value === sort) return
-    const query = { ...route.query }
-    if (!sort || sort === 'latest') {
-      delete query.sort
-    } else {
-      query.sort = sort
-    }
-    await router.push({ query })
+    await routeState.push({
+      sortBy: sort,
+      listFilter: listFilter.value,
+      searchQuery: searchQuery.value,
+    })
+  }
+
+  async function changeListFilter(filterCode) {
+    if (listFilter.value === filterCode) return
+    await routeState.push({
+      listFilter: filterCode,
+      sortBy: sortBy.value,
+      searchQuery: searchQuery.value,
+    })
+  }
+
+  async function changeSearchQuery(nextQuery) {
+    if (searchQuery.value === nextQuery) return
+    await routeState.push({
+      searchQuery: nextQuery,
+      sortBy: sortBy.value,
+      listFilter: listFilter.value,
+    })
   }
 
   async function loadMore() {
@@ -214,12 +233,16 @@ export function useDiscussionListData({
     currentTag,
     currentTagSlug,
     discussions,
+    filterOptions,
     hasMore,
     isFollowingPage,
+    listFilter,
     loadMore,
     loading,
     loadingMore,
     markAllAsRead,
+    changeListFilter,
+    changeSearchQuery,
     markingAllRead,
     refreshPageData,
     refreshDiscussionList,

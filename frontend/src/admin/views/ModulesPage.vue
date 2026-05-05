@@ -241,6 +241,17 @@
                 </ul>
                 <p v-else class="ModuleEmpty">暂无讨论排序</p>
               </div>
+
+              <div>
+                <h5>讨论列表过滤</h5>
+                <ul v-if="module.discussion_list_filters.length" class="ModuleList">
+                  <li v-for="discussionListFilter in module.discussion_list_filters" :key="discussionListFilter.code">
+                    <code>{{ discussionListFilter.code }}</code>
+                    <span>{{ discussionListFilter.description || discussionListFilter.label }}</span>
+                  </li>
+                </ul>
+                <p v-else class="ModuleEmpty">暂无讨论列表过滤</p>
+              </div>
             </div>
           </article>
         </div>
@@ -481,6 +492,41 @@
           </table>
         </div>
       </section>
+
+      <section class="ModulesPage-section">
+        <div class="ModulesPage-sectionHeader">
+          <h3>讨论列表过滤注册</h3>
+          <p>列出模块通过注册中心声明的讨论列表过滤能力，帮助检查首页、关注页和用户列表是否正在共用统一协议。</p>
+        </div>
+
+        <div class="AdminTableWrap">
+          <table class="AdminTable">
+            <thead>
+              <tr>
+                <th>过滤码</th>
+                <th>名称</th>
+                <th>归属模块</th>
+                <th>需登录</th>
+                <th>默认</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="discussionListFilter in filteredDiscussionListFilters"
+                :key="`${discussionListFilter.module_id}:${discussionListFilter.code}`"
+              >
+                <td><code>{{ discussionListFilter.code }}</code></td>
+                <td>{{ discussionListFilter.label }}</td>
+                <td>{{ moduleNameMap[discussionListFilter.module_id] || discussionListFilter.module_id }}</td>
+                <td>{{ discussionListFilter.requires_authenticated_user ? '是' : '否' }}</td>
+                <td>{{ discussionListFilter.is_default ? '是' : '否' }}</td>
+                <td>{{ discussionListFilter.description || discussionListFilter.label }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   </AdminPage>
 </template>
@@ -508,6 +554,7 @@ const postTypes = ref([])
 const resourceFields = ref([])
 const searchFilters = ref([])
 const discussionSorts = ref([])
+const discussionListFilters = ref([])
 const categoryFilter = ref('all')
 const statusFilter = ref('all')
 const searchQuery = ref('')
@@ -578,6 +625,7 @@ const filteredPostTypes = computed(() => postTypes.value.filter(item => filtered
 const filteredResourceFields = computed(() => resourceFields.value.filter(item => filteredModuleIds.value.has(item.module_id)))
 const filteredSearchFilters = computed(() => searchFilters.value.filter(item => filteredModuleIds.value.has(item.module_id)))
 const filteredDiscussionSorts = computed(() => discussionSorts.value.filter(item => filteredModuleIds.value.has(item.module_id)))
+const filteredDiscussionListFilters = computed(() => discussionListFilters.value.filter(item => filteredModuleIds.value.has(item.module_id)))
 
 const summaryItems = computed(() => [
   { label: '模块总数', value: String(summary.value.module_count ?? modules.value.length) },
@@ -593,6 +641,7 @@ const summaryItems = computed(() => [
   { label: '资源字段', value: String(summary.value.resource_field_count ?? resourceFields.value.length) },
   { label: '搜索过滤', value: String(summary.value.search_filter_count ?? searchFilters.value.length) },
   { label: '讨论排序', value: String(summary.value.discussion_sort_count ?? discussionSorts.value.length) },
+  { label: '列表过滤', value: String(summary.value.discussion_list_filter_count ?? discussionListFilters.value.length) },
 ])
 
 const moduleNameMap = computed(() => Object.fromEntries(modules.value.map(item => [item.id, item.name])))
@@ -618,6 +667,7 @@ function normalizeModule(module) {
     resource_fields: module.resource_fields || [],
     search_filters: module.search_filters || [],
     discussion_sorts: module.discussion_sorts || [],
+    discussion_list_filters: module.discussion_list_filters || [],
     missing_dependencies: module.missing_dependencies || [],
     disabled_dependencies: module.disabled_dependencies || [],
     dependency_status: module.dependency_status || 'healthy',
@@ -648,6 +698,7 @@ async function loadModules() {
     resourceFields.value = data.resource_fields || []
     searchFilters.value = data.search_filters || []
     discussionSorts.value = data.discussion_sorts || []
+    discussionListFilters.value = data.discussion_list_filters || []
   } catch (error) {
     console.error('加载模块信息失败:', error)
     errorMessage.value = error.response?.data?.error || '加载模块信息失败，请稍后重试'
@@ -670,6 +721,7 @@ function buildModuleSummary(module) {
     { label: '资源字段', value: String(counts.resource_fields ?? module.resource_fields?.length ?? 0) },
     { label: '搜索过滤', value: String(counts.search_filters ?? module.search_filters?.length ?? 0) },
     { label: '讨论排序', value: String(counts.discussion_sorts ?? module.discussion_sorts?.length ?? 0) },
+    { label: '列表过滤', value: String(counts.discussion_list_filters ?? module.discussion_list_filters?.length ?? 0) },
   ]
 }
 

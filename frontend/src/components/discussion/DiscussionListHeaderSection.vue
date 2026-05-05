@@ -4,9 +4,14 @@
     :auth-store="authStore"
     :sort-by="sortBy"
     :sort-options="sortOptions"
+    :list-filter="listFilter"
+    :filter-options="filterOptions"
+    :search-query="searchQuery"
     :marking-all-read="markingAllRead"
     :refreshing="refreshing"
     @change-sort="$emit('change-sort', $event)"
+    @change-filter="$emit('change-filter', $event)"
+    @change-search="$emit('change-search', $event)"
     @mark-all-read="$emit('mark-all-read')"
     @refresh="$emit('refresh')"
   />
@@ -37,6 +42,18 @@ defineProps({
     type: Array,
     default: () => []
   },
+  listFilter: {
+    type: String,
+    default: 'all'
+  },
+  filterOptions: {
+    type: Array,
+    default: () => []
+  },
+  searchQuery: {
+    type: String,
+    default: ''
+  },
   markingAllRead: {
     type: Boolean,
     default: false
@@ -47,5 +64,5 @@ defineProps({
   }
 })
 
-defineEmits(['change-sort', 'mark-all-read', 'refresh'])
+defineEmits(['change-sort', 'change-filter', 'change-search', 'mark-all-read', 'refresh'])
 </script>

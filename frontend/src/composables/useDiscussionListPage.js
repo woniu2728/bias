@@ -27,9 +27,14 @@ export function useDiscussionListPage({
     isFollowingPage,
     tags,
     sortOptions,
+    filterOptions,
+    listFilter,
+    searchQuery,
     refreshPageData,
     refreshDiscussionList,
     changeSortBy,
+    changeListFilter,
+    changeSearchQuery,
     loadMore,
     markAllAsRead
   } = useDiscussionListData({
@@ -55,6 +60,7 @@ export function useDiscussionListPage({
     currentTag,
     currentTagSlug,
     isFollowingPage,
+    listFilter,
     route,
     tags
   })
@@ -74,6 +80,9 @@ export function useDiscussionListPage({
     loadingMore,
     sortBy,
     sortOptions,
+    filterOptions,
+    listFilter,
+    searchQuery,
     markingAllRead,
     hasMore,
     isFollowingPage,
@@ -89,6 +98,8 @@ export function useDiscussionListPage({
     refreshPageData,
     refreshDiscussionList,
     changeSortBy,
+    changeListFilter,
+    changeSearchQuery,
     loadMore,
     markAllAsRead,
     handleStartDiscussion,

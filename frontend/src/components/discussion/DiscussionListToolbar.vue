@@ -68,6 +68,8 @@ const props = defineProps({
   }
 })
 
+defineEmits(['change-sort', 'change-filter', 'change-search', 'mark-all-read', 'refresh'])
+
 const normalizedSortOptions = computed(() => {
   if (props.sortOptions.length) {
     return props.sortOptions
@@ -79,8 +81,6 @@ const normalizedSortOptions = computed(() => {
     { code: 'top', label: '热门', icon: 'fas fa-fire' },
   ]
 })
-
-defineEmits(['change-sort', 'mark-all-read', 'refresh'])
 </script>
 
 <style scoped>
@@ -92,7 +92,6 @@ defineEmits(['change-sort', 'mark-all-read', 'refresh'])
   border-bottom: 1px solid var(--forum-border-color);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 252, 253, 0.92) 100%);
 }
-
 .index-toolbar-view,
 .index-toolbar-action {
   display: flex;
@@ -170,13 +169,15 @@ defineEmits(['change-sort', 'mark-all-read', 'refresh'])
     flex-shrink: 0;
   }
 
-  .index-toolbar-view {
-    overflow-x: auto;
-    scrollbar-width: none;
+  .index-toolbar-view::-webkit-scrollbar,
+  .index-toolbar-action::-webkit-scrollbar {
+    display: none;
   }
 
-  .index-toolbar-view::-webkit-scrollbar {
-    display: none;
+  .index-toolbar-view,
+  .index-toolbar-action {
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
   .btn-view,

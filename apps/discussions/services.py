@@ -53,6 +53,14 @@ class DiscussionService:
         return FORUM_REGISTRY.get_discussion_sorts()
 
     @staticmethod
+    def normalize_discussion_list_filter(filter_code: str | None) -> str:
+        return FORUM_REGISTRY.get_discussion_list_filter(filter_code or "").code
+
+    @staticmethod
+    def get_discussion_list_filter_catalog():
+        return FORUM_REGISTRY.get_discussion_list_filters()
+
+    @staticmethod
     def _viewer_cache_identity(user: Optional[User]) -> str:
         if user and user.is_authenticated:
             return f"user:{user.id}"
@@ -304,7 +312,7 @@ class DiscussionService:
         q: Optional[str] = None,
         tag: Optional[str] = None,
         author: Optional[str] = None,
-        subscription: Optional[str] = None,
+        list_filter: str = 'all',
         sort: str = 'latest',
         page: int = 1,
         limit: int = 20,
@@ -343,15 +351,17 @@ class DiscussionService:
         if author:
             queryset = queryset.filter(user__username=author)
 
-        # 订阅过滤
-        if subscription == 'following':
-            if not user or not user.is_authenticated:
-                return [], 0
-
-            queryset = queryset.filter(
-                user_states__user=user,
-                user_states__is_subscribed=True,
-            )
+        filter_definition = FORUM_REGISTRY.get_discussion_list_filter(list_filter)
+        queryset = filter_definition.applier(
+            queryset,
+            {
+                "user": user,
+                "filter": filter_definition.code,
+                "query": q,
+                "tag": tag,
+                "author": author,
+            },
+        )
 
         # 排序
         sort_definition = FORUM_REGISTRY.get_discussion_sort(sort)
@@ -363,7 +373,7 @@ class DiscussionService:
                 "query": q,
                 "tag": tag,
                 "author": author,
-                "subscription": subscription,
+                "filter": filter_definition.code,
             },
         )
 

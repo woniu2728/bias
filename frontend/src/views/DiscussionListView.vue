@@ -26,6 +26,9 @@
         :is-following-page="isFollowingPage"
         :sort-by="sortBy"
         :sort-options="sortOptions"
+        :list-filter="listFilter"
+        :filter-options="filterOptions"
+        :search-query="searchQuery"
         :marking-all-read="markingAllRead"
         :loading="loading"
         :refreshing="refreshing"
@@ -41,6 +44,8 @@
         :get-user-display-name="getUserDisplayName"
         :get-user-initial="getUserInitial"
         @change-sort="changeSortBy"
+        @change-filter="changeListFilter"
+        @change-search="changeSearchQuery"
         @mark-all-read="markAllAsRead"
         @refresh="refreshDiscussionList"
         @load-more="loadMore"
@@ -80,6 +85,9 @@ const {
   loadingMore,
   sortBy,
   sortOptions,
+  listFilter,
+  filterOptions,
+  searchQuery,
   markingAllRead,
   hasMore,
   isFollowingPage,
@@ -95,6 +103,8 @@ const {
   refreshPageData,
   refreshDiscussionList,
   changeSortBy,
+  changeListFilter,
+  changeSearchQuery,
   loadMore,
   markAllAsRead,
   handleStartDiscussion,

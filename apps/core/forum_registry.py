@@ -79,6 +79,7 @@ class PostTypeDefinition:
 SearchFilterParser = Callable[[str], Any | None]
 SearchFilterApplier = Callable[[Any, Any, dict], Any]
 DiscussionSortApplier = Callable[[Any, dict], Any]
+DiscussionListFilterApplier = Callable[[Any, dict], Any]
 
 
 @dataclass(frozen=True)
@@ -106,6 +107,19 @@ class DiscussionSortDefinition:
 
 
 @dataclass(frozen=True)
+class DiscussionListFilterDefinition:
+    code: str
+    label: str
+    module_id: str
+    applier: DiscussionListFilterApplier
+    description: str = ""
+    icon: str = "fas fa-filter"
+    is_default: bool = False
+    requires_authenticated_user: bool = False
+    order: int = 100
+
+
+@dataclass(frozen=True)
 class ForumModuleDefinition:
     module_id: str
     name: str
@@ -124,6 +138,7 @@ class ForumModuleDefinition:
     post_types: Tuple[PostTypeDefinition, ...] = ()
     search_filters: Tuple[SearchFilterDefinition, ...] = ()
     discussion_sorts: Tuple[DiscussionSortDefinition, ...] = ()
+    discussion_list_filters: Tuple[DiscussionListFilterDefinition, ...] = ()
 
 
 class ForumRegistry:
@@ -138,6 +153,7 @@ class ForumRegistry:
         self._post_types: Dict[str, PostTypeDefinition] = {}
         self._search_filters: List[SearchFilterDefinition] = []
         self._discussion_sorts: Dict[str, DiscussionSortDefinition] = {}
+        self._discussion_list_filters: Dict[str, DiscussionListFilterDefinition] = {}
 
     def register_module(self, module: ForumModuleDefinition) -> ForumModuleDefinition:
         self._modules[module.module_id] = module
@@ -167,6 +183,9 @@ class ForumRegistry:
 
         for discussion_sort in module.discussion_sorts:
             self._discussion_sorts[discussion_sort.code] = discussion_sort
+
+        for discussion_list_filter in module.discussion_list_filters:
+            self._discussion_list_filters[discussion_list_filter.code] = discussion_list_filter
 
         self._admin_pages.sort(key=lambda item: (item.nav_section, item.label, item.path))
         self._event_listeners.sort(key=lambda item: (item.event, item.module_id, item.listener))
@@ -296,6 +315,28 @@ class ForumRegistry:
             if definition.is_default:
                 return definition.code
         return "latest"
+
+    def get_discussion_list_filters(self) -> List[DiscussionListFilterDefinition]:
+        return sorted(
+            self._discussion_list_filters.values(),
+            key=lambda item: (item.order, item.module_id, item.label, item.code),
+        )
+
+    def get_discussion_list_filter(self, code: str) -> DiscussionListFilterDefinition | None:
+        normalized = (code or "").strip()
+        if normalized in self._discussion_list_filters:
+            return self._discussion_list_filters[normalized]
+
+        for definition in self.get_discussion_list_filters():
+            if definition.is_default:
+                return definition
+        return None
+
+    def get_default_discussion_list_filter_code(self) -> str:
+        for definition in self.get_discussion_list_filters():
+            if definition.is_default:
+                return definition.code
+        return "all"
 
     def get_permission_sections(self) -> List[dict]:
         sections: Dict[str, dict] = {}
@@ -615,6 +656,48 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     description="按讨论创建时间正序排序。",
                     icon="fas fa-hourglass-start",
                     order=50,
+                ),
+            ),
+            discussion_list_filters=(
+                DiscussionListFilterDefinition(
+                    code="all",
+                    label="全部讨论",
+                    module_id="discussions",
+                    applier=_apply_all_discussion_list_filter,
+                    description="显示当前可见的全部讨论。",
+                    icon="far fa-comments",
+                    is_default=True,
+                    order=10,
+                ),
+                DiscussionListFilterDefinition(
+                    code="following",
+                    label="关注中",
+                    module_id="discussions",
+                    applier=_apply_following_discussion_list_filter,
+                    description="仅显示当前用户已关注的讨论。",
+                    icon="fas fa-bell",
+                    requires_authenticated_user=True,
+                    order=20,
+                ),
+                DiscussionListFilterDefinition(
+                    code="my",
+                    label="我发起的",
+                    module_id="discussions",
+                    applier=_apply_my_discussions_list_filter,
+                    description="仅显示当前用户自己发起的讨论。",
+                    icon="fas fa-user",
+                    requires_authenticated_user=True,
+                    order=30,
+                ),
+                DiscussionListFilterDefinition(
+                    code="unread",
+                    label="未读",
+                    module_id="discussions",
+                    applier=_apply_unread_discussions_list_filter,
+                    description="仅显示当前用户仍有未读回复的讨论。",
+                    icon="fas fa-circle",
+                    requires_authenticated_user=True,
+                    order=40,
                 ),
             ),
             search_filters=(
@@ -1438,6 +1521,35 @@ def _apply_discussion_newest_sort(queryset, context: dict):
 
 def _apply_discussion_unanswered_sort(queryset, context: dict):
     return queryset.order_by("-is_sticky", "comment_count", "-created_at", "-id")
+
+
+def _apply_all_discussion_list_filter(queryset, context: dict):
+    return queryset
+
+
+def _apply_following_discussion_list_filter(queryset, context: dict):
+    user = context.get("user")
+    if not user or not getattr(user, "is_authenticated", False):
+        return queryset.none()
+    return queryset.filter(user_states__user=user, user_states__is_subscribed=True)
+
+
+def _apply_my_discussions_list_filter(queryset, context: dict):
+    user = context.get("user")
+    if not user or not getattr(user, "is_authenticated", False):
+        return queryset.none()
+    return queryset.filter(user=user)
+
+
+def _apply_unread_discussions_list_filter(queryset, context: dict):
+    user = context.get("user")
+    if not user or not getattr(user, "is_authenticated", False):
+        return queryset.none()
+
+    return queryset.filter(last_post_number__gt=0).filter(
+        models.Q(user_states__user=user, last_post_number__gt=models.F("user_states__last_read_post_number"))
+        | models.Q(user_states__user__isnull=True)
+    )
 
 
 def _parse_is_search_filter(token: str, expected: str) -> bool | None:

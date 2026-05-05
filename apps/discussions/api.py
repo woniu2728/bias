@@ -54,6 +54,18 @@ def _serialize_discussion_sort(definition):
     }
 
 
+def _serialize_discussion_list_filter(definition):
+    return {
+        "code": definition.code,
+        "label": definition.label,
+        "module_id": definition.module_id,
+        "description": definition.description,
+        "icon": definition.icon,
+        "is_default": definition.is_default,
+        "requires_authenticated_user": definition.requires_authenticated_user,
+    }
+
+
 @router.post("/", response=DiscussionOutSchema, auth=AuthBearer(), tags=["Discussions"])
 def create_discussion(request, payload: DiscussionCreateSchema):
     """
@@ -81,6 +93,7 @@ def list_discussions(
     q: Optional[str] = None,
     tag: Optional[str] = None,
     author: Optional[str] = None,
+    filter: str = 'all',
     subscription: Optional[str] = None,
     sort: str = 'latest',
     page: int = 1,
@@ -99,22 +112,32 @@ def list_discussions(
     """
     user = get_optional_user(request)
 
+    normalized_filter = filter
+    if subscription == "following" and normalized_filter == "all":
+        normalized_filter = "following"
+
     discussions, total = DiscussionService.get_discussion_list(
         q=q,
         tag=tag,
         author=author,
-        subscription=subscription,
+        list_filter=normalized_filter,
         sort=sort,
         page=page,
         limit=limit,
         user=user,
     )
+    active_filter = DiscussionService.normalize_discussion_list_filter(normalized_filter)
     active_sort = DiscussionService.normalize_discussion_sort(sort)
 
     return {
         "total": total,
         "page": page,
         "limit": limit,
+        "filter": active_filter,
+        "available_filters": [
+            _serialize_discussion_list_filter(item)
+            for item in DiscussionService.get_discussion_list_filter_catalog()
+        ],
         "sort": active_sort,
         "available_sorts": [
             _serialize_discussion_sort(item)
