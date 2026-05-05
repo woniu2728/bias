@@ -3,6 +3,7 @@
   <DiscussionListToolbar
     :auth-store="authStore"
     :sort-by="sortBy"
+    :sort-options="sortOptions"
     :marking-all-read="markingAllRead"
     :refreshing="refreshing"
     @change-sort="$emit('change-sort', $event)"
@@ -31,6 +32,10 @@ defineProps({
   sortBy: {
     type: String,
     default: 'latest'
+  },
+  sortOptions: {
+    type: Array,
+    default: () => []
   },
   markingAllRead: {
     type: Boolean,

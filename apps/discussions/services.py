@@ -45,6 +45,14 @@ class DiscussionService:
     VIEW_COUNT_PENDING_IDS_CACHE_KEY = "discussion.view_count.pending.ids"
 
     @staticmethod
+    def normalize_discussion_sort(sort: str | None) -> str:
+        return FORUM_REGISTRY.get_discussion_sort(sort or "").code
+
+    @staticmethod
+    def get_discussion_sort_catalog():
+        return FORUM_REGISTRY.get_discussion_sorts()
+
+    @staticmethod
     def _viewer_cache_identity(user: Optional[User]) -> str:
         if user and user.is_authenticated:
             return f"user:{user.id}"
@@ -346,16 +354,18 @@ class DiscussionService:
             )
 
         # 排序
-        if sort == 'latest':
-            queryset = queryset.order_by('-is_sticky', '-last_posted_at')
-        elif sort == 'top':
-            queryset = queryset.order_by('-is_sticky', '-comment_count', '-view_count')
-        elif sort == 'oldest':
-            queryset = queryset.order_by('-is_sticky', 'created_at')
-        elif sort == 'newest':
-            queryset = queryset.order_by('-is_sticky', '-created_at')
-        else:
-            queryset = queryset.order_by('-is_sticky', '-last_posted_at')
+        sort_definition = FORUM_REGISTRY.get_discussion_sort(sort)
+        queryset = sort_definition.applier(
+            queryset,
+            {
+                "user": user,
+                "sort": sort_definition.code,
+                "query": q,
+                "tag": tag,
+                "author": author,
+                "subscription": subscription,
+            },
+        )
 
         # 分页
         queryset = queryset.distinct()

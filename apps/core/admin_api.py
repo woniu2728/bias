@@ -329,6 +329,16 @@ def serialize_module_definition(module, module_map: Dict[str, Any]) -> Dict[str,
             }
             for search_filter in module.search_filters
         ],
+        "discussion_sorts": [
+            {
+                "code": discussion_sort.code,
+                "label": discussion_sort.label,
+                "description": discussion_sort.description,
+                "icon": discussion_sort.icon,
+                "is_default": discussion_sort.is_default,
+            }
+            for discussion_sort in module.discussion_sorts
+        ],
         "resource_fields": resource_fields,
         "permissions": [
             {
@@ -361,6 +371,7 @@ def serialize_module_definition(module, module_map: Dict[str, Any]) -> Dict[str,
             "event_listeners": len(module.event_listeners),
             "post_types": len(module.post_types),
             "search_filters": len(module.search_filters),
+            "discussion_sorts": len(module.discussion_sorts),
             "resource_fields": len(resource_fields),
         },
     }
@@ -1016,6 +1027,17 @@ def list_admin_modules(request):
         }
         for search_filter in REGISTRY.get_search_filters()
     ]
+    discussion_sorts = [
+        {
+            "code": discussion_sort.code,
+            "label": discussion_sort.label,
+            "module_id": discussion_sort.module_id,
+            "description": discussion_sort.description,
+            "icon": discussion_sort.icon,
+            "is_default": discussion_sort.is_default,
+        }
+        for discussion_sort in REGISTRY.get_discussion_sorts()
+    ]
     resource_fields = [
         {
             "resource": definition.resource,
@@ -1061,6 +1083,7 @@ def list_admin_modules(request):
         "post_type_count": len(post_types),
         "resource_field_count": len(resource_fields),
         "search_filter_count": len(search_filters),
+        "discussion_sort_count": len(discussion_sorts),
         "dependency_issue_count": len(dependency_attention),
     }
     return {
@@ -1074,6 +1097,7 @@ def list_admin_modules(request):
         "event_listeners": event_listeners,
         "post_types": post_types,
         "search_filters": search_filters,
+        "discussion_sorts": discussion_sorts,
         "resource_fields": resource_fields,
         "permission_aliases": REGISTRY.get_permission_aliases(),
     }

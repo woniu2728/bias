@@ -26,6 +26,7 @@ export function useDiscussionListPage({
     hasMore,
     isFollowingPage,
     tags,
+    sortOptions,
     refreshPageData,
     refreshDiscussionList,
     changeSortBy,
@@ -34,7 +35,8 @@ export function useDiscussionListPage({
   } = useDiscussionListData({
     authStore,
     modalStore,
-    route
+    route,
+    router,
   })
   const {
     isTagsPage,
@@ -71,6 +73,7 @@ export function useDiscussionListPage({
     refreshing,
     loadingMore,
     sortBy,
+    sortOptions,
     markingAllRead,
     hasMore,
     isFollowingPage,

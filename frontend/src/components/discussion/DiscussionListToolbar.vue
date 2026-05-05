@@ -1,13 +1,15 @@
 <template>
   <div class="index-toolbar">
     <ul class="index-toolbar-view">
-      <li v-for="option in sortOptions" :key="option.value">
+      <li v-for="option in normalizedSortOptions" :key="option.code">
         <button
           type="button"
           class="btn-view"
-          :class="{ active: sortBy === option.value }"
-          @click="$emit('change-sort', option.value)"
+          :class="{ active: sortBy === option.code }"
+          :title="option.description || option.label"
+          @click="$emit('change-sort', option.code)"
         >
+          <i v-if="option.icon" :class="option.icon"></i>
           {{ option.label }}
         </button>
       </li>
@@ -41,13 +43,9 @@
 </template>
 
 <script setup>
-const sortOptions = [
-  { value: 'latest', label: '最新活跃' },
-  { value: 'newest', label: '新主题' },
-  { value: 'top', label: '热门' }
-]
+import { computed } from 'vue'
 
-defineProps({
+const props = defineProps({
   authStore: {
     type: Object,
     required: true
@@ -55,6 +53,10 @@ defineProps({
   sortBy: {
     type: String,
     default: 'latest'
+  },
+  sortOptions: {
+    type: Array,
+    default: () => []
   },
   markingAllRead: {
     type: Boolean,
@@ -64,6 +66,18 @@ defineProps({
     type: Boolean,
     default: false
   }
+})
+
+const normalizedSortOptions = computed(() => {
+  if (props.sortOptions.length) {
+    return props.sortOptions
+  }
+
+  return [
+    { code: 'latest', label: '最新活跃', icon: 'fas fa-clock' },
+    { code: 'newest', label: '新主题', icon: 'fas fa-sparkles' },
+    { code: 'top', label: '热门', icon: 'fas fa-fire' },
+  ]
 })
 
 defineEmits(['change-sort', 'mark-all-read', 'refresh'])
@@ -89,6 +103,9 @@ defineEmits(['change-sort', 'mark-all-read', 'refresh'])
 }
 
 .btn-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: var(--forum-bg-subtle);
   border: none;
   color: var(--forum-text-muted);
@@ -151,6 +168,15 @@ defineEmits(['change-sort', 'mark-all-read', 'refresh'])
   .index-toolbar-action {
     flex-wrap: nowrap;
     flex-shrink: 0;
+  }
+
+  .index-toolbar-view {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .index-toolbar-view::-webkit-scrollbar {
+    display: none;
   }
 
   .btn-view,

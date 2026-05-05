@@ -25,6 +25,7 @@
         :current-tag="currentTag"
         :is-following-page="isFollowingPage"
         :sort-by="sortBy"
+        :sort-options="sortOptions"
         :marking-all-read="markingAllRead"
         :loading="loading"
         :refreshing="refreshing"
@@ -78,6 +79,7 @@ const {
   refreshing,
   loadingMore,
   sortBy,
+  sortOptions,
   markingAllRead,
   hasMore,
   isFollowingPage,

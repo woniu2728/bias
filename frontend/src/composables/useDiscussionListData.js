@@ -6,7 +6,8 @@ import { normalizeDiscussion, normalizeTag, unwrapList } from '@/utils/forum'
 export function useDiscussionListData({
   authStore,
   modalStore,
-  route
+  route,
+  router,
 }) {
   const resourceStore = useResourceStore()
   const discussionIds = ref([])
@@ -18,7 +19,8 @@ export function useDiscussionListData({
   const loading = ref(true)
   const refreshing = ref(false)
   const loadingMore = ref(false)
-  const sortBy = ref('latest')
+  const sortBy = ref(String(route.query.sort || 'latest'))
+  const sortOptions = ref([])
   const currentPage = ref(1)
   const total = ref(0)
   const markingAllRead = ref(false)
@@ -39,11 +41,12 @@ export function useDiscussionListData({
   })
 
   watch(
-    () => [route.name, route.params.slug, route.query.search],
+    () => [route.name, route.params.slug, route.query.search, route.query.sort],
     async () => {
       discussionIds.value = []
       currentTagId.value = null
       currentPage.value = 1
+      sortBy.value = String(route.query.sort || sortBy.value || 'latest')
       await refreshPageData()
     }
   )
@@ -129,19 +132,19 @@ export function useDiscussionListData({
     }
 
     total.value = response.total || items.length
+    sortBy.value = response.sort || sortBy.value || 'latest'
+    sortOptions.value = Array.isArray(response.available_sorts) ? response.available_sorts : []
   }
 
   async function changeSortBy(sort) {
     if (sortBy.value === sort) return
-    sortBy.value = sort
-    currentPage.value = 1
-    loading.value = true
-
-    try {
-      await loadDiscussions(false)
-    } finally {
-      loading.value = false
+    const query = { ...route.query }
+    if (!sort || sort === 'latest') {
+      delete query.sort
+    } else {
+      query.sort = sort
     }
+    await router.push({ query })
   }
 
   async function loadMore() {
@@ -222,6 +225,7 @@ export function useDiscussionListData({
     refreshDiscussionList,
     refreshing,
     sortBy,
+    sortOptions,
     tags
   }
 }

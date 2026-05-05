@@ -98,6 +98,15 @@ class ForumRegistryTests(TestCase):
         self.assertIn("comment", registry.get_discussion_counted_post_type_codes())
         self.assertIn("comment", registry.get_user_counted_post_type_codes())
 
+    def test_builtin_registry_exposes_discussion_sort_catalog(self):
+        registry = get_forum_registry()
+
+        sort_codes = [item.code for item in registry.get_discussion_sorts()]
+        self.assertIn("latest", sort_codes)
+        self.assertIn("top", sort_codes)
+        self.assertIn("unanswered", sort_codes)
+        self.assertEqual(registry.get_default_discussion_sort_code(), "latest")
+
 
 class ChineseSearchTests(TestCase):
     def setUp(self):
@@ -135,6 +144,44 @@ class ChineseSearchTests(TestCase):
 
         self.assertEqual(total, 1)
         self.assertEqual(discussions[0].id, discussion.id)
+
+    def test_discussion_list_supports_registered_unanswered_sort(self):
+        first_discussion = DiscussionService.create_discussion(
+            title="零回复讨论",
+            content="等待回复",
+            user=self.user,
+        )
+        answered_discussion = DiscussionService.create_discussion(
+            title="已有回复讨论",
+            content="已经有回复",
+            user=self.user,
+        )
+        PostService.create_post(
+            discussion_id=answered_discussion.id,
+            content="我来回复一下",
+            user=self.user,
+        )
+
+        discussions, total = DiscussionService.get_discussion_list(sort="unanswered", user=self.user)
+
+        self.assertEqual(total, 2)
+        self.assertEqual(discussions[0].id, first_discussion.id)
+        self.assertEqual(discussions[1].id, answered_discussion.id)
+
+    def test_discussions_api_returns_registered_sort_catalog(self):
+        DiscussionService.create_discussion(
+            title="排序目录讨论",
+            content="用于测试排序元数据",
+            user=self.user,
+        )
+
+        response = self.client.get("/api/discussions/", {"sort": "unanswered"})
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["sort"], "unanswered")
+        self.assertTrue(any(item["code"] == "latest" and item["is_default"] for item in payload["available_sorts"]))
+        self.assertTrue(any(item["code"] == "unanswered" for item in payload["available_sorts"]))
 
     def test_chinese_tokenizer_keeps_phrase_and_segments(self):
         tokens = SearchService.tokenize_query("中文搜索")
@@ -3258,6 +3305,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("event_listeners", payload)
         self.assertIn("post_types", payload)
         self.assertIn("search_filters", payload)
+        self.assertIn("discussion_sorts", payload)
         self.assertIn("resource_fields", payload)
         module_ids = {module["id"] for module in payload["modules"]}
         self.assertIn("core", module_ids)
@@ -3284,6 +3332,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("search_filters", tags_module)
         self.assertEqual(core_module["dependency_status"], "healthy")
         discussions_module = next(module for module in payload["modules"] if module["id"] == "discussions")
+        self.assertIn("discussion_sorts", discussions_module)
         self.assertTrue(any(item["code"] == "author" and item["syntax"] == "author:<username>" for item in discussions_module["search_filters"]))
         self.assertTrue(any(item["code"] == "is_sticky" and item["syntax"] == "is:sticky" for item in discussions_module["search_filters"]))
         self.assertTrue(any(item["code"] == "is_locked" and item["syntax"] == "is:locked" for item in discussions_module["search_filters"]))
@@ -3291,6 +3340,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertTrue(any(item["module_id"] == "tags" and item["code"] == "tag" for item in payload["search_filters"]))
         self.assertTrue(any(item["module_id"] == "discussions" and item["code"] == "author" for item in payload["search_filters"]))
         self.assertTrue(any(item["module_id"] == "discussions" and item["target"] == "post" and item["code"] == "author" for item in payload["search_filters"]))
+        self.assertTrue(any(item["module_id"] == "discussions" and item["code"] == "unanswered" for item in payload["discussion_sorts"]))
         self.assertTrue(any(item["field"] == "can_start_discussion" for item in tags_module["resource_fields"]))
         self.assertTrue(any(item["resource"] == "search_post" and item["field"] == "user" for item in payload["resource_fields"]))
         self.assertTrue(any(item["module_id"] == "notifications" for item in payload["user_preferences"]))

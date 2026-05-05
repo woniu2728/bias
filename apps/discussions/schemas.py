@@ -111,6 +111,8 @@ class DiscussionListSchema(BaseModel):
     total: int
     page: int
     limit: int
+    sort: str = "latest"
+    available_sorts: List[dict] = []
     data: List[DiscussionOutSchema]
 
 

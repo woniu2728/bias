@@ -43,6 +43,17 @@ def _serialize_discussion_payload(discussion, user=None):
     return payload
 
 
+def _serialize_discussion_sort(definition):
+    return {
+        "code": definition.code,
+        "label": definition.label,
+        "module_id": definition.module_id,
+        "description": definition.description,
+        "icon": definition.icon,
+        "is_default": definition.is_default,
+    }
+
+
 @router.post("/", response=DiscussionOutSchema, auth=AuthBearer(), tags=["Discussions"])
 def create_discussion(request, payload: DiscussionCreateSchema):
     """
@@ -98,11 +109,17 @@ def list_discussions(
         limit=limit,
         user=user,
     )
+    active_sort = DiscussionService.normalize_discussion_sort(sort)
 
     return {
         "total": total,
         "page": page,
         "limit": limit,
+        "sort": active_sort,
+        "available_sorts": [
+            _serialize_discussion_sort(item)
+            for item in DiscussionService.get_discussion_sort_catalog()
+        ],
         "data": [_serialize_discussion_payload(discussion, user=user) for discussion in discussions],
     }
 

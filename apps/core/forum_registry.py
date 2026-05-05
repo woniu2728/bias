@@ -78,6 +78,7 @@ class PostTypeDefinition:
 
 SearchFilterParser = Callable[[str], Any | None]
 SearchFilterApplier = Callable[[Any, Any, dict], Any]
+DiscussionSortApplier = Callable[[Any, dict], Any]
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,18 @@ class SearchFilterDefinition:
     applier: SearchFilterApplier
     syntax: str = ""
     description: str = ""
+
+
+@dataclass(frozen=True)
+class DiscussionSortDefinition:
+    code: str
+    label: str
+    module_id: str
+    applier: DiscussionSortApplier
+    description: str = ""
+    icon: str = "fas fa-sort"
+    is_default: bool = False
+    order: int = 100
 
 
 @dataclass(frozen=True)
@@ -110,6 +123,7 @@ class ForumModuleDefinition:
     event_listeners: Tuple[EventListenerDefinition, ...] = ()
     post_types: Tuple[PostTypeDefinition, ...] = ()
     search_filters: Tuple[SearchFilterDefinition, ...] = ()
+    discussion_sorts: Tuple[DiscussionSortDefinition, ...] = ()
 
 
 class ForumRegistry:
@@ -123,6 +137,7 @@ class ForumRegistry:
         self._event_listeners: List[EventListenerDefinition] = []
         self._post_types: Dict[str, PostTypeDefinition] = {}
         self._search_filters: List[SearchFilterDefinition] = []
+        self._discussion_sorts: Dict[str, DiscussionSortDefinition] = {}
 
     def register_module(self, module: ForumModuleDefinition) -> ForumModuleDefinition:
         self._modules[module.module_id] = module
@@ -149,6 +164,9 @@ class ForumRegistry:
 
         for search_filter in module.search_filters:
             self._search_filters.append(search_filter)
+
+        for discussion_sort in module.discussion_sorts:
+            self._discussion_sorts[discussion_sort.code] = discussion_sort
 
         self._admin_pages.sort(key=lambda item: (item.nav_section, item.label, item.path))
         self._event_listeners.sort(key=lambda item: (item.event, item.module_id, item.listener))
@@ -256,6 +274,28 @@ class ForumRegistry:
         if target is not None:
             filters = [definition for definition in filters if definition.target == target]
         return filters
+
+    def get_discussion_sorts(self) -> List[DiscussionSortDefinition]:
+        return sorted(
+            self._discussion_sorts.values(),
+            key=lambda item: (item.order, item.module_id, item.label, item.code),
+        )
+
+    def get_discussion_sort(self, code: str) -> DiscussionSortDefinition | None:
+        normalized = (code or "").strip()
+        if normalized in self._discussion_sorts:
+            return self._discussion_sorts[normalized]
+
+        for definition in self.get_discussion_sorts():
+            if definition.is_default:
+                return definition
+        return None
+
+    def get_default_discussion_sort_code(self) -> str:
+        for definition in self.get_discussion_sorts():
+            if definition.is_default:
+                return definition.code
+        return "latest"
 
     def get_permission_sections(self) -> List[dict]:
         sections: Dict[str, dict] = {}
@@ -529,6 +569,54 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
             ),
             capabilities=("discussion-list", "discussion-detail", "composer", "moderation"),
             dependencies=("posts",),
+            discussion_sorts=(
+                DiscussionSortDefinition(
+                    code="latest",
+                    label="最新活跃",
+                    module_id="discussions",
+                    applier=_apply_discussion_latest_sort,
+                    description="按最后活跃时间排序，优先展示最近有新回复的讨论。",
+                    icon="fas fa-clock",
+                    is_default=True,
+                    order=10,
+                ),
+                DiscussionSortDefinition(
+                    code="newest",
+                    label="新主题",
+                    module_id="discussions",
+                    applier=_apply_discussion_newest_sort,
+                    description="按讨论创建时间倒序，优先展示最新发布的主题。",
+                    icon="fas fa-sparkles",
+                    order=20,
+                ),
+                DiscussionSortDefinition(
+                    code="top",
+                    label="热门",
+                    module_id="discussions",
+                    applier=_apply_discussion_top_sort,
+                    description="按回复数和浏览量综合排序，优先展示热门讨论。",
+                    icon="fas fa-fire",
+                    order=30,
+                ),
+                DiscussionSortDefinition(
+                    code="unanswered",
+                    label="零回复",
+                    module_id="discussions",
+                    applier=_apply_discussion_unanswered_sort,
+                    description="优先展示还没有收到其他回复的讨论，便于发现待回应主题。",
+                    icon="fas fa-comment-slash",
+                    order=40,
+                ),
+                DiscussionSortDefinition(
+                    code="oldest",
+                    label="最早发布",
+                    module_id="discussions",
+                    applier=_apply_discussion_oldest_sort,
+                    description="按讨论创建时间正序排序。",
+                    icon="fas fa-hourglass-start",
+                    order=50,
+                ),
+            ),
             search_filters=(
                 SearchFilterDefinition(
                     code="author",
@@ -1330,6 +1418,26 @@ def _apply_post_mentioned_me_search_filter(queryset, enabled: bool, context: dic
     if not user or not getattr(user, "is_authenticated", False):
         return queryset.none()
     return queryset.filter(mentions__mentions_user=user)
+
+
+def _apply_discussion_latest_sort(queryset, context: dict):
+    return queryset.order_by("-is_sticky", "-last_posted_at", "-id")
+
+
+def _apply_discussion_top_sort(queryset, context: dict):
+    return queryset.order_by("-is_sticky", "-comment_count", "-view_count", "-last_posted_at", "-id")
+
+
+def _apply_discussion_oldest_sort(queryset, context: dict):
+    return queryset.order_by("-is_sticky", "created_at", "id")
+
+
+def _apply_discussion_newest_sort(queryset, context: dict):
+    return queryset.order_by("-is_sticky", "-created_at", "-id")
+
+
+def _apply_discussion_unanswered_sort(queryset, context: dict):
+    return queryset.order_by("-is_sticky", "comment_count", "-created_at", "-id")
 
 
 def _parse_is_search_filter(token: str, expected: str) -> bool | None:
