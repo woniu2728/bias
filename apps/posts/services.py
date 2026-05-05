@@ -10,7 +10,13 @@ from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
-from apps.core.forum_events import PostApprovedEvent, PostCreatedEvent
+from apps.core.forum_events import (
+    PostApprovedEvent,
+    PostCreatedEvent,
+    PostHiddenEvent,
+    PostRejectedEvent,
+    PostResubmittedEvent,
+)
 from apps.core.forum_registry import get_forum_registry
 from apps.posts.models import Post, PostLike, PostMentionsUser, PostFlag
 from apps.discussions.models import Discussion
@@ -28,12 +34,6 @@ DEFAULT_POST_TYPE = FORUM_REGISTRY.get_default_post_type_code()
 STREAM_POST_TYPES = FORUM_REGISTRY.get_stream_post_type_codes()
 DISCUSSION_COUNTED_POST_TYPES = FORUM_REGISTRY.get_discussion_counted_post_type_codes()
 USER_COUNTED_POST_TYPES = FORUM_REGISTRY.get_user_counted_post_type_codes()
-POST_APPROVED_EVENT_TYPE = "postApproved"
-POST_REJECTED_EVENT_TYPE = "postRejected"
-POST_RESUBMITTED_EVENT_TYPE = "postResubmitted"
-POST_HIDDEN_EVENT_TYPE = "postHidden"
-
-
 class PostService:
     """帖子服务"""
 
@@ -405,16 +405,13 @@ class PostService:
             PostService._process_mentions(post, content)
 
             if previous_approval_status:
-                PostService._create_moderation_event_post(
-                    discussion=post.discussion,
-                    actor=user,
-                    event_type=POST_RESUBMITTED_EVENT_TYPE,
-                    content=(
-                        f"target_post_id: {post.id}\n"
-                        f"target_post_number: {post.number}\n"
-                        f"previous_status: {previous_approval_status}\n"
-                        "note:"
-                    ),
+                get_forum_event_bus().dispatch(
+                    PostResubmittedEvent(
+                        post_id=post.id,
+                        discussion_id=post.discussion_id,
+                        actor_user_id=user.id,
+                        previous_status=previous_approval_status,
+                    )
                 )
 
             return post
@@ -493,15 +490,14 @@ class PostService:
                     post.user.comment_count = F("comment_count") + delta
                     post.user.save(update_fields=["comment_count"])
 
-            PostService._create_moderation_event_post(
-                discussion=post.discussion,
-                actor=admin_user,
-                event_type=POST_HIDDEN_EVENT_TYPE,
-                content=(
-                    f"state: {'hidden' if is_hidden else 'restored'}\n"
-                    f"target_post_id: {post.id}\n"
-                    f"target_post_number: {post.number}"
-                ),
+            get_forum_event_bus().dispatch(
+                PostHiddenEvent(
+                    post_id=post.id,
+                    discussion_id=post.discussion_id,
+                    actor_user_id=admin_user.id,
+                    post_number=post.number,
+                    is_hidden=is_hidden,
+                )
             )
 
         post.refresh_from_db()
@@ -771,18 +767,6 @@ class PostService:
             else:
                 TagService.refresh_discussion_tag_stats(discussion.id)
 
-            PostService._create_moderation_event_post(
-                discussion=discussion,
-                actor=admin_user,
-                event_type=POST_APPROVED_EVENT_TYPE,
-                content=(
-                    f"target_post_id: {post.id}\n"
-                    f"target_post_number: {post.number}\n"
-                    f"previous_status: {previous_status}\n"
-                    f"note: {note}"
-                ),
-            )
-
         post.refresh_from_db()
         return post
 
@@ -814,39 +798,17 @@ class PostService:
                     post.user.save(update_fields=['comment_count'])
 
             if previous_status != Post.APPROVAL_REJECTED:
-                from apps.notifications.services import NotificationService
-                NotificationService.notify_post_rejected(post, admin_user, note=note)
-            PostService._create_moderation_event_post(
-                discussion=post.discussion,
-                actor=admin_user,
-                event_type=POST_REJECTED_EVENT_TYPE,
-                content=(
-                    f"target_post_id: {post.id}\n"
-                    f"target_post_number: {post.number}\n"
-                    f"previous_status: {previous_status}\n"
-                    f"note: {note}"
-                ),
-            )
+                get_forum_event_bus().dispatch(
+                    PostRejectedEvent(
+                        post_id=post.id,
+                        discussion_id=post.discussion_id,
+                        actor_user_id=post.user_id,
+                        admin_user_id=admin_user.id,
+                        note=note,
+                        previous_status=previous_status,
+                    )
+                )
         return post
-
-    @staticmethod
-    def _create_moderation_event_post(
-        discussion: Discussion,
-        actor: User,
-        event_type: str,
-        content: str,
-    ) -> Post:
-        locked_discussion = PostService._lock_discussion_for_post_number(discussion.id)
-        return PostService._create_post_with_sequential_number(
-            discussion=locked_discussion,
-            user=actor,
-            type=event_type,
-            content=content,
-            content_html="",
-            approval_status=Post.APPROVAL_APPROVED,
-            approved_at=timezone.now(),
-            approved_by=actor,
-        )
 
     @staticmethod
     def unlike_post(post_id: int, user: User) -> bool:

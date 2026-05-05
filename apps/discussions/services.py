@@ -9,7 +9,17 @@ from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
-from apps.core.forum_events import DiscussionApprovedEvent, DiscussionCreatedEvent
+from apps.core.forum_events import (
+    DiscussionApprovedEvent,
+    DiscussionCreatedEvent,
+    DiscussionHiddenEvent,
+    DiscussionLockedEvent,
+    DiscussionRejectedEvent,
+    DiscussionRenamedEvent,
+    DiscussionResubmittedEvent,
+    DiscussionStickyChangedEvent,
+    DiscussionTaggedEvent,
+)
 from apps.core.forum_registry import get_forum_registry
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post
@@ -26,16 +36,6 @@ FORUM_REGISTRY = get_forum_registry()
 DEFAULT_POST_TYPE = FORUM_REGISTRY.get_default_post_type_code()
 DISCUSSION_COUNTED_POST_TYPES = FORUM_REGISTRY.get_discussion_counted_post_type_codes()
 USER_COUNTED_POST_TYPES = FORUM_REGISTRY.get_user_counted_post_type_codes()
-DISCUSSION_RENAMED_POST_TYPE = "discussionRenamed"
-DISCUSSION_LOCKED_POST_TYPE = "discussionLocked"
-DISCUSSION_STICKY_POST_TYPE = "discussionSticky"
-DISCUSSION_TAGGED_POST_TYPE = "discussionTagged"
-DISCUSSION_HIDDEN_POST_TYPE = "discussionHidden"
-DISCUSSION_APPROVED_POST_TYPE = "discussionApproved"
-DISCUSSION_REJECTED_POST_TYPE = "discussionRejected"
-DISCUSSION_RESUBMITTED_POST_TYPE = "discussionResubmitted"
-
-
 class DiscussionService:
     """讨论服务"""
 
@@ -666,24 +666,24 @@ class DiscussionService:
                 first_post.save(update_fields=[
                     'approval_status', 'approved_at', 'approved_by', 'approval_note', 'hidden_at', 'hidden_user'
                 ])
-                DiscussionService._create_system_event_post(
-                    discussion=discussion,
-                    actor=user,
-                    post_type=DISCUSSION_RESUBMITTED_POST_TYPE,
-                    content=(
-                        f"previous_status: {previous_approval_status}\n"
-                        "note:"
-                    ),
+                get_forum_event_bus().dispatch(
+                    DiscussionResubmittedEvent(
+                        discussion_id=discussion.id,
+                        actor_user_id=user.id,
+                        previous_status=previous_approval_status,
+                    )
                 )
 
             if should_persist_discussion:
                 discussion.save()
             if title is not None and title != previous_title:
-                DiscussionService._create_system_event_post(
-                    discussion=discussion,
-                    actor=user,
-                    post_type=DISCUSSION_RENAMED_POST_TYPE,
-                    content=f"from: {previous_title}\nto: {title}",
+                get_forum_event_bus().dispatch(
+                    DiscussionRenamedEvent(
+                        discussion_id=discussion.id,
+                        actor_user_id=user.id,
+                        old_title=previous_title,
+                        new_title=title,
+                    )
                 )
             if tag_ids is not None:
                 current_tag_names = list(
@@ -694,14 +694,13 @@ class DiscussionService:
                 added_tags = [name for name in current_tag_names if name not in previous_tag_names]
                 removed_tags = [name for name in previous_tag_names if name not in current_tag_names]
                 if added_tags or removed_tags:
-                    DiscussionService._create_system_event_post(
-                        discussion=discussion,
-                        actor=user,
-                        post_type=DISCUSSION_TAGGED_POST_TYPE,
-                        content=(
-                            f"added:{'|'.join(added_tags)}\n"
-                            f"removed:{'|'.join(removed_tags)}"
-                        ),
+                    get_forum_event_bus().dispatch(
+                        DiscussionTaggedEvent(
+                            discussion_id=discussion.id,
+                            actor_user_id=user.id,
+                            added_tags=tuple(added_tags),
+                            removed_tags=tuple(removed_tags),
+                        )
                     )
             if is_hidden is not None or tag_ids is not None:
                 refreshed_tag_ids = set(previous_tag_ids) | set(discussion.discussion_tags.values_list('tag_id', flat=True))
@@ -738,11 +737,12 @@ class DiscussionService:
                 for user_id, total in approved_reply_counts.items():
                     User.objects.filter(id=user_id).update(comment_count=F("comment_count") + (reply_delta * total))
 
-            DiscussionService._create_system_event_post(
-                discussion=discussion,
-                actor=user,
-                post_type=DISCUSSION_HIDDEN_POST_TYPE,
-                content="hidden" if is_hidden else "restored",
+            get_forum_event_bus().dispatch(
+                DiscussionHiddenEvent(
+                    discussion_id=discussion.id,
+                    actor_user_id=user.id,
+                    is_hidden=is_hidden,
+                )
             )
             TagService.refresh_discussion_tag_stats(discussion.id)
         return discussion
@@ -792,16 +792,6 @@ class DiscussionService:
             else:
                 TagService.refresh_discussion_tag_stats(discussion.id)
 
-            DiscussionService._create_system_event_post(
-                discussion=discussion,
-                actor=admin_user,
-                post_type=DISCUSSION_APPROVED_POST_TYPE,
-                content=(
-                    f"previous_status: {previous_status}\n"
-                    f"note: {note}"
-                ),
-            )
-
         discussion.refresh_from_db()
         return discussion
 
@@ -841,18 +831,15 @@ class DiscussionService:
                     User.objects.filter(id=user_id).update(comment_count=F("comment_count") - total)
 
             if previous_status != Discussion.APPROVAL_REJECTED:
-                from apps.notifications.services import NotificationService
-                NotificationService.notify_discussion_rejected(discussion, admin_user, note=note)
+                get_forum_event_bus().dispatch(
+                    DiscussionRejectedEvent(
+                        discussion_id=discussion.id,
+                        admin_user_id=admin_user.id,
+                        note=note,
+                        previous_status=previous_status,
+                    )
+                )
             TagService.refresh_discussion_tag_stats(discussion.id)
-            DiscussionService._create_system_event_post(
-                discussion=discussion,
-                actor=admin_user,
-                post_type=DISCUSSION_REJECTED_POST_TYPE,
-                content=(
-                    f"previous_status: {previous_status}\n"
-                    f"note: {note}"
-                ),
-            )
 
         discussion.refresh_from_db()
         return discussion
@@ -949,11 +936,12 @@ class DiscussionService:
 
         discussion.is_locked = is_locked
         discussion.save(update_fields=["is_locked"])
-        DiscussionService._create_system_event_post(
-            discussion=discussion,
-            actor=actor,
-            post_type=DISCUSSION_LOCKED_POST_TYPE,
-            content="locked" if is_locked else "unlocked",
+        get_forum_event_bus().dispatch(
+            DiscussionLockedEvent(
+                discussion_id=discussion.id,
+                actor_user_id=actor.id,
+                is_locked=is_locked,
+            )
         )
         return discussion
 
@@ -967,45 +955,14 @@ class DiscussionService:
 
         discussion.is_sticky = is_sticky
         discussion.save(update_fields=["is_sticky"])
-        DiscussionService._create_system_event_post(
-            discussion=discussion,
-            actor=actor,
-            post_type=DISCUSSION_STICKY_POST_TYPE,
-            content="sticky" if is_sticky else "unsticky",
+        get_forum_event_bus().dispatch(
+            DiscussionStickyChangedEvent(
+                discussion_id=discussion.id,
+                actor_user_id=actor.id,
+                is_sticky=is_sticky,
+            )
         )
         return discussion
-
-    @staticmethod
-    def _create_system_event_post(
-        discussion: Discussion,
-        actor: User,
-        post_type: str,
-        content: str,
-    ) -> Post:
-        from apps.posts.services import PostService
-
-        locked_discussion = PostService._lock_discussion_for_post_number(discussion.id)
-        event_post = PostService._create_post_with_sequential_number(
-            discussion=locked_discussion,
-            user=actor,
-            type=post_type,
-            content=content,
-            content_html="",
-            approval_status=Post.APPROVAL_APPROVED,
-            approved_at=timezone.now(),
-            approved_by=actor,
-        )
-        locked_discussion.last_post_id = event_post.id
-        locked_discussion.last_post_number = event_post.number
-        locked_discussion.last_posted_at = event_post.created_at
-        locked_discussion.last_posted_user = actor
-        locked_discussion.save(update_fields=[
-            "last_post_id",
-            "last_post_number",
-            "last_posted_at",
-            "last_posted_user",
-        ])
-        return event_post
 
     @staticmethod
     def can_edit_discussion(discussion: Discussion, user: User) -> bool:

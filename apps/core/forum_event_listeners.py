@@ -1,11 +1,36 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from apps.core.domain_events import get_forum_event_bus
 from apps.core.forum_events import (
     DiscussionApprovedEvent,
+    DiscussionHiddenEvent,
+    DiscussionLockedEvent,
     DiscussionCreatedEvent,
+    DiscussionRejectedEvent,
+    DiscussionRenamedEvent,
+    DiscussionResubmittedEvent,
+    DiscussionStickyChangedEvent,
+    DiscussionTaggedEvent,
     PostApprovedEvent,
     PostCreatedEvent,
+    PostHiddenEvent,
+    PostRejectedEvent,
+    PostResubmittedEvent,
+)
+from apps.core.forum_timeline import (
+    build_discussion_hidden_content,
+    build_discussion_locked_content,
+    build_discussion_renamed_content,
+    build_discussion_resubmitted_content,
+    build_discussion_review_content,
+    build_discussion_sticky_content,
+    build_discussion_tagged_content,
+    build_post_hidden_content,
+    build_post_resubmitted_content,
+    build_post_review_content,
+    create_timeline_event_post,
 )
 
 
@@ -20,8 +45,18 @@ def bootstrap_forum_event_listeners() -> None:
     event_bus = get_forum_event_bus()
     event_bus.register(DiscussionCreatedEvent, handle_discussion_created)
     event_bus.register(DiscussionApprovedEvent, handle_discussion_approved)
+    event_bus.register(DiscussionRenamedEvent, handle_discussion_renamed)
+    event_bus.register(DiscussionTaggedEvent, handle_discussion_tagged)
+    event_bus.register(DiscussionLockedEvent, handle_discussion_locked)
+    event_bus.register(DiscussionStickyChangedEvent, handle_discussion_sticky_changed)
+    event_bus.register(DiscussionHiddenEvent, handle_discussion_hidden)
+    event_bus.register(DiscussionRejectedEvent, handle_discussion_rejected)
+    event_bus.register(DiscussionResubmittedEvent, handle_discussion_resubmitted)
     event_bus.register(PostCreatedEvent, handle_post_created)
     event_bus.register(PostApprovedEvent, handle_post_approved)
+    event_bus.register(PostRejectedEvent, handle_post_rejected)
+    event_bus.register(PostResubmittedEvent, handle_post_resubmitted)
+    event_bus.register(PostHiddenEvent, handle_post_hidden)
     _listeners_bootstrapped = True
 
 
@@ -48,6 +83,85 @@ def handle_discussion_approved(event: DiscussionApprovedEvent) -> None:
 
     NotificationService.notify_discussion_approved(discussion, admin_user, note=event.note)
     TagService.refresh_discussion_tag_stats(discussion.id)
+    create_timeline_event_post(
+        discussion_id=discussion.id,
+        actor_user_id=admin_user.id,
+        post_type="discussionApproved",
+        content=build_discussion_review_content(
+            SimpleNamespace(
+                post_type="discussionApproved",
+                previous_status="pending",
+                note=event.note,
+            )
+        )[1],
+    )
+
+
+def handle_discussion_renamed(event: DiscussionRenamedEvent) -> None:
+    _create_timeline_from_builder(
+        _make_timeline_context(event, post_type="discussionRenamed"),
+        build_discussion_renamed_content,
+    )
+
+
+def handle_discussion_tagged(event: DiscussionTaggedEvent) -> None:
+    _create_timeline_from_builder(
+        _make_timeline_context(event, post_type="discussionTagged"),
+        build_discussion_tagged_content,
+    )
+
+
+def handle_discussion_locked(event: DiscussionLockedEvent) -> None:
+    _create_timeline_from_builder(
+        _make_timeline_context(event, post_type="discussionLocked"),
+        build_discussion_locked_content,
+    )
+
+
+def handle_discussion_sticky_changed(event: DiscussionStickyChangedEvent) -> None:
+    _create_timeline_from_builder(
+        _make_timeline_context(event, post_type="discussionSticky"),
+        build_discussion_sticky_content,
+    )
+
+
+def handle_discussion_hidden(event: DiscussionHiddenEvent) -> None:
+    _create_timeline_from_builder(
+        _make_timeline_context(event, post_type="discussionHidden"),
+        build_discussion_hidden_content,
+    )
+
+
+def handle_discussion_rejected(event: DiscussionRejectedEvent) -> None:
+    from apps.notifications.services import NotificationService
+    from apps.discussions.models import Discussion
+    from apps.users.models import User
+
+    try:
+        discussion = Discussion.objects.select_related("user").get(id=event.discussion_id)
+        admin_user = User.objects.get(id=event.admin_user_id)
+    except (Discussion.DoesNotExist, User.DoesNotExist):
+        return
+
+    NotificationService.notify_discussion_rejected(discussion, admin_user, note=event.note)
+    _create_timeline_from_builder(
+        _make_timeline_context(
+            event,
+            actor_user_id=event.admin_user_id,
+            post_type="discussionRejected",
+        ),
+        build_discussion_review_content,
+    )
+
+
+def handle_discussion_resubmitted(event: DiscussionResubmittedEvent) -> None:
+    _create_timeline_from_builder(
+        _make_timeline_context(
+            event,
+            post_type="discussionResubmitted",
+        ),
+        build_discussion_resubmitted_content,
+    )
 
 
 def handle_post_created(event: PostCreatedEvent) -> None:
@@ -103,3 +217,77 @@ def handle_post_approved(event: PostApprovedEvent) -> None:
 
     NotificationService.notify_post_approved(post, admin_user, note=event.note)
     TagService.refresh_discussion_tag_stats(event.discussion_id)
+    enriched_event = _make_timeline_context(
+        event,
+        actor_user_id=event.admin_user_id,
+        post_type="postApproved",
+        post_number=getattr(post, "number", None),
+    )
+    _create_timeline_from_builder(enriched_event, build_post_review_content)
+
+
+def handle_post_rejected(event: PostRejectedEvent) -> None:
+    from apps.notifications.services import NotificationService
+    from apps.posts.models import Post
+    from apps.users.models import User
+
+    try:
+        post = Post.objects.select_related("discussion", "user").get(id=event.post_id)
+        admin_user = User.objects.get(id=event.admin_user_id)
+    except (Post.DoesNotExist, User.DoesNotExist):
+        return
+
+    NotificationService.notify_post_rejected(post, admin_user, note=event.note)
+    enriched_event = _make_timeline_context(
+        event,
+        actor_user_id=event.admin_user_id,
+        post_type="postRejected",
+        post_number=getattr(post, "number", None),
+    )
+    _create_timeline_from_builder(enriched_event, build_post_review_content)
+
+
+def handle_post_resubmitted(event: PostResubmittedEvent) -> None:
+    from apps.posts.models import Post
+
+    try:
+        post = Post.objects.get(id=event.post_id)
+    except Post.DoesNotExist:
+        return
+
+    enriched_event = _make_timeline_context(
+        event,
+        post_type="postResubmitted",
+        post_number=getattr(post, "number", None),
+    )
+    _create_timeline_from_builder(enriched_event, build_post_resubmitted_content)
+
+
+def handle_post_hidden(event: PostHiddenEvent) -> None:
+    _create_timeline_from_builder(
+        _make_timeline_context(
+            event,
+            post_type="postHidden",
+        ),
+        build_post_hidden_content,
+    )
+
+
+def _create_timeline_from_builder(event, builder) -> None:
+    built = builder(event)
+    if not built:
+        return
+
+    post_type, content = built
+    create_timeline_event_post(
+        discussion_id=event.discussion_id,
+        actor_user_id=event.actor_user_id,
+        post_type=post_type,
+        content=content,
+    )
+
+
+def _make_timeline_context(event, **extra):
+    payload = dict(getattr(event, "__dict__", {}))
+    payload.update(extra)
+    return SimpleNamespace(**payload)

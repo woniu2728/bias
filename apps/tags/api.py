@@ -4,7 +4,6 @@
 from typing import Optional
 from ninja import Router
 from django.core.exceptions import PermissionDenied
-from django.http import JsonResponse
 from django.db.models import Prefetch
 
 from apps.tags.models import Tag
@@ -16,6 +15,7 @@ from apps.tags.schemas import (
     TagListSchema,
 )
 from apps.tags.services import TagService
+from apps.core.api_errors import api_error
 from apps.core.auth import AuthBearer, get_optional_user
 from apps.core.resource_registry import get_resource_registry
 
@@ -218,7 +218,7 @@ def get_tag(request, tag_id: int):
     user = get_optional_user(request)
     tag = Tag.objects.select_related('last_posted_discussion').prefetch_related('children').get(id=tag.id)
     if not TagService.can_view_tag(tag, user):
-        return JsonResponse({"error": "没有权限查看此标签"}, status=403)
+        return api_error("没有权限查看此标签", status=403)
     return _serialize_tag(tag, user=user, include_children=True)
 
 
@@ -239,7 +239,7 @@ def get_tag_by_slug(request, slug: str):
     user = get_optional_user(request)
     tag = Tag.objects.select_related('last_posted_discussion').prefetch_related('children').get(id=tag.id)
     if not TagService.can_view_tag(tag, user):
-        return JsonResponse({"error": "没有权限查看此标签"}, status=403)
+        return api_error("没有权限查看此标签", status=403)
     return _serialize_tag(tag, user=user, include_children=True)
 
 

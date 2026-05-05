@@ -3,8 +3,8 @@
 """
 import os
 from typing import Optional
-from django.http import JsonResponse
 from ninja import Router
+from apps.core.api_errors import api_error
 from apps.core.schemas import (
     SearchQuerySchema,
     SearchResultSchema,
@@ -69,12 +69,12 @@ def upload_attachment(request):
     """上传 composer 附件或图片"""
     file = request.FILES.get("file")
     if not file:
-        return JsonResponse({"error": "请选择要上传的文件"}, status=400)
+        return api_error("请选择要上传的文件", status=400)
 
     try:
         file_url, file_info = FileUploadService.upload_attachment(file, request.auth.id)
     except ValueError as e:
-        return JsonResponse({"error": str(e)}, status=400)
+        return api_error(str(e), status=400)
 
     ext = os.path.splitext(file.name)[1].lower()
     return {
@@ -223,7 +223,7 @@ def search(
 
     elif type == 'users':
         if not can_search_users:
-            return JsonResponse({"error": "没有权限搜索用户"}, status=403)
+            return api_error("没有权限搜索用户", status=403)
 
         users, total = SearchService.search_users(query, page, limit, context=context)
 
@@ -241,11 +241,7 @@ def search(
         }
 
     else:
-        return router.create_response(
-            request,
-            {"error": "无效的搜索类型"},
-            status=400
-        )
+        return api_error("无效的搜索类型", status=400)
 
 
 @router.get("/search/suggestions", response=SearchSuggestionSchema, tags=["Search"])
@@ -276,7 +272,7 @@ def get_search_filters(request, target: str = "all"):
     }
     targets = target_map.get((target or "all").strip().lower())
     if targets is None:
-        return JsonResponse({"error": "无效的搜索过滤目标"}, status=400)
+        return api_error("无效的搜索过滤目标", status=400)
 
     return {
         "target": target,
