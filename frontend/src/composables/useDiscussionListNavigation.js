@@ -5,7 +5,6 @@ const DEFAULT_DISCUSSION_FILTERS = [
   { code: 'all', label: '全部讨论', icon: 'far fa-comments' },
   { code: 'following', label: '关注中', icon: 'fas fa-bell', requires_authenticated_user: true },
   { code: 'my', label: '我的讨论', icon: 'fas fa-pen' },
-  { code: 'unread', label: '未读', icon: 'fas fa-circle', requires_authenticated_user: true },
 ]
 
 export function useDiscussionListNavigation({
