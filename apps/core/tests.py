@@ -29,7 +29,7 @@ from apps.core.online_service import OnlineUserService
 from apps.core.release import build_git_command, ensure_release_versions_aligned
 from apps.core.search_index_service import SEARCH_INDEX_DEFINITIONS
 from apps.core.settings_service import clear_runtime_setting_caches, get_setting_group
-from apps.core.services import SearchService
+from apps.core.services import PaginationService, SearchService
 from apps.core.test_runner import BiasDiscoverRunner
 from apps.core.websocket_auth import get_user_from_token
 from apps.discussions.services import DiscussionService
@@ -867,6 +867,12 @@ class ChineseSearchTests(TestCase):
         self.assertEqual(payload["page"], 1)
         self.assertEqual(payload["limit"], 100)
         self.assertEqual(len(payload["discussions"]), 3)
+
+    def test_pagination_service_normalizes_page_and_limit(self):
+        page, limit = PaginationService.normalize(0, 999)
+
+        self.assertEqual(page, 1)
+        self.assertEqual(limit, 100)
 
     def test_search_api_all_reuses_single_search_context(self):
         DiscussionService.create_discussion(

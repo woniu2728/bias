@@ -18,7 +18,7 @@ from apps.users.preferences import get_user_preference_value
 from apps.users.services import UserService
 from apps.tags.models import Tag, DiscussionTag
 from apps.tags.services import TagService
-from apps.core.services import SearchService
+from apps.core.services import PaginationService, SearchService
 from apps.core.visibility import build_discussion_visibility_q
 
 
@@ -332,6 +332,7 @@ class DiscussionService:
         Returns:
             Tuple[List[Discussion], int]: (讨论列表, 总数)
         """
+        page, limit = PaginationService.normalize(page, limit)
         queryset = Discussion.objects.select_related(
             'user', 'last_posted_user'
         ).prefetch_related('discussion_tags__tag', 'user__user_groups', 'last_posted_user__user_groups')
@@ -981,11 +982,11 @@ class DiscussionService:
         post_type: str,
         content: str,
     ) -> Post:
-        last_post = Post.objects.filter(discussion=discussion).order_by("-number").first()
-        next_number = (last_post.number + 1) if last_post else 1
-        event_post = Post.objects.create(
-            discussion=discussion,
-            number=next_number,
+        from apps.posts.services import PostService
+
+        locked_discussion = PostService._lock_discussion_for_post_number(discussion.id)
+        event_post = PostService._create_post_with_sequential_number(
+            discussion=locked_discussion,
             user=actor,
             type=post_type,
             content=content,
@@ -994,11 +995,11 @@ class DiscussionService:
             approved_at=timezone.now(),
             approved_by=actor,
         )
-        discussion.last_post_id = event_post.id
-        discussion.last_post_number = event_post.number
-        discussion.last_posted_at = event_post.created_at
-        discussion.last_posted_user = actor
-        discussion.save(update_fields=[
+        locked_discussion.last_post_id = event_post.id
+        locked_discussion.last_post_number = event_post.number
+        locked_discussion.last_posted_at = event_post.created_at
+        locked_discussion.last_posted_user = actor
+        locked_discussion.save(update_fields=[
             "last_post_id",
             "last_post_number",
             "last_posted_at",

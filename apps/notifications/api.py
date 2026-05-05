@@ -13,6 +13,7 @@ from apps.notifications.schemas import (
 from apps.notifications.services import NotificationService
 from apps.core.auth import AuthBearer
 from apps.core.resource_registry import get_resource_registry
+from apps.core.services import PaginationService
 
 router = Router()
 RESOURCE_REGISTRY = get_resource_registry()
@@ -60,6 +61,7 @@ def list_notifications(
     - page: 页码
     - limit: 每页数量
     """
+    page, limit = PaginationService.normalize(page, limit)
     notifications, total, unread_count, type_counts, unread_type_counts = NotificationService.get_notification_list(
         user=request.auth,
         is_read=is_read,

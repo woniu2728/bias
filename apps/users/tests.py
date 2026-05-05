@@ -353,6 +353,27 @@ class UserProfileApiTests(TestCase):
         matched_payload = next(item for item in payload if item["username"] == "search-profile-user")
         self.assertEqual(matched_payload["primary_group"]["name"], support_group.name)
 
+    def test_list_users_normalizes_page_and_limit(self):
+        viewer = User.objects.create_user(
+            username="user-limit-viewer",
+            email="user-limit-viewer@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        viewer_group = Group.objects.create(name="LimitViewers", color="#16a085")
+        Permission.objects.create(group=viewer_group, permission="viewUserList")
+        viewer.user_groups.add(viewer_group)
+        token = str(RefreshToken.for_user(viewer).access_token)
+
+        response = self.client.get(
+            "/api/users",
+            {"page": 0, "limit": 999},
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertLessEqual(len(response.json()), 100)
+
 
 class SuspendedUserAuthTests(TestCase):
     def setUp(self):

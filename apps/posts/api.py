@@ -24,6 +24,7 @@ from apps.core.auth import AuthBearer, get_optional_user
 from apps.core.forum_resources import serialize_user_payload
 from apps.core.forum_registry import get_forum_registry
 from apps.core.resource_registry import get_resource_registry
+from apps.core.services import PaginationService
 
 router = Router()
 RESOURCE_REGISTRY = get_resource_registry()
@@ -111,6 +112,7 @@ def list_all_posts(
     - limit: 每页数量
     """
     user = get_optional_user(request)
+    page, limit = PaginationService.normalize(page, limit)
 
     queryset = Post.objects.select_related(
         "discussion",
@@ -194,6 +196,7 @@ def list_posts(
     - limit: 每页数量
     """
     user = get_optional_user(request)
+    page, limit = PaginationService.normalize(page, limit)
     if near:
         page = PostService.get_page_for_near_post(
             discussion_id=discussion_id,

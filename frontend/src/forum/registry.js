@@ -48,7 +48,8 @@ registerForumNavItem({
   label: '全部讨论',
   description: '查看全站最新讨论流。',
   section: 'primary',
-  order: 10
+  order: 10,
+  surfaces: ['primary-nav', 'discussion-sidebar', 'mobile-drawer']
 })
 
 registerForumNavItem({
@@ -59,6 +60,7 @@ registerForumNavItem({
   description: '查看你关注讨论的更新。',
   section: 'primary',
   order: 20,
+  surfaces: ['discussion-sidebar', 'mobile-drawer'],
   isVisible: ({ authStore }) => Boolean(authStore?.user)
 })
 
@@ -69,7 +71,8 @@ registerForumNavItem({
   label: '全部标签',
   description: '按标签浏览论坛主题。',
   section: 'primary',
-  order: 30
+  order: 30,
+  surfaces: ['primary-nav', 'mobile-drawer']
 })
 
 registerForumNavItem({
@@ -95,6 +98,7 @@ registerForumNavItem({
   description: '查看你的资料、讨论和回复。',
   section: 'personal',
   order: 50,
+  surfaces: ['discussion-sidebar', 'mobile-drawer'],
   isVisible: ({ authStore }) => Boolean(authStore?.user)
 })
 

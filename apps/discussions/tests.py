@@ -199,6 +199,20 @@ class DiscussionApiTests(TestCase):
         self.assertEqual([item["id"] for item in my_response.json()["data"]], [my_discussion.id])
         self.assertEqual([item["id"] for item in unread_response.json()["data"]], [unread_discussion.id])
 
+    def test_discussion_list_api_normalizes_page_and_limit(self):
+        DiscussionService.create_discussion(
+            title="分页规范化讨论",
+            content="测试分页参数收口",
+            user=self.author,
+        )
+
+        response = self.client.get("/api/discussions/", {"page": 0, "limit": 999})
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["page"], 1)
+        self.assertEqual(payload["limit"], 100)
+
     def test_discussion_detail_does_not_mark_everything_read_immediately(self):
         discussion = DiscussionService.create_discussion(
             title="Unread detail",

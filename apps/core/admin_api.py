@@ -57,6 +57,7 @@ from apps.tags.models import Tag
 from apps.tags.services import TagService
 from apps.notifications.services import NotificationService
 from apps.users.group_utils import get_primary_group, serialize_group_badge
+from apps.core.services import PaginationService
 
 router = Router()
 
@@ -1216,6 +1217,7 @@ def save_permissions(request, payload: Dict[int, List[str]] = Body(...)):
 @require_staff
 def list_admin_users(request, page: int = 1, limit: int = 20, q: str = None):
     """获取用户列表（管理后台）"""
+    page, limit = PaginationService.normalize(page, limit)
     queryset = User.objects.prefetch_related("user_groups").all().order_by("-joined_at")
 
     if q:
@@ -1365,6 +1367,7 @@ def delete_admin_user(request, user_id: int):
 @require_staff
 def list_post_flags(request, page: int = 1, limit: int = 20, status: str = PostFlag.STATUS_OPEN):
     """获取帖子举报列表"""
+    page, limit = PaginationService.normalize(page, limit)
     flags, total = PostService.get_flag_list(status=status, page=page, limit=limit)
     return {
         "total": total,
@@ -1377,6 +1380,7 @@ def list_post_flags(request, page: int = 1, limit: int = 20, status: str = PostF
 @router.get("/approval-queue", auth=AuthBearer(), tags=["Admin"])
 @require_staff
 def list_approval_queue(request, page: int = 1, limit: int = 20, content_type: str = "all"):
+    page, limit = PaginationService.normalize(page, limit)
     items = []
 
     if content_type in {"all", "discussion"}:
@@ -1697,8 +1701,7 @@ def list_audit_logs(
     user_id: int = None,
 ):
     """获取管理员操作审计日志"""
-    page = max(1, int(page or 1))
-    limit = min(max(1, int(limit or 20)), 100)
+    page, limit = PaginationService.normalize(page, limit)
     queryset = (
         AuditLog.objects.select_related("user")
         .filter(action__startswith="admin.")

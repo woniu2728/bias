@@ -15,6 +15,7 @@ from typing import List
 from apps.core.auth import get_optional_user
 from apps.core.forum_resources import serialize_user_payload
 from apps.core.human_verification import HumanVerificationError, verify_human_verification
+from apps.core.services import PaginationService
 from .models import User
 from .preferences import normalize_user_preferences, serialize_user_preferences
 from apps.core.file_service import FileUploadService
@@ -258,6 +259,7 @@ def list_users(request, page: int = 1, limit: int = 20, q: str = None):
     user = get_optional_user(request)
     if user:
         user = _attach_current_user_context(user)
+    page, limit = PaginationService.normalize(page, limit)
 
     if q:
         if not UserService.has_forum_permission(user, "searchUsers"):

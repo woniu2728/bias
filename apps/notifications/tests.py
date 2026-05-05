@@ -521,6 +521,18 @@ class NotificationServiceTests(TestCase):
         self.assertEqual(payload["data"][0]["from_user"]["username"], self.replier.username)
         self.assertEqual(payload["data"][0]["from_user"]["primary_group"]["name"], group.name)
 
+    def test_notification_list_normalizes_page_and_limit(self):
+        response = self.client.get(
+            "/api/notifications",
+            {"page": 0, "limit": 999},
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["page"], 1)
+        self.assertEqual(payload["limit"], 100)
+
     @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "notification-cache-test"}})
     def test_notification_stats_reuses_cached_unread_count(self):
         cache.clear()

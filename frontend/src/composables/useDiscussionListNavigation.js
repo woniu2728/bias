@@ -1,11 +1,12 @@
 import { computed } from 'vue'
+import { getForumNavItems } from '@/forum/registry'
 import { flattenTags, normalizeTag, unwrapList } from '@/utils/forum'
 
 const DEFAULT_DISCUSSION_FILTERS = [
   { code: 'all', label: '全部讨论', icon: 'far fa-comments' },
   { code: 'following', label: '关注中', icon: 'fas fa-bell', requires_authenticated_user: true },
-  { code: 'my', label: '我的讨论', icon: 'fas fa-pen' },
 ]
+const SIDEBAR_HIDDEN_DISCUSSION_FILTER_CODES = new Set(['my', 'unread'])
 
 export function useDiscussionListNavigation({
   authStore,
@@ -51,25 +52,38 @@ export function useDiscussionListNavigation({
   })
 
   function buildSidebarFilterItems() {
+    const navItems = getForumNavItems({
+      authStore,
+      surface: 'discussion-sidebar',
+    })
+    const navItemsByCode = new Map(
+      navItems.map(item => [
+        item.key === 'home' ? 'all' : item.key,
+        item,
+      ])
+    )
     const sourceFilters = Array.isArray(filterOptions?.value) && filterOptions.value.length
       ? filterOptions.value
       : DEFAULT_DISCUSSION_FILTERS
     const fallbackByCode = new Map(DEFAULT_DISCUSSION_FILTERS.map(item => [item.code, item]))
 
     return sourceFilters
+      .filter(item => !SIDEBAR_HIDDEN_DISCUSSION_FILTER_CODES.has(item.code))
       .map(item => {
         const fallback = fallbackByCode.get(item.code) || {}
+        const navItem = navItemsByCode.get(item.code) || {}
         return {
           ...fallback,
+          ...navItem,
           ...item,
-          label: item.label || fallback.label || item.code,
-          icon: item.icon || fallback.icon || 'far fa-comments',
+          label: item.label || navItem.label || fallback.label || item.code,
+          icon: item.icon || navItem.icon || fallback.icon || 'far fa-comments',
         }
       })
       .filter(item => !(item.requires_authenticated_user && !authStore.user))
       .map(item => ({
         ...item,
-        to: buildDiscussionFilterLocation(item.code),
+        to: item.to || buildDiscussionFilterLocation(item.code),
         active: isDiscussionFilterActive(item.code),
       }))
   }

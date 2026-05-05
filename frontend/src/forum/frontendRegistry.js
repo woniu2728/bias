@@ -21,12 +21,20 @@ function upsertByKey(target, key, value) {
 function normalizeRegisteredItem(item, defaults = {}) {
   return {
     order: 100,
+    surfaces: [],
     ...defaults,
     ...item,
   }
 }
 
 function resolveRegisteredItem(item, context = {}) {
+  if (Array.isArray(item.surfaces) && item.surfaces.length > 0) {
+    const currentSurface = String(context.surface || '').trim()
+    if (currentSurface && !item.surfaces.includes(currentSurface)) {
+      return null
+    }
+  }
+
   const isVisible = typeof item.isVisible === 'function' ? item.isVisible(context) : true
   if (!isVisible) {
     return null

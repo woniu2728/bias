@@ -44,9 +44,8 @@ class SearchContext:
         return self.discussion_total + self.post_total + self.user_total
 
 
-class SearchService:
-    """搜索服务"""
-
+class PaginationService:
+    DEFAULT_LIMIT = 20
     MIN_PAGE = 1
     MIN_LIMIT = 1
     MAX_LIMIT = 100
@@ -56,16 +55,41 @@ class SearchService:
         try:
             normalized = int(page)
         except (TypeError, ValueError):
-            return SearchService.MIN_PAGE
-        return max(SearchService.MIN_PAGE, normalized)
+            return PaginationService.MIN_PAGE
+        return max(PaginationService.MIN_PAGE, normalized)
 
     @staticmethod
-    def normalize_limit(limit: int) -> int:
+    def normalize_limit(limit: int, *, default: int | None = None, max_limit: int | None = None) -> int:
+        fallback = PaginationService.DEFAULT_LIMIT if default is None else int(default)
+        upper_bound = PaginationService.MAX_LIMIT if max_limit is None else int(max_limit)
         try:
             normalized = int(limit)
         except (TypeError, ValueError):
-            return 20
-        return max(SearchService.MIN_LIMIT, min(normalized, SearchService.MAX_LIMIT))
+            return fallback
+        return max(PaginationService.MIN_LIMIT, min(normalized, upper_bound))
+
+    @staticmethod
+    def normalize(page: int, limit: int, *, default_limit: int | None = None, max_limit: int | None = None) -> tuple[int, int]:
+        return (
+            PaginationService.normalize_page(page),
+            PaginationService.normalize_limit(limit, default=default_limit, max_limit=max_limit),
+        )
+
+
+class SearchService:
+    """搜索服务"""
+
+    MIN_PAGE = 1
+    MIN_LIMIT = 1
+    MAX_LIMIT = 100
+
+    @staticmethod
+    def normalize_page(page: int) -> int:
+        return PaginationService.normalize_page(page)
+
+    @staticmethod
+    def normalize_limit(limit: int) -> int:
+        return PaginationService.normalize_limit(limit, default=20, max_limit=SearchService.MAX_LIMIT)
 
     @staticmethod
     def tokenize_query(query: str) -> List[str]:
