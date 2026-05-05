@@ -1,11 +1,11 @@
-from unittest.mock import patch
-
 from django.db import OperationalError
 from django.test import TestCase
 from django.utils import timezone
 from datetime import timedelta
 from ninja_jwt.tokens import RefreshToken
+from unittest.mock import Mock, patch
 
+from apps.core.forum_events import DiscussionTagStatsRefreshEvent
 from apps.core.models import AuditLog
 from apps.discussions.models import DiscussionUser
 from apps.discussions.services import DiscussionService
@@ -117,6 +117,26 @@ class PostPaginationTests(TestCase):
             )
 
         self.assertTrue(lock_discussion_mock.called)
+
+    def test_refresh_discussion_stats_dispatches_tag_refresh_event(self):
+        discussion = DiscussionService.create_discussion(
+            title="Stats refresh discussion",
+            content="First post",
+            user=self.user,
+        )
+        PostService.create_post(
+            discussion_id=discussion.id,
+            content="Reply for stats",
+            user=self.user,
+        )
+
+        mocked_bus = Mock()
+        with patch("apps.posts.services.get_forum_event_bus", return_value=mocked_bus):
+            PostService._refresh_discussion_approved_stats(discussion)
+
+        event = mocked_bus.dispatch.call_args.args[0]
+        self.assertIsInstance(event, DiscussionTagStatsRefreshEvent)
+        self.assertEqual(event.discussion_id, discussion.id)
 
 
 class PostFlagApiTests(TestCase):
@@ -890,3 +910,9 @@ class PostLikeTests(TestCase):
 
         self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(response.json()["error"], "不能给自己的帖子点赞")
+
+    def test_like_post_dispatches_domain_event_instead_of_direct_notification_call(self):
+        with patch("apps.notifications.services.NotificationService.notify_post_liked") as notify_mock:
+            PostService.like_post(self.post.id, self.liker)
+
+        notify_mock.assert_called_once_with(post_id=self.post.id, from_user=self.liker)

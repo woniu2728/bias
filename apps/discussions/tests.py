@@ -1,5 +1,5 @@
 import json
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.core.cache import cache
 from django.core.management import call_command
@@ -11,6 +11,7 @@ from datetime import timedelta
 from io import StringIO
 from ninja_jwt.tokens import RefreshToken
 
+from apps.core.forum_events import TagStatsRefreshRequestedEvent
 from apps.core.models import AuditLog
 from apps.discussions.models import Discussion
 from apps.discussions.services import DiscussionService
@@ -39,6 +40,30 @@ class DiscussionApiTests(TestCase):
     def auth_header(self, user):
         token = RefreshToken.for_user(user).access_token
         return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_update_discussion_dispatches_tag_stats_refresh_request_event(self):
+        tag_a = Tag.objects.create(name="标签A", slug="tag-a", color="#3498db")
+        tag_b = Tag.objects.create(name="标签B", slug="tag-b", color="#2ecc71")
+        discussion = DiscussionService.create_discussion(
+            title="Tag stats event discussion",
+            content="Initial post",
+            user=self.author,
+            tag_ids=[tag_a.id],
+        )
+
+        mocked_bus = Mock()
+        with patch("apps.discussions.services.get_forum_event_bus", return_value=mocked_bus):
+            DiscussionService.update_discussion(
+                discussion_id=discussion.id,
+                user=self.author,
+                tag_ids=[tag_b.id],
+            )
+
+        events = [call.args[0] for call in mocked_bus.dispatch.call_args_list]
+        tag_refresh_event = next(
+            event for event in events if isinstance(event, TagStatsRefreshRequestedEvent)
+        )
+        self.assertEqual(tag_refresh_event.tag_ids, tuple(sorted((tag_a.id, tag_b.id))))
 
     def test_create_discussion_accepts_bearer_token(self):
         response = self.client.post(

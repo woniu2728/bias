@@ -26,6 +26,7 @@ def create_timeline_event_post(
     actor_user_id: int,
     post_type: str,
     content: str,
+    update_discussion_last_post: bool = True,
 ) -> Post | None:
     from apps.posts.services import PostService
 
@@ -47,16 +48,17 @@ def create_timeline_event_post(
         approved_by=actor,
     )
 
-    locked_discussion.last_post_id = event_post.id
-    locked_discussion.last_post_number = event_post.number
-    locked_discussion.last_posted_at = event_post.created_at
-    locked_discussion.last_posted_user = actor
-    locked_discussion.save(update_fields=[
-        "last_post_id",
-        "last_post_number",
-        "last_posted_at",
-        "last_posted_user",
-    ])
+    if update_discussion_last_post:
+        locked_discussion.last_post_id = event_post.id
+        locked_discussion.last_post_number = event_post.number
+        locked_discussion.last_posted_at = event_post.created_at
+        locked_discussion.last_posted_user = actor
+        locked_discussion.save(update_fields=[
+            "last_post_id",
+            "last_post_number",
+            "last_posted_at",
+            "last_posted_user",
+        ])
     return event_post
 
 

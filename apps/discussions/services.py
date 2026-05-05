@@ -18,7 +18,9 @@ from apps.core.forum_events import (
     DiscussionRenamedEvent,
     DiscussionResubmittedEvent,
     DiscussionStickyChangedEvent,
+    DiscussionTagStatsRefreshEvent,
     DiscussionTaggedEvent,
+    TagStatsRefreshRequestedEvent,
 )
 from apps.core.forum_registry import get_forum_registry
 from apps.discussions.models import Discussion, DiscussionUser
@@ -705,7 +707,9 @@ class DiscussionService:
             if is_hidden is not None or tag_ids is not None:
                 refreshed_tag_ids = set(previous_tag_ids) | set(discussion.discussion_tags.values_list('tag_id', flat=True))
                 if refreshed_tag_ids:
-                    TagService.dispatch_refresh_tag_stats(list(refreshed_tag_ids))
+                    get_forum_event_bus().dispatch(
+                        TagStatsRefreshRequestedEvent(tag_ids=tuple(sorted(refreshed_tag_ids)))
+                    )
             return discussion
 
     @staticmethod
@@ -744,7 +748,9 @@ class DiscussionService:
                     is_hidden=is_hidden,
                 )
             )
-            TagService.refresh_discussion_tag_stats(discussion.id)
+            get_forum_event_bus().dispatch(
+                DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
+            )
         return discussion
 
     @staticmethod
@@ -790,7 +796,9 @@ class DiscussionService:
                     )
                 )
             else:
-                TagService.refresh_discussion_tag_stats(discussion.id)
+                get_forum_event_bus().dispatch(
+                    DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
+                )
 
         discussion.refresh_from_db()
         return discussion
@@ -839,7 +847,9 @@ class DiscussionService:
                         previous_status=previous_status,
                     )
                 )
-            TagService.refresh_discussion_tag_stats(discussion.id)
+            get_forum_event_bus().dispatch(
+                DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
+            )
 
         discussion.refresh_from_db()
         return discussion
@@ -912,8 +922,9 @@ class DiscussionService:
             discussion.delete()
 
             if tag_ids:
-                from apps.tags.services import TagService
-                TagService.dispatch_refresh_tag_stats(tag_ids)
+                get_forum_event_bus().dispatch(
+                    TagStatsRefreshRequestedEvent(tag_ids=tuple(sorted(tag_ids)))
+                )
 
             # 更新作者讨论数
             if counted_discussion and discussion.user:

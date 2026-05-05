@@ -219,7 +219,7 @@ class NotificationService:
         unread_type_counts = NotificationService._collect_type_counts(base_queryset.filter(is_read=False))
 
         # 排序
-        queryset = queryset.order_by('-created_at')
+        queryset = queryset.order_by('-created_at', '-id')
 
         # 统计
         total = queryset.count()

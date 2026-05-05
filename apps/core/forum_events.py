@@ -88,6 +88,7 @@ class PostApprovedEvent(DomainEvent):
     actor_user_id: int | None
     admin_user_id: int
     note: str = ""
+    previous_status: str = ""
 
 
 @dataclass(frozen=True)
@@ -115,3 +116,42 @@ class PostHiddenEvent(DomainEvent):
     actor_user_id: int
     post_number: int | None
     is_hidden: bool
+
+
+@dataclass(frozen=True)
+class PostLikedEvent(DomainEvent):
+    post_id: int
+    discussion_id: int
+    actor_user_id: int
+    post_number: int | None = None
+
+
+@dataclass(frozen=True)
+class UserMentionedEvent(DomainEvent):
+    post_id: int
+    discussion_id: int
+    actor_user_id: int | None
+    mentioned_user_id: int
+    post_number: int | None = None
+
+
+@dataclass(frozen=True)
+class UserSuspendedEvent(DomainEvent):
+    user_id: int
+    actor_user_id: int | None
+
+
+@dataclass(frozen=True)
+class UserUnsuspendedEvent(DomainEvent):
+    user_id: int
+    actor_user_id: int | None
+
+
+@dataclass(frozen=True)
+class DiscussionTagStatsRefreshEvent(DomainEvent):
+    discussion_id: int
+
+
+@dataclass(frozen=True)
+class TagStatsRefreshRequestedEvent(DomainEvent):
+    tag_ids: tuple[int, ...] = ()

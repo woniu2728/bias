@@ -5,9 +5,9 @@ from types import SimpleNamespace
 from apps.core.domain_events import get_forum_event_bus
 from apps.core.forum_events import (
     DiscussionApprovedEvent,
+    DiscussionCreatedEvent,
     DiscussionHiddenEvent,
     DiscussionLockedEvent,
-    DiscussionCreatedEvent,
     DiscussionRejectedEvent,
     DiscussionRenamedEvent,
     DiscussionResubmittedEvent,
@@ -15,9 +15,15 @@ from apps.core.forum_events import (
     DiscussionTaggedEvent,
     PostApprovedEvent,
     PostCreatedEvent,
+    DiscussionTagStatsRefreshEvent,
     PostHiddenEvent,
+    PostLikedEvent,
     PostRejectedEvent,
     PostResubmittedEvent,
+    TagStatsRefreshRequestedEvent,
+    UserMentionedEvent,
+    UserSuspendedEvent,
+    UserUnsuspendedEvent,
 )
 from apps.core.forum_timeline import (
     build_discussion_hidden_content,
@@ -57,6 +63,12 @@ def bootstrap_forum_event_listeners() -> None:
     event_bus.register(PostRejectedEvent, handle_post_rejected)
     event_bus.register(PostResubmittedEvent, handle_post_resubmitted)
     event_bus.register(PostHiddenEvent, handle_post_hidden)
+    event_bus.register(PostLikedEvent, handle_post_liked)
+    event_bus.register(UserMentionedEvent, handle_user_mentioned)
+    event_bus.register(UserSuspendedEvent, handle_user_suspended)
+    event_bus.register(UserUnsuspendedEvent, handle_user_unsuspended)
+    event_bus.register(DiscussionTagStatsRefreshEvent, handle_discussion_tag_stats_refresh)
+    event_bus.register(TagStatsRefreshRequestedEvent, handle_tag_stats_refresh_requested)
     _listeners_bootstrapped = True
 
 
@@ -87,6 +99,7 @@ def handle_discussion_approved(event: DiscussionApprovedEvent) -> None:
         discussion_id=discussion.id,
         actor_user_id=admin_user.id,
         post_type="discussionApproved",
+        update_discussion_last_post=False,
         content=build_discussion_review_content(
             SimpleNamespace(
                 post_type="discussionApproved",
@@ -273,17 +286,105 @@ def handle_post_hidden(event: PostHiddenEvent) -> None:
     )
 
 
+def handle_post_liked(event: PostLikedEvent) -> None:
+    from apps.notifications.services import NotificationService
+    from apps.users.models import User
+
+    try:
+        from_user = User.objects.get(id=event.actor_user_id)
+    except User.DoesNotExist:
+        return
+
+    NotificationService.notify_post_liked(post_id=event.post_id, from_user=from_user)
+
+
+def handle_user_mentioned(event: UserMentionedEvent) -> None:
+    from apps.notifications.services import NotificationService
+    from apps.users.models import User
+
+    try:
+        mentioned_user = User.objects.get(id=event.mentioned_user_id)
+    except User.DoesNotExist:
+        return
+
+    from_user = None
+    if event.actor_user_id:
+        from_user = User.objects.filter(id=event.actor_user_id).first()
+    if from_user is None:
+        return
+
+    NotificationService.notify_user_mentioned(
+        post_id=event.post_id,
+        mentioned_user=mentioned_user,
+        from_user=from_user,
+    )
+
+
+def handle_user_suspended(event: UserSuspendedEvent) -> None:
+    from apps.notifications.services import NotificationService
+    from apps.users.models import User
+
+    user = User.objects.filter(id=event.user_id).first()
+    if user is None:
+        return
+
+    admin_user = None
+    if event.actor_user_id:
+        admin_user = User.objects.filter(id=event.actor_user_id).first()
+
+    NotificationService.notify_user_suspended(user, admin_user)
+
+
+def handle_user_unsuspended(event: UserUnsuspendedEvent) -> None:
+    from apps.notifications.services import NotificationService
+    from apps.users.models import User
+
+    user = User.objects.filter(id=event.user_id).first()
+    if user is None:
+        return
+
+    admin_user = None
+    if event.actor_user_id:
+        admin_user = User.objects.filter(id=event.actor_user_id).first()
+
+    NotificationService.notify_user_unsuspended(user, admin_user)
+
+
+def handle_discussion_tag_stats_refresh(event: DiscussionTagStatsRefreshEvent) -> None:
+    from apps.tags.services import TagService
+
+    TagService.refresh_discussion_tag_stats(event.discussion_id)
+
+
+def handle_tag_stats_refresh_requested(event: TagStatsRefreshRequestedEvent) -> None:
+    if not event.tag_ids:
+        return
+
+    from apps.tags.services import TagService
+
+    TagService.dispatch_refresh_tag_stats(list(event.tag_ids))
+
+
 def _create_timeline_from_builder(event, builder) -> None:
     built = builder(event)
     if not built:
         return
 
     post_type, content = built
+    update_discussion_last_post = post_type not in {
+        "discussionApproved",
+        "discussionRejected",
+        "discussionResubmitted",
+        "postApproved",
+        "postRejected",
+        "postResubmitted",
+    }
     create_timeline_event_post(
         discussion_id=event.discussion_id,
         actor_user_id=event.actor_user_id,
         post_type=post_type,
         content=content,
+        update_discussion_last_post=update_discussion_last_post,
     )
 
 

@@ -19,7 +19,13 @@ from ninja_jwt.tokens import RefreshToken
 from unittest.mock import patch
 
 from apps.core.domain_events import DomainEventBus
-from apps.core.forum_events import DiscussionCreatedEvent
+from apps.core.forum_events import (
+    DiscussionCreatedEvent,
+    DiscussionTagStatsRefreshEvent,
+    TagStatsRefreshRequestedEvent,
+    UserSuspendedEvent,
+    UserUnsuspendedEvent,
+)
 from apps.core.forum_registry import get_forum_registry
 from apps.core.resource_registry import ResourceFieldDefinition, ResourceRegistry
 from apps.core.bootstrap_config import load_site_bootstrap, read_site_config
@@ -65,6 +71,43 @@ class DomainEventBusTests(TestCase):
         )
 
         self.assertEqual(received, [(7, 3, (11, 12))])
+
+    def test_dispatches_handlers_for_additional_forum_events(self):
+        bus = DomainEventBus()
+        received = []
+
+        def handle_suspended(event):
+            received.append(("suspended", event.user_id, event.actor_user_id))
+
+        def handle_unsuspended(event):
+            received.append(("unsuspended", event.user_id, event.actor_user_id))
+
+        bus.register(UserSuspendedEvent, handle_suspended)
+        bus.register(UserUnsuspendedEvent, handle_unsuspended)
+        bus.dispatch(UserSuspendedEvent(user_id=9, actor_user_id=2))
+        bus.dispatch(UserUnsuspendedEvent(user_id=9, actor_user_id=2))
+
+        self.assertEqual(
+            received,
+            [("suspended", 9, 2), ("unsuspended", 9, 2)],
+        )
+
+    def test_dispatches_handlers_for_tag_stats_events(self):
+        bus = DomainEventBus()
+        received = []
+
+        def handle_discussion_refresh(event):
+            received.append(("discussion", event.discussion_id))
+
+        def handle_tag_refresh(event):
+            received.append(("tags", event.tag_ids))
+
+        bus.register(DiscussionTagStatsRefreshEvent, handle_discussion_refresh)
+        bus.register(TagStatsRefreshRequestedEvent, handle_tag_refresh)
+        bus.dispatch(DiscussionTagStatsRefreshEvent(discussion_id=12))
+        bus.dispatch(TagStatsRefreshRequestedEvent(tag_ids=(3, 7)))
+
+        self.assertEqual(received, [("discussion", 12), ("tags", (3, 7))])
 
 
 class ResourceRegistryTests(TestCase):

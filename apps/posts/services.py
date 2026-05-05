@@ -11,11 +11,14 @@ from django.utils import timezone
 from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
 from apps.core.forum_events import (
+    DiscussionTagStatsRefreshEvent,
     PostApprovedEvent,
     PostCreatedEvent,
     PostHiddenEvent,
+    PostLikedEvent,
     PostRejectedEvent,
     PostResubmittedEvent,
+    UserMentionedEvent,
 )
 from apps.core.forum_registry import get_forum_registry
 from apps.posts.models import Post, PostLike, PostMentionsUser, PostFlag
@@ -579,7 +582,9 @@ class PostService:
             "last_posted_at",
             "last_posted_user",
         ])
-        TagService.refresh_discussion_tag_stats(discussion.id)
+        get_forum_event_bus().dispatch(
+            DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
+        )
         return discussion
 
     @staticmethod
@@ -612,9 +617,14 @@ class PostService:
         except IntegrityError:
             raise ValueError("已经点赞过了")
 
-        # 发送通知：帖子被点赞
-        from apps.notifications.services import NotificationService
-        NotificationService.notify_post_liked(post_id=post.id, from_user=user)
+        get_forum_event_bus().dispatch(
+            PostLikedEvent(
+                post_id=post.id,
+                discussion_id=post.discussion_id,
+                actor_user_id=user.id,
+                post_number=post.number,
+            )
+        )
 
         return True
 
@@ -762,10 +772,13 @@ class PostService:
                         actor_user_id=post.user_id,
                         admin_user_id=admin_user.id,
                         note=note,
+                        previous_status=previous_status,
                     )
                 )
             else:
-                TagService.refresh_discussion_tag_stats(discussion.id)
+                get_forum_event_bus().dispatch(
+                    DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
+                )
 
         post.refresh_from_db()
         return post
@@ -891,12 +904,14 @@ class PostService:
                 mentions_user=mentioned_user
             )
 
-            # 发送通知：用户被@提及
-            from apps.notifications.services import NotificationService
-            NotificationService.notify_user_mentioned(
-                post_id=post.id,
-                mentioned_user=mentioned_user,
-                from_user=post.user
+            get_forum_event_bus().dispatch(
+                UserMentionedEvent(
+                    post_id=post.id,
+                    discussion_id=post.discussion_id,
+                    actor_user_id=post.user_id,
+                    mentioned_user_id=mentioned_user.id,
+                    post_number=post.number,
+                )
             )
 
     @staticmethod
