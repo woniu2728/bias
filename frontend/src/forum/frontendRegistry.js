@@ -7,6 +7,7 @@ const composerTools = []
 const composerNotices = []
 const composerSubmitGuards = []
 const composerSecondaryActions = []
+const composerStatusItems = []
 const profilePanels = []
 
 function upsertByKey(target, key, value) {
@@ -191,6 +192,18 @@ export function registerComposerSecondaryAction(item) {
 
 export function getComposerSecondaryActions(context = {}) {
   return [...composerSecondaryActions]
+    .sort((left, right) => (left.order || 100) - (right.order || 100))
+    .map(item => resolveRegisteredItem(item, context))
+    .filter(Boolean)
+}
+
+export function registerComposerStatusItem(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(composerStatusItems, normalizedItem.key, normalizedItem)
+}
+
+export function getComposerStatusItems(context = {}) {
+  return [...composerStatusItems]
     .sort((left, right) => (left.order || 100) - (right.order || 100))
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)

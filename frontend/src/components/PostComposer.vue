@@ -35,6 +35,7 @@
 
       <div v-show="!composerStore.isMinimized" class="composer-body">
         <ComposerNoticeStack :notices="composerNotices" />
+        <ComposerStatusBar :items="composerStatusItems" />
         <textarea
           v-show="!showPreview"
           ref="composerTextarea"
@@ -163,8 +164,10 @@ import ComposerActionBar from '@/components/composer/ComposerActionBar.vue'
 import ComposerHeaderBar from '@/components/composer/ComposerHeaderBar.vue'
 import ComposerNoticeStack from '@/components/composer/ComposerNoticeStack.vue'
 import ComposerPreviewPanel from '@/components/composer/ComposerPreviewPanel.vue'
+import ComposerStatusBar from '@/components/composer/ComposerStatusBar.vue'
 import ComposerMentionPicker from '@/components/ComposerMentionPicker.vue'
-import { getComposerNotices, getComposerSecondaryActions, getComposerTools, runComposerSubmitGuards } from '@/forum/registry'
+import { runComposerSecondaryAction } from '@/forum/composerRuntime'
+import { getComposerNotices, getComposerSecondaryActions, getComposerStatusItems, getComposerTools, runComposerSubmitGuards } from '@/forum/registry'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
 import { useModalStore } from '@/stores/modal'
@@ -305,6 +308,9 @@ const composerTools = computed(() => {
 })
 const composerSecondaryActions = computed(() => {
   return getComposerSecondaryActions(buildComposerExtensionContext())
+})
+const composerStatusItems = computed(() => {
+  return getComposerStatusItems(buildComposerExtensionContext())
 })
 const composerNotices = computed(() => {
   return [
@@ -472,6 +478,7 @@ onMounted(() => {
   window.addEventListener('mousemove', handleResizeMove)
   window.addEventListener('mouseup', stopResize)
   document.addEventListener('mousedown', handleDocumentMouseDown)
+  window.addEventListener('bias:composer-save-request', handleComposerSaveRequest)
 })
 
 onBeforeUnmount(() => {
@@ -485,6 +492,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('mousemove', handleResizeMove)
   window.removeEventListener('mouseup', stopResize)
   document.removeEventListener('mousedown', handleDocumentMouseDown)
+  window.removeEventListener('bias:composer-save-request', handleComposerSaveRequest)
   clearComposerViewportEffects()
 })
 
@@ -707,6 +715,13 @@ function clearComposerDraft() {
   previewError.value = ''
   clearMentionSuggestions()
   nextTick(() => composerTextarea.value?.focus())
+}
+
+function handleComposerSaveRequest(event) {
+  const detail = event?.detail || {}
+  if (detail.composerType !== 'post') return
+  if (Number(detail.requestId || 0) !== Number(composerStore.current.requestId || 0)) return
+  saveComposerDraft(true)
 }
 
 async function applyComposerTool(tool) {
@@ -1234,18 +1249,33 @@ function buildComposerExtensionContext() {
     approvalNote: composerStore.current.approvalNote || '',
     approvalStatus: composerStore.current.approvalStatus || '',
     authStore,
+    canSubmit: Boolean(replyContent.value.trim()) && !submitting.value && !uploading.value && !isSuspended.value,
     composerStore,
     content: replyContent.value,
+    draftSavedAt: composerDraftSavedAt.value,
     discussionId: discussionId.value,
     discussionTitle: composerStore.current.discussionTitle || '',
+    formatDraftTime,
+    hasDraftContent: Boolean(replyContent.value.trim()),
     isEditing: isEditing.value,
+    isExpanded: composerStore.isExpanded,
+    isMinimized: composerStore.isMinimized,
+    minimized: composerStore.isMinimized,
     mode: isEditing.value ? 'edit' : 'reply',
+    modalStore,
     postNumber: composerStore.current.postNumber ?? null,
     route,
     router,
+    secondaryActionHandlers: {
+      'cancel-edit': () => cancelEdit(),
+      'clear-draft': () => clearComposerDraft(),
+    },
     source: composerStore.current.source || '',
+    showPreview: showPreview.value,
     suspensionNotice: suspensionNotice.value,
+    submitting: submitting.value,
     type: 'post',
+    uploading: uploading.value,
     username: composerStore.current.username || '',
   }
 }
@@ -1270,22 +1300,8 @@ function buildComposerToolContext(tool) {
   }
 }
 
-function handleComposerSecondaryAction(item) {
-  if (item.disabled) return
-
-  if (typeof item.onClick === 'function') {
-    item.onClick(buildComposerExtensionContext())
-    return
-  }
-
-  if (item.action === 'clear-draft') {
-    clearComposerDraft()
-    return
-  }
-
-  if (item.action === 'cancel-edit') {
-    cancelEdit()
-  }
+async function handleComposerSecondaryAction(item) {
+  await runComposerSecondaryAction(item, buildComposerExtensionContext())
 }
 </script>
 

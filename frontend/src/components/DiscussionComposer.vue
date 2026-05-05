@@ -29,6 +29,7 @@
 
       <div v-show="!composerStore.isMinimized" class="composer-body">
         <ComposerNoticeStack :notices="composerNotices" />
+        <ComposerStatusBar :items="composerStatusItems" />
 
         <input
           ref="titleInput"
@@ -197,8 +198,10 @@ import ComposerActionBar from '@/components/composer/ComposerActionBar.vue'
 import ComposerHeaderBar from '@/components/composer/ComposerHeaderBar.vue'
 import ComposerNoticeStack from '@/components/composer/ComposerNoticeStack.vue'
 import ComposerPreviewPanel from '@/components/composer/ComposerPreviewPanel.vue'
+import ComposerStatusBar from '@/components/composer/ComposerStatusBar.vue'
 import ComposerMentionPicker from '@/components/ComposerMentionPicker.vue'
-import { getComposerNotices, getComposerSecondaryActions, getComposerTools, runComposerSubmitGuards } from '@/forum/registry'
+import { runComposerSecondaryAction } from '@/forum/composerRuntime'
+import { getComposerNotices, getComposerSecondaryActions, getComposerStatusItems, getComposerTools, runComposerSubmitGuards } from '@/forum/registry'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
 import { useModalStore } from '@/stores/modal'
@@ -370,6 +373,9 @@ const composerTools = computed(() => {
 const composerSecondaryActions = computed(() => {
   return getComposerSecondaryActions(buildComposerExtensionContext())
 })
+const composerStatusItems = computed(() => {
+  return getComposerStatusItems(buildComposerExtensionContext())
+})
 const composerNotices = computed(() => {
   return [
     {
@@ -525,6 +531,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('mousemove', handleResizeMove)
   window.removeEventListener('mouseup', stopResize)
   document.removeEventListener('mousedown', handleDocumentMouseDown)
+  window.removeEventListener('bias:composer-save-request', handleComposerSaveRequest)
   clearComposerViewportEffects()
 })
 
@@ -533,6 +540,7 @@ onMounted(() => {
   window.addEventListener('mousemove', handleResizeMove)
   window.addEventListener('mouseup', stopResize)
   document.addEventListener('mousedown', handleDocumentMouseDown)
+  window.addEventListener('bias:composer-save-request', handleComposerSaveRequest)
 })
 
 async function prepareComposer() {
@@ -814,8 +822,8 @@ function saveDraft(showMessage = true) {
   draftMessage.value = showMessage ? '讨论草稿已保存。' : ''
 }
 
-async function clearDraft() {
-  if (hasDraftContent.value) {
+async function clearDraft(options = {}) {
+  if (hasDraftContent.value && !options.skipConfirm) {
     const confirmed = await modalStore.confirm({
       title: '清除讨论草稿',
       message: '确定要清除当前讨论草稿吗？',
@@ -834,6 +842,13 @@ async function clearDraft() {
   }
   clearDraftStorage('已清除本地草稿。')
   focusPreferredField()
+}
+
+function handleComposerSaveRequest(event) {
+  const detail = event?.detail || {}
+  if (detail.composerType !== 'discussion') return
+  if (Number(detail.requestId || 0) !== Number(composerStore.current.requestId || 0)) return
+  saveDraft(true)
 }
 
 function clearDraftStorage(message = '') {
@@ -1386,18 +1401,35 @@ function buildComposerExtensionContext() {
     approvalStatus: composerStore.current.approvalStatus || '',
     availablePrimaryTagCount: primaryTags.value.length,
     authStore,
+    canSubmit: canSubmit.value,
     composerStore,
     content: form.value.content,
+    draftSavedAt: draftSavedAt.value,
     discussionId: Number(composerStore.current.discussionId || 0),
+    discussionTitle: form.value.title.trim() || composerStore.current.discussionTitle || '',
+    formatDraftTime,
+    hasDraftContent: hasDraftContent.value,
     isEditing: isEditingDiscussion.value,
+    isExpanded: composerStore.isExpanded,
+    isMinimized: composerStore.isMinimized,
+    minimized: composerStore.isMinimized,
     mode: isEditingDiscussion.value ? 'edit' : 'create',
+    modalStore,
     primaryTagId: form.value.primary_tag_id,
+    secondaryActionHandlers: {
+      'clear-draft': () => clearDraft({ skipConfirm: true }),
+    },
+    selectedTagIds: selectedTagIds.value,
+    selectedTagLabel: selectedTagName.value,
     source: composerStore.current.source || '',
+    submitting: submitting.value,
     route: null,
     router,
     secondaryTagId: form.value.secondary_tag_id,
+    showPreview: showPreview.value,
     title: form.value.title,
     type: 'discussion',
+    uploading: uploading.value,
   }
 }
 
@@ -1421,17 +1453,8 @@ function buildComposerToolContext(tool) {
   }
 }
 
-function handleComposerSecondaryAction(item) {
-  if (item.disabled) return
-
-  if (typeof item.onClick === 'function') {
-    item.onClick(buildComposerExtensionContext())
-    return
-  }
-
-  if (item.action === 'clear-draft') {
-    clearDraft()
-  }
+async function handleComposerSecondaryAction(item) {
+  await runComposerSecondaryAction(item, buildComposerExtensionContext())
 }
 </script>
 

@@ -3,6 +3,7 @@ import { buildUserPath } from '@/utils/forum'
 import {
   getComposerNotices,
   getComposerSecondaryActions,
+  getComposerStatusItems,
   getComposerTools,
   getForumNavItems,
   getForumNavSections,
@@ -10,6 +11,7 @@ import {
   registerDiscussionAction,
   registerComposerNotice,
   registerComposerSecondaryAction,
+  registerComposerStatusItem,
   registerComposerSubmitGuard,
   registerComposerTool,
   registerForumNavItem,
@@ -24,10 +26,12 @@ export {
   getForumNavSections,
   getComposerNotices,
   getComposerSecondaryActions,
+  getComposerStatusItems,
   getComposerTools,
   registerDiscussionAction,
   registerComposerNotice,
   registerComposerSecondaryAction,
+  registerComposerStatusItem,
   registerComposerSubmitGuard,
   registerComposerTool,
   registerForumNavItem,
@@ -365,9 +369,16 @@ registerComposerSecondaryAction({
   key: 'clear-discussion-draft',
   order: 10,
   isVisible: ({ type, isEditing, hasDraftContent }) => type === 'discussion' && !isEditing && Boolean(hasDraftContent),
-  resolve: () => ({
+  resolve: ({ draftSavedAt }) => ({
     label: '清除草稿',
     action: 'clear-draft',
+    confirm: draftSavedAt ? {
+      title: '清除讨论草稿',
+      message: '确定要清除当前讨论草稿吗？',
+      confirmText: '清除草稿',
+      cancelText: '取消',
+      tone: 'danger',
+    } : null,
   }),
 })
 
@@ -375,9 +386,16 @@ registerComposerSecondaryAction({
   key: 'clear-post-draft',
   order: 10,
   isVisible: ({ type, isEditing, hasDraftContent }) => type === 'post' && !isEditing && Boolean(hasDraftContent),
-  resolve: () => ({
+  resolve: ({ draftSavedAt }) => ({
     label: '清除草稿',
     action: 'clear-draft',
+    confirm: draftSavedAt ? {
+      title: '清除回复草稿',
+      message: '确定要清除当前回复草稿吗？',
+      confirmText: '清除草稿',
+      cancelText: '取消',
+      tone: 'danger',
+    } : null,
   }),
 })
 
@@ -388,5 +406,112 @@ registerComposerSecondaryAction({
   resolve: () => ({
     label: '取消编辑',
     action: 'cancel-edit',
+    confirm: {
+      title: '取消编辑',
+      message: '确定放弃当前回复编辑内容吗？未保存修改将丢失。',
+      confirmText: '放弃修改',
+      cancelText: '继续编辑',
+      tone: 'warning',
+    },
+  }),
+})
+
+registerComposerSecondaryAction({
+  key: 'save-discussion-draft',
+  order: 5,
+  isVisible: ({ type, isEditing, hasDraftContent, submitting, uploading }) => {
+    return type === 'discussion' && !isEditing && Boolean(hasDraftContent) && !submitting && !uploading
+  },
+  resolve: () => ({
+    label: '保存草稿',
+    onClick: async ({ composerStore }) => {
+      window.dispatchEvent(new CustomEvent('bias:composer-save-request', {
+        detail: {
+          composerType: 'discussion',
+          requestId: composerStore?.current?.requestId || 0,
+        },
+      }))
+    },
+  }),
+})
+
+registerComposerSecondaryAction({
+  key: 'save-post-draft',
+  order: 5,
+  isVisible: ({ type, isEditing, hasDraftContent, submitting, uploading }) => {
+    return type === 'post' && !isEditing && Boolean(hasDraftContent) && !submitting && !uploading
+  },
+  resolve: () => ({
+    label: '保存草稿',
+    onClick: async ({ composerStore }) => {
+      window.dispatchEvent(new CustomEvent('bias:composer-save-request', {
+        detail: {
+          composerType: 'post',
+          requestId: composerStore?.current?.requestId || 0,
+        },
+      }))
+    },
+  }),
+})
+
+registerComposerStatusItem({
+  key: 'discussion-selected-tag',
+  order: 10,
+  isVisible: ({ type, selectedTagLabel, minimized }) => type === 'discussion' && Boolean(selectedTagLabel) && !minimized,
+  resolve: ({ selectedTagLabel }) => ({
+    label: '标签',
+    value: selectedTagLabel,
+  }),
+})
+
+registerComposerStatusItem({
+  key: 'discussion-editing',
+  order: 20,
+  isVisible: ({ type, isEditing, minimized }) => type === 'discussion' && Boolean(isEditing) && !minimized,
+  resolve: () => ({
+    label: '状态',
+    value: '编辑讨论',
+  }),
+})
+
+registerComposerStatusItem({
+  key: 'discussion-draft-saved-at',
+  order: 30,
+  isVisible: ({ type, draftSavedAt, minimized }) => type === 'discussion' && Boolean(draftSavedAt) && !minimized,
+  resolve: ({ draftSavedAt, formatDraftTime }) => ({
+    label: '草稿',
+    value: `保存于 ${formatDraftTime?.(draftSavedAt) || draftSavedAt}`,
+  }),
+})
+
+registerComposerStatusItem({
+  key: 'post-editing',
+  order: 10,
+  isVisible: ({ type, isEditing, minimized }) => type === 'post' && Boolean(isEditing) && !minimized,
+  resolve: ({ postNumber }) => ({
+    label: '状态',
+    value: postNumber ? `编辑 #${postNumber}` : '编辑回复',
+  }),
+})
+
+registerComposerStatusItem({
+  key: 'post-target',
+  order: 20,
+  isVisible: ({ type, discussionTitle, minimized }) => type === 'post' && Boolean(discussionTitle) && !minimized,
+  resolve: ({ discussionTitle, username }) => ({
+    label: '讨论',
+    value: username ? `${discussionTitle} · @${username}` : discussionTitle,
+  }),
+})
+
+registerComposerStatusItem({
+  key: 'post-draft-saved-at',
+  order: 30,
+  isVisible: ({ type, draftSavedAt, isEditing, minimized }) => {
+    return type === 'post' && !isEditing && Boolean(draftSavedAt) && !minimized
+  },
+  resolve: ({ draftSavedAt, formatDraftTime }) => ({
+    label: '草稿',
+    value: `保存于 ${formatDraftTime?.(draftSavedAt) || draftSavedAt}`,
   }),
 })
