@@ -8,6 +8,9 @@
       >
         {{ discussion.title }}
       </router-link>
+      <span v-if="hasNewReplies" class="discussion-live-pill">
+        {{ newReplyCount > 1 ? `${newReplyCount} 条新回复` : '有新回复' }}
+      </span>
       <ForumStateBadge
         v-for="badge in discussionStateBadges"
         :key="badge.key"
@@ -62,6 +65,14 @@ const props = defineProps({
   isUnread: {
     type: Boolean,
     default: false
+  },
+  hasNewReplies: {
+    type: Boolean,
+    default: false
+  },
+  newReplyCount: {
+    type: Number,
+    default: 0
   },
   buildDiscussionPath: {
     type: Function,
@@ -131,6 +142,19 @@ const {
   color: var(--forum-text-color);
 }
 
+.discussion-live-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e8f4ee;
+  color: #1f7a45;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .discussion-list-item-info {
   list-style: none;
   padding: 0;
@@ -188,6 +212,11 @@ const {
     align-items: flex-start;
     gap: 6px;
     margin-bottom: 5px;
+  }
+
+  .discussion-live-pill {
+    min-height: 20px;
+    font-size: 10px;
   }
 
   .discussion-list-item-title {

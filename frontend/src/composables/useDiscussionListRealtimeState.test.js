@@ -83,6 +83,8 @@ test('discussion list realtime state patches read state updates into the resourc
       last_read_post_number: 6,
       last_read_at: '2026-05-17T01:00:00Z',
       is_unread: true,
+      has_new_replies: false,
+      new_reply_count: 0,
     },
   ]])
 })
@@ -105,19 +107,87 @@ test('discussion list realtime state refreshes list for refresh-only forum event
 
 test('discussion list realtime state merges visible forum events into resources', async () => {
   const harness = createRealtimeHarness()
+  harness.store.set('discussions:2', {
+    id: 2,
+    comment_count: 3,
+    last_post_number: 3,
+    last_read_post_number: 3,
+    last_posted_at: '2026-05-17T00:00:00Z',
+  })
 
   await harness.realtime.handleForumEvent({
     detail: {
       discussion_id: 2,
-      event_type: 'discussion_updated',
+      event_type: 'post.created',
+      payload: {
+        post: {
+          id: 10,
+          number: 4,
+          created_at: '2026-05-18T00:00:00Z',
+        },
+      },
     },
   })
 
   assert.equal(harness.refreshCalls.length, 0)
+  assert.deepEqual(harness.upserts[0], [
+    'discussions',
+    {
+      id: 2,
+      comment_count: 4,
+      last_post_number: 4,
+      last_read_post_number: 3,
+      last_posted_at: '2026-05-18T00:00:00Z',
+      has_new_replies: true,
+      new_reply_count: 1,
+    },
+  ])
   assert.deepEqual(harness.merged, [[harness.resourceStore, {
     discussion_id: 2,
-    event_type: 'discussion_updated',
+    event_type: 'post.created',
+    payload: {
+      post: {
+        id: 10,
+        number: 4,
+        created_at: '2026-05-18T00:00:00Z',
+      },
+    },
   }]])
+})
+
+test('discussion list realtime state clears pending new replies after read state sync', () => {
+  const harness = createRealtimeHarness()
+  harness.store.set('discussions:7', {
+    id: 7,
+    unread_count: 4,
+    last_read_post_number: 2,
+    last_read_at: null,
+    is_unread: true,
+    has_new_replies: true,
+    new_reply_count: 4,
+  })
+
+  harness.realtime.handleDiscussionReadStateUpdated({
+    detail: {
+      discussionId: 7,
+      lastReadAt: '2026-05-17T01:00:00Z',
+      lastReadPostNumber: 6,
+      unreadCount: 1,
+    },
+  })
+
+  assert.deepEqual(harness.upserts, [[
+    'discussions',
+    {
+      id: 7,
+      unread_count: 1,
+      last_read_post_number: 6,
+      last_read_at: '2026-05-17T01:00:00Z',
+      is_unread: true,
+      has_new_replies: false,
+      new_reply_count: 0,
+    },
+  ]])
 })
 
 test('discussion list realtime state marks visible discussions as read in bulk', async () => {
@@ -151,6 +221,8 @@ test('discussion list realtime state marks visible discussions as read in bulk',
       last_post_number: 8,
       last_read_post_number: 8,
       last_read_at: '2026-05-17T00:00:00Z',
+      has_new_replies: false,
+      new_reply_count: 0,
     },
   ], [
     'discussions',
@@ -161,6 +233,8 @@ test('discussion list realtime state marks visible discussions as read in bulk',
       last_post_number: 5,
       last_read_post_number: 5,
       last_read_at: '2026-05-17T00:00:00Z',
+      has_new_replies: false,
+      new_reply_count: 0,
     },
   ]])
 })

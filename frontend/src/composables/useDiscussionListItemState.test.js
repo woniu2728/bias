@@ -24,3 +24,13 @@ test('discussion list item state falls back to empty badge list', () => {
 
   assert.deepEqual(state.discussionBadges.value, [])
 })
+
+test('discussion list item state exposes pending new reply markers', () => {
+  const state = createDiscussionListItemState({
+    discussion: ref({ id: 3, has_new_replies: true, new_reply_count: 2 }),
+    getBadges: () => [],
+  })
+
+  assert.equal(state.hasNewReplies.value, true)
+  assert.equal(state.newReplyCount.value, 2)
+})

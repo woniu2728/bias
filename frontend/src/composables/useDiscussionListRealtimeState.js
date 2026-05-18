@@ -6,6 +6,7 @@ import {
   resolveDiscussionMarkAllReadPatch,
   resolveDiscussionReadStatePatch,
 } from '../utils/discussionListRealtime.js'
+import { resolveDiscussionNewReplyPatch } from '../utils/discussionListRealtimeUi.js'
 
 export function createDiscussionListRealtimeState({
   api,
@@ -29,7 +30,11 @@ export function createDiscussionListRealtimeState({
         const discussion = resourceStore.get('discussions', id)
         const patch = resolveDiscussionMarkAllReadPatch(discussion, response.marked_all_as_read_at)
         if (!patch) return
-        resourceStore.upsert('discussions', patch)
+        resourceStore.upsert('discussions', {
+          ...patch,
+          has_new_replies: false,
+          new_reply_count: 0,
+        })
       })
     } catch (error) {
       console.error('标记已读失败:', error)
@@ -55,7 +60,11 @@ export function createDiscussionListRealtimeState({
     const patch = resolveDiscussionReadStatePatch(discussion, detail)
     if (!patch) return
 
-    resourceStore.upsert('discussions', patch)
+    resourceStore.upsert('discussions', {
+      ...patch,
+      has_new_replies: false,
+      new_reply_count: 0,
+    })
   }
 
   async function handleForumEvent(event) {
@@ -69,6 +78,12 @@ export function createDiscussionListRealtimeState({
     if (shouldRefreshEvent(detail.event_type)) {
       await refreshDiscussionList()
       return
+    }
+
+    const discussion = resourceStore.get('discussions', discussionId)
+    const newReplyPatch = resolveDiscussionNewReplyPatch(discussion, detail)
+    if (newReplyPatch) {
+      resourceStore.upsert('discussions', newReplyPatch)
     }
 
     mergeEventPayload(resourceStore, detail)

@@ -16,6 +16,8 @@
       <DiscussionListItemMeta
         :discussion="discussion"
         :is-unread="discussion.is_unread"
+        :has-new-replies="hasNewReplies"
+        :new-reply-count="newReplyCount"
         :build-discussion-path="buildDiscussionPath"
         :build-tag-path="buildTagPath"
         :build-user-path="buildUserPath"
@@ -68,7 +70,7 @@ const props = defineProps({
   }
 })
 
-const { discussionBadges } = useDiscussionListItemState({
+const { discussionBadges, hasNewReplies, newReplyCount } = useDiscussionListItemState({
   discussion: toRef(props, 'discussion'),
 })
 </script>

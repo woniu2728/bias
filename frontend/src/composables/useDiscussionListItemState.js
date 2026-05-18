@@ -9,9 +9,13 @@ export function createDiscussionListItemState({
     discussion: discussion.value,
     surface: 'discussion-list-item',
   }))
+  const hasNewReplies = computed(() => Boolean(discussion.value?.has_new_replies))
+  const newReplyCount = computed(() => Math.max(Number(discussion.value?.new_reply_count || 0), 0))
 
   return {
     discussionBadges,
+    hasNewReplies,
+    newReplyCount,
   }
 }
 
