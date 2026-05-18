@@ -24,7 +24,8 @@ const DEFAULT_SETTINGS = {
   logo_url: '',
   favicon_url: '',
   custom_css: '',
-  custom_header: '',
+  custom_head_html: '',
+  custom_footer_html: '',
   maintenance_mode: false,
   maintenance_message: '论坛正在维护中，请稍后再试...',
   realtime_typing_enabled: true,
@@ -38,7 +39,7 @@ const DEFAULT_SETTINGS = {
 }
 
 const CUSTOM_CSS_STYLE_ID = 'forum-custom-css'
-const CUSTOM_HEADER_CONTAINER_ID = 'forum-custom-header'
+const CUSTOM_HEAD_MARKER_ATTRIBUTE = 'data-forum-custom-head'
 
 function upsertHeadTag(selector, buildTag) {
   let element = document.head.querySelector(selector)
@@ -52,6 +53,7 @@ function upsertHeadTag(selector, buildTag) {
 export const useForumStore = defineStore('forum', () => {
   const settings = ref({ ...DEFAULT_SETTINGS })
   const initialized = ref(false)
+  let customHeadNodes = []
 
   async function initialize() {
     if (initialized.value) return
@@ -265,15 +267,53 @@ export const useForumStore = defineStore('forum', () => {
       document.head.appendChild(customCssStyle)
     }
     customCssStyle.textContent = settings.value.custom_css || ''
+    applyCustomHeadHtml(settings.value.custom_head_html || '')
+  }
 
-    let customHeaderContainer = document.getElementById(CUSTOM_HEADER_CONTAINER_ID)
-    if (!customHeaderContainer) {
-      customHeaderContainer = document.createElement('div')
-      customHeaderContainer.id = CUSTOM_HEADER_CONTAINER_ID
-      customHeaderContainer.style.display = 'none'
-      document.body.appendChild(customHeaderContainer)
+  function applyCustomHeadHtml(html) {
+    customHeadNodes.forEach((node) => node.remove())
+    customHeadNodes = []
+
+    const normalizedHtml = String(html || '').trim()
+    if (!normalizedHtml) return
+
+    const template = document.createElement('template')
+    template.innerHTML = normalizedHtml
+
+    const nextNodes = []
+    Array.from(template.content.childNodes).forEach((node) => {
+      const injectedNode = cloneCustomHeadNode(node)
+      if (!injectedNode) return
+      if (injectedNode.nodeType === Node.ELEMENT_NODE) {
+        injectedNode.setAttribute(CUSTOM_HEAD_MARKER_ATTRIBUTE, 'true')
+      }
+      document.head.appendChild(injectedNode)
+      nextNodes.push(injectedNode)
+    })
+
+    customHeadNodes = nextNodes
+  }
+
+  function cloneCustomHeadNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = String(node.textContent || '').trim()
+      return text ? document.createTextNode(text) : null
     }
-    customHeaderContainer.innerHTML = settings.value.custom_header || ''
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return null
+    }
+
+    if (node.tagName.toLowerCase() !== 'script') {
+      return node.cloneNode(true)
+    }
+
+    const script = document.createElement('script')
+    Array.from(node.attributes).forEach((attribute) => {
+      script.setAttribute(attribute.name, attribute.value)
+    })
+    script.textContent = node.textContent || ''
+    return script
   }
 
   return {

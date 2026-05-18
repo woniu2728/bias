@@ -36,6 +36,37 @@
 
       <section class="Form-section">
         <div class="Form-sectionHeader">
+          <h3>{{ basicsCopy?.welcomeSectionTitle || '欢迎区文案' }}</h3>
+          <p>{{ basicsCopy?.welcomeSectionDescription || '首页 Hero 会优先读取这里的标题和说明，作为论坛的默认欢迎语。' }}</p>
+        </div>
+
+        <div class="Form-group">
+          <label for="basics-welcome-title">{{ basicsCopy?.welcomeTitleLabel || '欢迎标题' }}</label>
+          <input
+            id="basics-welcome-title"
+            v-model="settings.welcome_title"
+            name="welcome_title"
+            type="text"
+            class="FormControl"
+            :placeholder="basicsConfig?.placeholders?.welcomeTitle || '欢迎来到 Bias'"
+          />
+        </div>
+
+        <div class="Form-group">
+          <label for="basics-welcome-message">{{ basicsCopy?.welcomeMessageLabel || '欢迎说明' }}</label>
+          <textarea
+            id="basics-welcome-message"
+            v-model="settings.welcome_message"
+            name="welcome_message"
+            class="FormControl"
+            rows="3"
+            :placeholder="basicsConfig?.placeholders?.welcomeMessage || '介绍你的社区定位、内容方向或新用户起步方式。'"
+          ></textarea>
+        </div>
+      </section>
+
+      <section class="Form-section">
+        <div class="Form-sectionHeader">
           <h3>{{ basicsCopy?.seoSectionTitle || 'SEO 设置' }}</h3>
           <p>{{ basicsCopy?.seoSectionDescription || '这些字段会进入公开论坛设置，并在前台页面标题与 meta 标签中生效。' }}</p>
         </div>
@@ -225,6 +256,8 @@ function defaultSettings() {
     seo_keywords: '',
     seo_robots_index: true,
     seo_robots_follow: true,
+    welcome_title: '欢迎来到Bias',
+    welcome_message: '这是一个基于Django和Vue 3的现代化论坛',
     announcement_enabled: false,
     announcement_message: '',
     announcement_tone: 'info',
@@ -249,6 +282,8 @@ onMounted(async () => {
       seo_keywords: data.seo_keywords || '',
       seo_robots_index: data.seo_robots_index !== false,
       seo_robots_follow: data.seo_robots_follow !== false,
+      welcome_title: data.welcome_title || '欢迎来到Bias',
+      welcome_message: data.welcome_message || '这是一个基于Django和Vue 3的现代化论坛',
       announcement_enabled: Boolean(data.announcement_enabled),
       announcement_message: data.announcement_message || '',
       announcement_tone: ['info', 'warning', 'success'].includes(data.announcement_tone) ? data.announcement_tone : 'info',

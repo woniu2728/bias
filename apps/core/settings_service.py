@@ -55,7 +55,8 @@ APPEARANCE_SETTINGS_DEFAULTS = {
     "logo_url": "",
     "favicon_url": "",
     "custom_css": "",
-    "custom_header": "",
+    "custom_head_html": "",
+    "custom_footer_html": "",
 }
 
 MAIL_SETTINGS_STATIC_DEFAULTS = {
@@ -126,6 +127,7 @@ ADVANCED_SETTINGS_DEFAULTS = {
 
 def get_setting_group(prefix: str, defaults: dict) -> dict:
     values = defaults.copy()
+    found_keys = set()
     try:
         stored_settings = Setting.objects.filter(
             key__in=[f"{prefix}.{key}" for key in defaults.keys()]
@@ -136,12 +138,28 @@ def get_setting_group(prefix: str, defaults: dict) -> dict:
     try:
         for setting in stored_settings:
             key = setting.key.split(".", 1)[1]
+            found_keys.add(key)
             try:
                 values[key] = json.loads(setting.value)
             except json.JSONDecodeError:
                 values[key] = setting.value
     except (OperationalError, ProgrammingError):
         return defaults.copy()
+
+    if (
+        prefix == "appearance"
+        and "custom_head_html" in defaults
+        and "custom_head_html" not in found_keys
+    ):
+        try:
+            legacy_setting = Setting.objects.filter(key="appearance.custom_header").first()
+        except (OperationalError, ProgrammingError):
+            legacy_setting = None
+        if legacy_setting is not None:
+            try:
+                values["custom_head_html"] = json.loads(legacy_setting.value)
+            except json.JSONDecodeError:
+                values["custom_head_html"] = legacy_setting.value
 
     return values
 

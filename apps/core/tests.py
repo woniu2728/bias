@@ -1458,6 +1458,8 @@ class AdminSettingsApiTests(TestCase):
                 "seo_keywords": "Python, Django, Vue",
                 "seo_robots_index": False,
                 "seo_robots_follow": True,
+                "welcome_title": "欢迎来到中文社区",
+                "welcome_message": "在这里讨论 Django、Vue 与论坛产品设计。",
                 "announcement_enabled": True,
                 "announcement_message": "今晚 23:00 进行维护。",
                 "announcement_tone": "warning",
@@ -1479,6 +1481,10 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(
             json.loads(Setting.objects.get(key="basic.seo_robots_index").value),
             False,
+        )
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="basic.welcome_title").value),
+            "欢迎来到中文社区",
         )
         self.assertEqual(
             json.loads(Setting.objects.get(key="basic.announcement_message").value),
@@ -1548,6 +1554,55 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(payload["upload_site_asset_max_size_mb"], 4)
         self.assertEqual(payload["storage_r2_bucket"], "forum-assets")
         self.assertEqual(payload["storage_r2_public_url"], "https://cdn.example.com")
+
+    def test_appearance_settings_persist_head_and_footer_html(self):
+        response = self.client.post(
+            "/api/admin/appearance",
+            data=json.dumps({
+                "custom_head_html": "<script>window.testHead = true</script>",
+                "custom_footer_html": "<p>备案号：蜀ICP备123456号</p>",
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="appearance.custom_head_html").value),
+            "<script>window.testHead = true</script>",
+        )
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="appearance.custom_footer_html").value),
+            "<p>备案号：蜀ICP备123456号</p>",
+        )
+
+        response = self.client.get(
+            "/api/admin/appearance",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["custom_head_html"], "<script>window.testHead = true</script>")
+        self.assertEqual(payload["custom_footer_html"], "<p>备案号：蜀ICP备123456号</p>")
+
+    def test_appearance_settings_fall_back_to_legacy_custom_header(self):
+        Setting.objects.update_or_create(
+            key="appearance.custom_header",
+            defaults={"value": json.dumps("<meta name=\"legacy-test\" content=\"1\">")},
+        )
+
+        response = self.client.get(
+            "/api/admin/appearance",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            response.json()["custom_head_html"],
+            "<meta name=\"legacy-test\" content=\"1\">",
+        )
+        self.assertEqual(response.json()["custom_footer_html"], "")
 
     def test_advanced_settings_persist_human_verification_config(self):
         response = self.client.post(
@@ -2062,6 +2117,21 @@ class AdminSettingsApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertFalse(response.json()["realtime_typing_enabled"])
+
+    def test_public_forum_settings_fall_back_to_legacy_custom_header(self):
+        Setting.objects.update_or_create(
+            key="appearance.custom_header",
+            defaults={"value": json.dumps("<script>window.legacyHead = true</script>")},
+        )
+        clear_runtime_setting_caches()
+
+        response = self.client.get("/api/forum")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            response.json()["custom_head_html"],
+            "<script>window.legacyHead = true</script>",
+        )
 
     @patch("apps.core.admin_api.FileUploadService.upload_site_asset")
     def test_admin_can_upload_appearance_logo(self, upload_site_asset):

@@ -182,16 +182,58 @@
         </div>
 
         <div class="Form-group">
-          <label for="appearance-custom-header">{{ appearanceCopy?.customHeaderLabel || '自定义 Header HTML' }}</label>
+          <label for="appearance-custom-head">{{ appearanceCopy?.customHeadLabel || 'Head / 统计代码注入' }}</label>
           <textarea
-            id="appearance-custom-header"
-            v-model="settings.custom_header"
-            name="custom_header"
+            id="appearance-custom-head"
+            v-model="settings.custom_head_html"
+            name="custom_head_html"
             class="FormControl"
             rows="5"
-            :placeholder="appearanceConfig?.placeholders?.customHeader || '<!-- 在这里添加自定义 HTML -->'"
+            :placeholder="appearanceConfig?.placeholders?.customHead || '<!-- 在这里添加 head 注入或统计代码 -->'"
           ></textarea>
-          <p class="Form-help">{{ appearanceCopy?.customHeaderHelpText || '在页面头部添加自定义 HTML（如统计代码）' }}</p>
+          <p class="Form-help">{{ appearanceCopy?.customHeadHelpText || '用于统计脚本、验证标签或其他不直接展示给用户的 Head 注入。' }}</p>
+        </div>
+
+        <div class="Form-group">
+          <label for="appearance-custom-footer">{{ appearanceCopy?.customFooterLabel || 'Footer HTML' }}</label>
+          <textarea
+            id="appearance-custom-footer"
+            v-model="settings.custom_footer_html"
+            name="custom_footer_html"
+            class="FormControl"
+            rows="5"
+            :placeholder="appearanceConfig?.placeholders?.customFooter || '<p>在页脚展示备案号、版权说明或联系信息</p>'"
+          ></textarea>
+          <p class="Form-help">{{ appearanceCopy?.customFooterHelpText || '这里的内容会直接显示在站点页脚，适合备案、版权和联系信息。' }}</p>
+        </div>
+      </div>
+
+      <div class="AppearancePage-section">
+        <h3 class="Section-title">{{ appearanceCopy?.previewSectionTitle || '实时预览' }}</h3>
+        <div class="AppearancePreviewCard">
+          <div class="AppearancePreviewShell" :style="previewStyleVars">
+            <div class="AppearancePreviewHeader">
+              <div class="AppearancePreviewLogo">
+                <span>{{ settings.logo_url ? (appearanceCopy?.previewLogoText || 'Logo') : (settings.primary_color || '#4d698e').toUpperCase().slice(0, 7) }}</span>
+              </div>
+              <div class="AppearancePreviewHeaderText">
+                <strong>{{ settings.primary_color || '#4d698e' }}</strong>
+                <span>{{ settings.accent_color || '#e74c3c' }}</span>
+              </div>
+            </div>
+            <div class="AppearancePreviewHero">
+              <h4>{{ previewTitleText }}</h4>
+              <p>{{ previewDescriptionText }}</p>
+              <div class="AppearancePreviewActions">
+                <button type="button" class="AppearancePreviewPrimary">{{ appearanceCopy?.previewPrimaryActionLabel || '主操作' }}</button>
+                <button type="button" class="AppearancePreviewSecondary">{{ appearanceCopy?.previewSecondaryActionLabel || '次操作' }}</button>
+              </div>
+            </div>
+            <div v-if="settings.custom_footer_html" class="AppearancePreviewFooter" v-html="settings.custom_footer_html"></div>
+            <div v-else class="AppearancePreviewFooter AppearancePreviewFooter--placeholder">
+              {{ appearanceCopy?.previewFooterPlaceholder || '页脚自定义内容会显示在这里。' }}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -231,12 +273,22 @@ const appearanceActionMeta = computed(() => getAdminAppearancePageActionMeta())
 const loading = ref(true)
 const loadError = ref('')
 const settings = ref({})
+const previewContent = ref({
+  welcome_title: '欢迎来到Bias',
+  welcome_message: '这是一个基于Django和Vue 3的现代化论坛',
+})
 const saving = ref(false)
 const uploadingLogo = ref(false)
 const uploadingFavicon = ref(false)
 const modalStore = useModalStore()
 const { saveSuccess, saveError, resetSaveFeedback, showSaveSuccess, showSaveError } = useAdminSaveFeedback()
 const cssPresets = computed(() => appearanceConfig.value?.cssPresets || [])
+const previewTitleText = computed(() => String(previewContent.value.welcome_title || '欢迎来到 Bias').trim() || '欢迎来到 Bias')
+const previewDescriptionText = computed(() => String(previewContent.value.welcome_message || '这里会预览首页欢迎文案和页脚内容。').trim() || '这里会预览首页欢迎文案和页脚内容。')
+const previewStyleVars = computed(() => ({
+  '--appearance-preview-primary': settings.value.primary_color || '#4d698e',
+  '--appearance-preview-accent': settings.value.accent_color || '#e74c3c',
+}))
 
 function buildDefaultSettings() {
   return {
@@ -245,7 +297,8 @@ function buildDefaultSettings() {
     logo_url: '',
     favicon_url: '',
     custom_css: '',
-    custom_header: '',
+    custom_head_html: '',
+    custom_footer_html: '',
     ...(appearanceConfig.value?.defaultSettings || {}),
   }
 }
@@ -255,8 +308,16 @@ onMounted(async () => {
   loading.value = true
   loadError.value = ''
   try {
-    const data = await api.get('/admin/appearance')
+    const [appearanceData, basicsData] = await Promise.all([
+      api.get('/admin/appearance'),
+      api.get('/admin/settings'),
+    ])
+    const data = appearanceData
     settings.value = { ...settings.value, ...data }
+    previewContent.value = {
+      welcome_title: basicsData.welcome_title || '欢迎来到Bias',
+      welcome_message: basicsData.welcome_message || '这是一个基于Django和Vue 3的现代化论坛',
+    }
   } catch (error) {
     console.error('加载外观设置失败:', error)
     loadError.value = error.response?.data?.error || error.message || appearanceActionMeta.value?.loadErrorText || '加载外观设置失败，请稍后重试'
@@ -517,6 +578,115 @@ async function uploadAsset(event, target) {
   pointer-events: none;
 }
 
+.AppearancePreviewCard {
+  border: 1px solid var(--forum-border-soft);
+  border-radius: var(--forum-radius-md);
+  background: var(--forum-bg-elevated-strong);
+  padding: 16px;
+}
+
+.AppearancePreviewShell {
+  --appearance-preview-primary: #4d698e;
+  --appearance-preview-accent: #e74c3c;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(36, 52, 71, 0.08);
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--appearance-preview-primary) 16%, white) 0%, transparent 36%),
+    linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
+}
+
+.AppearancePreviewHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px 0;
+}
+
+.AppearancePreviewLogo {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--appearance-preview-primary) 0%, var(--appearance-preview-accent) 100%);
+  color: white;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.AppearancePreviewHeaderText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.AppearancePreviewHeaderText strong {
+  color: var(--forum-text-color);
+}
+
+.AppearancePreviewHeaderText span {
+  color: var(--forum-text-muted);
+  font-size: var(--forum-font-size-sm);
+}
+
+.AppearancePreviewHero {
+  padding: 18px 20px 20px;
+}
+
+.AppearancePreviewHero h4 {
+  margin: 0 0 10px;
+  font-size: 26px;
+  color: #13202f;
+}
+
+.AppearancePreviewHero p {
+  margin: 0;
+  color: #546577;
+  line-height: 1.7;
+}
+
+.AppearancePreviewActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.AppearancePreviewPrimary,
+.AppearancePreviewSecondary {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.AppearancePreviewPrimary {
+  background: var(--appearance-preview-primary);
+  color: white;
+}
+
+.AppearancePreviewSecondary {
+  background: white;
+  color: #213243;
+  border: 1px solid rgba(36, 52, 71, 0.12);
+}
+
+.AppearancePreviewFooter {
+  border-top: 1px solid rgba(36, 52, 71, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+  padding: 14px 20px 18px;
+  color: #607080;
+  font-size: var(--forum-font-size-sm);
+}
+
+.AppearancePreviewFooter--placeholder {
+  color: var(--forum-text-soft);
+}
+
+.AppearancePreviewFooter :deep(p) {
+  margin: 0;
+}
+
 @media (max-width: 768px) {
   .AppearancePage-content {
     max-width: none;
@@ -564,6 +734,10 @@ async function uploadAsset(event, target) {
   .Form-actions .Button {
     width: 100%;
     justify-content: center;
+  }
+
+  .AppearancePreviewActions {
+    flex-direction: column;
   }
 }
 </style>

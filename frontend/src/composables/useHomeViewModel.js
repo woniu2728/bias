@@ -2,12 +2,14 @@ import { computed } from 'vue'
 import { getUiCopy } from '@/forum/registry'
 import { useHomeViewBindings } from '@/composables/useHomeViewBindings'
 import { useStartDiscussionAction } from '@/composables/useStartDiscussionAction'
+import { useForumStore } from '@/stores/forum'
 
 export function useHomeViewModel({
   authStore,
   composerStore,
   router,
 }) {
+  const forumStore = useForumStore()
   const { startDiscussion } = useStartDiscussionAction({
     authStore,
     composerStore,
@@ -16,10 +18,10 @@ export function useHomeViewModel({
 
   const heroTitleText = computed(() => getUiCopy({
     surface: 'home-hero-title',
-  })?.text || 'Bias')
+  })?.text || forumStore.settings.welcome_title || forumStore.settings.forum_title || 'Bias')
   const heroDescriptionText = computed(() => getUiCopy({
     surface: 'home-hero-description',
-  })?.text || '基于 Django 和 Vue 3 的现代化论坛')
+  })?.text || forumStore.settings.welcome_message || '基于 Django 和 Vue 3 的现代化论坛')
   const browseDiscussionsText = computed(() => getUiCopy({
     surface: 'home-browse-discussions',
   })?.text || '浏览讨论')

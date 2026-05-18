@@ -1,15 +1,22 @@
 <template>
   <footer class="footer">
     <div class="container">
-      <p>Powered by <strong>{{ forumStore.settings.forum_title }}</strong> - Django + Vue 3</p>
+      <div
+        v-if="footerHtml"
+        class="footer-html"
+        v-html="footerHtml"
+      ></div>
+      <p v-else>Powered by <strong>{{ forumStore.settings.forum_title }}</strong> - Django + Vue 3</p>
     </div>
   </footer>
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useForumStore } from '@/stores/forum'
 
 const forumStore = useForumStore()
+const footerHtml = computed(() => String(forumStore.settings.custom_footer_html || '').trim())
 </script>
 
 <style scoped>
@@ -31,6 +38,14 @@ const forumStore = useForumStore()
 
 .footer p {
   margin: 0;
+}
+
+.footer-html {
+  color: inherit;
+}
+
+.footer-html :deep(*) {
+  max-width: 100%;
 }
 
 .footer strong {
