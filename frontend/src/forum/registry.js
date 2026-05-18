@@ -5484,6 +5484,28 @@ registerUiCopy({
 })
 
 registerUiCopy({
+  key: 'discussion-reply-typing-notice',
+  order: 1321,
+  surfaces: ['discussion-reply-typing-notice'],
+  resolve: ({ count, usernames }) => {
+    const normalizedNames = Array.isArray(usernames)
+      ? usernames.map(value => String(value || '').trim()).filter(Boolean)
+      : []
+
+    if (!normalizedNames.length || !count) {
+      return { text: '' }
+    }
+    if (count === 1) {
+      return { text: `${normalizedNames[0]} 正在输入...` }
+    }
+    if (count === 2) {
+      return { text: `${normalizedNames[0]}、${normalizedNames[1]} 正在输入...` }
+    }
+    return { text: `${normalizedNames[0]} 等 ${count} 人正在输入...` }
+  },
+})
+
+registerUiCopy({
   key: 'auth-session-forgot-link',
   order: 1330,
   surfaces: ['auth-session-forgot-link'],

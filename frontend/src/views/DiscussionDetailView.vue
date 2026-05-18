@@ -127,6 +127,7 @@
             :is-suspended="postStreamBindings.isSuspended"
             :suspension-notice="postStreamBindings.suspensionNotice"
             :has-active-composer="postStreamBindings.hasActiveComposer"
+            :typing-discussion-id="postStreamBindings.typingDiscussionId"
             @open-composer="postStreamEvents.openComposer"
           />
         </main>

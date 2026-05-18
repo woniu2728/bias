@@ -11,6 +11,8 @@ from django.contrib.auth.models import AnonymousUser
 from apps.discussions.models import Discussion
 from apps.discussions.services import DiscussionService
 from apps.core.online_service import OnlineUserService
+from apps.core.settings_service import get_advanced_settings
+from apps.users.services import UserService
 
 
 def resolve_visible_discussion_ids(discussion_ids, user) -> list[int]:
@@ -260,6 +262,10 @@ class DiscussionConsumer(AsyncWebsocketConsumer):
         message_type = data.get("type")
         if message_type == "ping":
             await self.send(text_data=json.dumps({"type": "pong"}))
+            return
+
+        if message_type == "typing_indicator":
+            await self.handle_typing_indicator_message(data)
 
     async def forum_event_message(self, event):
         await self.send(text_data=json.dumps({
@@ -276,6 +282,23 @@ class DiscussionConsumer(AsyncWebsocketConsumer):
             "is_typing": event["is_typing"],
         }))
 
+    async def handle_typing_indicator_message(self, data):
+        if isinstance(self.user, AnonymousUser):
+            return
+        if not await self.can_send_typing_indicator(self.discussion_id):
+            return
+
+        await self.channel_layer.group_send(
+            self.discussion_group_name,
+            {
+                "type": "typing_indicator",
+                "discussion_id": self.discussion_id,
+                "user_id": self.user.id,
+                "username": self.user.username,
+                "is_typing": bool(data.get("is_typing", False)),
+            },
+        )
+
     @database_sync_to_async
     def can_view_discussion(self):
         from apps.discussions.models import Discussion
@@ -287,6 +310,15 @@ class DiscussionConsumer(AsyncWebsocketConsumer):
         if discussion is None:
             return False
         return DiscussionService._can_view_discussion(discussion, user)
+
+    @database_sync_to_async
+    def can_send_typing_indicator(self, discussion_id: int) -> bool:
+        if not bool(get_advanced_settings().get("realtime_typing_enabled", True)):
+            return False
+        if not UserService.has_forum_permission(self.user, "discussion.typing"):
+            return False
+        visible_ids = resolve_visible_discussion_ids([discussion_id], self.user)
+        return discussion_id in visible_ids
 
 
 class ForumRealtimeConsumer(AsyncWebsocketConsumer):
@@ -331,6 +363,10 @@ class ForumRealtimeConsumer(AsyncWebsocketConsumer):
                 "type": "unsubscribed",
                 "discussion_ids": unsubscribed_ids,
             }))
+            return
+
+        if message_type == "typing_indicator":
+            await self.handle_typing_indicator_message(data)
 
     async def forum_event_message(self, event):
         await self.send(text_data=json.dumps({
@@ -346,6 +382,29 @@ class ForumRealtimeConsumer(AsyncWebsocketConsumer):
             "username": event["username"],
             "is_typing": event["is_typing"],
         }))
+
+    async def handle_typing_indicator_message(self, data):
+        if isinstance(self.user, AnonymousUser):
+            return
+
+        try:
+            discussion_id = int(data.get("discussion_id"))
+        except (TypeError, ValueError):
+            return
+
+        if not await self.can_send_typing_indicator(discussion_id):
+            return
+
+        await self.channel_layer.group_send(
+            f"discussion_{discussion_id}",
+            {
+                "type": "typing_indicator",
+                "discussion_id": discussion_id,
+                "user_id": self.user.id,
+                "username": self.user.username,
+                "is_typing": bool(data.get("is_typing", False)),
+            },
+        )
 
     async def subscribe_discussions(self, discussion_ids):
         visible_ids = await self.get_visible_discussion_ids(discussion_ids)
@@ -371,3 +430,12 @@ class ForumRealtimeConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_visible_discussion_ids(self, discussion_ids):
         return resolve_visible_discussion_ids(discussion_ids, self.user)
+
+    @database_sync_to_async
+    def can_send_typing_indicator(self, discussion_id: int) -> bool:
+        if not bool(get_advanced_settings().get("realtime_typing_enabled", True)):
+            return False
+        if not UserService.has_forum_permission(self.user, "discussion.typing"):
+            return False
+        visible_ids = resolve_visible_discussion_ids([discussion_id], self.user)
+        return discussion_id in visible_ids

@@ -1,30 +1,39 @@
 <template>
-  <div v-if="replyState?.kind === 'composer'" class="reply-placeholder">
-    <button type="button" class="primary" @click="$emit('open-composer')">
-      {{ replyState.actionLabel }}
-    </button>
-    <span v-if="replyState.hint">{{ replyState.hint }}</span>
-  </div>
-  <div
-    v-else-if="replyState?.kind === 'login'"
-    class="reply-notice"
-    :class="`reply-notice--${replyState.tone || 'warning'}`"
-  >
-    <router-link :to="replyState.to || '/login'">{{ replyState.linkLabel || '登录' }}</router-link>
-    {{ replyState.message }}
-  </div>
-  <div
-    v-else-if="replyState"
-    class="reply-notice"
-    :class="`reply-notice--${replyState.tone || 'warning'}`"
-  >
-    {{ replyState.message }}
+  <div class="reply-state-stack">
+    <div v-if="replyState?.kind === 'composer'" class="reply-placeholder">
+      <button type="button" class="primary" @click="$emit('open-composer')">
+        {{ replyState.actionLabel }}
+      </button>
+      <span v-if="replyState.hint">{{ replyState.hint }}</span>
+    </div>
+    <div
+      v-else-if="replyState?.kind === 'login'"
+      class="reply-notice"
+      :class="`reply-notice--${replyState.tone || 'warning'}`"
+    >
+      <router-link :to="replyState.to || '/login'">{{ replyState.linkLabel || '登录' }}</router-link>
+      {{ replyState.message }}
+    </div>
+    <div
+      v-else-if="replyState"
+      class="reply-notice"
+      :class="`reply-notice--${replyState.tone || 'warning'}`"
+    >
+      {{ replyState.message }}
+    </div>
+
+    <div v-if="typingNoticeText" class="reply-typing-notice">
+      {{ typingNoticeText }}
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import { getDiscussionReplyState } from '@/forum/registry'
+import { useForumRealtimeStore } from '@/stores/forumRealtime'
+import { getUiCopy } from '@/forum/registry'
+import { formatDiscussionTypingNotice } from '@/utils/discussionTypingState'
 
 const props = defineProps({
   authStore: {
@@ -46,10 +55,16 @@ const props = defineProps({
   hasActiveComposer: {
     type: Boolean,
     default: false
+  },
+  typingDiscussionId: {
+    type: Number,
+    default: 0
   }
 })
 
 defineEmits(['open-composer'])
+
+const forumRealtimeStore = useForumRealtimeStore()
 
 const replyState = computed(() => getDiscussionReplyState({
   authStore: props.authStore,
@@ -59,9 +74,28 @@ const replyState = computed(() => getDiscussionReplyState({
   hasActiveComposer: props.hasActiveComposer,
   surface: 'discussion-reply',
 }))
+
+const typingUsers = computed(() => forumRealtimeStore.getTypingUsers(props.typingDiscussionId))
+
+const typingNoticeText = computed(() => {
+  if (!typingUsers.value.length) return ''
+
+  const usernames = typingUsers.value.map(item => item.username).filter(Boolean)
+  return getUiCopy({
+    surface: 'discussion-reply-typing-notice',
+    count: usernames.length,
+    usernames,
+  })?.text || formatDiscussionTypingNotice(usernames)
+})
 </script>
 
 <style scoped>
+.reply-state-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .reply-placeholder {
   display: flex;
   align-items: center;
@@ -85,6 +119,12 @@ const replyState = computed(() => getDiscussionReplyState({
 .reply-notice--warning {
   background: var(--forum-warning-bg-strong);
   color: var(--forum-warning-color);
+}
+
+.reply-typing-notice {
+  color: var(--forum-text-muted);
+  font-size: var(--forum-font-size-sm);
+  padding: 0 2px;
 }
 
 @media (max-width: 768px) {

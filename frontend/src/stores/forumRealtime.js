@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import { useResourceStore } from '@/stores/resource'
 
+const TYPING_TTL_MS = 7000
+
 function resolveWsBaseUrl() {
   const configured = import.meta.env.VITE_WS_BASE_URL?.trim()
   if (configured) {
@@ -29,6 +31,7 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
   const subscribedDiscussionIds = new Set()
   const pendingDiscussionIds = new Set()
   const trackedDiscussionCounts = new Map()
+  const discussionTypingUsers = ref({})
   const isConnected = computed(() => connectionState.value === 'connected')
   const isReconnecting = computed(() => connectionState.value === 'reconnecting')
   const hasConnectionError = computed(() => connectionState.value === 'error')
@@ -80,6 +83,9 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
         if (data.type === 'unsubscribed') {
           applyUnsubscribedIds(data.discussion_ids)
         }
+        if (data.type === 'typing_indicator') {
+          applyTypingIndicator(data)
+        }
       } catch (error) {
         console.error('解析论坛实时消息失败:', error)
       }
@@ -128,6 +134,7 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
     subscribedDiscussionIds.clear()
     pendingDiscussionIds.clear()
     trackedDiscussionCounts.clear()
+    discussionTypingUsers.value = {}
     if (ws) {
       ws.close()
       ws = null
@@ -163,6 +170,7 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
       const currentCount = Number(trackedDiscussionCounts.get(id) || 0)
       if (currentCount <= 1) {
         trackedDiscussionCounts.delete(id)
+        delete discussionTypingUsers.value[id]
         removableIds.push(id)
         return
       }
@@ -223,6 +231,73 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
     }
   }
 
+  function sendTypingIndicator({ discussionId, isTyping }) {
+    const normalizedDiscussionId = Number(discussionId)
+    if (!Number.isInteger(normalizedDiscussionId) || normalizedDiscussionId <= 0) return false
+    if (ws?.readyState !== WebSocket.OPEN) return false
+
+    ws.send(JSON.stringify({
+      type: 'typing_indicator',
+      discussion_id: normalizedDiscussionId,
+      is_typing: Boolean(isTyping),
+    }))
+    return true
+  }
+
+  function applyTypingIndicator(data) {
+    const discussionId = Number(data?.discussion_id)
+    const userId = Number(data?.user_id)
+    const username = String(data?.username || '').trim()
+
+    if (!Number.isInteger(discussionId) || discussionId <= 0) return
+    if (!Number.isInteger(userId) || userId <= 0 || !username) return
+
+    const authStore = useAuthStore()
+    if (Number(authStore.user?.id || 0) === userId) return
+
+    const currentItems = Array.isArray(discussionTypingUsers.value[discussionId])
+      ? discussionTypingUsers.value[discussionId]
+      : []
+
+    if (!data?.is_typing) {
+      discussionTypingUsers.value = {
+        ...discussionTypingUsers.value,
+        [discussionId]: currentItems.filter(item => item.userId !== userId),
+      }
+      return
+    }
+
+    const expiresAt = Date.now() + TYPING_TTL_MS
+    const nextItems = currentItems
+      .filter(item => item.userId !== userId && item.expiresAt > Date.now())
+      .concat([{ userId, username, expiresAt }])
+
+    discussionTypingUsers.value = {
+      ...discussionTypingUsers.value,
+      [discussionId]: nextItems,
+    }
+  }
+
+  function getTypingUsers(discussionId) {
+    const normalizedDiscussionId = Number(discussionId)
+    if (!Number.isInteger(normalizedDiscussionId) || normalizedDiscussionId <= 0) return []
+
+    const currentItems = Array.isArray(discussionTypingUsers.value[normalizedDiscussionId])
+      ? discussionTypingUsers.value[normalizedDiscussionId]
+      : []
+    const now = Date.now()
+    const activeItems = currentItems.filter(item => item.expiresAt > now)
+
+    if (activeItems.length !== currentItems.length) {
+      discussionTypingUsers.value = {
+        ...discussionTypingUsers.value,
+        [normalizedDiscussionId]: activeItems,
+      }
+    }
+
+    return activeItems
+  }
+
   function resetState() {
     disconnect()
     connectFailures = 0
@@ -237,7 +312,9 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
     isReconnecting,
     connect,
     disconnect,
+    getTypingUsers,
     resetState,
+    sendTypingIndicator,
     trackDiscussionIds,
     untrackDiscussionIds,
   }

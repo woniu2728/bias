@@ -1590,6 +1590,30 @@ class AdminSettingsApiTests(TestCase):
         self.assertTrue(payload["auth_human_verification_login_enabled"])
         self.assertFalse(payload["auth_human_verification_register_enabled"])
 
+    def test_advanced_settings_persist_realtime_typing_toggle(self):
+        response = self.client.post(
+            "/api/admin/advanced",
+            data=json.dumps({
+                "realtime_typing_enabled": False,
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="advanced.realtime_typing_enabled").value),
+            False,
+        )
+
+        response = self.client.get(
+            "/api/admin/advanced",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(response.json()["realtime_typing_enabled"])
+
     def test_debug_mode_setting_is_read_only_runtime_value(self):
         response = self.client.post(
             "/api/admin/advanced",
@@ -1986,6 +2010,7 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(payload["announcement_tone"], "warning")
         self.assertEqual(payload["primary_color"], "#123456")
         self.assertEqual(payload["logo_url"], "/media/runtime-logo.png")
+        self.assertTrue(payload["realtime_typing_enabled"])
         self.assertIn("notification_types", payload)
         self.assertTrue(
             any(
@@ -2026,6 +2051,17 @@ class AdminSettingsApiTests(TestCase):
         self.assertTrue(any(item["code"] == "comment" and item["is_default"] for item in payload["post_types"]))
         self.assertTrue(any(item["code"] == "discussionRenamed" for item in payload["post_types"]))
         self.assertNotIn("auth_turnstile_secret_key", payload)
+
+    def test_public_forum_settings_expose_realtime_typing_toggle(self):
+        Setting.objects.update_or_create(
+            key="advanced.realtime_typing_enabled",
+            defaults={"value": json.dumps(False)},
+        )
+
+        response = self.client.get("/api/forum")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(response.json()["realtime_typing_enabled"])
 
     @patch("apps.core.admin_api.FileUploadService.upload_site_asset")
     def test_admin_can_upload_appearance_logo(self, upload_site_asset):

@@ -72,6 +72,7 @@ class WebSocketService:
             group_name,
             {
                 'type': 'typing_indicator',
+                'discussion_id': discussion_id,
                 'user_id': user_id,
                 'username': username,
                 'is_typing': is_typing

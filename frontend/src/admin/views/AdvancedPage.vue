@@ -168,6 +168,20 @@
           </label>
           <p class="Form-help">{{ advancedCopy?.queueEnabledHelpText || '关闭时强制同步执行。开启后，已接入任务会入队执行；入队失败时会同步回退，避免影响主流程。' }}</p>
         </div>
+
+        <div class="Form-group">
+          <label>
+            <input
+              id="advanced-realtime-typing-enabled"
+              v-model="settings.realtime_typing_enabled"
+              name="realtime_typing_enabled"
+              type="checkbox"
+              class="FormControl-checkbox"
+            />
+            {{ advancedCopy?.realtimeTypingEnabledLabel || '启用回复输入提示' }}
+          </label>
+          <p class="Form-help">{{ advancedCopy?.realtimeTypingEnabledHelpText || '关闭后，讨论详情页不再广播“正在输入”状态；仍保留其他实时通知与更新。' }}</p>
+        </div>
       </div>
 
       <div class="Form-section">
@@ -805,6 +819,7 @@ function defaultSettings() {
     cache_lifetime: 3600,
     queue_driver: 'sync',
     queue_enabled: false,
+    realtime_typing_enabled: true,
     maintenance_mode: false,
     maintenance_message: '',
     debug_mode: false,
@@ -982,6 +997,7 @@ function createSettingsSnapshot(value) {
   return {
     maintenance_mode: Boolean(value.maintenance_mode),
     queue_enabled: Boolean(value.queue_enabled),
+    realtime_typing_enabled: Boolean(value.realtime_typing_enabled),
     queue_driver: value.queue_driver,
     log_queries: Boolean(value.log_queries),
     storage_driver: value.storage_driver,

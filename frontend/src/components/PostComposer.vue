@@ -43,10 +43,10 @@
           :placeholder="contentPlaceholderText"
           rows="7"
           :disabled="submitting || uploading || isSuspended"
-          @input="handleEditorInteraction"
-          @click="handleEditorInteraction"
-          @keyup="handleEditorInteraction"
-          @scroll="handleEditorInteraction"
+          @input="handleEditorActivity"
+          @click="handleEditorActivity"
+          @keyup="handleEditorActivity"
+          @scroll="handleEditorActivity"
           @keydown="handleEditorKeydown"
         ></textarea>
         <ComposerPreviewPanel
@@ -156,7 +156,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ComposerEmojiAutocomplete from '@/components/ComposerEmojiAutocomplete.vue'
 import ComposerEmojiPicker from '@/components/ComposerEmojiPicker.vue'
@@ -170,6 +170,8 @@ import { useComposerRuntime } from '@/composables/useComposerRuntime'
 import { getUiCopy, runComposerSubmitGuards, runComposerSubmitSuccess } from '@/forum/registry'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
+import { useForumStore } from '@/stores/forum'
+import { useForumRealtimeStore } from '@/stores/forumRealtime'
 import { useModalStore } from '@/stores/modal'
 import api from '@/api'
 import { normalizePost } from '@/utils/forum'
@@ -178,6 +180,8 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
+const forumStore = useForumStore()
+const forumRealtimeStore = useForumRealtimeStore()
 const modalStore = useModalStore()
 
 const replyContent = ref('')
@@ -187,6 +191,15 @@ const draftNotice = ref('')
 const draftNoticeTone = ref('info')
 const submitNotice = ref('')
 const submitNoticeTone = ref('info')
+const canSendTypingIndicator = computed(() => (
+  showComposer.value
+  && !isEditing.value
+  && forumStore.settings.realtime_typing_enabled !== false
+  && authStore.hasPermission('discussion.typing')
+))
+
+let typingActive = false
+let typingIdleTimer = null
 
 const showComposer = computed(() => {
   return composerStore.isOpen && ['reply', 'edit'].includes(composerStore.current.type) && authStore.isAuthenticated
@@ -438,6 +451,7 @@ watch(
   () => authStore.isAuthenticated,
   value => {
     if (!value) {
+      stopTypingIndicator()
       resetComposerState()
     }
   }
@@ -490,6 +504,13 @@ function focusEditor() {
   composerTextarea.value?.focus()
 }
 
+const runtimeHandleEditorInteraction = handleEditorInteraction
+
+function handleEditorActivity(event) {
+  runtimeHandleEditorInteraction(event)
+  handleTypingActivity()
+}
+
 async function closeComposer(force = false) {
   if (!force && dirtyState.value) {
     const confirmed = await modalStore.confirm({
@@ -524,6 +545,7 @@ function cancelEdit() {
 }
 
 function resetComposerState() {
+  stopTypingIndicator()
   composerStore.closeComposer()
   composerDraftSavedAt.value = ''
   draftNotice.value = ''
@@ -639,6 +661,7 @@ async function submitReply() {
   if (!replyContent.value.trim() || !discussionId.value) return
 
   submitting.value = true
+  stopTypingIndicator()
   submitNotice.value = ''
   submitNoticeTone.value = 'info'
   try {
@@ -793,6 +816,65 @@ function buildBaseContext() {
     username: composerStore.current.username || '',
   }
 }
+
+function handleTypingActivity() {
+  if (!canSendTypingIndicator.value || !discussionId.value || submitting.value || !replyContent.value.trim()) return
+
+  if (!typingActive) {
+    typingActive = forumRealtimeStore.sendTypingIndicator({
+      discussionId: discussionId.value,
+      isTyping: true,
+    })
+  }
+
+  if (typingIdleTimer) {
+    clearTimeout(typingIdleTimer)
+  }
+
+  typingIdleTimer = setTimeout(() => {
+    stopTypingIndicator()
+  }, 2500)
+}
+
+function stopTypingIndicator() {
+  if (typingIdleTimer) {
+    clearTimeout(typingIdleTimer)
+    typingIdleTimer = null
+  }
+
+  if (!typingActive || !discussionId.value) {
+    typingActive = false
+    return
+  }
+
+  forumRealtimeStore.sendTypingIndicator({
+    discussionId: discussionId.value,
+    isTyping: false,
+  })
+  typingActive = false
+}
+
+watch(showComposer, value => {
+  if (!value) {
+    stopTypingIndicator()
+  }
+})
+
+watch(() => composerStore.isMinimized, value => {
+  if (value) {
+    stopTypingIndicator()
+  }
+})
+
+watch(replyContent, value => {
+  if (!value.trim()) {
+    stopTypingIndicator()
+  }
+})
+
+onBeforeUnmount(() => {
+  stopTypingIndicator()
+})
 </script>
 
 <style scoped>

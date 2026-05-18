@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS = {
   custom_header: '',
   maintenance_mode: false,
   maintenance_message: '论坛正在维护中，请稍后再试...',
+  realtime_typing_enabled: true,
   auth_human_verification_provider: 'off',
   auth_turnstile_site_key: '',
   auth_human_verification_login_enabled: false,

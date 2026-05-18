@@ -567,6 +567,16 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     required_permissions=("discussion.reply",),
                 ),
                 PermissionDefinition(
+                    code="discussion.typing",
+                    label="发送输入提示",
+                    section="reply",
+                    section_label="回复权限",
+                    module_id="discussions",
+                    icon="fas fa-keyboard",
+                    description="允许在讨论实时流里向其他用户显示“正在输入”提示。",
+                    required_permissions=("discussion.reply",),
+                ),
+                PermissionDefinition(
                     code="discussion.editOwn",
                     label="编辑自己的帖子",
                     section="reply",

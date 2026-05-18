@@ -77,6 +77,7 @@ ADVANCED_SETTINGS_DEFAULTS = {
     "cache_lifetime": 3600,
     "queue_driver": "redis" if "redis" in getattr(settings, "CELERY_BROKER_URL", "") else "sync",
     "queue_enabled": False,
+    "realtime_typing_enabled": True,
     "maintenance_mode": False,
     "maintenance_message": "论坛正在维护中，请稍后再试...",
     "debug_mode": settings.DEBUG,
@@ -305,6 +306,7 @@ def get_public_forum_settings() -> dict:
     forum_settings.update({
         "maintenance_mode": bool(advanced_settings.get("maintenance_mode", False)),
         "maintenance_message": get_maintenance_message(),
+        "realtime_typing_enabled": bool(advanced_settings.get("realtime_typing_enabled", True)),
         "auth_human_verification_provider": "off",
         "auth_turnstile_site_key": "",
         "auth_human_verification_login_enabled": False,

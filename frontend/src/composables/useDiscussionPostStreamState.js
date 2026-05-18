@@ -58,6 +58,7 @@ export function useDiscussionPostStreamState({
     const lastRead = Number(discussion.value?.last_read_post_number || 0)
     return Math.min(maxPostNumber.value, Math.max(1, lastRead + 1))
   })
+  const typingDiscussionId = computed(() => Number(discussionId.value || 0))
 
   onMounted(() => {
     window.addEventListener('bias:reply-created', handleReplyCreated)
@@ -539,6 +540,7 @@ export function useDiscussionPostStreamState({
     },
     showUnreadDivider,
     totalPosts,
+    typingDiscussionId,
     unreadCount,
     unreadStartPostNumber,
     upsertPost,

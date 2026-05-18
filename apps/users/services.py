@@ -25,6 +25,7 @@ class UserService:
         "searchUsers",
         "startDiscussion",
         "discussion.reply",
+        "discussion.typing",
         "discussion.editOwn",
         "discussion.deleteOwn",
     }
@@ -36,6 +37,7 @@ class UserService:
         "startDiscussion",
         "startDiscussionWithoutApproval",
         "discussion.reply",
+        "discussion.typing",
         "replyWithoutApproval",
         "discussion.editOwn",
         "discussion.deleteOwn",
