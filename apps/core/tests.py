@@ -489,6 +489,36 @@ class ChineseSearchTests(TestCase):
         self.assertGreaterEqual(payload["post_total"], 1)
         self.assertGreaterEqual(payload["user_total"], 1)
 
+    def test_search_api_preview_mode_returns_capped_section_results_without_full_totals(self):
+        for index in range(7):
+            DiscussionService.create_discussion(
+                title=f"预览标题专用词 {index}",
+                content="这是一段不会命中标题预览查询的正文",
+                user=self.user,
+            )
+
+        response = self.client.get(
+            "/api/search",
+            {"q": "预览标题专用词", "type": "all", "limit": 20, "preview": True},
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["type"], "all")
+        self.assertEqual(payload["page"], 1)
+        self.assertEqual(payload["limit"], 5)
+        self.assertTrue(payload["is_preview"])
+        self.assertEqual(payload["discussion_total"], 5)
+        self.assertEqual(len(payload["discussions"]), 5)
+        self.assertEqual(payload["discussion_total"], len(payload["discussions"]))
+        self.assertEqual(payload["post_total"], len(payload["posts"]))
+        self.assertEqual(payload["user_total"], len(payload["users"]))
+        self.assertEqual(
+            payload["total"],
+            payload["discussion_total"] + payload["post_total"] + payload["user_total"],
+        )
+
     def test_search_api_posts_type_returns_pagination_metadata(self):
         discussion = DiscussionService.create_discussion(
             title="分页搜索讨论",

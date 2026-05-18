@@ -145,6 +145,7 @@ def search(
     type: str = 'all',
     page: int = 1,
     limit: int = 20,
+    preview: bool = False,
 ):
     """
     全局搜索
@@ -178,6 +179,31 @@ def search(
     discussion_resource_options = parse_resource_query_options(request, "search_discussion")
     post_resource_options = parse_resource_query_options(request, "search_post")
     user_resource_options = parse_resource_query_options(request, "search_user")
+
+    if preview and type == 'all':
+        result = SearchService.search_preview(
+            query,
+            limit=limit,
+            user=user,
+            include_users=can_search_users,
+        )
+        response_payload = {
+            **result,
+            'discussions': [
+                serialize_discussion_search_result(item, resource_options=discussion_resource_options)
+                for item in result['discussions']
+            ],
+            'posts': [
+                serialize_post_search_result(item, resource_options=post_resource_options)
+                for item in result['posts']
+            ],
+            'users': [
+                serialize_user_search_result(item, resource_options=user_resource_options)
+                for item in result['users']
+            ],
+        }
+        return JsonResponse(response_payload)
+
     context = SearchService.build_search_context(query, user=user, include_users=can_search_users)
 
     if type == 'all':

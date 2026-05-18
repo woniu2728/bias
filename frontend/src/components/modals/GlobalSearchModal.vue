@@ -192,6 +192,7 @@ import {
 const RECENT_SEARCH_STORAGE_KEY = 'bias:search:recent'
 const RECENT_SEARCH_LIMIT = 6
 const POPULAR_TAG_LIMIT = 6
+const SEARCH_PREVIEW_LIMIT = 5
 
 const props = defineProps({
   showing: {
@@ -539,20 +540,21 @@ async function fetchResults() {
   const currentRequestId = ++requestId
 
   try {
-      const data = await api.get('/search', {
-        params: {
-          q: normalizedQuery.value,
-          type: searchSourceMap[activeType.value]?.apiType || activeType.value,
-          limit: activeType.value === 'all' ? 4 : 8,
-        }
-      })
+    const data = await api.get('/search', {
+      params: {
+        q: normalizedQuery.value,
+        type: 'all',
+        limit: SEARCH_PREVIEW_LIMIT,
+        preview: true,
+      }
+    })
 
     if (currentRequestId !== requestId) return
 
     totals.value = {
-      discussions: data.discussion_total ?? 0,
-      posts: data.post_total ?? 0,
-      users: data.user_total ?? 0,
+      discussions: data.discussion_total ?? unwrapList(data.discussions || []).length,
+      posts: data.post_total ?? unwrapList(data.posts || []).length,
+      users: data.user_total ?? unwrapList(data.users || []).length,
     }
     discussionIds.value = resourceStore.upsertMany('discussions', unwrapList(data.discussions || []))
       .map(item => item.id)

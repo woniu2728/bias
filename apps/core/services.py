@@ -320,6 +320,56 @@ class SearchService:
         }
 
     @staticmethod
+    def search_preview(
+        query: str,
+        *,
+        limit: int = 5,
+        user=None,
+        include_users: bool = True,
+    ) -> Dict:
+        """
+        轻量搜索预览。
+
+        仅返回每类前 N 条结果，不计算全量 totals，供全局搜索弹层使用。
+        """
+        preview_limit = PaginationService.normalize_limit(limit, default=5, max_limit=5)
+        discussion_queryset = SearchService._discussion_queryset(query, user=user)
+        post_queryset = SearchService._post_queryset(query, user=user)
+        user_queryset = SearchService._user_queryset(query) if include_users else None
+
+        discussions = SearchService._search_discussions_queryset(
+            discussion_queryset,
+            query,
+            page=1,
+            limit=preview_limit,
+        )
+        posts = SearchService._search_posts_queryset(
+            post_queryset,
+            query,
+            page=1,
+            limit=preview_limit,
+        )
+        users = (
+            SearchService._search_users_queryset(user_queryset, limit=preview_limit)
+            if include_users and user_queryset is not None
+            else []
+        )
+
+        return {
+            'total': len(discussions) + len(posts) + len(users),
+            'page': 1,
+            'limit': preview_limit,
+            'type': 'all',
+            'discussion_total': len(discussions),
+            'post_total': len(posts),
+            'user_total': len(users),
+            'discussions': discussions,
+            'posts': posts,
+            'users': users,
+            'is_preview': True,
+        }
+
+    @staticmethod
     def search_discussions(
         query: str,
         page: int = 1,
