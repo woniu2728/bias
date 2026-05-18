@@ -1678,6 +1678,67 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(response.json()["error"], "当前数据库不是 PostgreSQL，全文索引无需重建")
         self.assertFalse(AuditLog.objects.filter(action="admin.search_indexes.rebuild").exists())
 
+    @patch("apps.core.admin_api.QueueService.get_worker_status")
+    @patch("apps.core.admin_api.SearchIndexService.get_status")
+    def test_search_index_status_returns_runtime_snapshot(self, get_status, get_worker_status):
+        get_status.return_value = {
+            "supported": True,
+            "status": "missing",
+            "label": "缺少 1 个索引",
+            "message": "建议先补齐缺失索引，再继续依赖 PostgreSQL 全文搜索。",
+            "expected_indexes": ["discussions_title_slug_fts_idx", "posts_content_fts_idx"],
+            "existing_indexes": ["discussions_title_slug_fts_idx"],
+            "missing_indexes": ["posts_content_fts_idx"],
+        }
+        get_worker_status.return_value = {
+            "status": "available",
+            "label": "2 个 worker 在线",
+            "available": True,
+            "worker_count": 2,
+            "message": "Celery worker 可用。",
+        }
+        AuditLog.objects.create(
+            user=self.admin,
+            action="admin.search_indexes.rebuild",
+            target_type="search_index",
+            data={
+                "indexes": ["discussions_title_slug_fts_idx", "posts_content_fts_idx"],
+                "duration_ms": 42,
+            },
+        )
+
+        response = self.client.get(
+            "/api/admin/search-indexes/status",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        get_status.assert_called_once_with()
+        get_worker_status.assert_called_once_with()
+        payload = response.json()
+        self.assertTrue(payload["supported"])
+        self.assertEqual(payload["status"], "missing")
+        self.assertEqual(payload["existing_indexes"], ["discussions_title_slug_fts_idx"])
+        self.assertEqual(payload["missing_indexes"], ["posts_content_fts_idx"])
+        self.assertEqual(payload["queueWorkerLabel"], "2 个 worker 在线")
+        self.assertEqual(payload["lastRebuild"]["duration_ms"], 42)
+        self.assertEqual(
+            payload["lastRebuild"]["indexes"],
+            ["discussions_title_slug_fts_idx", "posts_content_fts_idx"],
+        )
+
+    def test_search_index_status_reports_unsupported_database_by_default(self):
+        response = self.client.get(
+            "/api/admin/search-indexes/status",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertFalse(payload["supported"])
+        self.assertEqual(payload["status"], "unsupported")
+        self.assertIsNone(payload["lastRebuild"])
+
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_mail_settings_affect_test_email_sender(self):
         response = self.client.post(

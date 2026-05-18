@@ -1044,6 +1044,34 @@ def clear_cache(request):
     return {"message": "缓存已清除"}
 
 
+@router.get("/search-indexes/status", auth=AccessTokenAuth(), tags=["Admin"])
+@require_staff
+def get_search_index_status(request):
+    """获取搜索索引状态"""
+    queue_worker_status = QueueService.get_worker_status()
+    latest_rebuild = AuditLog.objects.filter(action="admin.search_indexes.rebuild").first()
+    search_index_status = SearchIndexService.get_status()
+
+    last_rebuild = None
+    if latest_rebuild:
+        last_rebuild = {
+            "created_at": latest_rebuild.created_at,
+            "duration_ms": latest_rebuild.data.get("duration_ms", 0),
+            "indexes": latest_rebuild.data.get("indexes", []),
+        }
+
+    return {
+        **search_index_status,
+        "databaseLabel": detect_database_label(),
+        "lastRebuild": last_rebuild,
+        "queueWorkerStatus": queue_worker_status["status"],
+        "queueWorkerLabel": queue_worker_status["label"],
+        "queueWorkerAvailable": queue_worker_status["available"],
+        "queueWorkerCount": queue_worker_status["worker_count"],
+        "queueWorkerMessage": queue_worker_status["message"],
+    }
+
+
 @router.post("/search-indexes/rebuild", auth=AccessTokenAuth(), tags=["Admin"])
 @require_staff
 def rebuild_search_indexes(request):

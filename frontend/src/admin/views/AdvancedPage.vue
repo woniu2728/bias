@@ -61,16 +61,75 @@
       <div class="Form-section">
         <h3 class="Section-title">{{ advancedCopy?.searchSectionTitle || '搜索索引' }}</h3>
 
+        <div class="RuntimeSnapshot">
+          <div class="RuntimeSnapshot-grid">
+            <div class="RuntimeSnapshot-item">
+              <div class="RuntimeSnapshot-label">{{ advancedCopy?.searchStatusLabel || '当前状态' }}</div>
+              <div class="RuntimeSnapshot-value">
+                {{ searchIndexStatus?.label || advancedCopy?.searchStatusLoadingText || '加载中...' }}
+              </div>
+              <p class="RuntimeSnapshot-help">
+                {{ searchIndexStatus?.message || searchIndexStatusError || advancedCopy?.searchStatusHintText || '查看当前索引与队列运行状态。' }}
+              </p>
+            </div>
+
+            <div class="RuntimeSnapshot-item">
+              <div class="RuntimeSnapshot-label">{{ advancedCopy?.searchDatabaseLabel || '当前数据库' }}</div>
+              <div class="RuntimeSnapshot-value">
+                {{ searchIndexStatus?.databaseLabel || advancedCopy?.searchStatusLoadingText || '加载中...' }}
+              </div>
+            </div>
+
+            <div class="RuntimeSnapshot-item">
+              <div class="RuntimeSnapshot-label">{{ advancedCopy?.searchLastRebuildLabel || '最近重建' }}</div>
+              <div class="RuntimeSnapshot-value">
+                {{ formatSearchRebuildTime(searchIndexStatus?.lastRebuild?.created_at) }}
+              </div>
+              <p v-if="searchIndexStatus?.lastRebuild?.duration_ms" class="RuntimeSnapshot-help">
+                {{ formatSearchRebuildDuration(searchIndexStatus.lastRebuild.duration_ms) }}
+              </p>
+            </div>
+
+            <div class="RuntimeSnapshot-item">
+              <div class="RuntimeSnapshot-label">{{ advancedCopy?.searchQueueStatusLabel || '索引队列状态' }}</div>
+              <div class="RuntimeSnapshot-value">
+                {{ searchIndexStatus?.queueWorkerLabel || advancedCopy?.searchStatusLoadingText || '加载中...' }}
+              </div>
+              <p class="RuntimeSnapshot-help">
+                {{ searchIndexStatus?.queueWorkerMessage || advancedCopy?.searchQueueStatusHelpText || '当前重建按钮仍是请求内执行，后续异步索引任务会复用这里的队列运行状态。' }}
+              </p>
+            </div>
+          </div>
+
+          <div
+            v-if="Array.isArray(searchIndexStatus?.missing_indexes) && searchIndexStatus.missing_indexes.length > 0"
+            class="RuntimeSnapshot-tags"
+          >
+            <span class="RuntimeSnapshot-tagsLabel">{{ advancedCopy?.searchMissingIndexesLabel || '缺失索引' }}</span>
+            <code
+              v-for="indexName in searchIndexStatus.missing_indexes"
+              :key="indexName"
+              class="RuntimeSnapshot-tag"
+            >
+              {{ indexName }}
+            </code>
+          </div>
+        </div>
+
         <div class="Form-group">
           <label>{{ advancedCopy?.searchIndexLabel || 'PostgreSQL 全文索引' }}</label>
           <p class="Form-help">{{ advancedCopy?.searchIndexHelpText || '用于英文、数字关键词的讨论、回复和用户搜索。数据量较大时请在低峰期执行。' }}</p>
         </div>
 
+        <AdminInlineMessage v-if="searchIndexStatusError" tone="danger">
+          {{ searchIndexStatusError }}
+        </AdminInlineMessage>
+
         <div class="Form-actions">
           <button
             type="button"
             class="Button"
-            :disabled="rebuildingSearchIndexes"
+            :disabled="rebuildingSearchIndexes || searchIndexStatus?.supported === false"
             @click="rebuildSearchIndexes"
           >
             {{ rebuildingSearchIndexes ? (advancedCopy?.rebuildingSearchIndexesLabel || '重建中...') : (advancedCopy?.rebuildSearchIndexesLabel || '重建搜索索引') }}
@@ -721,6 +780,8 @@ const advancedCopy = computed(() => getAdminAdvancedPageCopy())
 const advancedConfig = computed(() => getAdminAdvancedPageConfig())
 const advancedActionMeta = computed(() => getAdminAdvancedPageActionMeta())
 const settings = ref({})
+const searchIndexStatus = ref(null)
+const searchIndexStatusError = ref('')
 
 const saving = ref(false)
 const clearing = ref(false)
@@ -793,6 +854,13 @@ function defaultSettings() {
 
 onMounted(async () => {
   settings.value = defaultSettings()
+  await Promise.all([
+    loadAdvancedSettings(),
+    loadSearchIndexStatus(),
+  ])
+})
+
+async function loadAdvancedSettings() {
   try {
     const data = await api.get('/admin/advanced')
     settings.value = { ...settings.value, ...data }
@@ -800,7 +868,19 @@ onMounted(async () => {
   } catch (error) {
     console.error('加载高级设置失败:', error)
   }
-})
+}
+
+async function loadSearchIndexStatus() {
+  searchIndexStatusError.value = ''
+  try {
+    searchIndexStatus.value = await api.get('/admin/search-indexes/status')
+  } catch (error) {
+    console.error('加载搜索索引状态失败:', error)
+    searchIndexStatusError.value = error.response?.data?.error
+      || advancedActionMeta.value?.loadSearchStatusErrorText
+      || '加载搜索索引状态失败，请稍后重试'
+  }
+}
 
 async function saveSettings() {
   const sensitiveChanges = getSensitiveSettingChanges()
@@ -880,10 +960,11 @@ async function rebuildSearchIndexes() {
 
   rebuildingSearchIndexes.value = true
   try {
-    await api.post('/admin/search-indexes/rebuild')
+    const response = await api.post('/admin/search-indexes/rebuild')
+    await loadSearchIndexStatus()
     await modalStore.alert({
       title: advancedActionMeta.value?.rebuildSearchSuccessTitle || '搜索索引已重建',
-      message: advancedActionMeta.value?.rebuildSearchSuccessMessage || '已重建讨论、回复和用户搜索索引。',
+      message: advancedActionMeta.value?.rebuildSearchSuccessMessage?.(response) || '已重建讨论、回复和用户搜索索引。',
       tone: 'success'
     })
   } catch (error) {
@@ -929,6 +1010,33 @@ function normalizeUploadSize(value) {
   }
   return Math.min(100, Math.max(1, parsed))
 }
+
+function formatSearchRebuildTime(value) {
+  if (!value) {
+    return advancedCopy.value?.searchNeverRebuiltText || '尚未重建'
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function formatSearchRebuildDuration(durationMs) {
+  const normalized = Number(durationMs || 0)
+  if (!normalized) {
+    return advancedCopy.value?.searchLastRebuildDurationFallback || '最近一次重建未记录耗时。'
+  }
+  return advancedCopy.value?.searchLastRebuildDurationText?.(normalized) || `最近一次耗时 ${normalized} ms`
+}
 </script>
 
 <style scoped>
@@ -970,6 +1078,64 @@ function normalizeUploadSize(value) {
   border-bottom: 1px solid var(--forum-border-soft);
 }
 
+.RuntimeSnapshot {
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--forum-bg-elevated) 0%, var(--forum-bg-subtle) 100%);
+}
+
+.RuntimeSnapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.RuntimeSnapshot-item {
+  min-width: 0;
+}
+
+.RuntimeSnapshot-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--forum-text-muted);
+}
+
+.RuntimeSnapshot-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--forum-text-color);
+  word-break: break-word;
+}
+
+.RuntimeSnapshot-help {
+  margin: 6px 0 0;
+  font-size: var(--forum-font-size-sm);
+  color: var(--forum-text-muted);
+  line-height: 1.6;
+}
+
+.RuntimeSnapshot-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.RuntimeSnapshot-tagsLabel {
+  color: var(--forum-text-muted);
+  font-size: var(--forum-font-size-sm);
+}
+
+.RuntimeSnapshot-tag {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--forum-bg-subtle);
+  border: 1px solid var(--forum-border-color);
+  font-size: 12px;
+}
+
 .Form-grid {
   gap: 0 16px;
 }
@@ -1008,6 +1174,7 @@ function normalizeUploadSize(value) {
 
 @media (max-width: 768px) {
   .RuntimeNotice-grid,
+  .RuntimeSnapshot-grid,
   .Form-grid {
     grid-template-columns: 1fr;
   }

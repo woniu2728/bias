@@ -52,6 +52,65 @@ SEARCH_INDEX_DEFINITIONS = [
 
 class SearchIndexService:
     @staticmethod
+    def get_status() -> Dict[str, object]:
+        defined_indexes = [definition["name"] for definition in SEARCH_INDEX_DEFINITIONS]
+
+        if connection.vendor != "postgresql":
+            return {
+                "supported": False,
+                "status": "unsupported",
+                "label": "当前数据库不需要全文索引重建",
+                "message": "只有 PostgreSQL 需要维护这组全文索引。",
+                "expected_indexes": defined_indexes,
+                "existing_indexes": [],
+                "missing_indexes": defined_indexes,
+            }
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT indexname
+                    FROM pg_indexes
+                    WHERE schemaname = ANY (current_schemas(false))
+                      AND indexname = ANY (%s)
+                    """,
+                    [defined_indexes],
+                )
+                existing_indexes = sorted(row[0] for row in cursor.fetchall())
+        except Exception as exc:
+            return {
+                "supported": True,
+                "status": "unknown",
+                "label": "索引状态检测失败",
+                "message": str(exc) or "无法检测 PostgreSQL 全文索引状态。",
+                "expected_indexes": defined_indexes,
+                "existing_indexes": [],
+                "missing_indexes": defined_indexes,
+            }
+
+        existing_index_set = set(existing_indexes)
+        missing_indexes = [name for name in defined_indexes if name not in existing_index_set]
+        if missing_indexes:
+            status = "missing"
+            label = f"缺少 {len(missing_indexes)} 个索引"
+            message = "建议先补齐缺失索引，再继续依赖 PostgreSQL 全文搜索。"
+        else:
+            status = "healthy"
+            label = "索引状态正常"
+            message = "讨论、回复和用户搜索所需的 PostgreSQL 全文索引都已存在。"
+
+        return {
+            "supported": True,
+            "status": status,
+            "label": label,
+            "message": message,
+            "expected_indexes": defined_indexes,
+            "existing_indexes": existing_indexes,
+            "missing_indexes": missing_indexes,
+        }
+
+    @staticmethod
     def rebuild_postgres_indexes() -> Dict[str, object]:
         if connection.vendor != "postgresql":
             raise RuntimeError("当前数据库不是 PostgreSQL，全文索引无需重建")
