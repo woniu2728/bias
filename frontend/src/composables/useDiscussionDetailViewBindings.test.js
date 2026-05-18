@@ -46,12 +46,14 @@ function createBindings(overrides = {}) {
     handleScrubberTrackClick() {},
     hasActiveComposer: ref(false),
     hasMore: ref(true),
+    hasPendingNewReplies: () => true,
     hasPostControls: () => true,
     hasPrevious: ref(true),
     highlightedPostNumber: ref(3),
     isSuspended: ref(false),
     jumpToPost() {},
     likePendingPostIds: ref([8]),
+    loadPendingNewReplies() {},
     loadMorePosts() {},
     loading: ref(false),
     loadingMore: ref(false),
@@ -67,6 +69,7 @@ function createBindings(overrides = {}) {
     moderatePost() {},
     nextTrigger: ref(null),
     openComposer() {},
+    pendingNewReplyCount: ref(3),
     shareDiscussion() {},
     posts: ref([{ id: 8, number: 3 }, { id: 9, number: 4 }]),
     previousTrigger: ref(null),
@@ -105,6 +108,8 @@ test('discussion detail view bindings expose grouped bindings', () => {
   assert.equal(bindings.postStreamBindings.value.isTargetPost({ number: 3 }), true)
   assert.equal(bindings.postStreamBindings.value.isLikePending({ id: 8 }), true)
   assert.equal(bindings.postStreamBindings.value.isFlagPending({ id: 9 }), true)
+  assert.equal(bindings.postStreamBindings.value.hasPendingNewReplies, true)
+  assert.equal(bindings.postStreamBindings.value.pendingNewReplyCount, 3)
   assert.equal(bindings.sidebarBindings.value.maxPostNumber, 20)
 })
 
@@ -134,6 +139,9 @@ test('discussion detail view bindings expose stable event handlers', () => {
     },
     loadMorePosts() {
       calls.push('load-more')
+    },
+    loadPendingNewReplies() {
+      calls.push('load-pending')
     },
     loadPreviousPosts() {
       calls.push('load-previous')
@@ -190,6 +198,7 @@ test('discussion detail view bindings expose stable event handlers', () => {
   bindings.postStreamEvents.moderatePost({ post: { id: 10 }, action: 'approve' })
   bindings.postStreamEvents.resolvePostFlags({ post: { id: 11 }, status: 'resolved' })
   bindings.postStreamEvents.closePostMenu()
+  bindings.postStreamEvents.loadPendingNewReplies()
   bindings.postStreamEvents.loadMorePosts()
   bindings.postStreamEvents.openComposer()
   bindings.sidebarEvents.sidebarAction('bookmark')
@@ -220,6 +229,7 @@ test('discussion detail view bindings expose stable event handlers', () => {
     ['moderate-post', 10, 'approve'],
     ['resolve-flags', 11, 'resolved'],
     'close-post-menu',
+    'load-pending',
     'load-more',
     'open-composer',
     ['discussion-menu', 'bookmark'],

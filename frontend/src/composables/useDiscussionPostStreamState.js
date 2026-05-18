@@ -10,6 +10,7 @@ import {
   mergeForumEventPayload,
   shouldRefreshForumEvent,
 } from '@/utils/forumRealtime'
+import { shouldAppendRealtimePostImmediately } from '@/utils/discussionPostStream'
 import { useDiscussionNearRouteState } from './useDiscussionNearRouteState'
 
 export function useDiscussionPostStreamState({
@@ -35,6 +36,7 @@ export function useDiscussionPostStreamState({
   const highlightedPostNumber = ref(null)
   const currentVisiblePostNumber = ref(1)
   const currentVisiblePostProgress = ref(1)
+  const pendingNewReplyCount = ref(0)
   const pageLimit = 20
 
   let nearUrlTimer = null
@@ -127,6 +129,7 @@ export function useDiscussionPostStreamState({
     firstLoadedPostNumber.value = Number(data.current_start || items[0]?.number || 0)
     lastLoadedPostNumber.value = Number(data.current_end || items[items.length - 1]?.number || 0)
     totalPosts.value = data.total || items.length
+    syncPendingNewReplyCount()
     return items
   }
 
@@ -135,6 +138,7 @@ export function useDiscussionPostStreamState({
     mergePostIds(collectPostIds(items))
     lastLoadedPostNumber.value = Number(data.current_end || items[items.length - 1]?.number || lastLoadedPostNumber.value)
     totalPosts.value = data.total || totalPosts.value
+    syncPendingNewReplyCount()
   }
 
   function prependPosts(data) {
@@ -142,6 +146,7 @@ export function useDiscussionPostStreamState({
     mergePostIds(collectPostIds(items), { prepend: true })
     firstLoadedPostNumber.value = Number(data.current_start || items[0]?.number || firstLoadedPostNumber.value)
     totalPosts.value = data.total || totalPosts.value
+    syncPendingNewReplyCount()
   }
 
   async function loadMorePosts() {
@@ -226,8 +231,29 @@ export function useDiscussionPostStreamState({
     lastLoadedPostNumber.value = 0
     totalPosts.value = 0
     highlightedPostNumber.value = null
+    pendingNewReplyCount.value = 0
     currentVisiblePostNumber.value = normalizePostNumber(targetNearPost.value) || 1
     currentVisiblePostProgress.value = currentVisiblePostNumber.value
+  }
+
+  function syncPendingNewReplyCount() {
+    pendingNewReplyCount.value = Math.max(totalPosts.value - lastLoadedPostNumber.value, 0)
+  }
+
+  function hasPendingNewReplies() {
+    return pendingNewReplyCount.value > 0
+  }
+
+  function isNearStreamBottom() {
+    return shouldAppendRealtimePostImmediately({
+      currentVisiblePostNumber: currentVisiblePostNumber.value,
+      lastLoadedPostNumber: lastLoadedPostNumber.value,
+    })
+  }
+
+  async function loadPendingNewReplies() {
+    if (!pendingNewReplyCount.value) return
+    await loadMorePosts()
   }
 
   function collectPostIds(items = []) {
@@ -333,15 +359,37 @@ export function useDiscussionPostStreamState({
     if (posts.value.some(post => post.id === newPost.id)) return
 
     const mergedPost = resourceStore.upsert('posts', newPost)
-    mergePostIds([mergedPost.id])
-    totalPosts.value = Math.max(totalPosts.value + 1, posts.value.length)
-    lastLoadedPostNumber.value = Math.max(lastLoadedPostNumber.value, Number(newPost.number || 0))
-    lastReportedReadNumber = Math.max(lastReportedReadNumber, newPost.number || 0)
-    const lastReadPostNumber = Math.max(Number(discussion.value.last_read_post_number || 0), newPost.number || 0)
-    const lastPostNumber = Math.max(discussion.value.last_post_number || 0, newPost.number || 0)
+    const newPostNumber = Number(newPost.number || 0)
+    const shouldAppendImmediately = isNearStreamBottom()
+
+    if (shouldAppendImmediately) {
+      mergePostIds([mergedPost.id])
+      lastLoadedPostNumber.value = Math.max(lastLoadedPostNumber.value, newPostNumber)
+    }
+
+    totalPosts.value = Math.max(totalPosts.value + 1, newPostNumber, posts.value.length)
+    syncPendingNewReplyCount()
+
+    const lastPostNumber = Math.max(discussion.value.last_post_number || 0, newPostNumber)
+    if (!shouldAppendImmediately) {
+      const pendingUnreadCount = Math.max(Number(discussion.value.unread_count || 0), pendingNewReplyCount.value)
+      patchDiscussion({
+        comment_count: Math.max((discussion.value.comment_count || 0) + 1, totalPosts.value),
+        last_post_id: newPost.id,
+        last_post_number: lastPostNumber,
+        last_posted_at: newPost.created_at || discussion.value.last_posted_at,
+        unread_count: pendingUnreadCount,
+        is_unread: pendingUnreadCount > 0,
+        ...(authStore.user?.preferences?.follow_after_reply ? { is_subscribed: true } : {}),
+      })
+      return
+    }
+
+    lastReportedReadNumber = Math.max(lastReportedReadNumber, newPostNumber)
+    const lastReadPostNumber = Math.max(Number(discussion.value.last_read_post_number || 0), newPostNumber)
     const unreadCountValue = Math.max(lastPostNumber - lastReadPostNumber, 0)
     patchDiscussion({
-      comment_count: (discussion.value.comment_count || 0) + 1,
+      comment_count: Math.max((discussion.value.comment_count || 0) + 1, totalPosts.value),
       last_post_id: newPost.id,
       last_post_number: lastPostNumber,
       last_posted_at: newPost.created_at || discussion.value.last_posted_at,
@@ -382,12 +430,24 @@ export function useDiscussionPostStreamState({
       const normalizedPost = postId > 0
         ? resourceStore.get('posts', postId) || normalizePost(payload.post)
         : normalizePost(payload.post)
+      const normalizedPostNumber = Number(normalizedPost?.number || 0)
       switch (event.event_type) {
         case 'post.created':
         case 'post.approved':
         case 'post.resubmitted':
-          upsertPost(normalizedPost)
-          sortPostIds()
+          totalPosts.value = Math.max(totalPosts.value, normalizedPostNumber)
+          if (shouldAppendRealtimePostImmediately({
+            currentVisiblePostNumber: currentVisiblePostNumber.value,
+            lastLoadedPostNumber: lastLoadedPostNumber.value,
+            postIds: postIds.value,
+            postId: normalizedPost.id,
+            postNumber: normalizedPostNumber,
+          })) {
+            upsertPost(normalizedPost)
+            sortPostIds()
+            lastLoadedPostNumber.value = Math.max(lastLoadedPostNumber.value, normalizedPostNumber)
+          }
+          syncPendingNewReplyCount()
           break
         case 'discussion.created':
         case 'discussion.approved':
@@ -445,11 +505,13 @@ export function useDiscussionPostStreamState({
     currentVisiblePostNumber,
     currentVisiblePostProgress,
     hasMore,
+    hasPendingNewReplies,
     hasPrevious,
     highlightedPostNumber,
     lastReportedReadNumber,
     loadInitialPosts,
     loadMorePosts,
+    loadPendingNewReplies,
     loadPreviousPosts,
     loading,
     loadingMore,
@@ -458,6 +520,7 @@ export function useDiscussionPostStreamState({
     maxPostNumber,
     normalizePostNumber,
     patchDiscussion,
+    pendingNewReplyCount,
     postIds,
     posts,
     refreshPostStream,

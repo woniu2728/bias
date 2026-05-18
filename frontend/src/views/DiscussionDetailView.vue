@@ -99,6 +99,16 @@
             </template>
           </div>
 
+          <ForumInlineMessage
+            v-if="postStreamBindings.hasPendingNewReplies"
+            tone="info"
+            class="discussion-new-replies-banner"
+          >
+            <button type="button" class="discussion-new-replies-button" @click="postStreamEvents.loadPendingNewReplies">
+              已有 {{ postStreamBindings.pendingNewReplyCount }} 条新回复，点击加载
+            </button>
+          </ForumInlineMessage>
+
           <!-- 加载更多 -->
           <div v-if="postStreamBindings.hasMore" :ref="postStreamBindings.nextTrigger" class="load-more">
             <ForumLoadMoreButton
@@ -160,6 +170,7 @@
 
 <script setup>
 import { useRoute, useRouter } from 'vue-router'
+import ForumInlineMessage from '@/components/forum/ForumInlineMessage.vue'
 import ForumLoadMoreButton from '@/components/forum/ForumLoadMoreButton.vue'
 import ForumStateBlock from '@/components/forum/ForumStateBlock.vue'
 import { useForumStore } from '@/stores/forum'
@@ -249,6 +260,25 @@ const {
 .load-more {
   text-align: center;
   margin-bottom: 30px;
+}
+
+.discussion-new-replies-banner {
+  margin-top: -6px;
+}
+
+.discussion-new-replies-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.discussion-new-replies-button:hover {
+  opacity: 0.84;
 }
 
 .load-previous {

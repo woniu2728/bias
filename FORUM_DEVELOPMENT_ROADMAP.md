@@ -992,6 +992,7 @@ GET /api/discussions/:id/posts?after=123&limit=20
 - 已完成：讨论详情页的 `near` 路由变化已从“整页重刷”收口为“帖子窗口切换 + 目标楼层定位”，`useDiscussionDetailPageLifecycle` 现在只在讨论 id 变化时重置整页状态，而在 `near` 变化时直接驱动 `useDiscussionPostStreamState.syncWindowToRouteNear()` 切换窗口、flash 目标楼层并在必要时把地址栏校正到真实可见楼层；阶段 5 的 `near=楼层` 稳定定位因此开始具备独立链路，但这一步仍没有提前扩到 ResizeObserver 锚定或虚拟列表。
 - 已完成：讨论详情页“加载前文”链路已补上一层轻量滚动锚定 settling，`useDiscussionPostViewportState` 现在会在 prepend 窗口后围绕原首个可见楼层做最多数帧的滚动校正，并在校正期间暂停继续自动翻前文，先把长讨论最容易出现的“前文插入后再被图片/代码块二次顶走”问题收口；这一刀仍保持在短周期 anchor 校正，没有提前扩成全量 `ResizeObserver` 监听或虚拟列表。
 - 已完成：讨论列表到详情页的主链路已补齐“返回后回到刚才那条讨论附近”的显式恢复协议，列表项进入详情时会记录当前列表上下文与目标讨论 id，`useDiscussionListPageLifecycle` 会在列表重新挂载且命中同一路由上下文时把对应卡片滚回可视区并再清掉一次性标记；阶段 5 的“返回列表位置恢复”因此先在主列表链路闭合，没有顺手扩成更重的全站滚动缓存系统。
+- 已完成：讨论详情页的远端新回复已从“实时到达就直接插入并打断阅读”收口为“底部提示 + 用户点击后再补载后文”，`useDiscussionPostStreamState` 现在只会在读者仍停留在尾部时立即拼接新帖，否则先累计 `pendingNewReplyCount` 并在页面底部显示“点击加载”提示；阶段 5 的“当前详情页底部提示 / 用户点击后加载新回复 / 不强行打断当前阅读位置”因此先在主详情阅读链路闭合，没有提前扩成通知聚合或全量虚拟流。
 - 已完成：后端新增统一 `ResourceQueryOptions` / `fields[...]` / `include` 解析层，讨论、帖子、标签、通知四条主读接口已开始通过同一套资源查询协议裁剪注册字段并显式展开关系，阶段 2 的 Resource API 已从“能挂字段”推进到“主接口可查询”的实际形态。
 - 已完成：后端 `ResourceRegistry` 新增资源级预加载协议，注册字段与关系现在可以声明 `select_related/prefetch_related` 依赖；discussion / post / notification 主读接口已接入统一预加载计划并补齐查询回归测试，阶段 2 的 Resource API 开始从“可查询”继续推进到“可扩展且可控查询成本”。
 - 已完成：搜索 API 与用户列表/详情接口已接入统一资源查询与预加载协议，`search_discussion/search_post/search_user/user_detail` 现在开始共用 `fields[...]` 与 registry 预加载计划，搜索用户结果和用户列表的主用户组查询也已补齐回归测试，阶段 2 的 Resource API 覆盖面进一步扩到搜索与用户域。
