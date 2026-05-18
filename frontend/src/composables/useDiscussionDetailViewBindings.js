@@ -123,6 +123,11 @@ export function createDiscussionDetailViewBindings({
     togglingSubscription: togglingSubscription.value,
     canEditDiscussion: canEditDiscussion.value,
     canModerateDiscussionSettings: canModerateDiscussionSettings.value,
+    scrubberPositionText: scrubberPositionText.value,
+    scrubberDescription: scrubberDescription.value,
+    unreadCount: unreadCount.value,
+    unreadStartPostNumber: unreadCount.value ? Math.max(1, maxPostNumber.value - unreadCount.value + 1) : null,
+    maxPostNumber: maxPostNumber.value,
     menuItems: discussionMenuItems.value,
   }))
 
@@ -133,6 +138,7 @@ export function createDiscussionDetailViewBindings({
     toggleDiscussionMenu,
     toggleSubscription,
     menuAction: handleDiscussionMenuSelection,
+    jumpToPost,
   }
 
   const postStreamBindings = computed(() => ({

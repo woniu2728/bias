@@ -105,6 +105,8 @@ test('discussion detail view bindings expose grouped bindings', () => {
   assert.equal(bindings.stateBindings.value.discussion.title, '讨论')
   assert.equal(bindings.heroBindings.value.discussionBadges[0].key, 'sticky')
   assert.equal(bindings.mobileBindings.value.menuItems[0].key, 'reply')
+  assert.equal(bindings.mobileBindings.value.scrubberPositionText, '3 / 20')
+  assert.equal(bindings.mobileBindings.value.unreadStartPostNumber, 19)
   assert.equal(bindings.postStreamBindings.value.isTargetPost({ number: 3 }), true)
   assert.equal(bindings.postStreamBindings.value.isLikePending({ id: 8 }), true)
   assert.equal(bindings.postStreamBindings.value.isFlagPending({ id: 9 }), true)
@@ -186,6 +188,7 @@ test('discussion detail view bindings expose stable event handlers', () => {
   bindings.mobileEvents.toggleSubscription()
   bindings.mobileEvents.toggleDiscussionMenu()
   bindings.mobileEvents.menuAction('reply')
+  bindings.mobileEvents.jumpToPost(18)
   bindings.postStreamEvents.loadPreviousPosts()
   bindings.postStreamEvents.jumpToPost(12)
   bindings.postStreamEvents.toggleLike({ id: 3 })
@@ -217,6 +220,7 @@ test('discussion detail view bindings expose stable event handlers', () => {
     'toggle-subscription',
     'toggle-menu',
     ['discussion-menu', 'reply'],
+    ['jump', 18],
     'load-previous',
     ['jump', 12],
     ['like', 3],

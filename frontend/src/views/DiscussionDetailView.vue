@@ -35,6 +35,7 @@
             @toggle-subscription="mobileEvents.toggleSubscription"
             @toggle-menu="mobileEvents.toggleDiscussionMenu"
             @menu-action="mobileEvents.menuAction"
+            @jump-to-post="postStreamEvents.jumpToPost"
           />
 
           <div v-if="postStreamBindings.hasPrevious" :ref="postStreamBindings.previousTrigger" class="load-more load-previous">

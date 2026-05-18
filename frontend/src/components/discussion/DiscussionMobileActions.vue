@@ -28,6 +28,16 @@
       <button
         type="button"
         class="discussion-mobile-action"
+        :title="positionActionTitle"
+        @click="togglePositionPanel"
+      >
+        <i class="fas fa-grip-lines"></i>
+        <span>{{ positionActionLabel }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="discussion-mobile-action"
         :title="shareTitle"
         @click="$emit('share-discussion')"
       >
@@ -46,6 +56,36 @@
         <i class="fas fa-ellipsis"></i>
         <span>{{ moreLabel }}</span>
       </button>
+    </div>
+
+    <div v-if="showPositionPanel" class="discussion-actions-menu discussion-actions-menu--mobile discussion-actions-menu--scrubber">
+      <div class="discussion-mobile-scrubber">
+        <div class="discussion-mobile-scrubber__meta">
+          <strong>{{ scrubberPositionText }}</strong>
+          <span>{{ scrubberDescription }}</span>
+        </div>
+        <p v-if="unreadCount" class="discussion-mobile-scrubber__unread">
+          未读从第 {{ unreadStartPostNumber }} 楼开始，共 {{ unreadCount }} 条
+        </p>
+        <div class="discussion-mobile-scrubber__actions">
+          <button type="button" class="discussion-mobile-chip" @click="jumpToStart">原帖</button>
+          <button type="button" class="discussion-mobile-chip" :disabled="!unreadStartPostNumber" @click="jumpToUnread">未读</button>
+          <button type="button" class="discussion-mobile-chip" @click="jumpToCurrent">当前</button>
+          <button type="button" class="discussion-mobile-chip" @click="jumpToEnd">现在</button>
+        </div>
+        <form class="discussion-mobile-scrubber__form" @submit.prevent="submitPositionJump">
+          <input
+            v-model="positionInput"
+            class="discussion-mobile-scrubber__input"
+            type="number"
+            min="1"
+            :max="maxPostNumber"
+            inputmode="numeric"
+            placeholder="输入楼层"
+          />
+          <button type="submit" class="discussion-mobile-scrubber__submit">跳转</button>
+        </form>
+      </div>
     </div>
 
     <div v-if="showDiscussionMenu" class="discussion-actions-menu discussion-actions-menu--mobile">
@@ -101,6 +141,26 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  scrubberPositionText: {
+    type: String,
+    default: ''
+  },
+  scrubberDescription: {
+    type: String,
+    default: ''
+  },
+  unreadCount: {
+    type: Number,
+    default: 0
+  },
+  unreadStartPostNumber: {
+    type: Number,
+    default: null
+  },
+  maxPostNumber: {
+    type: Number,
+    default: 1
+  },
   menuItems: {
     type: Array,
     default: () => []
@@ -109,6 +169,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'menu-action',
+  'jump-to-post',
   'open-composer',
   'open-login-for-reply',
   'share-discussion',
@@ -117,6 +178,8 @@ const emit = defineEmits([
 ])
 
 const rootEl = ref(null)
+const showPositionPanel = ref(false)
+const positionInput = ref('')
 
 const replyAction = computed(() => {
   if (props.authStore?.isAuthenticated && props.canReplyFromMenu) {
@@ -171,6 +234,12 @@ const moreLabel = computed(() => getUiCopy({
 const moreTitle = computed(() => getUiCopy({
   surface: 'discussion-mobile-action-more-description',
 })?.text || '查看更多讨论操作。')
+const positionActionLabel = computed(() => getUiCopy({
+  surface: 'discussion-mobile-action-position',
+})?.text || '楼层')
+const positionActionTitle = computed(() => getUiCopy({
+  surface: 'discussion-mobile-action-position-description',
+})?.text || '打开轻量楼层跳转。')
 
 function handleReplyAction() {
   if (replyAction.value.action === 'reply') {
@@ -181,11 +250,60 @@ function handleReplyAction() {
   emit('open-login-for-reply')
 }
 
+function togglePositionPanel() {
+  showPositionPanel.value = !showPositionPanel.value
+  if (showPositionPanel.value) {
+    positionInput.value = String(sanitizePostNumber(props.unreadStartPostNumber || props.maxPostNumber || 1))
+  }
+}
+
+function closePositionPanel() {
+  showPositionPanel.value = false
+}
+
+function emitJump(number) {
+  emit('jump-to-post', sanitizePostNumber(number))
+  closePositionPanel()
+}
+
+function jumpToStart() {
+  emitJump(1)
+}
+
+function jumpToUnread() {
+  if (!props.unreadStartPostNumber) return
+  emitJump(props.unreadStartPostNumber)
+}
+
+function jumpToCurrent() {
+  emitJump(extractCurrentPostNumber())
+}
+
+function jumpToEnd() {
+  emitJump(props.maxPostNumber)
+}
+
+function submitPositionJump() {
+  emitJump(positionInput.value)
+}
+
+function extractCurrentPostNumber() {
+  const match = String(props.scrubberPositionText || '').match(/^(\d+)/)
+  return match ? Number(match[1]) : 1
+}
+
+function sanitizePostNumber(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 1
+  return Math.max(1, Math.min(Number(props.maxPostNumber || 1), Math.floor(parsed)))
+}
+
 function getRootEl() {
   return rootEl.value
 }
 
 defineExpose({
+  closePositionPanel,
   getRootEl
 })
 </script>
@@ -197,7 +315,7 @@ defineExpose({
 
 .discussion-mobile-bar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   padding: 12px 15px;
   border-top: 1px solid var(--forum-border-color);
@@ -255,6 +373,85 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+.discussion-actions-menu--scrubber {
+  padding: 14px 15px 16px;
+}
+
+.discussion-mobile-scrubber {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.discussion-mobile-scrubber__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.discussion-mobile-scrubber__meta strong {
+  color: var(--forum-text-color);
+  font-size: 14px;
+}
+
+.discussion-mobile-scrubber__meta span,
+.discussion-mobile-scrubber__unread {
+  color: var(--forum-text-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.discussion-mobile-scrubber__unread {
+  margin: 0;
+}
+
+.discussion-mobile-scrubber__actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.discussion-mobile-chip {
+  min-height: 38px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: 999px;
+  background: var(--forum-bg-subtle);
+  color: var(--forum-text-color);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.discussion-mobile-chip:disabled {
+  opacity: 0.5;
+}
+
+.discussion-mobile-scrubber__form {
+  display: flex;
+  gap: 8px;
+}
+
+.discussion-mobile-scrubber__input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: var(--forum-radius-md);
+  padding: 0 12px;
+  background: var(--forum-bg-elevated);
+  color: var(--forum-text-color);
+}
+
+.discussion-mobile-scrubber__submit {
+  min-width: 72px;
+  min-height: 40px;
+  border: 0;
+  border-radius: var(--forum-radius-md);
+  background: var(--forum-accent-color);
+  color: var(--forum-text-inverse);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 @media (max-width: 768px) {
