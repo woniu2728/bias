@@ -4190,6 +4190,7 @@ class AdminPermissionsApiTests(TestCase):
         tags_module = next(module for module in payload["modules"] if module["id"] == "tags")
         admin_page_paths = {page["path"] for page in payload["admin_pages"]}
         self.assertIn("/admin/modules", admin_page_paths)
+        self.assertIn("/admin/docs", admin_page_paths)
         self.assertTrue(core_module["is_core"])
         self.assertEqual(core_module["category_label"], "核心")
         self.assertIn("dependency_status", core_module)
@@ -4199,6 +4200,10 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("registration_counts", core_module)
         self.assertIn("permissions", core_module)
         self.assertIn("documentation_url", core_module)
+        self.assertEqual(
+            core_module["documentation_url"],
+            "/admin.html#/admin/docs?guide=module-development&module=core",
+        )
         self.assertIn("debug_items", core_module["runtime"])
         self.assertIn("permissions_entry_path", core_module["runtime"])
         self.assertIn("module_center_path", core_module["runtime"])

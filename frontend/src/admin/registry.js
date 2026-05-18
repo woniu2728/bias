@@ -10,6 +10,7 @@ import AppearancePage from './views/AppearancePage.vue'
 import TagsPage from './views/TagsPage.vue'
 import MailPage from './views/MailPage.vue'
 import AdvancedPage from './views/AdvancedPage.vue'
+import DeveloperDocsPage from './views/DeveloperDocsPage.vue'
 
 const adminRoutes = []
 const adminDashboardStats = []
@@ -1031,6 +1032,18 @@ registerAdminRoute({
   navDescription: '管理缓存、队列和系统级能力。',
   navSection: 'feature',
   navOrder: 160,
+  moduleId: 'core'
+})
+
+registerAdminRoute({
+  path: '/admin/docs',
+  name: 'admin-developer-docs',
+  component: DeveloperDocsPage,
+  icon: 'fas fa-book',
+  label: '开发者文档',
+  navDescription: '查看模块开发、资源字段、事件订阅和注册接入指南。',
+  navSection: 'feature',
+  navOrder: 170,
   moduleId: 'core'
 })
 

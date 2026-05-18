@@ -526,6 +526,14 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     nav_section="feature",
                     description="查看后台关键管理操作审计记录。",
                 ),
+                AdminPageDefinition(
+                    path="/admin/docs",
+                    label="开发者文档",
+                    icon="fas fa-book",
+                    module_id="core",
+                    nav_section="feature",
+                    description="查看模块开发、资源字段、事件订阅与前后端接入指南。",
+                ),
             ),
             capabilities=(
                 "settings",
@@ -534,6 +542,7 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                 "mail",
                 "advanced",
                 "audit-log",
+                "developer-docs",
             ),
             settings_groups=("basic", "appearance", "mail", "advanced"),
             language_packs=(

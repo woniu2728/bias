@@ -300,7 +300,7 @@ def build_module_settings_overview(module) -> Dict[str, Any]:
 def resolve_module_documentation_url(module) -> str:
     if module.documentation_url:
         return module.documentation_url
-    return f"/admin/modules?module={module.module_id}"
+    return f"/admin.html#/admin/docs?guide=module-development&module={module.module_id}"
 
 
 def build_module_runtime_state(module) -> Dict[str, Any]:
