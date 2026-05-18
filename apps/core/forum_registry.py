@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Tuple
 from django.db import models
 
@@ -813,6 +814,26 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                     syntax="is:unread",
                     description="仅返回当前用户还有未读回复的讨论。",
                 ),
+                SearchFilterDefinition(
+                    code="created",
+                    label="按创建月份过滤",
+                    module_id="discussions",
+                    target="discussion",
+                    parser=_parse_created_month_search_filter,
+                    applier=_apply_discussion_created_month_search_filter,
+                    syntax="created:YYYY-MM",
+                    description="按讨论创建月份过滤搜索结果。",
+                ),
+                SearchFilterDefinition(
+                    code="created",
+                    label="按创建月份过滤",
+                    module_id="posts",
+                    target="post",
+                    parser=_parse_created_month_search_filter,
+                    applier=_apply_post_created_month_search_filter,
+                    syntax="created:YYYY-MM",
+                    description="按回复创建月份过滤搜索结果。",
+                ),
             ),
         )
     )
@@ -1617,6 +1638,33 @@ def _apply_post_mentioned_me_search_filter(queryset, enabled: bool, context: dic
     if not user or not getattr(user, "is_authenticated", False):
         return queryset.none()
     return queryset.filter(mentions__mentions_user=user)
+
+
+def _parse_created_month_search_filter(token: str) -> tuple[int, int] | None:
+    if not token or ":" not in token:
+        return None
+
+    prefix, value = token.split(":", 1)
+    if prefix.lower() != "created":
+        return None
+
+    normalized = value.strip()
+    try:
+        parsed = datetime.strptime(normalized, "%Y-%m")
+    except ValueError:
+        return None
+
+    return parsed.year, parsed.month
+
+
+def _apply_discussion_created_month_search_filter(queryset, year_month: tuple[int, int], context: dict):
+    year, month = year_month
+    return queryset.filter(created_at__year=year, created_at__month=month)
+
+
+def _apply_post_created_month_search_filter(queryset, year_month: tuple[int, int], context: dict):
+    year, month = year_month
+    return queryset.filter(created_at__year=year, created_at__month=month)
 
 
 def _apply_discussion_latest_sort(queryset, context: dict):

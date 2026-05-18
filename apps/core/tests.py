@@ -51,9 +51,10 @@ from apps.core.websocket_auth import (
     resolve_user_from_refresh_token,
     resolve_user_from_token,
 )
+from apps.discussions.models import Discussion
 from apps.discussions.services import DiscussionService
 from apps.notifications.models import Notification
-from apps.posts.models import PostFlag
+from apps.posts.models import Post, PostFlag
 from apps.posts.services import PostService
 from apps.tags.models import Tag
 from apps.users.models import Group, Permission, User
@@ -855,6 +856,69 @@ class ChineseSearchTests(TestCase):
         self.assertEqual([item["id"] for item in following_response.json()["discussions"]], [followed.id])
         self.assertEqual([item["id"] for item in unread_response.json()["discussions"]], [unread_discussion.id])
 
+    def test_search_api_supports_registered_created_month_filter_for_discussions(self):
+        current_month = timezone.now().strftime("%Y-%m")
+        previous_month = (timezone.now() - timedelta(days=40)).strftime("%Y-%m")
+
+        matched = DiscussionService.create_discussion(
+            title="创建月份过滤命中讨论",
+            content="创建月份过滤关键字",
+            user=self.user,
+        )
+        other = DiscussionService.create_discussion(
+            title="创建月份过滤未命中讨论",
+            content="创建月份过滤关键字",
+            user=self.user,
+        )
+        Discussion.objects.filter(id=other.id).update(
+            created_at=timezone.now() - timedelta(days=40),
+            last_posted_at=timezone.now() - timedelta(days=40),
+        )
+
+        response = self.client.get(
+            "/api/search",
+            {"q": f"创建月份过滤关键字 created:{current_month}", "type": "discussions"},
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["discussion_total"], 1)
+        self.assertEqual([item["id"] for item in payload["discussions"]], [matched.id])
+        self.assertNotEqual(current_month, previous_month)
+
+    def test_search_api_supports_registered_created_month_filter_for_posts(self):
+        current_month = timezone.now().strftime("%Y-%m")
+        discussion = DiscussionService.create_discussion(
+            title="帖子创建月份过滤讨论",
+            content="首帖内容",
+            user=self.user,
+        )
+        matched_post = PostService.create_post(
+            discussion_id=discussion.id,
+            content="帖子创建月份过滤关键字",
+            user=self.user,
+        )
+        other_post = PostService.create_post(
+            discussion_id=discussion.id,
+            content="帖子创建月份过滤关键字",
+            user=self.user,
+        )
+        Post.objects.filter(id=other_post.id).update(
+            created_at=timezone.now() - timedelta(days=40),
+        )
+
+        response = self.client.get(
+            "/api/search",
+            {"q": f"帖子创建月份过滤关键字 created:{current_month}", "type": "posts"},
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["post_total"], 1)
+        self.assertEqual([item["id"] for item in payload["posts"]], [matched_post.id])
+
     def test_search_api_supports_registered_mentioned_me_filter_syntax(self):
         mentioned_user = User.objects.create_user(
             username="mentioned-me-user",
@@ -906,6 +970,7 @@ class ChineseSearchTests(TestCase):
         self.assertIn("author:<username>", syntaxes)
         self.assertIn("is:following", syntaxes)
         self.assertIn("is:unread", syntaxes)
+        self.assertIn("created:YYYY-MM", syntaxes)
         self.assertIn("mentioned:me", syntaxes)
 
     def test_search_filters_api_supports_target_scoping(self):
@@ -923,6 +988,8 @@ class ChineseSearchTests(TestCase):
         self.assertTrue(all(item["target"] == "discussion" for item in discussions_payload["filters"]))
         self.assertTrue(all(item["target"] == "post" for item in posts_payload["filters"]))
         self.assertIn("is:following", {item["syntax"] for item in discussions_payload["filters"]})
+        self.assertIn("created:YYYY-MM", {item["syntax"] for item in discussions_payload["filters"]})
+        self.assertIn("created:YYYY-MM", {item["syntax"] for item in posts_payload["filters"]})
         self.assertIn("mentioned:me", {item["syntax"] for item in posts_payload["filters"]})
 
     def test_search_api_respects_discussion_approval_visibility(self):
