@@ -1,3 +1,4 @@
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
 import { useResourceStore } from '@/stores/resource'
@@ -18,6 +19,8 @@ function resolveWsBaseUrl() {
 
 export const useForumRealtimeStore = defineStore('forumRealtime', () => {
   const resourceStore = useResourceStore()
+  const connectionState = ref('idle')
+  const connectionFailureCount = ref(0)
   let ws = null
   let heartbeatTimer = null
   let reconnectTimer = null
@@ -26,6 +29,13 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
   const subscribedDiscussionIds = new Set()
   const pendingDiscussionIds = new Set()
   const trackedDiscussionCounts = new Map()
+  const isConnected = computed(() => connectionState.value === 'connected')
+  const isReconnecting = computed(() => connectionState.value === 'reconnecting')
+  const hasConnectionError = computed(() => connectionState.value === 'error')
+
+  function setConnectionState(nextState) {
+    connectionState.value = nextState
+  }
 
   function connect() {
     const authStore = useAuthStore()
@@ -33,6 +43,7 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
     if (ws && [WebSocket.OPEN, WebSocket.CONNECTING].includes(ws.readyState)) return
 
     shouldReconnect = true
+    setConnectionState(connectFailures > 0 ? 'reconnecting' : 'connecting')
     const socket = new WebSocket(`${resolveWsBaseUrl()}/ws/forum/`)
     ws = socket
     let didOpen = false
@@ -40,6 +51,8 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
     socket.onopen = () => {
       didOpen = true
       connectFailures = 0
+      connectionFailureCount.value = 0
+      setConnectionState('connected')
       if (reconnectTimer) {
         clearTimeout(reconnectTimer)
         reconnectTimer = null
@@ -80,17 +93,21 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
 
       subscribedDiscussionIds.clear()
       if (!shouldReconnect) {
+        setConnectionState('idle')
         return
       }
 
       if (!didOpen) {
         connectFailures += 1
+        connectionFailureCount.value = connectFailures
         if (connectFailures >= 2) {
           shouldReconnect = false
+          setConnectionState('error')
           return
         }
       }
 
+      setConnectionState('reconnecting')
       reconnectTimer = setTimeout(() => {
         connect()
       }, 5000)
@@ -99,6 +116,7 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
 
   function disconnect() {
     shouldReconnect = false
+    setConnectionState('idle')
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
       reconnectTimer = null
@@ -208,9 +226,15 @@ export const useForumRealtimeStore = defineStore('forumRealtime', () => {
   function resetState() {
     disconnect()
     connectFailures = 0
+    connectionFailureCount.value = 0
   }
 
   return {
+    connectionState,
+    connectionFailureCount,
+    hasConnectionError,
+    isConnected,
+    isReconnecting,
     connect,
     disconnect,
     resetState,

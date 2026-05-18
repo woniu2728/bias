@@ -4383,6 +4383,24 @@ registerUiCopy({
 })
 
 registerUiCopy({
+  key: 'forum-realtime-status-reconnecting',
+  order: 645,
+  surfaces: ['forum-realtime-status-reconnecting'],
+  resolve: () => ({
+    text: '论坛实时连接已断开，正在尝试重新连接...',
+  }),
+})
+
+registerUiCopy({
+  key: 'forum-realtime-status-error',
+  order: 646,
+  surfaces: ['forum-realtime-status-error'],
+  resolve: () => ({
+    text: '论坛实时连接暂时不可用，稍后会在下次页面交互时重试。',
+  }),
+})
+
+registerUiCopy({
   key: 'post-composer-edit-pending-message',
   order: 644,
   surfaces: ['post-composer-edit-pending-message'],

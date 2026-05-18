@@ -21,6 +21,13 @@
         </div>
       </div>
       <main class="main-content">
+        <div v-if="forumRealtimeStatus.shouldShow.value" class="global-runtime-banner">
+          <div class="container">
+            <ForumInlineMessage :tone="forumRealtimeStatus.tone.value">
+              {{ forumRealtimeStatus.text.value }}
+            </ForumInlineMessage>
+          </div>
+        </div>
         <router-view />
       </main>
       <Footer />
@@ -39,11 +46,14 @@ import Footer from './components/Footer.vue'
 import AppModalHost from './components/AppModalHost.vue'
 import DiscussionComposer from './components/DiscussionComposer.vue'
 import PostComposer from './components/PostComposer.vue'
+import ForumInlineMessage from './components/forum/ForumInlineMessage.vue'
 import { useAuthStore } from './stores/auth'
 import { useComposerStore } from './stores/composer'
 import { useForumStore } from './stores/forum'
 import { useForumRealtimeStore } from './stores/forumRealtime'
 import { useNotificationStore } from './stores/notification'
+import { useForumRealtimeStatus } from './composables/useForumRealtimeStatus'
+import { getUiCopy } from './forum/registry'
 import { openLoginModal } from './utils/authModal'
 
 const authStore = useAuthStore()
@@ -52,6 +62,11 @@ const forumStore = useForumStore()
 const forumRealtimeStore = useForumRealtimeStore()
 const notificationStore = useNotificationStore()
 const route = useRoute()
+const forumRealtimeStatus = useForumRealtimeStatus({
+  forumRealtimeStore,
+  authStore,
+  getText: getUiCopy,
+})
 const dismissedAnnouncementKey = ref('')
 const viewportWidth = ref(typeof window === 'undefined' ? 1280 : window.innerWidth)
 const showMaintenance = computed(() => forumStore.settings.maintenance_mode && !authStore.user?.is_staff)
@@ -250,6 +265,10 @@ onBeforeUnmount(() => {
   flex: 1;
   padding-bottom: var(--composer-offset);
   transition: padding-bottom 0.15s ease;
+}
+
+.global-runtime-banner {
+  padding-top: 16px;
 }
 
 .site-announcement {

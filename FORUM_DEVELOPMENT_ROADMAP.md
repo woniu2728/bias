@@ -998,6 +998,7 @@ GET /api/discussions/:id/posts?after=123&limit=20
 - 已完成：全局搜索弹层已改成轻量预览协议，`/api/search?preview=true&type=all` 现在只返回讨论/帖子/用户各前 5 条结果而不再计算全量 totals，`GlobalSearchModal` 也同步固定为每类最多显示 5 条并直接使用预览数量；阶段 5 的“弹层只取每类前 5 条 / 弹层不计算全量总数 / 结果页再算总数”因此先在搜索弹层主链路闭合，没有提前扩成索引后台、建议缓存或新的搜索服务拆分。
 - 已完成：搜索过滤目录继续补齐 `created:YYYY-MM` 语法，`forum_registry` 现在会把它同时注册到 discussion/post 搜索，`SearchService` 也会按月份过滤讨论与回复创建时间；阶段 5 的“搜索至少支持 5 种过滤器”因此继续沿现有注册式搜索链路收口，没有提前扩成更重的高级查询构建器或新的前端筛选面板。
 - 已完成：后台高级设置页已补齐搜索索引运行时状态面板，新增 `/api/admin/search-indexes/status` 统一返回 PostgreSQL 全文索引存在性、最近一次重建快照和当前队列 worker 状态；高级设置页现在会显示当前数据库、缺失索引、最近重建时间/耗时，并在重建后即时刷新状态。阶段 5 的“后台索引管理”因此先在现有高级设置页内完成最小可用闭环，没有提前扩成异步重建队列、独立索引中心或新的搜索存储模型。
+- 已完成：前台统一 `forumRealtime` store 已补齐连接状态派生，应用顶层现在会在实时断线重连或多次失败后显示轻量状态提示；提示文案走 `uiCopy` registry，重连中与暂时不可用两类状态都已接入统一前台语义层，并补上 Node 测试覆盖。阶段 5 的“连接状态提示”因此先在现有论坛实时主链路闭合，没有提前扩成 toast 中心、typing 面板或新的连接管理服务。
 - 已完成：后端新增统一 `ResourceQueryOptions` / `fields[...]` / `include` 解析层，讨论、帖子、标签、通知四条主读接口已开始通过同一套资源查询协议裁剪注册字段并显式展开关系，阶段 2 的 Resource API 已从“能挂字段”推进到“主接口可查询”的实际形态。
 - 已完成：后端 `ResourceRegistry` 新增资源级预加载协议，注册字段与关系现在可以声明 `select_related/prefetch_related` 依赖；discussion / post / notification 主读接口已接入统一预加载计划并补齐查询回归测试，阶段 2 的 Resource API 开始从“可查询”继续推进到“可扩展且可控查询成本”。
 - 已完成：搜索 API 与用户列表/详情接口已接入统一资源查询与预加载协议，`search_discussion/search_post/search_user/user_detail` 现在开始共用 `fields[...]` 与 registry 预加载计划，搜索用户结果和用户列表的主用户组查询也已补齐回归测试，阶段 2 的 Resource API 覆盖面进一步扩到搜索与用户域。
