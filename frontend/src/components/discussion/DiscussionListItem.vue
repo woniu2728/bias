@@ -1,6 +1,7 @@
 <template>
   <li
     class="discussion-list-item"
+    :data-discussion-id="discussion.id"
     :class="{ 'is-sticky': discussion.is_sticky, 'is-unread': discussion.is_unread }"
   >
     <div class="discussion-list-item-content">

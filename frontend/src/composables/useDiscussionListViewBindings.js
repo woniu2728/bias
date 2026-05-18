@@ -3,6 +3,7 @@ import { computed } from 'vue'
 export function createDiscussionListViewBindings({
   authStore,
   buildDiscussionPath,
+  buildTrackedDiscussionPath,
   buildTagPath,
   buildUserPath,
   changeSortBy,
@@ -72,7 +73,7 @@ export function createDiscussionListViewBindings({
     loadingStateText: loadingStateText.value,
     hasMore: hasMore.value,
     loadingMore: loadingMore.value,
-    buildDiscussionPath,
+    buildDiscussionPath: buildTrackedDiscussionPath || buildDiscussionPath,
     buildTagPath,
     buildUserPath,
     formatRelativeTime,

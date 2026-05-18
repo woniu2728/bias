@@ -10,6 +10,8 @@ import { useDiscussionListRealtimeState } from '@/composables/useDiscussionListR
 import { useForumRealtimeStore } from '@/stores/forumRealtime'
 import { useResourceStore } from '@/stores/resource'
 
+const DISCUSSION_LIST_RETURN_RESTORE_KEY = 'bias.discussionListReturnRestore'
+
 export function useDiscussionListData({
   authStore,
   modalStore,
@@ -62,8 +64,11 @@ export function useDiscussionListData({
   useDiscussionListPageLifecycle({
     addDiscussionReadStateListener: realtimeLifecycleState.addDiscussionReadStateListener,
     addForumEventListener: realtimeLifecycleState.addForumEventListener,
+    clearPendingReturnRestore,
     cleanupTrackedDiscussionIds: realtimeLifecycleState.cleanupTrackedDiscussionIds,
     currentDiscussionIds: resourceState.discussionIds,
+    discussions: resourceState.discussions,
+    getPendingReturnRestore,
     removeDiscussionReadStateListener: realtimeLifecycleState.removeDiscussionReadStateListener,
     removeForumEventListener: realtimeLifecycleState.removeForumEventListener,
     syncTrackedDiscussionIds: realtimeLifecycleState.syncTrackedDiscussionIds,
@@ -76,12 +81,53 @@ export function useDiscussionListData({
     sortBy,
   })
 
+  function buildReturnRestoreKey() {
+    return JSON.stringify({
+      name: route.name || null,
+      params: route.params || {},
+      query: {
+        filter: routeState.listFilter.value || null,
+        q: routeState.searchQuery.value || null,
+        sort: routeState.sortBy.value || null,
+      },
+    })
+  }
+
+  function getPendingReturnRestore() {
+    if (typeof window === 'undefined') return null
+
+    const raw = window.sessionStorage.getItem(DISCUSSION_LIST_RETURN_RESTORE_KEY)
+    if (!raw) return null
+
+    let payload = null
+    try {
+      payload = JSON.parse(raw)
+    } catch {
+      window.sessionStorage.removeItem(DISCUSSION_LIST_RETURN_RESTORE_KEY)
+      return null
+    }
+
+    if (!payload || payload.listKey !== buildReturnRestoreKey()) {
+      return null
+    }
+
+    const discussionId = Number(payload.discussionId || 0)
+    return Number.isFinite(discussionId) && discussionId > 0 ? discussionId : null
+  }
+
+  function clearPendingReturnRestore() {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.removeItem(DISCUSSION_LIST_RETURN_RESTORE_KEY)
+  }
+
   return {
     changeSortBy: routeActions.changeSortBy,
+    clearPendingReturnRestore,
     currentTag: resourceState.currentTag,
     currentTagSlug,
     discussions: resourceState.discussions,
     filterOptions: resourceState.filterOptions,
+    getPendingReturnRestore,
     hasMore: resourceState.hasMore,
     isFollowingPage,
     listFilter,

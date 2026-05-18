@@ -38,6 +38,37 @@ export function useDiscussionListViewModel({
   const viewBindings = useDiscussionListViewBindings({
     authStore,
     buildDiscussionPath,
+    buildTrackedDiscussionPath(value) {
+      const discussion = value && typeof value === 'object' ? value : { id: value }
+      const path = buildDiscussionPath(discussion)
+
+      if (!discussion?.id) {
+        return path
+      }
+
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('bias.discussionListReturnRestore', JSON.stringify({
+          discussionId: discussion.id,
+          listKey: JSON.stringify({
+            name: route.name || null,
+            params: route.params || {},
+            query: {
+              filter: pageState.listFilter.value || null,
+              q: pageState.searchQuery.value || null,
+              sort: pageState.sortBy.value || null,
+            },
+          }),
+        }))
+      }
+
+      return {
+        path,
+        query: {
+          returnTo: route.fullPath,
+          returnDiscussion: discussion.id,
+        },
+      }
+    },
     buildTagPath,
     buildUserPath,
     changeSortBy: pageState.changeSortBy,

@@ -7,6 +7,7 @@ test('discussion list view bindings expose sidebar and content bindings', () => 
   const bindings = createDiscussionListViewBindings({
     authStore: { isAuthenticated: true },
     buildDiscussionPath: value => `/d/${value.id || value}`,
+    buildTrackedDiscussionPath: value => ({ path: `/d/${value.id || value}`, query: { returnDiscussion: value.id || value } }),
     buildTagPath: value => `/t/${value.slug || value}`,
     buildUserPath: value => `/u/${value.id || value}`,
     changeSortBy() {},
@@ -45,6 +46,10 @@ test('discussion list view bindings expose sidebar and content bindings', () => 
   assert.equal(bindings.sidebarBindings.value.currentTag.name, '公告')
   assert.deepEqual(bindings.contentBindings.value.discussions, [{ id: 1 }])
   assert.equal(bindings.contentBindings.value.sortBy, 'latest')
+  assert.deepEqual(bindings.contentBindings.value.buildDiscussionPath({ id: 1 }), {
+    path: '/d/1',
+    query: { returnDiscussion: 1 },
+  })
   assert.equal('searchQuery' in bindings.contentBindings.value, false)
   assert.equal('filterOptions' in bindings.contentBindings.value, false)
   assert.equal(typeof bindings.sidebarEvents.startDiscussion, 'function')
