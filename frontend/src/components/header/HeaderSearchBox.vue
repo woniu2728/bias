@@ -63,7 +63,7 @@ defineEmits(['open-search', 'clear-search'])
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  background: #f5f8fa;
+  background: var(--forum-bg-subtle);
   border-radius: 3px;
   border: 1px solid transparent;
   transition: all 0.2s;
@@ -73,12 +73,12 @@ defineEmits(['open-search', 'clear-search'])
 
 .search-box:focus-within,
 .search-box--active {
-  background: white;
+  background: var(--forum-bg-elevated);
   border-color: var(--forum-primary-color);
 }
 
 .search-box i {
-  color: #999;
+  color: var(--forum-text-soft);
   font-size: 14px;
 }
 
@@ -87,13 +87,13 @@ defineEmits(['open-search', 'clear-search'])
   background: none;
   outline: none;
   font-size: 13px;
-  color: #333;
+  color: var(--forum-text-color);
   width: 100%;
   cursor: pointer;
 }
 
 .search-box input::placeholder {
-  color: #999;
+  color: var(--forum-text-soft);
 }
 
 .search-clear {
@@ -110,8 +110,8 @@ defineEmits(['open-search', 'clear-search'])
 }
 
 .search-clear:hover {
-  background: #edf2f7;
-  color: #526578;
+  background: var(--forum-bg-canvas);
+  color: var(--forum-text-muted);
 }
 
 @media (max-width: 900px) {

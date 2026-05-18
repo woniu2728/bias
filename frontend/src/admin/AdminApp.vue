@@ -19,10 +19,14 @@ import AppModalHost from '../components/AppModalHost.vue'
 import AdminHeader from './components/AdminHeader.vue'
 import AdminNav from './components/AdminNav.vue'
 import { useAuthStore } from '../stores/auth'
+import { useForumStore } from '../stores/forum'
+import { useForumUiStore } from '../stores/forumUi'
 import { useModalStore } from '../stores/modal'
 import { useRouter, useRoute } from 'vue-router'
 
 const authStore = useAuthStore()
+const forumStore = useForumStore()
+const forumUiStore = useForumUiStore()
 const modalStore = useModalStore()
 const router = useRouter()
 const route = useRoute()
@@ -46,8 +50,11 @@ onMounted(async () => {
     window.addEventListener('bias:auth-invalidated', handleAuthInvalidated)
   }
 
+  await forumUiStore.initialize()
+
   // 检查认证状态
   await authStore.checkAuth()
+  await forumUiStore.refreshFromUserPreferences()
 
   // 检查是否是管理员
   if (!authStore.user?.is_staff) {
@@ -67,6 +74,14 @@ onMounted(async () => {
 })
 
 watch(
+  () => forumStore.settings,
+  () => {
+    forumUiStore.syncFromForumSettings()
+  },
+  { deep: true }
+)
+
+watch(
   () => route.fullPath,
   () => {
     closeMobileNav()
@@ -77,6 +92,7 @@ onBeforeUnmount(() => {
   if (typeof window !== 'undefined') {
     window.removeEventListener('bias:auth-invalidated', handleAuthInvalidated)
   }
+  forumUiStore.reset()
 })
 </script>
 

@@ -520,6 +520,56 @@ class ChineseSearchTests(TestCase):
             payload["discussion_total"] + payload["post_total"] + payload["user_total"],
         )
 
+
+class UserPreferencesApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="prefs-user",
+            email="prefs-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+
+    def auth_header(self, user=None):
+        token = RefreshToken.for_user(user or self.user).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_preferences_api_returns_ui_values_defaults(self):
+        response = self.client.get("/api/users/me/preferences", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["ui_values"]["theme_mode"], "system")
+        self.assertEqual(payload["ui_values"]["locale"], "zh-CN")
+        self.assertIn("values", payload)
+        self.assertIn("definitions", payload)
+
+    def test_preferences_api_updates_ui_values(self):
+        response = self.client.patch(
+            "/api/users/me/preferences",
+            data=json.dumps({
+                "values": {
+                    "notify_user_mentioned": False,
+                },
+                "ui_values": {
+                    "theme_mode": "dark",
+                    "locale": "en",
+                },
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.preferences_ui["theme_mode"], "dark")
+        self.assertEqual(self.user.preferences_ui["locale"], "en")
+        self.assertFalse(self.user.preferences["notify_user_mentioned"])
+        self.assertEqual(response.json()["ui_values"]["theme_mode"], "dark")
+        self.assertEqual(response.json()["ui_values"]["locale"], "en")
+
+
+class SearchApiTests(ChineseSearchTests):
     def test_search_api_posts_type_returns_pagination_metadata(self):
         discussion = DiscussionService.create_discussion(
             title="分页搜索讨论",
@@ -2105,6 +2155,9 @@ class AdminSettingsApiTests(TestCase):
         self.assertFalse(payload["auth_human_verification_register_enabled"])
         self.assertTrue(any(item["code"] == "comment" and item["is_default"] for item in payload["post_types"]))
         self.assertTrue(any(item["code"] == "discussionRenamed" for item in payload["post_types"]))
+        self.assertEqual(payload["theme_mode"], "system")
+        self.assertTrue(any(item["code"] == "zh-CN" and item["is_default"] for item in payload["locale_packs"]))
+        self.assertTrue(any(item["code"] == "en" for item in payload["locale_packs"]))
         self.assertNotIn("auth_turnstile_secret_key", payload)
 
     def test_public_forum_settings_expose_realtime_typing_toggle(self):
@@ -4109,6 +4162,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("admin_pages", payload)
         self.assertIn("notification_types", payload)
         self.assertIn("user_preferences", payload)
+        self.assertIn("language_packs", payload)
         self.assertIn("event_listeners", payload)
         self.assertIn("post_types", payload)
         self.assertIn("search_filters", payload)
@@ -4126,6 +4180,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertGreaterEqual(payload["summary"]["module_count"], len(module_ids))
         self.assertGreaterEqual(payload["summary"]["enabled_count"], 1)
         self.assertGreaterEqual(payload["summary"]["user_preference_count"], 1)
+        self.assertGreaterEqual(payload["summary"]["language_pack_count"], 1)
 
         core_module = next(module for module in payload["modules"] if module["id"] == "core")
         posts_module = next(module for module in payload["modules"] if module["id"] == "posts")
@@ -4181,6 +4236,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertTrue(any(item["relationship"] == "user" and item["resource"] == "post" for item in payload["resource_relationships"]))
         self.assertTrue(any(item["resource"] == "search_post" and item["field"] == "user" for item in payload["resource_fields"]))
         self.assertTrue(any(item["module_id"] == "notifications" for item in payload["user_preferences"]))
+        self.assertTrue(any(item["module_id"] == "core" and item["code"] == "zh-CN" for item in payload["language_packs"]))
         self.assertTrue(any(item["id"] == "core" for item in payload["category_summaries"]))
         self.assertTrue(
             any(
@@ -4202,6 +4258,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertTrue(any(item["code"] == "admin.flag.resolve" for item in flags_module["permissions"]))
         self.assertTrue(any(item["code"] == "comment" and item["is_default"] for item in posts_module["post_types"]))
         self.assertTrue(any(item["module_id"] == "posts" and item["code"] == "comment" for item in payload["post_types"]))
+        self.assertTrue(any(item["code"] == "zh-CN" and item["is_default"] for item in core_module["language_packs"]))
 
     def test_registry_permission_prefix_helper_returns_admin_moderation_codes(self):
         self.assertEqual(

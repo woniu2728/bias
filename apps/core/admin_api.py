@@ -412,6 +412,16 @@ def serialize_module_definition(module, module_map: Dict[str, Any]) -> Dict[str,
             }
             for preference in module.user_preferences
         ],
+        "language_packs": [
+            {
+                "code": language_pack.code,
+                "label": language_pack.label,
+                "native_label": language_pack.native_label,
+                "description": language_pack.description,
+                "is_default": language_pack.is_default,
+            }
+            for language_pack in module.language_packs
+        ],
         "event_listeners": [
             {
                 "event": listener.event,
@@ -500,6 +510,7 @@ def serialize_module_definition(module, module_map: Dict[str, Any]) -> Dict[str,
             "admin_pages": len(module.admin_pages),
             "notification_types": len(module.notification_types),
             "user_preferences": len(module.user_preferences),
+            "language_packs": len(module.language_packs),
             "event_listeners": len(module.event_listeners),
             "post_types": len(module.post_types),
             "search_filters": len(module.search_filters),
@@ -1407,6 +1418,17 @@ def list_admin_modules(request):
         }
         for preference in REGISTRY.get_user_preferences()
     ]
+    language_packs = [
+        {
+            "code": language_pack.code,
+            "label": language_pack.label,
+            "native_label": language_pack.native_label,
+            "module_id": language_pack.module_id,
+            "description": language_pack.description,
+            "is_default": language_pack.is_default,
+        }
+        for language_pack in REGISTRY.get_language_packs()
+    ]
     category_summaries = build_module_category_summaries(modules)
     dependency_attention = [
         {
@@ -1428,6 +1450,7 @@ def list_admin_modules(request):
         "admin_page_count": len(pages),
         "notification_type_count": len(notification_types),
         "user_preference_count": len(user_preferences),
+        "language_pack_count": len(language_packs),
         "event_listener_count": len(event_listeners),
         "post_type_count": len(post_types),
         "resource_definition_count": len(resource_definitions),
@@ -1448,6 +1471,7 @@ def list_admin_modules(request):
         "admin_pages": pages,
         "notification_types": notification_types,
         "user_preferences": user_preferences,
+        "language_packs": language_packs,
         "event_listeners": event_listeners,
         "post_types": post_types,
         "search_filters": search_filters,

@@ -284,6 +284,17 @@
               </div>
 
               <div>
+                <h5>{{ modulesCopy?.languagePacksTitle || '语言包' }}</h5>
+                <ul v-if="module.language_packs.length" class="ModuleList">
+                  <li v-for="languagePack in module.language_packs" :key="languagePack.code">
+                    <code>{{ languagePack.code }}</code>
+                    <span>{{ languagePack.native_label || languagePack.label }}</span>
+                  </li>
+                </ul>
+                <p v-else class="ModuleEmpty">{{ modulesCopy?.noLanguagePacksText || '暂无语言包' }}</p>
+              </div>
+
+              <div>
                 <h5>{{ modulesCopy?.eventListenersTitle || '事件监听' }}</h5>
                 <ul v-if="module.event_listeners.length" class="ModuleList">
                   <li v-for="listener in module.event_listeners" :key="`${listener.event}:${listener.listener}`">
@@ -457,6 +468,32 @@
             <p v-else class="ModuleEmpty">{{ modulesCopy?.noEventListenersCardText || '暂无事件监听器' }}</p>
           </article>
         </div>
+      </section>
+
+      <section class="ModulesPage-section">
+        <div class="ModulesPage-sectionHeader">
+          <h3>{{ modulesCopy?.languagePacksSectionTitle || '语言包注册' }}</h3>
+          <p>{{ modulesCopy?.languagePacksSectionDescription || '列出模块通过注册中心声明的语言包，作为阶段 6 国际化准备的最小快照。' }}</p>
+        </div>
+
+        <table class="AdminTable">
+          <thead>
+            <tr>
+              <th>{{ modulesCopy?.nameHeader || '名称' }}</th>
+              <th>{{ modulesCopy?.descriptionHeader || '说明' }}</th>
+              <th>{{ modulesCopy?.moduleHeader || '归属模块' }}</th>
+              <th>{{ modulesCopy?.defaultHeader || '默认' }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="languagePack in filteredLanguagePacks" :key="`${languagePack.module_id}:${languagePack.code}`">
+              <td><code>{{ languagePack.code }}</code></td>
+              <td>{{ languagePack.native_label ? `${languagePack.native_label} (${languagePack.label})` : languagePack.label }}</td>
+              <td>{{ moduleNameMap[languagePack.module_id] || languagePack.module_id }}</td>
+              <td>{{ languagePack.is_default ? (modulesCopy?.yesText || '是') : (modulesCopy?.noText || '否') }}</td>
+            </tr>
+          </tbody>
+        </table>
       </section>
 
       <section class="ModulesPage-section">
@@ -673,6 +710,7 @@ const categorySummaries = ref([])
 const dependencyAttention = ref([])
 const adminPages = ref([])
 const notificationTypes = ref([])
+const languagePacks = ref([])
 const notificationRenderers = computed(() => {
   const moduleIdsByCode = Object.fromEntries(
     notificationTypes.value.map(item => [item.code, item.module_id])
@@ -771,6 +809,7 @@ const filteredModuleIds = computed(() => new Set(filteredModules.value.map(item 
 const filteredAdminPages = computed(() => adminPages.value.filter(item => filteredModuleIds.value.has(item.module_id)))
 const filteredNotificationTypes = computed(() => notificationTypes.value.filter(item => filteredModuleIds.value.has(item.module_id)))
 const filteredNotificationRenderers = computed(() => notificationRenderers.value.filter(item => filteredModuleIds.value.has(item.module_id)))
+const filteredLanguagePacks = computed(() => languagePacks.value.filter(item => filteredModuleIds.value.has(item.module_id)))
 const filteredUserPreferences = computed(() => userPreferences.value.filter(item => filteredModuleIds.value.has(item.module_id)))
 const filteredEventListeners = computed(() => eventListeners.value.filter(item => filteredModuleIds.value.has(item.module_id)))
 const filteredPostTypes = computed(() => postTypes.value.filter(item => filteredModuleIds.value.has(item.module_id)))
@@ -790,6 +829,7 @@ const summaryItems = computed(() => {
     { label: labels.admin_page_count || '后台入口', value: String(summary.value.admin_page_count ?? adminPages.value.length) },
     { label: labels.notification_type_count || '通知类型', value: String(summary.value.notification_type_count ?? notificationTypes.value.length) },
     { label: labels.notification_renderer_count || '通知渲染器', value: String(notificationRenderers.value.length) },
+    { label: labels.language_pack_count || '语言包', value: String(summary.value.language_pack_count ?? languagePacks.value.length) },
     { label: labels.user_preference_count || '用户偏好', value: String(summary.value.user_preference_count ?? userPreferences.value.length) },
     { label: labels.event_listener_count || '事件监听', value: String(summary.value.event_listener_count ?? eventListeners.value.length) },
     { label: labels.post_type_count || '帖子类型', value: String(summary.value.post_type_count ?? postTypes.value.length) },
@@ -825,6 +865,7 @@ function normalizeModule(module) {
     admin_pages: module.admin_pages || [],
     notification_types: module.notification_types || [],
     notification_renderers: notificationRenderers.value.filter(item => item.module_id === moduleId),
+    language_packs: module.language_packs || [],
     user_preferences: module.user_preferences || [],
     event_listeners: module.event_listeners || [],
     post_types: module.post_types || [],
@@ -861,6 +902,7 @@ async function loadModules() {
     dependencyAttention.value = data.dependency_attention || []
     adminPages.value = data.admin_pages || []
     notificationTypes.value = data.notification_types || []
+    languagePacks.value = data.language_packs || []
     modules.value = (data.modules || []).map(normalizeModule)
     userPreferences.value = data.user_preferences || []
     eventListeners.value = data.event_listeners || []
@@ -887,6 +929,7 @@ function buildModuleSummary(module) {
     { label: labels.capabilities || '能力项', value: String(module.capabilities?.length || 0) },
     { label: labels.notification_types || '通知数', value: String(counts.notification_types ?? module.notification_types?.length ?? 0) },
     { label: labels.notification_renderers || '渲染器', value: String(module.notification_renderers?.length ?? 0) },
+    { label: labels.language_packs || '语言包', value: String(counts.language_packs ?? module.language_packs?.length ?? 0) },
     { label: labels.user_preferences || '偏好项', value: String(counts.user_preferences ?? module.user_preferences?.length ?? 0) },
     { label: labels.event_listeners || '监听器', value: String(counts.event_listeners ?? module.event_listeners?.length ?? 0) },
     { label: labels.post_types || '帖子类型', value: String(counts.post_types ?? module.post_types?.length ?? 0) },

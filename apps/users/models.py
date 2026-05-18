@@ -34,6 +34,7 @@ class User(AbstractUser):
 
     # 用户偏好设置（JSON字段）
     preferences = models.JSONField(default=dict, blank=True)
+    preferences_ui = models.JSONField(default=dict, blank=True)
 
     # 封禁相关
     suspended_until = models.DateTimeField(null=True, blank=True)

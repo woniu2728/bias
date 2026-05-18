@@ -74,7 +74,7 @@ defineEmits(['toggle', 'item-click'])
 }
 
 .user-dropdown:hover {
-  background: #f5f8fa;
+  background: var(--forum-bg-subtle);
 }
 
 .avatar {
@@ -97,7 +97,7 @@ defineEmits(['toggle', 'item-click'])
 .username {
   max-width: 88px;
   font-size: 14px;
-  color: #555;
+  color: var(--forum-text-muted);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -106,7 +106,7 @@ defineEmits(['toggle', 'item-click'])
 
 .user-dropdown i.fa-caret-down {
   font-size: 12px;
-  color: #999;
+  color: var(--forum-text-soft);
 }
 
 .dropdown-menu {
@@ -114,10 +114,10 @@ defineEmits(['toggle', 'item-click'])
   top: 100%;
   right: 0;
   margin-top: 8px;
-  background: white;
-  border: 1px solid #e3e8ed;
+  background: var(--forum-bg-elevated);
+  border: 1px solid var(--forum-border-color);
   border-radius: 3px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--forum-shadow-md);
   min-width: 200px;
   z-index: 1000;
 }
@@ -127,26 +127,26 @@ defineEmits(['toggle', 'item-click'])
   align-items: center;
   gap: 10px;
   padding: 10px 15px;
-  color: #555;
+  color: var(--forum-text-muted);
   font-size: 14px;
   transition: background 0.2s;
   cursor: pointer;
 }
 
 .dropdown-item:hover {
-  background: #f5f8fa;
+  background: var(--forum-bg-subtle);
   text-decoration: none;
 }
 
 .dropdown-item--active {
-  background: #f5f8fa;
-  color: #31465d;
+  background: var(--forum-bg-subtle);
+  color: var(--forum-text-color);
 }
 
 .dropdown-item i {
   width: 16px;
   font-size: 14px;
-  color: #999;
+  color: var(--forum-text-soft);
 }
 
 .dropdown-item--danger,
@@ -170,7 +170,7 @@ defineEmits(['toggle', 'item-click'])
 
 .dropdown-divider {
   height: 1px;
-  background: #e3e8ed;
+  background: var(--forum-border-color);
   margin: 5px 0;
 }
 </style>

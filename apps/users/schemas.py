@@ -121,11 +121,18 @@ class UserPreferenceItemSchema(Schema):
     default_value: bool = False
 
 
+class UserUiPreferencesSchema(Schema):
+    theme_mode: str = "system"
+    locale: str = "zh-CN"
+
+
 class UserPreferencesSchema(Schema):
     """用户偏好Schema"""
     values: Dict[str, bool] = {}
+    ui_values: UserUiPreferencesSchema = UserUiPreferencesSchema()
     definitions: List[UserPreferenceItemSchema] = []
 
 
 class UserPreferencesUpdateSchema(Schema):
     values: Dict[str, bool] = {}
+    ui_values: UserUiPreferencesSchema | None = None

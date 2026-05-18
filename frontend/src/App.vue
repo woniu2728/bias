@@ -50,6 +50,7 @@ import ForumInlineMessage from './components/forum/ForumInlineMessage.vue'
 import { useAuthStore } from './stores/auth'
 import { useComposerStore } from './stores/composer'
 import { useForumStore } from './stores/forum'
+import { useForumUiStore } from './stores/forumUi'
 import { useForumRealtimeStore } from './stores/forumRealtime'
 import { useNotificationStore } from './stores/notification'
 import { useOnlineUsersStore } from './stores/onlineUsers'
@@ -60,6 +61,7 @@ import { openLoginModal } from './utils/authModal'
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
 const forumStore = useForumStore()
+const forumUiStore = useForumUiStore()
 const forumRealtimeStore = useForumRealtimeStore()
 const notificationStore = useNotificationStore()
 const onlineUsersStore = useOnlineUsersStore()
@@ -146,6 +148,7 @@ function handleAuthInvalidated() {
 
 onMounted(async () => {
   await forumStore.initialize()
+  await forumUiStore.initialize()
   applyRouteMeta()
   loadDismissedAnnouncementKey()
   syncViewportWidth()
@@ -171,8 +174,22 @@ onMounted(async () => {
 })
 
 watch(
+  () => forumStore.settings,
+  () => {
+    forumUiStore.syncFromForumSettings()
+  },
+  { deep: true }
+)
+
+watch(
   () => authStore.isAuthenticated,
   async isAuthenticated => {
+    if (isAuthenticated) {
+      await forumUiStore.refreshFromUserPreferences()
+    } else {
+      forumUiStore.syncFromForumSettings()
+    }
+
     if (showMaintenance.value) {
       notificationStore.disconnect()
       notificationStore.resetState()
@@ -220,6 +237,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('bias:auth-required', handleAuthRequired)
   window.removeEventListener('bias:auth-invalidated', handleAuthInvalidated)
   onlineUsersStore.disconnect()
+  forumUiStore.reset()
 })
 </script>
 

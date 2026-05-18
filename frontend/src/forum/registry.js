@@ -286,6 +286,49 @@ registerHeaderItem({
 })
 
 registerHeaderItem({
+  key: 'user-theme-toggle-menu',
+  placement: 'user-menu',
+  order: 35,
+  icon: ({ forumUiStore }) => {
+    const mode = String(forumUiStore?.themeMode || 'system')
+    if (mode === 'dark') return 'fas fa-moon'
+    if (mode === 'light') return 'fas fa-sun'
+    return 'fas fa-circle-half-stroke'
+  },
+  label: ({ forumUiStore }) => {
+    const mode = String(forumUiStore?.themeMode || 'system')
+    if (mode === 'dark') return '主题：深色'
+    if (mode === 'light') return '主题：浅色'
+    return '主题：跟随系统'
+  },
+  isVisible: ({ authStore }) => Boolean(authStore?.user),
+  onClick: async ({ forumUiStore }) => {
+    const currentMode = String(forumUiStore?.themeMode || 'system')
+    const nextMode = currentMode === 'system' ? 'dark' : currentMode === 'dark' ? 'light' : 'system'
+    await forumUiStore?.setThemeMode?.(nextMode)
+  },
+})
+
+registerHeaderItem({
+  key: 'user-locale-toggle-menu',
+  placement: 'user-menu',
+  order: 36,
+  icon: 'fas fa-language',
+  label: ({ forumUiStore, forumStore }) => {
+    const currentLocale = String(forumUiStore?.locale || forumStore?.settings?.default_locale || 'zh-CN')
+    return currentLocale === 'en' ? 'Language: English' : '语言：简体中文'
+  },
+  isVisible: ({ forumStore }) => Boolean(forumStore?.settings?.show_language_selector),
+  onClick: async ({ forumUiStore, forumStore }) => {
+    const availableLocales = Array.isArray(forumStore?.settings?.locale_packs) ? forumStore.settings.locale_packs : []
+    const nextLocale = String(forumUiStore?.locale || '').trim().toLowerCase() === 'en'
+      ? (availableLocales.find(item => item.code === 'zh-CN')?.code || forumStore?.settings?.default_locale || 'zh-CN')
+      : (availableLocales.find(item => item.code === 'en')?.code || forumStore?.settings?.default_locale || 'zh-CN')
+    await forumUiStore?.setLocale?.(nextLocale)
+  },
+})
+
+registerHeaderItem({
   key: 'user-logout-menu',
   placement: 'user-menu',
   order: 40,
@@ -331,6 +374,40 @@ registerHeaderItem({
   label: '管理后台',
   href: '/admin.html',
   isVisible: ({ authStore }) => Boolean(authStore?.user?.is_staff),
+})
+
+registerHeaderItem({
+  key: 'mobile-theme-toggle',
+  placement: 'mobile-drawer-user',
+  order: 15,
+  icon: 'fas fa-circle-half-stroke',
+  label: ({ forumUiStore }) => {
+    const mode = String(forumUiStore?.themeMode || 'system')
+    if (mode === 'dark') return '切换到浅色'
+    if (mode === 'light') return '切换到跟随系统'
+    return '切换到深色'
+  },
+  onClick: async ({ forumUiStore }) => {
+    const currentMode = String(forumUiStore?.themeMode || 'system')
+    const nextMode = currentMode === 'system' ? 'dark' : currentMode === 'dark' ? 'light' : 'system'
+    await forumUiStore?.setThemeMode?.(nextMode)
+  },
+})
+
+registerHeaderItem({
+  key: 'mobile-locale-toggle',
+  placement: 'mobile-drawer-user',
+  order: 16,
+  icon: 'fas fa-language',
+  label: ({ forumUiStore }) => String(forumUiStore?.locale || 'zh-CN').toLowerCase() === 'en' ? '切换到中文' : 'Switch to English',
+  isVisible: ({ forumStore }) => Boolean(forumStore?.settings?.show_language_selector),
+  onClick: async ({ forumUiStore, forumStore }) => {
+    const availableLocales = Array.isArray(forumStore?.settings?.locale_packs) ? forumStore.settings.locale_packs : []
+    const nextLocale = String(forumUiStore?.locale || '').trim().toLowerCase() === 'en'
+      ? (availableLocales.find(item => item.code === 'zh-CN')?.code || forumStore?.settings?.default_locale || 'zh-CN')
+      : (availableLocales.find(item => item.code === 'en')?.code || forumStore?.settings?.default_locale || 'zh-CN')
+    await forumUiStore?.setLocale?.(nextLocale)
+  },
 })
 
 registerHeaderItem({

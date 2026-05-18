@@ -57,6 +57,16 @@ class UserPreferenceDefinition:
 
 
 @dataclass(frozen=True)
+class LanguagePackDefinition:
+    code: str
+    label: str
+    module_id: str
+    native_label: str = ""
+    description: str = ""
+    is_default: bool = False
+
+
+@dataclass(frozen=True)
 class EventListenerDefinition:
     event: str
     listener: str
@@ -139,6 +149,7 @@ class ForumModuleDefinition:
     capabilities: Tuple[str, ...] = ()
     notification_types: Tuple[NotificationTypeDefinition, ...] = ()
     user_preferences: Tuple[UserPreferenceDefinition, ...] = ()
+    language_packs: Tuple[LanguagePackDefinition, ...] = ()
     event_listeners: Tuple[EventListenerDefinition, ...] = ()
     post_types: Tuple[PostTypeDefinition, ...] = ()
     search_filters: Tuple[SearchFilterDefinition, ...] = ()
@@ -156,6 +167,7 @@ class ForumRegistry:
         self._admin_pages: List[AdminPageDefinition] = []
         self._notification_types: Dict[str, NotificationTypeDefinition] = {}
         self._user_preferences: Dict[str, UserPreferenceDefinition] = {}
+        self._language_packs: Dict[tuple[str, str], LanguagePackDefinition] = {}
         self._event_listeners: List[EventListenerDefinition] = []
         self._post_types: Dict[str, PostTypeDefinition] = {}
         self._search_filters: List[SearchFilterDefinition] = []
@@ -178,6 +190,9 @@ class ForumRegistry:
 
         for preference in module.user_preferences:
             self._user_preferences[preference.key] = preference
+
+        for language_pack in module.language_packs:
+            self._language_packs[(language_pack.module_id, language_pack.code)] = language_pack
 
         for event_listener in module.event_listeners:
             self._event_listeners.append(event_listener)
@@ -247,6 +262,20 @@ class ForumRegistry:
         return sorted(
             preferences,
             key=lambda item: (item.category, item.module_id, item.label, item.key),
+        )
+
+    def get_language_packs(self, module_id: str | None = None) -> List[LanguagePackDefinition]:
+        language_packs = list(self._language_packs.values())
+        if module_id is not None:
+            language_packs = [item for item in language_packs if item.module_id == module_id]
+        return sorted(
+            language_packs,
+            key=lambda item: (
+                int(not item.is_default),
+                item.module_id,
+                item.label.lower(),
+                item.code,
+            ),
         )
 
     def get_event_listeners(self) -> List[EventListenerDefinition]:
@@ -507,6 +536,23 @@ def _register_builtin_modules(registry: ForumRegistry) -> None:
                 "audit-log",
             ),
             settings_groups=("basic", "appearance", "mail", "advanced"),
+            language_packs=(
+                LanguagePackDefinition(
+                    code="zh-CN",
+                    label="简体中文",
+                    native_label="简体中文",
+                    module_id="core",
+                    description="Bias 默认内置语言包。",
+                    is_default=True,
+                ),
+                LanguagePackDefinition(
+                    code="en",
+                    label="English",
+                    native_label="English",
+                    module_id="core",
+                    description="Bias 内置英文基础语言包。",
+                ),
+            ),
         )
     )
 

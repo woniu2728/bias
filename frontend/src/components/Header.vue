@@ -164,6 +164,7 @@ import { useStartDiscussionAction } from '@/composables/useStartDiscussionAction
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
 import { useForumStore } from '@/stores/forum'
+import { useForumUiStore } from '@/stores/forumUi'
 import { useModalStore } from '@/stores/modal'
 import { useNotificationStore } from '@/stores/notification'
 import { useRoute, useRouter } from 'vue-router'
@@ -177,6 +178,7 @@ import {
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
 const forumStore = useForumStore()
+const forumUiStore = useForumUiStore()
 const modalStore = useModalStore()
 const notificationStore = useNotificationStore()
 const route = useRoute()
@@ -254,6 +256,7 @@ function buildHeaderExtensionContext() {
   return {
     authStore,
     forumStore,
+    forumUiStore,
     notificationStore,
     route,
     router,
@@ -380,8 +383,8 @@ function openSearchFromDrawer() {
 
 <style scoped>
 .header {
-  background: white;
-  border-bottom: 1px solid #e3e8ed;
+  background: var(--forum-bg-elevated);
+  border-bottom: 1px solid var(--forum-border-color);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -432,7 +435,7 @@ function openSearchFromDrawer() {
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  color: #555;
+  color: var(--forum-text-muted);
   font-size: 14px;
   border-radius: 3px;
   transition: all 0.2s;
@@ -443,8 +446,8 @@ function openSearchFromDrawer() {
 }
 
 .nav-item:hover {
-  background: #f5f8fa;
-  color: #333;
+  background: var(--forum-bg-subtle);
+  color: var(--forum-text-color);
   text-decoration: none;
 }
 
@@ -462,10 +465,10 @@ function openSearchFromDrawer() {
 .header-plugin-action {
   min-height: 34px;
   padding: 0 10px;
-  border: 1px solid #e3e8ed;
+  border: 1px solid var(--forum-border-color);
   border-radius: 3px;
-  background: #fff;
-  color: #5c6f84;
+  background: var(--forum-bg-elevated);
+  color: var(--forum-text-muted);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -475,8 +478,8 @@ function openSearchFromDrawer() {
 }
 
 .header-plugin-action:hover {
-  background: #f5f8fa;
-  color: #31465d;
+  background: var(--forum-bg-subtle);
+  color: var(--forum-text-color);
   text-decoration: none;
 }
 
@@ -500,7 +503,7 @@ function openSearchFromDrawer() {
 .header-session-dot,
 .header-session-chip {
   display: inline-flex;
-  background: linear-gradient(90deg, #eef3f7 0%, #e1e8ef 50%, #eef3f7 100%);
+  background: linear-gradient(90deg, var(--forum-bg-subtle) 0%, var(--forum-border-soft) 50%, var(--forum-bg-subtle) 100%);
   background-size: 200% 100%;
   animation: headerPlaceholderPulse 1.2s ease-in-out infinite;
 }
@@ -531,7 +534,7 @@ function openSearchFromDrawer() {
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: #62758a;
+  color: var(--forum-text-muted);
   align-items: center;
   justify-content: center;
 }
@@ -571,12 +574,12 @@ function openSearchFromDrawer() {
 }
 
 .btn-login {
-  color: #555;
+  color: var(--forum-text-muted);
   background: transparent;
 }
 
 .btn-login:hover {
-  background: #f5f8fa;
+  background: var(--forum-bg-subtle);
   text-decoration: none;
 }
 
@@ -621,7 +624,7 @@ function openSearchFromDrawer() {
     left: 50%;
     transform: translateX(-50%);
     width: min(220px, calc(100vw - 120px));
-    color: #de6c2b;
+    color: var(--forum-accent-color);
     font-size: 16px;
     font-weight: 400;
     line-height: 56px;
@@ -650,7 +653,7 @@ function openSearchFromDrawer() {
 
   .mobile-nav-toggle:hover,
   .mobile-primary-action:hover {
-    background: #f4f7fa;
+    background: var(--forum-bg-subtle);
   }
 }
 </style>

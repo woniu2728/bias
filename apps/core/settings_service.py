@@ -47,6 +47,7 @@ BASIC_SETTINGS_DEFAULTS = {
     "announcement_tone": "info",
     "default_locale": "zh-CN",
     "show_language_selector": False,
+    "theme_mode": "system",
 }
 
 APPEARANCE_SETTINGS_DEFAULTS = {
@@ -372,6 +373,18 @@ def get_public_forum_settings() -> dict:
             "default_value": definition.default_value,
         }
         for definition in FORUM_REGISTRY.get_user_preferences()
+    ]
+
+    forum_settings["locale_packs"] = [
+        {
+            "code": definition.code,
+            "label": definition.label,
+            "native_label": definition.native_label,
+            "module_id": definition.module_id,
+            "description": definition.description,
+            "is_default": definition.is_default,
+        }
+        for definition in FORUM_REGISTRY.get_language_packs()
     ]
 
     forum_settings["post_types"] = [

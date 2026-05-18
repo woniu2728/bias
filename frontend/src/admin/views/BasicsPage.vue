@@ -197,6 +197,20 @@
       </div>
 
       <div class="Form-group">
+        <label for="basics-theme-mode">{{ basicsCopy?.themeModeLabel || '默认主题' }}</label>
+        <select
+          id="basics-theme-mode"
+          v-model="settings.theme_mode"
+          name="theme_mode"
+          class="FormControl"
+        >
+          <option v-for="option in themeModeOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
+
+      <div class="Form-group">
         <label>
           <input
             v-model="settings.show_language_selector"
@@ -246,6 +260,7 @@ const loadError = ref('')
 const { saveSuccess, saveError, resetSaveFeedback, showSaveSuccess, showSaveError } = useAdminSaveFeedback()
 const announcementToneOptions = computed(() => basicsConfig.value?.announcementToneOptions || [])
 const localeOptions = computed(() => basicsConfig.value?.localeOptions || [])
+const themeModeOptions = computed(() => basicsConfig.value?.themeModeOptions || [])
 
 function defaultSettings() {
   return {
@@ -262,6 +277,7 @@ function defaultSettings() {
     announcement_message: '',
     announcement_tone: 'info',
     default_locale: 'zh-CN',
+    theme_mode: 'system',
     show_language_selector: false,
     ...(basicsConfig.value?.defaultSettings || {}),
   }
@@ -288,6 +304,7 @@ onMounted(async () => {
       announcement_message: data.announcement_message || '',
       announcement_tone: ['info', 'warning', 'success'].includes(data.announcement_tone) ? data.announcement_tone : 'info',
       default_locale: data.default_locale || 'zh-CN',
+      theme_mode: ['light', 'dark', 'system'].includes(data.theme_mode) ? data.theme_mode : 'system',
       show_language_selector: Boolean(data.show_language_selector),
     }
   } catch (error) {
