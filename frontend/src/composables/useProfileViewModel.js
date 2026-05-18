@@ -4,6 +4,7 @@ import { useProfilePanelState } from '@/composables/useProfilePanelState'
 import { useProfilePresentation } from '@/composables/useProfilePresentation'
 import { useProfileViewBindings } from '@/composables/useProfileViewBindings'
 import { getUserAvatarColor } from '@/utils/forum'
+import { useOnlineUsersStore } from '@/stores/onlineUsers'
 
 export function useProfileViewModel({
   authStore,
@@ -13,13 +14,16 @@ export function useProfileViewModel({
   route,
   router,
 }) {
+  const onlineUsersStore = useOnlineUsersStore()
   const pageState = injectedPageState || useProfilePage({
     authStore,
     modalStore,
     route,
     router,
   })
-  const presentationState = useProfilePresentation(pageState.user)
+  const presentationState = useProfilePresentation(pageState.user, {
+    isUserOnline: onlineUsersStore.isUserOnline,
+  })
   const metaState = useProfileMetaState({
     authStore,
     forumStore,

@@ -52,6 +52,7 @@ import { useComposerStore } from './stores/composer'
 import { useForumStore } from './stores/forum'
 import { useForumRealtimeStore } from './stores/forumRealtime'
 import { useNotificationStore } from './stores/notification'
+import { useOnlineUsersStore } from './stores/onlineUsers'
 import { useForumRealtimeStatus } from './composables/useForumRealtimeStatus'
 import { getUiCopy } from './forum/registry'
 import { openLoginModal } from './utils/authModal'
@@ -61,6 +62,7 @@ const composerStore = useComposerStore()
 const forumStore = useForumStore()
 const forumRealtimeStore = useForumRealtimeStore()
 const notificationStore = useNotificationStore()
+const onlineUsersStore = useOnlineUsersStore()
 const route = useRoute()
 const forumRealtimeStatus = useForumRealtimeStatus({
   forumRealtimeStore,
@@ -156,6 +158,8 @@ onMounted(async () => {
   // 初始化认证状态
   await authStore.checkAuth()
 
+  onlineUsersStore.connect()
+
   if (showMaintenance.value) {
     return
   }
@@ -173,10 +177,12 @@ watch(
       notificationStore.disconnect()
       notificationStore.resetState()
       forumRealtimeStore.disconnect()
+      onlineUsersStore.disconnect()
       return
     }
 
     if (isAuthenticated) {
+      onlineUsersStore.reconnect()
       await syncNotificationState()
       return
     }
@@ -184,6 +190,7 @@ watch(
     notificationStore.disconnect()
     notificationStore.resetState()
     forumRealtimeStore.disconnect()
+    onlineUsersStore.reconnect()
   }
 )
 
@@ -212,6 +219,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', syncViewportWidth)
   window.removeEventListener('bias:auth-required', handleAuthRequired)
   window.removeEventListener('bias:auth-invalidated', handleAuthInvalidated)
+  onlineUsersStore.disconnect()
 })
 </script>
 

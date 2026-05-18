@@ -2,28 +2,37 @@ import { computed } from 'vue'
 import {
   formatMonth,
   formatRelativeTime
-} from '@/utils/forum'
+} from '../utils/forum.js'
 import {
   getUserPrimaryGroupColor,
   getUserPrimaryGroupIcon,
   getUserPrimaryGroupLabel,
-} from '@/utils/userPrimaryGroup'
+} from '../utils/userPrimaryGroup.js'
+import { resolveProfileOnlineState } from '../utils/profileOnlineState.js'
 
-export function useProfilePresentation(user) {
+export function createProfilePresentation({
+  formatMonthText = formatMonth,
+  formatRelativeText = formatRelativeTime,
+  getPrimaryGroupColor = getUserPrimaryGroupColor,
+  getPrimaryGroupIcon = getUserPrimaryGroupIcon,
+  getPrimaryGroupLabel = getUserPrimaryGroupLabel,
+  isUserOnline = () => false,
+  user,
+}) {
   const isOnline = computed(() => {
-    if (!user.value?.last_seen_at) return false
-
-    const lastSeen = new Date(user.value.last_seen_at)
-    const now = new Date()
-    return (now - lastSeen) < 5 * 60 * 1000
+    return resolveProfileOnlineState({
+      userId: user.value?.id,
+      lastSeenAt: user.value?.last_seen_at,
+      isUserOnline,
+    })
   })
 
   function formatDate(dateString) {
-    return formatRelativeTime(dateString)
+    return formatRelativeText(dateString)
   }
 
   function formatJoinDate(dateString) {
-    return formatMonth(dateString)
+    return formatMonthText(dateString)
   }
 
   function formatLastSeen(dateString) {
@@ -46,13 +55,20 @@ export function useProfilePresentation(user) {
 
   return {
     isOnline,
-    getUserPrimaryGroupIcon,
+    getUserPrimaryGroupIcon: getPrimaryGroupIcon,
     getUserPrimaryGroupColor(userValue) {
-      return getUserPrimaryGroupColor(userValue, '#4d698e')
+      return getPrimaryGroupColor(userValue, '#4d698e')
     },
-    getUserPrimaryGroupLabel,
+    getUserPrimaryGroupLabel: getPrimaryGroupLabel,
     formatDate,
     formatJoinDate,
     formatLastSeen
   }
+}
+
+export function useProfilePresentation(user, options = {}) {
+  return createProfilePresentation({
+    user,
+    ...options,
+  })
 }
