@@ -145,6 +145,37 @@
               </div>
             </div>
 
+            <div class="ModuleActionBar">
+              <router-link
+                v-if="module.runtime?.settings_entry_path"
+                class="ModuleActionLink"
+                :to="module.runtime.settings_entry_path"
+              >
+                {{ modulesCopy?.settingsEntryActionLabel || '配置入口' }}
+              </router-link>
+              <router-link
+                v-if="module.runtime?.permissions_entry_path"
+                class="ModuleActionLink"
+                :to="module.runtime.permissions_entry_path"
+              >
+                {{ modulesCopy?.permissionsEntryActionLabel || '权限入口' }}
+              </router-link>
+              <router-link
+                v-if="module.runtime?.module_center_path"
+                class="ModuleActionLink"
+                :to="module.runtime.module_center_path"
+              >
+                {{ modulesCopy?.debugEntryActionLabel || '调试视图' }}
+              </router-link>
+              <a
+                v-if="module.documentation_url"
+                class="ModuleActionLink"
+                :href="module.documentation_url"
+              >
+                {{ modulesCopy?.documentationEntryActionLabel || '模块文档' }}
+              </a>
+            </div>
+
             <div v-if="module.missing_dependencies.length || module.disabled_dependencies.length" class="ModuleWarnings">
               <p v-if="module.missing_dependencies.length">
                 {{ modulesCopy?.missingDependenciesPrefix || '缺少依赖' }}: <code>{{ module.missing_dependencies.join(', ') }}</code>
@@ -205,6 +236,17 @@
                   </li>
                 </ul>
                 <p v-else class="ModuleEmpty">{{ modulesCopy?.noSettingsRuntimeText || '暂无设置或运行时元数据' }}</p>
+              </div>
+
+              <div>
+                <h5>{{ modulesCopy?.debugInfoTitle || '调试信息' }}</h5>
+                <ul v-if="module.runtime?.debug_items?.length" class="ModuleList">
+                  <li v-for="item in module.runtime.debug_items" :key="item.key">
+                    <span>{{ item.label }}</span>
+                    <code>{{ item.value }}</code>
+                  </li>
+                </ul>
+                <p v-else class="ModuleEmpty">{{ modulesCopy?.noDebugInfoText || '暂无调试信息' }}</p>
               </div>
 
               <div>
@@ -1078,6 +1120,31 @@ function formatPostTypeCapabilities(postType) {
 
 .ModuleWarnings p {
   margin: 0;
+}
+
+.ModuleActionBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ModuleActionLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: 999px;
+  background: var(--forum-bg-subtle);
+  color: var(--forum-text-color);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ModuleActionLink:hover {
+  border-color: var(--forum-primary-color);
+  color: var(--forum-primary-color);
 }
 
 .ModuleTokens {

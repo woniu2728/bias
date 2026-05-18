@@ -309,11 +309,30 @@ def build_module_runtime_state(module) -> Dict[str, Any]:
     if module.module_id == "core":
         migration_label = "核心底座"
 
+    settings_entry_path = None
+    if len(module.settings_groups) == 1:
+        group_name = next(iter(module.settings_groups), "")
+        settings_entry_path = {
+            "basic": "/admin/basics",
+            "appearance": "/admin/appearance",
+            "mail": "/admin/mail",
+            "advanced": "/admin/advanced",
+        }.get(group_name)
+
     return {
         "migration_state": migration_state,
         "migration_label": migration_label,
         "boot_mode": "static",
         "boot_mode_label": "启动时静态注册",
+        "settings_entry_path": settings_entry_path,
+        "permissions_entry_path": "/admin/permissions" if module.permissions else "",
+        "module_center_path": f"/admin/modules?module={module.module_id}",
+        "debug_items": [
+            {"key": "module_id", "label": "模块 ID", "value": module.module_id},
+            {"key": "category", "label": "模块分类", "value": resolve_module_category_label(module.category)},
+            {"key": "boot_mode", "label": "启动方式", "value": "启动时静态注册"},
+            {"key": "migration", "label": "迁移状态", "value": migration_label},
+        ],
     }
 
 
