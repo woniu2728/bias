@@ -27,18 +27,20 @@ class TagStatsTests(TestCase):
         )
 
     def test_create_discussion_refreshes_tag_count(self):
-        DiscussionService.create_discussion(
-            title="生活讨论 1",
-            content="第一条生活内容",
-            user=self.user,
-            tag_ids=[self.tag.id],
-        )
-        DiscussionService.create_discussion(
-            title="生活讨论 2",
-            content="第二条生活内容",
-            user=self.user,
-            tag_ids=[self.tag.id],
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            DiscussionService.create_discussion(
+                title="生活讨论 1",
+                content="第一条生活内容",
+                user=self.user,
+                tag_ids=[self.tag.id],
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            DiscussionService.create_discussion(
+                title="生活讨论 2",
+                content="第二条生活内容",
+                user=self.user,
+                tag_ids=[self.tag.id],
+            )
 
         self.tag.refresh_from_db()
 
@@ -99,37 +101,41 @@ class TagStatsTests(TestCase):
             password="password123",
         )
 
-        discussion = DiscussionService.create_discussion(
-            title="待审核标签讨论",
-            content="等待审核",
-            user=self.user,
-            tag_ids=[self.tag.id],
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            discussion = DiscussionService.create_discussion(
+                title="待审核标签讨论",
+                content="等待审核",
+                user=self.user,
+                tag_ids=[self.tag.id],
+            )
         self.tag.refresh_from_db()
         self.assertEqual(self.tag.discussion_count, 0)
         self.assertIsNone(self.tag.last_posted_discussion)
 
-        DiscussionService.approve_discussion(discussion, admin)
+        with self.captureOnCommitCallbacks(execute=True):
+            DiscussionService.approve_discussion(discussion, admin)
         self.tag.refresh_from_db()
         self.assertEqual(self.tag.discussion_count, 1)
         self.assertEqual(self.tag.last_posted_discussion_id, discussion.id)
 
     def test_reply_refreshes_tag_last_posted_at(self):
-        discussion = DiscussionService.create_discussion(
-            title="标签回复刷新",
-            content="首帖",
-            user=self.user,
-            tag_ids=[self.tag.id],
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            discussion = DiscussionService.create_discussion(
+                title="标签回复刷新",
+                content="首帖",
+                user=self.user,
+                tag_ids=[self.tag.id],
+            )
         self.tag.refresh_from_db()
         initial_last_posted_at = self.tag.last_posted_at
 
         from apps.posts.services import PostService
-        PostService.create_post(
-            discussion_id=discussion.id,
-            content="新的回复",
-            user=self.user,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.create_post(
+                discussion_id=discussion.id,
+                content="新的回复",
+                user=self.user,
+            )
 
         self.tag.refresh_from_db()
         self.assertIsNotNone(initial_last_posted_at)
@@ -189,12 +195,13 @@ class TagAccessApiTests(TestCase):
         self.assertEqual(slugs, {"public-tag", "members-tag"})
 
     def test_tag_detail_exposes_registered_resource_fields(self):
-        discussion = DiscussionService.create_discussion(
-            title="标签详情附加字段",
-            content="用于验证资源注册输出",
-            user=self.admin,
-            tag_ids=[self.members_tag.id],
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            discussion = DiscussionService.create_discussion(
+                title="标签详情附加字段",
+                content="用于验证资源注册输出",
+                user=self.admin,
+                tag_ids=[self.members_tag.id],
+            )
 
         response = self.client.get(
             f"/api/tags/{self.members_tag.id}",

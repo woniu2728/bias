@@ -2,10 +2,13 @@
 Runtime queue dispatch helpers.
 """
 import logging
+import os
+from unittest.mock import Mock
 from django.core.cache import cache
 from django.utils import timezone
 from typing import Callable, Optional
 
+from apps.core.bootstrap_config import _is_test_process
 from apps.core.settings_service import get_advanced_settings
 
 
@@ -31,6 +34,37 @@ class QueueService:
     STATUS_AVAILABLE = "available"
     STATUS_UNAVAILABLE = "unavailable"
     STATUS_UNKNOWN = "unknown"
+    TEST_SKIP_LIVE_IO_ENV = "BIAS_TEST_ALLOW_LIVE_QUEUE_IO"
+
+    @staticmethod
+    def _allows_live_queue_io_in_tests() -> bool:
+        return str(os.getenv(QueueService.TEST_SKIP_LIVE_IO_ENV, "")).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+
+    @staticmethod
+    def _should_skip_live_worker_check() -> bool:
+        return _is_test_process() and not QueueService._allows_live_queue_io_in_tests()
+
+    @staticmethod
+    def _should_skip_live_task_enqueue(task) -> bool:
+        if not _is_test_process() or QueueService._allows_live_queue_io_in_tests():
+            return False
+
+        delay = getattr(task, "delay", None)
+        apply_async = getattr(task, "apply_async", None)
+        if isinstance(delay, Mock) or isinstance(apply_async, Mock):
+            return False
+
+        task_module = getattr(task, "__module__", "") or ""
+        task_name = getattr(task, "name", "") or ""
+        if ".tests" in task_module or task_name.startswith("tests."):
+            return False
+
+        return task_module.startswith("apps.")
 
     @staticmethod
     def get_runtime_config() -> dict:
@@ -73,6 +107,15 @@ class QueueService:
                 "available": False,
                 "worker_count": 0,
                 "message": f"{config['driver']} 队列驱动尚未接入 worker 检测。",
+            }
+
+        if QueueService._should_skip_live_worker_check():
+            return {
+                "status": QueueService.STATUS_UNAVAILABLE,
+                "label": "测试环境跳过",
+                "available": False,
+                "worker_count": 0,
+                "message": "测试环境默认跳过真实 worker 检测。",
             }
 
         try:
@@ -167,6 +210,12 @@ class QueueService:
         """
         task_name = getattr(task, "name", repr(task))
         if QueueService.should_enqueue():
+            if QueueService._should_skip_live_task_enqueue(task):
+                if fallback is not None:
+                    result = fallback()
+                    QueueService._record_metric("sync", task_name)
+                    return result
+                return None
             try:
                 if countdown is not None and hasattr(task, "apply_async"):
                     result = task.apply_async(args=args, kwargs=kwargs, countdown=countdown)

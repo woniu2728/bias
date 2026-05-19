@@ -1416,11 +1416,12 @@ class DiscussionRealtimeTests(TestCase):
 
     @patch.object(WebSocketService, "broadcast_discussion_event")
     def test_visible_post_event_broadcasts_discussion_and_post_payload(self, broadcast_discussion_event):
-        post = PostService.create_post(
-            discussion_id=self.discussion.id,
-            content="新增回复",
-            user=self.author,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            post = PostService.create_post(
+                discussion_id=self.discussion.id,
+                content="新增回复",
+                user=self.author,
+            )
 
         self.assertTrue(broadcast_discussion_event.called)
         discussion_id, event_type, payload = broadcast_discussion_event.call_args.args
@@ -1444,12 +1445,13 @@ class DiscussionRealtimeTests(TestCase):
             parent=self.tag,
         )
 
-        discussion = DiscussionService.create_discussion(
-            title="第二个实时讨论",
-            content="讨论内容",
-            user=self.author,
-            tag_ids=[self.tag.id, child_tag.id],
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            discussion = DiscussionService.create_discussion(
+                title="第二个实时讨论",
+                content="讨论内容",
+                user=self.author,
+                tag_ids=[self.tag.id, child_tag.id],
+            )
 
         discussion_id, event_type, payload = broadcast_discussion_event.call_args.args
         self.assertEqual(discussion_id, discussion.id)
@@ -1467,14 +1469,16 @@ class DiscussionRealtimeTests(TestCase):
 
     @patch.object(WebSocketService, "broadcast_discussion_event")
     def test_hidden_post_event_broadcasts_minimal_signal_only(self, broadcast_discussion_event):
-        post = PostService.create_post(
-            discussion_id=self.discussion.id,
-            content="待隐藏回复",
-            user=self.author,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            post = PostService.create_post(
+                discussion_id=self.discussion.id,
+                content="待隐藏回复",
+                user=self.author,
+            )
         broadcast_discussion_event.reset_mock()
 
-        PostService.set_hidden_state(post, self.admin, True)
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.set_hidden_state(post, self.admin, True)
 
         discussion_id, event_type, payload = broadcast_discussion_event.call_args.args
         self.assertEqual(discussion_id, self.discussion.id)
@@ -2995,7 +2999,8 @@ class QueueServiceTests(TestCase):
 
     @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
     @patch("config.celery.app.control.inspect")
-    def test_queue_worker_status_reports_available_workers(self, inspect):
+    @patch("apps.core.queue_service.QueueService._should_skip_live_worker_check", return_value=False)
+    def test_queue_worker_status_reports_available_workers(self, _skip_live_worker_check, inspect):
         from apps.core.queue_service import QueueService
 
         Setting.objects.update_or_create(
@@ -3016,7 +3021,8 @@ class QueueServiceTests(TestCase):
 
     @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
     @patch("config.celery.app.control.inspect")
-    def test_queue_worker_status_reports_unavailable_without_ping_response(self, inspect):
+    @patch("apps.core.queue_service.QueueService._should_skip_live_worker_check", return_value=False)
+    def test_queue_worker_status_reports_unavailable_without_ping_response(self, _skip_live_worker_check, inspect):
         from apps.core.queue_service import QueueService
 
         Setting.objects.update_or_create(
@@ -3031,6 +3037,24 @@ class QueueServiceTests(TestCase):
         self.assertEqual(status["status"], "unavailable")
         self.assertFalse(status["available"])
         self.assertEqual(status["worker_count"], 0)
+
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
+    @patch("config.celery.app.control.inspect")
+    def test_queue_worker_status_skips_live_probe_during_tests(self, inspect):
+        from apps.core.queue_service import QueueService
+
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(True)},
+        )
+        clear_runtime_setting_caches()
+
+        status = QueueService.get_worker_status()
+
+        self.assertEqual(status["status"], "unavailable")
+        self.assertEqual(status["label"], "测试环境跳过")
+        self.assertFalse(status["available"])
+        inspect.assert_not_called()
 
     def test_queue_metrics_record_sync_dispatch(self):
         from apps.core.queue_service import QueueService
@@ -3089,6 +3113,32 @@ class QueueServiceTests(TestCase):
         self.assertEqual(metrics["sync_count"], 0)
         self.assertEqual(metrics["last_task"], "tests.failing_task")
         self.assertEqual(metrics["last_error"], "queue down")
+
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
+    def test_queue_dispatch_skips_live_enqueue_for_app_tasks_during_tests(self):
+        from apps.core.queue_service import QueueService
+
+        class AppTask:
+            __module__ = "apps.notifications.tasks"
+            name = "apps.notifications.tasks.dispatch_notification_batch"
+
+            def delay(self):
+                raise AssertionError("live queue should be skipped in tests")
+
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(True)},
+        )
+        clear_runtime_setting_caches()
+        QueueService.reset_metrics()
+
+        result = QueueService.dispatch_celery_task(AppTask(), fallback=lambda: "sync")
+        metrics = QueueService.get_metrics()
+
+        self.assertEqual(result, "sync")
+        self.assertEqual(metrics["sync_count"], 1)
+        self.assertEqual(metrics["enqueued_count"], 0)
+        self.assertEqual(metrics["fallback_count"], 0)
 
 
 class ComposerUploadApiTests(TestCase):
@@ -4920,12 +4970,13 @@ class AdminApprovalQueueApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["total"], 2)
 
-        response = self.client.post(
-            f"/api/admin/approval-queue/discussion/{self.pending_discussion.id}/approve",
-            data=json.dumps({"note": "讨论符合规范"}),
-            content_type="application/json",
-            **self.auth_header(),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"/api/admin/approval-queue/discussion/{self.pending_discussion.id}/approve",
+                data=json.dumps({"note": "讨论符合规范"}),
+                content_type="application/json",
+                **self.auth_header(),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         self.pending_discussion.refresh_from_db()
@@ -4938,12 +4989,13 @@ class AdminApprovalQueueApiTests(TestCase):
         self.assertEqual(approved_notification.from_user_id, self.admin.id)
         self.assertEqual(approved_notification.data["approval_note"], "讨论符合规范")
 
-        response = self.client.post(
-            f"/api/admin/approval-queue/post/{self.post.id}/reject",
-            data=json.dumps({"note": "回复质量不足"}),
-            content_type="application/json",
-            **self.auth_header(),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"/api/admin/approval-queue/post/{self.post.id}/reject",
+                data=json.dumps({"note": "回复质量不足"}),
+                content_type="application/json",
+                **self.auth_header(),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         self.post.refresh_from_db()
@@ -4958,18 +5010,19 @@ class AdminApprovalQueueApiTests(TestCase):
         self.assertEqual(rejected_notification.data["approval_note"], "回复质量不足")
 
     def test_admin_can_bulk_process_approval_queue(self):
-        response = self.client.post(
-            "/api/admin/approval-queue/bulk/approve",
-            data=json.dumps({
-                "note": "批量审核通过",
-                "items": [
-                    {"type": "discussion", "id": self.pending_discussion.id},
-                    {"type": "post", "id": self.post.id},
-                ],
-            }),
-            content_type="application/json",
-            **self.auth_header(),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                "/api/admin/approval-queue/bulk/approve",
+                data=json.dumps({
+                    "note": "批量审核通过",
+                    "items": [
+                        {"type": "discussion", "id": self.pending_discussion.id},
+                        {"type": "post", "id": self.post.id},
+                    ],
+                }),
+                content_type="application/json",
+                **self.auth_header(),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
