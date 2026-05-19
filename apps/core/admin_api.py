@@ -4,7 +4,9 @@
 import json
 import sys
 import functools
+import socket
 from pathlib import Path
+from urllib.parse import urlparse
 
 import django
 from ninja import Router, Body
@@ -273,6 +275,33 @@ def build_module_health_state(module, dependency_state: Dict[str, Any]) -> Dict[
     }
 
 
+def build_runtime_dependency_summary() -> dict[str, Any]:
+    advanced_settings = get_runtime_advanced_settings()
+    queue_driver = advanced_settings.get("queue_driver", "sync")
+    queue_enabled = bool(advanced_settings.get("queue_enabled", False))
+    queue_worker_status = QueueService.get_worker_status()
+    cache_connection = _probe_cache_connection()
+    realtime_connection = _probe_realtime_connection()
+    queue_broker_connection = _probe_queue_broker_connection(queue_enabled, queue_driver)
+    checks = build_runtime_dependency_checks(
+        cache_connection=cache_connection,
+        realtime_connection=realtime_connection,
+        queue_broker_connection=queue_broker_connection,
+        queue_worker_status=queue_worker_status,
+    )
+    issues = [
+        f"{item['label']}：{item['status_label']}"
+        for item in checks
+        if item.get("available") is False
+    ]
+    return {
+        "status": "attention" if issues else "healthy",
+        "label": "需关注" if issues else "健康",
+        "issues": issues,
+        "checks": checks,
+    }
+
+
 def build_module_settings_overview(module) -> Dict[str, Any]:
     setting_keys = []
     for group_name in module.settings_groups:
@@ -367,6 +396,18 @@ def serialize_module_definition(module, module_map: Dict[str, Any]) -> Dict[str,
         for definition in RESOURCE_REGISTRY.get_all_relationships()
         if definition.module_id == module.module_id
     ]
+    runtime_dependency_summary = None
+    if module.module_id == "core":
+        runtime_dependency_summary = build_runtime_dependency_summary()
+        if runtime_dependency_summary["status"] != "healthy":
+            health_state = {
+                "status": "attention",
+                "label": "需关注",
+                "issues": [
+                    *health_state["issues"],
+                    *runtime_dependency_summary["issues"],
+                ],
+            }
     return {
         "id": module.module_id,
         "name": module.name,
@@ -481,6 +522,7 @@ def serialize_module_definition(module, module_map: Dict[str, Any]) -> Dict[str,
         "resource_definitions": resource_definitions,
         "resource_relationships": resource_relationships,
         "resource_fields": resource_fields,
+        "runtime_dependency_summary": runtime_dependency_summary,
         "permissions": [
             {
                 "code": permission.code,
@@ -541,7 +583,7 @@ def build_module_category_summaries(modules: List[Dict[str, Any]]) -> List[Dict[
         group["module_count"] += 1
         if module["enabled"]:
             group["enabled_count"] += 1
-        if module["dependency_status"] != "healthy":
+        if module["health_status"] != "healthy":
             group["attention_count"] += 1
 
     return sorted(
@@ -668,6 +710,223 @@ def is_redis_enabled(queue_enabled: bool = False, queue_driver: str = "") -> boo
     return cache_uses_redis or realtime_uses_redis or queue_uses_redis
 
 
+MIN_HS256_KEY_LENGTH = 32
+KNOWN_PLACEHOLDER_SECRETS = {
+    "django-insecure-change-this-in-production",
+    "jwt-secret-key-change-this",
+}
+
+NETWORK_PROBE_TIMEOUT_SECONDS = 0.3
+
+
+def _probe_cache_connection() -> dict[str, Any]:
+    backend = (settings.CACHES.get("default", {}).get("BACKEND") or "").lower()
+    if "django_redis" not in backend and "redis" not in backend:
+        return {
+            "enabled": False,
+            "available": None,
+            "status": "disabled",
+            "label": "未启用",
+            "message": "当前默认缓存未使用 Redis。",
+        }
+
+    try:
+        cache.set("admin.runtime.cache_probe", "ok", timeout=5)
+        cache.get("admin.runtime.cache_probe")
+    except Exception as exc:
+        return {
+            "enabled": True,
+            "available": False,
+            "status": "unavailable",
+            "label": "连接失败",
+            "message": str(exc) or "无法访问缓存后端。",
+        }
+
+    return {
+        "enabled": True,
+        "available": True,
+        "status": "available",
+        "label": "可用",
+        "message": "缓存后端可正常读写。",
+    }
+
+
+def _probe_tcp_endpoint(host: str | None, port: int | None, *, label: str) -> dict[str, Any]:
+    normalized_host = str(host or "").strip()
+    normalized_port = int(port or 0)
+    if not normalized_host or normalized_port <= 0:
+        return {
+            "available": False,
+            "status": "misconfigured",
+            "label": "配置缺失",
+            "message": f"{label} 缺少主机或端口配置。",
+        }
+
+    try:
+        with socket.create_connection((normalized_host, normalized_port), timeout=NETWORK_PROBE_TIMEOUT_SECONDS):
+            return {
+                "available": True,
+                "status": "available",
+                "label": "可达",
+                "message": f"{label} 主机 {normalized_host}:{normalized_port} 可连通。",
+            }
+    except OSError as exc:
+        return {
+            "available": False,
+            "status": "unreachable",
+            "label": "不可达",
+            "message": f"{label} 主机 {normalized_host}:{normalized_port} 无法连通：{exc}",
+        }
+
+
+def _probe_realtime_connection() -> dict[str, Any]:
+    channel_config = settings.CHANNEL_LAYERS.get("default", {})
+    backend = (channel_config.get("BACKEND") or "").lower()
+    if "channels_redis" not in backend and "redis" not in backend:
+        return {
+            "enabled": False,
+            "available": None,
+            "status": "disabled",
+            "label": "未启用",
+            "message": "当前实时层未使用 Redis Channel Layer。",
+        }
+
+    hosts = channel_config.get("CONFIG", {}).get("hosts") or []
+    if not hosts:
+        return {
+            "enabled": True,
+            "available": False,
+            "status": "misconfigured",
+            "label": "配置缺失",
+            "message": "Redis Channel Layer 缺少 hosts 配置。",
+        }
+    first_host = hosts[0]
+    if isinstance(first_host, (list, tuple)):
+        host = first_host[0] if len(first_host) > 0 else None
+        port = first_host[1] if len(first_host) > 1 else 6379
+    elif isinstance(first_host, str):
+        parsed = urlparse(first_host if "://" in first_host else f"redis://{first_host}")
+        host = parsed.hostname
+        port = parsed.port or 6379
+    else:
+        host = None
+        port = None
+
+    connectivity = _probe_tcp_endpoint(host, port, label="Redis Channel Layer")
+    return {
+        "enabled": True,
+        "available": connectivity["available"],
+        "status": connectivity["status"],
+        "label": connectivity["label"],
+        "message": connectivity["message"],
+    }
+
+
+def _probe_queue_broker_connection(queue_enabled: bool, queue_driver: str) -> dict[str, Any]:
+    normalized_driver = str(queue_driver or "").strip().lower()
+    broker_url = str(getattr(settings, "CELERY_BROKER_URL", "") or "").strip()
+    if not queue_enabled or normalized_driver != "redis":
+        return {
+            "enabled": False,
+            "available": None,
+            "status": "disabled",
+            "label": "未启用",
+            "message": "当前未启用 Redis 队列 broker。",
+        }
+
+    if not broker_url:
+        return {
+            "enabled": True,
+            "available": False,
+            "status": "misconfigured",
+            "label": "配置缺失",
+            "message": "队列已启用，但 CELERY_BROKER_URL 为空。",
+        }
+
+    parsed = urlparse(broker_url)
+    if "redis" not in (parsed.scheme or "").lower():
+        return {
+            "enabled": True,
+            "available": False,
+            "status": "misconfigured",
+            "label": "驱动不匹配",
+            "message": "队列驱动为 Redis，但 broker URL 不是 Redis 协议。",
+        }
+
+    if not parsed.hostname:
+        return {
+            "enabled": True,
+            "available": False,
+            "status": "misconfigured",
+            "label": "配置缺失",
+            "message": "Redis broker 缺少主机配置。",
+        }
+    connectivity = _probe_tcp_endpoint(parsed.hostname, parsed.port or 6379, label="Redis broker")
+    return {
+        "enabled": True,
+        "available": connectivity["available"],
+        "status": connectivity["status"],
+        "label": connectivity["label"],
+        "message": connectivity["message"],
+    }
+
+
+def _normalize_secret_value(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _looks_like_placeholder_secret(value: str) -> bool:
+    return value.lower() in KNOWN_PLACEHOLDER_SECRETS
+
+
+def _jwt_key_length_requirement(algorithm: str) -> int:
+    normalized = str(algorithm or "").strip().upper()
+    if normalized.startswith("HS"):
+        return MIN_HS256_KEY_LENGTH
+    return 0
+
+
+def build_auth_secret_risks() -> list[dict[str, Any]]:
+    risks: list[dict[str, Any]] = []
+
+    secret_key = _normalize_secret_value(settings.SECRET_KEY)
+    jwt_algorithm = str(settings.NINJA_JWT.get("ALGORITHM") or "").strip().upper()
+    jwt_signing_key = _normalize_secret_value(settings.NINJA_JWT.get("SIGNING_KEY") or settings.SECRET_KEY)
+    jwt_required_length = _jwt_key_length_requirement(jwt_algorithm)
+
+    if _looks_like_placeholder_secret(secret_key):
+        risks.append(
+            {
+                "code": "django-secret-placeholder",
+                "level": "danger",
+                "title": "Django SECRET_KEY 仍为默认占位值",
+                "message": "当前 SECRET_KEY 仍带有开发占位标记，生产环境必须替换为独立高强度密钥。",
+            }
+        )
+
+    if _looks_like_placeholder_secret(jwt_signing_key):
+        risks.append(
+            {
+                "code": "jwt-secret-placeholder",
+                "level": "danger",
+                "title": "JWT 签名密钥仍为默认占位值",
+                "message": "当前 JWT 签名密钥仍带有开发占位标记，生产环境必须替换为独立高强度密钥。",
+            }
+        )
+
+    if jwt_required_length and len(jwt_signing_key) < jwt_required_length:
+        risks.append(
+            {
+                "code": "jwt-secret-too-short",
+                "level": "danger",
+                "title": "JWT 签名密钥长度不足",
+                "message": f"当前 {jwt_algorithm or 'JWT'} 签名密钥长度小于 {jwt_required_length} 字节，存在被弱密钥攻击的风险。",
+            }
+        )
+
+    return risks
+
+
 def build_runtime_risks(
     *,
     debug_mode: bool,
@@ -678,6 +937,9 @@ def build_runtime_risks(
     queue_driver: str,
     queue_worker_status: dict,
     redis_enabled: bool,
+    cache_connection: dict[str, Any],
+    realtime_connection: dict[str, Any],
+    queue_broker_connection: dict[str, Any],
 ) -> list[dict[str, Any]]:
     risks: list[dict[str, Any]] = []
     normalized_database_label = str(database_label or "").lower()
@@ -726,6 +988,36 @@ def build_runtime_risks(
             }
         )
 
+    if cache_connection.get("enabled") and cache_connection.get("available") is False:
+        risks.append(
+            {
+                "code": "cache-backend-unavailable",
+                "level": "danger",
+                "title": "缓存后端不可用",
+                "message": cache_connection.get("message") or "当前缓存后端无法正常访问。",
+            }
+        )
+
+    if realtime_connection.get("enabled") and realtime_connection.get("available") is False:
+        risks.append(
+            {
+                "code": "realtime-backend-unavailable",
+                "level": "warning",
+                "title": "实时层配置不完整",
+                "message": realtime_connection.get("message") or "当前实时层无法确认 Redis Channel Layer 可用。",
+            }
+        )
+
+    if queue_broker_connection.get("enabled") and queue_broker_connection.get("available") is False:
+        risks.append(
+            {
+                "code": "queue-broker-unavailable",
+                "level": "danger",
+                "title": "队列 broker 不可用",
+                "message": queue_broker_connection.get("message") or "当前队列 broker 无法使用。",
+            }
+        )
+
     if queue_enabled and normalized_queue_driver != "redis":
         risks.append(
             {
@@ -756,7 +1048,89 @@ def build_runtime_risks(
             }
         )
 
+    risks.extend(build_auth_secret_risks())
     return risks
+
+
+def build_auth_secret_status() -> dict[str, Any]:
+    risks = build_auth_secret_risks()
+    if risks:
+        highest_level = "danger" if any(item.get("level") == "danger" for item in risks) else "warning"
+        return {
+            "status": highest_level,
+            "label": "存在风险",
+            "message": "；".join(item.get("title") or "" for item in risks if item.get("title")),
+        }
+
+    return {
+        "status": "healthy",
+        "label": "健康",
+        "message": "Django 与 JWT 密钥未发现默认占位值或长度不足问题。",
+    }
+
+
+def build_runtime_dependency_checks(
+    *,
+    cache_connection: dict[str, Any],
+    realtime_connection: dict[str, Any],
+    queue_broker_connection: dict[str, Any],
+    queue_worker_status: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "key": "cache",
+            "label": "缓存后端",
+            "status": cache_connection.get("status") or "unknown",
+            "status_label": cache_connection.get("label") or "未知",
+            "available": cache_connection.get("available"),
+            "message": cache_connection.get("message") or "",
+            "recommended_action": (
+                "确认 Redis 缓存服务在线，并检查 Django `CACHES` 配置、网络与认证信息。"
+                if cache_connection.get("enabled") and cache_connection.get("available") is False
+                else ""
+            ),
+        },
+        {
+            "key": "realtime",
+            "label": "实时层",
+            "status": realtime_connection.get("status") or "unknown",
+            "status_label": realtime_connection.get("label") or "未知",
+            "available": realtime_connection.get("available"),
+            "message": realtime_connection.get("message") or "",
+            "recommended_action": (
+                "补全 `CHANNEL_LAYERS.default.CONFIG.hosts`，并在多实例部署前切换到 Redis Channel Layer。"
+                if realtime_connection.get("enabled") and realtime_connection.get("available") is False
+                else ""
+            ),
+        },
+        {
+            "key": "queue-broker",
+            "label": "队列 Broker",
+            "status": queue_broker_connection.get("status") or "unknown",
+            "status_label": queue_broker_connection.get("label") or "未知",
+            "available": queue_broker_connection.get("available"),
+            "message": queue_broker_connection.get("message") or "",
+            "recommended_action": (
+                "确认 `CELERY_BROKER_URL` 使用 Redis 协议且主机配置完整，再重新加载 worker。"
+                if queue_broker_connection.get("enabled") and queue_broker_connection.get("available") is False
+                else ""
+            ),
+        },
+        {
+            "key": "queue-worker",
+            "label": "队列 Worker",
+            "status": queue_worker_status.get("status") or "unknown",
+            "status_label": queue_worker_status.get("label") or "未知",
+            "available": queue_worker_status.get("available"),
+            "message": queue_worker_status.get("message") or "",
+            "recommended_action": (
+                "启动 Celery worker 并确认其能连接到当前 Redis broker。"
+                if queue_worker_status.get("status") not in {QueueService.STATUS_DISABLED, QueueService.STATUS_SYNC}
+                and not queue_worker_status.get("available")
+                else ""
+            ),
+        },
+    ]
 
 
 def validate_advanced_runtime_settings(payload: Dict[str, Any]) -> list[str]:
@@ -798,6 +1172,9 @@ def get_stats(request):
     cache_driver = detect_cache_driver()
     realtime_driver = detect_realtime_driver()
     redis_enabled = is_redis_enabled(queue_enabled=queue_enabled, queue_driver=queue_driver)
+    cache_connection = _probe_cache_connection()
+    realtime_connection = _probe_realtime_connection()
+    queue_broker_connection = _probe_queue_broker_connection(queue_enabled, queue_driver)
     runtime_risks = build_runtime_risks(
         debug_mode=settings.DEBUG,
         database_label=database_label,
@@ -807,6 +1184,16 @@ def get_stats(request):
         queue_driver=queue_driver,
         queue_worker_status=queue_worker_status,
         redis_enabled=redis_enabled,
+        cache_connection=cache_connection,
+        realtime_connection=realtime_connection,
+        queue_broker_connection=queue_broker_connection,
+    )
+    auth_secret_status = build_auth_secret_status()
+    runtime_dependency_checks = build_runtime_dependency_checks(
+        cache_connection=cache_connection,
+        realtime_connection=realtime_connection,
+        queue_broker_connection=queue_broker_connection,
+        queue_worker_status=queue_worker_status,
     )
 
     return {
@@ -826,7 +1213,23 @@ def get_stats(request):
         "queueMetrics": queue_metrics,
         "realtimeDriver": realtime_driver,
         "redisEnabled": redis_enabled,
+        "cacheConnectionStatus": cache_connection["status"],
+        "cacheConnectionLabel": cache_connection["label"],
+        "cacheConnectionAvailable": cache_connection["available"],
+        "cacheConnectionMessage": cache_connection["message"],
+        "realtimeConnectionStatus": realtime_connection["status"],
+        "realtimeConnectionLabel": realtime_connection["label"],
+        "realtimeConnectionAvailable": realtime_connection["available"],
+        "realtimeConnectionMessage": realtime_connection["message"],
+        "queueBrokerStatus": queue_broker_connection["status"],
+        "queueBrokerLabel": queue_broker_connection["label"],
+        "queueBrokerAvailable": queue_broker_connection["available"],
+        "queueBrokerMessage": queue_broker_connection["message"],
+        "runtimeDependencyChecks": runtime_dependency_checks,
         "runtimeRisks": runtime_risks,
+        "authSecretStatus": auth_secret_status["status"],
+        "authSecretLabel": auth_secret_status["label"],
+        "authSecretMessage": auth_secret_status["message"],
         "debugMode": settings.DEBUG,
         "maintenanceMode": bool(advanced_settings.get("maintenance_mode", False)),
         "totalUsers": User.objects.count(),
@@ -1442,6 +1845,12 @@ def list_admin_modules(request):
         for module in modules
         if module["dependency_status"] != "healthy"
     ]
+    runtime_dependency_attention_count = sum(
+        1
+        for module in modules
+        if module.get("runtime_dependency_summary") is not None
+        and module["runtime_dependency_summary"]["status"] != "healthy"
+    )
     summary = {
         "module_count": len(modules),
         "core_count": sum(1 for module in modules if module["is_core"]),
@@ -1462,6 +1871,7 @@ def list_admin_modules(request):
         "settings_group_count": sum(len(module["settings"]["groups"]) for module in modules),
         "dependency_issue_count": len(dependency_attention),
         "health_attention_count": sum(1 for module in modules if module["health_status"] != "healthy"),
+        "runtime_dependency_attention_count": runtime_dependency_attention_count,
     }
     return {
         "summary": summary,

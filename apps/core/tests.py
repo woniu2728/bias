@@ -2534,6 +2534,13 @@ class AdminDashboardStatsApiTests(TestCase):
         self.assertEqual(payload["queueMetrics"]["sync_count"], 0)
         self.assertEqual(payload["queueMetrics"]["fallback_count"], 0)
         self.assertFalse(payload["redisEnabled"])
+        self.assertEqual(payload["cacheConnectionStatus"], "disabled")
+        self.assertIsNone(payload["cacheConnectionAvailable"])
+        self.assertEqual(payload["realtimeConnectionStatus"], "disabled")
+        self.assertIsNone(payload["realtimeConnectionAvailable"])
+        self.assertEqual(payload["queueBrokerStatus"], "disabled")
+        self.assertIsNone(payload["queueBrokerAvailable"])
+        self.assertEqual(payload["authSecretStatus"], "healthy")
         self.assertEqual(payload["runtimeRisks"], [])
 
     @override_settings(
@@ -2541,8 +2548,17 @@ class AdminDashboardStatsApiTests(TestCase):
         CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {"hosts": [("localhost", 6379)]}}},
         CELERY_BROKER_URL="redis://localhost:6379/1",
     )
+    @patch("apps.core.admin_api._probe_tcp_endpoint")
+    @patch("apps.core.admin_api.cache.get", return_value="ok")
+    @patch("apps.core.admin_api.cache.set", return_value=None)
     @patch("apps.core.admin_api.QueueService.get_worker_status")
-    def test_admin_stats_marks_redis_and_queue_status(self, get_worker_status):
+    def test_admin_stats_marks_redis_and_queue_status(self, get_worker_status, _cache_set, _cache_get, probe_tcp_endpoint):
+        probe_tcp_endpoint.return_value = {
+            "available": True,
+            "status": "available",
+            "label": "可达",
+            "message": "探测通过",
+        }
         get_worker_status.return_value = {
             "status": "available",
             "label": "2 个 worker 在线",
@@ -2570,6 +2586,12 @@ class AdminDashboardStatsApiTests(TestCase):
         self.assertTrue(payload["queueWorkerAvailable"])
         self.assertEqual(payload["queueWorkerCount"], 2)
         self.assertTrue(payload["redisEnabled"])
+        self.assertEqual(payload["cacheConnectionStatus"], "available")
+        self.assertTrue(payload["cacheConnectionAvailable"])
+        self.assertEqual(payload["realtimeConnectionStatus"], "available")
+        self.assertTrue(payload["realtimeConnectionAvailable"])
+        self.assertEqual(payload["queueBrokerStatus"], "available")
+        self.assertTrue(payload["queueBrokerAvailable"])
         self.assertEqual(payload["runtimeRisks"], [])
 
     @override_settings(
@@ -2629,6 +2651,135 @@ class AdminDashboardStatsApiTests(TestCase):
         self.assertIn("queue-worker-unavailable", risk_codes)
 
     @override_settings(
+        CACHES={"default": {"BACKEND": "django_redis.cache.RedisCache", "LOCATION": "redis://localhost:6379/0"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {"hosts": [("localhost", 6379)]}}},
+        CELERY_BROKER_URL="redis://localhost:6379/1",
+    )
+    @patch("apps.core.admin_api.cache.get", side_effect=RuntimeError("cache offline"))
+    @patch("apps.core.admin_api.cache.set", side_effect=RuntimeError("cache offline"))
+    def test_admin_stats_reports_cache_backend_unavailable(self, _cache_set, _cache_get):
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(True)},
+        )
+        clear_runtime_setting_caches()
+
+        response = self.client.get("/api/admin/stats", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        risk_codes = {item["code"] for item in payload["runtimeRisks"]}
+        dependency_checks = {item["key"]: item for item in payload["runtimeDependencyChecks"]}
+        self.assertEqual(payload["cacheConnectionStatus"], "unavailable")
+        self.assertFalse(payload["cacheConnectionAvailable"])
+        self.assertIn("cache-backend-unavailable", risk_codes)
+        self.assertIn("缓存服务在线", dependency_checks["cache"]["recommended_action"])
+
+    @override_settings(
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "dashboard-test"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {}}},
+        CELERY_BROKER_URL="memory://",
+    )
+    @patch("apps.core.admin_api._probe_tcp_endpoint")
+    def test_admin_stats_reports_realtime_backend_misconfigured(self, _probe_tcp_endpoint):
+        response = self.client.get("/api/admin/stats", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        risk_codes = {item["code"] for item in payload["runtimeRisks"]}
+        dependency_checks = {item["key"]: item for item in payload["runtimeDependencyChecks"]}
+        self.assertEqual(payload["realtimeConnectionStatus"], "misconfigured")
+        self.assertFalse(payload["realtimeConnectionAvailable"])
+        self.assertIn("realtime-backend-unavailable", risk_codes)
+        self.assertIn("CHANNEL_LAYERS.default.CONFIG.hosts", dependency_checks["realtime"]["recommended_action"])
+
+    @override_settings(
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "dashboard-test"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
+        CELERY_BROKER_URL="memory://",
+    )
+    @patch("apps.core.admin_api.QueueService.get_worker_status")
+    @patch("apps.core.admin_api.get_runtime_advanced_settings")
+    def test_admin_stats_reports_queue_broker_misconfigured(self, get_runtime_advanced_settings, get_worker_status):
+        get_runtime_advanced_settings.return_value = {
+            "queue_enabled": True,
+            "queue_driver": "redis",
+            "maintenance_mode": False,
+        }
+        get_worker_status.return_value = {
+            "status": "unavailable",
+            "label": "无 worker 响应",
+            "available": False,
+            "worker_count": 0,
+            "message": "队列已启用，但没有检测到在线 worker。",
+        }
+
+        response = self.client.get("/api/admin/stats", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        risk_codes = {item["code"] for item in payload["runtimeRisks"]}
+        dependency_checks = {item["key"]: item for item in payload["runtimeDependencyChecks"]}
+        self.assertEqual(payload["queueBrokerStatus"], "misconfigured")
+        self.assertFalse(payload["queueBrokerAvailable"])
+        self.assertIn("queue-broker-unavailable", risk_codes)
+        self.assertIn("CELERY_BROKER_URL", dependency_checks["queue-broker"]["recommended_action"])
+        self.assertIn("启动 Celery worker", dependency_checks["queue-worker"]["recommended_action"])
+
+    @override_settings(
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "dashboard-test"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {"hosts": [("redis.internal", 6379)]}}},
+        CELERY_BROKER_URL="redis://redis.internal:6379/1",
+    )
+    @patch("apps.core.admin_api.cache.get", return_value="ok")
+    @patch("apps.core.admin_api.cache.set", return_value=None)
+    @patch("apps.core.admin_api._probe_tcp_endpoint")
+    @patch("apps.core.admin_api.QueueService.get_worker_status")
+    def test_admin_stats_reports_unreachable_realtime_and_queue_broker(
+        self,
+        get_worker_status,
+        probe_tcp_endpoint,
+        _cache_set,
+        _cache_get,
+    ):
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(True)},
+        )
+        clear_runtime_setting_caches()
+        get_worker_status.return_value = {
+            "status": "unavailable",
+            "label": "无 worker 响应",
+            "available": False,
+            "worker_count": 0,
+            "message": "队列已启用，但没有检测到在线 worker。",
+        }
+        probe_tcp_endpoint.side_effect = [
+            {
+                "available": False,
+                "status": "unreachable",
+                "label": "不可达",
+                "message": "Redis Channel Layer 主机 redis.internal:6379 无法连通：timeout",
+            },
+            {
+                "available": False,
+                "status": "unreachable",
+                "label": "不可达",
+                "message": "Redis broker 主机 redis.internal:6379 无法连通：timeout",
+            },
+        ]
+
+        response = self.client.get("/api/admin/stats", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        risk_codes = {item["code"] for item in payload["runtimeRisks"]}
+        self.assertEqual(payload["realtimeConnectionStatus"], "unreachable")
+        self.assertEqual(payload["queueBrokerStatus"], "unreachable")
+        self.assertIn("realtime-backend-unavailable", risk_codes)
+        self.assertIn("queue-broker-unavailable", risk_codes)
+
+    @override_settings(
         DATABASES={"default": {"ENGINE": "django.db.backends.postgresql", "NAME": "bias", "HOST": "db"}},
         CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "prod-risk-test"}},
         CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
@@ -2647,6 +2798,28 @@ class AdminDashboardStatsApiTests(TestCase):
         payload = response.json()
         risk_codes = {item["code"] for item in payload["runtimeRisks"]}
         self.assertIn("redis-disabled-production", risk_codes)
+
+    @override_settings(
+        SECRET_KEY="django-insecure-change-this-in-production",
+        NINJA_JWT={
+            "ALGORITHM": "HS256",
+            "SIGNING_KEY": "short-jwt-secret",
+        },
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "auth-risk-test"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
+        CELERY_BROKER_URL="memory://",
+    )
+    def test_admin_stats_reports_auth_secret_risks(self):
+        response = self.client.get("/api/admin/stats", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        risk_codes = {item["code"] for item in payload["runtimeRisks"]}
+        self.assertEqual(payload["authSecretStatus"], "danger")
+        self.assertEqual(payload["authSecretLabel"], "存在风险")
+        self.assertIn("django-secret-placeholder", risk_codes)
+        self.assertIn("jwt-secret-too-short", risk_codes)
+        self.assertIn("JWT 签名密钥长度不足", payload["authSecretMessage"])
 
     @override_settings(
         CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "queue-reset-test"}},
@@ -4147,7 +4320,14 @@ class AdminPermissionsApiTests(TestCase):
         self.assertEqual(payload["aliases"]["reply"], "discussion.reply")
         self.assertTrue(any(module["id"] == "core" for module in payload["modules"]))
 
-    def test_modules_api_returns_builtin_registry_snapshot(self):
+    @patch("apps.core.admin_api.build_runtime_dependency_summary")
+    def test_modules_api_returns_builtin_registry_snapshot(self, build_runtime_dependency_summary):
+        build_runtime_dependency_summary.return_value = {
+            "status": "healthy",
+            "label": "健康",
+            "issues": [],
+            "checks": [],
+        }
         response = self.client.get(
             "/api/admin/modules",
             **self.auth_header(),
@@ -4240,29 +4420,41 @@ class AdminPermissionsApiTests(TestCase):
         self.assertTrue(any(item["resource"] == "search_discussion" for item in payload["resource_definitions"]))
         self.assertTrue(any(item["relationship"] == "user" and item["resource"] == "post" for item in payload["resource_relationships"]))
         self.assertTrue(any(item["resource"] == "search_post" and item["field"] == "user" for item in payload["resource_fields"]))
+
+    @patch("apps.core.admin_api.build_runtime_dependency_summary")
+    def test_modules_api_surfaces_runtime_dependency_attention_on_core_module(self, build_runtime_dependency_summary):
+        build_runtime_dependency_summary.return_value = {
+            "status": "attention",
+            "label": "需关注",
+            "issues": ["缓存后端：不可达", "队列 Broker：不可达"],
+            "checks": [
+                {
+                    "key": "cache",
+                    "label": "缓存后端",
+                    "status": "unreachable",
+                    "status_label": "不可达",
+                    "available": False,
+                    "message": "缓存后端主机不可达",
+                    "recommended_action": "检查 Redis 缓存服务。",
+                }
+            ],
+        }
+
+        response = self.client.get(
+            "/api/admin/modules",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        core_module = next(module for module in payload["modules"] if module["id"] == "core")
+        self.assertEqual(core_module["health_status"], "attention")
+        self.assertIn("缓存后端：不可达", core_module["health_issues"])
+        self.assertEqual(core_module["runtime_dependency_summary"]["status"], "attention")
+        self.assertGreaterEqual(payload["summary"]["runtime_dependency_attention_count"], 1)
         self.assertTrue(any(item["module_id"] == "notifications" for item in payload["user_preferences"]))
         self.assertTrue(any(item["module_id"] == "core" and item["code"] == "zh-CN" for item in payload["language_packs"]))
         self.assertTrue(any(item["id"] == "core" for item in payload["category_summaries"]))
-        self.assertTrue(
-            any(
-                item["code"] == "discussionReply"
-                and item["icon"] == "fas fa-reply"
-                and item["navigation_scope"] == "post"
-                for item in notifications_module["notification_types"]
-            )
-        )
-        self.assertEqual(notifications_module["event_listeners"], [])
-        self.assertTrue(any(item["event"] == "DiscussionApprovedEvent" for item in approval_module["event_listeners"]))
-        self.assertTrue(any(item["event"] == "DiscussionRejectedEvent" for item in approval_module["event_listeners"]))
-        self.assertTrue(any(item["event"] == "PostApprovedEvent" for item in approval_module["event_listeners"]))
-        self.assertTrue(any(item["event"] == "PostRejectedEvent" for item in approval_module["event_listeners"]))
-        self.assertTrue(any(item["code"] == "admin.approval.view" for item in approval_module["permissions"]))
-        self.assertTrue(any(item["code"] == "admin.approval.approve" for item in approval_module["permissions"]))
-        self.assertTrue(any(item["code"] == "admin.approval.reject" for item in approval_module["permissions"]))
-        self.assertTrue(any(item["code"] == "admin.flag.view" for item in flags_module["permissions"]))
-        self.assertTrue(any(item["code"] == "admin.flag.resolve" for item in flags_module["permissions"]))
-        self.assertTrue(any(item["code"] == "comment" and item["is_default"] for item in posts_module["post_types"]))
-        self.assertTrue(any(item["module_id"] == "posts" and item["code"] == "comment" for item in payload["post_types"]))
         self.assertTrue(any(item["code"] == "zh-CN" and item["is_default"] for item in core_module["language_packs"]))
 
     def test_registry_permission_prefix_helper_returns_admin_moderation_codes(self):

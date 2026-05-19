@@ -54,18 +54,34 @@ class DiscussionApiTests(TestCase):
         )
 
         mocked_bus = Mock()
-        with patch("apps.discussions.services.get_forum_event_bus", return_value=mocked_bus):
-            DiscussionService.update_discussion(
-                discussion_id=discussion.id,
-                user=self.author,
-                tag_ids=[tag_b.id],
-            )
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True):
+                DiscussionService.update_discussion(
+                    discussion_id=discussion.id,
+                    user=self.author,
+                    tag_ids=[tag_b.id],
+                )
 
         events = [call.args[0] for call in mocked_bus.dispatch.call_args_list]
         tag_refresh_event = next(
             event for event in events if isinstance(event, TagStatsRefreshRequestedEvent)
         )
         self.assertEqual(tag_refresh_event.tag_ids, tuple(sorted((tag_a.id, tag_b.id))))
+
+    def test_create_discussion_dispatches_created_event_after_commit(self):
+        mocked_bus = Mock()
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                discussion = DiscussionService.create_discussion(
+                    title="After commit discussion event",
+                    content="Initial post",
+                    user=self.author,
+                )
+
+        self.assertEqual(len(callbacks), 1)
+        event = mocked_bus.dispatch.call_args.args[0]
+        self.assertEqual(event.discussion_id, discussion.id)
+
 
     def test_update_discussion_dispatches_discussion_tagged_event_with_all_affected_tag_ids(self):
         parent_tag = Tag.objects.create(name="父标签", slug="parent-tag", color="#3498db")
@@ -89,12 +105,13 @@ class DiscussionApiTests(TestCase):
         )
 
         mocked_bus = Mock()
-        with patch("apps.discussions.services.get_forum_event_bus", return_value=mocked_bus):
-            DiscussionService.update_discussion(
-                discussion_id=discussion.id,
-                user=self.author,
-                tag_ids=[parent_tag.id, new_child_tag.id],
-            )
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True):
+                DiscussionService.update_discussion(
+                    discussion_id=discussion.id,
+                    user=self.author,
+                    tag_ids=[parent_tag.id, new_child_tag.id],
+                )
 
         events = [call.args[0] for call in mocked_bus.dispatch.call_args_list]
         tagged_event = next(
@@ -104,6 +121,28 @@ class DiscussionApiTests(TestCase):
             tagged_event.tag_ids,
             tuple(sorted((parent_tag.id, old_child_tag.id, new_child_tag.id))),
         )
+
+    def test_approve_discussion_dispatches_event_after_commit(self):
+        admin = User.objects.create_superuser(
+            username="discussion-approver",
+            email="discussion-approver@example.com",
+            password="password123",
+        )
+        discussion = DiscussionService.create_discussion(
+            title="Pending discussion",
+            content="Needs approval",
+            user=self.author,
+        )
+        discussion.approval_status = Discussion.APPROVAL_PENDING
+        discussion.save(update_fields=["approval_status"])
+
+        mocked_bus = Mock()
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                DiscussionService.approve_discussion(discussion, admin, note="ok")
+
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(mocked_bus.dispatch.call_args.args[0].discussion_id, discussion.id)
 
     def test_create_discussion_accepts_bearer_token(self):
         response = self.client.post(
@@ -720,7 +759,8 @@ class DiscussionApiTests(TestCase):
             email="approval-admin-visible@example.com",
             password="password123",
         )
-        DiscussionService.approve_discussion(discussion, admin, note="已通过审核")
+        with self.captureOnCommitCallbacks(execute=True):
+            DiscussionService.approve_discussion(discussion, admin, note="已通过审核")
 
         discussion.refresh_from_db()
         self.assertEqual(discussion.approval_status, Discussion.APPROVAL_APPROVED)
@@ -808,7 +848,8 @@ class DiscussionApiTests(TestCase):
             password="password123",
         )
 
-        DiscussionService.reject_discussion(discussion, admin, note="内容不符合要求")
+        with self.captureOnCommitCallbacks(execute=True):
+            DiscussionService.reject_discussion(discussion, admin, note="内容不符合要求")
 
         posts_response = self.client.get(
             f"/api/discussions/{discussion.id}/posts",
@@ -838,14 +879,15 @@ class DiscussionApiTests(TestCase):
         )
         DiscussionService.reject_discussion(discussion, admin, note="请补充细节")
 
-        response = self.client.patch(
-            f"/api/discussions/{discussion.id}",
-            data=json.dumps({
-                "content": "Updated content for review",
-            }),
-            content_type="application/json",
-            **self.auth_header(self.author),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                f"/api/discussions/{discussion.id}",
+                data=json.dumps({
+                    "content": "Updated content for review",
+                }),
+                content_type="application/json",
+                **self.auth_header(self.author),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         posts_response = self.client.get(
@@ -1022,14 +1064,15 @@ class DiscussionApiTests(TestCase):
             user=self.author,
         )
 
-        response = self.client.patch(
-            f"/api/discussions/{discussion.id}",
-            data=json.dumps({
-                "title": "Updated title",
-            }),
-            content_type="application/json",
-            **self.auth_header(self.author),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                f"/api/discussions/{discussion.id}",
+                data=json.dumps({
+                    "title": "Updated title",
+                }),
+                content_type="application/json",
+                **self.auth_header(self.author),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         discussion.refresh_from_db()
@@ -1066,10 +1109,11 @@ class DiscussionApiTests(TestCase):
             password="password123",
         )
 
-        response = self.client.post(
-            f"/api/discussions/{discussion.id}/lock",
-            **self.auth_header(admin),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"/api/discussions/{discussion.id}/lock",
+                **self.auth_header(admin),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         discussion.refresh_from_db()
@@ -1120,14 +1164,15 @@ class DiscussionApiTests(TestCase):
             password="password123",
         )
 
-        response = self.client.patch(
-            f"/api/discussions/{discussion.id}",
-            data=json.dumps({
-                "is_locked": True,
-            }),
-            content_type="application/json",
-            **self.auth_header(admin),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                f"/api/discussions/{discussion.id}",
+                data=json.dumps({
+                    "is_locked": True,
+                }),
+                content_type="application/json",
+                **self.auth_header(admin),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         discussion.refresh_from_db()
@@ -1160,10 +1205,11 @@ class DiscussionApiTests(TestCase):
             password="password123",
         )
 
-        response = self.client.post(
-            f"/api/discussions/{discussion.id}/pin",
-            **self.auth_header(admin),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"/api/discussions/{discussion.id}/pin",
+                **self.auth_header(admin),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         discussion.refresh_from_db()
@@ -1202,14 +1248,15 @@ class DiscussionApiTests(TestCase):
             tag_ids=[original_tag.id],
         )
 
-        response = self.client.patch(
-            f"/api/discussions/{discussion.id}",
-            data=json.dumps({
-                "tag_ids": [new_tag.id],
-            }),
-            content_type="application/json",
-            **self.auth_header(self.author),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                f"/api/discussions/{discussion.id}",
+                data=json.dumps({
+                    "tag_ids": [new_tag.id],
+                }),
+                content_type="application/json",
+                **self.auth_header(self.author),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         tagged_post = Post.objects.get(discussion=discussion, number=2)
@@ -1239,10 +1286,11 @@ class DiscussionApiTests(TestCase):
             password="password123",
         )
 
-        response = self.client.post(
-            f"/api/discussions/{discussion.id}/hide",
-            **self.auth_header(admin),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"/api/discussions/{discussion.id}/hide",
+                **self.auth_header(admin),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         hidden_post = Post.objects.get(discussion=discussion, number=2)

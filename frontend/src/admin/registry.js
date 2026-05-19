@@ -1136,8 +1136,14 @@ registerAdminDashboardStatusBadge({
   key: 'redis-status',
   order: 30,
   resolve: ({ stats, copy }) => ({
-    text: stats?.redisEnabled ? (copy?.redisEnabledText || 'Redis 已启用') : (copy?.redisDisabledText || 'Redis 未启用'),
-    tone: stats?.redisEnabled ? 'success' : 'neutral',
+    text: !stats?.redisEnabled
+      ? (copy?.redisDisabledText || 'Redis 未启用')
+      : (stats?.cacheConnectionAvailable === false || stats?.queueBrokerAvailable === false
+          ? (copy?.redisUnavailableText || 'Redis 已配置但不可用')
+          : (copy?.redisEnabledText || 'Redis 已启用')),
+    tone: !stats?.redisEnabled
+      ? 'neutral'
+      : (stats?.cacheConnectionAvailable === false || stats?.queueBrokerAvailable === false ? 'warning' : 'success'),
   }),
 })
 
@@ -1216,6 +1222,16 @@ registerAdminDashboardStatusItem({
   }),
 })
 
+registerAdminDashboardStatusItem({
+  key: 'auth-secret-status',
+  order: 80,
+  resolve: ({ stats, copy }) => ({
+    label: copy?.authSecretStatusLabel || '认证密钥',
+    value: stats?.authSecretLabel || copy?.emptyValueText || '-',
+    help: stats?.authSecretMessage || '',
+  }),
+})
+
 registerAdminDashboardAlert({
   key: 'runtime-risks',
   order: 10,
@@ -1291,7 +1307,9 @@ registerAdminDashboardCopy({
     maintenanceModeOffText: '维护模式关闭',
     redisEnabledText: 'Redis 已启用',
     redisDisabledText: 'Redis 未启用',
+    redisUnavailableText: 'Redis 已配置但不可用',
     queueWorkerUndetectedText: '队列未检测',
+    authSecretStatusLabel: '认证密钥',
     usersStatLabel: '用户总数',
     discussionsStatLabel: '讨论总数',
     postsStatLabel: '帖子总数',
@@ -1330,6 +1348,9 @@ registerAdminDashboardConfig({
       queueWorkerAvailable: false,
       queueWorkerCount: 0,
       queueWorkerMessage: '',
+      authSecretStatus: 'healthy',
+      authSecretLabel: '健康',
+      authSecretMessage: '',
       queueMetrics: {
         enqueued_count: 0,
         sync_count: 0,
@@ -1340,6 +1361,18 @@ registerAdminDashboardConfig({
       },
       realtimeDriver: null,
       redisEnabled: false,
+      cacheConnectionStatus: 'disabled',
+      cacheConnectionLabel: '',
+      cacheConnectionAvailable: null,
+      cacheConnectionMessage: '',
+      realtimeConnectionStatus: 'disabled',
+      realtimeConnectionLabel: '',
+      realtimeConnectionAvailable: null,
+      realtimeConnectionMessage: '',
+      queueBrokerStatus: 'disabled',
+      queueBrokerLabel: '',
+      queueBrokerAvailable: null,
+      queueBrokerMessage: '',
       runtimeRisks: [],
       debugMode: false,
       maintenanceMode: false,
@@ -1422,6 +1455,9 @@ registerAdminModulesPageCopy({
     loadingText: '加载模块信息中...',
     dependencyAttentionTitle: '依赖关注项',
     dependencyAttentionDescription: '模块依赖状态会直接影响后续扩展启用与注册结果，这里优先暴露需要处理的项。',
+    runtimeDependencyTitle: '运行依赖健康',
+    runtimeDependencyDescription: '这里汇总模块运行时依赖的真实健康状态，优先暴露配置已存在但服务不可达的风险。',
+    runtimeDependencyWarningLabel: '需关注',
     missingDependenciesPrefix: '缺少依赖',
     disabledDependenciesPrefix: '未启用依赖',
     categorySummaryTitle: '分类概览',
@@ -1573,6 +1609,7 @@ registerAdminModulesPageConfig({
       discussion_list_filter_count: '列表过滤',
       settings_group_count: '设置组',
       health_attention_count: '健康关注',
+      runtime_dependency_attention_count: '运行依赖关注',
     },
     moduleSummaryLabels: {
       permissions: '权限数',
@@ -1904,6 +1941,9 @@ registerAdminAdvancedPageCopy({
     immediateEffectDescription: '`maintenance_mode`、`maintenance_message`、`cache_lifetime`、`log_queries` 会在保存后直接影响请求层行为。',
     deploymentRequiredTitle: '需额外部署或重启',
     deploymentRequiredDescription: '`debug_mode` 由 Django 配置文件或环境变量控制；`queue_enabled` / `queue_driver` 会控制已接入队列入口的任务，新 worker 配置需重启服务后生效。',
+    dependencyHealthTitle: '依赖健康',
+    dependencyHealthHelpText: '查看缓存、实时层、队列 broker 与 worker 的当前运行状态。',
+    dependencyActionLabel: '建议处理',
     cacheSectionTitle: '缓存设置',
     cacheDriverLabel: '缓存驱动',
     cacheDriverHelpText: '选择缓存存储方式',
@@ -2051,6 +2091,7 @@ registerAdminAdvancedPageConfig({
       storage_imagebed_form_data: '{}',
       storage_imagebed_url_path: 'data.url',
     },
+    defaultRuntimeDependencyChecks: [],
     placeholders: {
       cacheLifetime: '3600',
       turnstileSiteKey: '0x4AAAA...',

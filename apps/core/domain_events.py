@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from typing import Callable, DefaultDict, Generic, List, TypeVar
+from django.db import transaction
 
 
 class DomainEvent:
@@ -36,3 +37,7 @@ def get_forum_event_bus() -> DomainEventBus:
     if _forum_event_bus is None:
         _forum_event_bus = DomainEventBus()
     return _forum_event_bus
+
+
+def dispatch_forum_event_after_commit(event: DomainEvent) -> None:
+    transaction.on_commit(lambda: get_forum_event_bus().dispatch(event))

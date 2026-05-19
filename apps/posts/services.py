@@ -10,7 +10,7 @@ from django.db.models import Q, F, Count, Exists, OuterRef, Prefetch
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from apps.core.db import sqlite_write_retry
-from apps.core.domain_events import get_forum_event_bus
+from apps.core.domain_events import dispatch_forum_event_after_commit, get_forum_event_bus
 from apps.core.forum_events import (
     DiscussionTagStatsRefreshEvent,
     PostApprovedEvent,
@@ -235,7 +235,7 @@ class PostService:
                 # 处理@提及
                 PostService._process_mentions(post, content)
 
-                get_forum_event_bus().dispatch(
+                dispatch_forum_event_after_commit(
                     PostCreatedEvent(
                         post_id=post.id,
                         discussion_id=discussion.id,
@@ -534,7 +534,7 @@ class PostService:
             PostService._process_mentions(post, content)
 
             if previous_approval_status:
-                get_forum_event_bus().dispatch(
+                dispatch_forum_event_after_commit(
                     PostResubmittedEvent(
                         post_id=post.id,
                         discussion_id=post.discussion_id,
@@ -619,7 +619,7 @@ class PostService:
                     post.user.comment_count = F("comment_count") + delta
                     post.user.save(update_fields=["comment_count"])
 
-            get_forum_event_bus().dispatch(
+            dispatch_forum_event_after_commit(
                 PostHiddenEvent(
                     post_id=post.id,
                     discussion_id=post.discussion_id,
@@ -708,7 +708,7 @@ class PostService:
             "last_posted_at",
             "last_posted_user",
         ])
-        get_forum_event_bus().dispatch(
+        dispatch_forum_event_after_commit(
             DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
         )
         return discussion
@@ -743,7 +743,7 @@ class PostService:
         except IntegrityError:
             raise ValueError("已经点赞过了")
 
-        get_forum_event_bus().dispatch(
+        dispatch_forum_event_after_commit(
             PostLikedEvent(
                 post_id=post.id,
                 discussion_id=post.discussion_id,
@@ -891,7 +891,7 @@ class PostService:
 
                 PostService._process_mentions(post, post.content)
 
-                get_forum_event_bus().dispatch(
+                dispatch_forum_event_after_commit(
                     PostApprovedEvent(
                         post_id=post.id,
                         discussion_id=discussion.id,
@@ -902,7 +902,7 @@ class PostService:
                     )
                 )
             else:
-                get_forum_event_bus().dispatch(
+                dispatch_forum_event_after_commit(
                     DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
                 )
 
@@ -937,7 +937,7 @@ class PostService:
                     post.user.save(update_fields=['comment_count'])
 
             if previous_status != Post.APPROVAL_REJECTED:
-                get_forum_event_bus().dispatch(
+                dispatch_forum_event_after_commit(
                     PostRejectedEvent(
                         post_id=post.id,
                         discussion_id=post.discussion_id,
@@ -1030,7 +1030,7 @@ class PostService:
                 mentions_user=mentioned_user
             )
 
-            get_forum_event_bus().dispatch(
+            dispatch_forum_event_after_commit(
                 UserMentionedEvent(
                     post_id=post.id,
                     discussion_id=post.discussion_id,

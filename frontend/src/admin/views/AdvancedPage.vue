@@ -21,6 +21,41 @@
       </div>
 
       <div class="Form-section">
+        <h3 class="Section-title">{{ advancedCopy?.dependencyHealthTitle || '依赖健康' }}</h3>
+
+        <div class="RuntimeSnapshot">
+          <div class="RuntimeSnapshot-grid">
+            <div
+              v-for="item in runtimeDependencyChecks"
+              :key="item.key"
+              class="RuntimeSnapshot-item"
+            >
+              <div class="RuntimeSnapshot-label">{{ item.label }}</div>
+              <div class="RuntimeSnapshot-value">{{ item.status_label || advancedCopy?.searchStatusLoadingText || '加载中...' }}</div>
+              <p class="RuntimeSnapshot-help">
+                {{ item.message || advancedCopy?.dependencyHealthHelpText || '查看当前依赖运行状态与修复建议。' }}
+              </p>
+            </div>
+          </div>
+
+          <div
+            v-if="runtimeDependencyActions.length > 0"
+            class="RuntimeSnapshot-tags"
+          >
+            <span class="RuntimeSnapshot-tagsLabel">{{ advancedCopy?.dependencyActionLabel || '建议处理' }}</span>
+            <div
+              v-for="item in runtimeDependencyActions"
+              :key="item.key"
+              class="RuntimeRemediation"
+            >
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.recommended_action }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="Form-section">
         <h3 class="Section-title">{{ advancedCopy?.cacheSectionTitle || '缓存设置' }}</h3>
 
         <div class="Form-group">
@@ -796,6 +831,7 @@ const advancedActionMeta = computed(() => getAdminAdvancedPageActionMeta())
 const settings = ref({})
 const searchIndexStatus = ref(null)
 const searchIndexStatusError = ref('')
+const adminStats = ref(null)
 
 const saving = ref(false)
 const clearing = ref(false)
@@ -808,6 +844,14 @@ const queueDriverOptions = computed(() => advancedConfig.value?.queueDriverOptio
 const humanVerificationProviderOptions = computed(() => advancedConfig.value?.humanVerificationProviderOptions || [])
 const storageDriverOptions = computed(() => advancedConfig.value?.storageDriverOptions || [])
 const imagebedMethodOptions = computed(() => advancedConfig.value?.imagebedMethodOptions || [])
+const runtimeDependencyChecks = computed(() => (
+  Array.isArray(adminStats.value?.runtimeDependencyChecks)
+    ? adminStats.value.runtimeDependencyChecks
+    : (advancedConfig.value?.defaultRuntimeDependencyChecks || [])
+))
+const runtimeDependencyActions = computed(() => (
+  runtimeDependencyChecks.value.filter(item => item?.recommended_action)
+))
 const turnstileMisconfigured = computed(() => (
   settings.value.auth_human_verification_provider === 'turnstile'
   && (!settings.value.auth_turnstile_site_key || !settings.value.auth_turnstile_secret_key)
@@ -871,6 +915,7 @@ onMounted(async () => {
   settings.value = defaultSettings()
   await Promise.all([
     loadAdvancedSettings(),
+    loadAdminStats(),
     loadSearchIndexStatus(),
   ])
 })
@@ -894,6 +939,14 @@ async function loadSearchIndexStatus() {
     searchIndexStatusError.value = error.response?.data?.error
       || advancedActionMeta.value?.loadSearchStatusErrorText
       || '加载搜索索引状态失败，请稍后重试'
+  }
+}
+
+async function loadAdminStats() {
+  try {
+    adminStats.value = await api.get('/admin/stats')
+  } catch (error) {
+    console.error('加载后台运行状态失败:', error)
   }
 }
 
@@ -921,6 +974,7 @@ async function saveSettings() {
       settings.value = { ...settings.value, ...response.settings }
     }
     loadedSettingsSnapshot.value = createSettingsSnapshot(settings.value)
+    await loadAdminStats()
     showSaveSuccess()
   } catch (error) {
     console.error('保存高级设置失败:', error)
@@ -945,6 +999,7 @@ async function clearCache() {
   clearing.value = true
   try {
     await api.post('/admin/cache/clear')
+    await loadAdminStats()
     await modalStore.alert({
       title: advancedActionMeta.value?.clearCacheSuccessTitle || '缓存已清除',
       message: advancedActionMeta.value?.clearCacheSuccessMessage || '运行时缓存已成功清理。',
@@ -976,6 +1031,7 @@ async function rebuildSearchIndexes() {
   rebuildingSearchIndexes.value = true
   try {
     const response = await api.post('/admin/search-indexes/rebuild')
+    await loadAdminStats()
     await loadSearchIndexStatus()
     await modalStore.alert({
       title: advancedActionMeta.value?.rebuildSearchSuccessTitle || '搜索索引已重建',

@@ -55,8 +55,8 @@ class SiteBootstrapConfig:
     installed: bool = False
     source: str = "none"
     debug: bool = False
-    secret_key: str = "django-insecure-change-this-in-production"
-    jwt_secret_key: str = "jwt-secret-key-change-this"
+    secret_key: str = "bias-dev-secret-key-change-this-32bytes-min"
+    jwt_secret_key: str = "bias-dev-jwt-secret-key-change-this-32b"
     jwt_algorithm: str = "HS256"
     jwt_access_token_lifetime: int = 900
     jwt_refresh_token_lifetime: int = 86400
@@ -213,8 +213,8 @@ def _load_env_bootstrap() -> SiteBootstrapConfig | None:
         installed=True,
         source="env",
         debug=_env_flag(os.getenv("DEBUG"), default=False),
-        secret_key=_env_first("SECRET_KEY") or "django-insecure-change-this-in-production",
-        jwt_secret_key=_env_first("JWT_SECRET_KEY") or _env_first("SECRET_KEY") or "jwt-secret-key-change-this",
+        secret_key=_env_first("SECRET_KEY") or "bias-dev-secret-key-change-this-32bytes-min",
+        jwt_secret_key=_env_first("JWT_SECRET_KEY") or _env_first("SECRET_KEY") or "bias-dev-jwt-secret-key-change-this-32b",
         jwt_algorithm=_env_first("JWT_ALGORITHM") or "HS256",
         jwt_access_token_lifetime=int(_env_first("JWT_ACCESS_TOKEN_LIFETIME") or 900),
         jwt_refresh_token_lifetime=int(_env_first("JWT_REFRESH_TOKEN_LIFETIME") or 86400),

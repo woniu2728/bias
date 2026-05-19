@@ -48,23 +48,25 @@ class NotificationServiceTests(TestCase):
             content="Initial post",
             user=self.author,
         )
-        self.initial_reply = PostService.create_post(
-            discussion_id=self.discussion.id,
-            content="First reply",
-            user=self.participant,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            self.initial_reply = PostService.create_post(
+                discussion_id=self.discussion.id,
+                content="First reply",
+                user=self.participant,
+            )
 
     def tearDown(self):
         clear_runtime_setting_caches()
         super().tearDown()
 
     def test_reply_to_post_creates_post_reply_notification(self):
-        PostService.create_post(
-            discussion_id=self.discussion.id,
-            content="@author Thanks for the update",
-            user=self.replier,
-            reply_to_post_id=self.initial_reply.id,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.create_post(
+                discussion_id=self.discussion.id,
+                content="@author Thanks for the update",
+                user=self.replier,
+                reply_to_post_id=self.initial_reply.id,
+            )
 
         notification = Notification.objects.filter(
             user=self.participant,
@@ -77,7 +79,8 @@ class NotificationServiceTests(TestCase):
         self.assertIn("post_number", notification.data)
 
     def test_like_notification_contains_post_number(self):
-        PostService.like_post(self.initial_reply.id, self.replier)
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.like_post(self.initial_reply.id, self.replier)
 
         notification = Notification.objects.get(
             user=self.participant,
@@ -90,11 +93,12 @@ class NotificationServiceTests(TestCase):
         self.assertEqual(notification.data["post_number"], self.initial_reply.number)
 
     def test_mention_notification_contains_post_number(self):
-        post = PostService.create_post(
-            discussion_id=self.discussion.id,
-            content=f"Hello @{self.mentioned.username}",
-            user=self.replier,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            post = PostService.create_post(
+                discussion_id=self.discussion.id,
+                content=f"Hello @{self.mentioned.username}",
+                user=self.replier,
+            )
 
         notification = Notification.objects.get(
             user=self.mentioned,
@@ -110,12 +114,13 @@ class NotificationServiceTests(TestCase):
         self.participant.preferences = {"notify_post_reply": False}
         self.participant.save(update_fields=["preferences"])
 
-        PostService.create_post(
-            discussion_id=self.discussion.id,
-            content="Reply without notify",
-            user=self.replier,
-            reply_to_post_id=self.initial_reply.id,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.create_post(
+                discussion_id=self.discussion.id,
+                content="Reply without notify",
+                user=self.replier,
+                reply_to_post_id=self.initial_reply.id,
+            )
 
         self.assertFalse(
             Notification.objects.filter(
@@ -128,7 +133,8 @@ class NotificationServiceTests(TestCase):
         self.participant.preferences = {"notify_post_liked": False}
         self.participant.save(update_fields=["preferences"])
 
-        PostService.like_post(self.initial_reply.id, self.replier)
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.like_post(self.initial_reply.id, self.replier)
 
         self.assertFalse(
             Notification.objects.filter(
@@ -142,11 +148,12 @@ class NotificationServiceTests(TestCase):
         self.mentioned.preferences = {"notify_user_mentioned": False}
         self.mentioned.save(update_fields=["preferences"])
 
-        PostService.create_post(
-            discussion_id=self.discussion.id,
-            content=f"Hello again @{self.mentioned.username}",
-            user=self.replier,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.create_post(
+                discussion_id=self.discussion.id,
+                content=f"Hello again @{self.mentioned.username}",
+                user=self.replier,
+            )
 
         self.assertFalse(
             Notification.objects.filter(
@@ -156,16 +163,18 @@ class NotificationServiceTests(TestCase):
         )
 
     def test_multiple_replies_in_same_discussion_create_multiple_notifications(self):
-        PostService.create_post(
-            discussion_id=self.discussion.id,
-            content="Second reply",
-            user=self.replier,
-        )
-        PostService.create_post(
-            discussion_id=self.discussion.id,
-            content="Third reply",
-            user=self.replier,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.create_post(
+                discussion_id=self.discussion.id,
+                content="Second reply",
+                user=self.replier,
+            )
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.create_post(
+                discussion_id=self.discussion.id,
+                content="Third reply",
+                user=self.replier,
+            )
 
         notifications = Notification.objects.filter(
             user=self.author,
@@ -188,11 +197,12 @@ class NotificationServiceTests(TestCase):
             is_email_confirmed=True,
         )
         DiscussionUser.objects.create(discussion=self.discussion, user=subscriber, is_subscribed=True)
-        new_post = PostService.create_post(
-            discussion_id=self.discussion.id,
-            content="Sync reply",
-            user=self.replier,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            new_post = PostService.create_post(
+                discussion_id=self.discussion.id,
+                content="Sync reply",
+                user=self.replier,
+            )
 
         with patch("apps.notifications.tasks.dispatch_notification_batch.delay") as delay:
             with patch("apps.notifications.services.NotificationService._send_websocket_notification") as websocket_send:
@@ -239,11 +249,12 @@ class NotificationServiceTests(TestCase):
         )
         DiscussionUser.objects.create(discussion=self.discussion, user=subscriber, is_subscribed=True)
         DiscussionUser.objects.create(discussion=self.discussion, user=muted, is_subscribed=True)
-        new_post = PostService.create_post(
-            discussion_id=self.discussion.id,
-            content="Bulk reply",
-            user=self.replier,
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            new_post = PostService.create_post(
+                discussion_id=self.discussion.id,
+                content="Bulk reply",
+                user=self.replier,
+            )
 
         with patch("apps.notifications.tasks.dispatch_notification_batch.delay") as delay:
             with self.captureOnCommitCallbacks(execute=True):

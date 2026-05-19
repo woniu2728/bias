@@ -179,12 +179,33 @@ class PostPaginationTests(TestCase):
         )
 
         mocked_bus = Mock()
-        with patch("apps.posts.services.get_forum_event_bus", return_value=mocked_bus):
-            PostService._refresh_discussion_approved_stats(discussion)
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True):
+                PostService._refresh_discussion_approved_stats(discussion)
 
         event = mocked_bus.dispatch.call_args.args[0]
         self.assertIsInstance(event, DiscussionTagStatsRefreshEvent)
         self.assertEqual(event.discussion_id, discussion.id)
+
+    def test_create_post_dispatches_created_event_after_commit(self):
+        discussion = DiscussionService.create_discussion(
+            title="After commit post discussion",
+            content="First post",
+            user=self.user,
+        )
+
+        mocked_bus = Mock()
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                post = PostService.create_post(
+                    discussion_id=discussion.id,
+                    content="Reply after commit",
+                    user=self.user,
+                )
+
+        self.assertEqual(len(callbacks), 1)
+        event = mocked_bus.dispatch.call_args.args[0]
+        self.assertEqual(event.post_id, post.id)
 
 
 class PostFlagApiTests(TestCase):
@@ -519,7 +540,8 @@ class PostFlagApiTests(TestCase):
         self.author.refresh_from_db()
         self.assertEqual(self.author.comment_count, 1)
 
-        hidden_post = PostService.set_hidden_state(self.post, self.admin, True)
+        with self.captureOnCommitCallbacks(execute=True):
+            hidden_post = PostService.set_hidden_state(self.post, self.admin, True)
 
         hidden_post.refresh_from_db()
         self.assertTrue(hidden_post.is_hidden)
@@ -760,7 +782,8 @@ class PostFlagApiTests(TestCase):
         pending_post = Post.objects.get(id=pending_post_id)
         self.assertEqual(pending_post.approval_status, Post.APPROVAL_PENDING)
 
-        PostService.approve_post(pending_post, self.admin, note="已通过审核")
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.approve_post(pending_post, self.admin, note="已通过审核")
 
         pending_post.refresh_from_db()
         self.assertEqual(pending_post.approval_status, Post.APPROVAL_APPROVED)
@@ -840,7 +863,8 @@ class PostFlagApiTests(TestCase):
             user=self.reporter,
         )
 
-        PostService.reject_post(pending_post, self.admin, note="回复质量不足")
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.reject_post(pending_post, self.admin, note="回复质量不足")
 
         posts_response = self.client.get(
             f"/api/discussions/{self.discussion.id}/posts",
@@ -865,14 +889,16 @@ class PostFlagApiTests(TestCase):
             content="被拒绝的回复",
             user=self.reporter,
         )
-        PostService.reject_post(rejected_post, self.admin, note="请补充更多细节")
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.reject_post(rejected_post, self.admin, note="请补充更多细节")
 
-        response = self.client.patch(
-            f"/api/posts/{rejected_post.id}",
-            data='{"content":"修改后的回复内容"}',
-            content_type="application/json",
-            **self.auth_header(),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                f"/api/posts/{rejected_post.id}",
+                data='{"content":"修改后的回复内容"}',
+                content_type="application/json",
+                **self.auth_header(),
+            )
         self.assertEqual(response.status_code, 200, response.content)
 
         posts_response = self.client.get(
@@ -1020,7 +1046,8 @@ class PostLikeTests(TestCase):
         )
 
     def test_duplicate_like_raises_value_error_not_integrity_error(self):
-        PostService.like_post(self.post.id, self.liker)
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.like_post(self.post.id, self.liker)
 
         with self.assertRaisesMessage(ValueError, "已经点赞过了"):
             PostService.like_post(self.post.id, self.liker)
@@ -1039,6 +1066,22 @@ class PostLikeTests(TestCase):
 
     def test_like_post_dispatches_domain_event_instead_of_direct_notification_call(self):
         with patch("apps.notifications.services.NotificationService.notify_post_liked") as notify_mock:
-            PostService.like_post(self.post.id, self.liker)
+            with self.captureOnCommitCallbacks(execute=True):
+                PostService.like_post(self.post.id, self.liker)
 
         notify_mock.assert_called_once_with(post_id=self.post.id, from_user=self.liker)
+
+    def test_like_post_dispatches_domain_event_after_commit(self):
+        with patch("apps.core.domain_events.get_forum_event_bus") as get_bus_mock:
+            bus_mock = Mock()
+            get_bus_mock.return_value = bus_mock
+
+            with self.captureOnCommitCallbacks() as callbacks:
+                PostService.like_post(self.post.id, self.liker)
+
+            self.assertEqual(len(callbacks), 1)
+            bus_mock.dispatch.assert_not_called()
+
+            callbacks[0]()
+
+        bus_mock.dispatch.assert_called_once()

@@ -8,7 +8,7 @@ from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from apps.core.db import sqlite_write_retry
-from apps.core.domain_events import get_forum_event_bus
+from apps.core.domain_events import dispatch_forum_event_after_commit, get_forum_event_bus
 from apps.core.forum_events import (
     DiscussionApprovedEvent,
     DiscussionCreatedEvent,
@@ -299,7 +299,7 @@ class DiscussionService:
                 is_subscribed=get_user_preference_value(user, 'follow_after_create', fallback=False),
             )
 
-            get_forum_event_bus().dispatch(
+            dispatch_forum_event_after_commit(
                 DiscussionCreatedEvent(
                     discussion_id=discussion.id,
                     actor_user_id=user.id,
@@ -674,7 +674,7 @@ class DiscussionService:
                 first_post.save(update_fields=[
                     'approval_status', 'approved_at', 'approved_by', 'approval_note', 'hidden_at', 'hidden_user'
                 ])
-                get_forum_event_bus().dispatch(
+                dispatch_forum_event_after_commit(
                     DiscussionResubmittedEvent(
                         discussion_id=discussion.id,
                         actor_user_id=user.id,
@@ -685,7 +685,7 @@ class DiscussionService:
             if should_persist_discussion:
                 discussion.save()
             if title is not None and title != previous_title:
-                get_forum_event_bus().dispatch(
+                dispatch_forum_event_after_commit(
                     DiscussionRenamedEvent(
                         discussion_id=discussion.id,
                         actor_user_id=user.id,
@@ -705,7 +705,7 @@ class DiscussionService:
                 added_tags = [name for name in current_tag_names if name not in previous_tag_names]
                 removed_tags = [name for name in previous_tag_names if name not in current_tag_names]
                 if added_tags or removed_tags:
-                    get_forum_event_bus().dispatch(
+                    dispatch_forum_event_after_commit(
                         DiscussionTaggedEvent(
                             discussion_id=discussion.id,
                             actor_user_id=user.id,
@@ -717,7 +717,7 @@ class DiscussionService:
             if is_hidden is not None or tag_ids is not None:
                 refreshed_tag_ids = set(previous_tag_ids) | set(discussion.discussion_tags.values_list('tag_id', flat=True))
                 if refreshed_tag_ids:
-                    get_forum_event_bus().dispatch(
+                    dispatch_forum_event_after_commit(
                         TagStatsRefreshRequestedEvent(tag_ids=tuple(sorted(refreshed_tag_ids)))
                     )
             return discussion
@@ -751,14 +751,14 @@ class DiscussionService:
                 for user_id, total in approved_reply_counts.items():
                     User.objects.filter(id=user_id).update(comment_count=F("comment_count") + (reply_delta * total))
 
-            get_forum_event_bus().dispatch(
+            dispatch_forum_event_after_commit(
                 DiscussionHiddenEvent(
                     discussion_id=discussion.id,
                     actor_user_id=user.id,
                     is_hidden=is_hidden,
                 )
             )
-            get_forum_event_bus().dispatch(
+            dispatch_forum_event_after_commit(
                 DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
             )
         return discussion
@@ -798,7 +798,7 @@ class DiscussionService:
                     User.objects.filter(id=user_id).update(comment_count=F("comment_count") + total)
 
             if not was_counted:
-                get_forum_event_bus().dispatch(
+                dispatch_forum_event_after_commit(
                     DiscussionApprovedEvent(
                         discussion_id=discussion.id,
                         admin_user_id=admin_user.id,
@@ -806,7 +806,7 @@ class DiscussionService:
                     )
                 )
             else:
-                get_forum_event_bus().dispatch(
+                dispatch_forum_event_after_commit(
                     DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
                 )
 
@@ -849,7 +849,7 @@ class DiscussionService:
                     User.objects.filter(id=user_id).update(comment_count=F("comment_count") - total)
 
             if previous_status != Discussion.APPROVAL_REJECTED:
-                get_forum_event_bus().dispatch(
+                dispatch_forum_event_after_commit(
                     DiscussionRejectedEvent(
                         discussion_id=discussion.id,
                         admin_user_id=admin_user.id,
@@ -857,7 +857,7 @@ class DiscussionService:
                         previous_status=previous_status,
                     )
                 )
-            get_forum_event_bus().dispatch(
+            dispatch_forum_event_after_commit(
                 DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
             )
 
@@ -932,7 +932,7 @@ class DiscussionService:
             discussion.delete()
 
             if tag_ids:
-                get_forum_event_bus().dispatch(
+                dispatch_forum_event_after_commit(
                     TagStatsRefreshRequestedEvent(tag_ids=tuple(sorted(tag_ids)))
                 )
 
@@ -955,15 +955,16 @@ class DiscussionService:
         if discussion.is_locked == is_locked:
             return discussion
 
-        discussion.is_locked = is_locked
-        discussion.save(update_fields=["is_locked"])
-        get_forum_event_bus().dispatch(
-            DiscussionLockedEvent(
-                discussion_id=discussion.id,
-                actor_user_id=actor.id,
-                is_locked=is_locked,
+        with transaction.atomic():
+            discussion.is_locked = is_locked
+            discussion.save(update_fields=["is_locked"])
+            dispatch_forum_event_after_commit(
+                DiscussionLockedEvent(
+                    discussion_id=discussion.id,
+                    actor_user_id=actor.id,
+                    is_locked=is_locked,
+                )
             )
-        )
         return discussion
 
     @staticmethod
@@ -974,15 +975,16 @@ class DiscussionService:
         if discussion.is_sticky == is_sticky:
             return discussion
 
-        discussion.is_sticky = is_sticky
-        discussion.save(update_fields=["is_sticky"])
-        get_forum_event_bus().dispatch(
-            DiscussionStickyChangedEvent(
-                discussion_id=discussion.id,
-                actor_user_id=actor.id,
-                is_sticky=is_sticky,
+        with transaction.atomic():
+            discussion.is_sticky = is_sticky
+            discussion.save(update_fields=["is_sticky"])
+            dispatch_forum_event_after_commit(
+                DiscussionStickyChangedEvent(
+                    discussion_id=discussion.id,
+                    actor_user_id=actor.id,
+                    is_sticky=is_sticky,
+                )
             )
-        )
         return discussion
 
     @staticmethod

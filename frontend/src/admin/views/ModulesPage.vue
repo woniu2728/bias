@@ -36,6 +36,34 @@
         </div>
       </section>
 
+      <section v-if="runtimeDependencyModules.length" class="ModulesPage-section">
+        <div class="ModulesPage-sectionHeader">
+          <h3>{{ modulesCopy?.runtimeDependencyTitle || '运行依赖健康' }}</h3>
+          <p>{{ modulesCopy?.runtimeDependencyDescription || '这里汇总模块运行时依赖的真实健康状态，优先暴露配置已存在但服务不可达的风险。' }}</p>
+        </div>
+
+        <div class="ModulesPage-alerts">
+          <article
+            v-for="module in runtimeDependencyModules"
+            :key="`${module.id}-runtime-dependency`"
+            class="ModuleAttentionCard"
+          >
+            <div class="ModuleAttentionCard-header">
+              <strong>{{ module.name }}</strong>
+              <span class="ModuleStatus ModuleStatus--warning">
+                {{ module.runtime_dependency_summary?.label || (modulesCopy?.runtimeDependencyWarningLabel || '需关注') }}
+              </span>
+            </div>
+            <p
+              v-for="issue in module.runtime_dependency_summary?.issues || []"
+              :key="issue"
+            >
+              {{ issue }}
+            </p>
+          </article>
+        </div>
+      </section>
+
       <section class="ModulesPage-section">
         <div class="ModulesPage-sectionHeader">
           <h3>{{ modulesCopy?.categorySummaryTitle || '分类概览' }}</h3>
@@ -771,10 +799,10 @@ const filteredModules = computed(() => {
       return false
     }
 
-    if (statusFilter.value === 'healthy' && module.dependency_status !== 'healthy') {
+    if (statusFilter.value === 'healthy' && module.health_status !== 'healthy') {
       return false
     }
-    if (statusFilter.value === 'attention' && module.dependency_status === 'healthy') {
+    if (statusFilter.value === 'attention' && module.health_status === 'healthy') {
       return false
     }
     if (statusFilter.value === 'enabled' && !module.enabled) {
@@ -805,6 +833,9 @@ const filteredModules = computed(() => {
 })
 
 const filteredModuleIds = computed(() => new Set(filteredModules.value.map(item => item.id)))
+const runtimeDependencyModules = computed(() => (
+  filteredModules.value.filter(module => module.runtime_dependency_summary?.status !== 'healthy')
+))
 
 const filteredAdminPages = computed(() => adminPages.value.filter(item => filteredModuleIds.value.has(item.module_id)))
 const filteredNotificationTypes = computed(() => notificationTypes.value.filter(item => filteredModuleIds.value.has(item.module_id)))
@@ -839,6 +870,7 @@ const summaryItems = computed(() => {
     { label: labels.discussion_list_filter_count || '列表过滤', value: String(summary.value.discussion_list_filter_count ?? discussionListFilters.value.length) },
     { label: labels.settings_group_count || '设置组', value: String(summary.value.settings_group_count ?? 0) },
     { label: labels.health_attention_count || '健康关注', value: String(summary.value.health_attention_count ?? 0) },
+    { label: labels.runtime_dependency_attention_count || '运行依赖关注', value: String(summary.value.runtime_dependency_attention_count ?? runtimeDependencyModules.value.length) },
   ]
 })
 
@@ -881,6 +913,7 @@ function normalizeModule(module) {
     health_issues: module.health_issues || [],
     health_status: module.health_status || 'healthy',
     health_status_label: module.health_status_label || '健康',
+    runtime_dependency_summary: module.runtime_dependency_summary || null,
     settings: module.settings || { groups: [], group_count: 0, configured_key_count: 0, has_settings: false },
     runtime: module.runtime || {},
     documentation_url: module.documentation_url || '',
