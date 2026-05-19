@@ -779,6 +779,46 @@ def _probe_tcp_endpoint(host: str | None, port: int | None, *, label: str) -> di
         }
 
 
+def _probe_redis_ping(host: str | None, port: int | None, *, label: str) -> dict[str, Any]:
+    normalized_host = str(host or "").strip()
+    normalized_port = int(port or 0)
+    if not normalized_host or normalized_port <= 0:
+        return {
+            "available": False,
+            "status": "misconfigured",
+            "label": "配置缺失",
+            "message": f"{label} 缺少主机或端口配置。",
+        }
+
+    try:
+        with socket.create_connection((normalized_host, normalized_port), timeout=NETWORK_PROBE_TIMEOUT_SECONDS) as connection:
+            connection.settimeout(NETWORK_PROBE_TIMEOUT_SECONDS)
+            connection.sendall(b"*1\r\n$4\r\nPING\r\n")
+            response = connection.recv(64)
+    except OSError as exc:
+        return {
+            "available": False,
+            "status": "unreachable",
+            "label": "不可达",
+            "message": f"{label} 主机 {normalized_host}:{normalized_port} 无法连通：{exc}",
+        }
+
+    if response.startswith(b"+PONG"):
+        return {
+            "available": True,
+            "status": "available",
+            "label": "可用",
+            "message": f"{label} 返回 Redis PONG，服务可用。",
+        }
+
+    return {
+        "available": False,
+        "status": "protocol-error",
+        "label": "协议异常",
+        "message": f"{label} 已建立连接，但未返回 Redis PONG。",
+    }
+
+
 def _probe_realtime_connection() -> dict[str, Any]:
     channel_config = settings.CHANNEL_LAYERS.get("default", {})
     backend = (channel_config.get("BACKEND") or "").lower()
@@ -812,7 +852,7 @@ def _probe_realtime_connection() -> dict[str, Any]:
         host = None
         port = None
 
-    connectivity = _probe_tcp_endpoint(host, port, label="Redis Channel Layer")
+    connectivity = _probe_redis_ping(host, port, label="Redis Channel Layer")
     return {
         "enabled": True,
         "available": connectivity["available"],
@@ -861,7 +901,7 @@ def _probe_queue_broker_connection(queue_enabled: bool, queue_driver: str) -> di
             "label": "配置缺失",
             "message": "Redis broker 缺少主机配置。",
         }
-    connectivity = _probe_tcp_endpoint(parsed.hostname, parsed.port or 6379, label="Redis broker")
+    connectivity = _probe_redis_ping(parsed.hostname, parsed.port or 6379, label="Redis broker")
     return {
         "enabled": True,
         "available": connectivity["available"],

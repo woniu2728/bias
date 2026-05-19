@@ -2548,16 +2548,16 @@ class AdminDashboardStatsApiTests(TestCase):
         CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {"hosts": [("localhost", 6379)]}}},
         CELERY_BROKER_URL="redis://localhost:6379/1",
     )
-    @patch("apps.core.admin_api._probe_tcp_endpoint")
+    @patch("apps.core.admin_api._probe_redis_ping")
     @patch("apps.core.admin_api.cache.get", return_value="ok")
     @patch("apps.core.admin_api.cache.set", return_value=None)
     @patch("apps.core.admin_api.QueueService.get_worker_status")
-    def test_admin_stats_marks_redis_and_queue_status(self, get_worker_status, _cache_set, _cache_get, probe_tcp_endpoint):
-        probe_tcp_endpoint.return_value = {
+    def test_admin_stats_marks_redis_and_queue_status(self, get_worker_status, _cache_set, _cache_get, probe_redis_ping):
+        probe_redis_ping.return_value = {
             "available": True,
             "status": "available",
-            "label": "可达",
-            "message": "探测通过",
+            "label": "可用",
+            "message": "Redis 返回 PONG",
         }
         get_worker_status.return_value = {
             "status": "available",
@@ -2680,8 +2680,8 @@ class AdminDashboardStatsApiTests(TestCase):
         CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {}}},
         CELERY_BROKER_URL="memory://",
     )
-    @patch("apps.core.admin_api._probe_tcp_endpoint")
-    def test_admin_stats_reports_realtime_backend_misconfigured(self, _probe_tcp_endpoint):
+    @patch("apps.core.admin_api._probe_redis_ping")
+    def test_admin_stats_reports_realtime_backend_misconfigured(self, _probe_redis_ping):
         response = self.client.get("/api/admin/stats", **self.auth_header())
 
         self.assertEqual(response.status_code, 200, response.content)
@@ -2733,12 +2733,12 @@ class AdminDashboardStatsApiTests(TestCase):
     )
     @patch("apps.core.admin_api.cache.get", return_value="ok")
     @patch("apps.core.admin_api.cache.set", return_value=None)
-    @patch("apps.core.admin_api._probe_tcp_endpoint")
+    @patch("apps.core.admin_api._probe_redis_ping")
     @patch("apps.core.admin_api.QueueService.get_worker_status")
     def test_admin_stats_reports_unreachable_realtime_and_queue_broker(
         self,
         get_worker_status,
-        probe_tcp_endpoint,
+        probe_redis_ping,
         _cache_set,
         _cache_get,
     ):
@@ -2754,7 +2754,7 @@ class AdminDashboardStatsApiTests(TestCase):
             "worker_count": 0,
             "message": "队列已启用，但没有检测到在线 worker。",
         }
-        probe_tcp_endpoint.side_effect = [
+        probe_redis_ping.side_effect = [
             {
                 "available": False,
                 "status": "unreachable",
@@ -2778,6 +2778,56 @@ class AdminDashboardStatsApiTests(TestCase):
         self.assertEqual(payload["queueBrokerStatus"], "unreachable")
         self.assertIn("realtime-backend-unavailable", risk_codes)
         self.assertIn("queue-broker-unavailable", risk_codes)
+
+    @override_settings(
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "dashboard-test"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {"hosts": [("redis.internal", 6379)]}}},
+        CELERY_BROKER_URL="redis://redis.internal:6379/1",
+    )
+    @patch("apps.core.admin_api.cache.get", return_value="ok")
+    @patch("apps.core.admin_api.cache.set", return_value=None)
+    @patch("apps.core.admin_api._probe_redis_ping")
+    @patch("apps.core.admin_api.QueueService.get_worker_status")
+    def test_admin_stats_reports_protocol_error_for_realtime_and_queue_broker(
+        self,
+        get_worker_status,
+        probe_redis_ping,
+        _cache_set,
+        _cache_get,
+    ):
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(True)},
+        )
+        clear_runtime_setting_caches()
+        get_worker_status.return_value = {
+            "status": "available",
+            "label": "1 个 worker 在线",
+            "available": True,
+            "worker_count": 1,
+            "message": "Celery worker 可用。",
+        }
+        probe_redis_ping.side_effect = [
+            {
+                "available": False,
+                "status": "protocol-error",
+                "label": "协议异常",
+                "message": "Redis Channel Layer 已建立连接，但未返回 Redis PONG。",
+            },
+            {
+                "available": False,
+                "status": "protocol-error",
+                "label": "协议异常",
+                "message": "Redis broker 已建立连接，但未返回 Redis PONG。",
+            },
+        ]
+
+        response = self.client.get("/api/admin/stats", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["realtimeConnectionStatus"], "protocol-error")
+        self.assertEqual(payload["queueBrokerStatus"], "protocol-error")
 
     @override_settings(
         DATABASES={"default": {"ENGINE": "django.db.backends.postgresql", "NAME": "bias", "HOST": "db"}},
