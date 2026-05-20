@@ -20,7 +20,7 @@ from django.test.utils import CaptureQueriesContext
 from django.db import connection
 from django.utils import timezone
 from ninja_jwt.tokens import RefreshToken
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from apps.core.domain_events import DomainEventBus
 from apps.core.forum_events import (
@@ -2397,23 +2397,24 @@ class AdminUserManagementApiTests(TestCase):
         self.assertEqual(response.json()["username"], "managed-user")
         self.assertEqual(len(response.json()["groups"]), 1)
 
-        response = self.client.put(
-            f"/api/admin/users/{self.user.id}",
-            data=json.dumps({
-                "username": "managed-user-updated",
-                "email": "managed-updated@example.com",
-                "display_name": "运营同学",
-                "bio": "负责社区运营",
-                "is_staff": True,
-                "is_email_confirmed": True,
-                "group_ids": [self.member_group.id, self.moderator_group.id],
-                "suspended_until": "2030-01-02T03:04:05Z",
-                "suspend_reason": "spam",
-                "suspend_message": "请联系管理员处理",
-            }),
-            content_type="application/json",
-            **self.auth_header(),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.put(
+                f"/api/admin/users/{self.user.id}",
+                data=json.dumps({
+                    "username": "managed-user-updated",
+                    "email": "managed-updated@example.com",
+                    "display_name": "运营同学",
+                    "bio": "负责社区运营",
+                    "is_staff": True,
+                    "is_email_confirmed": True,
+                    "group_ids": [self.member_group.id, self.moderator_group.id],
+                    "suspended_until": "2030-01-02T03:04:05Z",
+                    "suspend_reason": "spam",
+                    "suspend_message": "请联系管理员处理",
+                }),
+                content_type="application/json",
+                **self.auth_header(),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
@@ -2459,16 +2460,17 @@ class AdminUserManagementApiTests(TestCase):
         self.user.suspend_message = "请等待处理"
         self.user.save(update_fields=["suspended_until", "suspend_reason", "suspend_message"])
 
-        response = self.client.put(
-            f"/api/admin/users/{self.user.id}",
-            data=json.dumps({
-                "suspended_until": None,
-                "suspend_reason": "",
-                "suspend_message": "",
-            }),
-            content_type="application/json",
-            **self.auth_header(),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.put(
+                f"/api/admin/users/{self.user.id}",
+                data=json.dumps({
+                    "suspended_until": None,
+                    "suspend_reason": "",
+                    "suspend_message": "",
+                }),
+                content_type="application/json",
+                **self.auth_header(),
+            )
 
         self.assertEqual(response.status_code, 200, response.content)
         self.user.refresh_from_db()
@@ -2480,6 +2482,55 @@ class AdminUserManagementApiTests(TestCase):
             subject_id=self.user.id,
         )
         self.assertEqual(unsuspended_notification.from_user_id, self.admin.id)
+
+    def test_admin_suspension_event_dispatches_after_commit(self):
+        mocked_bus = Mock()
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                response = self.client.put(
+                    f"/api/admin/users/{self.user.id}",
+                    data=json.dumps({
+                        "suspended_until": "2030-01-02T03:04:05Z",
+                        "suspend_reason": "spam",
+                        "suspend_message": "请联系管理员处理",
+                    }),
+                    content_type="application/json",
+                    **self.auth_header(),
+                )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(len(callbacks), 1)
+        event = mocked_bus.dispatch.call_args.args[0]
+        self.assertIsInstance(event, UserSuspendedEvent)
+        self.assertEqual(event.user_id, self.user.id)
+        self.assertEqual(event.actor_user_id, self.admin.id)
+
+    def test_admin_unsuspension_event_dispatches_after_commit(self):
+        self.user.suspended_until = timezone.now() + timedelta(days=2)
+        self.user.suspend_reason = "temporary"
+        self.user.suspend_message = "请等待处理"
+        self.user.save(update_fields=["suspended_until", "suspend_reason", "suspend_message"])
+
+        mocked_bus = Mock()
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                response = self.client.put(
+                    f"/api/admin/users/{self.user.id}",
+                    data=json.dumps({
+                        "suspended_until": None,
+                        "suspend_reason": "",
+                        "suspend_message": "",
+                    }),
+                    content_type="application/json",
+                    **self.auth_header(),
+                )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(len(callbacks), 1)
+        event = mocked_bus.dispatch.call_args.args[0]
+        self.assertIsInstance(event, UserUnsuspendedEvent)
+        self.assertEqual(event.user_id, self.user.id)
+        self.assertEqual(event.actor_user_id, self.admin.id)
 
     def test_admin_can_delete_user(self):
         response = self.client.delete(

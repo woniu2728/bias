@@ -35,7 +35,7 @@ from apps.core.forum_registry import get_forum_registry
 from apps.core.resource_registry import get_resource_registry
 from apps.core.search_index_service import SearchIndexService
 from apps.core.file_service import FileUploadService
-from apps.core.domain_events import get_forum_event_bus
+from apps.core.domain_events import dispatch_forum_event_after_commit
 from apps.core.forum_events import UserSuspendedEvent, UserUnsuspendedEvent
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.settings_service import (
@@ -1986,14 +1986,14 @@ def update_admin_user(request, user_id: int, payload: Dict[str, Any] = Body(...)
     )
     if touched_suspension_fields:
         if is_suspended:
-            get_forum_event_bus().dispatch(
+            dispatch_forum_event_after_commit(
                 UserSuspendedEvent(
                     user_id=user.id,
                     actor_user_id=getattr(request.auth, "id", None),
                 )
             )
         elif was_suspended:
-            get_forum_event_bus().dispatch(
+            dispatch_forum_event_after_commit(
                 UserUnsuspendedEvent(
                     user_id=user.id,
                     actor_user_id=getattr(request.auth, "id", None),
