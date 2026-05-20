@@ -2986,6 +2986,56 @@ class AdminAuditLogApiTests(TestCase):
         self.assertEqual(response.status_code, 403, response.content)
 
 
+class HealthCheckApiTests(TestCase):
+    @override_settings(
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "health-test"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
+        CELERY_BROKER_URL="memory://",
+        SECRET_KEY="health-check-secret-key-1234567890123456",
+        NINJA_JWT={"ALGORITHM": "HS256", "SIGNING_KEY": "health-check-jwt-secret-key-1234567890"},
+    )
+    def test_health_check_exposes_runtime_readiness_summary(self):
+        response = self.client.get("/api/health")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["state"], "ready")
+        self.assertIn("readiness", payload)
+        self.assertEqual(payload["readiness"]["cache_driver"], "内存")
+        self.assertEqual(payload["readiness"]["realtime_driver"], "In-memory")
+        self.assertEqual(payload["readiness"]["queue_driver"], "sync")
+        self.assertFalse(payload["readiness"]["queue_enabled"])
+        self.assertEqual(payload["readiness"]["queue_worker_status"]["status"], "disabled")
+        self.assertEqual(payload["readiness"]["auth_secret_status"]["status"], "healthy")
+        self.assertEqual(payload["readiness"]["runtime_risks"], [])
+
+    @override_settings(
+        DEBUG=False,
+        DATABASES={"default": {"ENGINE": "django.db.backends.postgresql", "NAME": "bias", "HOST": "db"}},
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "health-prod-test"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
+        CELERY_BROKER_URL="memory://",
+        SECRET_KEY="django-insecure-change-this-in-production",
+        NINJA_JWT={"ALGORITHM": "HS256", "SIGNING_KEY": "short-jwt-secret"},
+        FRONTEND_URL="",
+        EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend",
+    )
+    @patch.object(settings.BOOTSTRAP, "installed", True)
+    @patch("apps.core.runtime_checks._is_test_process", return_value=False)
+    def test_health_check_reports_production_runtime_risks(self, _is_test_process):
+        response = self.client.get("/api/health")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        risk_codes = {item["code"] for item in payload["readiness"]["runtime_risks"]}
+        self.assertIn("django-secret-placeholder", risk_codes)
+        self.assertIn("jwt-secret-too-short", risk_codes)
+        self.assertIn("redis-disabled-production", risk_codes)
+        self.assertIn("frontend-url-missing-production", risk_codes)
+        self.assertIn("email-backend-development-production", risk_codes)
+
+
 class QueueServiceTests(TestCase):
     def tearDown(self):
         clear_runtime_setting_caches()

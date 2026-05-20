@@ -8,6 +8,7 @@ from django.conf.urls.static import static
 from ninja import NinjaAPI
 
 from apps.core.runtime_state import get_runtime_status
+from apps.core.runtime_checks import collect_runtime_readiness
 from apps.core.version import APP_VERSION
 
 # 创建API实例
@@ -42,12 +43,25 @@ api.add_router("/admin", admin_router, tags=["Admin"])
 def health_check(request):
     """健康检查"""
     runtime = get_runtime_status()
+    readiness = collect_runtime_readiness()
     return {
         "status": "ok" if runtime.state == "ready" else "degraded",
         "message": "Bias API is running",
         "state": runtime.state,
         "current_version": runtime.current_version,
         "installed_version": runtime.installed_version,
+        "readiness": {
+            "database_label": readiness["database_label"],
+            "cache_driver": readiness["cache_driver"],
+            "realtime_driver": readiness["realtime_driver"],
+            "queue_driver": readiness["queue_driver"],
+            "queue_enabled": readiness["queue_enabled"],
+            "queue_worker_status": readiness["queue_worker_status"],
+            "redis_enabled": readiness["redis_enabled"],
+            "auth_secret_status": readiness["auth_secret_status"],
+            "runtime_risks": readiness["runtime_risks"],
+            "runtime_dependency_checks": readiness["runtime_dependency_checks"],
+        },
     }
 
 urlpatterns = [
