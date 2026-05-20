@@ -552,6 +552,9 @@ class NotificationServiceTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
+        self.assertEqual(payload["id"], notification.id)
+        self.assertEqual(payload["type"], "postLiked")
+        self.assertEqual(payload["subject_id"], self.initial_reply.id)
         self.assertIn("from_user", payload)
 
     def test_notification_detail_omits_registered_fields_when_not_selected(self):

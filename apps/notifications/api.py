@@ -30,25 +30,11 @@ def _normalize_notification_type(type_value: Optional[str]) -> Optional[str]:
 
 def _serialize_notification(notification, resource_options=None):
     resource_options = resource_options or ResourceQueryOptions()
-    payload = {
-        "id": notification.id,
-        "user_id": notification.user_id,
-        "type": notification.type,
-        "subject_type": notification.subject_type,
-        "subject_id": notification.subject_id,
-        "data": notification.data,
-        "is_read": notification.is_read,
-        "read_at": notification.read_at,
-        "created_at": notification.created_at,
-    }
-    payload.update(
-        RESOURCE_REGISTRY.serialize(
-            "notification",
-            notification,
-            only=resource_options.fields,
-        )
+    return RESOURCE_REGISTRY.serialize(
+        "notification",
+        notification,
+        only=resource_options.fields,
     )
-    return payload
 
 
 def _apply_notification_resource_preloads(queryset, resource_options=None):

@@ -85,6 +85,14 @@ def bootstrap_forum_resource_fields() -> None:
             description="论坛标签主资源。",
         )
     )
+    registry.register_resource(
+        ResourceDefinition(
+            resource="notification",
+            module_id="notifications",
+            resolver=_serialize_notification_base,
+            description="论坛通知主资源。",
+        )
+    )
 
     registry.register_relationship(
         ResourceRelationshipDefinition(
@@ -452,6 +460,20 @@ def _serialize_tag_base(tag, context: dict) -> dict:
         "last_posted_at": tag.last_posted_at,
         "created_at": tag.created_at,
         "updated_at": tag.updated_at,
+    }
+
+
+def _serialize_notification_base(notification, context: dict) -> dict:
+    return {
+        "id": notification.id,
+        "user_id": notification.user_id,
+        "type": notification.type,
+        "subject_type": notification.subject_type,
+        "subject_id": notification.subject_id,
+        "data": notification.data,
+        "is_read": notification.is_read,
+        "read_at": notification.read_at,
+        "created_at": notification.created_at,
     }
 
 
