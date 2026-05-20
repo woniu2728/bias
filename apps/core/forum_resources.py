@@ -77,6 +77,14 @@ def bootstrap_forum_resource_fields() -> None:
             description="搜索帖子结果资源。",
         )
     )
+    registry.register_resource(
+        ResourceDefinition(
+            resource="tag",
+            module_id="tags",
+            resolver=_serialize_tag_base,
+            description="论坛标签主资源。",
+        )
+    )
 
     registry.register_relationship(
         ResourceRelationshipDefinition(
@@ -421,6 +429,29 @@ def _serialize_search_post_base(post, context: dict) -> dict:
         "content": post.content,
         "created_at": post.created_at,
         "excerpt": post.excerpt,
+    }
+
+
+def _serialize_tag_base(tag, context: dict) -> dict:
+    return {
+        "id": tag.id,
+        "name": tag.name,
+        "slug": tag.slug,
+        "description": tag.description,
+        "color": tag.color,
+        "icon": tag.icon,
+        "background_url": tag.background_url,
+        "position": tag.position,
+        "parent_id": tag.parent_id,
+        "is_hidden": tag.is_hidden,
+        "is_restricted": tag.is_restricted,
+        "view_scope": tag.view_scope,
+        "start_discussion_scope": tag.start_discussion_scope,
+        "reply_scope": tag.reply_scope,
+        "discussion_count": tag.discussion_count,
+        "last_posted_at": tag.last_posted_at,
+        "created_at": tag.created_at,
+        "updated_at": tag.updated_at,
     }
 
 

@@ -4620,6 +4620,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertTrue(any(item["code"] == "following" and item["route_path"] == "/following" for item in payload["discussion_list_filters"]))
         self.assertTrue(any(item["code"] == "my" and item["sidebar_visible"] is False for item in payload["discussion_list_filters"]))
         self.assertTrue(any(item["field"] == "can_start_discussion" for item in tags_module["resource_fields"]))
+        self.assertTrue(any(item["resource"] == "tag" for item in payload["resource_definitions"]))
         self.assertTrue(any(item["resource"] == "search_discussion" for item in payload["resource_definitions"]))
         self.assertTrue(any(item["relationship"] == "user" and item["resource"] == "post" for item in payload["resource_relationships"]))
         self.assertTrue(any(item["resource"] == "search_post" and item["field"] == "user" for item in payload["resource_fields"]))

@@ -48,7 +48,7 @@ def _serialize_tag(
     context = context or _build_tag_serialize_context(user, action=action)
     forbidden_tag_ids = context["forbidden_tag_ids"]
     resource_options = resource_options or ResourceQueryOptions()
-    resource_fields = RESOURCE_REGISTRY.serialize(
+    payload = RESOURCE_REGISTRY.serialize(
         "tag",
         tag,
         {"user": user, "action": action},
@@ -69,28 +69,7 @@ def _serialize_tag(
             if not child.is_hidden and child.id not in forbidden_tag_ids
         ]
 
-    payload = {
-        'id': tag.id,
-        'name': tag.name,
-        'slug': tag.slug,
-        'description': tag.description,
-        'color': tag.color,
-        'icon': tag.icon,
-        'background_url': tag.background_url,
-        'position': tag.position,
-        'parent_id': tag.parent_id,
-        'is_hidden': tag.is_hidden,
-        'is_restricted': tag.is_restricted,
-        'view_scope': tag.view_scope,
-        'start_discussion_scope': tag.start_discussion_scope,
-        'reply_scope': tag.reply_scope,
-        'discussion_count': tag.discussion_count,
-        'last_posted_at': tag.last_posted_at,
-        'created_at': tag.created_at,
-        'updated_at': tag.updated_at,
-        'children': children,
-    }
-    payload.update(resource_fields)
+    payload["children"] = children
     return payload
 
 
