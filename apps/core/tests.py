@@ -1,8 +1,10 @@
+import importlib
 import json
 import os
 from pathlib import Path
 import shutil
 from subprocess import CompletedProcess
+import sys
 import uuid
 from datetime import timedelta
 
@@ -5295,3 +5297,26 @@ class ProductionRuntimeCheckTests(TestCase):
         enforce_production_runtime_checks()
 
         run_checks_mock.assert_not_called()
+
+    @patch("apps.core.startup_guard.enforce_production_runtime_checks")
+    @patch("django.core.management.execute_from_command_line")
+    def test_manage_py_main_enforces_production_runtime_checks(
+        self,
+        execute_from_command_line_mock,
+        enforce_runtime_checks_mock,
+    ):
+        import manage
+
+        manage.main()
+
+        enforce_runtime_checks_mock.assert_called_once_with()
+        execute_from_command_line_mock.assert_called_once_with(sys.argv)
+
+    @patch("apps.core.startup_guard.enforce_production_runtime_checks")
+    def test_celery_module_enforces_production_runtime_checks(self, enforce_runtime_checks_mock):
+        import config.celery as celery_module
+
+        importlib.reload(celery_module)
+        celery_module._enforce_celery_runtime_checks()
+
+        enforce_runtime_checks_mock.assert_called_once_with()

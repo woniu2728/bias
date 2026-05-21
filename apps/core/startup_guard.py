@@ -3,10 +3,10 @@ from __future__ import annotations
 from django.core.checks import Critical, run_checks
 from django.core.exceptions import ImproperlyConfigured
 
-from apps.core.runtime_checks import PRODUCTION_RUNTIME_CHECK_TAG, is_production_runtime
-
 
 def enforce_production_runtime_checks() -> None:
+    from apps.core.runtime_checks import PRODUCTION_RUNTIME_CHECK_TAG, is_production_runtime
+
     if not is_production_runtime():
         return
 
