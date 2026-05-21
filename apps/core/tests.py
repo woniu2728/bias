@@ -652,6 +652,53 @@ class SearchApiTests(ChineseSearchTests):
         self.assertEqual(payload["users"][0]["primary_group"]["name"], group.name)
         self.assertIn("bio", payload["users"][0])
 
+    def test_search_api_discussions_support_resource_include_for_author(self):
+        keyword = "搜索讨论 include 作者"
+        discussion = DiscussionService.create_discussion(
+            title=keyword,
+            content="作者 include 讨论内容",
+            user=self.user,
+        )
+
+        response = self.client.get(
+            "/api/search",
+            {"q": keyword, "type": "discussions", "fields[search_discussion]": "unknown_field", "include": "user"},
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["discussion_total"], 1)
+        self.assertEqual(payload["discussions"][0]["id"], discussion.id)
+        self.assertIn("user", payload["discussions"][0])
+        self.assertEqual(payload["discussions"][0]["user"]["username"], self.user.username)
+
+    def test_search_api_posts_support_resource_include_for_author(self):
+        keyword = "搜索回复 include 作者"
+        discussion = DiscussionService.create_discussion(
+            title="搜索回复 include 讨论",
+            content="首帖内容",
+            user=self.user,
+        )
+        post = PostService.create_post(
+            discussion_id=discussion.id,
+            content=keyword,
+            user=self.user,
+        )
+
+        response = self.client.get(
+            "/api/search",
+            {"q": keyword, "type": "posts", "fields[search_post]": "unknown_field", "include": "user"},
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["post_total"], 1)
+        self.assertEqual(payload["posts"][0]["id"], post.id)
+        self.assertIn("user", payload["posts"][0])
+        self.assertEqual(payload["posts"][0]["user"]["username"], self.user.username)
+
     def test_search_api_user_results_avoid_n_plus_one_for_primary_group(self):
         keyword = "搜索预加载用户"
         for index in range(3):

@@ -29,6 +29,7 @@ from apps.core.settings_service import get_public_forum_settings
 from apps.core.resource_api import (
     ResourceQueryOptions,
     apply_resource_preloads,
+    merge_resource_includes,
     parse_resource_query_options,
 )
 from apps.core.resource_registry import get_resource_registry
@@ -106,6 +107,7 @@ def serialize_discussion_search_result(discussion, resource_options=None):
         "search_discussion",
         discussion,
         only=resource_options.fields,
+        include=resource_options.includes,
     )
 
 
@@ -115,6 +117,7 @@ def serialize_post_search_result(post, resource_options=None):
         "search_post",
         post,
         only=resource_options.fields,
+        include=resource_options.includes,
     )
 
 
@@ -244,6 +247,7 @@ def search(
                 queryset,
                 "search_discussion",
                 resource_options=discussion_resource_options,
+                default_includes=("user",),
             ),
         )
         discussion_data = [
@@ -276,6 +280,7 @@ def search(
                 queryset,
                 "search_post",
                 resource_options=post_resource_options,
+                default_includes=("user",),
             ),
         )
         post_data = [

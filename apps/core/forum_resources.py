@@ -140,6 +140,28 @@ def bootstrap_forum_resource_fields() -> None:
     )
     registry.register_relationship(
         ResourceRelationshipDefinition(
+            resource="search_discussion",
+            relationship="user",
+            module_id="discussions",
+            resolver=_resolve_search_discussion_user,
+            description="搜索结果中的讨论作者摘要。",
+            select_related=("user",),
+            prefetch_related=("user__user_groups",),
+        )
+    )
+    registry.register_relationship(
+        ResourceRelationshipDefinition(
+            resource="search_post",
+            relationship="user",
+            module_id="posts",
+            resolver=_resolve_search_post_user,
+            description="搜索结果中的回复作者摘要。",
+            select_related=("user",),
+            prefetch_related=("user__user_groups",),
+        )
+    )
+    registry.register_relationship(
+        ResourceRelationshipDefinition(
             resource="tag",
             relationship="last_posted_discussion",
             module_id="tags",
