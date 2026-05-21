@@ -1,0 +1,76 @@
+import {
+  registerAdminPermissionsPageActionMeta,
+  registerAdminPermissionsPageConfig,
+  registerAdminPermissionsPageCopy,
+} from '../pages.js'
+
+registerAdminPermissionsPageCopy({
+  key: 'core-permissions-page-copy',
+  order: 10,
+  resolve: () => ({
+    pageTitle: '权限管理',
+    pageDescription: '配置用户组和权限，并检查权限来源与依赖关系',
+    metaSummaryText: ({ permissionCount, moduleCount }) => `当前共注册 ${permissionCount} 项权限，来自 ${moduleCount} 个模块。保存时会自动补齐依赖权限，避免出现“子权限已勾选但前置权限缺失”的配置。`,
+    editGroupTitle: '编辑用户组',
+    addGroupLabel: '添加用户组',
+    permissionHeaderLabel: '权限',
+    dependencyPrefix: '依赖',
+    mobilePermissionCountText: count => `${count} 项权限`,
+    savePermissionsLabel: '保存权限',
+    savingPermissionsLabel: '保存中...',
+    saveSuccessText: '保存成功',
+    createGroupTitle: '创建用户组',
+    updateGroupTitle: '编辑用户组',
+    groupNameLabel: '名称',
+    groupNamePlaceholder: '例如：Moderator',
+    groupIconLabel: '图标',
+    groupIconPlaceholder: '例如：fas fa-shield-alt',
+    groupColorLabel: '颜色',
+    groupColorPickerAriaLabel: '用户组颜色选择器',
+    groupColorPlaceholder: '#4d698e',
+    groupHiddenLabel: '隐藏用户组',
+    deleteGroupLabel: '删除用户组',
+    deletingGroupLabel: '删除中...',
+    deleteGroupBlockedText: '系统默认用户组不允许删除',
+    cancelLabel: '取消',
+    saveGroupLabel: '保存',
+    savingGroupLabel: '保存中...',
+    unknownModuleLabel: '未知模块',
+  }),
+})
+
+registerAdminPermissionsPageConfig({
+  key: 'core-permissions-page-config',
+  order: 10,
+  resolve: () => ({
+    groupColorFallback: '#6b7c93',
+    groupColorDefault: '#4d698e',
+  }),
+})
+
+registerAdminPermissionsPageActionMeta({
+  key: 'core-permissions-page-actions-meta',
+  order: 10,
+  resolve: () => ({
+    loadGroupsFailedMessage: '加载用户组失败',
+    loadPermissionsFailedMessage: '加载权限失败',
+    loadPermissionMetaFailedMessage: '加载权限定义失败',
+    savePermissionsConfirmTitle: '保存权限配置',
+    savePermissionsConfirmMessage: '权限变更会立即影响用户操作能力。确定保存当前配置吗？',
+    savePermissionsConfirmText: '保存',
+    savePermissionsCancelText: '取消',
+    savePermissionsFailedMessage: '保存权限失败',
+    groupIncompleteTitle: '信息不完整',
+    groupIncompleteMessage: '请输入用户组名称',
+    saveGroupFailedTitle: '保存失败',
+    saveGroupFailedMessage: '未知错误',
+    deleteGroupConfirmTitle: '删除用户组',
+    deleteGroupConfirmMessage: name => `确定删除用户组“${name}”吗？现有成员会失去该用户组权限。`,
+    deleteGroupConfirmText: '删除',
+    deleteGroupCancelText: '取消',
+    deleteGroupSuccessTitle: '用户组已删除',
+    deleteGroupSuccessMessage: name => `用户组“${name}”已删除。`,
+    deleteGroupFailedTitle: '删除失败',
+    deleteGroupFailedMessage: '未知错误',
+  }),
+})
