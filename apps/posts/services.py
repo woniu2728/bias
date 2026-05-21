@@ -5,32 +5,17 @@ from dataclasses import dataclass
 from math import ceil
 from typing import Optional, List, Tuple
 from django.db import IntegrityError
-from django.db import transaction
-from django.db.models import Q, F, Count, Exists, OuterRef, Prefetch
-from django.core.exceptions import PermissionDenied
-from django.utils import timezone
+from django.db.models import Q, Count, Exists, OuterRef, Prefetch
 from apps.core.db import sqlite_write_retry
-from apps.core.domain_events import dispatch_forum_event_after_commit, get_forum_event_bus
-from apps.core.forum_events import (
-    DiscussionTagStatsRefreshEvent,
-    PostApprovedEvent,
-    PostCreatedEvent,
-    PostHiddenEvent,
-    PostLikedEvent,
-    PostRejectedEvent,
-    PostResubmittedEvent,
-    UserMentionedEvent,
-)
+from apps.core.domain_events import get_forum_event_bus
 from apps.core.forum_registry import get_forum_registry
-from apps.posts.models import Post, PostLike, PostMentionsUser, PostFlag
+from apps.posts.models import Post, PostLike, PostFlag
 from apps.discussions.models import Discussion
-from apps.discussions.models import DiscussionUser
 from apps.tags.services import TagService
 from apps.users.models import User
-from apps.users.preferences import get_user_preference_value
 from apps.users.services import UserService
 from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
-from apps.core.mentions import extract_mentioned_usernames
+from apps.posts import service_lifecycle, service_moderation
 
 
 FORUM_REGISTRY = get_forum_registry()
@@ -161,91 +146,18 @@ class PostService:
         Raises:
             ValueError: 讨论不存在或已锁定
         """
-        UserService.ensure_not_suspended(user, "回复讨论")
-        UserService.ensure_email_confirmed(user, "回复讨论")
-        UserService.ensure_forum_permission(user, "discussion.reply", "没有权限回复讨论")
-        requires_approval = UserService.requires_content_approval(user, "replyWithoutApproval")
-
-        try:
-            discussion = Discussion.objects.get(id=discussion_id)
-        except Discussion.DoesNotExist:
-            raise ValueError("讨论不存在")
-
-        if discussion.approval_status != Discussion.APPROVAL_APPROVED and not user.is_staff:
-            raise ValueError("讨论正在审核中，暂时无法回复")
-
-        if discussion.is_locked and not user.is_staff:
-            raise ValueError("讨论已锁定，无法回复")
-
-        TagService.ensure_can_reply_in_discussion(user, discussion)
-
-        with transaction.atomic():
-            discussion = PostService._lock_discussion_for_post_number(discussion.id)
-
-            if discussion.approval_status != Discussion.APPROVAL_APPROVED and not user.is_staff:
-                raise ValueError("讨论正在审核中，暂时无法回复")
-
-            if discussion.is_locked and not user.is_staff:
-                raise ValueError("讨论已锁定，无法回复")
-
-            reply_target = None
-            if reply_to_post_id:
-                reply_target = Post.objects.filter(
-                    id=reply_to_post_id,
-                    discussion=discussion,
-                ).select_related('user').first()
-
-            post = PostService._create_post_with_sequential_number(
-                discussion=discussion,
-                user=user,
-                content=content,
-                content_html=PostService._render_markdown(content),
-                type=DEFAULT_POST_TYPE,
-                approval_status=Post.APPROVAL_PENDING if requires_approval else Post.APPROVAL_APPROVED,
-                approved_at=None if requires_approval else timezone.now(),
-                approved_by=None if requires_approval else user,
-            )
-
-            if not requires_approval:
-                # 更新讨论统计
-                discussion.comment_count = F('comment_count') + 1
-                discussion.last_posted_at = timezone.now()
-                discussion.last_posted_user = user
-                discussion.last_post_id = post.id
-                discussion.last_post_number = post.number
-                discussion.save()
-
-                # 更新用户统计
-                user.comment_count = F('comment_count') + 1
-                user.save(update_fields=['comment_count'])
-
-                follow_after_reply = get_user_preference_value(user, 'follow_after_reply', fallback=False)
-                state_defaults = {
-                    'last_read_at': timezone.now(),
-                    'last_read_post_number': post.number,
-                }
-                if follow_after_reply:
-                    state_defaults['is_subscribed'] = True
-                DiscussionUser.objects.update_or_create(
-                    discussion=discussion,
-                    user=user,
-                    defaults=state_defaults,
-                )
-
-                # 处理@提及
-                PostService._process_mentions(post, content)
-
-                dispatch_forum_event_after_commit(
-                    PostCreatedEvent(
-                        post_id=post.id,
-                        discussion_id=discussion.id,
-                        actor_user_id=user.id,
-                        reply_to_post_id=reply_target.id if reply_target else None,
-                        is_approved=True,
-                    )
-                )
-
-            return post
+        return service_lifecycle.create_post(
+            discussion_id,
+            content,
+            user,
+            reply_to_post_id=reply_to_post_id,
+            default_post_type=DEFAULT_POST_TYPE,
+            can_reply_in_discussion=PostService._validate_replyable_discussion,
+            render_markdown_cb=PostService._render_markdown,
+            process_mentions_cb=PostService._process_mentions,
+            lock_discussion_for_post_number_cb=PostService._lock_discussion_for_post_number,
+            create_post_with_sequential_number_cb=PostService._create_post_with_sequential_number,
+        )
 
     @staticmethod
     def get_post_list(
@@ -267,43 +179,16 @@ class PostService:
         Returns:
             Tuple[List[Post], int]: (帖子列表, 总数)
         """
-        queryset = Post.objects.filter(
-            discussion_id=discussion_id,
-            type__in=STREAM_POST_TYPES,
-        ).annotate(
-            like_count=Count('likes', distinct=True)
+        return service_lifecycle.get_post_list(
+            discussion_id,
+            page=page,
+            limit=limit,
+            user=user,
+            preload=preload,
+            stream_post_types=STREAM_POST_TYPES,
+            annotate_flag_state_cb=PostService.annotate_flag_state,
+            apply_visibility_filters_cb=PostService.apply_visibility_filters,
         )
-        if preload is not None:
-            queryset = preload(queryset)
-        queryset = PostService.annotate_flag_state(queryset, user)
-
-        queryset = PostService.apply_visibility_filters(queryset, user)
-        queryset = TagService.filter_posts_for_user(queryset, user)
-
-        # 排序
-        queryset = queryset.order_by('number')
-
-        # 分页
-        total = queryset.count()
-        offset = (page - 1) * limit
-        posts = list(queryset[offset:offset + limit])
-
-        # 添加点赞状态
-        if user and user.is_authenticated:
-            post_ids = [p.id for p in posts]
-            liked_post_ids = set(
-                PostLike.objects.filter(
-                    post_id__in=post_ids,
-                    user=user
-                ).values_list('post_id', flat=True)
-            )
-            for post in posts:
-                post.is_liked = post.id in liked_post_ids
-        else:
-            for post in posts:
-                post.is_liked = False
-
-        return posts, total
 
     @staticmethod
     def _build_visible_post_queryset(
@@ -451,30 +336,13 @@ class PostService:
         Returns:
             Optional[Post]: 帖子对象
         """
-        try:
-            post = Post.objects.select_related(
-                'discussion'
-            ).annotate(
-                like_count=Count('likes', distinct=True)
-            )
-            if preload is not None:
-                post = preload(post)
-            post = PostService.annotate_flag_state(post, user).get(id=post_id)
-
-            if not PostService._can_view_post(post, user):
-                return None
-
-            # 检查点赞状态
-            if user and user.is_authenticated:
-                post.is_liked = PostLike.objects.filter(
-                    post=post, user=user
-                ).exists()
-            else:
-                post.is_liked = False
-
-            return post
-        except Post.DoesNotExist:
-            return None
+        return service_lifecycle.get_post_by_id(
+            post_id,
+            user=user,
+            preload=preload,
+            can_view_post_cb=PostService._can_view_post,
+            annotate_flag_state_cb=PostService.annotate_flag_state,
+        )
 
     @staticmethod
     def update_post(
@@ -496,54 +364,14 @@ class PostService:
         Raises:
             PermissionDenied: 权限不足
         """
-        UserService.ensure_not_suspended(user, "编辑帖子")
-        post = Post.objects.get(id=post_id)
-
-        # 权限检查
-        if not PostService.can_edit_post(post, user):
-            raise PermissionDenied("没有权限编辑此帖子")
-
-        with transaction.atomic():
-            post.content = content
-            post.content_html = PostService._render_markdown(content)
-            post.edited_at = timezone.now()
-            post.edited_user = user
-            update_fields = ['content', 'content_html', 'edited_at', 'edited_user']
-            previous_approval_status = None
-
-            if (
-                post.approval_status == Post.APPROVAL_REJECTED
-                and not user.is_staff
-                and post.user_id == user.id
-            ):
-                previous_approval_status = post.approval_status
-                post.approval_status = Post.APPROVAL_PENDING
-                post.approved_at = None
-                post.approved_by = None
-                post.approval_note = ""
-                post.hidden_at = None
-                post.hidden_user = None
-                update_fields.extend([
-                    'approval_status', 'approved_at', 'approved_by', 'approval_note', 'hidden_at', 'hidden_user'
-                ])
-
-            post.save(update_fields=update_fields)
-
-            # 重新处理@提及
-            PostMentionsUser.objects.filter(post=post).delete()
-            PostService._process_mentions(post, content)
-
-            if previous_approval_status:
-                dispatch_forum_event_after_commit(
-                    PostResubmittedEvent(
-                        post_id=post.id,
-                        discussion_id=post.discussion_id,
-                        actor_user_id=user.id,
-                        previous_status=previous_approval_status,
-                    )
-                )
-
-            return post
+        return service_lifecycle.update_post(
+            post_id,
+            user,
+            content,
+            can_edit_post_cb=PostService.can_edit_post,
+            render_markdown_cb=PostService._render_markdown,
+            process_mentions_cb=PostService._process_mentions,
+        )
 
     @staticmethod
     def delete_post(post_id: int, user: User) -> bool:
@@ -560,77 +388,38 @@ class PostService:
         Raises:
             PermissionDenied: 权限不足
         """
-        UserService.ensure_not_suspended(user, "删除帖子")
-        post = Post.objects.select_related('discussion').get(id=post_id)
-
-        # 权限检查
-        if not PostService.can_delete_post(post, user):
-            raise PermissionDenied("没有权限删除此帖子")
-
-        # 不能删除第一条帖子
-        if post.number == 1:
-            raise ValueError("不能删除第一条帖子")
-
-        with transaction.atomic():
-            discussion = post.discussion
-            counted_post = (
-                post.approval_status == Post.APPROVAL_APPROVED
-                and post.type in DISCUSSION_COUNTED_POST_TYPES
-            )
-
-            # 删除帖子
-            post.delete()
-
-            if counted_post:
-                PostService._refresh_discussion_approved_stats(discussion)
-
-                if post.user and post.type in USER_COUNTED_POST_TYPES:
-                    post.user.comment_count = F('comment_count') - 1
-                    post.user.save(update_fields=['comment_count'])
-
-        return True
+        return service_lifecycle.delete_post(
+            post_id,
+            user,
+            can_delete_post_cb=PostService.can_delete_post,
+            discussion_counted_post_types=DISCUSSION_COUNTED_POST_TYPES,
+            user_counted_post_types=USER_COUNTED_POST_TYPES,
+            refresh_discussion_approved_stats_cb=PostService._refresh_discussion_approved_stats,
+        )
 
     @staticmethod
     def set_hidden_state(post: Post, admin_user: User, is_hidden: bool) -> Post:
-        if not admin_user.is_staff:
-            raise PermissionDenied("只有管理员可以隐藏或恢复回复")
-        if post.number == 1:
-            raise ValueError("不能直接隐藏首贴，请改为隐藏讨论")
-
-        was_hidden = post.hidden_at is not None
-        if was_hidden == is_hidden:
-            return post
-
-        should_adjust_counts = (
-            post.approval_status == Post.APPROVAL_APPROVED
-            and post.type in DISCUSSION_COUNTED_POST_TYPES
+        return service_lifecycle.set_hidden_state(
+            post,
+            admin_user,
+            is_hidden,
+            discussion_counted_post_types=DISCUSSION_COUNTED_POST_TYPES,
+            user_counted_post_types=USER_COUNTED_POST_TYPES,
+            refresh_discussion_approved_stats_cb=PostService._refresh_discussion_approved_stats,
         )
-        hidden_at = timezone.now() if is_hidden else None
 
-        with transaction.atomic():
-            post.hidden_at = hidden_at
-            post.hidden_user = admin_user if is_hidden else None
-            post.save(update_fields=["hidden_at", "hidden_user"])
-
-            if should_adjust_counts:
-                PostService._refresh_discussion_approved_stats(post.discussion)
-                if post.user and post.type in USER_COUNTED_POST_TYPES:
-                    delta = -1 if is_hidden else 1
-                    post.user.comment_count = F("comment_count") + delta
-                    post.user.save(update_fields=["comment_count"])
-
-            dispatch_forum_event_after_commit(
-                PostHiddenEvent(
-                    post_id=post.id,
-                    discussion_id=post.discussion_id,
-                    actor_user_id=admin_user.id,
-                    post_number=post.number,
-                    is_hidden=is_hidden,
-                )
-            )
-
-        post.refresh_from_db()
-        return post
+    @staticmethod
+    def _validate_replyable_discussion(
+        discussion_id: int,
+        user: User,
+        *,
+        discussion: Optional[Discussion] = None,
+    ) -> Discussion:
+        return service_lifecycle.validate_replyable_discussion(
+            discussion_id,
+            user,
+            discussion=discussion,
+        )
 
     @staticmethod
     def _lock_discussion_for_post_number(discussion_id: int) -> Discussion:
@@ -648,329 +437,93 @@ class PostService:
 
     @staticmethod
     def _is_post_number_conflict(exc: IntegrityError) -> bool:
-        message = str(exc).lower()
-        return (
-            "unique" in message
-            and "post" in message
-            and "number" in message
-        )
+        return service_lifecycle.is_post_number_conflict(exc)
 
     @staticmethod
     def _create_post_with_sequential_number(**post_kwargs) -> Post:
-        last_error = None
-
-        for attempt in range(PostService.POST_NUMBER_CONFLICT_RETRY_ATTEMPTS):
-            next_number = PostService._allocate_next_post_number(post_kwargs["discussion"])
-            try:
-                return Post.objects.create(
-                    **post_kwargs,
-                    number=next_number,
-                )
-            except IntegrityError as exc:
-                if not PostService._is_post_number_conflict(exc):
-                    raise
-                last_error = exc
-                if attempt == PostService.POST_NUMBER_CONFLICT_RETRY_ATTEMPTS - 1:
-                    raise
-
-        if last_error:
-            raise last_error
-        raise IntegrityError("帖子楼层分配失败")
+        return service_lifecycle.create_post_with_sequential_number(
+            attempts=PostService.POST_NUMBER_CONFLICT_RETRY_ATTEMPTS,
+            allocate_next_post_number_cb=PostService._allocate_next_post_number,
+            **post_kwargs,
+        )
 
     @staticmethod
     def _refresh_discussion_approved_stats(discussion: Discussion) -> Discussion:
-        approved_posts = Post.objects.filter(
-            discussion=discussion,
-            type__in=DISCUSSION_COUNTED_POST_TYPES,
-            approval_status=Post.APPROVAL_APPROVED,
-            hidden_at__isnull=True,
-        ).order_by("number")
-
-        approved_count = approved_posts.count()
-        last_post = approved_posts.order_by("-number").select_related("user").first()
-
-        discussion.comment_count = approved_count
-        if last_post:
-            discussion.last_post_id = last_post.id
-            discussion.last_post_number = last_post.number
-            discussion.last_posted_at = last_post.created_at
-            discussion.last_posted_user = last_post.user
-        else:
-            discussion.last_post_id = None
-            discussion.last_post_number = None
-            discussion.last_posted_at = None
-            discussion.last_posted_user = None
-
-        discussion.save(update_fields=[
-            "comment_count",
-            "last_post_id",
-            "last_post_number",
-            "last_posted_at",
-            "last_posted_user",
-        ])
-        dispatch_forum_event_after_commit(
-            DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
+        return service_lifecycle.refresh_discussion_approved_stats(
+            discussion,
+            discussion_counted_post_types=DISCUSSION_COUNTED_POST_TYPES,
         )
-        return discussion
 
     @staticmethod
     def like_post(post_id: int, user: User) -> bool:
-        """
-        点赞帖子
-
-        Args:
-            post_id: 帖子ID
-            user: 操作用户
-
-        Returns:
-            bool: 是否点赞成功
-        """
-        UserService.ensure_not_suspended(user, "点赞帖子")
-        post = Post.objects.get(id=post_id)
-        if not PostService._can_view_post(post, user):
-            raise PermissionDenied("没有权限查看此帖子")
-
-        # 不能给自己的帖子点赞
-        if post.user_id == user.id:
-            raise ValueError("不能给自己的帖子点赞")
-
-        # 检查是否已点赞
-        if PostLike.objects.filter(post=post, user=user).exists():
-            raise ValueError("已经点赞过了")
-
-        try:
-            PostLike.objects.create(post=post, user=user)
-        except IntegrityError:
-            raise ValueError("已经点赞过了")
-
-        dispatch_forum_event_after_commit(
-            PostLikedEvent(
-                post_id=post.id,
-                discussion_id=post.discussion_id,
-                actor_user_id=user.id,
-                post_number=post.number,
-            )
+        return service_moderation.like_post(
+            post_id,
+            user,
+            can_view_post=PostService._can_view_post,
         )
-
-        return True
 
     @staticmethod
     def report_post(post_id: int, user: User, reason: str, message: str = "") -> PostFlag:
-        """举报帖子"""
-        UserService.ensure_not_suspended(user, "举报帖子")
-        post = Post.objects.select_related("user", "discussion").get(id=post_id)
-        if not PostService._can_view_post(post, user):
-            raise PermissionDenied("没有权限查看此帖子")
-
-        if not user or not user.is_authenticated:
-            raise PermissionDenied("请先登录")
-        if post.user_id == user.id:
-            raise ValueError("不能举报自己的帖子")
-        if post.hidden_at is not None:
-            raise ValueError("该帖子已被隐藏")
-
-        try:
-            existing = PostFlag.objects.get(
-                post=post,
-                user=user,
-                status=PostFlag.STATUS_OPEN,
-            )
-            existing.reason = reason
-            existing.message = message
-            existing.save(update_fields=["reason", "message"])
-            return existing
-        except PostFlag.DoesNotExist:
-            return PostFlag.objects.create(
-                post=post,
-                user=user,
-                reason=reason,
-                message=message,
-            )
+        return service_moderation.report_post(
+            post_id,
+            user,
+            reason,
+            message,
+            can_view_post=PostService._can_view_post,
+        )
 
     @staticmethod
     def get_flag_list(status: Optional[str] = None, page: int = 1, limit: int = 20):
-        queryset = PostFlag.objects.select_related(
-            "post",
-            "post__discussion",
-            "post__user",
-            "user",
-            "resolved_by",
-        )
-
-        if status:
-            queryset = queryset.filter(status=status)
-
-        total = queryset.count()
-        offset = (page - 1) * limit
-        return list(queryset[offset:offset + limit]), total
+        return service_moderation.get_flag_list(status=status, page=page, limit=limit)
 
     @staticmethod
     def resolve_flag(flag_id: int, admin_user: User, status: str, resolution_note: str = "") -> PostFlag:
-        if status not in {PostFlag.STATUS_RESOLVED, PostFlag.STATUS_IGNORED}:
-            raise ValueError("无效的处理状态")
-
-        flag = PostFlag.objects.select_related("post", "post__discussion", "user").get(id=flag_id)
-        flag.status = status
-        flag.resolution_note = resolution_note
-        flag.resolved_by = admin_user
-        flag.resolved_at = timezone.now()
-        flag.save(update_fields=["status", "resolution_note", "resolved_by", "resolved_at"])
-        return flag
+        return service_moderation.resolve_flag(
+            flag_id,
+            admin_user,
+            status,
+            resolution_note=resolution_note,
+        )
 
     @staticmethod
     def resolve_post_flags(post_id: int, admin_user: User, status: str, resolution_note: str = "") -> int:
-        if not admin_user.is_staff:
-            raise PermissionDenied("只有管理员可以处理举报")
-
-        if status not in {PostFlag.STATUS_RESOLVED, PostFlag.STATUS_IGNORED}:
-            raise ValueError("无效的处理状态")
-
-        open_flags = list(PostFlag.objects.filter(post_id=post_id, status=PostFlag.STATUS_OPEN))
-        if not open_flags:
-            raise ValueError("当前帖子没有待处理举报")
-
-        resolved_at = timezone.now()
-        for flag in open_flags:
-            flag.status = status
-            flag.resolution_note = resolution_note
-            flag.resolved_by = admin_user
-            flag.resolved_at = resolved_at
-
-        PostFlag.objects.bulk_update(
-            open_flags,
-            ["status", "resolution_note", "resolved_by", "resolved_at"],
+        return service_moderation.resolve_post_flags(
+            post_id,
+            admin_user,
+            status,
+            resolution_note=resolution_note,
         )
-        return len(open_flags)
 
     @staticmethod
     def approve_post(post: Post, admin_user: User, note: str = "") -> Post:
-        previous_status = post.approval_status
-        was_counted = (
-            post.approval_status == Post.APPROVAL_APPROVED
-            and post.hidden_at is None
-            and post.type in DISCUSSION_COUNTED_POST_TYPES
+        return service_moderation.approve_post(
+            post,
+            admin_user,
+            note=note,
+            discussion_counted_post_types=DISCUSSION_COUNTED_POST_TYPES,
+            user_counted_post_types=USER_COUNTED_POST_TYPES,
+            process_mentions_cb=PostService._process_mentions,
+            refresh_discussion_approved_stats_cb=PostService._refresh_discussion_approved_stats,
         )
-
-        with transaction.atomic():
-            now = timezone.now()
-            post.approval_status = Post.APPROVAL_APPROVED
-            post.approved_at = now
-            post.approved_by = admin_user
-            post.approval_note = note
-            post.hidden_at = None
-            post.hidden_user = None
-            post.save(update_fields=[
-                'approval_status', 'approved_at', 'approved_by', 'approval_note', 'hidden_at', 'hidden_user'
-            ])
-
-            discussion = post.discussion
-            if not was_counted:
-                discussion.comment_count = F('comment_count') + 1
-                if not discussion.last_post_number or post.number >= discussion.last_post_number:
-                    discussion.last_posted_at = now
-                    discussion.last_posted_user = post.user
-                    discussion.last_post_id = post.id
-                    discussion.last_post_number = post.number
-                discussion.save()
-
-                if post.user and post.type in USER_COUNTED_POST_TYPES:
-                    post.user.comment_count = F('comment_count') + 1
-                    post.user.save(update_fields=['comment_count'])
-                    follow_after_reply = get_user_preference_value(post.user, 'follow_after_reply', fallback=False)
-                    approval_defaults = {
-                        'last_read_at': now,
-                        'last_read_post_number': post.number,
-                    }
-                    if follow_after_reply:
-                        approval_defaults['is_subscribed'] = True
-                    DiscussionUser.objects.update_or_create(
-                        discussion=discussion,
-                        user=post.user,
-                        defaults=approval_defaults,
-                    )
-
-                PostService._process_mentions(post, post.content)
-
-                dispatch_forum_event_after_commit(
-                    PostApprovedEvent(
-                        post_id=post.id,
-                        discussion_id=discussion.id,
-                        actor_user_id=post.user_id,
-                        admin_user_id=admin_user.id,
-                        note=note,
-                        previous_status=previous_status,
-                    )
-                )
-            else:
-                dispatch_forum_event_after_commit(
-                    DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
-                )
-
-        post.refresh_from_db()
-        return post
 
     @staticmethod
     def reject_post(post: Post, admin_user: User, note: str = "") -> Post:
-        rejected_at = timezone.now()
-        previous_status = post.approval_status
-        was_counted = (
-            post.approval_status == Post.APPROVAL_APPROVED
-            and post.hidden_at is None
-            and post.type in DISCUSSION_COUNTED_POST_TYPES
+        return service_moderation.reject_post(
+            post,
+            admin_user,
+            note=note,
+            discussion_counted_post_types=DISCUSSION_COUNTED_POST_TYPES,
+            user_counted_post_types=USER_COUNTED_POST_TYPES,
+            refresh_discussion_approved_stats_cb=PostService._refresh_discussion_approved_stats,
         )
-
-        with transaction.atomic():
-            post.approval_status = Post.APPROVAL_REJECTED
-            post.approved_at = rejected_at
-            post.approved_by = admin_user
-            post.approval_note = note
-            post.hidden_at = rejected_at
-            post.hidden_user = admin_user
-            post.save(update_fields=[
-                'approval_status', 'approved_at', 'approved_by', 'approval_note', 'hidden_at', 'hidden_user'
-            ])
-
-            if was_counted:
-                PostService._refresh_discussion_approved_stats(post.discussion)
-                if post.user and post.type in USER_COUNTED_POST_TYPES:
-                    post.user.comment_count = F('comment_count') - 1
-                    post.user.save(update_fields=['comment_count'])
-
-            if previous_status != Post.APPROVAL_REJECTED:
-                dispatch_forum_event_after_commit(
-                    PostRejectedEvent(
-                        post_id=post.id,
-                        discussion_id=post.discussion_id,
-                        actor_user_id=post.user_id,
-                        admin_user_id=admin_user.id,
-                        note=note,
-                        previous_status=previous_status,
-                    )
-                )
-        return post
 
     @staticmethod
     def unlike_post(post_id: int, user: User) -> bool:
-        """
-        取消点赞
-
-        Args:
-            post_id: 帖子ID
-            user: 操作用户
-
-        Returns:
-            bool: 是否取消成功
-        """
-        UserService.ensure_not_suspended(user, "点赞帖子")
-        post = Post.objects.get(id=post_id)
-        if not PostService._can_view_post(post, user):
-            raise PermissionDenied("没有权限查看此帖子")
-
-        deleted_count, _ = PostLike.objects.filter(post=post, user=user).delete()
-        if deleted_count == 0:
-            raise ValueError("还没有点赞")
-
-        return True
+        return service_moderation.unlike_post(
+            post_id,
+            user,
+            can_view_post=PostService._can_view_post,
+        )
 
     @staticmethod
     def can_edit_post(post: Post, user: User) -> bool:
@@ -1011,34 +564,13 @@ class PostService:
 
     @staticmethod
     def _process_mentions(post: Post, content: str):
-        """
-        处理@提及
+        from apps.core.mentions import extract_mentioned_usernames
 
-        Args:
-            post: 帖子对象
-            content: 帖子内容
-        """
-        mentions = extract_mentioned_usernames(content)
-        if not mentions:
-            return
-
-        # 查找被提及的用户
-        mentioned_users = User.objects.filter(username__in=mentions)
-        for mentioned_user in mentioned_users:
-            PostMentionsUser.objects.get_or_create(
-                post=post,
-                mentions_user=mentioned_user
-            )
-
-            dispatch_forum_event_after_commit(
-                UserMentionedEvent(
-                    post_id=post.id,
-                    discussion_id=post.discussion_id,
-                    actor_user_id=post.user_id,
-                    mentioned_user_id=mentioned_user.id,
-                    post_number=post.number,
-                )
-            )
+        return service_lifecycle.process_mentions(
+            post,
+            content,
+            extract_mentions_cb=extract_mentioned_usernames,
+        )
 
     @staticmethod
     def _render_markdown(content: str) -> str:
