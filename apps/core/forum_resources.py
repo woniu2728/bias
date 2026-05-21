@@ -138,6 +138,37 @@ def bootstrap_forum_resource_fields() -> None:
             prefetch_related=("edited_user__user_groups",),
         )
     )
+    registry.register_relationship(
+        ResourceRelationshipDefinition(
+            resource="tag",
+            relationship="last_posted_discussion",
+            module_id="tags",
+            resolver=_resolve_tag_last_posted_discussion,
+            description="标签下最后活跃讨论摘要。",
+            select_related=("last_posted_discussion",),
+        )
+    )
+    registry.register_relationship(
+        ResourceRelationshipDefinition(
+            resource="notification",
+            relationship="from_user",
+            module_id="notifications",
+            resolver=_resolve_notification_from_user,
+            description="通知来源用户摘要。",
+            select_related=("from_user",),
+            prefetch_related=("from_user__user_groups",),
+        )
+    )
+    registry.register_relationship(
+        ResourceRelationshipDefinition(
+            resource="user_detail",
+            relationship="groups",
+            module_id="users",
+            resolver=_resolve_user_groups,
+            description="用户详情中的用户组列表。",
+            prefetch_related=("user_groups",),
+        )
+    )
 
     registry.register_field(
         ResourceFieldDefinition(
@@ -803,6 +834,22 @@ def _resolve_user_primary_group(user, context: dict) -> dict | None:
     from apps.users.group_utils import get_primary_group, serialize_group_badge
 
     return serialize_group_badge(get_primary_group(user))
+
+
+def _resolve_user_groups(user, context: dict) -> list[dict]:
+    if not hasattr(user, "user_groups"):
+        return []
+
+    return [
+        {
+            "id": group.id,
+            "name": group.name,
+            "color": group.color,
+            "icon": group.icon,
+            "is_hidden": group.is_hidden,
+        }
+        for group in user.user_groups.all()
+    ]
 
 
 def _resolve_notification_from_user(notification, context: dict) -> dict | None:

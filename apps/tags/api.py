@@ -53,6 +53,7 @@ def _serialize_tag(
         tag,
         {"user": user, "action": action},
         only=resource_options.fields,
+        include=resource_options.includes,
     )
     children = []
     if include_children:
@@ -80,6 +81,7 @@ def _apply_tag_resource_preloads(queryset, user=None, action="view", resource_op
         "tag",
         {"user": user, "action": action},
         only=resource_options.fields,
+        include=resource_options.includes,
     )
 
 

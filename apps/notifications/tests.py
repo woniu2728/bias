@@ -577,6 +577,27 @@ class NotificationServiceTests(TestCase):
         payload = response.json()
         self.assertNotIn("from_user", payload)
 
+    def test_notification_detail_supports_resource_include_for_from_user(self):
+        notification = Notification.objects.create(
+            user=self.author,
+            from_user=self.replier,
+            type="postLiked",
+            subject_type="post",
+            subject_id=self.initial_reply.id,
+            data={"post_id": self.initial_reply.id},
+        )
+
+        response = self.client.get(
+            f"/api/notifications/{notification.id}",
+            {"fields[notification]": "unknown_field", "include": "from_user"},
+            **self.auth_header(self.author),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertIn("from_user", payload)
+        self.assertEqual(payload["from_user"]["username"], self.replier.username)
+
     def test_notification_list_avoids_n_plus_one_for_registered_from_user_summary(self):
         for index in range(3):
             Notification.objects.create(

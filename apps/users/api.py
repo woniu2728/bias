@@ -108,6 +108,7 @@ def _serialize_user_detail_payload(user, include_forum_permissions: bool = False
         "user_detail",
         user,
         only=resource_options.fields,
+        include=resource_options.includes,
     ) or {}
     payload.update(
         {
@@ -117,7 +118,7 @@ def _serialize_user_detail_payload(user, include_forum_permissions: bool = False
             "is_staff": user.is_staff,
         }
     )
-    if hasattr(user, "user_groups"):
+    if "groups" not in payload and hasattr(user, "user_groups"):
         payload["groups"] = [
             {
                 "id": group.id,
@@ -337,6 +338,7 @@ def list_users(request, page: int = 1, limit: int = 20, q: str = None):
         User.objects.all(),
         "user_detail",
         resource_options=resource_options,
+        default_includes=("groups",),
     )
 
     # 搜索
@@ -364,6 +366,7 @@ def get_user_by_username(request, username: str):
             User.objects.filter(username=username),
             "user_detail",
             resource_options=resource_options,
+            default_includes=("groups",),
         )
     )
     return JsonResponse(_serialize_user_detail_payload(user, resource_options=resource_options))
@@ -379,6 +382,7 @@ def get_user(request, user_id: int):
             User.objects.filter(id=user_id),
             "user_detail",
             resource_options=resource_options,
+            default_includes=("groups",),
         )
     )
     return JsonResponse(_serialize_user_detail_payload(user, resource_options=resource_options))

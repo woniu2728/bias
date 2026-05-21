@@ -242,6 +242,26 @@ class UserProfileApiTests(TestCase):
         self.assertEqual(payload["primary_group"]["name"], "SupportFields")
         self.assertIn("bio", payload)
 
+    def test_user_detail_supports_resource_include_for_groups(self):
+        user = User.objects.create_user(
+            username="group-profile-include",
+            email="group-profile-include@example.com",
+            password="password123",
+        )
+        group = Group.objects.create(name="SupportInclude", color="#27ae60", icon="fas fa-life-ring")
+        user.user_groups.add(group)
+
+        response = self.client.get(
+            f"/api/users/{user.id}",
+            {"fields[user_detail]": "primary_group", "include": "groups"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["primary_group"]["name"], "SupportInclude")
+        self.assertIn("groups", payload)
+        self.assertEqual(payload["groups"][0]["name"], "SupportInclude")
+
     def test_current_user_exposes_forum_permissions(self):
         user = User.objects.create_user(
             username="permission-profile",

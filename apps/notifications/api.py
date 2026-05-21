@@ -34,6 +34,7 @@ def _serialize_notification(notification, resource_options=None):
         "notification",
         notification,
         only=resource_options.fields,
+        include=resource_options.includes,
     )
 
 
@@ -43,6 +44,7 @@ def _apply_notification_resource_preloads(queryset, resource_options=None):
         queryset,
         "notification",
         only=resource_options.fields,
+        include=resource_options.includes,
     )
 
 

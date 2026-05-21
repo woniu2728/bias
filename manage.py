@@ -7,8 +7,10 @@ import sys
 def main():
     """Run administrative tasks."""
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+    import django
     from apps.core.startup_guard import enforce_production_runtime_checks
 
+    django.setup()
     enforce_production_runtime_checks()
     try:
         from django.core.management import execute_from_command_line
