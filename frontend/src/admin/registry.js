@@ -11,870 +11,151 @@ import TagsPage from './views/TagsPage.vue'
 import MailPage from './views/MailPage.vue'
 import AdvancedPage from './views/AdvancedPage.vue'
 import DeveloperDocsPage from './views/DeveloperDocsPage.vue'
-
-const adminRoutes = []
-const adminDashboardStats = []
-const adminDashboardStatusSummaries = []
-const adminDashboardStatusBadges = []
-const adminDashboardStatusItems = []
-const adminDashboardAlerts = []
-const adminDashboardQueueMetrics = []
-const adminDashboardCopies = []
-const adminDashboardConfig = []
-const adminDashboardActionsMeta = []
-const adminDashboardActions = []
-const adminModulesPageCopies = []
-const adminModulesPageConfig = []
-const adminModulesPageActionMeta = []
-const adminBasicsPageCopies = []
-const adminBasicsPageConfig = []
-const adminBasicsPageActionMeta = []
-const adminAppearancePageCopies = []
-const adminAppearancePageConfig = []
-const adminAppearancePageActionMeta = []
-const adminMailPageCopies = []
-const adminMailPageConfig = []
-const adminMailPageActionMeta = []
-const adminAdvancedPageCopies = []
-const adminAdvancedPageConfig = []
-const adminAdvancedPageActionMeta = []
-const adminAuditLogsPageCopies = []
-const adminAuditLogsPageConfig = []
-const adminApprovalQueuePageCopies = []
-const adminApprovalQueuePageConfig = []
-const adminApprovalQueuePageActionMeta = []
-const adminApprovalQueueNoteTemplates = []
-const adminFlagsPageCopies = []
-const adminFlagsPageConfig = []
-const adminFlagsPageActionMeta = []
-const adminPermissionsPageCopies = []
-const adminPermissionsPageConfig = []
-const adminPermissionsPageActionMeta = []
-const adminUsersPageCopies = []
-const adminUsersPageConfig = []
-const adminUsersPageActionMeta = []
-const adminTagsPageConfig = []
-const adminTagsPageCopies = []
-const adminTagsPageActionMeta = []
-
-function upsertByPath(target, value) {
-  const existingIndex = target.findIndex(item => item.path === value.path)
-  if (existingIndex >= 0) {
-    target.splice(existingIndex, 1, value)
-    return value
-  }
-
-  target.push(value)
-  return value
-}
-
-function upsertByKey(target, value) {
-  const existingIndex = target.findIndex(item => item.key === value.key)
-  if (existingIndex >= 0) {
-    target.splice(existingIndex, 1, value)
-    return value
-  }
-
-  target.push(value)
-  return value
-}
-
-function resolveAdminItem(item, context = {}) {
-  const isVisible = typeof item.isVisible === 'function' ? item.isVisible(context) : true
-  if (!isVisible) {
-    return null
-  }
-
-  const resolvedItem = typeof item.resolve === 'function'
-    ? item.resolve(context)
-    : item
-
-  if (!resolvedItem) {
-    return null
-  }
-
-  return {
-    ...item,
-    ...resolvedItem,
-  }
-}
-
-export function registerAdminRoute(route) {
-  const normalizedRoute = {
-    navSection: 'feature',
-    navOrder: 100,
-    showInNavigation: true,
-    showInDashboardActions: false,
-    dashboardActionOrder: null,
-    dashboardActionLabel: '',
-    navDescription: '',
-    navBadge: '',
-    ...route
-  }
-
-  return upsertByPath(adminRoutes, normalizedRoute)
-}
-
-export function getAdminRoutes() {
-  return [...adminRoutes].sort((left, right) => {
-    if (left.path === '/admin') return -1
-    if (right.path === '/admin') return 1
-    return (left.navOrder || 100) - (right.navOrder || 100)
-  })
-}
-
-export function getAdminNavSections() {
-  const sections = {
-    core: { key: 'core', title: '核心', items: [] },
-    feature: { key: 'feature', title: '功能', items: [] }
-  }
-
-  for (const route of getAdminRoutes()) {
-    if (!route.showInNavigation) {
-      continue
-    }
-
-    const section = sections[route.navSection] || sections.feature
-    section.items.push({
-      path: route.path,
-      icon: route.icon,
-      label: route.label,
-      description: route.navDescription || '',
-      badge: route.navBadge || '',
-      moduleId: route.moduleId || 'core',
-      navOrder: route.navOrder || 100
-    })
-  }
-
-  return Object.values(sections)
-    .map(section => ({
-      ...section,
-      items: section.items.sort((left, right) => left.navOrder - right.navOrder)
-    }))
-    .filter(section => section.items.length > 0)
-}
-
-export function getAdminDashboardActions() {
-  return getAdminRoutes()
-    .filter(route => route.showInDashboardActions)
-    .sort((left, right) => {
-      const leftOrder = left.dashboardActionOrder ?? left.navOrder ?? 100
-      const rightOrder = right.dashboardActionOrder ?? right.navOrder ?? 100
-      return leftOrder - rightOrder
-    })
-    .map(route => ({
-      key: route.name || route.path,
-      to: route.path,
-      icon: route.icon,
-      label: route.dashboardActionLabel || route.label,
-      description: route.navDescription || '',
-      moduleId: route.moduleId || 'core',
-    }))
-}
-
-export function registerAdminDashboardStat(item) {
-  const normalizedItem = {
-    order: 100,
-    iconClass: '',
-    ...item,
-  }
-
-  return upsertByKey(adminDashboardStats, normalizedItem)
-}
-
-export function getAdminDashboardStats(context = {}) {
-  return [...adminDashboardStats]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .filter(Boolean)
-}
-
-export function registerAdminDashboardStatusSummary(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminDashboardStatusSummaries, normalizedItem)
-}
-
-export function getAdminDashboardStatusSummaries(context = {}) {
-  return [...adminDashboardStatusSummaries]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .filter(Boolean)
-}
-
-export function registerAdminDashboardStatusBadge(item) {
-  const normalizedItem = {
-    order: 100,
-    tone: 'neutral',
-    ...item,
-  }
-
-  return upsertByKey(adminDashboardStatusBadges, normalizedItem)
-}
-
-export function getAdminDashboardStatusBadges(context = {}) {
-  return [...adminDashboardStatusBadges]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .filter(Boolean)
-}
-
-export function registerAdminDashboardStatusItem(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminDashboardStatusItems, normalizedItem)
-}
-
-export function getAdminDashboardStatusItems(context = {}) {
-  return [...adminDashboardStatusItems]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .filter(Boolean)
-}
-
-export function registerAdminDashboardAlert(item) {
-  const normalizedItem = {
-    order: 100,
-    tone: 'warning',
-    ...item,
-  }
-
-  return upsertByKey(adminDashboardAlerts, normalizedItem)
-}
-
-export function getAdminDashboardAlerts(context = {}) {
-  return [...adminDashboardAlerts]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .filter(Boolean)
-}
-
-export function registerAdminDashboardQueueMetric(item) {
-  const normalizedItem = {
-    order: 100,
-    variant: 'stat',
-    ...item,
-  }
-
-  return upsertByKey(adminDashboardQueueMetrics, normalizedItem)
-}
-
-export function getAdminDashboardQueueMetrics(context = {}) {
-  return [...adminDashboardQueueMetrics]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .filter(Boolean)
-}
-
-export function registerAdminDashboardCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminDashboardCopies, normalizedItem)
-}
-
-export function getAdminDashboardCopy(context = {}) {
-  return [...adminDashboardCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminDashboardConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminDashboardConfig, normalizedItem)
-}
-
-export function getAdminDashboardConfig(context = {}) {
-  return [...adminDashboardConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminDashboardActionMeta(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminDashboardActionsMeta, normalizedItem)
-}
-
-export function getAdminDashboardActionMeta(context = {}) {
-  return [...adminDashboardActionsMeta]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminDashboardAction(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminDashboardActions, normalizedItem)
-}
-
-export function getAdminDashboardAction(context = {}, key = '') {
-  if (!key) return null
-
-  return [...adminDashboardActions]
-    .filter(item => item.key === key)
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminModulesPageCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminModulesPageCopies, normalizedItem)
-}
-
-export function getAdminModulesPageCopy(context = {}) {
-  return [...adminModulesPageCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminModulesPageConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminModulesPageConfig, normalizedItem)
-}
-
-export function getAdminModulesPageConfig(context = {}) {
-  return [...adminModulesPageConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminModulesPageActionMeta(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminModulesPageActionMeta, normalizedItem)
-}
-
-export function getAdminModulesPageActionMeta(context = {}) {
-  return [...adminModulesPageActionMeta]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminBasicsPageCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminBasicsPageCopies, normalizedItem)
-}
-
-export function getAdminBasicsPageCopy(context = {}) {
-  return [...adminBasicsPageCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminBasicsPageConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminBasicsPageConfig, normalizedItem)
-}
-
-export function getAdminBasicsPageConfig(context = {}) {
-  return [...adminBasicsPageConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminBasicsPageActionMeta(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminBasicsPageActionMeta, normalizedItem)
-}
-
-export function getAdminBasicsPageActionMeta(context = {}) {
-  return [...adminBasicsPageActionMeta]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminAppearancePageCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminAppearancePageCopies, normalizedItem)
-}
-
-export function getAdminAppearancePageCopy(context = {}) {
-  return [...adminAppearancePageCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminAppearancePageConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminAppearancePageConfig, normalizedItem)
-}
-
-export function getAdminAppearancePageConfig(context = {}) {
-  return [...adminAppearancePageConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminAppearancePageActionMeta(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminAppearancePageActionMeta, normalizedItem)
-}
-
-export function getAdminAppearancePageActionMeta(context = {}) {
-  return [...adminAppearancePageActionMeta]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminMailPageCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminMailPageCopies, normalizedItem)
-}
-
-export function getAdminMailPageCopy(context = {}) {
-  return [...adminMailPageCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminMailPageConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminMailPageConfig, normalizedItem)
-}
-
-export function getAdminMailPageConfig(context = {}) {
-  return [...adminMailPageConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminMailPageActionMeta(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminMailPageActionMeta, normalizedItem)
-}
-
-export function getAdminMailPageActionMeta(context = {}) {
-  return [...adminMailPageActionMeta]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminAdvancedPageCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminAdvancedPageCopies, normalizedItem)
-}
-
-export function getAdminAdvancedPageCopy(context = {}) {
-  return [...adminAdvancedPageCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminAdvancedPageConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminAdvancedPageConfig, normalizedItem)
-}
-
-export function getAdminAdvancedPageConfig(context = {}) {
-  return [...adminAdvancedPageConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminAdvancedPageActionMeta(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminAdvancedPageActionMeta, normalizedItem)
-}
-
-export function getAdminAdvancedPageActionMeta(context = {}) {
-  return [...adminAdvancedPageActionMeta]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminAuditLogsPageCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminAuditLogsPageCopies, normalizedItem)
-}
-
-export function getAdminAuditLogsPageCopy(context = {}) {
-  return [...adminAuditLogsPageCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminAuditLogsPageConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminAuditLogsPageConfig, normalizedItem)
-}
-
-export function getAdminAuditLogsPageConfig(context = {}) {
-  return [...adminAuditLogsPageConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminApprovalQueuePageCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminApprovalQueuePageCopies, normalizedItem)
-}
-
-export function getAdminApprovalQueuePageCopy(context = {}) {
-  return [...adminApprovalQueuePageCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminApprovalQueuePageConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminApprovalQueuePageConfig, normalizedItem)
-}
-
-export function getAdminApprovalQueuePageConfig(context = {}) {
-  const config = [...adminApprovalQueuePageConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-
-  if (!config) {
-    return null
-  }
-
-  return {
-    ...config,
-    noteTemplates: getAdminApprovalQueueNoteTemplates(context),
-  }
-}
-
-export function registerAdminApprovalQueuePageActionMeta(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminApprovalQueuePageActionMeta, normalizedItem)
-}
-
-export function getAdminApprovalQueuePageActionMeta(context = {}) {
-  return [...adminApprovalQueuePageActionMeta]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminApprovalQueueNoteTemplate(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminApprovalQueueNoteTemplates, normalizedItem)
-}
-
-export function getAdminApprovalQueueNoteTemplates(context = {}) {
-  return [...adminApprovalQueueNoteTemplates]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .filter(Boolean)
-}
-
-export function registerAdminFlagsPageCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminFlagsPageCopies, normalizedItem)
-}
-
-export function getAdminFlagsPageCopy(context = {}) {
-  return [...adminFlagsPageCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminFlagsPageConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminFlagsPageConfig, normalizedItem)
-}
-
-export function getAdminFlagsPageConfig(context = {}) {
-  return [...adminFlagsPageConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminFlagsPageActionMeta(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminFlagsPageActionMeta, normalizedItem)
-}
-
-export function getAdminFlagsPageActionMeta(context = {}) {
-  return [...adminFlagsPageActionMeta]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminPermissionsPageCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminPermissionsPageCopies, normalizedItem)
-}
-
-export function getAdminPermissionsPageCopy(context = {}) {
-  return [...adminPermissionsPageCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminPermissionsPageConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminPermissionsPageConfig, normalizedItem)
-}
-
-export function getAdminPermissionsPageConfig(context = {}) {
-  return [...adminPermissionsPageConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminPermissionsPageActionMeta(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminPermissionsPageActionMeta, normalizedItem)
-}
-
-export function getAdminPermissionsPageActionMeta(context = {}) {
-  return [...adminPermissionsPageActionMeta]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminUsersPageCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminUsersPageCopies, normalizedItem)
-}
-
-export function getAdminUsersPageCopy(context = {}) {
-  return [...adminUsersPageCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminUsersPageConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminUsersPageConfig, normalizedItem)
-}
-
-export function getAdminUsersPageConfig(context = {}) {
-  return [...adminUsersPageConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminUsersPageActionMeta(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminUsersPageActionMeta, normalizedItem)
-}
-
-export function getAdminUsersPageActionMeta(context = {}) {
-  return [...adminUsersPageActionMeta]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminTagsPageConfig(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminTagsPageConfig, normalizedItem)
-}
-
-export function getAdminTagsPageConfig(context = {}) {
-  return [...adminTagsPageConfig]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminTagsPageCopy(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminTagsPageCopies, normalizedItem)
-}
-
-export function getAdminTagsPageCopy(context = {}) {
-  return [...adminTagsPageCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
-
-export function registerAdminTagsPageActionMeta(item) {
-  const normalizedItem = {
-    order: 100,
-    ...item,
-  }
-
-  return upsertByKey(adminTagsPageActionMeta, normalizedItem)
-}
-
-export function getAdminTagsPageActionMeta(context = {}) {
-  return [...adminTagsPageActionMeta]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
-    .map(item => resolveAdminItem(item, context))
-    .find(Boolean) || null
-}
+export {
+  getAdminDashboardActions,
+  getAdminNavSections,
+  getAdminRoutes,
+  registerAdminRoute,
+} from './registry/routes.js'
+export {
+  getAdminDashboardAction,
+  getAdminDashboardActionMeta,
+  getAdminDashboardAlerts,
+  getAdminDashboardConfig,
+  getAdminDashboardCopy,
+  getAdminDashboardQueueMetrics,
+  getAdminDashboardStats,
+  getAdminDashboardStatusBadges,
+  getAdminDashboardStatusItems,
+  getAdminDashboardStatusSummaries,
+  registerAdminDashboardAction,
+  registerAdminDashboardActionMeta,
+  registerAdminDashboardAlert,
+  registerAdminDashboardConfig,
+  registerAdminDashboardCopy,
+  registerAdminDashboardQueueMetric,
+  registerAdminDashboardStat,
+  registerAdminDashboardStatusBadge,
+  registerAdminDashboardStatusItem,
+  registerAdminDashboardStatusSummary,
+} from './registry/dashboard.js'
+export {
+  getAdminAdvancedPageActionMeta,
+  getAdminAdvancedPageConfig,
+  getAdminAdvancedPageCopy,
+  getAdminAppearancePageActionMeta,
+  getAdminAppearancePageConfig,
+  getAdminAppearancePageCopy,
+  getAdminApprovalQueueNoteTemplates,
+  getAdminApprovalQueuePageActionMeta,
+  getAdminApprovalQueuePageConfig,
+  getAdminApprovalQueuePageCopy,
+  getAdminAuditLogsPageConfig,
+  getAdminAuditLogsPageCopy,
+  getAdminBasicsPageActionMeta,
+  getAdminBasicsPageConfig,
+  getAdminBasicsPageCopy,
+  getAdminFlagsPageActionMeta,
+  getAdminFlagsPageConfig,
+  getAdminFlagsPageCopy,
+  getAdminMailPageActionMeta,
+  getAdminMailPageConfig,
+  getAdminMailPageCopy,
+  getAdminModulesPageActionMeta,
+  getAdminModulesPageConfig,
+  getAdminModulesPageCopy,
+  getAdminPermissionsPageActionMeta,
+  getAdminPermissionsPageConfig,
+  getAdminPermissionsPageCopy,
+  getAdminTagsPageActionMeta,
+  getAdminTagsPageConfig,
+  getAdminTagsPageCopy,
+  getAdminUsersPageActionMeta,
+  getAdminUsersPageConfig,
+  getAdminUsersPageCopy,
+  registerAdminAdvancedPageActionMeta,
+  registerAdminAdvancedPageConfig,
+  registerAdminAdvancedPageCopy,
+  registerAdminAppearancePageActionMeta,
+  registerAdminAppearancePageConfig,
+  registerAdminAppearancePageCopy,
+  registerAdminApprovalQueueNoteTemplate,
+  registerAdminApprovalQueuePageActionMeta,
+  registerAdminApprovalQueuePageConfig,
+  registerAdminApprovalQueuePageCopy,
+  registerAdminAuditLogsPageConfig,
+  registerAdminAuditLogsPageCopy,
+  registerAdminBasicsPageActionMeta,
+  registerAdminBasicsPageConfig,
+  registerAdminBasicsPageCopy,
+  registerAdminFlagsPageActionMeta,
+  registerAdminFlagsPageConfig,
+  registerAdminFlagsPageCopy,
+  registerAdminMailPageActionMeta,
+  registerAdminMailPageConfig,
+  registerAdminMailPageCopy,
+  registerAdminModulesPageActionMeta,
+  registerAdminModulesPageConfig,
+  registerAdminModulesPageCopy,
+  registerAdminPermissionsPageActionMeta,
+  registerAdminPermissionsPageConfig,
+  registerAdminPermissionsPageCopy,
+  registerAdminTagsPageActionMeta,
+  registerAdminTagsPageConfig,
+  registerAdminTagsPageCopy,
+  registerAdminUsersPageActionMeta,
+  registerAdminUsersPageConfig,
+  registerAdminUsersPageCopy,
+} from './registry/pages.js'
+
+import { registerAdminRoute } from './registry/routes.js'
+import {
+  registerAdminDashboardAction,
+  registerAdminDashboardActionMeta,
+  registerAdminDashboardAlert,
+  registerAdminDashboardConfig,
+  registerAdminDashboardCopy,
+  registerAdminDashboardQueueMetric,
+  registerAdminDashboardStat,
+  registerAdminDashboardStatusBadge,
+  registerAdminDashboardStatusItem,
+  registerAdminDashboardStatusSummary,
+} from './registry/dashboard.js'
+import {
+  registerAdminAdvancedPageActionMeta,
+  registerAdminAdvancedPageConfig,
+  registerAdminAdvancedPageCopy,
+  registerAdminAppearancePageActionMeta,
+  registerAdminAppearancePageConfig,
+  registerAdminAppearancePageCopy,
+  registerAdminApprovalQueueNoteTemplate,
+  registerAdminApprovalQueuePageActionMeta,
+  registerAdminApprovalQueuePageConfig,
+  registerAdminApprovalQueuePageCopy,
+  registerAdminAuditLogsPageConfig,
+  registerAdminAuditLogsPageCopy,
+  registerAdminBasicsPageActionMeta,
+  registerAdminBasicsPageConfig,
+  registerAdminBasicsPageCopy,
+  registerAdminFlagsPageActionMeta,
+  registerAdminFlagsPageConfig,
+  registerAdminFlagsPageCopy,
+  registerAdminMailPageActionMeta,
+  registerAdminMailPageConfig,
+  registerAdminMailPageCopy,
+  registerAdminModulesPageActionMeta,
+  registerAdminModulesPageConfig,
+  registerAdminModulesPageCopy,
+  registerAdminPermissionsPageActionMeta,
+  registerAdminPermissionsPageConfig,
+  registerAdminPermissionsPageCopy,
+  registerAdminTagsPageActionMeta,
+  registerAdminTagsPageConfig,
+  registerAdminTagsPageCopy,
+  registerAdminUsersPageActionMeta,
+  registerAdminUsersPageConfig,
+  registerAdminUsersPageCopy,
+} from './registry/pages.js'
 
 registerAdminRoute({
   path: '/admin',
