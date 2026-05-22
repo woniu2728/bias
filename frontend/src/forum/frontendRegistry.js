@@ -71,28 +71,39 @@ function resolveRegisteredItem(item, context = {}) {
     return null
   }
 
+  const getResolvedValue = field => {
+    if (field in resolvedItem) {
+      const value = resolvedItem[field]
+      return typeof value === 'function' ? value(context) : value
+    }
+
+    const fallback = item[field]
+    return typeof fallback === 'function' ? fallback(context) : fallback
+  }
+
   return {
     ...item,
     ...resolvedItem,
-    icon: typeof resolvedItem.icon === 'function' ? resolvedItem.icon(context) : resolvedItem.icon,
-    label: typeof resolvedItem.label === 'function' ? resolvedItem.label(context) : resolvedItem.label,
-    title: typeof resolvedItem.title === 'function' ? resolvedItem.title(context) : resolvedItem.title,
-    tone: typeof resolvedItem.tone === 'function' ? resolvedItem.tone(context) : resolvedItem.tone,
-    to: typeof resolvedItem.to === 'function' ? resolvedItem.to(context) : resolvedItem.to,
-    href: typeof resolvedItem.href === 'function' ? resolvedItem.href(context) : resolvedItem.href,
-    badge: typeof resolvedItem.badge === 'function' ? resolvedItem.badge(context) : resolvedItem.badge,
+    icon: getResolvedValue('icon'),
+    label: getResolvedValue('label'),
+    title: getResolvedValue('title'),
+    tone: getResolvedValue('tone'),
+    to: getResolvedValue('to'),
+    href: getResolvedValue('href'),
+    badge: getResolvedValue('badge'),
+    count: getResolvedValue('count'),
     active: Boolean(
-      typeof resolvedItem.isActive === 'function'
-        ? resolvedItem.isActive(context)
-        : resolvedItem.active
+      'isActive' in resolvedItem
+        ? (typeof resolvedItem.isActive === 'function' ? resolvedItem.isActive(context) : resolvedItem.active)
+        : (typeof item.isActive === 'function' ? item.isActive(context) : item.active)
     ),
-    description: typeof resolvedItem.description === 'function' ? resolvedItem.description(context) : resolvedItem.description,
-    disabledReason: typeof resolvedItem.disabledReason === 'function' ? resolvedItem.disabledReason(context) : resolvedItem.disabledReason,
-    confirm: typeof resolvedItem.confirm === 'function' ? resolvedItem.confirm(context) : resolvedItem.confirm,
+    description: getResolvedValue('description'),
+    disabledReason: getResolvedValue('disabledReason'),
+    confirm: getResolvedValue('confirm'),
     disabled: Boolean(
-      typeof resolvedItem.isDisabled === 'function'
-        ? resolvedItem.isDisabled(context)
-        : resolvedItem.disabled
+      'isDisabled' in resolvedItem
+        ? (typeof resolvedItem.isDisabled === 'function' ? resolvedItem.isDisabled(context) : resolvedItem.disabled)
+        : (typeof item.isDisabled === 'function' ? item.isDisabled(context) : item.disabled)
     ),
   }
 }

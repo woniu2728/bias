@@ -10,6 +10,7 @@ import {
   getHeroMetaItems,
   getNotificationRenderers,
   getPageState,
+  getProfilePanels,
   getPostActions,
   getStateBlock,
   getUiCopy,
@@ -29,6 +30,7 @@ import {
   registerHeroMeta,
   registerNotificationRenderer,
   registerPageState,
+  registerProfilePanel,
   registerStateBlock,
   registerUiCopy,
   registerPostAction,
@@ -110,6 +112,31 @@ test('header items resolve dynamic label and icon fields', () => {
   assert.equal(item.key, key)
   assert.equal(item.icon, 'fas fa-moon')
   assert.equal(item.label, '主题：深色')
+})
+
+test('resolved items preserve top-level dynamic fields when resolve omits them', () => {
+  const key = uniqueKey('profile-panel-dynamic')
+
+  registerProfilePanel({
+    key,
+    order: 10,
+    label: ({ user }) => `${user.username} 的讨论`,
+    icon: ({ user }) => user.is_staff ? 'fas fa-shield-alt' : 'fas fa-user',
+    badge: ({ user }) => Number(user.discussion_count || 0),
+    isVisible: () => true,
+    resolve: () => ({
+      component: 'PanelComponent',
+    }),
+  })
+
+  const [item] = getProfilePanels({
+    user: { username: 'admin', is_staff: true, discussion_count: 6 },
+  })
+
+  assert.equal(item.key, key)
+  assert.equal(item.label, 'admin 的讨论')
+  assert.equal(item.icon, 'fas fa-shield-alt')
+  assert.equal(item.badge, 6)
 })
 
 test('post state badges are ordered and filtered by surface', () => {

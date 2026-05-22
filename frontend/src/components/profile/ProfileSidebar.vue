@@ -10,7 +10,7 @@
           >
             <i :class="item.icon"></i>
             <span>{{ item.label }}</span>
-            <span v-if="typeof item.count === 'number'" class="badge-count">{{ item.count }}</span>
+            <span v-if="typeof resolveItemCount(item) === 'number'" class="badge-count">{{ resolveItemCount(item) }}</span>
           </a>
         </li>
       </ul>
@@ -31,6 +31,12 @@ defineProps({
 })
 
 defineEmits(['change-tab'])
+
+function resolveItemCount(item) {
+  if (typeof item?.count === 'number') return item.count
+  if (typeof item?.badge === 'number') return item.badge
+  return null
+}
 </script>
 
 <style scoped>
