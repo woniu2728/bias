@@ -264,10 +264,14 @@ import { useAdminSaveFeedback } from '../composables/useAdminSaveFeedback'
 import api from '../../api'
 import { useModalStore } from '../../stores/modal'
 import {
-  getAdminPermissionsPageActionMeta,
-  getAdminPermissionsPageConfig,
   getAdminPermissionsPageCopy,
-} from '../registry'
+} from '../registry/pageCopies.js'
+import {
+  getAdminPermissionsPageConfig,
+} from '../registry/pageConfigs.js'
+import {
+  getAdminPermissionsPageActionMeta,
+} from '../registry/pageActionMeta.js'
 
 const groups = ref([])
 const permissions = ref({})
@@ -279,12 +283,12 @@ const showGroupModal = ref(false)
 const groupSaving = ref(false)
 const deletingGroup = ref(false)
 const editingGroup = ref(null)
-const groupForm = ref(getEmptyGroupForm())
 const modalStore = useModalStore()
 const { saveSuccess, resetSaveFeedback, showSaveSuccess } = useAdminSaveFeedback()
 const permissionsCopy = computed(() => getAdminPermissionsPageCopy())
 const permissionsConfig = computed(() => getAdminPermissionsPageConfig())
 const permissionsActionMeta = computed(() => getAdminPermissionsPageActionMeta())
+const groupForm = ref(getEmptyGroupForm())
 
 onMounted(async () => {
   await loadGroups()
