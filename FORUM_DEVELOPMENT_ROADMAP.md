@@ -349,3 +349,5 @@ P2
 - 已完成：本轮标签 slug 收口后已补做 `apps/tags/tests.py` 的回归，并再次执行 `./.venv/bin/pytest` 与 `./.venv/bin/python manage.py test` 全量验证通过；阶段 D 的“收口模型层遗留逻辑”因此继续向 `tags` 域推进，没有引入标签创建、标签编辑或标签列表回归。
 - 已完成：阶段 D 继续收口 `apps/core/forum_resources.py` 的资源注册职责，帖子举报相关的 resource field 注册与 resolver 已下沉到 `apps/core/forum_resources_flags.py`，`forum_resources.py` 因此继续从资源字段注册入口转向主资源装配/序列化编排职责；资源注册边界因此更贴近“按子域拆 helper”的目标，而不是继续把所有 field resolver 堆在一个历史大文件里。
 - 已完成：本轮资源注册拆分后已补做资源注册表回归与帖子/讨论/通知相关针对性回归，并再次执行 `./.venv/bin/pytest` 与 `./.venv/bin/python manage.py test` 全量验证通过；阶段 D 的“收口资源协议实现文件、降低核心大文件维护风险”因此继续向 `forum_resources` 域推进，没有引入资源字段缺失或接口序列化回归。
+- 已完成：阶段 D 继续收口 `apps/core/forum_resources.py` 的剩余复合职责，用户资源注册/关系解析已下沉到 `apps/core/forum_resources_users.py`，系统事件帖 `post_type`/`event_data` 解析已下沉到 `apps/core/forum_resources_post_events.py`；`forum_resources.py` 因此进一步回到主资源装配、讨论/标签字段编排与公共兼容出口职责，避免用户摘要与事件元数据规则继续堆积在同一个核心文件中。
+- 已完成：本轮 `forum_resources` 继续拆分后已补做资源注册表直接回归，并再次执行 `./.venv/bin/pytest`、`./.venv/bin/python manage.py test` 与 `cd frontend && npm test -- --runInBand` 全量验证通过；阶段 D 的“继续拆核心协议实现文件、降低历史大文件维护风险”因此继续沿资源子域 helper 化方向推进，没有引入用户资源序列化、事件帖元数据解析或前端资源消费回归。

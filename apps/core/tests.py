@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 from subprocess import CompletedProcess
 import sys
+from types import SimpleNamespace
 import uuid
 from datetime import timedelta
 
@@ -32,6 +33,8 @@ from apps.core.forum_events import (
     UserSuspendedEvent,
     UserUnsuspendedEvent,
 )
+from apps.core.forum_resources_post_events import resolve_post_event_data
+from apps.core.forum_resources_users import serialize_user_payload, serialize_user_summary
 from apps.core.forum_registry import get_forum_registry, get_registry_permission_codes_by_prefix
 from apps.core.resource_registry import get_resource_registry
 from apps.core.forum_resources_flags import register_forum_flag_resource_fields
@@ -158,6 +161,62 @@ class ResourceRegistryTests(TestCase):
         self.assertIn("open_flag_count", field_names)
         self.assertIn("open_flags", field_names)
         self.assertIn("can_moderate_flags", field_names)
+
+    def test_serialize_user_payload_keeps_registered_primary_group_field(self):
+        user = User.objects.create_user(
+            username="resource-user",
+            email="resource-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        group = Group.objects.create(name="ResourceGroup", color="#16a085", icon="fas fa-user")
+        user.user_groups.add(group)
+
+        summary_payload = serialize_user_summary(user)
+        discussion_payload = serialize_user_payload(user, resource="discussion_user")
+
+        self.assertEqual(summary_payload["username"], user.username)
+        self.assertEqual(summary_payload["primary_group"]["name"], group.name)
+        self.assertEqual(discussion_payload["primary_group"]["name"], group.name)
+
+    def test_resolve_post_event_data_parses_post_hidden_payload(self):
+        payload = resolve_post_event_data(
+            SimpleNamespace(
+                type="postHidden",
+                content="state:hidden\ntarget_post_id:12\ntarget_post_number:5",
+            ),
+            {},
+        )
+
+        self.assertEqual(
+            payload,
+            {
+                "kind": "postHidden",
+                "is_hidden": True,
+                "target_post_id": 12,
+                "target_post_number": 5,
+            },
+        )
+
+    def test_resolve_post_event_data_parses_approval_payload(self):
+        payload = resolve_post_event_data(
+            SimpleNamespace(
+                type="postApproved",
+                content="note:已通过\nprevious_status:pending\ntarget_post_id:9\ntarget_post_number:3",
+            ),
+            {},
+        )
+
+        self.assertEqual(
+            payload,
+            {
+                "kind": "postApproved",
+                "note": "已通过",
+                "previous_status": "pending",
+                "target_post_id": 9,
+                "target_post_number": 3,
+            },
+        )
 
     def test_serializes_base_resource_and_relationship_includes(self):
         registry = ResourceRegistry()
