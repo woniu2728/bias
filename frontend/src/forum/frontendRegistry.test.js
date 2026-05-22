@@ -6,6 +6,7 @@ import {
   getDiscussionReplyState,
   getDiscussionReviewBanner,
   getEmptyState,
+  getHeaderItems,
   getHeroMetaItems,
   getNotificationRenderers,
   getPageState,
@@ -21,6 +22,7 @@ import {
   registerComposerSubmitSuccess,
   registerApprovalNote,
   registerDiscussionAction,
+  registerHeaderItem,
   registerDiscussionReplyState,
   registerDiscussionReviewBanner,
   registerEmptyState,
@@ -89,6 +91,25 @@ test('discussion reply state respects surface filtering', () => {
   const result = getDiscussionReplyState({ surface: 'discussion-reply' })
   assert.equal(result.key, scopedKey)
   assert.equal(result.message, 'scoped')
+})
+
+test('header items resolve dynamic label and icon fields', () => {
+  const key = uniqueKey('header-dynamic')
+
+  registerHeaderItem({
+    key,
+    placement: 'user-menu',
+    order: 10,
+    icon: ({ state }) => state.icon,
+    label: ({ state }) => `主题：${state.label}`,
+    isVisible: () => true,
+  })
+
+  const [item] = getHeaderItems({ state: { icon: 'fas fa-moon', label: '深色' } }, 'user-menu')
+
+  assert.equal(item.key, key)
+  assert.equal(item.icon, 'fas fa-moon')
+  assert.equal(item.label, '主题：深色')
 })
 
 test('post state badges are ordered and filtered by surface', () => {

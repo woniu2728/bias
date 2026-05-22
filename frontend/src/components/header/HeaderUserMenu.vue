@@ -126,11 +126,19 @@ defineEmits(['toggle', 'item-click'])
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   padding: 10px 15px;
+  border: 0;
+  background: transparent;
   color: var(--forum-text-muted);
   font-size: 14px;
+  font-family: inherit;
+  text-align: left;
+  text-decoration: none;
+  appearance: none;
   transition: background 0.2s;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 .dropdown-item:hover {

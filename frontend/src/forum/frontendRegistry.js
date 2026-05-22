@@ -74,6 +74,10 @@ function resolveRegisteredItem(item, context = {}) {
   return {
     ...item,
     ...resolvedItem,
+    icon: typeof resolvedItem.icon === 'function' ? resolvedItem.icon(context) : resolvedItem.icon,
+    label: typeof resolvedItem.label === 'function' ? resolvedItem.label(context) : resolvedItem.label,
+    title: typeof resolvedItem.title === 'function' ? resolvedItem.title(context) : resolvedItem.title,
+    tone: typeof resolvedItem.tone === 'function' ? resolvedItem.tone(context) : resolvedItem.tone,
     to: typeof resolvedItem.to === 'function' ? resolvedItem.to(context) : resolvedItem.to,
     href: typeof resolvedItem.href === 'function' ? resolvedItem.href(context) : resolvedItem.href,
     badge: typeof resolvedItem.badge === 'function' ? resolvedItem.badge(context) : resolvedItem.badge,
