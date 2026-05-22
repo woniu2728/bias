@@ -341,3 +341,5 @@ P2
 - 已完成：本轮拆分后已补做后台核心回归与两套全量验证，确认模块中心、运行时状态页、审核队列、标签/用户/设置等后台链路保持兼容；阶段 D 的“继续拆后台 API、降低历史大文件维护风险”因此继续沿现有路由拆分方向推进，没有偏离到新功能扩张或额外协议改造。
 - 已完成：阶段 D 继续对 `apps/discussions/services.py` 做职责收口，讨论浏览计数、阅读状态同步、订阅状态切换与讨论可见性判定已下沉到 `apps/discussions/discussion_tracking.py`，`DiscussionService` 仅保留原有静态方法兼容出口与服务编排职责；`apps/discussions/services.py` 因此从约 660 行继续收缩到约 480 行，讨论页 API、阅读进度、浏览量刷回命令、实时可见性判断与订阅链路的调用面保持不变。
 - 已完成：本轮 `DiscussionService` 拆分后已补做讨论域、帖子域、通知域、核心实时链路的针对性回归，并再次执行 `./.venv/bin/pytest` 与 `./.venv/bin/python manage.py test` 全量验证通过；阶段 D 的“继续拆大 service 文件、降低跨职责耦合”因此继续向 `discussion` 域推进，没有引入测试退化或接口行为变化。
+- 已完成：阶段 D 继续对 `apps/posts/services.py` 做职责收口，帖子流窗口装配、邻近楼层分页、帖子可见性判定与举报态标注逻辑已下沉到 `apps/posts/post_query_service.py`，`PostService` 仅保留原有静态方法兼容出口与生命周期/审核编排职责；`apps/posts/services.py` 因此从约 580 行继续收缩到约 420 行，讨论串帖子流、楼层定位、点赞态补齐与前后台可见性相关调用面保持不变。
+- 已完成：本轮 `PostService` 查询拆分后已补做帖子域、讨论域、通知域、核心后台链路的针对性回归，并再次执行 `./.venv/bin/pytest` 与 `./.venv/bin/python manage.py test` 全量验证通过；阶段 D 的“继续拆大 service 文件、降低跨职责耦合”因此继续向 `posts` 域推进，没有引入测试退化或接口行为变化。
