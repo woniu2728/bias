@@ -118,6 +118,17 @@ class TagStatsTests(TestCase):
         self.assertEqual(self.tag.discussion_count, 1)
         self.assertEqual(self.tag.last_posted_discussion_id, discussion.id)
 
+    def test_create_tag_generates_slug_when_missing(self):
+        admin = User.objects.create_superuser(
+            username="tag-admin-2",
+            email="tag-admin-2@example.com",
+            password="password123",
+        )
+        tag = TagService.create_tag(name="纯中文标签", user=admin)
+
+        self.assertTrue(tag.slug)
+        self.assertEqual(tag.slug, tag.slug.strip())
+
     def test_reply_refreshes_tag_last_posted_at(self):
         with self.captureOnCommitCallbacks(execute=True):
             discussion = DiscussionService.create_discussion(

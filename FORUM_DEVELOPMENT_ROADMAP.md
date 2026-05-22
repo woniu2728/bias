@@ -345,3 +345,5 @@ P2
 - 已完成：本轮 `PostService` 查询拆分后已补做帖子域、讨论域、通知域、核心后台链路的针对性回归，并再次执行 `./.venv/bin/pytest` 与 `./.venv/bin/python manage.py test` 全量验证通过；阶段 D 的“继续拆大 service 文件、降低跨职责耦合”因此继续向 `posts` 域推进，没有引入测试退化或接口行为变化。
 - 已完成：阶段 D 继续推进 `frontend/src/admin/registry.js` 关联注册层的结构治理，原先集中在 `frontend/src/admin/registry/pages.js` 的后台页面文案、配置、动作元数据与审核备注模板注册职责，已进一步拆到 `frontend/src/admin/registry/pageCopies.js`、`pageConfigs.js`、`pageActionMeta.js` 与 `pageNoteTemplates.js`；`pages.js` 现仅保留聚合导出职责，后台页面注册入口因此继续向“按职责分模块、避免历史注册文件反复膨胀”的方向收口。
 - 已完成：本轮后台页面注册层拆分后已补做 `frontend/src/admin/registry/pages.test.js` 聚合兼容回归，并执行 `npm test` 全量前端测试 `85/85` 通过；阶段 D 的“继续拆 registry 注册职责、降低后台配置层维护风险”因此继续向前端 admin 域推进，没有引入导出中断或页面配置读取回归。
+- 已完成：阶段 D 继续收口 `apps/tags/models.py` 的遗留逻辑，标签 slug 的自动归一化与唯一化已从模型 `save()` 下沉到 `TagService.normalize_tag_slug()`，`create_tag` / `update_tag` 现在显式负责 slug 生成与冲突规避；`Tag` 模型因此回到纯数据承载职责，减少了模型层隐式副作用继续外溢到各类直接持久化路径的风险。
+- 已完成：本轮标签 slug 收口后已补做 `apps/tags/tests.py` 的回归，并再次执行 `./.venv/bin/pytest` 与 `./.venv/bin/python manage.py test` 全量验证通过；阶段 D 的“收口模型层遗留逻辑”因此继续向 `tags` 域推进，没有引入标签创建、标签编辑或标签列表回归。

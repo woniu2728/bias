@@ -2,10 +2,12 @@
 标签系统业务逻辑层
 """
 from datetime import datetime
+import uuid
 from typing import Optional, List
 from django.db import transaction
 from django.db.models import Q, F, Count, QuerySet
 from django.core.exceptions import PermissionDenied
+from django.utils.text import slugify
 from apps.tags.models import Tag, DiscussionTag
 from apps.users.models import User
 from apps.discussions.models import Discussion
@@ -187,6 +189,25 @@ class TagService:
         return primary_tags + secondary_tags
 
     @staticmethod
+    def normalize_tag_slug(name: str, slug: Optional[str] = None, *, exclude_tag_id: Optional[int] = None) -> str:
+        normalized_slug = (slug or "").strip()
+        if not normalized_slug:
+            normalized_slug = slugify(name, allow_unicode=True)
+        if not normalized_slug:
+            normalized_slug = str(uuid.uuid4())[:8]
+
+        original_slug = normalized_slug
+        counter = 1
+        while True:
+            queryset = Tag.objects.filter(slug=normalized_slug)
+            if exclude_tag_id is not None:
+                queryset = queryset.exclude(pk=exclude_tag_id)
+            if not queryset.exists():
+                return normalized_slug
+            normalized_slug = f"{original_slug}-{counter}"
+            counter += 1
+
+    @staticmethod
     def ensure_can_start_discussion(user: User, tag_ids: Optional[List[int]]) -> List[Tag]:
         tags = TagService.get_tags_for_selection(tag_ids)
 
@@ -280,7 +301,7 @@ class TagService:
         with transaction.atomic():
             tag = Tag.objects.create(
                 name=name,
-                slug=slug or "",  # 如果为空，save方法会自动生成
+                slug=TagService.normalize_tag_slug(name, slug),
                 description=description,
                 color=color,
                 icon=icon,
@@ -492,6 +513,11 @@ class TagService:
                 next_start_scope,
                 next_reply_scope,
             )
+
+            if slug is not None:
+                tag.slug = TagService.normalize_tag_slug(tag.name, slug, exclude_tag_id=tag.id)
+            elif not tag.slug:
+                tag.slug = TagService.normalize_tag_slug(tag.name, tag.slug, exclude_tag_id=tag.id)
 
             tag.save()
             return tag

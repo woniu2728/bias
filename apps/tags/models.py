@@ -1,5 +1,4 @@
 from django.db import models
-from django.utils.text import slugify
 from apps.discussions.models import Discussion
 
 
@@ -61,27 +60,6 @@ class Tag(models.Model):
 
     def __str__(self):
         return self.name
-
-    def save(self, *args, **kwargs):
-        # 自动生成slug
-        if not self.slug:
-            from django.utils.text import slugify
-            import uuid
-
-            # 尝试使用名称生成slug
-            self.slug = slugify(self.name, allow_unicode=True)
-
-            # 如果slug为空（比如纯中文），使用UUID
-            if not self.slug:
-                self.slug = str(uuid.uuid4())[:8]
-
-            # 确保slug唯一
-            original_slug = self.slug
-            counter = 1
-            while Tag.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
-                self.slug = f"{original_slug}-{counter}"
-                counter += 1
-        super().save(*args, **kwargs)
 
     def increment_discussion_count(self):
         """增加讨论数"""
