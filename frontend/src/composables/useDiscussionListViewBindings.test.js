@@ -26,6 +26,7 @@ test('discussion list view bindings expose sidebar and content bindings', () => 
     isOwnProfilePage: ref(false),
     isSidebarTagActive: () => false,
     isTagsPage: ref(false),
+    listFilter: ref('all'),
     loading: ref(false),
     loadingMore: ref(false),
     loadingStateText: ref('loading'),
@@ -46,6 +47,9 @@ test('discussion list view bindings expose sidebar and content bindings', () => 
   assert.equal(bindings.sidebarBindings.value.currentTag.name, '公告')
   assert.deepEqual(bindings.contentBindings.value.discussions, [{ id: 1 }])
   assert.equal(bindings.contentBindings.value.sortBy, 'latest')
+  assert.equal(bindings.contentBindings.value.listFilter, 'all')
+  assert.equal(bindings.contentBindings.value.emptyStateText, 'empty')
+  assert.equal(bindings.contentBindings.value.loadingStateText, 'loading')
   assert.deepEqual(bindings.contentBindings.value.buildDiscussionPath({ id: 1 }), {
     path: '/d/1',
     query: { returnDiscussion: 1 },

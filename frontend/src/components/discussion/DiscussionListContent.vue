@@ -4,6 +4,7 @@
       :auth-store="authStore"
       :current-tag="currentTag"
       :is-following-page="isFollowingPage"
+      :list-filter="listFilter"
       :sort-by="sortBy"
       :sort-options="sortOptions"
       :marking-all-read="markingAllRead"
@@ -74,6 +75,10 @@ defineProps({
   isFollowingPage: {
     type: Boolean,
     default: false
+  },
+  listFilter: {
+    type: String,
+    default: 'all'
   },
   sortBy: {
     type: String,
