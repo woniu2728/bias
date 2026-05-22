@@ -162,6 +162,14 @@
                 <strong>{{ module.runtime?.boot_mode_label || modulesCopy?.staticBootModeLabel || '静态注册' }}</strong>
               </div>
               <div class="ModuleMeta-row">
+                <span>{{ modulesCopy?.lifecycleLabel || '生命周期' }}</span>
+                <strong>{{ formatLifecycleLabels(module) }}</strong>
+              </div>
+              <div class="ModuleMeta-row">
+                <span>{{ modulesCopy?.readinessProbeLabel || '就绪判定' }}</span>
+                <strong>{{ module.runtime?.readiness_probe || module.lifecycle?.readiness_probe || (modulesCopy?.noValueText || '无') }}</strong>
+              </div>
+              <div class="ModuleMeta-row">
                 <span>{{ modulesCopy?.settingsGroupLabel || '设置组' }}</span>
                 <strong>{{ module.settings?.groups?.length ? module.settings.groups.join(', ') : (modulesCopy?.noValueText || '无') }}</strong>
               </div>
@@ -264,6 +272,29 @@
                   </li>
                 </ul>
                 <p v-else class="ModuleEmpty">{{ modulesCopy?.noSettingsRuntimeText || '暂无设置或运行时元数据' }}</p>
+              </div>
+
+              <div>
+                <h5>{{ modulesCopy?.lifecycleTitle || '生命周期' }}</h5>
+                <ul v-if="module.lifecycle?.phases?.length" class="ModuleList">
+                  <li v-for="phase in module.lifecycle.phases" :key="phase.key">
+                    <span><code>{{ phase.label }}</code>{{ phase.optional ? ` · ${modulesCopy?.lifecyclePhaseOptionalLabel || '可选'}` : '' }}</span>
+                    <small>{{ phase.description }}</small>
+                  </li>
+                  <li>
+                    <span>{{ modulesCopy?.readinessProbeLabel || '就绪判定' }}</span>
+                    <code>{{ module.lifecycle?.readiness_probe || module.runtime?.readiness_probe || (modulesCopy?.noValueText || '无') }}</code>
+                  </li>
+                  <li>
+                    <span>{{ modulesCopy?.supportsDisableLabel || '可停用' }}</span>
+                    <code>{{ module.lifecycle?.supports_disable ? (modulesCopy?.yesText || '是') : (modulesCopy?.noText || '否') }}</code>
+                  </li>
+                  <li>
+                    <span>{{ modulesCopy?.supportsTeardownLabel || '可回收' }}</span>
+                    <code>{{ module.lifecycle?.supports_teardown ? (modulesCopy?.yesText || '是') : (modulesCopy?.noText || '否') }}</code>
+                  </li>
+                </ul>
+                <p v-else class="ModuleEmpty">{{ modulesCopy?.lifecycleReadyStateText || 'ready 由依赖校验与运行时健康摘要共同判定' }}</p>
               </div>
 
               <div>
@@ -915,6 +946,7 @@ function normalizeModule(module) {
     health_status_label: module.health_status_label || '健康',
     runtime_dependency_summary: module.runtime_dependency_summary || null,
     settings: module.settings || { groups: [], group_count: 0, configured_key_count: 0, has_settings: false },
+    lifecycle: module.lifecycle || { phases: [], supports_disable: false, supports_teardown: false, readiness_probe: '' },
     runtime: module.runtime || {},
     documentation_url: module.documentation_url || '',
   }
@@ -981,6 +1013,14 @@ function formatPostTypeCapabilities(postType) {
   if (postType.counts_toward_user) labels.push(modulesCopy.value?.countsUserCapabilityLabel || '计入用户')
   if (postType.searchable) labels.push(modulesCopy.value?.searchableCapabilityLabel || '可搜索')
   return labels.join(' / ') || modulesCopy.value?.noValueText || '无'
+}
+
+function formatLifecycleLabels(module) {
+  const phases = module.lifecycle?.phases || []
+  if (!phases.length) {
+    return modulesCopy.value?.noValueText || '无'
+  }
+  return phases.map(item => item.label).join(' -> ')
 }
 </script>
 
@@ -1258,6 +1298,12 @@ function formatPostTypeCapabilities(postType) {
 
 .ModuleList li {
   overflow-wrap: anywhere;
+}
+
+.ModuleList small {
+  display: block;
+  color: var(--forum-text-soft);
+  line-height: 1.5;
 }
 
 .ModuleList li small {

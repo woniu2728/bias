@@ -4699,6 +4699,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("health_status", core_module)
         self.assertIn("settings", core_module)
         self.assertIn("runtime", core_module)
+        self.assertIn("lifecycle", core_module)
         self.assertIn("registration_counts", core_module)
         self.assertIn("permissions", core_module)
         self.assertIn("documentation_url", core_module)
@@ -4707,8 +4708,18 @@ class AdminPermissionsApiTests(TestCase):
             "/admin.html#/admin/docs?guide=module-development&module=core",
         )
         self.assertIn("debug_items", core_module["runtime"])
+        self.assertIn("lifecycle_phases", core_module["runtime"])
         self.assertIn("permissions_entry_path", core_module["runtime"])
         self.assertIn("module_center_path", core_module["runtime"])
+        self.assertEqual(core_module["lifecycle"]["registration_mode"], "static")
+        self.assertEqual(core_module["lifecycle"]["registration_mode_label"], "启动时静态注册")
+        self.assertEqual(core_module["lifecycle"]["supports_disable"], False)
+        self.assertEqual(core_module["lifecycle"]["supports_teardown"], False)
+        self.assertEqual(
+            [item["key"] for item in core_module["lifecycle"]["phases"]],
+            ["register", "bootstrap", "ready", "disable", "teardown"],
+        )
+        self.assertTrue(any(item["optional"] for item in core_module["lifecycle"]["phases"] if item["key"] == "disable"))
         self.assertIn("resource_definitions", posts_module)
         self.assertIn("resource_relationships", posts_module)
         self.assertIn("resource_fields", tags_module)

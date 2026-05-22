@@ -133,6 +133,55 @@ class DiscussionListFilterDefinition:
 
 
 @dataclass(frozen=True)
+class ModuleLifecyclePhaseDefinition:
+    key: str
+    label: str
+    description: str = ""
+    optional: bool = False
+
+
+DEFAULT_MODULE_LIFECYCLE_PHASES: Tuple[ModuleLifecyclePhaseDefinition, ...] = (
+    ModuleLifecyclePhaseDefinition(
+        key="register",
+        label="register",
+        description="声明模块元数据，并注册权限、后台页、资源字段和扩展入口。",
+    ),
+    ModuleLifecyclePhaseDefinition(
+        key="bootstrap",
+        label="bootstrap",
+        description="在前后端启动期挂接默认配置、路由、事件监听和前端注入点。",
+    ),
+    ModuleLifecyclePhaseDefinition(
+        key="ready",
+        label="ready",
+        description="依赖和运行时检查完成后，对外提供稳定可消费的模块能力。",
+    ),
+    ModuleLifecyclePhaseDefinition(
+        key="disable",
+        label="optional disable",
+        description="当依赖缺失、配置关闭或健康检查失败时，可显式停用模块能力。",
+        optional=True,
+    ),
+    ModuleLifecyclePhaseDefinition(
+        key="teardown",
+        label="teardown",
+        description="卸载或切换实现时回收注入点、监听器和运行时资源。",
+        optional=True,
+    ),
+)
+
+
+@dataclass(frozen=True)
+class ModuleLifecycleDefinition:
+    registration_mode: str = "static"
+    registration_mode_label: str = "启动时静态注册"
+    readiness_probe: str = "依赖校验与健康摘要"
+    supports_disable: bool = False
+    supports_teardown: bool = False
+    phases: Tuple[ModuleLifecyclePhaseDefinition, ...] = DEFAULT_MODULE_LIFECYCLE_PHASES
+
+
+@dataclass(frozen=True)
 class ForumModuleDefinition:
     module_id: str
     name: str
@@ -155,3 +204,4 @@ class ForumModuleDefinition:
     discussion_list_filters: Tuple[DiscussionListFilterDefinition, ...] = ()
     settings_groups: Tuple[str, ...] = ()
     documentation_url: str = ""
+    lifecycle: ModuleLifecycleDefinition = ModuleLifecycleDefinition()

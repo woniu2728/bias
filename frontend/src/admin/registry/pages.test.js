@@ -97,3 +97,28 @@ test('admin page action meta registry stays available through aggregate exports'
   assert.equal(actionMeta.key, visibleKey)
   assert.equal(actionMeta.saveLabel, 'visible')
 })
+
+test('modules page copy registry preserves lifecycle labels for module center rendering', () => {
+  const lifecycleKey = uniqueKey('modules-copy-lifecycle')
+
+  registerAdminModulesPageCopy({
+    key: lifecycleKey,
+    order: 5,
+    resolve: () => ({
+      lifecycleLabel: '生命周期',
+      readinessProbeLabel: '就绪判定',
+      supportsDisableLabel: '可停用',
+      supportsTeardownLabel: '可回收',
+      lifecycleTitle: '生命周期',
+    }),
+  })
+
+  const copy = getAdminModulesPageCopy()
+
+  assert.equal(copy.key, lifecycleKey)
+  assert.equal(copy.lifecycleLabel, '生命周期')
+  assert.equal(copy.readinessProbeLabel, '就绪判定')
+  assert.equal(copy.supportsDisableLabel, '可停用')
+  assert.equal(copy.supportsTeardownLabel, '可回收')
+  assert.equal(copy.lifecycleTitle, '生命周期')
+})

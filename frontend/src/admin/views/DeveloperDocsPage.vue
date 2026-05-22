@@ -51,6 +51,7 @@ import eventSubscriptionsDoc from '../../../../docs/developer/event-subscription
 import frontendInjectionDoc from '../../../../docs/developer/frontend-injection-points.md?raw'
 import permissionRegistrationDoc from '../../../../docs/developer/permission-registration.md?raw'
 import adminPageRegistrationDoc from '../../../../docs/developer/admin-page-registration.md?raw'
+import platformDeliveryDoc from '../../../../docs/developer/platform-delivery.md?raw'
 
 const route = useRoute()
 
@@ -61,6 +62,7 @@ const guides = [
   { key: 'frontend-injection-points', title: '前端注入点指南', description: '说明 header、动作、状态块等扩展入口。', filename: 'frontend-injection-points.md', content: frontendInjectionDoc },
   { key: 'permission-registration', title: '权限注册指南', description: '说明权限码、别名和依赖关系的注册方式。', filename: 'permission-registration.md', content: permissionRegistrationDoc },
   { key: 'admin-page-registration', title: '后台页面注册指南', description: '说明后台页面如何同时接入后端模块定义与前端路由。', filename: 'admin-page-registration.md', content: adminPageRegistrationDoc },
+  { key: 'platform-delivery', title: '平台交付与性能收尾指南', description: '说明阶段 F 的性能、部署和平台交付检查项。', filename: 'platform-delivery.md', content: platformDeliveryDoc },
 ]
 
 const moduleId = computed(() => String(route.query.module || '').trim())

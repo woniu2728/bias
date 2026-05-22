@@ -99,6 +99,22 @@ def resolve_module_documentation_url(module) -> str:
 
 
 def build_module_runtime_state(module) -> Dict[str, Any]:
+    lifecycle = getattr(module, "lifecycle", None)
+    registration_mode = getattr(lifecycle, "registration_mode", "static")
+    registration_mode_label = getattr(lifecycle, "registration_mode_label", "启动时静态注册")
+    readiness_probe = getattr(lifecycle, "readiness_probe", "依赖校验与健康摘要")
+    supports_disable = bool(getattr(lifecycle, "supports_disable", False))
+    supports_teardown = bool(getattr(lifecycle, "supports_teardown", False))
+    phases = [
+        {
+            "key": phase.key,
+            "label": phase.label,
+            "description": phase.description,
+            "optional": phase.optional,
+        }
+        for phase in getattr(lifecycle, "phases", ())
+    ]
+
     migration_state = "built-in"
     migration_label = "内置模块"
     if module.module_id == "core":
@@ -117,16 +133,21 @@ def build_module_runtime_state(module) -> Dict[str, Any]:
     return {
         "migration_state": migration_state,
         "migration_label": migration_label,
-        "boot_mode": "static",
-        "boot_mode_label": "启动时静态注册",
+        "boot_mode": registration_mode,
+        "boot_mode_label": registration_mode_label,
+        "readiness_probe": readiness_probe,
+        "supports_disable": supports_disable,
+        "supports_teardown": supports_teardown,
+        "lifecycle_phases": phases,
         "settings_entry_path": settings_entry_path,
         "permissions_entry_path": "/admin/permissions" if module.permissions else "",
         "module_center_path": f"/admin/modules?module={module.module_id}",
         "debug_items": [
             {"key": "module_id", "label": "模块 ID", "value": module.module_id},
             {"key": "category", "label": "模块分类", "value": resolve_module_category_label(module.category)},
-            {"key": "boot_mode", "label": "启动方式", "value": "启动时静态注册"},
+            {"key": "boot_mode", "label": "启动方式", "value": registration_mode_label},
             {"key": "migration", "label": "迁移状态", "value": migration_label},
+            {"key": "readiness_probe", "label": "就绪判定", "value": readiness_probe},
         ],
     }
 
@@ -212,6 +233,22 @@ def serialize_module_definition(
         "capabilities": list(module.capabilities),
         "settings": settings_overview,
         "documentation_url": resolve_module_documentation_url(module),
+        "lifecycle": {
+            "registration_mode": getattr(module.lifecycle, "registration_mode", "static"),
+            "registration_mode_label": getattr(module.lifecycle, "registration_mode_label", "启动时静态注册"),
+            "readiness_probe": getattr(module.lifecycle, "readiness_probe", "依赖校验与健康摘要"),
+            "supports_disable": bool(getattr(module.lifecycle, "supports_disable", False)),
+            "supports_teardown": bool(getattr(module.lifecycle, "supports_teardown", False)),
+            "phases": [
+                {
+                    "key": phase.key,
+                    "label": phase.label,
+                    "description": phase.description,
+                    "optional": phase.optional,
+                }
+                for phase in getattr(module.lifecycle, "phases", ())
+            ],
+        },
         "runtime": runtime_state,
         "notification_types": [
             {
