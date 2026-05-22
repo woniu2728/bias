@@ -1,29 +1,29 @@
-"""
-讨论系统业务逻辑层
-"""
-from typing import Optional, List, Tuple
-from django.db.models import F, Count
-from django.core.cache import cache
+"""讨论系统业务逻辑层。"""
+from typing import List, Optional, Tuple
+
 from django.core.exceptions import PermissionDenied
+from django.db.models import Count
 from django.utils import timezone
+
 from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
 from apps.core.forum_registry import get_forum_registry
+from apps.discussions import discussion_tracking, service_lifecycle
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post
-from apps.users.models import User
-from apps.users.services import UserService
+from apps.core.services import PaginationService, SearchService
 from apps.tags.models import Tag
 from apps.tags.services import TagService
-from apps.core.services import PaginationService, SearchService
-from apps.core.visibility import build_discussion_visibility_q
-from apps.discussions import service_lifecycle
+from apps.users.models import User
+from apps.users.services import UserService
 
 
 FORUM_REGISTRY = get_forum_registry()
 DEFAULT_POST_TYPE = FORUM_REGISTRY.get_default_post_type_code()
 DISCUSSION_COUNTED_POST_TYPES = FORUM_REGISTRY.get_discussion_counted_post_type_codes()
 USER_COUNTED_POST_TYPES = FORUM_REGISTRY.get_user_counted_post_type_codes()
+
+
 class DiscussionService:
     """讨论服务"""
 
@@ -50,159 +50,79 @@ class DiscussionService:
 
     @staticmethod
     def _viewer_cache_identity(user: Optional[User]) -> str:
-        if user and user.is_authenticated:
-            return f"user:{user.id}"
-        return "guest"
+        return discussion_tracking.viewer_cache_identity(user)
 
     @staticmethod
     def _view_count_cache_key(discussion_id: int, user: Optional[User]) -> str:
-        return f"discussion.viewed.{discussion_id}.{DiscussionService._viewer_cache_identity(user)}"
+        return discussion_tracking.view_count_cache_key(discussion_id, user)
 
     @staticmethod
     def _view_count_pending_cache_key(discussion_id: int) -> str:
-        return f"discussion.view_count.pending.{discussion_id}"
+        return discussion_tracking.view_count_pending_cache_key(discussion_id)
 
     @staticmethod
     def _view_count_flush_lock_cache_key(discussion_id: int) -> str:
-        return f"discussion.view_count.flush_lock.{discussion_id}"
+        return discussion_tracking.view_count_flush_lock_cache_key(discussion_id)
 
     @staticmethod
     def record_view(discussion: Discussion, user: Optional[User] = None) -> bool:
-        cache_key = DiscussionService._view_count_cache_key(discussion.id, user)
-        try:
-            if cache.get(cache_key):
-                return False
-            cache.set(cache_key, True, DiscussionService.VIEW_COUNT_THROTTLE_SECONDS)
-        except Exception:
-            pass
-
-        try:
-            pending_count = DiscussionService._increment_pending_view_count(discussion.id)
-            DiscussionService.dispatch_view_count_flush(discussion.id, pending_count=pending_count)
-        except Exception:
-            Discussion.objects.filter(id=discussion.id).update(view_count=F('view_count') + 1)
-
-        discussion.view_count = (discussion.view_count or 0) + 1
-        return True
+        return discussion_tracking.record_view(
+            discussion,
+            user=user,
+            throttle_seconds=DiscussionService.VIEW_COUNT_THROTTLE_SECONDS,
+            cache_timeout=DiscussionService.VIEW_COUNT_CACHE_TIMEOUT,
+            pending_ids_cache_key=DiscussionService.VIEW_COUNT_PENDING_IDS_CACHE_KEY,
+            flush_delay_seconds=DiscussionService.VIEW_COUNT_FLUSH_DELAY_SECONDS,
+        )
 
     @staticmethod
     def _increment_pending_view_count(discussion_id: int) -> int:
-        pending_key = DiscussionService._view_count_pending_cache_key(discussion_id)
-        cache.add(pending_key, 0, DiscussionService.VIEW_COUNT_CACHE_TIMEOUT)
-        pending_count = cache.incr(pending_key)
-        DiscussionService._remember_pending_view_discussion(discussion_id)
-        return int(pending_count or 0)
+        return discussion_tracking.increment_pending_view_count(
+            discussion_id,
+            cache_timeout=DiscussionService.VIEW_COUNT_CACHE_TIMEOUT,
+            pending_ids_cache_key=DiscussionService.VIEW_COUNT_PENDING_IDS_CACHE_KEY,
+        )
 
     @staticmethod
     def _remember_pending_view_discussion(discussion_id: int) -> None:
-        pending_ids = cache.get(DiscussionService.VIEW_COUNT_PENDING_IDS_CACHE_KEY) or []
-        if discussion_id not in pending_ids:
-            pending_ids.append(discussion_id)
-            cache.set(
-                DiscussionService.VIEW_COUNT_PENDING_IDS_CACHE_KEY,
-                pending_ids,
-                DiscussionService.VIEW_COUNT_CACHE_TIMEOUT,
-            )
+        discussion_tracking.remember_pending_view_discussion(
+            discussion_id,
+            cache_timeout=DiscussionService.VIEW_COUNT_CACHE_TIMEOUT,
+            pending_ids_cache_key=DiscussionService.VIEW_COUNT_PENDING_IDS_CACHE_KEY,
+        )
 
     @staticmethod
     def dispatch_view_count_flush(discussion_id: int, pending_count: int = 0):
-        from apps.core.queue_service import QueueService
-        from apps.discussions.tasks import flush_discussion_view_count_task
-
-        def fallback():
-            return DiscussionService.flush_pending_view_count(discussion_id)
-
-        if QueueService.should_enqueue():
-            lock_key = DiscussionService._view_count_flush_lock_cache_key(discussion_id)
-            lock_timeout = DiscussionService.VIEW_COUNT_FLUSH_DELAY_SECONDS + 30
-            if cache.add(lock_key, True, lock_timeout):
-                return QueueService.dispatch_celery_task(
-                    flush_discussion_view_count_task,
-                    discussion_id,
-                    countdown=DiscussionService.VIEW_COUNT_FLUSH_DELAY_SECONDS,
-                    fallback=fallback,
-                )
-            return None
-
-        return QueueService.dispatch_celery_task(
-            flush_discussion_view_count_task,
+        return discussion_tracking.dispatch_view_count_flush(
             discussion_id,
-            fallback=fallback,
+            pending_count=pending_count,
+            cache_timeout=DiscussionService.VIEW_COUNT_CACHE_TIMEOUT,
+            flush_delay_seconds=DiscussionService.VIEW_COUNT_FLUSH_DELAY_SECONDS,
         )
 
     @staticmethod
     def flush_pending_view_count(discussion_id: int) -> int:
-        pending_key = DiscussionService._view_count_pending_cache_key(discussion_id)
-        lock_key = DiscussionService._view_count_flush_lock_cache_key(discussion_id)
-        cache.delete(lock_key)
-
-        try:
-            pending_count = int(cache.get(pending_key) or 0)
-        except (TypeError, ValueError):
-            pending_count = 0
-        if pending_count <= 0:
-            return 0
-
-        try:
-            remaining = cache.decr(pending_key, pending_count)
-            if remaining <= 0:
-                cache.delete(pending_key)
-        except Exception:
-            cache.delete(pending_key)
-            remaining = 0
-
-        Discussion.objects.filter(id=discussion_id).update(view_count=F('view_count') + pending_count)
-        if remaining > 0:
-            DiscussionService.dispatch_view_count_flush(discussion_id, pending_count=remaining)
-        return pending_count
-
-    @staticmethod
-    def flush_all_pending_view_counts() -> int:
-        pending_ids = cache.get(DiscussionService.VIEW_COUNT_PENDING_IDS_CACHE_KEY) or []
-        flushed_count = 0
-        active_ids = []
-        for discussion_id in pending_ids:
-            flushed_count += DiscussionService.flush_pending_view_count(int(discussion_id))
-            if cache.get(DiscussionService._view_count_pending_cache_key(int(discussion_id))):
-                active_ids.append(int(discussion_id))
-
-        if active_ids:
-            cache.set(
-                DiscussionService.VIEW_COUNT_PENDING_IDS_CACHE_KEY,
-                active_ids,
-                DiscussionService.VIEW_COUNT_CACHE_TIMEOUT,
-            )
-        else:
-            cache.delete(DiscussionService.VIEW_COUNT_PENDING_IDS_CACHE_KEY)
-        return flushed_count
-
-    @staticmethod
-    def _can_view_discussion(discussion: Discussion, user: Optional[User]) -> bool:
-        if discussion.hidden_at and not (user and user.is_staff):
-            can_view_rejected_own_discussion = bool(
-                user
-                and user.is_authenticated
-                and discussion.approval_status == Discussion.APPROVAL_REJECTED
-                and discussion.user_id == user.id
-            )
-            if not can_view_rejected_own_discussion:
-                return False
-        if not TagService.can_view_discussion_tags(discussion, user):
-            return False
-        if discussion.approval_status == Discussion.APPROVAL_APPROVED:
-            return True
-        if user and user.is_staff:
-            return True
-        return bool(
-            user
-            and user.is_authenticated
-            and discussion.approval_status in {Discussion.APPROVAL_PENDING, Discussion.APPROVAL_REJECTED}
-            and discussion.user_id == user.id
+        return discussion_tracking.flush_pending_view_count(
+            discussion_id,
+            cache_timeout=DiscussionService.VIEW_COUNT_CACHE_TIMEOUT,
+            flush_delay_seconds=DiscussionService.VIEW_COUNT_FLUSH_DELAY_SECONDS,
         )
 
     @staticmethod
+    def flush_all_pending_view_counts() -> int:
+        return discussion_tracking.flush_all_pending_view_counts(
+            cache_timeout=DiscussionService.VIEW_COUNT_CACHE_TIMEOUT,
+            pending_ids_cache_key=DiscussionService.VIEW_COUNT_PENDING_IDS_CACHE_KEY,
+            flush_delay_seconds=DiscussionService.VIEW_COUNT_FLUSH_DELAY_SECONDS,
+        )
+
+    @staticmethod
+    def _can_view_discussion(discussion: Discussion, user: Optional[User]) -> bool:
+        return discussion_tracking.can_view_discussion(discussion, user)
+
+    @staticmethod
     def apply_visibility_filters(queryset, user: Optional[User] = None):
-        return queryset.filter(build_discussion_visibility_q(user))
+        return discussion_tracking.apply_visibility_filters(queryset, user)
 
     @staticmethod
     @sqlite_write_retry()
@@ -367,132 +287,29 @@ class DiscussionService:
 
     @staticmethod
     def _attach_user_read_state(discussions: List[Discussion], user: Optional[User]) -> None:
-        if not discussions:
-            return
-
-        if not user or not user.is_authenticated:
-            for discussion in discussions:
-                discussion.is_subscribed = False
-                discussion.last_read_at = None
-                discussion.last_read_post_number = 0
-                discussion.unread_count = 0
-                discussion.is_unread = False
-            return
-
-        states = {
-            state.discussion_id: state
-            for state in DiscussionUser.objects.filter(
-                user=user,
-                discussion_id__in=[discussion.id for discussion in discussions],
-            )
-        }
-        marked_all_as_read_at = getattr(user, 'marked_all_as_read_at', None)
-
-        for discussion in discussions:
-            state = states.get(discussion.id)
-            last_read_at = state.last_read_at if state else None
-            last_read_post_number = state.last_read_post_number if state else 0
-
-            if (
-                marked_all_as_read_at
-                and discussion.last_posted_at
-                and discussion.last_posted_at <= marked_all_as_read_at
-            ):
-                last_read_at = marked_all_as_read_at
-                last_read_post_number = max(last_read_post_number, discussion.last_post_number or 0)
-
-            discussion.is_subscribed = bool(state and state.is_subscribed)
-            discussion.last_read_at = last_read_at
-            discussion.last_read_post_number = last_read_post_number
-            discussion.unread_count = max((discussion.last_post_number or 0) - last_read_post_number, 0)
-            discussion.is_unread = discussion.unread_count > 0
+        discussion_tracking.attach_user_read_state(discussions, user)
 
     @staticmethod
     def mark_all_as_read(user: User):
-        now = timezone.now()
-        user.marked_all_as_read_at = now
-        user.save(update_fields=['marked_all_as_read_at'])
-        return now
+        return discussion_tracking.mark_all_as_read(user)
 
     @staticmethod
     def update_read_state(discussion_id: int, user: User, last_read_post_number: int) -> DiscussionUser:
-        discussion = Discussion.objects.get(id=discussion_id)
-        if not DiscussionService._can_view_discussion(discussion, user):
-            raise PermissionDenied("没有权限查看此讨论")
-
-        clamped_number = max(1, min(last_read_post_number, discussion.last_post_number or 1))
-        state, _ = DiscussionUser.objects.get_or_create(
-            discussion=discussion,
-            user=user,
-            defaults={
-                'last_read_at': timezone.now(),
-                'last_read_post_number': clamped_number,
-            }
-        )
-
-        next_number = max(state.last_read_post_number, clamped_number)
-        update_fields = []
-        if next_number != state.last_read_post_number:
-            state.last_read_post_number = next_number
-            update_fields.append('last_read_post_number')
-
-        now = timezone.now()
-        if not state.last_read_at or next_number >= state.last_read_post_number:
-            state.last_read_at = now
-            update_fields.append('last_read_at')
-
-        if update_fields:
-            state.save(update_fields=update_fields)
-
-        return state
+        return discussion_tracking.update_read_state(discussion_id, user, last_read_post_number)
 
     @staticmethod
     def get_subscription_state(discussion: Discussion, user: Optional[User]) -> bool:
-        if not user or not user.is_authenticated:
-            return False
-
-        state = DiscussionUser.objects.filter(
-            discussion=discussion,
-            user=user,
-            is_subscribed=True,
-        ).exists()
-        return state
+        return discussion_tracking.get_subscription_state(discussion, user)
 
     @staticmethod
     def subscribe_discussion(discussion_id: int, user: User) -> bool:
         UserService.ensure_not_suspended(user, "关注讨论")
-        discussion = Discussion.objects.get(id=discussion_id)
-        state, _ = DiscussionUser.objects.get_or_create(
-            discussion=discussion,
-            user=user,
-            defaults={
-                'last_read_at': timezone.now(),
-                'last_read_post_number': discussion.last_post_number or 0,
-            }
-        )
-        if state.is_subscribed:
-            return False
-        state.is_subscribed = True
-        state.save(update_fields=['is_subscribed'])
-        return True
+        return discussion_tracking.set_subscription_state(discussion_id, user, True)
 
     @staticmethod
     def unsubscribe_discussion(discussion_id: int, user: User) -> bool:
         UserService.ensure_not_suspended(user, "关注讨论")
-        discussion = Discussion.objects.get(id=discussion_id)
-        state, _ = DiscussionUser.objects.get_or_create(
-            discussion=discussion,
-            user=user,
-            defaults={
-                'last_read_at': timezone.now(),
-                'last_read_post_number': discussion.last_post_number or 0,
-            }
-        )
-        if not state.is_subscribed:
-            return False
-        state.is_subscribed = False
-        state.save(update_fields=['is_subscribed'])
-        return True
+        return discussion_tracking.set_subscription_state(discussion_id, user, False)
 
     @staticmethod
     def update_discussion(
