@@ -1,26 +1,24 @@
-"""
-管理后台API端点
-"""
+"""管理后台 API 聚合与共享 helper。"""
+import functools
 import json
 import sys
-import functools
 from pathlib import Path
-from urllib.parse import urlparse
+from typing import Any, Dict, List
 
 import django
-from ninja import Router, Body
-from django.shortcuts import get_object_or_404
-from django.http import JsonResponse
 from django.conf import settings
 from django.core.cache import cache
-from django.utils import timezone
-from django.utils.dateparse import parse_datetime
-from typing import List, Dict, Any
-from django.db import transaction
-from django.db.models import Count, Max, Q
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
+from django.db import transaction
+from django.db.models import Max
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from ninja import Body, Router
 
+from apps.core import admin_module_helpers, admin_runtime_helpers
 from apps.core.email_service import EmailService
 from apps.core.audit import log_admin_action
 from apps.core.mail_drivers import (
@@ -233,62 +231,15 @@ def serialize_admin_user(user: User, include_details: bool = False) -> Dict[str,
 
 
 def resolve_module_category_label(category: str) -> str:
-    if category == "core":
-        return "核心"
-    if category == "infrastructure":
-        return "基础设施"
-    return "功能模块"
+    return admin_module_helpers.resolve_module_category_label(category)
 
 
 def build_module_dependency_state(module, module_map: Dict[str, Any]) -> Dict[str, Any]:
-    missing_dependencies = []
-    disabled_dependencies = []
-
-    for dependency in module.dependencies:
-        dependency_module = module_map.get(dependency)
-        if dependency_module is None:
-            missing_dependencies.append(dependency)
-        elif not dependency_module.enabled:
-            disabled_dependencies.append(dependency)
-
-    if missing_dependencies:
-        status = "missing"
-        label = "缺少依赖"
-    elif disabled_dependencies:
-        status = "disabled"
-        label = "依赖未启用"
-    else:
-        status = "healthy"
-        label = "依赖正常"
-
-    return {
-        "status": status,
-        "label": label,
-        "missing": missing_dependencies,
-        "disabled": disabled_dependencies,
-    }
+    return admin_module_helpers.build_module_dependency_state(module, module_map)
 
 
 def build_module_health_state(module, dependency_state: Dict[str, Any]) -> Dict[str, Any]:
-    issues = []
-
-    if dependency_state["status"] != "healthy":
-        issues.append(dependency_state["label"])
-
-    if module.enabled and not module.capabilities:
-        issues.append("未声明能力项")
-
-    status = "healthy"
-    label = "健康"
-    if issues:
-        status = "attention"
-        label = "需关注"
-
-    return {
-        "status": status,
-        "label": label,
-        "issues": issues,
-    }
+    return admin_module_helpers.build_module_health_state(module, dependency_state)
 
 
 def build_runtime_dependency_summary() -> dict[str, Any]:
@@ -319,296 +270,40 @@ def build_runtime_dependency_summary() -> dict[str, Any]:
 
 
 def build_module_settings_overview(module) -> Dict[str, Any]:
-    setting_keys = []
-    for group_name in module.settings_groups:
-        if group_name == "basic":
-            setting_keys.extend([f"basic.{key}" for key in BASIC_SETTINGS_DEFAULTS.keys()])
-        elif group_name == "appearance":
-            setting_keys.extend([f"appearance.{key}" for key in APPEARANCE_SETTINGS_DEFAULTS.keys()])
-        elif group_name == "advanced":
-            setting_keys.extend([f"advanced.{key}" for key in ADVANCED_SETTINGS_DEFAULTS.keys()])
-        elif group_name == "mail":
-            setting_keys.extend([f"mail.{key}" for key in get_mail_settings_defaults().keys()])
-
-    configured_count = 0
-    if setting_keys:
-        configured_count = Setting.objects.filter(key__in=setting_keys).count()
-
-    return {
-        "groups": list(module.settings_groups),
-        "group_count": len(module.settings_groups),
-        "configured_key_count": configured_count,
-        "has_settings": bool(module.settings_groups),
-    }
+    return admin_module_helpers.build_module_settings_overview(
+        module,
+        setting_model=Setting,
+        basic_settings_defaults=BASIC_SETTINGS_DEFAULTS,
+        appearance_settings_defaults=APPEARANCE_SETTINGS_DEFAULTS,
+        advanced_settings_defaults=ADVANCED_SETTINGS_DEFAULTS,
+        mail_settings_defaults=get_mail_settings_defaults(),
+    )
 
 
 def resolve_module_documentation_url(module) -> str:
-    if module.documentation_url:
-        return module.documentation_url
-    return f"/admin.html#/admin/docs?guide=module-development&module={module.module_id}"
+    return admin_module_helpers.resolve_module_documentation_url(module)
 
 
 def build_module_runtime_state(module) -> Dict[str, Any]:
-    migration_state = "built-in"
-    migration_label = "内置模块"
-    if module.module_id == "core":
-        migration_label = "核心底座"
-
-    settings_entry_path = None
-    if len(module.settings_groups) == 1:
-        group_name = next(iter(module.settings_groups), "")
-        settings_entry_path = {
-            "basic": "/admin/basics",
-            "appearance": "/admin/appearance",
-            "mail": "/admin/mail",
-            "advanced": "/admin/advanced",
-        }.get(group_name)
-
-    return {
-        "migration_state": migration_state,
-        "migration_label": migration_label,
-        "boot_mode": "static",
-        "boot_mode_label": "启动时静态注册",
-        "settings_entry_path": settings_entry_path,
-        "permissions_entry_path": "/admin/permissions" if module.permissions else "",
-        "module_center_path": f"/admin/modules?module={module.module_id}",
-        "debug_items": [
-            {"key": "module_id", "label": "模块 ID", "value": module.module_id},
-            {"key": "category", "label": "模块分类", "value": resolve_module_category_label(module.category)},
-            {"key": "boot_mode", "label": "启动方式", "value": "启动时静态注册"},
-            {"key": "migration", "label": "迁移状态", "value": migration_label},
-        ],
-    }
+    return admin_module_helpers.build_module_runtime_state(module)
 
 
 def serialize_module_definition(module, module_map: Dict[str, Any]) -> Dict[str, Any]:
-    dependency_state = build_module_dependency_state(module, module_map)
-    health_state = build_module_health_state(module, dependency_state)
-    settings_overview = build_module_settings_overview(module)
-    runtime_state = build_module_runtime_state(module)
-    resource_fields = [
-        {
-            "resource": definition.resource,
-            "field": definition.field,
-            "description": definition.description,
-        }
-        for definition in RESOURCE_REGISTRY.get_all_fields()
-        if definition.module_id == module.module_id
-    ]
-    resource_definitions = [
-        {
-            "resource": definition.resource,
-            "description": definition.description,
-        }
-        for definition in RESOURCE_REGISTRY.get_resources()
-        if definition.module_id == module.module_id
-    ]
-    resource_relationships = [
-        {
-            "resource": definition.resource,
-            "relationship": definition.relationship,
-            "description": definition.description,
-        }
-        for definition in RESOURCE_REGISTRY.get_all_relationships()
-        if definition.module_id == module.module_id
-    ]
-    runtime_dependency_summary = None
-    if module.module_id == "core":
-        runtime_dependency_summary = build_runtime_dependency_summary()
-        if runtime_dependency_summary["status"] != "healthy":
-            health_state = {
-                "status": "attention",
-                "label": "需关注",
-                "issues": [
-                    *health_state["issues"],
-                    *runtime_dependency_summary["issues"],
-                ],
-            }
-    return {
-        "id": module.module_id,
-        "name": module.name,
-        "description": module.description,
-        "version": module.version,
-        "category": module.category,
-        "category_label": resolve_module_category_label(module.category),
-        "is_core": module.is_core,
-        "enabled": module.enabled,
-        "dependencies": list(module.dependencies),
-        "dependency_status": dependency_state["status"],
-        "dependency_status_label": dependency_state["label"],
-        "missing_dependencies": dependency_state["missing"],
-        "disabled_dependencies": dependency_state["disabled"],
-        "health_status": health_state["status"],
-        "health_status_label": health_state["label"],
-        "health_issues": health_state["issues"],
-        "capabilities": list(module.capabilities),
-        "settings": settings_overview,
-        "documentation_url": resolve_module_documentation_url(module),
-        "runtime": runtime_state,
-        "notification_types": [
-            {
-                "code": notification_type.code,
-                "label": notification_type.label,
-                "description": notification_type.description,
-                "icon": notification_type.icon,
-                "navigation_scope": notification_type.navigation_scope,
-                "preference_key": notification_type.preference_key,
-                "preference_label": notification_type.preference_label,
-                "preference_description": notification_type.preference_description,
-                "preference_default_enabled": notification_type.preference_default_enabled,
-            }
-            for notification_type in module.notification_types
-        ],
-        "user_preferences": [
-            {
-                "key": preference.key,
-                "label": preference.label,
-                "description": preference.description,
-                "category": preference.category,
-                "default_value": preference.default_value,
-            }
-            for preference in module.user_preferences
-        ],
-        "language_packs": [
-            {
-                "code": language_pack.code,
-                "label": language_pack.label,
-                "native_label": language_pack.native_label,
-                "description": language_pack.description,
-                "is_default": language_pack.is_default,
-            }
-            for language_pack in module.language_packs
-        ],
-        "event_listeners": [
-            {
-                "event": listener.event,
-                "listener": listener.listener,
-                "description": listener.description,
-            }
-            for listener in module.event_listeners
-        ],
-        "post_types": [
-            {
-                "code": post_type.code,
-                "label": post_type.label,
-                "description": post_type.description,
-                "icon": post_type.icon,
-                "is_default": post_type.is_default,
-                "is_stream_visible": post_type.is_stream_visible,
-                "counts_toward_discussion": post_type.counts_toward_discussion,
-                "counts_toward_user": post_type.counts_toward_user,
-                "searchable": post_type.searchable,
-            }
-            for post_type in module.post_types
-        ],
-        "search_filters": [
-            {
-                "code": search_filter.code,
-                "label": search_filter.label,
-                "target": search_filter.target,
-                "syntax": search_filter.syntax,
-                "description": search_filter.description,
-            }
-            for search_filter in module.search_filters
-        ],
-        "discussion_sorts": [
-            {
-                "code": discussion_sort.code,
-                "label": discussion_sort.label,
-                "description": discussion_sort.description,
-                "icon": discussion_sort.icon,
-                "is_default": discussion_sort.is_default,
-                "toolbar_visible": discussion_sort.toolbar_visible,
-            }
-            for discussion_sort in module.discussion_sorts
-        ],
-        "discussion_list_filters": [
-            {
-                "code": discussion_list_filter.code,
-                "label": discussion_list_filter.label,
-                "description": discussion_list_filter.description,
-                "icon": discussion_list_filter.icon,
-                "is_default": discussion_list_filter.is_default,
-                "requires_authenticated_user": discussion_list_filter.requires_authenticated_user,
-                "sidebar_visible": discussion_list_filter.sidebar_visible,
-                "route_path": discussion_list_filter.route_path,
-            }
-            for discussion_list_filter in module.discussion_list_filters
-        ],
-        "resource_definitions": resource_definitions,
-        "resource_relationships": resource_relationships,
-        "resource_fields": resource_fields,
-        "runtime_dependency_summary": runtime_dependency_summary,
-        "permissions": [
-            {
-                "code": permission.code,
-                "label": permission.label,
-                "section": permission.section,
-                "section_label": permission.section_label,
-                "icon": permission.icon,
-                "description": permission.description,
-                "required_permissions": list(permission.required_permissions),
-                "aliases": list(permission.aliases),
-            }
-            for permission in module.permissions
-        ],
-        "admin_pages": [
-            {
-                "path": page.path,
-                "label": page.label,
-                "icon": page.icon,
-                "nav_section": page.nav_section,
-                "description": page.description,
-                "settings_group": page.settings_group,
-            }
-            for page in module.admin_pages
-        ],
-        "registration_counts": {
-            "permissions": len(module.permissions),
-            "admin_pages": len(module.admin_pages),
-            "notification_types": len(module.notification_types),
-            "user_preferences": len(module.user_preferences),
-            "language_packs": len(module.language_packs),
-            "event_listeners": len(module.event_listeners),
-            "post_types": len(module.post_types),
-            "search_filters": len(module.search_filters),
-            "discussion_sorts": len(module.discussion_sorts),
-            "discussion_list_filters": len(module.discussion_list_filters),
-            "resource_definitions": len(resource_definitions),
-            "resource_relationships": len(resource_relationships),
-            "resource_fields": len(resource_fields),
-            "settings_groups": len(module.settings_groups),
-        },
-    }
+    return admin_module_helpers.serialize_module_definition(
+        module,
+        module_map,
+        resource_registry=RESOURCE_REGISTRY,
+        runtime_dependency_summary_builder=build_runtime_dependency_summary,
+        setting_model=Setting,
+        basic_settings_defaults=BASIC_SETTINGS_DEFAULTS,
+        appearance_settings_defaults=APPEARANCE_SETTINGS_DEFAULTS,
+        advanced_settings_defaults=ADVANCED_SETTINGS_DEFAULTS,
+        mail_settings_defaults=get_mail_settings_defaults(),
+    )
 
 
 def build_module_category_summaries(modules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    grouped: Dict[str, Dict[str, Any]] = {}
-    for module in modules:
-        category_id = module["category"]
-        group = grouped.setdefault(
-            category_id,
-            {
-                "id": category_id,
-                "label": module["category_label"],
-                "module_count": 0,
-                "enabled_count": 0,
-                "attention_count": 0,
-            },
-        )
-        group["module_count"] += 1
-        if module["enabled"]:
-            group["enabled_count"] += 1
-        if module["health_status"] != "healthy":
-            group["attention_count"] += 1
-
-    return sorted(
-        grouped.values(),
-        key=lambda item: (
-            0 if item["id"] == "core" else 1,
-            item["label"],
-        ),
-    )
+    return admin_module_helpers.build_module_category_summaries(modules)
 
 
 def parse_optional_datetime(value):
@@ -692,35 +387,7 @@ def is_redis_enabled(queue_enabled: bool = False, queue_driver: str = "") -> boo
 
 
 def _probe_cache_connection() -> dict[str, Any]:
-    backend = (settings.CACHES.get("default", {}).get("BACKEND") or "").lower()
-    if "django_redis" not in backend and "redis" not in backend:
-        return {
-            "enabled": False,
-            "available": None,
-            "status": "disabled",
-            "label": "未启用",
-            "message": "当前默认缓存未使用 Redis。",
-        }
-
-    try:
-        cache.set("admin.runtime.cache_probe", "ok", timeout=5)
-        cache.get("admin.runtime.cache_probe")
-    except Exception as exc:
-        return {
-            "enabled": True,
-            "available": False,
-            "status": "unavailable",
-            "label": "连接失败",
-            "message": str(exc) or "无法访问缓存后端。",
-        }
-
-    return {
-        "enabled": True,
-        "available": True,
-        "status": "available",
-        "label": "可用",
-        "message": "缓存后端可正常读写。",
-    }
+    return admin_runtime_helpers.probe_cache_connection(settings_obj=settings, cache_backend=cache)
 
 
 def _probe_redis_ping(host: str | None, port: int | None, *, label: str) -> dict[str, Any]:
@@ -728,177 +395,46 @@ def _probe_redis_ping(host: str | None, port: int | None, *, label: str) -> dict
 
 
 def _probe_realtime_connection() -> dict[str, Any]:
-    channel_config = settings.CHANNEL_LAYERS.get("default", {})
-    backend = (channel_config.get("BACKEND") or "").lower()
-    if "channels_redis" not in backend and "redis" not in backend:
-        return {
-            "enabled": False,
-            "available": None,
-            "status": "disabled",
-            "label": "未启用",
-            "message": "当前实时层未使用 Redis Channel Layer。",
-        }
-
-    hosts = channel_config.get("CONFIG", {}).get("hosts") or []
-    if not hosts:
-        return {
-            "enabled": True,
-            "available": False,
-            "status": "misconfigured",
-            "label": "配置缺失",
-            "message": "Redis Channel Layer 缺少 hosts 配置。",
-        }
-
-    first_host = hosts[0]
-    if isinstance(first_host, (list, tuple)):
-        host = first_host[0] if len(first_host) > 0 else None
-        port = first_host[1] if len(first_host) > 1 else 6379
-    elif isinstance(first_host, str):
-        parsed = urlparse(first_host if "://" in first_host else f"redis://{first_host}")
-        host = parsed.hostname
-        port = parsed.port or 6379
-    else:
-        host = None
-        port = None
-
-    connectivity = _probe_redis_ping(host, port, label="Redis Channel Layer")
-    return {
-        "enabled": True,
-        "available": connectivity["available"],
-        "status": connectivity["status"],
-        "label": connectivity["label"],
-        "message": connectivity["message"],
-    }
+    return admin_runtime_helpers.probe_realtime_connection(
+        settings_obj=settings,
+        redis_probe=_probe_redis_ping,
+    )
 
 
 def _probe_queue_broker_connection(queue_enabled: bool, queue_driver: str) -> dict[str, Any]:
-    normalized_driver = str(queue_driver or "").strip().lower()
-    broker_url = str(getattr(settings, "CELERY_BROKER_URL", "") or "").strip()
-    if not queue_enabled or normalized_driver != "redis":
-        return {
-            "enabled": False,
-            "available": None,
-            "status": "disabled",
-            "label": "未启用",
-            "message": "当前未启用 Redis 队列 broker。",
-        }
-
-    if not broker_url:
-        return {
-            "enabled": True,
-            "available": False,
-            "status": "misconfigured",
-            "label": "配置缺失",
-            "message": "队列已启用，但 CELERY_BROKER_URL 为空。",
-        }
-
-    parsed = urlparse(broker_url)
-    if "redis" not in (parsed.scheme or "").lower():
-        return {
-            "enabled": True,
-            "available": False,
-            "status": "misconfigured",
-            "label": "驱动不匹配",
-            "message": "队列驱动为 Redis，但 broker URL 不是 Redis 协议。",
-        }
-
-    if not parsed.hostname:
-        return {
-            "enabled": True,
-            "available": False,
-            "status": "misconfigured",
-            "label": "配置缺失",
-            "message": "Redis broker 缺少主机配置。",
-        }
-
-    connectivity = _probe_redis_ping(parsed.hostname, parsed.port or 6379, label="Redis broker")
-    return {
-        "enabled": True,
-        "available": connectivity["available"],
-        "status": connectivity["status"],
-        "label": connectivity["label"],
-        "message": connectivity["message"],
-    }
-
-
-MIN_HS256_KEY_LENGTH = 32
-KNOWN_PLACEHOLDER_SECRETS = {
-    "django-insecure-change-this-in-production",
-    "jwt-secret-key-change-this",
-}
+    return admin_runtime_helpers.probe_queue_broker_connection(
+        settings_obj=settings,
+        queue_enabled=queue_enabled,
+        queue_driver=queue_driver,
+        redis_probe=_probe_redis_ping,
+    )
 
 
 def _normalize_secret_value(value: Any) -> str:
-    return str(value or "").strip()
+    return admin_runtime_helpers.normalize_secret_value(value)
 
 
 def _looks_like_placeholder_secret(value: str) -> bool:
-    return value.lower() in KNOWN_PLACEHOLDER_SECRETS
+    return admin_runtime_helpers.looks_like_placeholder_secret(value)
 
 
 def _jwt_key_length_requirement(algorithm: str) -> int:
-    normalized = str(algorithm or "").strip().upper()
-    if normalized.startswith("HS"):
-        return MIN_HS256_KEY_LENGTH
-    return 0
+    return admin_runtime_helpers.jwt_key_length_requirement(algorithm)
 
 
 def build_auth_secret_risks() -> list[dict[str, Any]]:
-    risks: list[dict[str, Any]] = []
-
     secret_key = _normalize_secret_value(settings.SECRET_KEY)
     jwt_algorithm = str(settings.NINJA_JWT.get("ALGORITHM") or "").strip().upper()
     jwt_signing_key = _normalize_secret_value(settings.NINJA_JWT.get("SIGNING_KEY") or settings.SECRET_KEY)
-    jwt_required_length = _jwt_key_length_requirement(jwt_algorithm)
-
-    if _looks_like_placeholder_secret(secret_key):
-        risks.append(
-            {
-                "code": "django-secret-placeholder",
-                "level": "danger",
-                "title": "Django SECRET_KEY 仍为默认占位值",
-                "message": "当前 SECRET_KEY 仍带有开发占位标记，生产环境必须替换为独立高强度密钥。",
-            }
-        )
-
-    if _looks_like_placeholder_secret(jwt_signing_key):
-        risks.append(
-            {
-                "code": "jwt-secret-placeholder",
-                "level": "danger",
-                "title": "JWT 签名密钥仍为默认占位值",
-                "message": "当前 JWT 签名密钥仍带有开发占位标记，生产环境必须替换为独立高强度密钥。",
-            }
-        )
-
-    if jwt_required_length and len(jwt_signing_key) < jwt_required_length:
-        risks.append(
-            {
-                "code": "jwt-secret-too-short",
-                "level": "danger",
-                "title": "JWT 签名密钥长度不足",
-                "message": f"当前 {jwt_algorithm or 'JWT'} 签名密钥长度小于 {jwt_required_length} 字节，存在被弱密钥攻击的风险。",
-            }
-        )
-
-    return risks
+    return admin_runtime_helpers.build_auth_secret_risks(
+        secret_key=secret_key,
+        jwt_algorithm=jwt_algorithm,
+        jwt_signing_key=jwt_signing_key,
+    )
 
 
 def build_auth_secret_status() -> dict[str, Any]:
-    risks = build_auth_secret_risks()
-    if risks:
-        highest_level = "danger" if any(item.get("level") == "danger" for item in risks) else "warning"
-        return {
-            "status": highest_level,
-            "label": "存在风险",
-            "message": "；".join(item.get("title") or "" for item in risks if item.get("title")),
-        }
-
-    return {
-        "status": "healthy",
-        "label": "健康",
-        "message": "Django 与 JWT 密钥未发现默认占位值或长度不足问题。",
-    }
+    return admin_runtime_helpers.build_auth_secret_status(risks=build_auth_secret_risks())
 
 
 def build_runtime_risks(
@@ -915,115 +451,20 @@ def build_runtime_risks(
     realtime_connection: dict[str, Any],
     queue_broker_connection: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    risks: list[dict[str, Any]] = []
-    normalized_database_label = str(database_label or "").lower()
-    normalized_cache_driver = str(cache_driver or "").lower()
-    normalized_realtime_driver = str(realtime_driver or "").lower()
-    normalized_queue_driver = str(queue_driver or "").lower()
-
-    if debug_mode:
-        risks.append(
-            {
-                "code": "debug-enabled",
-                "level": "warning",
-                "title": "DEBUG 模式仍处于开启状态",
-                "message": "生产环境应关闭 DEBUG，避免泄露调试信息并影响缓存与异常处理行为。",
-            }
-        )
-
-    is_production_like = "postgresql" in normalized_database_label
-    if is_production_like and not redis_enabled:
-        risks.append(
-            {
-                "code": "redis-disabled-production",
-                "level": "danger",
-                "title": "生产形态下未启用 Redis",
-                "message": "当前使用 PostgreSQL，但缓存、实时层与队列未形成 Redis 底座，不符合路线图中的生产约束要求。",
-            }
-        )
-
-    if is_production_like and "内存" in cache_driver:
-        risks.append(
-            {
-                "code": "locmem-cache-production",
-                "level": "danger",
-                "title": "生产形态下仍在使用内存缓存",
-                "message": "LocMemCache 只适合开发环境，多进程部署下会导致缓存割裂与状态不一致。",
-            }
-        )
-
-    if queue_enabled and normalized_queue_driver == "redis" and not queue_worker_status.get("available"):
-        risks.append(
-            {
-                "code": "queue-worker-unavailable",
-                "level": "danger",
-                "title": "队列已启用但没有可用 worker",
-                "message": queue_worker_status.get("message") or "当前队列会持续回退到同步执行，后台异步任务无法稳定处理。",
-            }
-        )
-
-    if cache_connection.get("enabled") and cache_connection.get("available") is False:
-        risks.append(
-            {
-                "code": "cache-backend-unavailable",
-                "level": "danger",
-                "title": "缓存后端不可用",
-                "message": cache_connection.get("message") or "当前缓存后端无法正常访问。",
-            }
-        )
-
-    if realtime_connection.get("enabled") and realtime_connection.get("available") is False:
-        risks.append(
-            {
-                "code": "realtime-backend-unavailable",
-                "level": "warning",
-                "title": "实时层配置不完整",
-                "message": realtime_connection.get("message") or "当前实时层无法确认 Redis Channel Layer 可用。",
-            }
-        )
-
-    if queue_broker_connection.get("enabled") and queue_broker_connection.get("available") is False:
-        risks.append(
-            {
-                "code": "queue-broker-unavailable",
-                "level": "danger",
-                "title": "队列 broker 不可用",
-                "message": queue_broker_connection.get("message") or "当前队列 broker 无法使用。",
-            }
-        )
-
-    if queue_enabled and normalized_queue_driver != "redis":
-        risks.append(
-            {
-                "code": "queue-driver-nonredis",
-                "level": "warning",
-                "title": "队列已启用但未使用 Redis 驱动",
-                "message": "当前 worker 健康检测与稳定异步链路主要围绕 Redis/Celery 设计，其他驱动暂未形成完整生产闭环。",
-            }
-        )
-
-    if is_production_like and normalized_realtime_driver == "in-memory":
-        risks.append(
-            {
-                "code": "realtime-inmemory-production",
-                "level": "warning",
-                "title": "实时层仍使用内存通道",
-                "message": "In-memory Channel Layer 不适合多实例部署，WebSocket 消息无法跨进程共享。",
-            }
-        )
-
-    if is_production_like and normalized_cache_driver not in {"redis", "memcached"}:
-        risks.append(
-            {
-                "code": "cache-driver-nonshared",
-                "level": "warning",
-                "title": "缓存驱动不是共享缓存",
-                "message": "当前缓存驱动缺少跨实例共享能力，生产环境下容易出现配置和统计状态不一致。",
-            }
-        )
-
-    risks.extend(build_auth_secret_risks())
-    return risks
+    return admin_runtime_helpers.build_runtime_risks(
+        debug_mode=debug_mode,
+        database_label=database_label,
+        cache_driver=cache_driver,
+        realtime_driver=realtime_driver,
+        queue_enabled=queue_enabled,
+        queue_driver=queue_driver,
+        queue_worker_status=queue_worker_status,
+        redis_enabled=redis_enabled,
+        cache_connection=cache_connection,
+        realtime_connection=realtime_connection,
+        queue_broker_connection=queue_broker_connection,
+        auth_secret_risks=build_auth_secret_risks(),
+    )
 
 
 def build_runtime_dependency_checks(
@@ -1042,25 +483,8 @@ def build_runtime_dependency_checks(
 
 
 def validate_advanced_runtime_settings(payload: Dict[str, Any]) -> list[str]:
-    cache_driver = str(payload.get("cache_driver") or "").strip().lower()
-    queue_driver = str(payload.get("queue_driver") or "").strip().lower()
-    queue_enabled = bool(payload.get("queue_enabled", False))
-    errors: list[str] = []
-
-    is_postgres = "postgresql" in detect_database_label().lower()
-    realtime_driver = detect_realtime_driver().lower()
-
-    if is_postgres and cache_driver == "file":
-        errors.append("PostgreSQL 生产形态下不允许将缓存驱动保存为文件缓存，请改用 Redis 或 Memcached。")
-
-    if is_postgres and cache_driver == "内存":
-        errors.append("PostgreSQL 生产形态下不允许继续使用内存缓存。")
-
-    if queue_enabled and queue_driver != "redis":
-        errors.append("启用队列处理时，当前仅允许使用 Redis 队列驱动。")
-
-    if is_postgres and realtime_driver == "in-memory" and queue_enabled:
-        errors.append("当前实时层仍是 In-memory，生产形态下启用队列前应先切换到 Redis Channel Layer。")
-
-    return errors
-
+    return admin_runtime_helpers.validate_advanced_runtime_settings(
+        payload,
+        database_label=detect_database_label(),
+        realtime_driver=detect_realtime_driver(),
+    )
