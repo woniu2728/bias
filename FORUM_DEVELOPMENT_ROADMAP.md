@@ -347,3 +347,5 @@ P2
 - 已完成：本轮后台页面注册层拆分后已补做 `frontend/src/admin/registry/pages.test.js` 聚合兼容回归，并执行 `npm test` 全量前端测试 `85/85` 通过；阶段 D 的“继续拆 registry 注册职责、降低后台配置层维护风险”因此继续向前端 admin 域推进，没有引入导出中断或页面配置读取回归。
 - 已完成：阶段 D 继续收口 `apps/tags/models.py` 的遗留逻辑，标签 slug 的自动归一化与唯一化已从模型 `save()` 下沉到 `TagService.normalize_tag_slug()`，`create_tag` / `update_tag` 现在显式负责 slug 生成与冲突规避；`Tag` 模型因此回到纯数据承载职责，减少了模型层隐式副作用继续外溢到各类直接持久化路径的风险。
 - 已完成：本轮标签 slug 收口后已补做 `apps/tags/tests.py` 的回归，并再次执行 `./.venv/bin/pytest` 与 `./.venv/bin/python manage.py test` 全量验证通过；阶段 D 的“收口模型层遗留逻辑”因此继续向 `tags` 域推进，没有引入标签创建、标签编辑或标签列表回归。
+- 已完成：阶段 D 继续收口 `apps/core/forum_resources.py` 的资源注册职责，帖子举报相关的 resource field 注册与 resolver 已下沉到 `apps/core/forum_resources_flags.py`，`forum_resources.py` 因此继续从资源字段注册入口转向主资源装配/序列化编排职责；资源注册边界因此更贴近“按子域拆 helper”的目标，而不是继续把所有 field resolver 堆在一个历史大文件里。
+- 已完成：本轮资源注册拆分后已补做资源注册表回归与帖子/讨论/通知相关针对性回归，并再次执行 `./.venv/bin/pytest` 与 `./.venv/bin/python manage.py test` 全量验证通过；阶段 D 的“收口资源协议实现文件、降低核心大文件维护风险”因此继续向 `forum_resources` 域推进，没有引入资源字段缺失或接口序列化回归。

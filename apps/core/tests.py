@@ -33,6 +33,8 @@ from apps.core.forum_events import (
     UserUnsuspendedEvent,
 )
 from apps.core.forum_registry import get_forum_registry, get_registry_permission_codes_by_prefix
+from apps.core.resource_registry import get_resource_registry
+from apps.core.forum_resources_flags import register_forum_flag_resource_fields
 from apps.core.resource_registry import (
     ResourceDefinition,
     ResourceFieldDefinition,
@@ -147,6 +149,15 @@ class ResourceRegistryTests(TestCase):
 
         payload = registry.serialize("discussion", Target(), {"suffix": "ok"})
         self.assertEqual(payload, {"summary": "3:ok"})
+
+    def test_registers_forum_flag_resource_fields(self):
+        register_forum_flag_resource_fields()
+        field_names = [field.field for field in get_resource_registry().get_fields("post")]
+
+        self.assertIn("viewer_has_open_flag", field_names)
+        self.assertIn("open_flag_count", field_names)
+        self.assertIn("open_flags", field_names)
+        self.assertIn("can_moderate_flags", field_names)
 
     def test_serializes_base_resource_and_relationship_includes(self):
         registry = ResourceRegistry()
