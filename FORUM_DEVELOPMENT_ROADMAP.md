@@ -343,3 +343,5 @@ P2
 - 已完成：本轮 `DiscussionService` 拆分后已补做讨论域、帖子域、通知域、核心实时链路的针对性回归，并再次执行 `./.venv/bin/pytest` 与 `./.venv/bin/python manage.py test` 全量验证通过；阶段 D 的“继续拆大 service 文件、降低跨职责耦合”因此继续向 `discussion` 域推进，没有引入测试退化或接口行为变化。
 - 已完成：阶段 D 继续对 `apps/posts/services.py` 做职责收口，帖子流窗口装配、邻近楼层分页、帖子可见性判定与举报态标注逻辑已下沉到 `apps/posts/post_query_service.py`，`PostService` 仅保留原有静态方法兼容出口与生命周期/审核编排职责；`apps/posts/services.py` 因此从约 580 行继续收缩到约 420 行，讨论串帖子流、楼层定位、点赞态补齐与前后台可见性相关调用面保持不变。
 - 已完成：本轮 `PostService` 查询拆分后已补做帖子域、讨论域、通知域、核心后台链路的针对性回归，并再次执行 `./.venv/bin/pytest` 与 `./.venv/bin/python manage.py test` 全量验证通过；阶段 D 的“继续拆大 service 文件、降低跨职责耦合”因此继续向 `posts` 域推进，没有引入测试退化或接口行为变化。
+- 已完成：阶段 D 继续推进 `frontend/src/admin/registry.js` 关联注册层的结构治理，原先集中在 `frontend/src/admin/registry/pages.js` 的后台页面文案、配置、动作元数据与审核备注模板注册职责，已进一步拆到 `frontend/src/admin/registry/pageCopies.js`、`pageConfigs.js`、`pageActionMeta.js` 与 `pageNoteTemplates.js`；`pages.js` 现仅保留聚合导出职责，后台页面注册入口因此继续向“按职责分模块、避免历史注册文件反复膨胀”的方向收口。
+- 已完成：本轮后台页面注册层拆分后已补做 `frontend/src/admin/registry/pages.test.js` 聚合兼容回归，并执行 `npm test` 全量前端测试 `85/85` 通过；阶段 D 的“继续拆 registry 注册职责、降低后台配置层维护风险”因此继续向前端 admin 域推进，没有引入导出中断或页面配置读取回归。
