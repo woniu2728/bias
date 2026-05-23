@@ -140,7 +140,16 @@ def _register_builtin_modules(registry) -> None:
                 "developer-docs",
             ),
             settings_groups=("basic", "appearance", "mail", "advanced"),
-            language_packs=(),
+            language_packs=(
+                LanguagePackDefinition(
+                    code="zh-CN",
+                    label="简体中文",
+                    native_label="简体中文",
+                    module_id="core",
+                    description="论坛内置默认语言包，仅提供中文界面元数据。",
+                    is_default=True,
+                ),
+            ),
         )
     )
 
