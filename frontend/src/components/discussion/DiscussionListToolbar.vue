@@ -89,7 +89,7 @@ const {
   align-items: center;
   padding: 15px 26px;
   border-bottom: 1px solid var(--forum-border-color);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 252, 253, 0.92) 100%);
+  background: var(--forum-bg-elevated);
 }
 .index-toolbar-view,
 .index-toolbar-action {
@@ -116,7 +116,7 @@ const {
 }
 
 .btn-view:hover {
-  background: #dbe5ed;
+  background: var(--forum-border-soft);
   color: var(--forum-text-color);
 }
 

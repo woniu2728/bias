@@ -230,12 +230,25 @@ onBeforeUnmount(() => {
 
 .Button.Button--icon.Button--link,
 .ModalManager :deep(.Button.Button--icon.Button--link) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 34px;
   height: 34px;
+  min-height: 34px;
   padding: 0;
   border-radius: 50%;
   background: transparent;
   color: #7b8794;
+  appearance: none;
+  -webkit-appearance: none;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.Button.Button--icon.Button--link i,
+.ModalManager :deep(.Button.Button--icon.Button--link i) {
+  line-height: 1;
 }
 
 .Button.Button--icon.Button--link:hover,

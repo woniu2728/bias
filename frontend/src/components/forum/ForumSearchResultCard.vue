@@ -4,7 +4,11 @@
     :class="{ 'user-card': userLayout }"
     @click="$emit('click')"
   >
-    <div class="result-card-icon" :class="{ 'result-card-icon--avatar': avatarMode }">
+    <div
+      class="result-card-icon"
+      :class="{ 'result-card-icon--avatar': avatarMode }"
+      :style="avatarStyle"
+    >
       <img
         v-if="avatarUrl"
         :src="avatarUrl"
@@ -25,8 +29,14 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   avatarAlt: {
+    type: String,
+    default: ''
+  },
+  avatarColor: {
     type: String,
     default: ''
   },
@@ -65,6 +75,17 @@ defineProps({
 })
 
 defineEmits(['click'])
+
+const avatarStyle = computed(() => {
+  if (!props.avatarMode || props.avatarUrl || !props.avatarColor) {
+    return null
+  }
+
+  return {
+    backgroundColor: props.avatarColor,
+    color: '#fff',
+  }
+})
 </script>
 
 <style scoped>

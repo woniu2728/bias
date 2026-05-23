@@ -30,18 +30,6 @@
               v-if="heroBindings.normalizedQuery"
               :items="heroBindings.searchStatsItems"
             />
-            <div v-if="heroBindings.syntaxItems.length" class="search-syntax-row">
-              <button
-                v-for="item in heroBindings.syntaxItems"
-                :key="item.key"
-                type="button"
-                class="search-syntax-chip"
-                @click="heroEvents.applySyntax(item.syntax)"
-              >
-                <strong>{{ item.syntax }}</strong>
-                <span>{{ item.label }}</span>
-              </button>
-            </div>
           </template>
         </ForumHeroPanel>
 
@@ -70,6 +58,7 @@
               v-for="item in section.resultItems"
               :key="item.key"
               :avatar-alt="item.avatarAlt || ''"
+              :avatar-color="item.avatarColor || ''"
               :avatar-mode="Boolean(item.avatarMode)"
               :avatar-text="item.avatarText || ''"
               :avatar-url="item.avatarUrl || ''"
@@ -120,7 +109,6 @@ const {
   contentBindings,
   contentEvents,
   heroBindings,
-  heroEvents,
   sidebarBindings,
   sidebarEvents,
 } = useSearchResultsViewModel({
@@ -146,36 +134,6 @@ const {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.search-syntax-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.search-syntax-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.36);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.search-syntax-chip strong {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-}
-
-.search-syntax-chip:hover {
-  background: rgba(255, 255, 255, 0.2);
 }
 
 @media (max-width: 768px) {

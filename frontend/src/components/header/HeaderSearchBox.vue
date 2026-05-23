@@ -90,6 +90,11 @@ defineEmits(['open-search', 'clear-search'])
   color: var(--forum-text-color);
   width: 100%;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
 }
 
 .search-box input::placeholder {
