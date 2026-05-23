@@ -50,7 +50,6 @@ APPEARANCE_SETTINGS_DEFAULTS = {
     "accent_color": "#e74c3c",
     "logo_url": "",
     "favicon_url": "",
-    "custom_css": "",
     "custom_head_html": "",
     "custom_footer_html": "",
 }
