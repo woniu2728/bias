@@ -1,11 +1,5 @@
 const adminRoutes = []
 
-function buildAdminHashPath(path = '') {
-  const normalizedPath = String(path || '').trim()
-  if (!normalizedPath) return '#/'
-  return `#${normalizedPath}`
-}
-
 function upsertByPath(target, value) {
   const existingIndex = target.findIndex(item => item.path === value.path)
   if (existingIndex >= 0) {
@@ -55,7 +49,6 @@ export function getAdminNavSections() {
     const section = sections[route.navSection] || sections.feature
     section.items.push({
       path: route.path,
-      hashPath: buildAdminHashPath(route.path),
       icon: route.icon,
       label: route.label,
       description: route.navDescription || '',
@@ -83,7 +76,7 @@ export function getAdminDashboardActions() {
     })
     .map(route => ({
       key: route.name || route.path,
-      to: buildAdminHashPath(route.path),
+      to: route.path,
       icon: route.icon,
       label: route.dashboardActionLabel || route.label,
       description: route.navDescription || '',

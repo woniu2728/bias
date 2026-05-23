@@ -7,6 +7,7 @@ import {
   getDiscussionListFilterHeroDescriptionText,
   getDiscussionListFilterHeroTitleText,
   getDiscussionListFilterLabelText,
+  getUserAvatarColor,
   getUserInitial,
   resolveDiscussionListPageMetaDescription,
   resolveDiscussionListPageMetaTitle,
@@ -639,7 +640,9 @@ registerSearchSource({
     return items.map(discussion => ({
       key: `discussion-${discussion.id}`,
       avatarAlt: discussion.user?.display_name || discussion.user?.username || '',
-      avatarMode: Boolean(discussion.user?.avatar_url),
+      avatarColor: getUserAvatarColor(discussion.user),
+      avatarMode: true,
+      avatarText: discussion.user?.avatar_url ? '' : getUserInitial(discussion.user),
       avatarUrl: discussion.user?.avatar_url || '',
       excerptHtml: buildSearchTextHtml(discussion.excerpt || '这个讨论没有更多摘要。', query, 180),
       iconClass: 'far fa-comments',
@@ -669,7 +672,9 @@ registerSearchSource({
     return items.map(post => ({
       key: `post-${post.id}`,
       avatarAlt: post.user?.display_name || post.user?.username || '',
-      avatarMode: Boolean(post.user?.avatar_url),
+      avatarColor: getUserAvatarColor(post.user),
+      avatarMode: true,
+      avatarText: post.user?.avatar_url ? '' : getUserInitial(post.user),
       avatarUrl: post.user?.avatar_url || '',
       excerptHtml: buildSearchTextHtml(post.excerpt || post.content || '', query, 200),
       iconClass: 'far fa-comment',
@@ -699,6 +704,7 @@ registerSearchSource({
     return items.map(user => ({
       key: `user-${user.id}`,
       avatarAlt: user.username || '',
+      avatarColor: getUserAvatarColor(user),
       avatarMode: true,
       avatarText: user.avatar_url ? '' : getUserInitial(user),
       avatarUrl: user.avatar_url || '',

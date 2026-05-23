@@ -1,6 +1,8 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { getAdminRoutes } from './registry'
 
+normalizeLegacyAdminHash()
+
 const routes = [
   {
     path: '/',
@@ -16,6 +18,21 @@ const routes = [
     redirect: '/admin',
   },
 ]
+
+function normalizeLegacyAdminHash() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const legacyHash = window.location.hash || ''
+  const normalizedHash = legacyHash.replace(/^#\/admin#(?=\/admin(?:\/|$))/, '#')
+  if (normalizedHash === legacyHash) {
+    return
+  }
+
+  const { pathname, search } = window.location
+  window.history.replaceState(window.history.state, '', `${pathname}${search}${normalizedHash}`)
+}
 
 const router = createRouter({
   // Admin SPA is served from admin.html, so hash history avoids broken deep links

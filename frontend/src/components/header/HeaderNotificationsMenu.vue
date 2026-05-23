@@ -236,17 +236,35 @@ function resolveNotificationPresentation(notification) {
 <style scoped>
 .header-icon {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   width: 34px;
   height: 34px;
+  padding: 0;
   border: 0;
   border-radius: 50%;
   background: transparent;
   color: #666;
+  appearance: none;
+  -webkit-appearance: none;
+  box-shadow: none;
   cursor: pointer;
   transition: all 0.2s;
 }
 
+.header-icon i {
+  font-size: 14px;
+  line-height: 1;
+}
+
 .header-icon:hover {
+  background: #f5f8fa;
+  color: #333;
+}
+
+.notifications-dropdown.is-open .header-icon {
   background: #f5f8fa;
   color: #333;
 }

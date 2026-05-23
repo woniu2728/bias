@@ -14,7 +14,6 @@
 
       <div class="Modal-header SearchModal-header">
         <h3>{{ titleText }}</h3>
-        <p>{{ descriptionText }}</p>
       </div>
 
       <div class="Modal-body SearchModal-body">
@@ -32,7 +31,7 @@
             @keydown.esc.prevent="modalStore.dismiss()"
           />
           <button v-if="normalizedQuery" type="button" class="SearchModal-clear" @click="clearQuery">
-            <i class="fas fa-times-circle"></i>
+            <i class="fas fa-times"></i>
           </button>
         </div>
 
@@ -114,9 +113,14 @@
                   @mouseenter="activeResultIndex = item.selectIndex"
                   @mousedown.prevent="selectItem(item)"
                 >
-                  <span class="SearchModal-resultIcon" :class="{ 'SearchModal-resultIcon--avatar': item.avatarUrl }">
+                  <span
+                    class="SearchModal-resultIcon"
+                    :class="{ 'SearchModal-resultIcon--avatar': item.avatarMode }"
+                    :style="getResultAvatarStyle(item)"
+                  >
                     <img v-if="item.avatarUrl" :src="item.avatarUrl" :alt="item.titleText" />
-                    <i v-else :class="item.icon"></i>
+                    <span v-else-if="item.avatarText">{{ item.avatarText }}</span>
+                    <i v-else :class="item.iconClass || item.icon"></i>
                   </span>
                   <span class="SearchModal-resultMain">
                     <span class="SearchModal-resultTitle" v-html="item.titleHtml"></span>
@@ -139,9 +143,14 @@
               @mouseenter="activeResultIndex = item.selectIndex"
               @mousedown.prevent="selectItem(item)"
             >
-              <span class="SearchModal-resultIcon" :class="{ 'SearchModal-resultIcon--avatar': item.avatarUrl }">
+              <span
+                class="SearchModal-resultIcon"
+                :class="{ 'SearchModal-resultIcon--avatar': item.avatarMode }"
+                :style="getResultAvatarStyle(item)"
+              >
                 <img v-if="item.avatarUrl" :src="item.avatarUrl" :alt="item.titleText" />
-                <i v-else :class="item.icon"></i>
+                <span v-else-if="item.avatarText">{{ item.avatarText }}</span>
+                <i v-else :class="item.iconClass || item.icon"></i>
               </span>
               <span class="SearchModal-resultMain">
                 <span class="SearchModal-resultTitle" v-html="item.titleHtml"></span>
@@ -266,9 +275,6 @@ const closeLabelText = computed(() => getUiCopy({
 const titleText = computed(() => getUiCopy({
   surface: 'search-modal-title',
 })?.text || '搜索')
-const descriptionText = computed(() => getUiCopy({
-  surface: 'search-modal-description',
-})?.text || '按讨论、帖子、用户快速定位内容，交互参考 Flarum 的全局搜索流程。')
 const inputPlaceholderText = computed(() => getUiCopy({
   surface: 'search-modal-input-placeholder',
 })?.text || '输入关键词搜索讨论、帖子和用户')
@@ -700,6 +706,17 @@ function openTag(tag) {
   router.push(buildTagPath(tag))
 }
 
+function getResultAvatarStyle(item) {
+  if (!item?.avatarMode || item?.avatarUrl || !item?.avatarColor) {
+    return null
+  }
+
+  return {
+    backgroundColor: item.avatarColor,
+    color: '#fff',
+  }
+}
+
 function saveRecentSearch(item) {
   const queryValue = String(item?.query || '').trim()
   if (!queryValue) return
@@ -819,15 +836,46 @@ function persistRecentSearches(items) {
   background: transparent;
   font-size: 16px;
   color: #22303d;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.SearchModal-input::-webkit-search-decoration,
+.SearchModal-input::-webkit-search-cancel-button,
+.SearchModal-input::-webkit-search-results-button,
+.SearchModal-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+.SearchModal-input::-ms-clear,
+.SearchModal-input::-ms-reveal {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .SearchModal-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   border: 0;
   background: transparent;
   color: #8a96a2;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   border-radius: 50%;
+  transition: background 0.2s, color 0.2s;
+}
+
+.SearchModal-clear i {
+  font-size: 12px;
+  line-height: 1;
 }
 
 .SearchModal-clear:hover {

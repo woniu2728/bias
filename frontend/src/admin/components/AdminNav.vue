@@ -59,7 +59,7 @@ const navSections = computed(() => getAdminNavSections().map(section => ({
   ...section,
   items: section.items.map(item => ({
     ...item,
-    to: item.hashPath,
+    to: item.path,
     active: isActive(item.path),
   }))
 })))
