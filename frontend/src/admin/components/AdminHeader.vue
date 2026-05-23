@@ -1,11 +1,19 @@
 <template>
   <header class="AdminHeader">
     <div class="container">
-      <div class="AdminHeader-logo">
-        <router-link to="/admin" class="AdminHeader-logoLink">
-          <span class="icon">⚙️</span>
-          <span class="text">管理后台</span>
-        </router-link>
+      <div class="AdminHeader-left">
+        <a :href="forumUrl" class="AdminHeader-backButton" aria-label="返回论坛">
+          <i class="fas fa-angle-left"></i>
+        </a>
+
+        <div class="AdminHeader-logo">
+          <router-link to="/admin" class="AdminHeader-logoLink">
+            <span class="icon" aria-hidden="true">
+              <i class="fas fa-sliders-h"></i>
+            </span>
+            <span class="text">管理后台</span>
+          </router-link>
+        </div>
       </div>
 
       <div class="AdminHeader-mobileTitle">
@@ -17,14 +25,33 @@
       </a>
 
       <div class="AdminHeader-actions">
-        <a :href="forumUrl" class="Button Button--link">
-          <i class="fas fa-arrow-left"></i>
-          返回论坛
-        </a>
+        <div class="AdminHeader-userMenu" ref="userMenuRef">
+          <button
+            type="button"
+            class="AdminHeader-userTrigger"
+            :aria-expanded="showUserMenu"
+            aria-label="打开管理员菜单"
+            @click="toggleUserMenu"
+          >
+            <span v-if="authStore.user?.avatar_url" class="AdminHeader-avatar">
+              <img :src="authStore.user.avatar_url" :alt="displayName" />
+            </span>
+            <span
+              v-else
+              class="AdminHeader-avatar AdminHeader-avatar--fallback"
+              :style="userAvatarStyle"
+            >
+              {{ userInitial }}
+            </span>
+            <span class="AdminHeader-userName">{{ displayName }}</span>
+            <i class="fas fa-angle-down"></i>
+          </button>
 
-        <div class="AdminHeader-user">
-          <span>{{ authStore.user?.username }}</span>
-          <button type="button" class="Button Button--link" @click="handleLogout">登出</button>
+          <div v-if="showUserMenu" class="AdminHeader-userDropdown">
+            <button type="button" class="AdminHeader-userDropdownItem" @click="handleLogout">
+              退出登录
+            </button>
+          </div>
         </div>
       </div>
 
@@ -44,8 +71,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { getUserAvatarColor, getUserInitial } from '@/utils/forum'
 import { useAuthStore } from '../../stores/auth'
 import { getAdminRouteMeta } from '../navigation'
 
@@ -60,14 +88,44 @@ defineEmits(['toggle-nav', 'close-nav'])
 
 const authStore = useAuthStore()
 const route = useRoute()
+const showUserMenu = ref(false)
+const userMenuRef = ref(null)
 
 const forumUrl = computed(() => '/')
 const activeMeta = computed(() => getAdminRouteMeta(route.path))
+const displayName = computed(() => authStore.user?.display_name || authStore.user?.username || 'admin')
+const userInitial = computed(() => getUserInitial(authStore.user))
+const userAvatarStyle = computed(() => (
+  authStore.user?.avatar_url ? {} : { backgroundColor: getUserAvatarColor(authStore.user) }
+))
+
+function toggleUserMenu() {
+  showUserMenu.value = !showUserMenu.value
+}
+
+function handleDocumentClick(event) {
+  if (!userMenuRef.value?.contains(event.target)) {
+    showUserMenu.value = false
+  }
+}
 
 function handleLogout() {
+  showUserMenu.value = false
   authStore.logout()
   window.location.href = '/login'
 }
+
+onMounted(() => {
+  if (typeof document !== 'undefined') {
+    document.addEventListener('click', handleDocumentClick)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('click', handleDocumentClick)
+  }
+})
 </script>
 
 <style scoped>
@@ -93,6 +151,34 @@ function handleLogout() {
   justify-content: space-between;
 }
 
+.AdminHeader-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.AdminHeader-backButton {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--forum-border-color);
+  background: var(--forum-bg-subtle);
+  color: var(--forum-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.AdminHeader-backButton:hover {
+  background: color-mix(in srgb, var(--forum-primary-color) 8%, var(--forum-bg-subtle));
+  border-color: color-mix(in srgb, var(--forum-primary-color) 26%, var(--forum-border-color));
+  color: var(--forum-primary-color);
+  text-decoration: none;
+}
+
 .AdminHeader-logo a {
   display: flex;
   align-items: center;
@@ -113,7 +199,16 @@ function handleLogout() {
 }
 
 .AdminHeader-logo .icon {
-  font-size: 20px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--forum-primary-color) 10%, white);
+  color: var(--forum-primary-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex: 0 0 auto;
 }
 
 .AdminHeader-actions {
@@ -123,21 +218,91 @@ function handleLogout() {
   min-width: 0;
 }
 
-.AdminHeader-user {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  color: var(--forum-text-muted);
-  font-size: var(--forum-font-size-md);
+.AdminHeader-userMenu {
+  position: relative;
 }
 
-.AdminHeader-user span {
+.AdminHeader-userTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 6px 12px 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--forum-text-muted);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.AdminHeader-userTrigger:hover,
+.AdminHeader-userTrigger[aria-expanded='true'] {
+  background: var(--forum-bg-subtle);
+  border-color: var(--forum-border-color);
+}
+
+.AdminHeader-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: var(--forum-bg-subtle);
+}
+
+.AdminHeader-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.AdminHeader-avatar--fallback {
+  align-items: center;
+  justify-content: center;
+  display: inline-flex;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.AdminHeader-userName {
   max-width: 140px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--forum-text-color);
+  font-size: 15px;
+}
+
+.AdminHeader-userDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 140px;
+  padding: 8px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: 14px;
+  background: var(--forum-bg-elevated);
+  box-shadow: var(--forum-shadow-md);
+}
+
+.AdminHeader-userDropdownItem {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--forum-text-color);
+  text-align: left;
+  cursor: pointer;
+}
+
+.AdminHeader-userDropdownItem:hover {
+  background: var(--forum-bg-subtle);
 }
 
 .Button--link {
@@ -194,6 +359,10 @@ function handleLogout() {
   }
 
   .AdminHeader-logo {
+    display: none;
+  }
+
+  .AdminHeader-left {
     display: none;
   }
 

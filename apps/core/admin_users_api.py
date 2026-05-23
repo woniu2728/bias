@@ -144,6 +144,18 @@ def get_permissions(request):
         if normalized and normalized not in result[group_id]:
             result[group_id].append(normalized)
 
+    admin_group = legacy.Group.objects.filter(id=1, name="Admin").first()
+    if admin_group is not None:
+        admin_runtime_permissions = sorted(
+            set(legacy.UserService.STAFF_BASE_FORUM_PERMISSIONS)
+            | legacy.UserService.get_staff_group_managed_forum_permissions()
+        )
+        if admin_group.id not in result:
+            result[admin_group.id] = []
+        for permission_name in admin_runtime_permissions:
+            if permission_name not in result[admin_group.id]:
+                result[admin_group.id].append(permission_name)
+
     return result
 
 
@@ -174,6 +186,13 @@ def save_permissions(request, payload: dict = Body(...)):
                 return legacy.admin_error(f"未知权限: {permission_name}", status=400)
             if normalized_permission not in normalized_permissions:
                 normalized_permissions.append(normalized_permission)
+
+        if legacy.is_builtin_group(group) and group.id == 1:
+            normalized_permissions = sorted(
+                set(normalized_permissions)
+                | set(legacy.UserService.STAFF_BASE_FORUM_PERMISSIONS)
+                | legacy.UserService.get_staff_group_managed_forum_permissions()
+            )
 
         normalized_permissions = legacy.REGISTRY.expand_permissions(normalized_permissions)
         normalized_payload[group.id] = {

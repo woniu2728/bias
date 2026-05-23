@@ -17,10 +17,24 @@
             v-for="group in groups"
             :key="group.id"
             class="GroupBar-item"
-            :style="{ backgroundColor: getGroupColor(group) }"
+            :class="{ 'is-active': activeGroup?.id === group.id }"
+            :style="{ '--group-color': getGroupColor(group) }"
           >
-            <i v-if="group.icon" :class="group.icon" class="GroupBar-icon"></i>
-            <span class="GroupBar-name">{{ group.name }}</span>
+            <button
+              type="button"
+              class="GroupBar-select"
+              @click="setActiveGroup(group.id)"
+            >
+              <span class="GroupBar-iconWrap">
+                <i v-if="group.icon" :class="group.icon" class="GroupBar-icon"></i>
+              </span>
+              <span class="GroupBar-text">
+                <span class="GroupBar-name">{{ group.name }}</span>
+                <span class="GroupBar-state">
+                  {{ activeGroup?.id === group.id ? (permissionsCopy?.activeGroupLabel || '当前编辑') : (permissionsCopy?.switchGroupLabel || '切换查看') }}
+                </span>
+              </span>
+            </button>
             <button
               type="button"
               class="GroupBar-edit"
@@ -44,26 +58,28 @@
             <thead>
               <tr>
                 <th class="PermissionGrid-permission">{{ permissionsCopy?.permissionHeaderLabel || '权限' }}</th>
-                <th
-                  v-for="group in groups"
-                  :key="group.id"
-                  class="PermissionGrid-group"
-                  :style="{ color: getGroupColor(group) }"
-                >
-                  {{ group.name }}
+                <th class="PermissionGrid-group PermissionGrid-group--active">
+                  <div v-if="activeGroup" class="PermissionGrid-groupHeader" :style="{ '--group-color': getGroupColor(activeGroup) }">
+                    <span class="PermissionGrid-groupBadge">
+                      <i v-if="activeGroup.icon" :class="activeGroup.icon"></i>
+                    </span>
+                    <span class="PermissionGrid-groupName">{{ activeGroup.name }}</span>
+                  </div>
+                  <span v-else>{{ permissionsCopy?.noGroupSelectedText || '未选择用户组' }}</span>
                 </th>
               </tr>
             </thead>
             <tbody>
               <template v-for="section in permissionSections" :key="section.name">
                 <tr>
-                  <td colspan="100%" class="PermissionGrid-section">
+                  <td colspan="2" class="PermissionGrid-section">
                     {{ section.label }}
                   </td>
                 </tr>
                 <tr
                   v-for="permission in section.permissions"
                   :key="permission.name"
+                  class="PermissionGrid-row"
                 >
                   <td class="PermissionGrid-permission">
                     <div class="PermissionCell-main">
@@ -71,25 +87,15 @@
                         <i :class="permission.icon"></i>
                         <span>{{ permission.label }}</span>
                       </div>
-                      <div class="PermissionCell-meta">
-                        <code>{{ permission.name }}</code>
-                        <span>{{ resolveModuleName(permission.module_id) }}</span>
-                      </div>
                       <p v-if="permission.description" class="PermissionCell-description">{{ permission.description }}</p>
-                      <p v-if="permission.required_permissions?.length" class="PermissionCell-dependencies">
-                        {{ permissionsCopy?.dependencyPrefix || '依赖' }}: <code>{{ permission.required_permissions.join(', ') }}</code>
-                      </p>
                     </div>
                   </td>
-                  <td
-                    v-for="group in groups"
-                    :key="group.id"
-                    class="PermissionGrid-cell"
-                  >
+                  <td class="PermissionGrid-cell PermissionGrid-cell--single">
                     <input
+                      v-if="activeGroup"
                       type="checkbox"
-                      :checked="hasPermission(group.id, permission.name)"
-                      @change="togglePermission(group.id, permission.name, $event)"
+                      :checked="hasPermission(activeGroup.id, permission.name)"
+                      @change="togglePermission(activeGroup.id, permission.name, $event)"
                     />
                   </td>
                 </tr>
@@ -115,31 +121,19 @@
                   <i :class="permission.icon"></i>
                   <strong>{{ permission.label }}</strong>
                 </div>
-                <div class="PermissionMobileCard-meta">
-                  <code>{{ permission.name }}</code>
-                  <span>{{ resolveModuleName(permission.module_id) }}</span>
-                </div>
               </div>
               <p v-if="permission.description" class="PermissionMobileCard-description">{{ permission.description }}</p>
-              <p v-if="permission.required_permissions?.length" class="PermissionMobileCard-dependencies">
-                {{ permissionsCopy?.dependencyPrefix || '依赖' }}: <code>{{ permission.required_permissions.join(', ') }}</code>
-              </p>
 
-              <div class="PermissionMobileMatrix">
-                <label
-                  v-for="group in groups"
-                  :key="`${permission.name}-${group.id}`"
-                  class="PermissionMobileToggle"
-                  :style="{ '--group-color': getGroupColor(group) }"
-                >
+              <div v-if="activeGroup" class="PermissionMobileMatrix">
+                <label class="PermissionMobileToggle" :style="{ '--group-color': getGroupColor(activeGroup) }">
                   <span class="PermissionMobileToggle-name">
-                    <i v-if="group.icon" :class="group.icon"></i>
-                    <span>{{ group.name }}</span>
+                    <i v-if="activeGroup.icon" :class="activeGroup.icon"></i>
+                    <span>{{ activeGroup.name }}</span>
                   </span>
                   <input
                     type="checkbox"
-                    :checked="hasPermission(group.id, permission.name)"
-                    @change="togglePermission(group.id, permission.name, $event)"
+                    :checked="hasPermission(activeGroup.id, permission.name)"
+                    @change="togglePermission(activeGroup.id, permission.name, $event)"
                   />
                 </label>
               </div>
@@ -163,16 +157,16 @@
 
       <div v-if="showGroupModal" class="Modal" @click.self="closeGroupModal">
         <div class="Modal-content Modal-content--group">
-          <div class="Modal-header">
+          <div class="Modal-header Modal-header--group">
             <h3>{{ editingGroup ? (permissionsCopy?.updateGroupTitle || '编辑用户组') : (permissionsCopy?.createGroupTitle || '创建用户组') }}</h3>
             <button type="button" class="Modal-close" @click="closeGroupModal">
               <i class="fas fa-times"></i>
             </button>
           </div>
 
-          <div class="Modal-body">
-            <div class="Form-group Form-group--groupName">
-              <label for="group-name">{{ permissionsCopy?.groupNameLabel || '名称' }}</label>
+          <div class="Modal-body Modal-body--group">
+            <div class="Form-group Form-group--groupCompact">
+              <label for="group-name" class="Form-labelStrong">{{ permissionsCopy?.groupNameLabel || '名称' }}</label>
               <input
                 id="group-name"
                 v-model="groupForm.name"
@@ -183,69 +177,76 @@
               />
             </div>
 
-            <div class="FormRow">
-              <div class="Form-group">
-                <label for="group-icon">{{ permissionsCopy?.groupIconLabel || '图标' }}</label>
+            <div class="Form-group Form-group--groupCompact">
+              <label for="group-color-text" class="Form-labelStrong">{{ permissionsCopy?.groupColorLabel || '颜色' }}</label>
+              <div class="ColorField ColorField--flarum">
                 <input
-                  id="group-icon"
-                  v-model="groupForm.icon"
-                  name="group_icon"
+                  id="group-color-text"
+                  v-model="groupForm.color"
+                  name="group_color"
                   type="text"
                   class="FormControl"
-                  :placeholder="permissionsCopy?.groupIconPlaceholder || '例如：fas fa-shield-alt'"
+                  :placeholder="permissionsCopy?.groupColorPlaceholder || '#4d698e'"
                 />
-              </div>
-              <div class="Form-group">
-                <label for="group-color-text">{{ permissionsCopy?.groupColorLabel || '颜色' }}</label>
-                <div class="ColorField">
-                  <input
-                    id="group-color-picker"
-                    v-model="groupForm.color"
-                    name="group_color_picker"
-                    type="color"
-                    class="ColorField-picker"
-                    :aria-label="permissionsCopy?.groupColorPickerAriaLabel || '用户组颜色选择器'"
-                  />
-                  <input
-                    id="group-color-text"
-                    v-model="groupForm.color"
-                    name="group_color"
-                    type="text"
-                    class="FormControl"
-                    :placeholder="permissionsCopy?.groupColorPlaceholder || '#4d698e'"
-                  />
-                </div>
+                <input
+                  id="group-color-picker"
+                  v-model="groupForm.color"
+                  name="group_color_picker"
+                  type="color"
+                  class="ColorField-picker"
+                  :aria-label="permissionsCopy?.groupColorPickerAriaLabel || '用户组颜色选择器'"
+                />
               </div>
             </div>
 
-            <label class="CheckboxField CheckboxField--toggle GroupHiddenToggle">
+            <div class="Form-group Form-group--groupCompact">
+              <label for="group-icon" class="Form-labelStrong">{{ permissionsCopy?.groupIconLabel || '图标' }}</label>
+              <p class="GroupModal-help">
+                输入 Font Awesome 图标类名，例如：`fas fa-bolt`
+                <a
+                  class="GroupModal-helpLink"
+                  href="https://fontawesome.com/icons?o=r&m=free"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  查看图标
+                </a>
+              </p>
               <input
-                id="group-is-hidden"
-                v-model="groupForm.is_hidden"
-                name="group_is_hidden"
-                type="checkbox"
+                id="group-icon"
+                v-model="groupForm.icon"
+                name="group_icon"
+                type="text"
+                class="FormControl"
+                :placeholder="permissionsCopy?.groupIconPlaceholder || '例如：fas fa-shield-alt'"
               />
-              <span>{{ permissionsCopy?.groupHiddenLabel || '隐藏用户组' }}</span>
-            </label>
-          </div>
+            </div>
 
-          <div class="Modal-footer Modal-footer--split">
-            <button
-              v-if="editingGroup && canDeleteGroup(editingGroup)"
-              type="button"
-              class="Button Button--danger"
-              :disabled="groupSaving || deletingGroup"
-              @click="deleteGroup"
-            >
-              {{ deletingGroup ? (permissionsCopy?.deletingGroupLabel || '删除中...') : (permissionsCopy?.deleteGroupLabel || '删除用户组') }}
-            </button>
-            <span v-else-if="editingGroup" class="Modal-footerNote">{{ permissionsCopy?.deleteGroupBlockedText || '系统默认用户组不允许删除' }}</span>
-            <span v-else class="Modal-footerNote"></span>
-            <div class="Modal-footerActions">
-              <button type="button" class="Button Button--secondary" @click="closeGroupModal">
-                {{ permissionsCopy?.cancelLabel || '取消' }}
+            <div class="GroupModal-toggleRow">
+              <label class="CheckboxField GroupHiddenToggle GroupHiddenToggle--switch">
+                <input
+                  id="group-is-hidden"
+                  v-model="groupForm.is_hidden"
+                  name="group_is_hidden"
+                  type="checkbox"
+                />
+                <span class="GroupHiddenToggle-switch" aria-hidden="true"></span>
+                <span>{{ permissionsCopy?.groupHiddenLabel || '隐藏用户组' }}</span>
+              </label>
+            </div>
+
+            <div class="GroupModal-actions">
+              <button
+                v-if="editingGroup && canDeleteGroup(editingGroup)"
+                type="button"
+                class="Button Button--danger"
+                :disabled="groupSaving || deletingGroup"
+                @click="deleteGroup"
+              >
+                {{ deletingGroup ? (permissionsCopy?.deletingGroupLabel || '删除中...') : (permissionsCopy?.deleteGroupLabel || '删除用户组') }}
               </button>
-              <button type="button" class="Button Button--primary" :disabled="groupSaving || deletingGroup" @click="saveGroup">
+              <span v-else-if="editingGroup" class="Modal-footerNote">{{ permissionsCopy?.deleteGroupBlockedText || '系统默认用户组不允许删除' }}</span>
+              <button type="button" class="Button Button--primary GroupModal-saveButton" :disabled="groupSaving || deletingGroup" @click="saveGroup">
                 {{ groupSaving ? (permissionsCopy?.savingGroupLabel || '保存中...') : (permissionsCopy?.saveGroupLabel || '保存') }}
               </button>
             </div>
@@ -274,6 +275,7 @@ import {
 } from '../registry/pageActionMeta.js'
 
 const groups = ref([])
+const activeGroupId = ref(null)
 const permissions = ref({})
 const permissionSections = ref([])
 const permissionModules = ref([])
@@ -289,6 +291,12 @@ const permissionsCopy = computed(() => getAdminPermissionsPageCopy())
 const permissionsConfig = computed(() => getAdminPermissionsPageConfig())
 const permissionsActionMeta = computed(() => getAdminPermissionsPageActionMeta())
 const groupForm = ref(getEmptyGroupForm())
+const activeGroup = computed(() => {
+  if (!groups.value.length) {
+    return null
+  }
+  return groups.value.find(group => group.id === activeGroupId.value) || groups.value[0]
+})
 
 onMounted(async () => {
   await loadGroups()
@@ -300,11 +308,28 @@ async function loadGroups() {
   try {
     const data = await api.get('/admin/groups')
     groups.value = data
+    syncActiveGroup()
     errorMessage.value = ''
   } catch (error) {
     console.error('加载用户组失败:', error)
     errorMessage.value = permissionsActionMeta.value?.loadGroupsFailedMessage || '加载用户组失败'
   }
+}
+
+function syncActiveGroup() {
+  if (!groups.value.length) {
+    activeGroupId.value = null
+    return
+  }
+
+  const exists = groups.value.some(group => group.id === activeGroupId.value)
+  if (!exists) {
+    activeGroupId.value = groups.value[0].id
+  }
+}
+
+function setActiveGroup(groupId) {
+  activeGroupId.value = groupId
 }
 
 async function loadPermissions() {
@@ -527,7 +552,7 @@ function getEmptyGroupForm() {
 .GroupBar {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   padding: 20px;
   background: var(--forum-bg-subtle);
   border-radius: var(--forum-radius-md);
@@ -536,16 +561,67 @@ function getEmptyGroupForm() {
 .GroupBar-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--forum-radius-sm);
-  color: var(--forum-text-inverse);
-  font-size: var(--forum-font-size-sm);
-  font-weight: 600;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--group-color) 18%, var(--forum-border-color));
+  border-radius: 14px;
+  background: var(--forum-bg-elevated);
+  color: var(--forum-text-color);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.GroupBar-item.is-active {
+  border-color: color-mix(in srgb, var(--group-color) 48%, var(--forum-border-color));
+  background: color-mix(in srgb, var(--group-color) 10%, var(--forum-bg-elevated));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--group-color) 16%, transparent);
+}
+
+.GroupBar-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.GroupBar-iconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--group-color) 14%, white);
+  color: var(--group-color);
+  flex: 0 0 auto;
 }
 
 .GroupBar-name {
-  flex: 1;
+  display: block;
+  color: var(--forum-text-color);
+  font-size: var(--forum-font-size-sm);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.GroupBar-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.GroupBar-state {
+  color: var(--forum-text-soft);
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .GroupBar-icon {
@@ -554,18 +630,24 @@ function getEmptyGroupForm() {
 }
 
 .GroupBar-edit {
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  color: var(--forum-text-inverse);
-  padding: 4px 8px;
-  border-radius: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: color-mix(in srgb, var(--group-color) 10%, var(--forum-bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--group-color) 20%, var(--forum-border-color));
+  color: var(--group-color);
+  padding: 0;
+  border-radius: 10px;
   cursor: pointer;
   font-size: var(--forum-font-size-xs);
-  transition: background 0.2s;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .GroupBar-edit:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: color-mix(in srgb, var(--group-color) 16%, var(--forum-bg-elevated));
+  border-color: color-mix(in srgb, var(--group-color) 34%, var(--forum-border-color));
 }
 
 .GroupBar-add {
@@ -602,7 +684,6 @@ function getEmptyGroupForm() {
   border: 1px solid var(--forum-border-color);
   border-radius: 12px;
   background: var(--forum-bg-elevated);
-  box-shadow: var(--forum-shadow-sm);
 }
 
 .PermissionGrid-wrap::-webkit-scrollbar {
@@ -622,9 +703,9 @@ function getEmptyGroupForm() {
 }
 
 .PermissionGrid thead th {
-  padding: 12px;
+  padding: 12px 16px;
   background: var(--forum-bg-subtle);
-  border-bottom: 2px solid var(--forum-border-color);
+  border-bottom: 1px solid var(--forum-border-color);
   font-size: var(--forum-font-size-sm);
   font-weight: 600;
   text-align: left;
@@ -638,17 +719,44 @@ function getEmptyGroupForm() {
 
 .PermissionGrid-group {
   text-align: center;
-  min-width: 100px;
+  min-width: 164px;
+  width: 164px;
+}
+
+.PermissionGrid-group--active {
+  text-align: center;
+}
+
+.PermissionGrid-groupHeader {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--forum-text-color);
+}
+
+.PermissionGrid-groupBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--group-color) 14%, white);
+  color: var(--group-color);
+}
+
+.PermissionGrid-groupName {
+  font-weight: 700;
 }
 
 .PermissionGrid-section {
-  padding: 12px;
-  background: var(--forum-bg-elevated-strong);
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--forum-bg-subtle) 82%, white);
   font-weight: 600;
-  font-size: var(--forum-font-size-sm);
+  font-size: 12px;
   color: var(--forum-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
   border-top: 1px solid var(--forum-border-color);
 }
 
@@ -657,24 +765,23 @@ function getEmptyGroupForm() {
 }
 
 .PermissionGrid tbody tr:not(:has(.PermissionGrid-section)):hover {
-  background: var(--forum-bg-elevated-strong);
+  background: color-mix(in srgb, var(--forum-primary-color) 3%, var(--forum-bg-elevated));
 }
 
 .PermissionGrid tbody td {
-  padding: 12px;
+  padding: 14px 16px;
 }
 
 .PermissionGrid-permission i {
-  margin-right: 8px;
   color: var(--forum-text-soft);
-  width: 16px;
+  width: 15px;
   text-align: center;
 }
 
 .PermissionCell-main {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .PermissionCell-title {
@@ -682,14 +789,8 @@ function getEmptyGroupForm() {
   align-items: center;
   gap: 8px;
   color: var(--forum-text-color);
-}
-
-.PermissionCell-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--forum-text-soft);
-  font-size: 12px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .PermissionCell-description,
@@ -697,17 +798,23 @@ function getEmptyGroupForm() {
   margin: 0;
   color: var(--forum-text-soft);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .PermissionGrid-cell {
   text-align: center;
+  vertical-align: middle;
+}
+
+.PermissionGrid-cell--single {
+  width: 164px;
+  min-width: 164px;
 }
 
 .PermissionGrid-cell input[type='checkbox'] {
   cursor: pointer;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .PermissionsPage-actions {
@@ -716,13 +823,78 @@ function getEmptyGroupForm() {
   gap: 15px;
 }
 
-.Modal-content--group {
-  width: min(680px, calc(100vw - 24px));
-  min-width: min(680px, calc(100vw - 24px));
+#admin-app .Modal-content.Modal-content--group {
+  width: min(470px, calc(100vw - 24px));
+  min-width: min(470px, calc(100vw - 24px));
+  background: #eef3fa;
+  border-radius: 8px;
+  box-shadow: 0 22px 54px rgba(15, 23, 42, 0.22);
 }
 
-.Form-group--groupName {
-  max-width: 360px;
+#admin-app .Modal-content.Modal-content--group .Modal-header,
+#admin-app .Modal-content.Modal-content--group .Modal-body {
+  padding: 26px 38px;
+}
+
+#admin-app .Modal-content.Modal-content--group .Modal-body {
+  overflow: visible;
+}
+
+.Form-group--groupCompact {
+  margin-bottom: 0;
+}
+
+.Form-labelStrong {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: var(--forum-text-color);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.Modal-header--group h3 {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.Modal-header--group {
+  position: relative;
+  justify-content: center;
+}
+
+.Modal-header--group .Modal-close {
+  position: absolute;
+  top: 22px;
+  right: 24px;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+}
+
+.Modal-body--group {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  border-top: 1px solid #d6deea;
+}
+
+.GroupModal-help {
+  margin: 0 0 10px;
+  color: var(--forum-text-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.GroupModal-helpLink {
+  display: inline;
+  margin-left: 6px;
+  color: var(--forum-primary-color);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.GroupModal-helpLink:hover {
+  text-decoration: underline;
 }
 
 .ColorField {
@@ -732,29 +904,103 @@ function getEmptyGroupForm() {
   min-width: 0;
 }
 
+.ColorField--flarum {
+  position: relative;
+  gap: 0;
+}
+
 .ColorField-picker {
-  flex: 0 0 52px;
-  width: 52px;
-  height: 40px;
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
   padding: 0;
-  border: 1px solid var(--forum-border-strong);
-  border-radius: var(--forum-radius-sm);
+  border: none;
+  border-radius: 6px;
   cursor: pointer;
+  background: transparent;
+  box-shadow: none;
 }
 
 .ColorField .FormControl {
   flex: 1 1 auto;
   min-width: 0;
+  padding-right: 44px;
+}
+
+.GroupModal-toggleRow {
+  margin-top: -2px;
 }
 
 .GroupHiddenToggle {
   width: fit-content;
-  min-width: 160px;
+  min-height: 38px;
+  padding: 0;
+  border: none;
+  background: transparent;
   justify-content: flex-start;
+  color: var(--forum-text-color);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.GroupHiddenToggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.GroupHiddenToggle--switch {
+  gap: 12px;
+}
+
+.GroupHiddenToggle-switch {
+  position: relative;
+  width: 52px;
+  height: 32px;
+  border-radius: 999px;
+  background: #b8bcc2;
+  transition: background 0.2s ease;
+}
+
+.GroupHiddenToggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+  transition: transform 0.2s ease;
+}
+
+.GroupHiddenToggle input:checked + .GroupHiddenToggle-switch {
+  background: #90959c;
+}
+
+.GroupHiddenToggle input:checked + .GroupHiddenToggle-switch::after {
+  transform: translateX(20px);
 }
 
 .GroupHiddenToggle span {
   white-space: nowrap;
+}
+
+.GroupModal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: 0;
+}
+
+.GroupModal-saveButton {
+  min-width: 162px;
+  min-height: 44px;
+  justify-content: center;
 }
 
 @media (max-width: 768px) {
@@ -766,17 +1012,25 @@ function getEmptyGroupForm() {
   .GroupBar-item,
   .GroupBar-add {
     width: 100%;
-    justify-content: space-between;
     min-height: 44px;
     border-radius: 12px;
+  }
+
+  .GroupBar-select {
+    min-width: 0;
   }
 
   .Form-group--groupName {
     max-width: none;
   }
 
-  .Modal-content--group {
+  #admin-app .Modal-content.Modal-content--group {
     min-width: 0;
+  }
+
+  #admin-app .Modal-content.Modal-content--group .Modal-header,
+  #admin-app .Modal-content.Modal-content--group .Modal-body {
+    padding: 22px;
   }
 
   .GroupHiddenToggle {
@@ -845,15 +1099,6 @@ function getEmptyGroupForm() {
     width: 16px;
     color: var(--forum-text-soft);
     text-align: center;
-  }
-
-  .PermissionMobileCard-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    color: var(--forum-text-soft);
-    font-size: 12px;
-    margin-bottom: 8px;
   }
 
   .PermissionMobileCard-description,

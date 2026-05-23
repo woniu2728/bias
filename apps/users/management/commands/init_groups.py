@@ -68,24 +68,12 @@ class Command(BaseCommand):
                     group.save(update_fields=updates)
                 self.stdout.write(f'  用户组已存在: {group.name}')
 
-        # Admin权限
-        admin_permissions = [
-            'viewForum',
-            'startDiscussion',
-            'discussion.reply',
-            'discussion.typing',
-            'discussion.edit',
-            'discussion.delete',
-            'discussion.hide',
-            'discussion.rename',
-            'discussion.lock',
-            'discussion.sticky',
-            'user.edit',
-            'user.suspend',
-            'viewUserList',
-            'searchUsers',
-        ]
-        admin_permissions.extend(sorted(UserService.get_staff_group_managed_forum_permissions()))
+        # Admin 权限需要与 staff/superuser 的运行时基线保持一致，
+        # 否则后台权限页展示会和实际生效权限不一致。
+        admin_permissions = sorted(
+            set(UserService.STAFF_BASE_FORUM_PERMISSIONS)
+            | UserService.get_staff_group_managed_forum_permissions()
+        )
 
         admin_group = Group.objects.get(id=1)
         for perm in admin_permissions:

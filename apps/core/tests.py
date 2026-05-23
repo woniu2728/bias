@@ -4528,6 +4528,15 @@ class AdminPermissionsApiTests(TestCase):
             email="admin-permission-mgr@example.com",
             password="password123",
         )
+        Group.objects.get_or_create(
+            id=1,
+            defaults={
+                "name": "Admin",
+                "name_singular": "Admin",
+                "name_plural": "Admins",
+                "color": "#B72A2A",
+            },
+        )
         self.group = Group.objects.create(
             name="Editors",
             name_singular="Editor",
@@ -4552,6 +4561,42 @@ class AdminPermissionsApiTests(TestCase):
         payload = response.json()
         group_permissions = payload.get(str(self.group.id), payload.get(self.group.id, []))
         self.assertEqual(set(group_permissions), {"discussion.reply", "discussion.edit"})
+
+    def test_permissions_api_includes_staff_runtime_baseline_for_admin_group(self):
+        admin_group = Group.objects.get(id=1)
+        Permission.objects.create(group=admin_group, permission="discussion.edit")
+
+        response = self.client.get(
+            "/api/admin/permissions",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        admin_permissions = set(payload.get("1", payload.get(1, [])))
+        self.assertIn("discussion.edit", admin_permissions)
+        self.assertIn("discussion.editOwn", admin_permissions)
+        self.assertIn("discussion.deleteOwn", admin_permissions)
+
+    def test_permissions_api_preserves_staff_runtime_baseline_when_saving_admin_group(self):
+        admin_group = Group.objects.get(id=1)
+
+        response = self.client.post(
+            "/api/admin/permissions",
+            data=json.dumps({
+                str(admin_group.id): ["discussion.edit"],
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        saved_permissions = set(
+            Permission.objects.filter(group=admin_group).values_list("permission", flat=True)
+        )
+        self.assertIn("discussion.edit", saved_permissions)
+        self.assertIn("discussion.editOwn", saved_permissions)
+        self.assertIn("discussion.deleteOwn", saved_permissions)
 
     def test_permissions_api_normalizes_legacy_codes_on_save(self):
         response = self.client.post(
