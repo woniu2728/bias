@@ -613,8 +613,7 @@ class UserPreferencesApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
-        self.assertEqual(payload["ui_values"]["theme_mode"], "system")
-        self.assertEqual(payload["ui_values"]["locale"], "zh-CN")
+        self.assertEqual(payload["ui_values"], {})
         self.assertIn("values", payload)
         self.assertIn("definitions", payload)
 
@@ -625,10 +624,7 @@ class UserPreferencesApiTests(TestCase):
                 "values": {
                     "notify_user_mentioned": False,
                 },
-                "ui_values": {
-                    "theme_mode": "dark",
-                    "locale": "en",
-                },
+                "ui_values": {},
             }),
             content_type="application/json",
             **self.auth_header(),
@@ -636,11 +632,9 @@ class UserPreferencesApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.preferences_ui["theme_mode"], "dark")
-        self.assertEqual(self.user.preferences_ui["locale"], "en")
+        self.assertEqual(self.user.preferences_ui, {})
         self.assertFalse(self.user.preferences["notify_user_mentioned"])
-        self.assertEqual(response.json()["ui_values"]["theme_mode"], "dark")
-        self.assertEqual(response.json()["ui_values"]["locale"], "en")
+        self.assertEqual(response.json()["ui_values"], {})
 
 
 class SearchApiTests(ChineseSearchTests):
@@ -1633,12 +1627,9 @@ class AdminSettingsApiTests(TestCase):
                 "seo_keywords": "Python, Django, Vue",
                 "seo_robots_index": False,
                 "seo_robots_follow": True,
-                "welcome_title": "欢迎来到中文社区",
-                "welcome_message": "在这里讨论 Django、Vue 与论坛产品设计。",
                 "announcement_enabled": True,
                 "announcement_message": "今晚 23:00 进行维护。",
                 "announcement_tone": "warning",
-                "show_language_selector": True,
             }),
             content_type="application/json",
             **self.auth_header(),
@@ -1656,10 +1647,6 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(
             json.loads(Setting.objects.get(key="basic.seo_robots_index").value),
             False,
-        )
-        self.assertEqual(
-            json.loads(Setting.objects.get(key="basic.welcome_title").value),
-            "欢迎来到中文社区",
         )
         self.assertEqual(
             json.loads(Setting.objects.get(key="basic.announcement_message").value),
@@ -2180,10 +2167,6 @@ class AdminSettingsApiTests(TestCase):
             defaults={"value": json.dumps(True)},
         )
         Setting.objects.update_or_create(
-            key="basic.welcome_title",
-            defaults={"value": json.dumps("欢迎来到运行时论坛")},
-        )
-        Setting.objects.update_or_create(
             key="basic.announcement_enabled",
             defaults={"value": json.dumps(True)},
         )
@@ -2234,7 +2217,6 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(payload["seo_keywords"], "Python, Django, Vue")
         self.assertFalse(payload["seo_robots_index"])
         self.assertTrue(payload["seo_robots_follow"])
-        self.assertEqual(payload["welcome_title"], "欢迎来到运行时论坛")
         self.assertTrue(payload["announcement_enabled"])
         self.assertEqual(payload["announcement_message"], "运行时公告")
         self.assertEqual(payload["announcement_tone"], "warning")
@@ -2280,9 +2262,6 @@ class AdminSettingsApiTests(TestCase):
         self.assertFalse(payload["auth_human_verification_register_enabled"])
         self.assertTrue(any(item["code"] == "comment" and item["is_default"] for item in payload["post_types"]))
         self.assertTrue(any(item["code"] == "discussionRenamed" for item in payload["post_types"]))
-        self.assertEqual(payload["theme_mode"], "system")
-        self.assertTrue(any(item["code"] == "zh-CN" and item["is_default"] for item in payload["locale_packs"]))
-        self.assertTrue(any(item["code"] == "en" for item in payload["locale_packs"]))
         self.assertNotIn("auth_turnstile_secret_key", payload)
 
     def test_public_forum_settings_expose_realtime_typing_toggle(self):

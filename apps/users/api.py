@@ -30,7 +30,6 @@ from apps.core.services import PaginationService
 from .models import User
 from .preferences import normalize_user_preferences, normalize_user_ui_preferences, serialize_user_preferences
 from apps.core.file_service import FileUploadService
-from apps.core.settings_service import BASIC_SETTINGS_DEFAULTS, get_setting_group
 from .schemas import (
     UserRegisterSchema,
     UserLoginSchema,
@@ -297,8 +296,6 @@ def get_current_user(request):
 
 @router.get("/me/preferences", response=UserPreferencesSchema, auth=AccessTokenAuth(), tags=["Users"])
 def get_preferences(request):
-    basic_settings = get_setting_group("basic", BASIC_SETTINGS_DEFAULTS)
-    request.auth._forum_default_locale = str(basic_settings.get("default_locale") or "zh-CN")
     return serialize_user_preferences(request.auth)
 
 
@@ -308,12 +305,7 @@ def update_preferences(request, payload: UserPreferencesUpdateSchema):
         **(request.auth.preferences or {}),
         **normalize_user_preferences(payload.values),
     }
-    basic_settings = get_setting_group("basic", BASIC_SETTINGS_DEFAULTS)
-    request.auth.preferences_ui = normalize_user_ui_preferences(
-        payload.ui_values.dict() if payload.ui_values is not None else request.auth.preferences_ui,
-        default_locale=str(basic_settings.get("default_locale") or "zh-CN"),
-    )
-    request.auth._forum_default_locale = str(basic_settings.get("default_locale") or "zh-CN")
+    request.auth.preferences_ui = normalize_user_ui_preferences(request.auth.preferences_ui)
     request.auth.save(update_fields=["preferences", "preferences_ui"])
     return serialize_user_preferences(request.auth)
 

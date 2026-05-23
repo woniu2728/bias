@@ -24,6 +24,7 @@ function createHarness(overrides = {}) {
     },
     preferences: {
       values: { mentions: true },
+      ui_values: {},
       definitions: [],
     },
     saving: false,
@@ -60,6 +61,7 @@ function createHarness(overrides = {}) {
       if (url === '/users/me/preferences') {
         return {
           values: { ...(payload.values || {}) },
+          ui_values: {},
           definitions: [],
         }
       }
@@ -69,6 +71,7 @@ function createHarness(overrides = {}) {
       calls.push(['get', url])
       return {
         values: { mentions: true },
+        ui_values: {},
         definitions: [],
       }
     },
@@ -103,6 +106,11 @@ function createHarness(overrides = {}) {
     editForm(value) {
       if (arguments.length > 0) state.editForm = value
       return state.editForm
+    },
+    forumUiStore: {
+      hydrateFromUiValues(value) {
+        calls.push(['hydrateFromUiValues', value])
+      },
     },
     getProfileErrorMessage(error) {
       return error.message
@@ -196,4 +204,18 @@ test('profile account actions saves profile and refreshes auth user', async () =
   assert.equal(harness.state.settingsSuccess, '资料已保存，验证邮件已发送到 new@example.com')
   assert.equal(harness.calls.some(item => item === 'fetchUser'), true)
   assert.equal(harness.state.userId, 7)
+})
+
+test('profile account actions loads and saves ui preferences', async () => {
+  const harness = createHarness()
+
+  await harness.actions.loadPreferences()
+  assert.deepEqual(harness.state.preferences.ui_values, {})
+
+  harness.state.preferences.ui_values = {}
+  await harness.actions.savePreferences()
+
+  const patchCall = harness.calls.find(item => Array.isArray(item) && item[0] === 'patch' && item[1] === '/users/me/preferences')
+  assert.deepEqual(patchCall[2].ui_values, {})
+  assert.equal(harness.calls.some(item => Array.isArray(item) && item[0] === 'hydrateFromUiValues'), true)
 })

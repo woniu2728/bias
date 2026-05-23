@@ -71,39 +71,6 @@
   --composer-offset: var(--forum-composer-offset);
 }
 
-:root[data-theme='dark'] {
-  --forum-primary-strong: #7597bb;
-  --forum-accent-strong: #ff9462;
-  --forum-warning-bg: #3b3220;
-  --forum-warning-bg-strong: #4a3c22;
-  --forum-warning-border: #7b6741;
-  --forum-warning-border-strong: #a48855;
-  --forum-danger-bg: #3c2729;
-  --forum-danger-border: #7c4a4f;
-  --forum-danger-soft: #332325;
-  --forum-info-bg: #1e3446;
-  --forum-info-border: #355169;
-  --forum-accent-bg: #35261b;
-  --forum-accent-surface: #2e241d;
-  --forum-code-bg: #24313d;
-  --forum-code-bg-dark: #15202a;
-  --forum-text-color: #e6edf3;
-  --forum-text-muted: #afbcc8;
-  --forum-text-soft: #8a9aa8;
-  --forum-text-inverse: #0f1720;
-  --forum-bg-canvas: #101820;
-  --forum-bg-subtle: #172330;
-  --forum-bg-elevated: #1a2633;
-  --forum-bg-elevated-strong: #202d3a;
-  --forum-bg-overlay: rgba(3, 8, 14, 0.62);
-  --forum-border-color: #314558;
-  --forum-border-strong: #42607a;
-  --forum-border-soft: #283746;
-  --forum-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.24);
-  --forum-shadow-md: 0 12px 28px rgba(0, 0, 0, 0.3);
-  --forum-shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.38);
-}
-
 * {
   margin: 0;
   padding: 0;

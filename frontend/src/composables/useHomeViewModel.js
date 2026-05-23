@@ -18,10 +18,10 @@ export function useHomeViewModel({
 
   const heroTitleText = computed(() => getUiCopy({
     surface: 'home-hero-title',
-  })?.text || forumStore.settings.welcome_title || forumStore.settings.forum_title || 'Bias')
+  })?.text || forumStore.settings.forum_title || 'Bias')
   const heroDescriptionText = computed(() => getUiCopy({
     surface: 'home-hero-description',
-  })?.text || forumStore.settings.welcome_message || '基于 Django 和 Vue 3 的现代化论坛')
+  })?.text || forumStore.settings.forum_description || '基于 Django 和 Vue 3 的现代化论坛')
   const browseDiscussionsText = computed(() => getUiCopy({
     surface: 'home-browse-discussions',
   })?.text || '浏览讨论')

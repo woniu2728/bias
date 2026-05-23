@@ -3,6 +3,7 @@ export function createProfileAccountActions({
   authStore,
   avatarInput,
   editForm,
+  forumUiStore,
   getProfileErrorMessage,
   getProfileUiCopy,
   modalStore,
@@ -78,6 +79,7 @@ export function createProfileAccountActions({
       const data = await apiClient.get('/users/me/preferences')
       preferences({
         values: { ...(data.values || {}) },
+        ui_values: {},
         definitions: Array.isArray(data.definitions) ? data.definitions : []
       })
       if (authStore.user) {
@@ -100,20 +102,23 @@ export function createProfileAccountActions({
 
     try {
       const data = await apiClient.patch('/users/me/preferences', {
-        values: { ...(preferences().values || {}) }
+        values: { ...(preferences().values || {}) },
+        ui_values: {},
       })
 
       preferences({
         values: { ...(data.values || {}) },
+        ui_values: {},
         definitions: Array.isArray(data.definitions) ? data.definitions : []
       })
       if (authStore.user) {
         authStore.user.preferences = { ...data }
       }
+      forumUiStore?.hydrateFromUiValues?.(data.ui_values || {})
       setPreferencesSuccess(getProfileUiCopy(
         'profile-preferences-save-success',
         {},
-        '通知偏好已保存'
+        '偏好已保存'
       ))
     } catch (error) {
       setPreferencesError(getProfileErrorMessage(
@@ -239,6 +244,7 @@ export function useProfileAccountActions({
   authStore,
   avatarInput,
   editForm,
+  forumUiStore,
   getProfileErrorMessage,
   getProfileUiCopy,
   modalStore,
@@ -273,6 +279,7 @@ export function useProfileAccountActions({
       }
       return editForm.value
     },
+    forumUiStore,
     getProfileErrorMessage,
     getProfileUiCopy,
     modalStore,

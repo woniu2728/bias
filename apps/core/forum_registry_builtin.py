@@ -140,23 +140,7 @@ def _register_builtin_modules(registry) -> None:
                 "developer-docs",
             ),
             settings_groups=("basic", "appearance", "mail", "advanced"),
-            language_packs=(
-                LanguagePackDefinition(
-                    code="zh-CN",
-                    label="简体中文",
-                    native_label="简体中文",
-                    module_id="core",
-                    description="Bias 默认内置语言包。",
-                    is_default=True,
-                ),
-                LanguagePackDefinition(
-                    code="en",
-                    label="English",
-                    native_label="English",
-                    module_id="core",
-                    description="Bias 内置英文基础语言包。",
-                ),
-            ),
+            language_packs=(),
         )
     )
 

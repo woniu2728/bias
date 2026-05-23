@@ -8,6 +8,7 @@ import { useProfilePageLifecycle } from '@/composables/useProfilePageLifecycle'
 import { useProfileRealtimeState } from '@/composables/useProfileRealtimeState'
 import { useProfileUserState } from '@/composables/useProfileUserState'
 import { useForumRealtimeStore } from '@/stores/forumRealtime'
+import { useForumUiStore } from '@/stores/forumUi'
 import { useResourceStore } from '@/stores/resource'
 import { normalizeUser } from '@/utils/forum'
 import { useProfileRouteState } from './useProfileRouteState'
@@ -20,6 +21,7 @@ export function useProfilePage({
 }) {
   const resourceStore = useResourceStore()
   const forumRealtimeStore = useForumRealtimeStore()
+  const forumUiStore = useForumUiStore()
   const routeState = useProfileRouteState({ route, router })
   const accountState = useProfileAccountState()
 
@@ -134,6 +136,7 @@ export function useProfilePage({
     avatarUploading: accountState.avatarUploading,
     changingPassword: accountState.changingPassword,
     editForm: accountState.editForm,
+    forumUiStore,
     getProfileErrorMessage,
     getProfileUiCopy,
     loadingPreferences: accountState.loadingPreferences,

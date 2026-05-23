@@ -13,7 +13,11 @@ function createPageState(overrides = {}) {
     isOwnProfile: ref(true),
     activeTab: ref('discussions'),
     editForm: ref({ display_name: 'Alice', bio: '', email: 'a@example.com' }),
-    preferences: ref({ values: { email: true }, definitions: [] }),
+    preferences: ref({
+      values: { email: true },
+      ui_values: {},
+      definitions: []
+    }),
     saving: ref(false),
     settingsSuccess: ref(''),
     settingsError: ref(''),

@@ -37,9 +37,6 @@ registerAdminAppearancePageCopy({
     faviconUrlLabel: 'Favicon URL',
     faviconUrlHelpText: '浏览器标签页图标的 URL 地址',
     customStyleSectionTitle: '自定义样式',
-    presetPanelTitle: '样式预设',
-    presetPanelDescription: '点击即可把常用样式片段填入自定义 CSS，你可以继续修改后再保存。',
-    clearCssLabel: '清空 CSS',
     customCssLabel: '自定义 CSS',
     customCssHelpText: '添加自定义 CSS 样式来进一步定制论坛外观',
     customHeadLabel: 'Head / 统计代码注入',
@@ -84,23 +81,6 @@ registerAdminAppearancePageConfig({
       logoAccept: '.png,.jpg,.jpeg,.gif,.webp,.svg',
       faviconAccept: '.ico,.png,.svg,.webp',
     },
-    cssPresets: [
-      {
-        name: '柔和圆角',
-        description: '让卡片、按钮和输入框更柔和一些',
-        css: `:root {\n  --forum-primary-color: #3f6f90;\n  --forum-accent-color: #d66b4d;\n}\n\n.Button,\n.FormControl,\n.DiscussionListItem,\n.DiscussionHero,\n.PostCard {\n  border-radius: 12px;\n}\n`,
-      },
-      {
-        name: '对比增强',
-        description: '提高标题、边框和标签的可读性',
-        css: `body {\n  color: #223245;\n}\n\n.Header,\n.DiscussionListItem,\n.PostCard,\n.Sidebar {\n  border-color: #d2dce6;\n}\n\nh1, h2, h3,\n.DiscussionListItem-title {\n  color: #162332;\n}\n`,
-      },
-      {
-        name: '紧凑列表',
-        description: '压缩讨论列表和帖子区域的纵向间距',
-        css: `.DiscussionListItem,\n.PostCard {\n  padding-top: 12px;\n  padding-bottom: 12px;\n}\n\n.DiscussionHero {\n  padding-top: 20px;\n  padding-bottom: 20px;\n}\n`,
-      },
-    ],
   }),
 })
 

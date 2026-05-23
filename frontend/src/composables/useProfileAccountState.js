@@ -31,6 +31,7 @@ export function createProfileAccountState() {
 
   const preferences = ref({
     values: {},
+    ui_values: {},
     definitions: []
   })
 

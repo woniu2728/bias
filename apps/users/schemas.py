@@ -122,8 +122,7 @@ class UserPreferenceItemSchema(Schema):
 
 
 class UserUiPreferencesSchema(Schema):
-    theme_mode: str = "system"
-    locale: str = "zh-CN"
+    pass
 
 
 class UserPreferencesSchema(Schema):

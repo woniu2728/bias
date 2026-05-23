@@ -146,28 +146,6 @@
 
       <div class="AppearancePage-section">
         <h3 class="Section-title">{{ appearanceCopy?.customStyleSectionTitle || '自定义样式' }}</h3>
-        <div class="PresetPanel">
-          <div class="PresetPanel-header">
-            <div>
-              <h4>{{ appearanceCopy?.presetPanelTitle || '样式预设' }}</h4>
-              <p>{{ appearanceCopy?.presetPanelDescription || '点击即可把常用样式片段填入自定义 CSS，你可以继续修改后再保存。' }}</p>
-            </div>
-            <button type="button" class="Button" @click="settings.custom_css = ''">{{ appearanceCopy?.clearCssLabel || '清空 CSS' }}</button>
-          </div>
-          <div class="PresetPanel-grid">
-            <button
-              v-for="preset in cssPresets"
-              :key="preset.name"
-              type="button"
-              class="PresetCard"
-              @click="applyCssPreset(preset.css)"
-            >
-              <span class="PresetCard-name">{{ preset.name }}</span>
-              <span class="PresetCard-desc">{{ preset.description }}</span>
-            </button>
-          </div>
-        </div>
-
         <div class="Form-group">
           <label for="appearance-custom-css">{{ appearanceCopy?.customCssLabel || '自定义 CSS' }}</label>
           <textarea
@@ -274,17 +252,16 @@ const loading = ref(true)
 const loadError = ref('')
 const settings = ref({})
 const previewContent = ref({
-  welcome_title: '欢迎来到Bias',
-  welcome_message: '这是一个基于Django和Vue 3的现代化论坛',
+  forum_title: 'Bias',
+  forum_description: '这里会预览首页说明和页脚内容。',
 })
 const saving = ref(false)
 const uploadingLogo = ref(false)
 const uploadingFavicon = ref(false)
 const modalStore = useModalStore()
 const { saveSuccess, saveError, resetSaveFeedback, showSaveSuccess, showSaveError } = useAdminSaveFeedback()
-const cssPresets = computed(() => appearanceConfig.value?.cssPresets || [])
-const previewTitleText = computed(() => String(previewContent.value.welcome_title || '欢迎来到 Bias').trim() || '欢迎来到 Bias')
-const previewDescriptionText = computed(() => String(previewContent.value.welcome_message || '这里会预览首页欢迎文案和页脚内容。').trim() || '这里会预览首页欢迎文案和页脚内容。')
+const previewTitleText = computed(() => String(previewContent.value.forum_title || 'Bias').trim() || 'Bias')
+const previewDescriptionText = computed(() => String(previewContent.value.forum_description || '这里会预览首页说明和页脚内容。').trim() || '这里会预览首页说明和页脚内容。')
 const previewStyleVars = computed(() => ({
   '--appearance-preview-primary': settings.value.primary_color || '#4d698e',
   '--appearance-preview-accent': settings.value.accent_color || '#e74c3c',
@@ -315,8 +292,8 @@ onMounted(async () => {
     const data = appearanceData
     settings.value = { ...settings.value, ...data }
     previewContent.value = {
-      welcome_title: basicsData.welcome_title || '欢迎来到Bias',
-      welcome_message: basicsData.welcome_message || '这是一个基于Django和Vue 3的现代化论坛',
+      forum_title: basicsData.forum_title || 'Bias',
+      forum_description: basicsData.forum_description || '这里会预览首页说明和页脚内容。',
     }
   } catch (error) {
     console.error('加载外观设置失败:', error)
@@ -339,10 +316,6 @@ async function saveSettings() {
   } finally {
     saving.value = false
   }
-}
-
-function applyCssPreset(css) {
-  settings.value.custom_css = css
 }
 
 async function uploadAsset(event, target) {
@@ -392,70 +365,6 @@ async function uploadAsset(event, target) {
   padding: 20px;
   margin-bottom: 20px;
   box-shadow: var(--forum-shadow-sm);
-}
-
-.PresetPanel {
-  margin-bottom: 20px;
-  padding: 16px;
-  border: 1px solid var(--forum-border-soft);
-  border-radius: var(--forum-radius-md);
-  background: var(--forum-bg-elevated-strong);
-}
-
-.PresetPanel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-
-.PresetPanel-header h4 {
-  margin: 0 0 6px;
-  font-size: 15px;
-  color: var(--forum-text-color);
-}
-
-.PresetPanel-header p {
-  margin: 0;
-  color: var(--forum-text-muted);
-  font-size: var(--forum-font-size-sm);
-  line-height: 1.6;
-}
-
-.PresetPanel-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-}
-
-.PresetCard {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 14px;
-  border: 1px solid var(--forum-border-color);
-  border-radius: var(--forum-radius-md);
-  background: var(--forum-bg-elevated);
-  text-align: left;
-}
-
-.PresetCard:hover {
-  border-color: var(--forum-primary-color);
-  background: #f8fbff;
-}
-
-.PresetCard-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--forum-text-color);
-}
-
-.PresetCard-desc {
-  color: var(--forum-text-muted);
-  font-size: var(--forum-font-size-xs);
-  line-height: 1.5;
 }
 
 .AssetCard {
@@ -693,13 +602,9 @@ async function uploadAsset(event, target) {
   }
 
   .AppearancePage-section,
-  .PresetPanel {
+  .AppearancePage-section {
     padding: 16px;
     border-radius: 14px;
-  }
-
-  .PresetPanel-header {
-    flex-direction: column;
   }
 
   .AssetCard {

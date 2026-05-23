@@ -12,14 +12,9 @@ const DEFAULT_SETTINGS = {
   seo_keywords: '',
   seo_robots_index: true,
   seo_robots_follow: true,
-  welcome_title: '欢迎来到Bias',
-  welcome_message: '这是一个基于Django和Vue 3的现代化论坛',
   announcement_enabled: false,
   announcement_message: '',
   announcement_tone: 'info',
-  default_locale: 'zh-CN',
-  show_language_selector: false,
-  theme_mode: 'system',
   primary_color: '#4d698e',
   accent_color: '#e74c3c',
   logo_url: '',
@@ -27,7 +22,6 @@ const DEFAULT_SETTINGS = {
   custom_css: '',
   custom_head_html: '',
   custom_footer_html: '',
-  locale_packs: [],
   maintenance_mode: false,
   maintenance_message: '论坛正在维护中，请稍后再试...',
   realtime_typing_enabled: true,
@@ -91,8 +85,7 @@ export const useForumStore = defineStore('forum', () => {
     const title = settings.value.seo_title || settings.value.forum_title || DEFAULT_SETTINGS.forum_title
     const description = settings.value.seo_description
       || settings.value.forum_description
-      || settings.value.welcome_message
-      || DEFAULT_SETTINGS.welcome_message
+      || DEFAULT_SETTINGS.forum_description
     const keywords = settings.value.seo_keywords || ''
     const robots = [
       settings.value.seo_robots_index === false ? 'noindex' : 'index',
