@@ -224,24 +224,15 @@
 
           <div class="Form-group">
             <label for="tag-color-text">{{ tagsCopy?.colorLabel || '颜色' }}</label>
-            <div class="ColorPicker">
-              <input
-                id="tag-color-picker"
-                v-model="formData.color"
-                name="tag_color_picker"
-                type="color"
-                class="ColorPicker-input"
-                :aria-label="tagsCopy?.colorPickerAriaLabel || '标签颜色选择器'"
-              />
-              <input
-                id="tag-color-text"
-                v-model="formData.color"
-                name="tag_color"
-                type="text"
-                class="FormControl ColorPicker-text"
-                :placeholder="tagsCopy?.colorPlaceholder || '#888888'"
-              />
-            </div>
+            <AdminColorField
+              v-model="formData.color"
+              input-id="tag-color-text"
+              picker-id="tag-color-picker"
+              name="tag_color"
+              picker-name="tag_color_picker"
+              :aria-label="tagsCopy?.colorPickerAriaLabel || '标签颜色选择器'"
+              :placeholder="tagsCopy?.colorPlaceholder || '#888888'"
+            />
             <div class="ColorPresetList">
               <button
                 v-for="color in tagColorPresets"
@@ -391,6 +382,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import AdminColorField from '../components/AdminColorField.vue'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import AdminSummaryGrid from '../components/AdminSummaryGrid.vue'
@@ -1071,24 +1063,6 @@ function getNextPosition(sourceTags, parentId) {
   margin-top: 10px;
 }
 
-.ColorPicker {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.ColorPicker-input {
-  width: 60px;
-  height: 40px;
-  border: 1px solid var(--forum-border-strong);
-  border-radius: var(--forum-radius-sm);
-  cursor: pointer;
-}
-
-.ColorPicker-text {
-  flex: 1;
-}
-
 .ColorPresetList {
   display: flex;
   flex-wrap: wrap;
@@ -1227,11 +1201,6 @@ function getNextPosition(sourceTags, parentId) {
     width: 100%;
     max-width: none;
     max-height: calc(100vh - 56px);
-  }
-
-  .ColorPicker {
-    flex-direction: column;
-    align-items: stretch;
   }
 
   .IconPicker {

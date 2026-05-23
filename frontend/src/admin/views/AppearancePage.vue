@@ -12,47 +12,29 @@
         <h3 class="Section-title">{{ appearanceCopy?.colorsSectionTitle || '颜色' }}</h3>
         <div class="Form-group">
           <label for="appearance-primary-color">{{ appearanceCopy?.primaryColorLabel || '主题色' }}</label>
-          <div class="ColorPicker">
-            <input
-              id="appearance-primary-color-picker"
-              v-model="settings.primary_color"
-              name="primary_color_picker"
-              type="color"
-              class="ColorPicker-input"
-              :aria-label="appearanceCopy?.primaryColorPickerAriaLabel || '主题色取色器'"
-            />
-            <input
-              id="appearance-primary-color"
-              v-model="settings.primary_color"
-              name="primary_color"
-              type="text"
-              class="FormControl ColorPicker-text"
-              :placeholder="appearanceConfig?.placeholders?.primaryColor || '#4d698e'"
-            />
-          </div>
+          <AdminColorField
+            v-model="settings.primary_color"
+            input-id="appearance-primary-color"
+            picker-id="appearance-primary-color-picker"
+            name="primary_color"
+            picker-name="primary_color_picker"
+            :aria-label="appearanceCopy?.primaryColorPickerAriaLabel || '主题色取色器'"
+            :placeholder="appearanceConfig?.placeholders?.primaryColor || '#4d698e'"
+          />
           <p class="Form-help">{{ appearanceCopy?.primaryColorHelpText || '论坛的主题颜色' }}</p>
         </div>
 
         <div class="Form-group">
           <label for="appearance-accent-color">{{ appearanceCopy?.accentColorLabel || '强调色' }}</label>
-          <div class="ColorPicker">
-            <input
-              id="appearance-accent-color-picker"
-              v-model="settings.accent_color"
-              name="accent_color_picker"
-              type="color"
-              class="ColorPicker-input"
-              :aria-label="appearanceCopy?.accentColorPickerAriaLabel || '强调色取色器'"
-            />
-            <input
-              id="appearance-accent-color"
-              v-model="settings.accent_color"
-              name="accent_color"
-              type="text"
-              class="FormControl ColorPicker-text"
-              :placeholder="appearanceConfig?.placeholders?.accentColor || '#e74c3c'"
-            />
-          </div>
+          <AdminColorField
+            v-model="settings.accent_color"
+            input-id="appearance-accent-color"
+            picker-id="appearance-accent-color-picker"
+            name="accent_color"
+            picker-name="accent_color_picker"
+            :aria-label="appearanceCopy?.accentColorPickerAriaLabel || '强调色取色器'"
+            :placeholder="appearanceConfig?.placeholders?.accentColor || '#e74c3c'"
+          />
           <p class="Form-help">{{ appearanceCopy?.accentColorHelpText || '用于按钮和链接的强调色' }}</p>
         </div>
       </div>
@@ -191,6 +173,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import AdminColorField from '../components/AdminColorField.vue'
 import AdminInlineMessage from '../components/AdminInlineMessage.vue'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
@@ -385,25 +368,6 @@ async function uploadAsset(event, target) {
   max-width: calc(100% - 198px);
 }
 
-.ColorPicker {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.ColorPicker-input {
-  width: 60px;
-  height: 40px;
-  border: 1px solid var(--forum-border-strong);
-  border-radius: var(--forum-radius-sm);
-  cursor: pointer;
-}
-
-.ColorPicker-text {
-  flex: 1;
-  max-width: 200px;
-}
-
 .Button {
   border-radius: var(--forum-radius-md);
 }
@@ -450,15 +414,6 @@ async function uploadAsset(event, target) {
 
   .AssetCard-preview {
     min-height: 96px;
-  }
-
-  .ColorPicker {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .ColorPicker-text {
-    max-width: none;
   }
 
   .Form-actions {

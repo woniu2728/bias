@@ -179,24 +179,15 @@
 
             <div class="Form-group Form-group--groupCompact">
               <label for="group-color-text" class="Form-labelStrong">{{ permissionsCopy?.groupColorLabel || '颜色' }}</label>
-              <div class="ColorField ColorField--flarum">
-                <input
-                  id="group-color-text"
-                  v-model="groupForm.color"
-                  name="group_color"
-                  type="text"
-                  class="FormControl"
-                  :placeholder="permissionsCopy?.groupColorPlaceholder || '#4d698e'"
-                />
-                <input
-                  id="group-color-picker"
-                  v-model="groupForm.color"
-                  name="group_color_picker"
-                  type="color"
-                  class="ColorField-picker"
-                  :aria-label="permissionsCopy?.groupColorPickerAriaLabel || '用户组颜色选择器'"
-                />
-              </div>
+              <AdminColorField
+                v-model="groupForm.color"
+                input-id="group-color-text"
+                picker-id="group-color-picker"
+                name="group_color"
+                picker-name="group_color_picker"
+                :aria-label="permissionsCopy?.groupColorPickerAriaLabel || '用户组颜色选择器'"
+                :placeholder="permissionsCopy?.groupColorPlaceholder || '#4d698e'"
+              />
             </div>
 
             <div class="Form-group Form-group--groupCompact">
@@ -259,6 +250,7 @@
 
 <script setup>
 import { computed, ref, onMounted } from 'vue'
+import AdminColorField from '../components/AdminColorField.vue'
 import AdminInlineMessage from '../components/AdminInlineMessage.vue'
 import AdminPage from '../components/AdminPage.vue'
 import { useAdminSaveFeedback } from '../composables/useAdminSaveFeedback'
@@ -895,38 +887,6 @@ function getEmptyGroupForm() {
 
 .GroupModal-helpLink:hover {
   text-decoration: underline;
-}
-
-.ColorField {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  min-width: 0;
-}
-
-.ColorField--flarum {
-  position: relative;
-  gap: 0;
-}
-
-.ColorField-picker {
-  position: absolute;
-  top: 9px;
-  right: 10px;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  background: transparent;
-  box-shadow: none;
-}
-
-.ColorField .FormControl {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding-right: 44px;
 }
 
 .GroupModal-toggleRow {
