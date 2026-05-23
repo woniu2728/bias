@@ -29,7 +29,7 @@
                 <th>{{ usersCopy?.tableIdHeader || 'ID' }}</th>
                 <th>{{ usersCopy?.tableUsernameHeader || '用户名' }}</th>
                 <th>{{ usersCopy?.tableEmailHeader || '邮箱' }}</th>
-                <th>{{ usersCopy?.tableDisplayNameHeader || '显示名称' }}</th>
+                <th>{{ usersCopy?.groupsLabel || '用户组' }}</th>
                 <th>{{ usersCopy?.tableDiscussionHeader || '讨论' }}</th>
                 <th>{{ usersCopy?.tableReplyHeader || '回复' }}</th>
                 <th>{{ usersCopy?.tableJoinedHeader || '加入时间' }}</th>
@@ -57,21 +57,27 @@
                 <td :data-label="usersCopy?.tableIdHeader || 'ID'">{{ user.id }}</td>
                 <td :data-label="usersCopy?.tableUsernameHeader || '用户名'">
                   <strong>{{ user.username }}</strong>
-                  <div v-if="getUserGroupBadges(user).length" class="UserGroups">
+                </td>
+                <td :data-label="usersCopy?.tableEmailHeader || '邮箱'">{{ user.email }}</td>
+                <td :data-label="usersCopy?.groupsLabel || '用户组'">
+                  <div v-if="getUserGroupBadges(user).length" class="UserGroupBadges">
                     <span
                       v-for="group in getUserGroupBadges(user)"
                       :key="`${user.id}-${group.id}-${group.name}`"
-                      class="UserGroupIcon"
-                      :style="{ backgroundColor: group.color || usersConfig?.groupBadgeFallbackColor || '#7f8c8d' }"
-                      :title="group.name"
+                      class="UserGroupBadge"
                     >
-                      <i v-if="group.icon" :class="group.icon"></i>
-                      <span v-else>{{ getGroupFallbackLabel(group) }}</span>
+                      <span
+                        class="UserGroupBadge-icon"
+                        :style="{ backgroundColor: group.color || usersConfig?.groupBadgeFallbackColor || '#7f8c8d' }"
+                      >
+                        <i v-if="group.icon" :class="group.icon"></i>
+                        <span v-else>{{ getGroupFallbackLabel(group) }}</span>
+                      </span>
+                      <span class="UserGroupBadge-name">{{ group.name }}</span>
                     </span>
                   </div>
+                  <span v-else class="UserGroupEmpty">{{ usersCopy?.noGroupsText || '-' }}</span>
                 </td>
-                <td :data-label="usersCopy?.tableEmailHeader || '邮箱'">{{ user.email }}</td>
-                <td :data-label="usersCopy?.tableDisplayNameHeader || '显示名称'">{{ user.display_name }}</td>
                 <td :data-label="usersCopy?.tableDiscussionHeader || '讨论'">{{ user.discussion_count }}</td>
                 <td :data-label="usersCopy?.tableReplyHeader || '回复'">{{ user.comment_count }}</td>
                 <td :data-label="usersCopy?.tableJoinedHeader || '加入时间'">{{ formatDate(user.joined_at) }}</td>
@@ -109,21 +115,6 @@
                     {{ statusLabel(user) }}
                   </span>
                 </div>
-                <div v-if="user.display_name && user.display_name !== user.username" class="UserMobileCard-display">
-                  {{ user.display_name }}
-                </div>
-                <div v-if="getUserGroupBadges(user).length" class="UserGroups">
-                  <span
-                    v-for="group in getUserGroupBadges(user)"
-                    :key="`${user.id}-${group.id}-${group.name}-mobile`"
-                    class="UserGroupIcon"
-                    :style="{ backgroundColor: group.color || usersConfig?.groupBadgeFallbackColor || '#7f8c8d' }"
-                    :title="group.name"
-                  >
-                    <i v-if="group.icon" :class="group.icon"></i>
-                    <span v-else>{{ getGroupFallbackLabel(group) }}</span>
-                  </span>
-                </div>
               </div>
 
               <button type="button" class="Button Button--small UserMobileCard-edit" :disabled="savingDetails" @click="editUser(user)">
@@ -135,6 +126,28 @@
               <div class="UserMobileCard-metaItem">
                 <dt>{{ usersCopy?.mobileEmailLabel || '邮箱' }}</dt>
                 <dd>{{ user.email || (usersCopy?.noEmailValueText || '-') }}</dd>
+              </div>
+              <div class="UserMobileCard-metaItem UserMobileCard-metaItem--full">
+                <dt>{{ usersCopy?.groupsLabel || '用户组' }}</dt>
+                <dd>
+                  <div v-if="getUserGroupBadges(user).length" class="UserGroupBadges">
+                    <span
+                      v-for="group in getUserGroupBadges(user)"
+                      :key="`${user.id}-${group.id}-${group.name}-mobile`"
+                      class="UserGroupBadge"
+                    >
+                      <span
+                        class="UserGroupBadge-icon"
+                        :style="{ backgroundColor: group.color || usersConfig?.groupBadgeFallbackColor || '#7f8c8d' }"
+                      >
+                        <i v-if="group.icon" :class="group.icon"></i>
+                        <span v-else>{{ getGroupFallbackLabel(group) }}</span>
+                      </span>
+                      <span class="UserGroupBadge-name">{{ group.name }}</span>
+                    </span>
+                  </div>
+                  <span v-else class="UserGroupEmpty">{{ usersCopy?.noGroupsText || '-' }}</span>
+                </dd>
               </div>
               <div class="UserMobileCard-metaItem">
                 <dt>{{ usersCopy?.mobileIdLabel || 'ID' }}</dt>
@@ -168,7 +181,7 @@
 
     <div v-if="showEditModal" class="Modal" @click.self="closeModal">
       <div class="Modal-content Modal-content--user">
-        <div class="Modal-header">
+        <div class="Modal-header Modal-header--user">
           <h3>{{ usersCopy?.modalTitle || '编辑用户' }}</h3>
           <button type="button" class="Modal-close" @click="closeModal">
             <i class="fas fa-times"></i>
@@ -176,21 +189,21 @@
         </div>
 
         <AdminStateBlock v-if="loadingDetails" class="Modal-loading" tone="subtle">{{ usersCopy?.loadingText || '加载中...' }}</AdminStateBlock>
-        <div v-else class="Modal-body">
-          <div class="Form-group">
-            <label for="user-username">{{ usersCopy?.usernameLabel || '用户名' }}</label>
-            <input
-              id="user-username"
-              v-model="formData.username"
-              name="user_username"
-              type="text"
-              class="FormControl"
-            />
-          </div>
+        <div v-else class="Modal-body Modal-body--user">
+          <div class="UserModal-grid UserModal-grid--two">
+            <div class="Form-group Form-group--userCompact">
+              <label for="user-username" class="Form-labelStrong">{{ usersCopy?.usernameLabel || '用户名' }}</label>
+              <input
+                id="user-username"
+                v-model="formData.username"
+                name="user_username"
+                type="text"
+                class="FormControl"
+              />
+            </div>
 
-          <div class="FormRow">
-            <div class="Form-group">
-              <label for="user-email">{{ usersCopy?.emailLabel || '邮箱' }}</label>
+            <div class="Form-group Form-group--userCompact">
+              <label for="user-email" class="Form-labelStrong">{{ usersCopy?.emailLabel || '邮箱' }}</label>
               <input
                 id="user-email"
                 v-model="formData.email"
@@ -199,20 +212,10 @@
                 class="FormControl"
               />
             </div>
-            <div class="Form-group">
-              <label for="user-display-name">{{ usersCopy?.displayNameLabel || '显示名称' }}</label>
-              <input
-                id="user-display-name"
-                v-model="formData.display_name"
-                name="user_display_name"
-                type="text"
-                class="FormControl"
-              />
-            </div>
           </div>
 
-          <div class="Form-group">
-            <label for="user-bio">{{ usersCopy?.bioLabel || '个人简介' }}</label>
+          <div class="Form-group Form-group--userCompact">
+            <label for="user-bio" class="Form-labelStrong">{{ usersCopy?.bioLabel || '个人简介' }}</label>
             <textarea
               id="user-bio"
               v-model="formData.bio"
@@ -223,8 +226,8 @@
             ></textarea>
           </div>
 
-          <div class="FormRow FormRow--toggles">
-            <label class="CheckboxField CheckboxField--toggle">
+          <div class="UserModal-grid UserModal-grid--two">
+            <label class="CheckboxField CheckboxField--toggle UserModal-toggleCard">
               <input
                 v-model="formData.is_staff"
                 name="user_is_staff"
@@ -232,7 +235,7 @@
               />
               <span>{{ usersCopy?.staffLabel || '管理员' }}</span>
             </label>
-            <label class="CheckboxField CheckboxField--toggle">
+            <label class="CheckboxField CheckboxField--toggle UserModal-toggleCard">
               <input
                 v-model="formData.is_email_confirmed"
                 name="user_is_email_confirmed"
@@ -242,23 +245,47 @@
             </label>
           </div>
 
-          <div class="Form-group">
-            <label>{{ usersCopy?.groupsLabel || '用户组' }}</label>
-            <div class="GroupChecklist">
-              <label v-for="group in availableGroups" :key="group.id" class="CheckboxField CheckboxField--card">
-                <input
-                  :checked="formData.group_ids.includes(group.id)"
-                  :name="`user_group_${group.id}`"
-                  type="checkbox"
-                  @change="toggleGroup(group.id, $event)"
-                />
-                <span :style="{ color: group.color || '#4d698e' }">{{ group.name }}</span>
-              </label>
+          <div class="Form-group Form-group--userCompact">
+            <label class="Form-labelStrong">{{ usersCopy?.groupsLabel || '用户组' }}</label>
+            <div ref="groupMenuRef" class="UserGroupSelect" :class="{ 'is-open': isGroupMenuOpen }">
+              <button
+                type="button"
+                class="FormControl UserGroupSelect-trigger"
+                :aria-expanded="isGroupMenuOpen"
+                @click="toggleGroupMenu"
+              >
+                <span class="UserGroupSelect-summary">
+                  {{ selectedGroupSummary }}
+                </span>
+                <i class="fas fa-chevron-down UserGroupSelect-arrow"></i>
+              </button>
+
+              <div v-if="isGroupMenuOpen" class="UserGroupSelect-menu">
+                <label v-for="group in availableGroups" :key="group.id" class="UserGroupSelect-option">
+                  <span class="UserGroupSelect-optionMain">
+                    <input
+                      :checked="formData.group_ids.includes(group.id)"
+                      :name="`user_group_${group.id}`"
+                      type="checkbox"
+                      @change="toggleGroup(group.id, $event)"
+                    />
+                    <span
+                      class="UserGroupSelect-badge"
+                      :style="{ backgroundColor: group.color || '#4d698e' }"
+                      :title="group.name"
+                    >
+                      <i v-if="group.icon" :class="group.icon"></i>
+                      <span v-else>{{ getGroupFallbackLabel(group) }}</span>
+                    </span>
+                    <span class="UserGroupSelect-name">{{ group.name }}</span>
+                  </span>
+                </label>
+              </div>
             </div>
           </div>
 
-          <div class="Form-group">
-            <label for="user-suspended-until">{{ usersCopy?.suspendedUntilLabel || '封禁截止时间' }}</label>
+          <div class="Form-group Form-group--userCompact">
+            <label for="user-suspended-until" class="Form-labelStrong">{{ usersCopy?.suspendedUntilLabel || '封禁截止时间' }}</label>
             <input
               id="user-suspended-until"
               v-model="formData.suspended_until"
@@ -269,8 +296,8 @@
             <small class="Form-help">{{ usersCopy?.suspendedUntilHelpText || '留空表示未封禁' }}</small>
           </div>
 
-          <div class="Form-group">
-            <label for="user-suspend-reason">{{ usersCopy?.suspendReasonLabel || '封禁原因' }}</label>
+          <div class="Form-group Form-group--userCompact">
+            <label for="user-suspend-reason" class="Form-labelStrong">{{ usersCopy?.suspendReasonLabel || '封禁原因' }}</label>
             <input
               id="user-suspend-reason"
               v-model="formData.suspend_reason"
@@ -281,8 +308,8 @@
             />
           </div>
 
-          <div class="Form-group">
-            <label for="user-suspend-message">{{ usersCopy?.suspendMessageLabel || '对用户显示的信息' }}</label>
+          <div class="Form-group Form-group--userCompact">
+            <label for="user-suspend-message" class="Form-labelStrong">{{ usersCopy?.suspendMessageLabel || '对用户显示的信息' }}</label>
             <textarea
               id="user-suspend-message"
               v-model="formData.suspend_message"
@@ -292,24 +319,19 @@
               :placeholder="usersCopy?.suspendMessagePlaceholder || '显示给被封禁用户的提示'"
             ></textarea>
           </div>
-        </div>
 
-        <div class="Modal-footer Modal-footer--split">
-          <button
-            v-if="canDeleteCurrentUser"
-            type="button"
-            class="Button Button--danger"
-            :disabled="saving || deleting"
-            @click="deleteUser"
-          >
-            {{ deleting ? (usersCopy?.deletingLabel || '删除中...') : (usersCopy?.deleteLabel || '删除用户') }}
-          </button>
-          <span v-else class="Modal-footerNote">{{ usersCopy?.deleteBlockedText || '当前登录管理员账号不允许删除' }}</span>
-          <div class="Modal-footerActions">
-            <button type="button" class="Button" @click="closeModal">
-              {{ usersCopy?.cancelLabel || '取消' }}
+          <div class="UserModal-actions">
+            <button
+              v-if="canDeleteCurrentUser"
+              type="button"
+              class="Button Button--danger"
+              :disabled="saving || deleting"
+              @click="deleteUser"
+            >
+              {{ deleting ? (usersCopy?.deletingLabel || '删除中...') : (usersCopy?.deleteLabel || '删除用户') }}
             </button>
-            <button type="button" class="Button Button--primary" :disabled="saving || deleting" @click="saveUser">
+            <span v-else class="Modal-footerNote">{{ usersCopy?.deleteBlockedText || '当前登录管理员账号不允许删除' }}</span>
+            <button type="button" class="Button Button--primary UserModal-saveButton" :disabled="saving || deleting" @click="saveUser">
               {{ saving ? (usersCopy?.savingLabel || '保存中...') : (usersCopy?.saveLabel || '保存') }}
             </button>
           </div>
@@ -320,7 +342,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import AdminPage from '../components/AdminPage.vue'
 import AdminPagination from '../components/AdminPagination.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
@@ -350,6 +372,8 @@ const saving = ref(false)
 const deleting = ref(false)
 const editingUserId = ref(null)
 const originalUserRiskSnapshot = ref(null)
+const isGroupMenuOpen = ref(false)
+const groupMenuRef = ref(null)
 
 let searchTimeout = null
 
@@ -363,6 +387,11 @@ onMounted(() => {
   limit.value = usersConfig.value?.paginationLimit || 20
   loadGroups()
   loadUsers()
+  document.addEventListener('click', handleDocumentClick)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocumentClick)
 })
 
 async function loadUsers() {
@@ -457,6 +486,16 @@ function toggleGroup(groupId, event) {
   }
 }
 
+function toggleGroupMenu() {
+  isGroupMenuOpen.value = !isGroupMenuOpen.value
+}
+
+function handleDocumentClick(event) {
+  if (!groupMenuRef.value?.contains(event.target)) {
+    isGroupMenuOpen.value = false
+  }
+}
+
 async function saveUser() {
   if (!editingUserId.value) return
 
@@ -545,6 +584,7 @@ function closeModal() {
   loadingDetails.value = false
   saving.value = false
   deleting.value = false
+  isGroupMenuOpen.value = false
   editingUserId.value = null
   originalUserRiskSnapshot.value = null
   formData.value = getEmptyForm()
@@ -660,6 +700,21 @@ const canDeleteCurrentUser = computed(() => {
   if (!currentAdminId.value) return true
   return Number(editingUserId.value) !== Number(currentAdminId.value)
 })
+
+const selectedGroups = computed(() => {
+  const selectedIds = new Set(formData.value.group_ids)
+  return availableGroups.value.filter(group => selectedIds.has(group.id))
+})
+
+const selectedGroupSummary = computed(() => {
+  if (!selectedGroups.value.length) {
+    return usersCopy.value?.groupsPlaceholder || '请选择用户组'
+  }
+  if (selectedGroups.value.length <= 2) {
+    return selectedGroups.value.map(group => group.name).join('、')
+  }
+  return `${selectedGroups.value[0].name}、${selectedGroups.value[1].name} 等 ${selectedGroups.value.length} 个用户组`
+})
 </script>
 
 <style scoped>
@@ -734,28 +789,50 @@ const canDeleteCurrentUser = computed(() => {
   padding: 18px;
 }
 
-.UserGroups {
+.UserGroupBadges {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 8px;
 }
 
-.UserGroupIcon {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--forum-radius-pill);
-  color: var(--forum-text-inverse);
+.UserGroupBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--forum-bg-elevated-strong);
+  color: var(--forum-text-color);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.UserGroupBadge-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
-  font-size: var(--forum-font-size-xs);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
 }
 
-.UserGroupIcon i,
-.UserGroupIcon span {
+.UserGroupBadge-icon i,
+.UserGroupBadge-icon span {
   line-height: 1;
+}
+
+.UserGroupBadge-name {
+  white-space: nowrap;
+}
+
+.UserGroupEmpty {
+  color: var(--forum-text-soft);
+  font-size: 13px;
 }
 
 .UserStatus {
@@ -786,8 +863,75 @@ const canDeleteCurrentUser = computed(() => {
   font-size: var(--forum-font-size-xs);
 }
 
-.Modal-content--user {
-  min-width: min(860px, calc(100vw - 24px));
+#admin-app .Modal-content.Modal-content--user {
+  width: min(760px, calc(100vw - 24px));
+  min-width: min(760px, calc(100vw - 24px));
+  background: var(--forum-bg-elevated);
+}
+
+#admin-app .Modal-content.Modal-content--user .Modal-header,
+#admin-app .Modal-content.Modal-content--user .Modal-body {
+  padding: 26px 28px;
+}
+
+.Modal-header--user {
+  position: relative;
+}
+
+.Modal-header--user .Modal-close {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+}
+
+.Modal-body--user {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  border-top: 1px solid var(--forum-border-color);
+}
+
+.Form-group--userCompact {
+  margin-bottom: 0;
+}
+
+.Form-labelStrong {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: var(--forum-text-color);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.UserModal-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.UserModal-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.UserModal-toggleCard {
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--forum-bg-elevated);
+}
+
+.UserModal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.UserModal-saveButton {
+  min-width: 96px;
+  justify-content: center;
 }
 
 .FormRow--toggles {
@@ -813,10 +957,93 @@ const canDeleteCurrentUser = computed(() => {
   overflow-wrap: anywhere;
 }
 
-.GroupChecklist {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
+.UserGroupSelect {
+  position: relative;
+}
+
+.UserGroupSelect-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  cursor: pointer;
+}
+
+.UserGroupSelect-summary {
+  min-width: 0;
+  color: var(--forum-text-color);
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.UserGroupSelect-arrow {
+  color: var(--forum-text-soft);
+  font-size: 12px;
+  transition: transform 0.18s ease;
+}
+
+.UserGroupSelect.is-open .UserGroupSelect-arrow {
+  transform: rotate(180deg);
+}
+
+.UserGroupSelect-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: 10px 0;
+  border: 1px solid var(--forum-border-color);
+  border-radius: 14px;
+  background: var(--forum-bg-elevated);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
+}
+
+.UserGroupSelect-option {
+  display: block;
+  cursor: pointer;
+}
+
+.UserGroupSelect-optionMain {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+.UserGroupSelect-option:hover {
+  background: color-mix(in srgb, var(--forum-primary-color) 4%, transparent);
+}
+
+.UserGroupSelect-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.UserGroupSelect-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
+  flex: 0 0 auto;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
+}
+
+.UserGroupSelect-name {
+  color: var(--forum-text-color);
+  font-size: 14px;
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {
@@ -829,18 +1056,17 @@ const canDeleteCurrentUser = computed(() => {
     grid-template-columns: 1fr;
   }
 
-  .Modal-content--user {
+  #admin-app .Modal-content.Modal-content--user {
     min-width: 0;
   }
 
-  .GroupChecklist {
+  .UserModal-grid--two {
     grid-template-columns: 1fr;
   }
 
-  .CheckboxField--card {
-    justify-content: space-between;
-    width: 100%;
-    min-height: 46px;
+  .UserGroupSelect-menu {
+    position: static;
+    margin-top: 8px;
   }
 }
 
@@ -891,12 +1117,6 @@ const canDeleteCurrentUser = computed(() => {
     color: var(--forum-text-color);
   }
 
-  .UserMobileCard-display {
-    margin-top: 4px;
-    color: var(--forum-text-muted);
-    font-size: var(--forum-font-size-sm);
-  }
-
   .UserMobileCard-edit {
     flex: 0 0 auto;
     min-width: 64px;
@@ -938,8 +1158,8 @@ const canDeleteCurrentUser = computed(() => {
     word-break: break-word;
   }
 
-  .UserGroups {
-    margin-top: 10px;
+  .UserGroupBadges {
+    gap: 6px;
   }
 }
 
