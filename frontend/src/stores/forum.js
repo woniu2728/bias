@@ -19,7 +19,6 @@ const DEFAULT_SETTINGS = {
   accent_color: '#e74c3c',
   logo_url: '',
   favicon_url: '',
-  custom_css: '',
   custom_head_html: '',
   custom_footer_html: '',
   maintenance_mode: false,
@@ -34,7 +33,6 @@ const DEFAULT_SETTINGS = {
   post_types: [],
 }
 
-const CUSTOM_CSS_STYLE_ID = 'forum-custom-css'
 const CUSTOM_HEAD_MARKER_ATTRIBUTE = 'data-forum-custom-head'
 
 function upsertHeadTag(selector, buildTag) {
@@ -254,14 +252,6 @@ export const useForumStore = defineStore('forum', () => {
       document.head.appendChild(favicon)
     }
     favicon.setAttribute('href', settings.value.favicon_url || '/favicon.ico')
-
-    let customCssStyle = document.getElementById(CUSTOM_CSS_STYLE_ID)
-    if (!customCssStyle) {
-      customCssStyle = document.createElement('style')
-      customCssStyle.id = CUSTOM_CSS_STYLE_ID
-      document.head.appendChild(customCssStyle)
-    }
-    customCssStyle.textContent = settings.value.custom_css || ''
     applyCustomHeadHtml(settings.value.custom_head_html || '')
   }
 

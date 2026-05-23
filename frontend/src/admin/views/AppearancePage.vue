@@ -147,19 +147,6 @@
       <div class="AppearancePage-section">
         <h3 class="Section-title">{{ appearanceCopy?.customStyleSectionTitle || '自定义样式' }}</h3>
         <div class="Form-group">
-          <label for="appearance-custom-css">{{ appearanceCopy?.customCssLabel || '自定义 CSS' }}</label>
-          <textarea
-            id="appearance-custom-css"
-            v-model="settings.custom_css"
-            name="custom_css"
-            class="FormControl"
-            rows="10"
-            :placeholder="appearanceConfig?.placeholders?.customCss || '/* 在这里添加自定义 CSS */'"
-          ></textarea>
-          <p class="Form-help">{{ appearanceCopy?.customCssHelpText || '添加自定义 CSS 样式来进一步定制论坛外观' }}</p>
-        </div>
-
-        <div class="Form-group">
           <label for="appearance-custom-head">{{ appearanceCopy?.customHeadLabel || 'Head / 统计代码注入' }}</label>
           <textarea
             id="appearance-custom-head"
@@ -183,35 +170,6 @@
             :placeholder="appearanceConfig?.placeholders?.customFooter || '<p>在页脚展示备案号、版权说明或联系信息</p>'"
           ></textarea>
           <p class="Form-help">{{ appearanceCopy?.customFooterHelpText || '这里的内容会直接显示在站点页脚，适合备案、版权和联系信息。' }}</p>
-        </div>
-      </div>
-
-      <div class="AppearancePage-section">
-        <h3 class="Section-title">{{ appearanceCopy?.previewSectionTitle || '实时预览' }}</h3>
-        <div class="AppearancePreviewCard">
-          <div class="AppearancePreviewShell" :style="previewStyleVars">
-            <div class="AppearancePreviewHeader">
-              <div class="AppearancePreviewLogo">
-                <span>{{ settings.logo_url ? (appearanceCopy?.previewLogoText || 'Logo') : (settings.primary_color || '#4d698e').toUpperCase().slice(0, 7) }}</span>
-              </div>
-              <div class="AppearancePreviewHeaderText">
-                <strong>{{ settings.primary_color || '#4d698e' }}</strong>
-                <span>{{ settings.accent_color || '#e74c3c' }}</span>
-              </div>
-            </div>
-            <div class="AppearancePreviewHero">
-              <h4>{{ previewTitleText }}</h4>
-              <p>{{ previewDescriptionText }}</p>
-              <div class="AppearancePreviewActions">
-                <button type="button" class="AppearancePreviewPrimary">{{ appearanceCopy?.previewPrimaryActionLabel || '主操作' }}</button>
-                <button type="button" class="AppearancePreviewSecondary">{{ appearanceCopy?.previewSecondaryActionLabel || '次操作' }}</button>
-              </div>
-            </div>
-            <div v-if="settings.custom_footer_html" class="AppearancePreviewFooter" v-html="settings.custom_footer_html"></div>
-            <div v-else class="AppearancePreviewFooter AppearancePreviewFooter--placeholder">
-              {{ appearanceCopy?.previewFooterPlaceholder || '页脚自定义内容会显示在这里。' }}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -251,21 +209,11 @@ const appearanceActionMeta = computed(() => getAdminAppearancePageActionMeta())
 const loading = ref(true)
 const loadError = ref('')
 const settings = ref({})
-const previewContent = ref({
-  forum_title: 'Bias',
-  forum_description: '这里会预览首页说明和页脚内容。',
-})
 const saving = ref(false)
 const uploadingLogo = ref(false)
 const uploadingFavicon = ref(false)
 const modalStore = useModalStore()
 const { saveSuccess, saveError, resetSaveFeedback, showSaveSuccess, showSaveError } = useAdminSaveFeedback()
-const previewTitleText = computed(() => String(previewContent.value.forum_title || 'Bias').trim() || 'Bias')
-const previewDescriptionText = computed(() => String(previewContent.value.forum_description || '这里会预览首页说明和页脚内容。').trim() || '这里会预览首页说明和页脚内容。')
-const previewStyleVars = computed(() => ({
-  '--appearance-preview-primary': settings.value.primary_color || '#4d698e',
-  '--appearance-preview-accent': settings.value.accent_color || '#e74c3c',
-}))
 
 function buildDefaultSettings() {
   return {
@@ -273,7 +221,6 @@ function buildDefaultSettings() {
     accent_color: '#e74c3c',
     logo_url: '',
     favicon_url: '',
-    custom_css: '',
     custom_head_html: '',
     custom_footer_html: '',
     ...(appearanceConfig.value?.defaultSettings || {}),
@@ -285,16 +232,9 @@ onMounted(async () => {
   loading.value = true
   loadError.value = ''
   try {
-    const [appearanceData, basicsData] = await Promise.all([
-      api.get('/admin/appearance'),
-      api.get('/admin/settings'),
-    ])
+    const appearanceData = await api.get('/admin/appearance')
     const data = appearanceData
     settings.value = { ...settings.value, ...data }
-    previewContent.value = {
-      forum_title: basicsData.forum_title || 'Bias',
-      forum_description: basicsData.forum_description || '这里会预览首页说明和页脚内容。',
-    }
   } catch (error) {
     console.error('加载外观设置失败:', error)
     loadError.value = error.response?.data?.error || error.message || appearanceActionMeta.value?.loadErrorText || '加载外观设置失败，请稍后重试'
@@ -487,115 +427,6 @@ async function uploadAsset(event, target) {
   pointer-events: none;
 }
 
-.AppearancePreviewCard {
-  border: 1px solid var(--forum-border-soft);
-  border-radius: var(--forum-radius-md);
-  background: var(--forum-bg-elevated-strong);
-  padding: 16px;
-}
-
-.AppearancePreviewShell {
-  --appearance-preview-primary: #4d698e;
-  --appearance-preview-accent: #e74c3c;
-  border-radius: 18px;
-  overflow: hidden;
-  border: 1px solid rgba(36, 52, 71, 0.08);
-  background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--appearance-preview-primary) 16%, white) 0%, transparent 36%),
-    linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
-}
-
-.AppearancePreviewHeader {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 18px 20px 0;
-}
-
-.AppearancePreviewLogo {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--appearance-preview-primary) 0%, var(--appearance-preview-accent) 100%);
-  color: white;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.AppearancePreviewHeaderText {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.AppearancePreviewHeaderText strong {
-  color: var(--forum-text-color);
-}
-
-.AppearancePreviewHeaderText span {
-  color: var(--forum-text-muted);
-  font-size: var(--forum-font-size-sm);
-}
-
-.AppearancePreviewHero {
-  padding: 18px 20px 20px;
-}
-
-.AppearancePreviewHero h4 {
-  margin: 0 0 10px;
-  font-size: 26px;
-  color: #13202f;
-}
-
-.AppearancePreviewHero p {
-  margin: 0;
-  color: #546577;
-  line-height: 1.7;
-}
-
-.AppearancePreviewActions {
-  display: flex;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.AppearancePreviewPrimary,
-.AppearancePreviewSecondary {
-  min-height: 38px;
-  padding: 0 16px;
-  border-radius: 999px;
-  font-weight: 600;
-}
-
-.AppearancePreviewPrimary {
-  background: var(--appearance-preview-primary);
-  color: white;
-}
-
-.AppearancePreviewSecondary {
-  background: white;
-  color: #213243;
-  border: 1px solid rgba(36, 52, 71, 0.12);
-}
-
-.AppearancePreviewFooter {
-  border-top: 1px solid rgba(36, 52, 71, 0.08);
-  background: rgba(255, 255, 255, 0.82);
-  padding: 14px 20px 18px;
-  color: #607080;
-  font-size: var(--forum-font-size-sm);
-}
-
-.AppearancePreviewFooter--placeholder {
-  color: var(--forum-text-soft);
-}
-
-.AppearancePreviewFooter :deep(p) {
-  margin: 0;
-}
-
 @media (max-width: 768px) {
   .AppearancePage-content {
     max-width: none;
@@ -639,10 +470,6 @@ async function uploadAsset(event, target) {
   .Form-actions .Button {
     width: 100%;
     justify-content: center;
-  }
-
-  .AppearancePreviewActions {
-    flex-direction: column;
   }
 }
 </style>
