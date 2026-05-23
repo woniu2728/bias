@@ -513,6 +513,14 @@ select:focus {
   border-color: var(--forum-primary-color);
 }
 
+#admin-app .Button--small {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1;
+}
+
 #admin-app .Button--primary {
   background: var(--forum-primary-color);
   color: var(--forum-text-inverse);

@@ -858,11 +858,6 @@ const selectedGroupSummary = computed(() => {
   color: #842029;
 }
 
-.Button--small {
-  padding: 4px 10px;
-  font-size: var(--forum-font-size-xs);
-}
-
 #admin-app .Modal-content.Modal-content--user {
   width: min(760px, calc(100vw - 24px));
   min-width: min(760px, calc(100vw - 24px));

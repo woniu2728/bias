@@ -843,11 +843,6 @@ function getNextPosition(sourceTags, parentId) {
   min-width: 0;
 }
 
-.Button--small {
-  padding: 4px 10px;
-  font-size: var(--forum-font-size-xs);
-}
-
 .TagTable {
   width: 100%;
   border-collapse: collapse;
