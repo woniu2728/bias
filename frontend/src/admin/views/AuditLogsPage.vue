@@ -6,32 +6,22 @@
     :description="auditCopy?.pageDescription || '查看管理员关键操作记录'"
   >
     <AdminToolbar class="AuditLogsPage-toolbar">
-      <select
-        id="audit-action-filter"
+      <AdminSelectMenu
+        input-id="audit-action-filter"
         v-model="filters.action"
-        name="action"
-        class="FormControl"
+        :options="auditActionFilterOptions"
+        :placeholder="auditCopy?.allActionsLabel || '全部操作'"
         :aria-label="auditCopy?.actionFilterLabel || '筛选操作'"
         @change="reloadFromFirstPage"
-      >
-        <option value="">{{ auditCopy?.allActionsLabel || '全部操作' }}</option>
-        <option v-for="option in actionOptions" :key="option.value" :value="option.value">
-          {{ option.label }}
-        </option>
-      </select>
-      <select
-        id="audit-target-type-filter"
+      />
+      <AdminSelectMenu
+        input-id="audit-target-type-filter"
         v-model="filters.target_type"
-        name="target_type"
-        class="FormControl"
+        :options="auditTargetFilterOptions"
+        :placeholder="auditCopy?.allTargetsLabel || '全部对象'"
         :aria-label="auditCopy?.targetFilterLabel || '筛选对象'"
         @change="reloadFromFirstPage"
-      >
-        <option value="">{{ auditCopy?.allTargetsLabel || '全部对象' }}</option>
-        <option v-for="option in targetOptions" :key="option.value" :value="option.value">
-          {{ option.label }}
-        </option>
-      </select>
+      />
       <button type="button" class="Button" :disabled="loading" @click="loadLogs">
         <i class="fas fa-sync-alt"></i>
         <span>{{ auditCopy?.refreshLabel || '刷新' }}</span>
@@ -95,6 +85,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import AdminPage from '../components/AdminPage.vue'
 import AdminPagination from '../components/AdminPagination.vue'
+import AdminSelectMenu from '../components/AdminSelectMenu.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import AdminToolbar from '../components/AdminToolbar.vue'
 import api from '../../api'
@@ -116,6 +107,14 @@ const actionLabels = computed(() => auditConfig.value?.actionLabels || {})
 const targetLabels = computed(() => auditConfig.value?.targetLabels || {})
 const actionOptions = computed(() => Object.entries(actionLabels.value).map(([value, label]) => ({ value, label })))
 const targetOptions = computed(() => Object.entries(targetLabels.value).map(([value, label]) => ({ value, label })))
+const auditActionFilterOptions = computed(() => [
+  { value: '', label: auditCopy.value?.allActionsLabel || '全部操作' },
+  ...actionOptions.value,
+])
+const auditTargetFilterOptions = computed(() => [
+  { value: '', label: auditCopy.value?.allTargetsLabel || '全部对象' },
+  ...targetOptions.value,
+])
 
 onMounted(() => {
   loadLogs()

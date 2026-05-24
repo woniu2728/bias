@@ -247,41 +247,14 @@
 
           <div class="Form-group Form-group--userCompact">
             <label class="Form-labelStrong">{{ usersCopy?.groupsLabel || '用户组' }}</label>
-            <div ref="groupMenuRef" class="UserGroupSelect" :class="{ 'is-open': isGroupMenuOpen }">
-              <button
-                type="button"
-                class="FormControl UserGroupSelect-trigger"
-                :aria-expanded="isGroupMenuOpen"
-                @click="toggleGroupMenu"
-              >
-                <span class="UserGroupSelect-summary">
-                  {{ selectedGroupSummary }}
-                </span>
-                <i class="fas fa-chevron-down UserGroupSelect-arrow"></i>
-              </button>
-
-              <div v-if="isGroupMenuOpen" class="UserGroupSelect-menu">
-                <label v-for="group in availableGroups" :key="group.id" class="UserGroupSelect-option">
-                  <span class="UserGroupSelect-optionMain">
-                    <input
-                      :checked="formData.group_ids.includes(group.id)"
-                      :name="`user_group_${group.id}`"
-                      type="checkbox"
-                      @change="toggleGroup(group.id, $event)"
-                    />
-                    <span
-                      class="UserGroupSelect-badge"
-                      :style="{ backgroundColor: group.color || '#4d698e' }"
-                      :title="group.name"
-                    >
-                      <i v-if="group.icon" :class="group.icon"></i>
-                      <span v-else>{{ getGroupFallbackLabel(group) }}</span>
-                    </span>
-                    <span class="UserGroupSelect-name">{{ group.name }}</span>
-                  </span>
-                </label>
-              </div>
-            </div>
+            <AdminMultiSelectMenu
+              input-id="user-group-select"
+              v-model="formData.group_ids"
+              :options="userGroupOptions"
+              :summary="selectedGroupSummary"
+              :placeholder="usersCopy?.groupsPlaceholder || '请选择用户组'"
+              :aria-label="usersCopy?.groupsLabel || '用户组'"
+            />
           </div>
 
           <div class="Form-group Form-group--userCompact">
@@ -342,7 +315,8 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted } from 'vue'
+import AdminMultiSelectMenu from '../components/AdminMultiSelectMenu.vue'
 import AdminPage from '../components/AdminPage.vue'
 import AdminPagination from '../components/AdminPagination.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
@@ -372,8 +346,6 @@ const saving = ref(false)
 const deleting = ref(false)
 const editingUserId = ref(null)
 const originalUserRiskSnapshot = ref(null)
-const isGroupMenuOpen = ref(false)
-const groupMenuRef = ref(null)
 
 let searchTimeout = null
 
@@ -382,16 +354,20 @@ const currentAdminId = computed(() => authStore.user?.id ?? null)
 const usersCopy = computed(() => getAdminUsersPageCopy())
 const usersConfig = computed(() => getAdminUsersPageConfig())
 const usersActionMeta = computed(() => getAdminUsersPageActionMeta())
+const userGroupOptions = computed(() => (
+  availableGroups.value.map(group => ({
+    value: group.id,
+    label: group.name,
+    icon: group.icon,
+    color: group.color || '#4d698e',
+    fallbackLabel: getGroupFallbackLabel(group),
+  }))
+))
 
 onMounted(() => {
   limit.value = usersConfig.value?.paginationLimit || 20
   loadGroups()
   loadUsers()
-  document.addEventListener('click', handleDocumentClick)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', handleDocumentClick)
 })
 
 async function loadUsers() {
@@ -473,26 +449,6 @@ async function editUser(user) {
     closeModal()
   } finally {
     loadingDetails.value = false
-  }
-}
-
-function toggleGroup(groupId, event) {
-  if (event.target.checked) {
-    if (!formData.value.group_ids.includes(groupId)) {
-      formData.value.group_ids.push(groupId)
-    }
-  } else {
-    formData.value.group_ids = formData.value.group_ids.filter(id => id !== groupId)
-  }
-}
-
-function toggleGroupMenu() {
-  isGroupMenuOpen.value = !isGroupMenuOpen.value
-}
-
-function handleDocumentClick(event) {
-  if (!groupMenuRef.value?.contains(event.target)) {
-    isGroupMenuOpen.value = false
   }
 }
 
@@ -584,7 +540,6 @@ function closeModal() {
   loadingDetails.value = false
   saving.value = false
   deleting.value = false
-  isGroupMenuOpen.value = false
   editingUserId.value = null
   originalUserRiskSnapshot.value = null
   formData.value = getEmptyForm()
@@ -952,95 +907,6 @@ const selectedGroupSummary = computed(() => {
   overflow-wrap: anywhere;
 }
 
-.UserGroupSelect {
-  position: relative;
-}
-
-.UserGroupSelect-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 48px;
-  cursor: pointer;
-}
-
-.UserGroupSelect-summary {
-  min-width: 0;
-  color: var(--forum-text-color);
-  font-size: 14px;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.UserGroupSelect-arrow {
-  color: var(--forum-text-soft);
-  font-size: 12px;
-  transition: transform 0.18s ease;
-}
-
-.UserGroupSelect.is-open .UserGroupSelect-arrow {
-  transform: rotate(180deg);
-}
-
-.UserGroupSelect-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  z-index: 20;
-  padding: 10px 0;
-  border: 1px solid var(--forum-border-color);
-  border-radius: 14px;
-  background: var(--forum-bg-elevated);
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
-}
-
-.UserGroupSelect-option {
-  display: block;
-  cursor: pointer;
-}
-
-.UserGroupSelect-optionMain {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 44px;
-  padding: 0 14px;
-}
-
-.UserGroupSelect-option:hover {
-  background: color-mix(in srgb, var(--forum-primary-color) 4%, transparent);
-}
-
-.UserGroupSelect-option input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  flex: 0 0 auto;
-}
-
-.UserGroupSelect-badge {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 13px;
-  flex: 0 0 auto;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
-}
-
-.UserGroupSelect-name {
-  color: var(--forum-text-color);
-  font-size: 14px;
-  font-weight: 500;
-}
-
 @media (max-width: 768px) {
   .UsersPage-search {
     max-width: none;
@@ -1057,11 +923,6 @@ const selectedGroupSummary = computed(() => {
 
   .UserModal-grid--two {
     grid-template-columns: 1fr;
-  }
-
-  .UserGroupSelect-menu {
-    position: static;
-    margin-top: 8px;
   }
 }
 

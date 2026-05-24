@@ -60,16 +60,12 @@
 
         <div class="Form-group">
           <label for="advanced-cache-driver">{{ advancedCopy?.cacheDriverLabel || '缓存驱动' }}</label>
-          <select
-            id="advanced-cache-driver"
+          <AdminSelectMenu
+            input-id="advanced-cache-driver"
             v-model="settings.cache_driver"
-            name="cache_driver"
-            class="FormControl"
-          >
-            <option v-for="option in cacheDriverOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
+            :options="cacheDriverOptions"
+            :aria-label="advancedCopy?.cacheDriverLabel || '缓存驱动'"
+          />
           <p class="Form-help">{{ advancedCopy?.cacheDriverHelpText || '选择缓存存储方式' }}</p>
         </div>
 
@@ -177,16 +173,12 @@
 
         <div class="Form-group">
           <label for="advanced-queue-driver">{{ advancedCopy?.queueDriverLabel || '队列驱动' }}</label>
-          <select
-            id="advanced-queue-driver"
+          <AdminSelectMenu
+            input-id="advanced-queue-driver"
             v-model="settings.queue_driver"
-            name="queue_driver"
-            class="FormControl"
-          >
-            <option v-for="option in queueDriverOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
+            :options="queueDriverOptions"
+            :aria-label="advancedCopy?.queueDriverLabel || '队列驱动'"
+          />
           <p class="Form-help">{{ advancedCopy?.queueDriverHelpText || '当前通知实时投递已接入统一队列入口。选择 Redis 并部署 worker 后会尝试异步投递。' }}</p>
         </div>
 
@@ -224,16 +216,12 @@
 
         <div class="Form-group">
           <label for="advanced-human-verification-provider">{{ advancedCopy?.humanVerificationProviderLabel || '验证提供方' }}</label>
-          <select
-            id="advanced-human-verification-provider"
+          <AdminSelectMenu
+            input-id="advanced-human-verification-provider"
             v-model="settings.auth_human_verification_provider"
-            name="auth_human_verification_provider"
-            class="FormControl"
-          >
-            <option v-for="option in humanVerificationProviderOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
+            :options="humanVerificationProviderOptions"
+            :aria-label="advancedCopy?.humanVerificationProviderLabel || '验证提供方'"
+          />
           <p class="Form-help">{{ advancedCopy?.humanVerificationProviderHelpText || '建议正式环境开启，优先拦截登录和注册机器人。' }}</p>
         </div>
 
@@ -303,16 +291,12 @@
 
         <div class="Form-group">
           <label for="advanced-storage-driver">{{ advancedCopy?.storageDriverLabel || '存储驱动' }}</label>
-          <select
-            id="advanced-storage-driver"
+          <AdminSelectMenu
+            input-id="advanced-storage-driver"
             v-model="settings.storage_driver"
-            name="storage_driver"
-            class="FormControl"
-          >
-            <option v-for="option in storageDriverOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
+            :options="storageDriverOptions"
+            :aria-label="advancedCopy?.storageDriverLabel || '存储驱动'"
+          />
           <p class="Form-help">{{ advancedCopy?.storageDriverHelpText || 'Composer 上传、头像上传和后续附件能力都会读取这里的运行时配置' }}</p>
         </div>
 
@@ -671,16 +655,12 @@
             </div>
             <div class="Form-group">
               <label for="advanced-storage-imagebed-method">{{ advancedCopy?.imagebedMethodLabel || '请求方法' }}</label>
-              <select
-                id="advanced-storage-imagebed-method"
+              <AdminSelectMenu
+                input-id="advanced-storage-imagebed-method"
                 v-model="settings.storage_imagebed_method"
-                name="storage_imagebed_method"
-                class="FormControl"
-              >
-                <option v-for="option in imagebedMethodOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
+                :options="imagebedMethodOptions"
+                :aria-label="advancedCopy?.imagebedMethodLabel || '请求方法'"
+              />
             </div>
             <div class="Form-group">
               <label for="advanced-storage-imagebed-file-field">{{ advancedCopy?.imagebedFileFieldLabel || '文件字段名' }}</label>
@@ -816,6 +796,7 @@
 import { computed, onMounted, ref } from 'vue'
 import AdminInlineMessage from '../components/AdminInlineMessage.vue'
 import AdminPage from '../components/AdminPage.vue'
+import AdminSelectMenu from '../components/AdminSelectMenu.vue'
 import { useAdminSaveFeedback } from '../composables/useAdminSaveFeedback'
 import api from '../../api'
 import { useModalStore } from '../../stores/modal'

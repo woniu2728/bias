@@ -70,16 +70,12 @@
 
               <div class="Form-group">
                 <label for="mail-encryption">{{ mailCopy?.mailEncryptionLabel || '加密方式' }}</label>
-                <select
-                  id="mail-encryption"
+                <AdminSelectMenu
+                  input-id="mail-encryption"
                   v-model="settings.mail_encryption"
-                  name="mail_encryption"
-                  class="FormControl"
-                >
-                  <option v-for="option in encryptionOptions" :key="option.value || 'none'" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
+                  :options="encryptionOptions"
+                  :aria-label="mailCopy?.mailEncryptionLabel || '加密方式'"
+                />
                 <p class="Form-hint">{{ mailCopy?.mailEncryptionHint || 'Gmail 通常使用 `TLS + 587`。' }}</p>
                 <div v-if="fieldErrors.mail_encryption?.length" class="ValidationError">
                   <p v-for="error in fieldErrors.mail_encryption" :key="error">{{ error }}</p>
@@ -88,16 +84,12 @@
 
               <div class="Form-group">
                 <label for="mail-format">{{ mailCopy?.mailFormatLabel || '邮件格式' }}</label>
-                <select
-                  id="mail-format"
+                <AdminSelectMenu
+                  input-id="mail-format"
                   v-model="settings.mail_format"
-                  name="mail_format"
-                  class="FormControl"
-                >
-                  <option v-for="option in formatOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
+                  :options="formatOptions"
+                  :aria-label="mailCopy?.mailFormatLabel || '邮件格式'"
+                />
                 <p class="Form-hint">{{ mailCopy?.mailFormatHint || '`Multipart` 兼容性最好。' }}</p>
                 <div v-if="fieldErrors.mail_format?.length" class="ValidationError">
                   <p v-for="error in fieldErrors.mail_format" :key="error">{{ error }}</p>
@@ -194,6 +186,7 @@
 import { computed, onMounted, ref } from 'vue'
 import AdminInlineMessage from '../components/AdminInlineMessage.vue'
 import AdminPage from '../components/AdminPage.vue'
+import AdminSelectMenu from '../components/AdminSelectMenu.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { useAdminSaveFeedback } from '../composables/useAdminSaveFeedback'
 import api from '../../api'

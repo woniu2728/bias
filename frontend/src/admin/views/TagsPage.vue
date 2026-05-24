@@ -198,41 +198,14 @@
           <div class="FormRow">
             <div class="Form-group">
               <label class="Form-labelStrong">{{ tagsCopy?.parentLabel || '父标签' }}</label>
-              <div ref="parentMenuRef" class="TagScopeSelect" :class="{ 'is-open': openScopeMenu === 'parent' }">
-                <button
-                  type="button"
-                  class="FormControl TagScopeSelect-trigger"
-                  :aria-expanded="openScopeMenu === 'parent'"
-                  :disabled="editingTagHasChildren"
-                  @click="toggleScopeMenu('parent')"
-                >
-                  <span class="TagScopeSelect-summary">{{ selectedParentLabel }}</span>
-                  <i class="fas fa-chevron-down TagScopeSelect-arrow"></i>
-                </button>
-
-                <div v-if="openScopeMenu === 'parent' && !editingTagHasChildren" class="TagScopeSelect-menu">
-                  <button
-                    type="button"
-                    class="TagScopeSelect-option"
-                    :class="{ 'is-active': formData.parent_id === null }"
-                    @click="selectParent(null)"
-                  >
-                    <span class="TagScopeSelect-name">{{ tagsCopy?.parentRootOptionLabel || '作为顶级标签' }}</span>
-                    <i v-if="formData.parent_id === null" class="fas fa-check TagScopeSelect-check"></i>
-                  </button>
-                  <button
-                    v-for="option in availableParentOptions"
-                    :key="option.id"
-                    type="button"
-                    class="TagScopeSelect-option"
-                    :class="{ 'is-active': formData.parent_id === option.id }"
-                    @click="selectParent(option.id)"
-                  >
-                    <span class="TagScopeSelect-name">{{ option.label }}</span>
-                    <i v-if="formData.parent_id === option.id" class="fas fa-check TagScopeSelect-check"></i>
-                  </button>
-                </div>
-              </div>
+              <AdminSelectMenu
+                input-id="tag-parent-select"
+                v-model="formData.parent_id"
+                :options="parentScopeOptions"
+                :placeholder="tagsCopy?.parentRootOptionLabel || '作为顶级标签'"
+                :disabled="editingTagHasChildren"
+                :aria-label="tagsCopy?.parentLabel || '父标签'"
+              />
               <div class="Form-help">
                 {{ editingTagHasChildren
                   ? (tagsCopy?.parentChildrenBlockedText || '当前标签下已有子标签，不能再把它设为次标签。')
@@ -354,91 +327,34 @@
           <div class="FormRow">
             <div class="Form-group">
               <label class="Form-labelStrong">{{ tagsCopy?.viewScopeLabel || '查看权限' }}</label>
-              <div ref="viewScopeMenuRef" class="TagScopeSelect" :class="{ 'is-open': openScopeMenu === 'view' }">
-                <button
-                  type="button"
-                  class="FormControl TagScopeSelect-trigger"
-                  :aria-expanded="openScopeMenu === 'view'"
-                  @click="toggleScopeMenu('view')"
-                >
-                  <span class="TagScopeSelect-summary">{{ getScopeLabel(formData.view_scope) }}</span>
-                  <i class="fas fa-chevron-down TagScopeSelect-arrow"></i>
-                </button>
-
-                <div v-if="openScopeMenu === 'view'" class="TagScopeSelect-menu">
-                  <button
-                    v-for="option in tagScopeOptions"
-                    :key="`view-${option.value}`"
-                    type="button"
-                    class="TagScopeSelect-option"
-                    :class="{ 'is-active': formData.view_scope === option.value }"
-                    @click="selectScope('view_scope', option.value)"
-                  >
-                    <span class="TagScopeSelect-name">{{ option.label }}</span>
-                    <i v-if="formData.view_scope === option.value" class="fas fa-check TagScopeSelect-check"></i>
-                  </button>
-                </div>
-              </div>
+              <AdminSelectMenu
+                input-id="tag-view-scope-select"
+                v-model="formData.view_scope"
+                :options="tagScopeOptions"
+                :aria-label="tagsCopy?.viewScopeLabel || '查看权限'"
+              />
             </div>
 
             <div class="Form-group">
               <label class="Form-labelStrong">{{ tagsCopy?.startScopeLabel || '发帖权限' }}</label>
-              <div ref="startScopeMenuRef" class="TagScopeSelect" :class="{ 'is-open': openScopeMenu === 'start' }">
-                <button
-                  type="button"
-                  class="FormControl TagScopeSelect-trigger"
-                  :aria-expanded="openScopeMenu === 'start'"
-                  @click="toggleScopeMenu('start')"
-                >
-                  <span class="TagScopeSelect-summary">{{ getScopeLabel(formData.start_discussion_scope) }}</span>
-                  <i class="fas fa-chevron-down TagScopeSelect-arrow"></i>
-                </button>
-
-                <div v-if="openScopeMenu === 'start'" class="TagScopeSelect-menu">
-                  <button
-                    v-for="option in availableStartScopeOptions"
-                    :key="`start-${option.value}`"
-                    type="button"
-                    class="TagScopeSelect-option"
-                    :class="{ 'is-active': formData.start_discussion_scope === option.value }"
-                    @click="selectScope('start_discussion_scope', option.value)"
-                  >
-                    <span class="TagScopeSelect-name">{{ option.label }}</span>
-                    <i v-if="formData.start_discussion_scope === option.value" class="fas fa-check TagScopeSelect-check"></i>
-                  </button>
-                </div>
-              </div>
+              <AdminSelectMenu
+                input-id="tag-start-scope-select"
+                v-model="formData.start_discussion_scope"
+                :options="availableStartScopeOptions"
+                :aria-label="tagsCopy?.startScopeLabel || '发帖权限'"
+              />
               <div class="Form-help">{{ tagsCopy?.startScopeHelpText || '发帖权限不能比查看权限更宽松。' }}</div>
             </div>
           </div>
 
           <div class="Form-group">
             <label class="Form-labelStrong">{{ tagsCopy?.replyScopeLabel || '回帖权限' }}</label>
-            <div ref="replyScopeMenuRef" class="TagScopeSelect" :class="{ 'is-open': openScopeMenu === 'reply' }">
-              <button
-                type="button"
-                class="FormControl TagScopeSelect-trigger"
-                :aria-expanded="openScopeMenu === 'reply'"
-                @click="toggleScopeMenu('reply')"
-              >
-                <span class="TagScopeSelect-summary">{{ getScopeLabel(formData.reply_scope) }}</span>
-                <i class="fas fa-chevron-down TagScopeSelect-arrow"></i>
-              </button>
-
-              <div v-if="openScopeMenu === 'reply'" class="TagScopeSelect-menu">
-                <button
-                  v-for="option in availableReplyScopeOptions"
-                  :key="`reply-${option.value}`"
-                  type="button"
-                  class="TagScopeSelect-option"
-                  :class="{ 'is-active': formData.reply_scope === option.value }"
-                  @click="selectScope('reply_scope', option.value)"
-                >
-                  <span class="TagScopeSelect-name">{{ option.label }}</span>
-                  <i v-if="formData.reply_scope === option.value" class="fas fa-check TagScopeSelect-check"></i>
-                </button>
-              </div>
-            </div>
+            <AdminSelectMenu
+              input-id="tag-reply-scope-select"
+              v-model="formData.reply_scope"
+              :options="availableReplyScopeOptions"
+              :aria-label="tagsCopy?.replyScopeLabel || '回帖权限'"
+            />
             <div class="Form-help">
               {{ formData.is_restricted
                 ? (tagsCopy?.restrictedHelpText || '“限制发帖”开启后，普通用户无法在该标签下发起讨论；回帖权限仍按这里的配置生效。')
@@ -467,7 +383,8 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import AdminSelectMenu from '../components/AdminSelectMenu.vue'
 import AdminColorField from '../components/AdminColorField.vue'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
@@ -491,11 +408,6 @@ const movingTagId = ref(null)
 const refreshingStats = ref(false)
 const editingTag = ref(null)
 const iconSearch = ref('')
-const openScopeMenu = ref('')
-const parentMenuRef = ref(null)
-const viewScopeMenuRef = ref(null)
-const startScopeMenuRef = ref(null)
-const replyScopeMenuRef = ref(null)
 const modalStore = useModalStore()
 const tagsCopy = computed(() => getAdminTagsPageCopy())
 const tagsConfig = computed(() => getAdminTagsPageConfig())
@@ -547,13 +459,10 @@ const availableParentOptions = computed(() => {
       label: row.tag.name
     }))
 })
-const selectedParentLabel = computed(() => {
-  if (formData.value.parent_id === null) {
-    return tagsCopy.value?.parentRootOptionLabel || '作为顶级标签'
-  }
-
-  return availableParentOptions.value.find(option => option.id === formData.value.parent_id)?.label || (tagsCopy.value?.parentRootOptionLabel || '作为顶级标签')
-})
+const parentScopeOptions = computed(() => [
+  { value: null, label: tagsCopy.value?.parentRootOptionLabel || '作为顶级标签' },
+  ...availableParentOptions.value.map(option => ({ value: option.id, label: option.label })),
+])
 const availableStartScopeOptions = computed(() => {
   const minimumLevel = getScopeLevel(formData.value.view_scope)
   return tagScopeOptions.value.filter(option => getScopeLevel(option.value) >= minimumLevel)
@@ -572,12 +481,7 @@ const positionHelpText = computed(() => {
   return `${parentText}${prefix}；第 ${rank} 位 / 共 ${siblingCount + 1} 个同级标签。`
 })
 onMounted(() => {
-  document.addEventListener('click', handleDocumentClick)
   loadTags()
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', handleDocumentClick)
 })
 
 watch(
@@ -787,35 +691,7 @@ function closeModal() {
   showEditModal.value = false
   editingTag.value = null
   iconSearch.value = ''
-  openScopeMenu.value = ''
   formData.value = getEmptyForm()
-}
-
-function toggleScopeMenu(menu) {
-  openScopeMenu.value = openScopeMenu.value === menu ? '' : menu
-}
-
-function selectScope(field, value) {
-  formData.value[field] = value
-  openScopeMenu.value = ''
-}
-
-function selectParent(parentId) {
-  formData.value.parent_id = parentId
-  openScopeMenu.value = ''
-}
-
-function handleDocumentClick(event) {
-  if (
-    parentMenuRef.value?.contains(event.target)
-    || viewScopeMenuRef.value?.contains(event.target)
-    || startScopeMenuRef.value?.contains(event.target)
-    || replyScopeMenuRef.value?.contains(event.target)
-  ) {
-    return
-  }
-
-  openScopeMenu.value = ''
 }
 
 function getEmptyForm(overrides = {}) {
@@ -1390,85 +1266,6 @@ function getChildTagCount(tagId) {
   white-space: nowrap;
 }
 
-.TagScopeSelect {
-  position: relative;
-}
-
-.TagScopeSelect-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 48px;
-  cursor: pointer;
-}
-
-.TagScopeSelect-summary {
-  min-width: 0;
-  color: var(--forum-text-color);
-  font-size: 14px;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.TagScopeSelect-arrow {
-  color: var(--forum-text-soft);
-  font-size: 12px;
-  transition: transform 0.18s ease;
-}
-
-.TagScopeSelect.is-open .TagScopeSelect-arrow {
-  transform: rotate(180deg);
-}
-
-.TagScopeSelect-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  z-index: 20;
-  padding: 10px 0;
-  border: 1px solid var(--forum-border-color);
-  border-radius: 14px;
-  background: var(--forum-bg-elevated);
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
-}
-
-.TagScopeSelect-option {
-  width: 100%;
-  border: none;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 44px;
-  padding: 0 14px;
-  cursor: pointer;
-}
-
-.TagScopeSelect-option:hover {
-  background: color-mix(in srgb, var(--forum-primary-color) 4%, transparent);
-}
-
-.TagScopeSelect-option.is-active .TagScopeSelect-name {
-  color: var(--forum-primary-color);
-  font-weight: 600;
-}
-
-.TagScopeSelect-name {
-  color: var(--forum-text-color);
-  font-size: 14px;
-  text-align: left;
-}
-
-.TagScopeSelect-check {
-  color: var(--forum-primary-color);
-  font-size: 12px;
-}
-
 .TagsModal-footer {
   justify-content: flex-start;
 }
@@ -1500,10 +1297,6 @@ function getChildTagCount(tagId) {
     justify-content: center;
   }
 
-  .TagScopeSelect-menu {
-    position: static;
-    margin-top: 8px;
-  }
 }
 
 @media (max-width: 680px) {
