@@ -1,0 +1,27 @@
+{
+  "id": "sample-hello",
+  "name": "Sample Hello",
+  "version": "0.1.0",
+  "description": "用于验证 Bias 扩展发现、清单展示和后续扩展协议的示例扩展。",
+  "icon": "fas fa-plug",
+  "category": "feature",
+  "authors": [
+    "Bias"
+  ],
+  "documentation_url": "/admin.html#/admin/docs?guide=extension-system-roadmap&extension=sample-hello",
+  "dependencies": [
+    "core"
+  ],
+  "provides": [
+    "sample-hello-panel"
+  ],
+  "backend_entry": "extensions.sample_hello.backend.ext",
+  "frontend_admin_entry": "extensions/sample-hello/frontend/admin/index.js",
+  "settings_pages": [
+    "/admin/extensions/sample-hello"
+  ],
+  "extra": {
+    "display_order": 1000,
+    "experimental": true
+  }
+}

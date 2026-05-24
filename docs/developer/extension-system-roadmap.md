@@ -14,6 +14,51 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 
 本文档是 Bias 扩展系统改造的主规范。
 
+## 当前进展
+
+截至当前代码状态，扩展系统主线已经完成了第一批和第二批基础设施落地：
+
+### 已完成：阶段 0 设计冻结的首批代码承载
+
+已新增扩展系统基础目录与核心类型：
+
+- `apps/core/extensions/types.py`
+- `apps/core/extensions/manifest.py`
+- `apps/core/extensions/exceptions.py`
+- `apps/core/extensions/registry.py`
+
+这意味着扩展系统不再停留在文档阶段，而是已经有正式的后端抽象承载 manifest、runtime state、lifecycle 和 registry。
+
+### 已完成：阶段 1 扩展发现与清单层的第一版实现
+
+已落地：
+
+1. `ExtensionManifestLoader`
+   可以扫描 `extensions/*/extension.json`
+2. `ExtensionRegistry`
+   可以汇总文件系统扩展与内置模块扩展
+3. `BuiltinModuleExtensionAdapter`
+   可以把现有 `ForumModuleDefinition` 包装为扩展定义
+4. 后台扩展清单 API
+   `GET /api/admin/extensions`
+5. 后台扩展中心页面
+   `frontend/src/admin/views/ExtensionsPage.vue`
+6. 真实示例扩展目录
+   `extensions/sample-hello/extension.json`
+
+当前已经进入“扩展中心和模块中心并行存在”的兼容阶段。
+
+### 已完成：阶段 2 的状态持久化基础
+
+已落地：
+
+1. `ExtensionInstallation` 模型
+2. 对应数据库迁移
+   `apps/core/migrations/0004_extension_installations.py`
+3. `ExtensionRegistry` 已能读取持久化状态覆盖扩展的 `installed / enabled / booted`
+
+当前尚未完成真实启停 API 和能力过滤，但状态模型与 registry 覆盖链路已经建立。
+
 ## 当前状态
 
 ### 已有能力

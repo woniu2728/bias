@@ -1,5 +1,7 @@
 from typing import Any, Dict, List
 
+from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extension
+
 
 def resolve_module_category_label(category: str) -> str:
     if category == "core":
@@ -164,6 +166,7 @@ def serialize_module_definition(
     advanced_settings_defaults: Dict[str, Any],
     mail_settings_defaults: Dict[str, Any],
 ) -> Dict[str, Any]:
+    extension_definition = adapt_builtin_module_to_extension(module)
     dependency_state = build_module_dependency_state(module, module_map)
     health_state = build_module_health_state(module, dependency_state)
     settings_overview = build_module_settings_overview(
@@ -233,6 +236,31 @@ def serialize_module_definition(
         "capabilities": list(module.capabilities),
         "settings": settings_overview,
         "documentation_url": resolve_module_documentation_url(module),
+        "extension": {
+            "id": extension_definition.id,
+            "name": extension_definition.name,
+            "version": extension_definition.version,
+            "description": extension_definition.description,
+            "icon": extension_definition.manifest.icon,
+            "category": extension_definition.manifest.category,
+            "source": extension_definition.source,
+            "dependencies": list(extension_definition.manifest.dependencies),
+            "provides": list(extension_definition.manifest.provides),
+            "module_ids": list(extension_definition.module_ids),
+            "settings_groups": list(extension_definition.settings_groups),
+            "admin_pages": list(extension_definition.admin_pages),
+            "runtime": {
+                "installed": extension_definition.runtime.installed,
+                "enabled": extension_definition.runtime.enabled,
+                "booted": extension_definition.runtime.booted,
+                "healthy": extension_definition.runtime.healthy,
+                "migration_state": extension_definition.runtime.migration_state,
+                "migration_label": extension_definition.runtime.migration_label,
+                "dependency_state": extension_definition.runtime.dependency_state,
+                "dependency_state_label": extension_definition.runtime.dependency_state_label,
+                "runtime_issues": list(extension_definition.runtime.runtime_issues),
+            },
+        },
         "lifecycle": {
             "registration_mode": getattr(module.lifecycle, "registration_mode", "static"),
             "registration_mode_label": getattr(module.lifecycle, "registration_mode_label", "启动时静态注册"),

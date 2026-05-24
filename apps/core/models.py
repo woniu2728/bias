@@ -53,3 +53,31 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} by {self.user.username if self.user else 'Unknown'}"
+
+
+class ExtensionInstallation(models.Model):
+    """
+    扩展安装状态 - 用于持久化扩展启停与安装信息
+    """
+    extension_id = models.CharField(max_length=120, unique=True, db_index=True)
+    version = models.CharField(max_length=32, blank=True)
+    source = models.CharField(max_length=32, default="filesystem")
+    enabled = models.BooleanField(default=True)
+    installed = models.BooleanField(default=True)
+    booted = models.BooleanField(default=True)
+    meta = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "extension_installations"
+        ordering = ["extension_id"]
+        indexes = [
+            models.Index(fields=["extension_id"]),
+            models.Index(fields=["enabled"]),
+            models.Index(fields=["installed"]),
+        ]
+
+    def __str__(self):
+        return self.extension_id

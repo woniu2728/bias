@@ -1,4 +1,5 @@
 import DashboardPage from '../../views/DashboardPage.vue'
+import ExtensionsPage from '../../views/ExtensionsPage.vue'
 import ModulesPage from '../../views/ModulesPage.vue'
 import BasicsPage from '../../views/BasicsPage.vue'
 import PermissionsPage from '../../views/PermissionsPage.vue'
@@ -26,6 +27,19 @@ registerAdminRoute({
 })
 
 registerAdminRoute({
+  path: '/admin/extensions',
+  name: 'admin-extensions',
+  component: ExtensionsPage,
+  icon: 'fas fa-plug',
+  label: '扩展中心',
+  navDescription: '查看扩展清单、状态、依赖与未来设置入口。',
+  navSection: 'core',
+  navOrder: 20,
+  showInDashboardActions: true,
+  moduleId: 'core'
+})
+
+registerAdminRoute({
   path: '/admin/modules',
   name: 'admin-modules',
   component: ModulesPage,
@@ -33,7 +47,7 @@ registerAdminRoute({
   label: '模块中心',
   navDescription: '查看内置模块、扩展能力和注册快照。',
   navSection: 'core',
-  navOrder: 20,
+  navOrder: 25,
   showInDashboardActions: true,
   moduleId: 'core'
 })

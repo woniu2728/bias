@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from ninja import Body, Router
 
+from apps.core.extensions import get_extension_registry
 from apps.core.jwt_auth import AccessTokenAuth
 
 
@@ -18,6 +19,73 @@ def _require_staff(request):
     if not request.auth or not request.auth.is_staff:
         return legacy.admin_error("需要管理员权限", status=403)
     return None
+
+
+@router.get("/extensions", auth=AccessTokenAuth(), tags=["Admin"])
+def list_admin_extensions(request):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    extensions = get_extension_registry().get_extensions()
+    payload = [
+        {
+            "id": extension.id,
+            "name": extension.name,
+            "version": extension.version,
+            "description": extension.description,
+            "icon": extension.manifest.icon,
+            "category": extension.manifest.category,
+            "documentation_url": extension.manifest.documentation_url,
+            "dependencies": list(extension.manifest.dependencies),
+            "optional_dependencies": list(extension.manifest.optional_dependencies),
+            "conflicts": list(extension.manifest.conflicts),
+            "provides": list(extension.manifest.provides),
+            "settings_pages": list(extension.manifest.settings_pages),
+            "permissions_pages": list(extension.manifest.permissions_pages),
+            "installed": extension.runtime.installed,
+            "enabled": extension.runtime.enabled,
+            "booted": extension.runtime.booted,
+            "healthy": extension.runtime.healthy,
+            "migration_state": extension.runtime.migration_state,
+            "migration_label": extension.runtime.migration_label,
+            "dependency_state": extension.runtime.dependency_state,
+            "dependency_state_label": extension.runtime.dependency_state_label,
+            "runtime_issues": list(extension.runtime.runtime_issues),
+            "source": extension.source,
+            "module_ids": list(extension.module_ids),
+            "admin_pages": list(extension.admin_pages),
+            "settings_groups": list(extension.settings_groups),
+            "lifecycle": {
+                "registration_mode": extension.lifecycle.registration_mode,
+                "registration_mode_label": extension.lifecycle.registration_mode_label,
+                "readiness_probe": extension.lifecycle.readiness_probe,
+                "supports_disable": extension.lifecycle.supports_disable,
+                "supports_teardown": extension.lifecycle.supports_teardown,
+                "phases": [
+                    {
+                        "key": phase.key,
+                        "label": phase.label,
+                        "description": phase.description,
+                        "optional": phase.optional,
+                    }
+                    for phase in extension.lifecycle.phases
+                ],
+            },
+        }
+        for extension in extensions
+    ]
+
+    return {
+        "summary": {
+            "extension_count": len(payload),
+            "enabled_count": sum(1 for item in payload if item["enabled"]),
+            "healthy_count": sum(1 for item in payload if item["healthy"]),
+            "builtin_count": sum(1 for item in payload if item["source"] == "builtin-module"),
+            "filesystem_count": sum(1 for item in payload if item["source"] == "filesystem"),
+        },
+        "extensions": payload,
+    }
 
 
 @router.get("/modules", auth=AccessTokenAuth(), tags=["Admin"])

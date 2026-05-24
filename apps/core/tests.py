@@ -26,6 +26,9 @@ from ninja_jwt.tokens import RefreshToken
 from unittest.mock import Mock, patch
 
 from apps.core.domain_events import DomainEventBus
+from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extension
+from apps.core.extensions.manifest import ExtensionManifestLoader
+from apps.core.extensions.registry import ExtensionRegistry
 from apps.core.forum_events import (
     DiscussionCreatedEvent,
     DiscussionTagStatsRefreshEvent,
@@ -45,7 +48,7 @@ from apps.core.resource_registry import (
     ResourceRegistry,
 )
 from apps.core.bootstrap_config import load_site_bootstrap, read_site_config
-from apps.core.models import AuditLog, Setting
+from apps.core.models import AuditLog, ExtensionInstallation, Setting
 from apps.core.file_service import FileUploadService
 from apps.core.online_service import OnlineUserService
 from apps.core.release import build_git_command, ensure_release_versions_aligned
@@ -114,6 +117,132 @@ class DomainEventBusTests(TestCase):
             received,
             [("suspended", 9, 2), ("unsuspended", 9, 2)],
         )
+
+
+class ExtensionManifestLoaderTests(TestCase):
+    def test_loader_reads_extension_manifest_from_extensions_directory(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            base_dir = Path(temp_dir)
+            manifest_dir = base_dir / "extensions" / "sample-extension"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "sample-extension",
+                "name": "Sample Extension",
+                "version": "1.0.0",
+                "description": "A sample extension.",
+                "dependencies": ["core"],
+                "settings_pages": ["/admin/extensions/sample"],
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(base_dir / "extensions")
+            results = loader.discover()
+
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0].manifest.id, "sample-extension")
+            self.assertEqual(results[0].manifest.name, "Sample Extension")
+            self.assertEqual(results[0].manifest.dependencies, ("core",))
+            self.assertEqual(results[0].manifest.settings_pages, ("/admin/extensions/sample",))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+class ExtensionRegistryTests(TestCase):
+    def test_registry_exposes_builtin_modules_as_extensions(self):
+        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
+        extensions = registry.get_extensions()
+
+        extension_ids = {item.id for item in extensions}
+        self.assertIn("core", extension_ids)
+        self.assertIn("posts", extension_ids)
+        self.assertIn("sample-hello", extension_ids)
+        self.assertTrue(any(item.source == "builtin-module" for item in extensions))
+        self.assertTrue(any(item.source == "filesystem" for item in extensions))
+
+        core_extension = next(item for item in extensions if item.id == "core")
+        self.assertEqual(core_extension.manifest.category, "core")
+        self.assertIn("/admin", core_extension.admin_pages)
+        self.assertIn("basic", core_extension.settings_groups)
+        self.assertEqual(core_extension.lifecycle.registration_mode, "static")
+
+        sample_extension = next(item for item in extensions if item.id == "sample-hello")
+        self.assertEqual(sample_extension.source, "filesystem")
+        self.assertEqual(sample_extension.manifest.dependencies, ("core",))
+        self.assertIn("/admin/extensions/sample-hello", sample_extension.manifest.settings_pages)
+
+    def test_builtin_adapter_preserves_module_metadata(self):
+        module = get_forum_registry().get_module("approval")
+        extension = adapt_builtin_module_to_extension(module)
+
+        self.assertEqual(extension.id, "approval")
+        self.assertEqual(extension.name, module.name)
+        self.assertEqual(extension.manifest.dependencies, module.dependencies)
+        self.assertEqual(extension.runtime.enabled, module.enabled)
+        self.assertIn("/admin/permissions", extension.manifest.permissions_pages)
+
+    def test_registry_applies_persisted_installation_state(self):
+        ExtensionInstallation.objects.create(
+            extension_id="sample-hello",
+            version="0.1.0",
+            source="filesystem",
+            enabled=False,
+            installed=True,
+            booted=False,
+        )
+
+        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
+        extension = registry.get_extension("sample-hello")
+
+        self.assertFalse(extension.runtime.enabled)
+        self.assertFalse(extension.runtime.booted)
+        self.assertTrue(extension.runtime.installed)
+
+
+class AdminExtensionsApiTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="admin-extensions",
+            email="admin-extensions@example.com",
+            password="password123",
+        )
+
+    def auth_header(self):
+        token = RefreshToken.for_user(self.admin).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_extensions_api_returns_builtin_extension_snapshot(self):
+        response = self.client.get(
+            "/api/admin/extensions",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertIn("summary", payload)
+        self.assertIn("extensions", payload)
+        self.assertGreaterEqual(payload["summary"]["extension_count"], 1)
+        self.assertGreaterEqual(payload["summary"]["builtin_count"], 1)
+        self.assertGreaterEqual(payload["summary"]["filesystem_count"], 1)
+
+        extension_ids = {item["id"] for item in payload["extensions"]}
+        self.assertIn("core", extension_ids)
+        self.assertIn("tags", extension_ids)
+        self.assertIn("sample-hello", extension_ids)
+
+        core_extension = next(item for item in payload["extensions"] if item["id"] == "core")
+        self.assertEqual(core_extension["source"], "builtin-module")
+        self.assertEqual(core_extension["category"], "core")
+        self.assertTrue(core_extension["installed"])
+        self.assertTrue(core_extension["enabled"])
+        self.assertIn("/admin", core_extension["admin_pages"])
+        self.assertIn("basic", core_extension["settings_groups"])
+        self.assertIn("phases", core_extension["lifecycle"])
+        self.assertTrue(any(phase["key"] == "register" for phase in core_extension["lifecycle"]["phases"]))
+
+        sample_extension = next(item for item in payload["extensions"] if item["id"] == "sample-hello")
+        self.assertEqual(sample_extension["source"], "filesystem")
+        self.assertIn("/admin/extensions/sample-hello", sample_extension["settings_pages"])
+
 
     def test_dispatches_handlers_for_tag_stats_events(self):
         bus = DomainEventBus()
@@ -4727,10 +4856,14 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("registration_counts", core_module)
         self.assertIn("permissions", core_module)
         self.assertIn("documentation_url", core_module)
+        self.assertIn("extension", core_module)
         self.assertEqual(
             core_module["documentation_url"],
             "/admin.html#/admin/docs?guide=module-development&module=core",
         )
+        self.assertEqual(core_module["extension"]["id"], "core")
+        self.assertEqual(core_module["extension"]["source"], "builtin-module")
+        self.assertTrue(core_module["extension"]["runtime"]["installed"])
         self.assertIn("debug_items", core_module["runtime"])
         self.assertIn("lifecycle_phases", core_module["runtime"])
         self.assertIn("permissions_entry_path", core_module["runtime"])
