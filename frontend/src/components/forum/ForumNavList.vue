@@ -13,7 +13,6 @@
             :to="item.href ? undefined : item.to"
             :href="item.href || undefined"
             :class="['forum-nav-list__item', itemClass, { active: item.active, 'is-muted': item.muted }]"
-            :title="item.description || ''"
             @click="$emit('select', item)"
           >
             <i v-if="item.icon" :class="item.icon"></i>
@@ -25,6 +24,11 @@
               >{{ item.description }}</small>
             </span>
             <span v-if="item.badge" :class="['forum-nav-list__badge', itemBadgeClass]">{{ item.badge }}</span>
+            <span
+              v-if="showTooltips && item.description"
+              :class="['forum-nav-list__tooltip', tooltipClass]"
+              role="tooltip"
+            >{{ item.description }}</span>
           </component>
         </li>
       </ul>
@@ -66,9 +70,17 @@ defineProps({
     type: String,
     default: 'forum-nav-list__badge'
   },
+  tooltipClass: {
+    type: String,
+    default: 'forum-nav-list__tooltip'
+  },
   showDescriptions: {
     type: Boolean,
     default: true
+  },
+  showTooltips: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -132,5 +144,46 @@ defineEmits(['select'])
   border-radius: 999px;
   font-size: 11px;
   text-align: center;
+}
+
+.forum-nav-list__tooltip {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 12px);
+  z-index: 30;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 120px));
+  padding: 10px 12px;
+  border: 1px solid rgba(114, 132, 153, 0.2);
+  border-radius: 12px;
+  background: rgba(24, 36, 51, 0.96);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.2);
+  color: #f4f7fb;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(-6px, -50%, 0);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.forum-nav-list__tooltip::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -6px;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border-left: 1px solid rgba(114, 132, 153, 0.2);
+  border-bottom: 1px solid rgba(114, 132, 153, 0.2);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.forum-nav-list__item:hover .forum-nav-list__tooltip,
+.forum-nav-list__item:focus-visible .forum-nav-list__tooltip {
+  opacity: 1;
+  transform: translate3d(0, -50%, 0);
 }
 </style>
