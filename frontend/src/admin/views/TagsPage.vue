@@ -7,10 +7,6 @@
   >
     <div class="TagsPage-content">
       <AdminToolbar align="end">
-        <button type="button" class="Button Button--primary" @click="openCreateModal">
-          <i class="fas fa-plus"></i>
-          {{ tagsCopy?.createLabel || '创建标签' }}
-        </button>
         <button type="button" class="Button" :disabled="refreshingStats" @click="refreshTagStats">
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': refreshingStats }"></i>
           {{ refreshingStats ? (tagsCopy?.refreshingLabel || '刷新中...') : (tagsCopy?.refreshLabel || '刷新统计') }}
@@ -21,92 +17,130 @@
       <AdminSummaryGrid :items="tagSummaryItems" />
 
       <div class="TagsPage-list">
-        <table class="TagTable">
-          <thead>
-            <tr>
-              <th style="width: 190px">{{ tagsCopy?.tablePreviewHeader || '预览' }}</th>
-              <th>{{ tagsCopy?.tableNameHeader || '标签名称' }}</th>
-              <th>{{ tagsCopy?.tableSlugHeader || '别名' }}</th>
-              <th>{{ tagsCopy?.tableHierarchyHeader || '层级' }}</th>
-              <th>{{ tagsCopy?.tableStatusHeader || '状态' }}</th>
-              <th>{{ tagsCopy?.tableDiscussionCountHeader || '讨论数' }}</th>
-              <th>{{ tagsCopy?.tableActionHeader || '操作' }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="7" class="TagTable-loading">
-                <AdminStateBlock tone="subtle">{{ tagsCopy?.loadingText || '加载中...' }}</AdminStateBlock>
-              </td>
-            </tr>
-            <tr v-else-if="!tagRows.length">
-              <td colspan="7" class="TagTable-empty">
-                <AdminStateBlock>{{ tagsCopy?.emptyText || '暂无标签' }}</AdminStateBlock>
-              </td>
-            </tr>
-            <tr v-for="row in tagRows" v-else :key="row.tag.id">
-              <td :data-label="tagsCopy?.tablePreviewHeader || '预览'">
-                <span class="TagBadgePreview" :style="getTagBadgeStyle(row.tag)">
-                  <i v-if="row.tag.icon" :class="row.tag.icon"></i>
-                  <span>{{ row.tag.name }}</span>
-                </span>
-              </td>
-              <td :data-label="tagsCopy?.tableNameHeader || '标签名称'">
-                <div class="TagNameCell" :style="{ '--tag-depth': row.depth }">
-                  <span class="TagNameCell-line" :class="{ 'is-child': row.depth > 0 }"></span>
-                  <div class="TagNameCell-main">
-                    <strong>{{ row.tag.name }}</strong>
-                    <small>{{ tagsCopy?.sortTextPrefix || '排序' }} {{ row.tag.position }}</small>
+        <AdminStateBlock v-if="loading" tone="subtle">{{ tagsCopy?.loadingText || '加载中...' }}</AdminStateBlock>
+        <AdminStateBlock v-else-if="!tagRows.length">{{ tagsCopy?.emptyText || '暂无标签' }}</AdminStateBlock>
+        <div v-else class="TagsBoard">
+          <section class="TagPanel">
+            <div class="TagPanel-header">
+              <div>
+                <h3 class="TagPanel-title">{{ tagsCopy?.rootLevelText || '顶级标签' }}</h3>
+                <p class="TagPanel-description">{{ tagsCopy?.primaryPanelHelpText || '用于承载论坛的主分类，可继续挂载子标签。' }}</p>
+              </div>
+              <span class="TagPanel-count">{{ primaryTagRows.length }}</span>
+            </div>
+
+            <div class="TagPanel-body">
+              <article v-for="row in primaryTagRows" :key="row.tag.id" class="TagCard TagCard--primary">
+                <div class="TagCard-topRow">
+                  <div class="TagCard-mainRow">
+                    <span class="TagBadgePreview" :style="getTagBadgeStyle(row.tag)">
+                      <i v-if="row.tag.icon" :class="row.tag.icon"></i>
+                      <span>{{ row.tag.name }}</span>
+                    </span>
+                    <div class="TagCard-submeta">
+                      <span>{{ row.tag.discussion_count }} {{ tagsCopy?.tableDiscussionCountHeader || '讨论' }}</span>
+                      <span>{{ getChildTagCount(row.tag.id) }} {{ tagsCopy?.childLevelText || '子标签' }}</span>
+                    </div>
+                  </div>
+                  <div class="TagCard-sideRow">
+                    <div v-if="row.tag.is_hidden || row.tag.is_restricted" class="TagStatusList">
+                      <span v-if="row.tag.is_hidden" class="TagStatus TagStatus--muted">{{ tagsCopy?.hiddenLabel || '隐藏标签' }}</span>
+                      <span v-if="row.tag.is_restricted" class="TagStatus TagStatus--warning">{{ tagsCopy?.restrictedLabel || '限制发帖' }}</span>
+                    </div>
+                    <div class="TagCard-inlineActions">
+                      <button
+                        type="button"
+                        class="TagCard-actionIcon"
+                        :title="tagsCopy?.moveUpLabel || '上移'"
+                        :disabled="!canMoveTag(row.tag, 'up') || movingTagId === row.tag.id"
+                        @click="moveTag(row.tag, 'up')"
+                      >
+                        <i class="fas fa-arrow-up"></i>
+                      </button>
+                      <button
+                        type="button"
+                        class="TagCard-actionIcon"
+                        :title="tagsCopy?.moveDownLabel || '下移'"
+                        :disabled="!canMoveTag(row.tag, 'down') || movingTagId === row.tag.id"
+                        @click="moveTag(row.tag, 'down')"
+                      >
+                        <i class="fas fa-arrow-down"></i>
+                      </button>
+                      <button type="button" class="TagCard-actionIcon" :title="tagsCopy?.editLabel || '编辑'" @click="editTag(row.tag)">
+                        <i class="fas fa-pencil-alt"></i>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </td>
-              <td :data-label="tagsCopy?.tableSlugHeader || '别名'">
-                <code class="TagSlug">{{ row.tag.slug }}</code>
-              </td>
-              <td :data-label="tagsCopy?.tableHierarchyHeader || '层级'">
-                <div class="TagHierarchy">
-                  <span>{{ row.depth > 0 ? (tagsCopy?.childLevelText || '子标签') : (tagsCopy?.rootLevelText || '顶级标签') }}</span>
-                  <small v-if="row.parentName">{{ tagsCopy?.childOwnedPrefix || '隶属' }} {{ row.parentName }}</small>
+              </article>
+
+              <button type="button" class="TagCreateButton" @click="openCreatePrimaryModal">
+                <i class="fas fa-plus"></i>
+                {{ tagsCopy?.createPrimaryLabel || '创建顶级标签' }}
+              </button>
+            </div>
+          </section>
+
+          <section class="TagPanel">
+            <div class="TagPanel-header">
+              <div>
+                <h3 class="TagPanel-title">{{ tagsCopy?.childLevelText || '子标签' }}</h3>
+                <p class="TagPanel-description">{{ tagsCopy?.secondaryPanelHelpText || '用于补充主分类下的细分主题，创建时需要选择父标签。' }}</p>
+              </div>
+              <span class="TagPanel-count">{{ secondaryTagRows.length }}</span>
+            </div>
+
+            <div class="TagPanel-body">
+              <article v-for="row in secondaryTagRows" :key="row.tag.id" class="TagCard TagCard--secondary">
+                <div class="TagCard-topRow">
+                  <span class="TagBadgePreview" :style="getTagBadgeStyle(row.tag)">
+                    <i v-if="row.tag.icon" :class="row.tag.icon"></i>
+                    <span>{{ row.tag.name }}</span>
+                  </span>
+                  <div class="TagCard-inlineActions">
+                    <button
+                      type="button"
+                      class="TagCard-actionIcon"
+                      :title="tagsCopy?.moveUpLabel || '上移'"
+                      :disabled="!canMoveTag(row.tag, 'up') || movingTagId === row.tag.id"
+                      @click="moveTag(row.tag, 'up')"
+                    >
+                      <i class="fas fa-arrow-up"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="TagCard-actionIcon"
+                      :title="tagsCopy?.moveDownLabel || '下移'"
+                      :disabled="!canMoveTag(row.tag, 'down') || movingTagId === row.tag.id"
+                      @click="moveTag(row.tag, 'down')"
+                    >
+                      <i class="fas fa-arrow-down"></i>
+                    </button>
+                    <button type="button" class="TagCard-actionIcon" :title="tagsCopy?.editLabel || '编辑'" @click="editTag(row.tag)">
+                      <i class="fas fa-pencil-alt"></i>
+                    </button>
+                  </div>
                 </div>
-              </td>
-              <td :data-label="tagsCopy?.tableStatusHeader || '状态'">
-                <div class="TagStatusList">
-                  <span v-if="row.tag.is_hidden" class="TagStatus TagStatus--muted">{{ tagsCopy?.hiddenLabel || '隐藏标签' }}</span>
-                  <span v-if="row.tag.is_restricted" class="TagStatus TagStatus--warning">{{ tagsCopy?.restrictedLabel || '限制发帖' }}</span>
-                  <span class="TagStatus">{{ tagsCopy?.viewTextPrefix || '查看' }}: {{ getScopeLabel(row.tag.view_scope) }}</span>
-                  <span class="TagStatus">{{ tagsCopy?.startTextPrefix || '发帖' }}: {{ getScopeLabel(row.tag.start_discussion_scope) }}</span>
-                  <span class="TagStatus">{{ tagsCopy?.replyTextPrefix || '回帖' }}: {{ getScopeLabel(row.tag.reply_scope) }}</span>
-                  <span v-if="!row.tag.is_hidden && !row.tag.is_restricted" class="TagStatus">{{ tagsCopy?.publicText || '公开' }}</span>
+                <div class="TagCard-meta">
+                  <div class="TagCard-submeta">
+                    <span>{{ tagsCopy?.childOwnedPrefix || '隶属' }} {{ row.parentName }}</span>
+                    <span>{{ row.tag.discussion_count }} {{ tagsCopy?.tableDiscussionCountHeader || '讨论' }}</span>
+                  </div>
+                  <div v-if="row.tag.is_hidden || row.tag.is_restricted" class="TagStatusList">
+                    <span v-if="row.tag.is_hidden" class="TagStatus TagStatus--muted">{{ tagsCopy?.hiddenLabel || '隐藏标签' }}</span>
+                    <span v-if="row.tag.is_restricted" class="TagStatus TagStatus--warning">{{ tagsCopy?.restrictedLabel || '限制发帖' }}</span>
+                  </div>
                 </div>
-              </td>
-              <td :data-label="tagsCopy?.tableDiscussionCountHeader || '讨论数'">{{ row.tag.discussion_count }}</td>
-              <td :data-label="tagsCopy?.tableActionHeader || '操作'">
-                <button type="button" class="Button Button--small" @click="editTag(row.tag)">
-                  {{ tagsCopy?.editLabel || '编辑' }}
-                </button>
-                <button
-                  type="button"
-                  class="Button Button--small"
-                  :disabled="!canMoveTag(row.tag, 'up') || movingTagId === row.tag.id"
-                  @click="moveTag(row.tag, 'up')"
-                >
-                  {{ tagsCopy?.moveUpLabel || '上移' }}
-                </button>
-                <button
-                  type="button"
-                  class="Button Button--small"
-                  :disabled="!canMoveTag(row.tag, 'down') || movingTagId === row.tag.id"
-                  @click="moveTag(row.tag, 'down')"
-                >
-                  {{ tagsCopy?.moveDownLabel || '下移' }}
-                </button>
-                <button type="button" class="Button Button--small Button--danger" @click="deleteTag(row.tag)">
-                  {{ tagsCopy?.deleteLabel || '删除' }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </article>
+
+              <button type="button" class="TagCreateButton TagCreateButton--secondary" :disabled="!primaryTagRows.length" @click="openCreateSecondaryModal">
+                <i class="fas fa-plus"></i>
+                {{ tagsCopy?.createSecondaryLabel || '创建子标签' }}
+              </button>
+              <p v-if="!primaryTagRows.length" class="TagPanel-note">{{ tagsCopy?.secondaryPanelEmptyParentText || '请先创建顶级标签，再添加子标签。' }}</p>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
 
@@ -115,7 +149,6 @@
         <div class="Modal-header">
           <div>
             <h3>{{ showEditModal ? (tagsCopy?.modalEditTitle || '编辑标签') : (tagsCopy?.modalCreateTitle || '创建标签') }}</h3>
-            <p class="Modal-subtitle">{{ tagsCopy?.modalSubtitle || '参考 Flarum 的标签编辑流程，并补齐父子层级、排序和显示状态配置。' }}</p>
           </div>
           <button type="button" class="Modal-close" @click="closeModal">
             <i class="fas fa-times"></i>
@@ -123,25 +156,6 @@
         </div>
 
         <div class="Modal-body">
-          <div class="TagPreviewPanel">
-            <span class="TagPreviewPanel-label">{{ tagsCopy?.previewLabel || '实时预览' }}</span>
-            <div class="TagPreviewPanel-card">
-              <div class="TagPreviewPanel-badge">
-                <span class="TagBadgePreview TagBadgePreview--large" :style="getTagBadgeStyle(formData)">
-                  <i v-if="formData.icon" :class="formData.icon"></i>
-                  <span>{{ formData.name || tagsCopy?.previewFallbackName || '新标签' }}</span>
-                </span>
-              </div>
-              <div class="TagPreviewPanel-meta">
-                <small>
-                  {{ formData.parent_id ? (tagsCopy?.previewChildText || '当前会作为子标签显示在父标签下方。') : (tagsCopy?.previewRootText || '当前会作为顶级标签显示在列表中。') }}
-                </small>
-              </div>
-            </div>
-          </div>
-
-          <AdminSummaryGrid class="TagConfigSummary" :items="tagConfigSummaryItems" />
-
           <div class="FormRow">
             <div class="Form-group">
               <label for="tag-name">{{ tagsCopy?.nameLabel || '标签名称 *' }}</label>
@@ -183,23 +197,42 @@
 
           <div class="FormRow">
             <div class="Form-group">
-              <label for="tag-parent">{{ tagsCopy?.parentLabel || '父标签' }}</label>
-              <select
-                id="tag-parent"
-                v-model="formData.parent_id"
-                name="tag_parent_id"
-                class="FormControl"
-                :disabled="editingTagHasChildren"
-              >
-                <option :value="null">{{ tagsCopy?.parentRootOptionLabel || '作为顶级标签' }}</option>
-                <option
-                  v-for="option in availableParentOptions"
-                  :key="option.id"
-                  :value="option.id"
+              <label class="Form-labelStrong">{{ tagsCopy?.parentLabel || '父标签' }}</label>
+              <div ref="parentMenuRef" class="TagScopeSelect" :class="{ 'is-open': openScopeMenu === 'parent' }">
+                <button
+                  type="button"
+                  class="FormControl TagScopeSelect-trigger"
+                  :aria-expanded="openScopeMenu === 'parent'"
+                  :disabled="editingTagHasChildren"
+                  @click="toggleScopeMenu('parent')"
                 >
-                  {{ option.label }}
-                </option>
-              </select>
+                  <span class="TagScopeSelect-summary">{{ selectedParentLabel }}</span>
+                  <i class="fas fa-chevron-down TagScopeSelect-arrow"></i>
+                </button>
+
+                <div v-if="openScopeMenu === 'parent' && !editingTagHasChildren" class="TagScopeSelect-menu">
+                  <button
+                    type="button"
+                    class="TagScopeSelect-option"
+                    :class="{ 'is-active': formData.parent_id === null }"
+                    @click="selectParent(null)"
+                  >
+                    <span class="TagScopeSelect-name">{{ tagsCopy?.parentRootOptionLabel || '作为顶级标签' }}</span>
+                    <i v-if="formData.parent_id === null" class="fas fa-check TagScopeSelect-check"></i>
+                  </button>
+                  <button
+                    v-for="option in availableParentOptions"
+                    :key="option.id"
+                    type="button"
+                    class="TagScopeSelect-option"
+                    :class="{ 'is-active': formData.parent_id === option.id }"
+                    @click="selectParent(option.id)"
+                  >
+                    <span class="TagScopeSelect-name">{{ option.label }}</span>
+                    <i v-if="formData.parent_id === option.id" class="fas fa-check TagScopeSelect-check"></i>
+                  </button>
+                </div>
+              </div>
               <div class="Form-help">
                 {{ editingTagHasChildren
                   ? (tagsCopy?.parentChildrenBlockedText || '当前标签下已有子标签，不能再把它设为次标签。')
@@ -293,24 +326,26 @@
 
           <div class="Form-group">
             <span id="tag-visibility-controls" class="Form-label">{{ tagsCopy?.visibilityLabel || '显示与发帖限制' }}</span>
-            <div class="CheckboxRow">
-              <label class="CheckboxChip">
+            <div class="TagToggleRow">
+              <label class="CheckboxField TagToggle TagToggle--switch">
                 <input
                   v-model="formData.is_hidden"
                   name="tag_is_hidden"
                   type="checkbox"
                   aria-describedby="tag-visibility-controls"
                 />
+                <span class="TagToggle-switch" aria-hidden="true"></span>
                 <span>{{ tagsCopy?.hiddenLabel || '隐藏标签' }}</span>
               </label>
 
-              <label class="CheckboxChip">
+              <label class="CheckboxField TagToggle TagToggle--switch">
                 <input
                   v-model="formData.is_restricted"
                   name="tag_is_restricted"
                   type="checkbox"
                   aria-describedby="tag-visibility-controls"
                 />
+                <span class="TagToggle-switch" aria-hidden="true"></span>
                 <span>{{ tagsCopy?.restrictedLabel || '限制发帖' }}</span>
               </label>
             </div>
@@ -318,47 +353,92 @@
 
           <div class="FormRow">
             <div class="Form-group">
-              <label for="tag-view-scope">{{ tagsCopy?.viewScopeLabel || '查看权限' }}</label>
-              <select
-                id="tag-view-scope"
-                v-model="formData.view_scope"
-                name="tag_view_scope"
-                class="FormControl"
-              >
-                <option v-for="option in tagScopeOptions" :key="`view-${option.value}`" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
+              <label class="Form-labelStrong">{{ tagsCopy?.viewScopeLabel || '查看权限' }}</label>
+              <div ref="viewScopeMenuRef" class="TagScopeSelect" :class="{ 'is-open': openScopeMenu === 'view' }">
+                <button
+                  type="button"
+                  class="FormControl TagScopeSelect-trigger"
+                  :aria-expanded="openScopeMenu === 'view'"
+                  @click="toggleScopeMenu('view')"
+                >
+                  <span class="TagScopeSelect-summary">{{ getScopeLabel(formData.view_scope) }}</span>
+                  <i class="fas fa-chevron-down TagScopeSelect-arrow"></i>
+                </button>
+
+                <div v-if="openScopeMenu === 'view'" class="TagScopeSelect-menu">
+                  <button
+                    v-for="option in tagScopeOptions"
+                    :key="`view-${option.value}`"
+                    type="button"
+                    class="TagScopeSelect-option"
+                    :class="{ 'is-active': formData.view_scope === option.value }"
+                    @click="selectScope('view_scope', option.value)"
+                  >
+                    <span class="TagScopeSelect-name">{{ option.label }}</span>
+                    <i v-if="formData.view_scope === option.value" class="fas fa-check TagScopeSelect-check"></i>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="Form-group">
-              <label for="tag-start-scope">{{ tagsCopy?.startScopeLabel || '发帖权限' }}</label>
-              <select
-                id="tag-start-scope"
-                v-model="formData.start_discussion_scope"
-                name="tag_start_discussion_scope"
-                class="FormControl"
-              >
-                <option v-for="option in availableStartScopeOptions" :key="`start-${option.value}`" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
+              <label class="Form-labelStrong">{{ tagsCopy?.startScopeLabel || '发帖权限' }}</label>
+              <div ref="startScopeMenuRef" class="TagScopeSelect" :class="{ 'is-open': openScopeMenu === 'start' }">
+                <button
+                  type="button"
+                  class="FormControl TagScopeSelect-trigger"
+                  :aria-expanded="openScopeMenu === 'start'"
+                  @click="toggleScopeMenu('start')"
+                >
+                  <span class="TagScopeSelect-summary">{{ getScopeLabel(formData.start_discussion_scope) }}</span>
+                  <i class="fas fa-chevron-down TagScopeSelect-arrow"></i>
+                </button>
+
+                <div v-if="openScopeMenu === 'start'" class="TagScopeSelect-menu">
+                  <button
+                    v-for="option in availableStartScopeOptions"
+                    :key="`start-${option.value}`"
+                    type="button"
+                    class="TagScopeSelect-option"
+                    :class="{ 'is-active': formData.start_discussion_scope === option.value }"
+                    @click="selectScope('start_discussion_scope', option.value)"
+                  >
+                    <span class="TagScopeSelect-name">{{ option.label }}</span>
+                    <i v-if="formData.start_discussion_scope === option.value" class="fas fa-check TagScopeSelect-check"></i>
+                  </button>
+                </div>
+              </div>
               <div class="Form-help">{{ tagsCopy?.startScopeHelpText || '发帖权限不能比查看权限更宽松。' }}</div>
             </div>
           </div>
 
           <div class="Form-group">
-            <label for="tag-reply-scope">{{ tagsCopy?.replyScopeLabel || '回帖权限' }}</label>
-            <select
-              id="tag-reply-scope"
-              v-model="formData.reply_scope"
-              name="tag_reply_scope"
-              class="FormControl"
-            >
-              <option v-for="option in availableReplyScopeOptions" :key="`reply-${option.value}`" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
+            <label class="Form-labelStrong">{{ tagsCopy?.replyScopeLabel || '回帖权限' }}</label>
+            <div ref="replyScopeMenuRef" class="TagScopeSelect" :class="{ 'is-open': openScopeMenu === 'reply' }">
+              <button
+                type="button"
+                class="FormControl TagScopeSelect-trigger"
+                :aria-expanded="openScopeMenu === 'reply'"
+                @click="toggleScopeMenu('reply')"
+              >
+                <span class="TagScopeSelect-summary">{{ getScopeLabel(formData.reply_scope) }}</span>
+                <i class="fas fa-chevron-down TagScopeSelect-arrow"></i>
+              </button>
+
+              <div v-if="openScopeMenu === 'reply'" class="TagScopeSelect-menu">
+                <button
+                  v-for="option in availableReplyScopeOptions"
+                  :key="`reply-${option.value}`"
+                  type="button"
+                  class="TagScopeSelect-option"
+                  :class="{ 'is-active': formData.reply_scope === option.value }"
+                  @click="selectScope('reply_scope', option.value)"
+                >
+                  <span class="TagScopeSelect-name">{{ option.label }}</span>
+                  <i v-if="formData.reply_scope === option.value" class="fas fa-check TagScopeSelect-check"></i>
+                </button>
+              </div>
+            </div>
             <div class="Form-help">
               {{ formData.is_restricted
                 ? (tagsCopy?.restrictedHelpText || '“限制发帖”开启后，普通用户无法在该标签下发起讨论；回帖权限仍按这里的配置生效。')
@@ -367,12 +447,18 @@
           </div>
         </div>
 
-        <div class="Modal-footer">
-          <button type="button" class="Button" @click="closeModal">
-            {{ tagsCopy?.cancelLabel || '取消' }}
-          </button>
+        <div class="Modal-footer TagsModal-footer" :class="{ 'TagsModal-footer--edit': showEditModal && editingTag }">
           <button type="button" class="Button Button--primary" :disabled="saving" @click="saveTag">
             {{ saving ? (tagsCopy?.savingLabel || '保存中...') : (tagsCopy?.saveLabel || '保存') }}
+          </button>
+          <button
+            v-if="showEditModal && editingTag"
+            type="button"
+            class="Button Button--danger"
+            :disabled="saving"
+            @click="deleteTag(editingTag)"
+          >
+            {{ tagsCopy?.deleteLabel || '删除' }}
           </button>
         </div>
       </div>
@@ -381,7 +467,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AdminColorField from '../components/AdminColorField.vue'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
@@ -405,6 +491,11 @@ const movingTagId = ref(null)
 const refreshingStats = ref(false)
 const editingTag = ref(null)
 const iconSearch = ref('')
+const openScopeMenu = ref('')
+const parentMenuRef = ref(null)
+const viewScopeMenuRef = ref(null)
+const startScopeMenuRef = ref(null)
+const replyScopeMenuRef = ref(null)
 const modalStore = useModalStore()
 const tagsCopy = computed(() => getAdminTagsPageCopy())
 const tagsConfig = computed(() => getAdminTagsPageConfig())
@@ -426,6 +517,8 @@ const filteredIconOptions = computed(() => {
 
 const tagTree = computed(() => buildTagTree(tags.value))
 const tagRows = computed(() => flattenTagTree(tagTree.value))
+const primaryTagRows = computed(() => tagRows.value.filter(row => row.depth === 0))
+const secondaryTagRows = computed(() => tagRows.value.filter(row => row.depth > 0))
 const tagSummary = computed(() => ({
   total: tags.value.length,
   root: tags.value.filter(tag => !tag.parent_id).length,
@@ -454,6 +547,13 @@ const availableParentOptions = computed(() => {
       label: row.tag.name
     }))
 })
+const selectedParentLabel = computed(() => {
+  if (formData.value.parent_id === null) {
+    return tagsCopy.value?.parentRootOptionLabel || '作为顶级标签'
+  }
+
+  return availableParentOptions.value.find(option => option.id === formData.value.parent_id)?.label || (tagsCopy.value?.parentRootOptionLabel || '作为顶级标签')
+})
 const availableStartScopeOptions = computed(() => {
   const minimumLevel = getScopeLevel(formData.value.view_scope)
   return tagScopeOptions.value.filter(option => getScopeLevel(option.value) >= minimumLevel)
@@ -462,46 +562,22 @@ const availableReplyScopeOptions = computed(() => {
   const minimumLevel = getScopeLevel(formData.value.view_scope)
   return tagScopeOptions.value.filter(option => getScopeLevel(option.value) >= minimumLevel)
 })
-const hierarchySummary = computed(() => {
-  if (!formData.value.parent_id) {
-    return tagsCopy.value?.rootLevelText || '顶级标签'
-  }
-
-  const parentTag = tags.value.find(tag => tag.id === formData.value.parent_id)
-  const childLabel = tagsCopy.value?.childLevelText || '子标签'
-  const ownedPrefix = tagsCopy.value?.childOwnedPrefix || '隶属'
-  return parentTag ? `${childLabel} · ${ownedPrefix} ${parentTag.name}` : childLabel
-})
-const positionSummary = computed(() => {
-  const siblingCount = getSiblingCount(formData.value.parent_id, editingTag.value?.id)
-  const rank = getPreviewRank(formData.value.parent_id, formData.value.position, editingTag.value?.id)
-  return `第 ${rank} 位 / 共 ${siblingCount + 1} 个同级标签`
-})
-const visibilitySummary = computed(() => {
-  const baseText = `${tagsCopy.value?.viewTextPrefix || '查看'}: ${getScopeLabel(formData.value.view_scope)}`
-  return formData.value.is_hidden ? `${baseText} · 前台隐藏` : `${baseText} · 正常显示`
-})
-const postingSummary = computed(() => {
-  if (formData.value.is_restricted) {
-    return `${tagsCopy.value?.startTextPrefix || '发帖'}: 仅管理员 · ${tagsCopy.value?.replyTextPrefix || '回帖'}: ${getScopeLabel(formData.value.reply_scope)}`
-  }
-  return `${tagsCopy.value?.startTextPrefix || '发帖'}: ${getScopeLabel(formData.value.start_discussion_scope)} · ${tagsCopy.value?.replyTextPrefix || '回帖'}: ${getScopeLabel(formData.value.reply_scope)}`
-})
 const positionHelpText = computed(() => {
   const parentText = formData.value.parent_id
     ? (tagsCopy.value?.positionHelpParentText || '当前父标签下')
     : (tagsCopy.value?.positionHelpRootText || '顶级标签层')
   const prefix = tagsCopy.value?.positionHelpTextPrefix || '数字越小越靠前'
-  return `${parentText}${prefix}；${positionSummary.value}。`
+  const siblingCount = getSiblingCount(formData.value.parent_id, editingTag.value?.id)
+  const rank = getPreviewRank(formData.value.parent_id, formData.value.position, editingTag.value?.id)
+  return `${parentText}${prefix}；第 ${rank} 位 / 共 ${siblingCount + 1} 个同级标签。`
 })
-const tagConfigSummaryItems = computed(() => [
-  { label: tagsCopy.value?.configHierarchyLabel || '层级', value: hierarchySummary.value },
-  { label: tagsCopy.value?.configSortLabel || '排序', value: positionSummary.value },
-  { label: tagsCopy.value?.configViewLabel || '查看范围', value: visibilitySummary.value },
-  { label: tagsCopy.value?.configPostingLabel || '发帖 / 回帖', value: postingSummary.value },
-])
 onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
   loadTags()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleDocumentClick)
 })
 
 watch(
@@ -535,6 +611,21 @@ function openCreateModal() {
   iconSearch.value = ''
   formData.value = getEmptyForm({
     position: getNextPosition(tags.value, null),
+  })
+  showCreateModal.value = true
+}
+
+function openCreatePrimaryModal() {
+  openCreateModal()
+}
+
+function openCreateSecondaryModal() {
+  const parentId = primaryTagRows.value[0]?.tag.id ?? null
+  editingTag.value = null
+  iconSearch.value = ''
+  formData.value = getEmptyForm({
+    parent_id: parentId,
+    position: getNextPosition(tags.value, parentId),
   })
   showCreateModal.value = true
 }
@@ -696,7 +787,35 @@ function closeModal() {
   showEditModal.value = false
   editingTag.value = null
   iconSearch.value = ''
+  openScopeMenu.value = ''
   formData.value = getEmptyForm()
+}
+
+function toggleScopeMenu(menu) {
+  openScopeMenu.value = openScopeMenu.value === menu ? '' : menu
+}
+
+function selectScope(field, value) {
+  formData.value[field] = value
+  openScopeMenu.value = ''
+}
+
+function selectParent(parentId) {
+  formData.value.parent_id = parentId
+  openScopeMenu.value = ''
+}
+
+function handleDocumentClick(event) {
+  if (
+    parentMenuRef.value?.contains(event.target)
+    || viewScopeMenuRef.value?.contains(event.target)
+    || startScopeMenuRef.value?.contains(event.target)
+    || replyScopeMenuRef.value?.contains(event.target)
+  ) {
+    return
+  }
+
+  openScopeMenu.value = ''
 }
 
 function getEmptyForm(overrides = {}) {
@@ -830,6 +949,10 @@ function getNextPosition(sourceTags, parentId) {
 
   return siblingPositions.length ? Math.max(...siblingPositions) + 1 : 0
 }
+
+function getChildTagCount(tagId) {
+  return tags.value.filter(tag => tag.parent_id === tagId).length
+}
 </script>
 
 <style scoped>
@@ -843,39 +966,176 @@ function getNextPosition(sourceTags, parentId) {
   min-width: 0;
 }
 
-.TagTable {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--forum-bg-elevated);
+.TagsBoard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.TagPanel {
   border: 1px solid var(--forum-border-color);
-  border-radius: var(--forum-radius-sm);
+  border-radius: 18px;
+  background: var(--forum-bg-elevated);
   box-shadow: var(--forum-shadow-sm);
+  overflow: hidden;
 }
 
-.TagTable thead th {
-  padding: 12px;
-  background: var(--forum-bg-subtle);
-  border-bottom: 2px solid var(--forum-border-color);
-  font-size: var(--forum-font-size-sm);
-  font-weight: 600;
-  text-align: left;
-  color: var(--forum-text-muted);
-}
-
-.TagTable tbody td {
-  padding: 12px;
+.TagPanel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
   border-bottom: 1px solid var(--forum-border-soft);
-  font-size: var(--forum-font-size-md);
-  vertical-align: middle;
 }
 
-.TagTable tbody tr:hover {
-  background: var(--forum-bg-elevated-strong);
+.TagPanel-title {
+  margin: 0;
+  color: var(--forum-text-color);
+  font-size: 16px;
+  font-weight: 700;
 }
 
-.TagTable-loading,
-.TagTable-empty {
-  padding: 18px;
+.TagPanel-description {
+  margin: 8px 0 0;
+  color: var(--forum-text-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.TagPanel-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--forum-bg-subtle);
+  color: var(--forum-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.TagPanel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 20px;
+}
+
+.TagCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--forum-border-soft);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.TagCard-topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.TagCard-mainRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.TagCard-sideRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.TagCard-submeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--forum-text-soft);
+  font-size: 13px;
+}
+
+.TagCard-inlineActions {
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.TagCard:hover .TagCard-inlineActions,
+.TagCard:focus-within .TagCard-inlineActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.TagCard-actionIcon {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: #e8eff7;
+  color: #5c7596;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.TagCard-actionIcon:hover:not(:disabled) {
+  background: #dbe7f4;
+  color: #375272;
+}
+
+.TagCard-actionIcon:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.TagCreateButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 18px;
+  border: 1px dashed #c9d7e7;
+  border-radius: 14px;
+  background: #f5f9fd;
+  color: #54739a;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.TagCreateButton:hover:not(:disabled) {
+  border-color: var(--forum-primary-color);
+  background: #edf4fb;
+}
+
+.TagCreateButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.TagPanel-note {
+  margin: -2px 0 0;
+  color: var(--forum-text-soft);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .TagBadgePreview {
@@ -912,35 +1172,6 @@ function getNextPosition(sourceTags, parentId) {
   font-size: 14px;
 }
 
-.TagNameCell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-left: calc(var(--tag-depth, 0) * 16px);
-}
-
-.TagNameCell-line {
-  width: 10px;
-  height: 1px;
-  background: transparent;
-  flex-shrink: 0;
-}
-
-.TagNameCell-line.is-child {
-  background: rgba(120, 132, 146, 0.42);
-}
-
-.TagNameCell-main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.TagNameCell-main small,
-.TagHierarchy small {
-  color: var(--forum-text-soft);
-}
-
 .TagSlug {
   display: inline-flex;
   align-items: center;
@@ -952,16 +1183,11 @@ function getNextPosition(sourceTags, parentId) {
   font-size: var(--forum-font-size-xs);
 }
 
-.TagHierarchy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .TagStatusList {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
 }
 
 .TagStatus {
@@ -990,55 +1216,6 @@ function getNextPosition(sourceTags, parentId) {
   width: 90%;
   max-width: 760px;
   max-height: calc(100vh - 32px);
-}
-
-.Modal-subtitle {
-  margin: 6px 0 0;
-  color: var(--forum-text-soft);
-  font-size: var(--forum-font-size-sm);
-}
-
-.TagPreviewPanel {
-  margin-bottom: 20px;
-}
-
-.TagPreviewPanel-label {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--forum-text-muted);
-  font-size: var(--forum-font-size-sm);
-  font-weight: 600;
-}
-
-.TagPreviewPanel-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 16px 18px;
-  border: 1px solid var(--forum-border-color);
-  border-radius: 12px;
-  background: linear-gradient(180deg, #fbfdff, #f4f7fa);
-  box-shadow: var(--forum-shadow-sm);
-}
-
-.TagPreviewPanel-badge {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.TagPreviewPanel-meta {
-  min-width: 0;
-  width: 100%;
-}
-
-.TagPreviewPanel-card small {
-  color: var(--forum-text-soft);
-  line-height: 1.6;
-}
-
-.TagConfigSummary {
-  margin-bottom: 20px;
 }
 
 .Form-group-header {
@@ -1150,45 +1327,154 @@ function getNextPosition(sourceTags, parentId) {
   font-weight: 600;
 }
 
-.CheckboxRow {
+.TagToggleRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 14px 18px;
   align-items: center;
+}
+
+.TagToggle {
+  width: fit-content;
+  min-height: 38px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  justify-content: flex-start;
+  color: var(--forum-text-color);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.TagToggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.TagToggle-switch {
+  display: inline-block;
+  flex: 0 0 auto;
+  vertical-align: middle;
+  margin-right: 14px;
+  position: relative;
+  width: 52px;
+  height: 32px;
+  border-radius: 999px;
+  background: #b8bcc2;
+  transition: background 0.2s ease;
+}
+
+.TagToggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+  transition: transform 0.2s ease;
+}
+
+.TagToggle input:checked + .TagToggle-switch {
+  background: #90959c;
+}
+
+.TagToggle input:checked + .TagToggle-switch::after {
+  transform: translateX(20px);
+}
+
+.TagToggle span:last-child {
+  white-space: nowrap;
+}
+
+.TagScopeSelect {
+  position: relative;
+}
+
+.TagScopeSelect-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  cursor: pointer;
+}
+
+.TagScopeSelect-summary {
+  min-width: 0;
+  color: var(--forum-text-color);
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.TagScopeSelect-arrow {
+  color: var(--forum-text-soft);
+  font-size: 12px;
+  transition: transform 0.18s ease;
+}
+
+.TagScopeSelect.is-open .TagScopeSelect-arrow {
+  transform: rotate(180deg);
+}
+
+.TagScopeSelect-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding: 10px 0;
+  border: 1px solid var(--forum-border-color);
+  border-radius: 14px;
+  background: var(--forum-bg-elevated);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
+}
+
+.TagScopeSelect-option {
+  width: 100%;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.TagScopeSelect-option:hover {
+  background: color-mix(in srgb, var(--forum-primary-color) 4%, transparent);
+}
+
+.TagScopeSelect-option.is-active .TagScopeSelect-name {
+  color: var(--forum-primary-color);
+  font-weight: 600;
+}
+
+.TagScopeSelect-name {
+  color: var(--forum-text-color);
+  font-size: 14px;
+  text-align: left;
+}
+
+.TagScopeSelect-check {
+  color: var(--forum-primary-color);
+  font-size: 12px;
+}
+
+.TagsModal-footer {
   justify-content: flex-start;
 }
 
-.CheckboxChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid var(--forum-border-color);
-  border-radius: var(--forum-radius-pill);
-  background: #fbfdff;
-  color: var(--forum-text-muted);
-  line-height: 1;
-  margin-bottom: 0;
-  font-weight: 500;
-  width: auto;
-}
-
-.CheckboxChip input {
-  margin: 0;
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  align-self: center;
-  transform: translateY(-0.5px);
-}
-
-.CheckboxChip span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 34px;
-  line-height: 1;
-  white-space: nowrap;
+.TagsModal-footer--edit {
+  justify-content: space-between;
 }
 
 @media (max-width: 768px) {
@@ -1202,90 +1488,56 @@ function getNextPosition(sourceTags, parentId) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .Modal-footer {
+  .Modal-footer,
+  .TagsModal-footer,
+  .TagsModal-footer--edit {
     flex-direction: column-reverse;
   }
 
-  .Modal-footer .Button {
+  .Modal-footer .Button,
+  .TagsModal-footer .Button {
     width: 100%;
     justify-content: center;
+  }
+
+  .TagScopeSelect-menu {
+    position: static;
+    margin-top: 8px;
   }
 }
 
 @media (max-width: 680px) {
-  .TagTable {
-    border: 0;
-    background: transparent;
+  .TagsBoard {
+    grid-template-columns: 1fr;
   }
 
-  .TagTable thead {
-    display: none;
+  .TagPanel-header,
+  .TagPanel-body {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
-  .TagTable tbody,
-  .TagTable tr,
-  .TagTable td {
-    display: block;
-    width: 100%;
-  }
-
-  .TagTable tbody tr {
-    margin-bottom: 12px;
+  .TagCard {
     padding: 14px;
-    border: 1px solid var(--forum-border-color);
-    border-radius: 14px;
-    background: var(--forum-bg-elevated);
-    box-shadow: 0 10px 26px rgba(28, 46, 67, 0.06);
   }
 
-  .TagTable tbody td {
-    padding: 8px 0;
-    border-bottom: 1px solid #eef2f6;
+  .TagCard-topRow {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
-  .TagTable tbody td:last-child {
-    border-bottom: 0;
-    padding-bottom: 0;
-  }
-
-  .TagTable tbody td::before {
-    content: attr(data-label);
-    display: block;
-    margin-bottom: 6px;
-    color: var(--forum-text-soft);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .TagTable-loading,
-  .TagTable-empty {
-    display: block;
-    padding: 0;
-  }
-
-  .TagNameCell {
-    padding-left: 0;
-  }
-
-  .TagStatusList {
-    gap: 6px;
-  }
-
-  .TagTable tbody td:last-child {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .TagTable tbody td:last-child::before {
+  .TagCard-mainRow,
+  .TagCard-sideRow {
     width: 100%;
   }
 
-  .TagTable tbody td:last-child .Button {
-    flex: 1 1 calc(50% - 8px);
-    justify-content: center;
+  .TagCard-sideRow {
+    justify-content: space-between;
+  }
+
+  .TagCard-inlineActions {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 
