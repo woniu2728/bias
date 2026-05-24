@@ -107,6 +107,15 @@
               <span class="ExtensionLifecycle">
                 {{ extension.lifecycle?.registration_mode_label || '静态注册' }}
               </span>
+
+              <button
+                type="button"
+                class="ExtensionAction"
+                :disabled="actionLoadingId === extension.id"
+                @click="toggleExtension(extension)"
+              >
+                {{ actionLoadingId === extension.id ? '处理中...' : (extension.enabled ? '停用扩展' : '启用扩展') }}
+              </button>
             </div>
           </div>
         </article>
@@ -120,11 +129,13 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import api from '../../api'
+import { useAdminRegistryStore } from '../../stores/adminRegistry'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import AdminToolbar from '../components/AdminToolbar.vue'
 import AdminFilterTabs from '../components/AdminFilterTabs.vue'
 
+const adminRegistryStore = useAdminRegistryStore()
 const loading = ref(true)
 const errorMessage = ref('')
 const summary = ref({})
@@ -132,6 +143,7 @@ const extensions = ref([])
 const sourceFilter = ref('all')
 const statusFilter = ref('all')
 const searchQuery = ref('')
+const actionLoadingId = ref('')
 
 const sourceOptions = [
   { value: 'all', label: '全部来源', icon: 'fas fa-layer-group' },
@@ -192,13 +204,43 @@ async function loadExtensions() {
 
   try {
     const data = await api.get('/admin/extensions')
-    summary.value = data.summary || {}
-    extensions.value = data.extensions || []
+    applyPayload(data)
   } catch (error) {
     console.error('加载扩展信息失败:', error)
     errorMessage.value = error.response?.data?.error || '加载扩展信息失败，请稍后重试'
   } finally {
     loading.value = false
+  }
+}
+
+function applyPayload(data) {
+  summary.value = data.summary || {}
+  extensions.value = data.extensions || []
+  const moduleEntries = extensions.value.flatMap(extension => {
+    const moduleIds = Array.isArray(extension.module_ids) ? extension.module_ids : []
+    return moduleIds.map(moduleId => ({
+      id: moduleId,
+      enabled: extension.enabled !== false,
+    }))
+  })
+  if (moduleEntries.length) {
+    adminRegistryStore.applyModules(moduleEntries)
+  }
+}
+
+async function toggleExtension(extension) {
+  actionLoadingId.value = extension.id
+  errorMessage.value = ''
+
+  try {
+    const action = extension.enabled ? 'disable' : 'enable'
+    const data = await api.post(`/admin/extensions/${extension.id}/${action}`)
+    applyPayload(data)
+  } catch (error) {
+    console.error('切换扩展状态失败:', error)
+    errorMessage.value = error.response?.data?.error || '切换扩展状态失败，请稍后重试'
+  } finally {
+    actionLoadingId.value = ''
   }
 }
 </script>

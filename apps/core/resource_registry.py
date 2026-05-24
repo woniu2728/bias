@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Tuple
 
+from django.db import OperationalError, ProgrammingError
+
+from apps.core.models import ExtensionInstallation
+
 
 ResourceFieldResolver = Callable[[Any, dict], Any]
 ResourceBaseFieldResolver = Callable[[Any, dict], dict]
@@ -54,6 +58,40 @@ class ResourceRegistry:
         self._fields: Dict[str, List[ResourceFieldDefinition]] = {}
         self._relationships: Dict[str, List[ResourceRelationshipDefinition]] = {}
 
+    def _get_enabled_module_ids(self) -> set[str] | None:
+        try:
+            overrides = {
+                item["extension_id"]: bool(item["enabled"])
+                for item in ExtensionInstallation.objects.values("extension_id", "enabled")
+            }
+        except (OperationalError, ProgrammingError, RuntimeError):
+            return None
+
+        if not overrides:
+            return None
+
+        disabled_ids = {
+            extension_id
+            for extension_id, enabled in overrides.items()
+            if not enabled
+        }
+        if not disabled_ids:
+            return None
+
+        enabled_ids = set(self._definitions.keys())
+        enabled_ids.update(definition.module_id for definitions in self._fields.values() for definition in definitions)
+        enabled_ids.update(
+            definition.module_id
+            for definitions in self._relationships.values()
+            for definition in definitions
+        )
+        return enabled_ids - disabled_ids
+
+    def _is_module_enabled(self, module_id: str, enabled_module_ids: set[str] | None) -> bool:
+        if enabled_module_ids is None:
+            return True
+        return module_id in enabled_module_ids
+
     def register_resource(self, definition: ResourceDefinition) -> ResourceDefinition:
         self._definitions[definition.resource] = definition
         return definition
@@ -89,19 +127,37 @@ class ResourceRegistry:
         return definition
 
     def get_resource(self, resource: str) -> ResourceDefinition | None:
-        return self._definitions.get(resource)
+        enabled_module_ids = self._get_enabled_module_ids()
+        definition = self._definitions.get(resource)
+        if definition is None:
+            return None
+        if not self._is_module_enabled(definition.module_id, enabled_module_ids):
+            return None
+        return definition
 
     def get_resources(self) -> List[ResourceDefinition]:
+        enabled_module_ids = self._get_enabled_module_ids()
         return [
             self._definitions[key]
             for key in sorted(self._definitions.keys())
+            if self._is_module_enabled(self._definitions[key].module_id, enabled_module_ids)
         ]
 
     def get_fields(self, resource: str) -> List[ResourceFieldDefinition]:
-        return list(self._fields.get(resource, []))
+        enabled_module_ids = self._get_enabled_module_ids()
+        return [
+            definition
+            for definition in self._fields.get(resource, [])
+            if self._is_module_enabled(definition.module_id, enabled_module_ids)
+        ]
 
     def get_relationships(self, resource: str) -> List[ResourceRelationshipDefinition]:
-        return list(self._relationships.get(resource, []))
+        enabled_module_ids = self._get_enabled_module_ids()
+        return [
+            definition
+            for definition in self._relationships.get(resource, [])
+            if self._is_module_enabled(definition.module_id, enabled_module_ids)
+        ]
 
     def get_all_fields(self) -> List[ResourceFieldDefinition]:
         definitions: List[ResourceFieldDefinition] = []

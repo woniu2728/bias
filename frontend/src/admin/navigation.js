@@ -1,4 +1,5 @@
 import { getAdminNavSections as getRegisteredAdminNavSections } from './registry'
+import { useAdminRegistryStore } from '../stores/adminRegistry'
 
 export function isAdminPathActive(currentPath, targetPath) {
   if (targetPath === '/admin') {
@@ -9,7 +10,10 @@ export function isAdminPathActive(currentPath, targetPath) {
 }
 
 export function getAdminNavSections() {
-  return getRegisteredAdminNavSections()
+  const adminRegistryStore = useAdminRegistryStore()
+  return getRegisteredAdminNavSections({
+    isModuleEnabled: moduleId => adminRegistryStore.isModuleEnabled(moduleId),
+  })
 }
 
 export function getAdminRouteMeta(currentPath) {

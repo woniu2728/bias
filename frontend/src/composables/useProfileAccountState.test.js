@@ -23,6 +23,7 @@ test('profile account state exposes default runtime flags and forms', () => {
   })
   assert.deepEqual(state.preferences.value, {
     values: {},
+    ui_values: {},
     definitions: [],
   })
 })

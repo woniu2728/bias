@@ -148,6 +148,7 @@ import AdminInlineMessage from '../components/AdminInlineMessage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import api from '../../api'
 import { useModalStore } from '../../stores/modal'
+import { useAdminRegistryStore } from '../../stores/adminRegistry'
 import {
   getAdminDashboardAlerts,
   getAdminDashboardAction,
@@ -169,6 +170,7 @@ const resettingQueueMetrics = ref(false)
 const queueMetricsMessage = ref('')
 const queueMetricsMessageTone = ref('success')
 const modalStore = useModalStore()
+const adminRegistryStore = useAdminRegistryStore()
 const dashboardActionMeta = computed(() => getAdminDashboardActionMeta())
 const dashboardCopy = computed(() => getAdminDashboardCopy())
 const dashboardConfig = computed(() => getAdminDashboardConfig())
@@ -176,7 +178,9 @@ const dashboardAlerts = computed(() => getAdminDashboardAlerts({
   stats: stats.value,
   copy: dashboardCopy.value,
 }))
-const dashboardActions = computed(() => getAdminDashboardActions())
+const dashboardActions = computed(() => getAdminDashboardActions({
+  isModuleEnabled: moduleId => adminRegistryStore.isModuleEnabled(moduleId),
+}))
 const dashboardStats = computed(() => getAdminDashboardStats({
   stats: stats.value,
   copy: dashboardCopy.value,

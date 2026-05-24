@@ -19,12 +19,14 @@ import AppModalHost from '../components/AppModalHost.vue'
 import AdminHeader from './components/AdminHeader.vue'
 import AdminNav from './components/AdminNav.vue'
 import { useAuthStore } from '../stores/auth'
+import { useAdminRegistryStore } from '../stores/adminRegistry'
 import { useForumStore } from '../stores/forum'
 import { useForumUiStore } from '../stores/forumUi'
 import { useModalStore } from '../stores/modal'
 import { useRouter, useRoute } from 'vue-router'
 
 const authStore = useAuthStore()
+const adminRegistryStore = useAdminRegistryStore()
 const forumStore = useForumStore()
 const forumUiStore = useForumUiStore()
 const modalStore = useModalStore()
@@ -66,6 +68,8 @@ onMounted(async () => {
     router.replace('/')
     return
   }
+
+  await adminRegistryStore.fetchModules()
 
   // 如果当前路径不是 /admin 开头，重定向到仪表盘
   if (!route.path.startsWith('/admin')) {

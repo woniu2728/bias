@@ -27,21 +27,32 @@ export function registerAdminRoute(route) {
   return upsertByPath(adminRoutes, normalizedRoute)
 }
 
-export function getAdminRoutes() {
-  return [...adminRoutes].sort((left, right) => {
+function sortAdminRoutes(routes) {
+  return [...routes].sort((left, right) => {
     if (left.path === '/admin') return -1
     if (right.path === '/admin') return 1
     return (left.navOrder || 100) - (right.navOrder || 100)
   })
 }
 
-export function getAdminNavSections() {
+function isRouteVisible(route, options = {}) {
+  const isModuleEnabled = options.isModuleEnabled || (() => true)
+  return isModuleEnabled(route.moduleId || 'core')
+}
+
+export function getAdminRoutes(options = {}) {
+  return sortAdminRoutes(
+    adminRoutes.filter(route => isRouteVisible(route, options))
+  )
+}
+
+export function getAdminNavSections(options = {}) {
   const sections = {
     core: { key: 'core', title: '核心', items: [] },
     feature: { key: 'feature', title: '功能', items: [] }
   }
 
-  for (const route of getAdminRoutes()) {
+  for (const route of getAdminRoutes(options)) {
     if (!route.showInNavigation) {
       continue
     }
@@ -66,8 +77,8 @@ export function getAdminNavSections() {
     .filter(section => section.items.length > 0)
 }
 
-export function getAdminDashboardActions() {
-  return getAdminRoutes()
+export function getAdminDashboardActions(options = {}) {
+  return getAdminRoutes(options)
     .filter(route => route.showInDashboardActions)
     .sort((left, right) => {
       const leftOrder = left.dashboardActionOrder ?? left.navOrder ?? 100

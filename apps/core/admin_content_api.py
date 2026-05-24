@@ -2,6 +2,8 @@ from django.shortcuts import get_object_or_404
 from ninja import Body, Router
 
 from apps.core.extensions import get_extension_registry
+from apps.core.extensions.exceptions import ExtensionStateError
+from apps.core.extension_service import ExtensionService
 from apps.core.jwt_auth import AccessTokenAuth
 
 
@@ -27,7 +29,46 @@ def list_admin_extensions(request):
     if denied:
         return denied
 
-    extensions = get_extension_registry().get_extensions()
+    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+
+
+@router.post("/extensions/{extension_id}/enable", auth=AccessTokenAuth(), tags=["Admin"])
+def enable_admin_extension(request, extension_id: str):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    try:
+        ExtensionService.set_extension_enabled(
+            extension_id,
+            True,
+            actor=request.auth,
+            request=request,
+        )
+    except ExtensionStateError as exc:
+        return _legacy().admin_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
+    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+
+
+@router.post("/extensions/{extension_id}/disable", auth=AccessTokenAuth(), tags=["Admin"])
+def disable_admin_extension(request, extension_id: str):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    try:
+        ExtensionService.set_extension_enabled(
+            extension_id,
+            False,
+            actor=request.auth,
+            request=request,
+        )
+    except ExtensionStateError as exc:
+        return _legacy().admin_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
+    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+
+
+def _serialize_admin_extensions_payload(extensions):
     payload = [
         {
             "id": extension.id,

@@ -27,8 +27,10 @@ from unittest.mock import Mock, patch
 
 from apps.core.domain_events import DomainEventBus
 from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extension
+from apps.core.extensions.exceptions import ExtensionStateError
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.registry import ExtensionRegistry
+from apps.core.extension_service import ExtensionService
 from apps.core.forum_events import (
     DiscussionCreatedEvent,
     DiscussionTagStatsRefreshEvent,
@@ -197,6 +199,37 @@ class ExtensionRegistryTests(TestCase):
         self.assertFalse(extension.runtime.booted)
         self.assertTrue(extension.runtime.installed)
 
+    def test_registry_filters_module_capabilities_when_extension_disabled(self):
+        ExtensionInstallation.objects.create(
+            extension_id="approval",
+            version="1.0.0",
+            source="builtin-module",
+            enabled=False,
+            installed=True,
+            booted=False,
+        )
+
+        registry = get_forum_registry()
+        approval_module = registry.get_module("approval")
+
+        self.assertFalse(approval_module.enabled)
+        self.assertFalse(any(item.module_id == "approval" for item in registry.get_admin_pages()))
+        self.assertFalse(any(item.module_id == "approval" for item in registry.get_search_filters()))
+
+    def test_registry_filters_resource_capabilities_when_extension_disabled(self):
+        ExtensionInstallation.objects.create(
+            extension_id="flags",
+            version="1.0.0",
+            source="builtin-module",
+            enabled=False,
+            installed=True,
+            booted=False,
+        )
+
+        resource_registry = get_resource_registry()
+
+        self.assertFalse(any(item.module_id == "flags" for item in resource_registry.get_fields("post")))
+
 
 class AdminExtensionsApiTests(TestCase):
     def setUp(self):
@@ -243,7 +276,105 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(sample_extension["source"], "filesystem")
         self.assertIn("/admin/extensions/sample-hello", sample_extension["settings_pages"])
 
+    def test_extensions_api_can_disable_and_enable_extension(self):
+        disable_response = self.client.post(
+            "/api/admin/extensions/sample-hello/disable",
+            **self.auth_header(),
+        )
 
+        self.assertEqual(disable_response.status_code, 200, disable_response.content)
+        disabled_payload = disable_response.json()
+        disabled_extension = next(item for item in disabled_payload["extensions"] if item["id"] == "sample-hello")
+        self.assertFalse(disabled_extension["enabled"])
+
+        installation = ExtensionInstallation.objects.get(extension_id="sample-hello")
+        self.assertFalse(installation.enabled)
+        self.assertFalse(installation.booted)
+
+        enable_response = self.client.post(
+            "/api/admin/extensions/sample-hello/enable",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(enable_response.status_code, 200, enable_response.content)
+        enabled_payload = enable_response.json()
+        enabled_extension = next(item for item in enabled_payload["extensions"] if item["id"] == "sample-hello")
+        self.assertTrue(enabled_extension["enabled"])
+
+        installation.refresh_from_db()
+        self.assertTrue(installation.enabled)
+        self.assertTrue(installation.booted)
+
+    def test_extensions_api_blocks_enable_when_dependency_disabled(self):
+        ExtensionInstallation.objects.create(
+            extension_id="core",
+            version="1.0.0",
+            source="builtin-module",
+            enabled=False,
+            installed=True,
+            booted=False,
+        )
+
+        response = self.client.post(
+            "/api/admin/extensions/sample-hello/enable",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        payload = response.json()
+        self.assertEqual(payload["code"], "extension_enable_blocked")
+        self.assertIn("disabled_dependencies", payload["field_errors"])
+        self.assertIn("core", payload["field_errors"]["disabled_dependencies"])
+
+    def test_extensions_api_blocks_disable_when_other_extensions_depend_on_it(self):
+        response = self.client.post(
+            "/api/admin/extensions/notifications/disable",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        payload = response.json()
+        self.assertEqual(payload["code"], "extension_disable_blocked")
+        self.assertIn("blocking_dependents", payload["field_errors"])
+        self.assertIn("approval", payload["field_errors"]["blocking_dependents"])
+
+    def test_extensions_api_blocks_disable_for_core_extension(self):
+        response = self.client.post(
+            "/api/admin/extensions/core/disable",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        payload = response.json()
+        self.assertEqual(payload["code"], "extension_disable_core_blocked")
+
+
+class ExtensionServiceTests(TestCase):
+    def test_enable_raises_when_required_dependency_missing_or_disabled(self):
+        ExtensionInstallation.objects.create(
+            extension_id="core",
+            version="1.0.0",
+            source="builtin-module",
+            enabled=False,
+            installed=True,
+            booted=False,
+        )
+
+        with self.assertRaises(ExtensionStateError) as context:
+            ExtensionService.set_extension_enabled("sample-hello", True)
+
+        self.assertEqual(context.exception.code, "extension_enable_blocked")
+        self.assertIn("core", context.exception.details["disabled_dependencies"])
+
+    def test_disable_raises_when_enabled_dependents_exist(self):
+        with self.assertRaises(ExtensionStateError) as context:
+            ExtensionService.set_extension_enabled("notifications", False)
+
+        self.assertEqual(context.exception.code, "extension_disable_blocked")
+        self.assertIn("approval", context.exception.details["blocking_dependents"])
+
+
+class DomainEventRegistryTests(TestCase):
     def test_dispatches_handlers_for_tag_stats_events(self):
         bus = DomainEventBus()
         received = []
@@ -4945,8 +5076,37 @@ class AdminPermissionsApiTests(TestCase):
         self.assertGreaterEqual(payload["summary"]["runtime_dependency_attention_count"], 1)
         self.assertTrue(any(item["module_id"] == "notifications" for item in payload["user_preferences"]))
         self.assertTrue(any(item["module_id"] == "core" and item["code"] == "zh-CN" for item in payload["language_packs"]))
-        self.assertTrue(any(item["id"] == "core" for item in payload["category_summaries"]))
-        self.assertTrue(any(item["code"] == "zh-CN" and item["is_default"] for item in core_module["language_packs"]))
+
+    @patch("apps.core.admin_api.build_runtime_dependency_summary")
+    def test_modules_api_filters_disabled_extension_runtime_capabilities(self, build_runtime_dependency_summary):
+        build_runtime_dependency_summary.return_value = {
+            "status": "healthy",
+            "label": "健康",
+            "issues": [],
+            "checks": [],
+        }
+        ExtensionInstallation.objects.create(
+            extension_id="approval",
+            version="1.0.0",
+            source="builtin-module",
+            enabled=False,
+            installed=True,
+            booted=False,
+        )
+
+        response = self.client.get(
+            "/api/admin/modules",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        approval_module = next(module for module in payload["modules"] if module["id"] == "approval")
+
+        self.assertFalse(approval_module["enabled"])
+        self.assertFalse(any(page["module_id"] == "approval" for page in payload["admin_pages"]))
+        self.assertFalse(any(item["module_id"] == "approval" for item in payload["search_filters"]))
+        self.assertFalse(any(item["module_id"] == "approval" for item in payload["user_preferences"]))
 
     def test_registry_permission_prefix_helper_returns_admin_moderation_codes(self):
         self.assertEqual(

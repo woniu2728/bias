@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { getAdminRoutes } from './registry'
+import { useAdminRegistryStore } from '../stores/adminRegistry'
 
 normalizeLegacyAdminHash()
 
@@ -39,6 +40,25 @@ const router = createRouter({
   // when navigating out to the forum and using the browser back button.
   history: createWebHashHistory(),
   routes,
+})
+
+router.beforeEach(async (to) => {
+  if (!to.path.startsWith('/admin')) {
+    return true
+  }
+
+  const adminRegistryStore = useAdminRegistryStore()
+  await adminRegistryStore.fetchModules()
+
+  const route = getAdminRoutes({
+    isModuleEnabled: moduleId => adminRegistryStore.isModuleEnabled(moduleId),
+  }).find(item => item.path === to.path)
+
+  if (!route) {
+    return '/admin'
+  }
+
+  return true
 })
 
 export default router
