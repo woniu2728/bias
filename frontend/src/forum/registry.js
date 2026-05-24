@@ -166,6 +166,7 @@ registerForumNavSection({
 
 registerForumNavItem({
   key: 'home',
+  moduleId: 'discussions',
   to: '/',
   icon: 'far fa-comments',
   label: '全部讨论',
@@ -177,6 +178,7 @@ registerForumNavItem({
 
 registerForumNavItem({
   key: 'following',
+  moduleId: 'subscriptions',
   to: '/following',
   icon: 'fas fa-bell',
   label: '关注中',
@@ -189,6 +191,7 @@ registerForumNavItem({
 
 registerForumNavItem({
   key: 'tags',
+  moduleId: 'tags',
   to: '/tags',
   icon: 'fas fa-tags',
   label: '全部标签',
@@ -200,6 +203,7 @@ registerForumNavItem({
 
 registerForumNavItem({
   key: 'notifications',
+  moduleId: 'notifications',
   to: '/notifications',
   icon: 'fas fa-inbox',
   label: '通知',
@@ -215,6 +219,7 @@ registerForumNavItem({
 
 registerForumNavItem({
   key: 'profile',
+  moduleId: 'users',
   to: ({ authStore }) => buildUserPath(authStore.user),
   icon: 'fas fa-user',
   label: '我的主页',
@@ -233,6 +238,7 @@ function isOwnProfileRoute(route, user) {
 
 registerHeaderItem({
   key: 'user-profile-menu',
+  moduleId: 'users',
   placement: 'user-menu',
   order: 10,
   icon: 'fas fa-user',
@@ -263,6 +269,7 @@ registerHeaderItem({
 
 registerHeaderItem({
   key: 'user-notifications-menu',
+  moduleId: 'notifications',
   placement: 'user-menu',
   order: 20,
   icon: 'fas fa-bell',
@@ -278,6 +285,7 @@ registerHeaderItem({
 
 registerHeaderItem({
   key: 'user-admin-menu',
+  moduleId: 'core',
   placement: 'user-menu',
   order: 30,
   icon: 'fas fa-cog',
@@ -300,6 +308,7 @@ registerHeaderItem({
 
 registerHeaderItem({
   key: 'mobile-notifications',
+  moduleId: 'notifications',
   placement: 'mobile-drawer-personal',
   order: 10,
   icon: 'fas fa-inbox',
@@ -315,6 +324,7 @@ registerHeaderItem({
 
 registerHeaderItem({
   key: 'mobile-profile',
+  moduleId: 'users',
   placement: 'mobile-drawer-personal',
   order: 20,
   icon: 'fas fa-user',
@@ -326,6 +336,7 @@ registerHeaderItem({
 
 registerHeaderItem({
   key: 'mobile-admin',
+  moduleId: 'core',
   placement: 'mobile-drawer-user',
   order: 10,
   icon: 'fas fa-cog',
@@ -525,6 +536,7 @@ registerDefaultNotificationRenderer({
 
 registerDefaultNotificationRenderer({
   type: 'discussionCreated',
+  moduleId: 'discussions',
   label: '发起讨论',
   icon: 'fas fa-pen',
   navigationScope: 'discussion',
@@ -539,6 +551,7 @@ registerDefaultNotificationRenderer({
 
 registerDefaultNotificationRenderer({
   type: 'postCreated',
+  moduleId: 'posts',
   label: '发表回复',
   icon: 'fas fa-message',
   navigationScope: 'post',
@@ -552,6 +565,7 @@ registerDefaultNotificationRenderer({
 
 registerSearchSource({
   key: 'discussions',
+  moduleId: 'discussions',
   type: 'discussions',
   label: '讨论',
   routeType: 'discussions',
@@ -584,6 +598,7 @@ registerSearchSource({
 
 registerSearchSource({
   key: 'posts',
+  moduleId: 'posts',
   type: 'posts',
   label: '帖子',
   routeType: 'posts',
@@ -616,6 +631,7 @@ registerSearchSource({
 
 registerSearchSource({
   key: 'users',
+  moduleId: 'users',
   type: 'users',
   label: '用户',
   routeType: 'users',
@@ -658,6 +674,7 @@ registerUserBadge({
 
 registerUserBadge({
   key: 'primary-group',
+  moduleId: 'users',
   order: 20,
   isVisible: ({ user }) => Boolean(user?.primary_group?.name),
   resolve: ({ user }) => ({
@@ -670,6 +687,7 @@ registerUserBadge({
 
 registerHeroMeta({
   key: 'profile-last-seen',
+  moduleId: 'users',
   order: 10,
   surfaces: ['profile-hero'],
   resolve: ({ isOnline, formatLastSeen, user }) => ({
@@ -681,6 +699,7 @@ registerHeroMeta({
 
 registerHeroMeta({
   key: 'profile-joined-at',
+  moduleId: 'users',
   order: 20,
   surfaces: ['profile-hero'],
   isVisible: ({ user }) => Boolean(user?.joined_at),
@@ -693,6 +712,7 @@ registerHeroMeta({
 
 registerDiscussionBadge({
   key: 'sticky',
+  moduleId: 'discussions',
   order: 10,
   isVisible: ({ discussion }) => Boolean(discussion?.is_sticky),
   resolve: () => ({
@@ -704,6 +724,7 @@ registerDiscussionBadge({
 
 registerDiscussionBadge({
   key: 'locked',
+  moduleId: 'discussions',
   order: 20,
   isVisible: ({ discussion }) => Boolean(discussion?.is_locked),
   resolve: () => ({
@@ -715,6 +736,7 @@ registerDiscussionBadge({
 
 registerDiscussionBadge({
   key: 'hidden',
+  moduleId: 'discussions',
   order: 30,
   surfaces: ['hero'],
   isVisible: ({ discussion }) => Boolean(discussion?.is_hidden),
@@ -726,6 +748,7 @@ registerDiscussionBadge({
 
 registerDiscussionBadge({
   key: 'pending',
+  moduleId: 'approval',
   order: 40,
   surfaces: ['hero'],
   isVisible: ({ discussion }) => discussion?.approval_status === 'pending',
@@ -737,6 +760,7 @@ registerDiscussionBadge({
 
 registerHeroMeta({
   key: 'discussion-author',
+  moduleId: 'discussions',
   order: 10,
   surfaces: ['discussion-hero'],
   isVisible: ({ discussion }) => Boolean(discussion?.user),
@@ -749,6 +773,7 @@ registerHeroMeta({
 
 registerHeroMeta({
   key: 'discussion-created-at',
+  moduleId: 'discussions',
   order: 20,
   surfaces: ['discussion-hero'],
   isVisible: ({ discussion }) => Boolean(discussion?.created_at),
@@ -761,6 +786,7 @@ registerHeroMeta({
 
 registerHeroMeta({
   key: 'discussion-last-posted-at',
+  moduleId: 'discussions',
   order: 30,
   surfaces: ['discussion-hero'],
   isVisible: ({ discussion }) => Boolean(discussion?.last_posted_at),
@@ -773,6 +799,7 @@ registerHeroMeta({
 
 registerHeroMeta({
   key: 'discussion-comment-count',
+  moduleId: 'posts',
   order: 40,
   surfaces: ['discussion-hero'],
   isVisible: ({ discussion }) => Number(discussion?.comment_count || 0) > 0,
@@ -957,6 +984,7 @@ registerDiscussionReplyState({
 
 registerDiscussionReviewBanner({
   key: 'pending',
+  moduleId: 'approval',
   order: 10,
   surfaces: ['discussion-hero'],
   isVisible: ({ discussion }) => discussion?.approval_status === 'pending',
@@ -975,6 +1003,7 @@ registerDiscussionReviewBanner({
 
 registerDiscussionReviewBanner({
   key: 'rejected',
+  moduleId: 'approval',
   order: 20,
   surfaces: ['discussion-hero'],
   isVisible: ({ discussion }) => discussion?.approval_status === 'rejected',
@@ -995,6 +1024,7 @@ registerDiscussionReviewBanner({
 
 registerPostFlagPanel({
   key: 'moderation-flags',
+  moduleId: 'flags',
   order: 10,
   surfaces: ['discussion-post'],
   isVisible: ({ post }) => Boolean(post?.can_moderate_flags && Number(post?.open_flag_count || 0) > 0),
@@ -1028,6 +1058,7 @@ registerPostFlagPanel({
 
 registerApprovalNote({
   key: 'rejected-discussion-list',
+  moduleId: 'approval',
   order: 10,
   surfaces: ['discussion-list-item', 'profile-discussion'],
   isVisible: ({ discussion }) => Boolean(discussion?.approval_status === 'rejected' && discussion?.approval_note),
@@ -1038,6 +1069,7 @@ registerApprovalNote({
 
 registerApprovalNote({
   key: 'rejected-profile-post',
+  moduleId: 'approval',
   order: 20,
   surfaces: ['profile-post'],
   isVisible: ({ post }) => Boolean(post?.approval_status === 'rejected' && post?.approval_note),
@@ -5567,6 +5599,7 @@ registerUiCopy({
 
 registerPostReviewBanner({
   key: 'pending',
+  moduleId: 'approval',
   order: 10,
   surfaces: ['discussion-post'],
   isVisible: ({ post }) => post?.approval_status === 'pending',
@@ -5584,6 +5617,7 @@ registerPostReviewBanner({
 
 registerPostReviewBanner({
   key: 'rejected',
+  moduleId: 'approval',
   order: 20,
   surfaces: ['discussion-post'],
   isVisible: ({ post }) => post?.approval_status === 'rejected',
@@ -5608,6 +5642,7 @@ const ProfileSecuritySection = defineAsyncComponent(() => import('@/components/p
 
 registerProfilePanel({
   key: 'discussions',
+  moduleId: 'discussions',
   label: '讨论',
   icon: 'fas fa-bars',
   order: 10,
@@ -5626,6 +5661,7 @@ registerProfilePanel({
 
 registerProfilePanel({
   key: 'posts',
+  moduleId: 'posts',
   label: '回复',
   icon: 'far fa-comment',
   order: 20,
@@ -5644,6 +5680,7 @@ registerProfilePanel({
 
 registerProfilePanel({
   key: 'settings',
+  moduleId: 'users',
   label: '设置',
   icon: 'fas fa-user-cog',
   order: 30,
@@ -5671,6 +5708,7 @@ registerProfilePanel({
 
 registerProfilePanel({
   key: 'security',
+  moduleId: 'users',
   label: '安全',
   icon: 'fas fa-shield-alt',
   order: 40,

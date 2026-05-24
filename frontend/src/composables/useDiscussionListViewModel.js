@@ -23,6 +23,7 @@ export function useDiscussionListViewModel({
   const pageState = injectedPageState || useDiscussionListPage({
     authStore,
     composerStore,
+    forumStore,
     modalStore,
     route,
     router

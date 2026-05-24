@@ -36,6 +36,7 @@ export function getPostMenuItems(context) {
 
 registerDiscussionAction({
   key: 'reply',
+  moduleId: 'posts',
   order: 10,
   surfaces: ['discussion-sidebar', 'discussion-menu'],
   isVisible: ({ canReplyFromMenu }) => Boolean(canReplyFromMenu),
@@ -56,6 +57,7 @@ registerDiscussionAction({
 
 registerDiscussionAction({
   key: 'login',
+  moduleId: 'posts',
   order: 10,
   surfaces: ['discussion-sidebar', 'discussion-menu'],
   isVisible: ({ canReplyFromMenu }) => !canReplyFromMenu,
@@ -74,6 +76,7 @@ registerDiscussionAction({
 
 registerDiscussionAction({
   key: 'toggle-subscription',
+  moduleId: 'subscriptions',
   order: 20,
   surfaces: ['discussion-sidebar', 'discussion-menu'],
   isVisible: ({ authStore, isSuspended }) => Boolean(authStore?.isAuthenticated) && !isSuspended,
@@ -101,6 +104,7 @@ registerDiscussionAction({
 
 registerDiscussionAction({
   key: 'edit',
+  moduleId: 'discussions',
   order: 30,
   surfaces: ['discussion-menu'],
   isVisible: ({ canEditDiscussion }) => Boolean(canEditDiscussion),
@@ -119,6 +123,7 @@ registerDiscussionAction({
 
 registerDiscussionAction({
   key: 'toggle-pin',
+  moduleId: 'discussions',
   order: 40,
   surfaces: ['discussion-menu'],
   isVisible: ({ canModerateDiscussionSettings }) => Boolean(canModerateDiscussionSettings),
@@ -154,6 +159,7 @@ registerDiscussionAction({
 
 registerDiscussionAction({
   key: 'toggle-lock',
+  moduleId: 'discussions',
   order: 50,
   surfaces: ['discussion-menu'],
   isVisible: ({ canModerateDiscussionSettings }) => Boolean(canModerateDiscussionSettings),
@@ -189,6 +195,7 @@ registerDiscussionAction({
 
 registerDiscussionAction({
   key: 'toggle-hide',
+  moduleId: 'discussions',
   order: 60,
   surfaces: ['discussion-menu'],
   isVisible: ({ canModerateDiscussionSettings }) => Boolean(canModerateDiscussionSettings),
@@ -227,6 +234,7 @@ registerDiscussionAction({
 
 registerDiscussionAction({
   key: 'delete',
+  moduleId: 'discussions',
   order: 70,
   surfaces: ['discussion-menu'],
   isVisible: ({ canModerateDiscussionSettings }) => Boolean(canModerateDiscussionSettings),
@@ -261,6 +269,7 @@ registerDiscussionAction({
 
 registerPostAction({
   key: 'edit-post',
+  moduleId: 'posts',
   order: 10,
   isVisible: ({ post, canEditPost }) => Boolean(canEditPost(post)),
   resolve: () => ({
@@ -278,6 +287,7 @@ registerPostAction({
 
 registerPostAction({
   key: 'delete-post',
+  moduleId: 'posts',
   order: 20,
   isVisible: ({ post, canDeletePost }) => Boolean(canDeletePost(post)),
   resolve: () => ({
@@ -311,6 +321,7 @@ registerPostAction({
 
 registerPostAction({
   key: 'toggle-hide-post',
+  moduleId: 'posts',
   order: 25,
   isVisible: ({ post, canModeratePostVisibility }) => Boolean(canModeratePostVisibility?.(post)),
   resolve: ({ post }) => ({
@@ -349,6 +360,7 @@ registerPostAction({
 
 registerPostAction({
   key: 'open-report-modal',
+  moduleId: 'flags',
   order: 30,
   isVisible: ({ post, canReportPost }) => Boolean(canReportPost(post)),
   resolve: () => ({

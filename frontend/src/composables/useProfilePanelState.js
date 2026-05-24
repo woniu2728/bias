@@ -9,6 +9,7 @@ function defaultBuildDiscussionPath(discussionOrId) {
 export function createProfilePanelState({
   authStore,
   formatDate,
+  forumStore,
   getPanels = getProfilePanels,
   getDiscussionPath = defaultBuildDiscussionPath,
   pageState,
@@ -18,6 +19,7 @@ export function createProfilePanelState({
 
     return getPanels({
       authStore,
+      forumStore,
       user: pageState.user.value,
       discussions: pageState.discussions.value,
       posts: pageState.posts.value,

@@ -5,6 +5,7 @@ import { useDiscussionListPageState } from '@/composables/useDiscussionListPageS
 export function useDiscussionListPage({
   authStore,
   composerStore,
+  forumStore,
   modalStore,
   route,
   router
@@ -16,6 +17,7 @@ export function useDiscussionListPage({
   })
   const pageState = useDiscussionListPageState({
     authStore,
+    forumStore,
     modalStore,
     route,
     router,

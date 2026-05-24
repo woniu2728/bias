@@ -3,6 +3,7 @@ import { useDiscussionListNavigation } from '@/composables/useDiscussionListNavi
 
 export function useDiscussionListPageState({
   authStore,
+  forumStore,
   modalStore,
   route,
   router,
@@ -19,6 +20,7 @@ export function useDiscussionListPageState({
     currentTag: dataState.currentTag,
     currentTagSlug: dataState.currentTagSlug,
     filterOptions: dataState.filterOptions,
+    forumStore,
     isFollowingPage: dataState.isFollowingPage,
     listFilter: dataState.listFilter,
     route,

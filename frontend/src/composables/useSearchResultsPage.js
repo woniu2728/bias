@@ -8,14 +8,16 @@ import { useSearchResultsResourceState } from '@/composables/useSearchResultsRes
 import { useSearchResultsRouteActions } from '@/composables/useSearchResultsRouteActions'
 import { useSearchRouteState } from '@/composables/useSearchRouteState'
 import { getEmptyState, getSearchSources, getStateBlock, getUiCopy } from '@/forum/registry'
+import { useForumStore } from '@/stores/forum'
 import { useForumRealtimeStore } from '@/stores/forumRealtime'
 import { useResourceStore } from '@/stores/resource'
 
 export function useSearchResultsPage({ route, router }) {
-  const routeState = useSearchRouteState({ route, router })
+  const forumStore = useForumStore()
+  const routeState = useSearchRouteState({ forumStore, route, router })
   const resourceStore = useResourceStore()
   const forumRealtimeStore = useForumRealtimeStore()
-  const searchSources = getSearchSources()
+  const searchSources = getSearchSources({ forumStore })
   const sourceMap = Object.fromEntries(searchSources.map(item => [item.routeType || item.type, item]))
   const resourceState = useSearchResultsResourceState({
     resourceStore,

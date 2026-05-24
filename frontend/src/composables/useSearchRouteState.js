@@ -6,13 +6,13 @@ function normalizePage(value) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 1
 }
 
-function normalizeSearchType(value) {
+function normalizeSearchType(value, forumStore) {
   const normalized = String(value || 'all').trim()
-  const allowedTypes = ['all', ...getSearchSources().map(item => item.routeType || item.type)]
+  const allowedTypes = ['all', ...getSearchSources({ forumStore }).map(item => item.routeType || item.type)]
   return allowedTypes.includes(normalized) ? normalized : 'all'
 }
 
-export function useSearchRouteState({ route, router }) {
+export function useSearchRouteState({ forumStore, route, router }) {
   return useRouteListState({
     route,
     router,
@@ -28,7 +28,7 @@ export function useSearchRouteState({ route, router }) {
       searchType: {
         queryKey: 'type',
         defaultValue: 'all',
-        normalize: normalizeSearchType,
+        normalize: value => normalizeSearchType(value, forumStore),
         omitWhen: value => value === 'all',
       },
       page: {

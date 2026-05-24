@@ -32,11 +32,16 @@ const props = defineProps({
   notificationStore: {
     type: Object,
     default: null
+  },
+  forumStore: {
+    type: Object,
+    default: null
   }
 })
 
 const navSections = computed(() => getForumNavSections({
   authStore: props.authStore,
+  forumStore: props.forumStore,
   showNotifications: props.showNotifications,
   notificationStore: props.notificationStore,
   surface: 'primary-nav',

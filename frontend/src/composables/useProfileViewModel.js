@@ -33,6 +33,7 @@ export function useProfileViewModel({
   const panelState = useProfilePanelState({
     authStore,
     formatDate: presentationState.formatDate,
+    forumStore,
     pageState,
   })
   const viewBindings = useProfileViewBindings({

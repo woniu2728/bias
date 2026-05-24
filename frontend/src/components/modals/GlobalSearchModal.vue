@@ -183,6 +183,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSearchFilterCatalog } from '@/composables/useSearchFilterCatalog'
 import { getEmptyState, getSearchSources, getStateBlock, getUiCopy } from '@/forum/registry'
+import { useForumStore } from '@/stores/forum'
 import { useForumRealtimeStore } from '@/stores/forumRealtime'
 import { useModalStore } from '@/stores/modal'
 import { useResourceStore } from '@/stores/resource'
@@ -221,8 +222,9 @@ const props = defineProps({
 const router = useRouter()
 const modalStore = useModalStore()
 const resourceStore = useResourceStore()
+const forumStore = useForumStore()
 const forumRealtimeStore = useForumRealtimeStore()
-const searchSources = getSearchSources()
+const searchSources = getSearchSources({ forumStore })
 const searchSourceMap = Object.fromEntries(searchSources.map(item => [item.type, item]))
 const root = ref(null)
 const inputRef = ref(null)

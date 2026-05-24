@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import api from '@/api'
 import { syncNotificationTypes } from '@/forum/notificationTypes'
 import { syncPostTypes } from '@/forum/postTypes'
@@ -31,6 +31,7 @@ const DEFAULT_SETTINGS = {
   notification_types: [],
   user_preferences: [],
   post_types: [],
+  enabled_modules: [],
 }
 
 const CUSTOM_HEAD_MARKER_ATTRIBUTE = 'data-forum-custom-head'
@@ -48,6 +49,17 @@ export const useForumStore = defineStore('forum', () => {
   const settings = ref({ ...DEFAULT_SETTINGS })
   const initialized = ref(false)
   let customHeadNodes = []
+
+  const enabledModuleIds = computed(() => {
+    const ids = new Set()
+    for (const item of settings.value.enabled_modules || []) {
+      const normalized = String(item || '').trim()
+      if (normalized) {
+        ids.add(normalized)
+      }
+    }
+    return ids
+  })
 
   async function initialize() {
     if (initialized.value) return
@@ -77,6 +89,17 @@ export const useForumStore = defineStore('forum', () => {
 
     applyPageMeta()
     applyRuntimeAssets()
+  }
+
+  function isModuleEnabled(moduleId) {
+    const normalized = String(moduleId || '').trim()
+    if (!normalized) {
+      return true
+    }
+    if (!initialized.value) {
+      return true
+    }
+    return enabledModuleIds.value.has(normalized)
   }
 
   function buildDefaultMeta() {
@@ -304,8 +327,10 @@ export const useForumStore = defineStore('forum', () => {
   return {
     settings,
     initialized,
+    enabledModuleIds,
     initialize,
     fetchSettings,
+    isModuleEnabled,
     resetPageMeta,
     setPageMeta,
   }

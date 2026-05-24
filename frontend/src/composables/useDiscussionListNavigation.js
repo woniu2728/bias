@@ -21,6 +21,7 @@ export function createDiscussionListNavigation({
   currentTag,
   currentTagSlug,
   filterOptions,
+  forumStore,
   getDefaultFilterLabelText = (code) => getUiCopy({
     surface: 'discussion-list-default-filter-label',
     code,
@@ -76,6 +77,7 @@ export function createDiscussionListNavigation({
   function buildSidebarFilterItems() {
     const navItems = getDiscussionForumNavItems({
       authStore,
+      forumStore,
       surface: 'discussion-sidebar',
     })
     const navItemsByCode = new Map(

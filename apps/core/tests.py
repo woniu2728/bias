@@ -2484,6 +2484,7 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(payload["logo_url"], "/media/runtime-logo.png")
         self.assertTrue(payload["realtime_typing_enabled"])
         self.assertIn("notification_types", payload)
+        self.assertIn("enabled_modules", payload)
         self.assertTrue(
             any(
                 item["code"] == "discussionReply"
@@ -2522,6 +2523,8 @@ class AdminSettingsApiTests(TestCase):
         self.assertFalse(payload["auth_human_verification_register_enabled"])
         self.assertTrue(any(item["code"] == "comment" and item["is_default"] for item in payload["post_types"]))
         self.assertTrue(any(item["code"] == "discussionRenamed" for item in payload["post_types"]))
+        self.assertIn("core", payload["enabled_modules"])
+        self.assertIn("users", payload["enabled_modules"])
         self.assertNotIn("auth_turnstile_secret_key", payload)
 
     def test_public_forum_settings_expose_realtime_typing_toggle(self):
@@ -2549,6 +2552,25 @@ class AdminSettingsApiTests(TestCase):
             response.json()["custom_head_html"],
             "<script>window.legacyHead = true</script>",
         )
+
+    def test_public_forum_settings_filters_disabled_extension_runtime_capabilities(self):
+        ExtensionInstallation.objects.create(
+            extension_id="approval",
+            version="1.0.0",
+            source="builtin-module",
+            enabled=False,
+            installed=True,
+            booted=False,
+        )
+
+        response = self.client.get("/api/forum")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertNotIn("approval", payload["enabled_modules"])
+        self.assertFalse(any(item["module_id"] == "approval" for item in payload["notification_types"]))
+        self.assertFalse(any(item["module_id"] == "approval" for item in payload["user_preferences"]))
+        self.assertFalse(any(item["module_id"] == "approval" for item in payload["post_types"]))
 
     @patch("apps.core.admin_api.FileUploadService.upload_site_asset")
     def test_admin_can_upload_appearance_logo(self, upload_site_asset):

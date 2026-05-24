@@ -1,17 +1,20 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  getDiscussionActions,
   getComposerDraftMeta,
   getApprovalNote,
   getDiscussionReplyState,
   getDiscussionReviewBanner,
   getEmptyState,
+  getForumNavItems,
   getHeaderItems,
   getHeroMetaItems,
   getNotificationRenderers,
   getPageState,
   getProfilePanels,
   getPostActions,
+  getSearchSources,
   getStateBlock,
   getUiCopy,
   getPostFlagPanel,
@@ -23,6 +26,7 @@ import {
   registerComposerSubmitSuccess,
   registerApprovalNote,
   registerDiscussionAction,
+  registerForumNavItem,
   registerHeaderItem,
   registerDiscussionReplyState,
   registerDiscussionReviewBanner,
@@ -37,6 +41,7 @@ import {
   registerPostFlagPanel,
   registerPostReviewBanner,
   registerPostStateBadge,
+  registerSearchSource,
   runComposerMentionProviders,
   runComposerPreviewTransformers,
   runComposerSubmitSuccess,
@@ -239,6 +244,72 @@ test('notification renderers normalize module and navigation metadata aliases', 
   assert.equal(renderer.module_id, 'mentions')
   assert.equal(renderer.navigationScope, 'post')
   assert.equal(renderer.navigation_scope, 'post')
+})
+
+test('registered items with module id are filtered by forum runtime state', () => {
+  const disabledModule = 'disabled-module'
+  const context = {
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId !== disabledModule
+      },
+    },
+    authStore: {
+      user: {
+        id: 1,
+        username: 'tester',
+        is_staff: false,
+      },
+    },
+    user: {
+      id: 1,
+      username: 'tester',
+      is_staff: false,
+      discussion_count: 0,
+      comment_count: 0,
+    },
+  }
+
+  const navKey = uniqueKey('nav-module-filter')
+  const profileKey = uniqueKey('profile-module-filter')
+  const searchKey = uniqueKey('search-module-filter')
+  const discussionActionKey = uniqueKey('discussion-action-module-filter')
+  const postActionKey = uniqueKey('post-action-module-filter')
+
+  registerForumNavItem({
+    key: navKey,
+    moduleId: disabledModule,
+    label: '隐藏导航项',
+  })
+  registerProfilePanel({
+    key: profileKey,
+    moduleId: disabledModule,
+    label: '隐藏资料面板',
+    resolve: () => ({ component: 'HiddenPanel' }),
+  })
+  registerSearchSource({
+    key: searchKey,
+    type: 'hidden-search',
+    routeType: 'hidden-search',
+    moduleId: disabledModule,
+    label: '隐藏搜索源',
+  })
+  registerDiscussionAction({
+    key: discussionActionKey,
+    moduleId: disabledModule,
+    label: '隐藏讨论动作',
+  })
+  registerPostAction({
+    key: postActionKey,
+    moduleId: disabledModule,
+    label: '隐藏帖子动作',
+  })
+
+  assert.equal(getForumNavItems(context).some(item => item.key === navKey), false)
+  assert.equal(getProfilePanels(context).some(item => item.key === profileKey), false)
+  assert.equal(getSearchSources(context).some(item => item.key === searchKey), false)
+  assert.equal(getDiscussionActions(context).some(item => item.key === discussionActionKey), false)
+  assert.equal(getPostActions(context).some(item => item.key === postActionKey), false)
 })
 
 test('post review banner prefers matching surface-specific item', () => {

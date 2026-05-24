@@ -385,6 +385,12 @@ def get_public_forum_settings() -> dict:
         for definition in FORUM_REGISTRY.get_post_types()
     ]
 
+    forum_settings["enabled_modules"] = [
+        module.module_id
+        for module in FORUM_REGISTRY.get_modules()
+        if module.enabled
+    ]
+
     if cache_lifetime > 0:
         _cache_set(PUBLIC_FORUM_SETTINGS_CACHE_KEY, forum_settings, cache_lifetime)
 

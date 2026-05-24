@@ -42,15 +42,35 @@ function upsertByKey(target, key, value) {
 }
 
 function normalizeRegisteredItem(item, defaults = {}) {
+  const moduleId = String(item?.moduleId || item?.module_id || '').trim()
   return {
     order: 100,
     surfaces: [],
     ...defaults,
     ...item,
+    ...(moduleId ? { moduleId, module_id: moduleId } : {}),
   }
 }
 
+function isRegisteredItemEnabled(item, context = {}) {
+  const moduleId = String(item?.moduleId || item?.module_id || '').trim()
+  if (!moduleId) {
+    return true
+  }
+
+  const checker = context.forumStore?.isModuleEnabled
+  if (typeof checker === 'function') {
+    return checker(moduleId)
+  }
+
+  return true
+}
+
 function resolveRegisteredItem(item, context = {}) {
+  if (!isRegisteredItemEnabled(item, context)) {
+    return null
+  }
+
   if (Array.isArray(item.surfaces) && item.surfaces.length > 0) {
     const currentSurface = String(context.surface || '').trim()
     if (!currentSurface || !item.surfaces.includes(currentSurface)) {
@@ -608,6 +628,9 @@ export async function runComposerSubmitGuards(context = {}) {
     .sort((left, right) => (left.order || 100) - (right.order || 100))
 
   for (const guard of guards) {
+    if (!isRegisteredItemEnabled(guard, context)) {
+      continue
+    }
     const isVisible = typeof guard.isVisible === 'function' ? guard.isVisible(context) : true
     if (!isVisible) {
       continue
@@ -642,6 +665,9 @@ export async function runComposerSubmitSuccess(context = {}) {
     .sort((left, right) => (left.order || 100) - (right.order || 100))
 
   for (const handler of handlers) {
+    if (!isRegisteredItemEnabled(handler, context)) {
+      continue
+    }
     const isVisible = typeof handler.isVisible === 'function' ? handler.isVisible(context) : true
     if (!isVisible) {
       continue
@@ -661,6 +687,9 @@ export async function runComposerMentionProviders(context = {}) {
   const seenKeys = new Set()
 
   for (const provider of providers) {
+    if (!isRegisteredItemEnabled(provider, context)) {
+      continue
+    }
     const isVisible = typeof provider.isVisible === 'function' ? provider.isVisible(context) : true
     if (!isVisible) {
       continue
@@ -702,6 +731,9 @@ export async function runComposerPreviewTransformers(context = {}) {
   }
 
   for (const transformer of transformers) {
+    if (!isRegisteredItemEnabled(transformer, transformed)) {
+      continue
+    }
     const isVisible = typeof transformer.isVisible === 'function' ? transformer.isVisible(transformed) : true
     if (!isVisible) {
       continue
