@@ -31,11 +31,12 @@
 </template>
 
 <script setup>
-import { computed, markRaw, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../../api'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
+import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
 import { findAdminRouteByPath } from '../registry'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
 import FlagsPage from './FlagsPage.vue'
@@ -122,68 +123,10 @@ async function loadExtensionHost() {
 }
 
 async function resolveExtensionComponent(currentExtension, currentHostKind) {
-  const entryPath = normalizeEntryPath(currentExtension?.frontend_admin_entry)
-  if (!entryPath) {
-    return null
-  }
-
-  if (entryPath.startsWith('builtin:')) {
-    return resolveBuiltinComponent(entryPath, currentHostKind, currentExtension)
-  }
-
-  const importer = adminEntryModules[entryPath]
-  if (!importer) {
-    throw new Error(`找不到扩展后台入口: ${entryPath}`)
-  }
-
-  const module = await importer()
-  const factory = resolveModuleFactory(module, currentHostKind)
-  const component = typeof factory === 'function' ? await factory({ extension: currentExtension }) : null
-
-  if (!component) {
-    return null
-  }
-
-  return markRaw(component.default || component)
-}
-
-async function resolveBuiltinComponent(entryPath, currentHostKind, currentExtension) {
-  const builtinEntry = builtinAdminEntries[entryPath]
-  if (!builtinEntry) {
-    throw new Error(`找不到内置扩展后台入口: ${entryPath}`)
-  }
-
-  const factory = resolveModuleFactory(builtinEntry, currentHostKind)
-  const component = typeof factory === 'function' ? await factory({ extension: currentExtension }) : null
-
-  if (!component) {
-    return null
-  }
-
-  return markRaw(component.default || component)
-}
-
-function normalizeEntryPath(entry) {
-  const value = String(entry || '').trim()
-  if (!value) {
-    return ''
-  }
-
-  const normalized = value.startsWith('extensions/')
-    ? `../../../../${value}`
-    : value
-
-  return normalized.replace(/\\/g, '/')
-}
-
-function resolveModuleFactory(module, currentHostKind) {
-  if (currentHostKind === 'operations') {
-    return module.resolveOperationsPage
-  }
-  if (currentHostKind === 'permissions') {
-    return module.resolvePermissionsPage
-  }
-  return module.resolveSettingsPage
+  return resolveExtensionAdminComponent(currentExtension, currentHostKind, {
+    importers: adminEntryModules,
+    builtins: builtinAdminEntries,
+  })
 }
 </script>
 

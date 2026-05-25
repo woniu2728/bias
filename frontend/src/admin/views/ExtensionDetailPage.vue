@@ -71,6 +71,14 @@
         </button>
       </section>
 
+      <component
+        :is="detailComponent"
+        v-if="detailComponent"
+        :extension="extension"
+        surface="detail"
+        class="ExtensionDetailPage-pluginDetail"
+      />
+
       <div class="ExtensionDetailPage-grid">
         <section class="ExtensionDetailCard">
           <h3>生命周期</h3>
@@ -168,6 +176,11 @@ import api from '../../api'
 import { useAdminRegistryStore } from '../../stores/adminRegistry'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
+import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
+import ApprovalQueuePage from './ApprovalQueuePage.vue'
+import FlagsPage from './FlagsPage.vue'
+import TagsPage from './TagsPage.vue'
+import UsersPage from './UsersPage.vue'
 
 const route = useRoute()
 const adminRegistryStore = useAdminRegistryStore()
@@ -175,6 +188,23 @@ const loading = ref(true)
 const actionLoading = ref(false)
 const errorMessage = ref('')
 const extension = ref(null)
+const detailComponent = ref(null)
+
+const adminEntryModules = import.meta.glob('../../../../extensions/*/frontend/admin/index.js')
+const builtinAdminEntries = {
+  'builtin:approval': {
+    resolveOperationsPage: () => ApprovalQueuePage,
+  },
+  'builtin:flags': {
+    resolveOperationsPage: () => FlagsPage,
+  },
+  'builtin:tags': {
+    resolveSettingsPage: () => TagsPage,
+  },
+  'builtin:users': {
+    resolveOperationsPage: () => UsersPage,
+  },
+}
 
 const actionItems = computed(() => {
   if (!extension.value) return []
@@ -206,11 +236,16 @@ watch(
 async function loadExtension() {
   loading.value = true
   errorMessage.value = ''
+  detailComponent.value = null
 
   try {
     const extensionId = String(route.params.extensionId || '').trim()
     const data = await api.get(`/admin/extensions/${extensionId}`)
     extension.value = data.extension || null
+    detailComponent.value = await resolveExtensionAdminComponent(extension.value, 'detail', {
+      importers: adminEntryModules,
+      builtins: builtinAdminEntries,
+    })
     syncModulesFromExtension(extension.value)
   } catch (error) {
     console.error('加载扩展详情失败:', error)
@@ -348,6 +383,10 @@ function syncModulesFromExtension(currentExtension) {
   border-radius: var(--forum-radius-md);
   background: var(--forum-bg-elevated);
   box-shadow: var(--forum-shadow-sm);
+}
+
+.ExtensionDetailPage-pluginDetail {
+  width: 100%;
 }
 
 .ExtensionDetailPage-summaryCard {

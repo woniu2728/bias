@@ -322,10 +322,23 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertEqual(manifest["name"], "Alpha Tools")
                 self.assertEqual(manifest["frontend_admin_entry"], "extensions/alpha-tools/frontend/admin/index.js")
                 self.assertEqual(manifest["admin_actions"][0]["key"], "details")
+                self.assertTrue((extension_dir / "frontend" / "admin" / "DetailPage.vue").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "index.js").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "SettingsPage.vue").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "OperationsPage.vue").exists())
                 self.assertTrue((extension_dir / "backend" / "ext.py").exists())
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_create_extension_command_admin_entry_exports_detail_page(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command("create_extension", "alpha-tools")
+
+                entry_source = (Path(temp_dir) / "extensions" / "alpha-tools" / "frontend" / "admin" / "index.js").read_text(encoding="utf-8")
+                self.assertIn("export function resolveDetailPage()", entry_source)
+                self.assertIn("import DetailPage from './DetailPage.vue'", entry_source)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

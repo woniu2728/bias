@@ -56,6 +56,10 @@ class Command(BaseCommand):
             self._build_admin_index_source(extension_id),
         )
         self._write_text(
+            frontend_admin_dir / "DetailPage.vue",
+            self._build_detail_page_source(name),
+        )
+        self._write_text(
             frontend_admin_dir / "SettingsPage.vue",
             self._build_settings_page_source(name),
         )
@@ -171,8 +175,12 @@ class Command(BaseCommand):
 
     def _build_admin_index_source(self, extension_id: str) -> str:
         return (
+            "import DetailPage from './DetailPage.vue'\n"
             "import OperationsPage from './OperationsPage.vue'\n"
             "import SettingsPage from './SettingsPage.vue'\n\n"
+            "export function resolveDetailPage() {\n"
+            "  return DetailPage\n"
+            "}\n\n"
             "export function resolveSettingsPage() {\n"
             "  return SettingsPage\n"
             "}\n\n"
@@ -182,6 +190,45 @@ class Command(BaseCommand):
             "export function resolveOperationsPage() {\n"
             "  return OperationsPage\n"
             "}\n"
+        )
+
+    def _build_detail_page_source(self, name: str) -> str:
+        return (
+            "<template>\n"
+            "  <section class=\"ExtensionScaffoldCard\">\n"
+            "    <header>\n"
+            f"      <h2>{name} 详情</h2>\n"
+            "      <p>这里承载扩展自己的详情摘要、诊断信息和平台之外的补充说明。</p>\n"
+            "    </header>\n"
+            "  </section>\n"
+            "</template>\n\n"
+            "<script setup>\n"
+            "defineProps({\n"
+            "  extension: {\n"
+            "    type: Object,\n"
+            "    default: () => ({}),\n"
+            "  },\n"
+            "  surface: {\n"
+            "    type: String,\n"
+            "    default: 'detail',\n"
+            "  },\n"
+            "})\n"
+            "</script>\n\n"
+            "<style scoped>\n"
+            ".ExtensionScaffoldCard {\n"
+            "  padding: 24px;\n"
+            "  border: 1px solid var(--forum-border-color);\n"
+            "  border-radius: var(--forum-radius-md);\n"
+            "  background: var(--forum-bg-elevated);\n"
+            "}\n"
+            ".ExtensionScaffoldCard h2 {\n"
+            "  margin: 0 0 8px;\n"
+            "}\n"
+            ".ExtensionScaffoldCard p {\n"
+            "  margin: 0;\n"
+            "  color: var(--forum-text-soft);\n"
+            "}\n"
+            "</style>\n"
         )
 
     def _build_settings_page_source(self, name: str) -> str:
