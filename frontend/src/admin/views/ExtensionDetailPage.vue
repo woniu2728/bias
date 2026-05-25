@@ -144,7 +144,7 @@
         </section>
 
         <section class="ExtensionDetailCard">
-          <h3>运行时</h3>
+          <h3>安装摘要</h3>
           <div class="ExtensionDetailStack">
             <div>
               <small>运行状态</small>
@@ -170,6 +170,24 @@
               <small>可执行操作</small>
               <strong>{{ runtimeActions.length }}</strong>
             </div>
+          </div>
+          <ul v-if="deliveryChecks.length" class="ExtensionDetailChecks">
+            <li v-for="item in deliveryChecks" :key="item.key">
+              <div class="ExtensionDetailChecks-head">
+                <strong>{{ item.label }}</strong>
+                <span class="ExtensionDetailChecks-status" :class="`is-${item.status}`">
+                  {{ item.status_label }}
+                </span>
+              </div>
+              <p v-if="item.message">{{ item.message }}</p>
+              <code v-if="item.path">{{ item.path }}</code>
+            </li>
+          </ul>
+          <div v-if="uninstallWarnings.length" class="ExtensionDetailWarnings">
+            <h4>卸载风险</h4>
+            <ul>
+              <li v-for="warning in uninstallWarnings" :key="warning">{{ warning }}</li>
+            </ul>
           </div>
           <p v-if="extension.runtime_issues?.length" class="ExtensionDetailIssues">
             {{ extension.runtime_issues.join('；') }}
@@ -237,6 +255,14 @@ const adminActions = computed(() => {
 
 const runtimeActions = computed(() => {
   return Array.isArray(extension.value?.runtime_actions) ? extension.value.runtime_actions : []
+})
+
+const deliveryChecks = computed(() => {
+  return Array.isArray(extension.value?.delivery_checks) ? extension.value.delivery_checks : []
+})
+
+const uninstallWarnings = computed(() => {
+  return Array.isArray(extension.value?.uninstall_warnings) ? extension.value.uninstall_warnings : []
 })
 
 const runtimeStatusClass = computed(() => {
@@ -520,6 +546,82 @@ function syncModulesFromExtension(currentExtension) {
 .ExtensionDetailIssues {
   margin: 16px 0 0;
   color: #b02a37;
+}
+
+.ExtensionDetailChecks {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  margin: 18px 0 0;
+  list-style: none;
+}
+
+.ExtensionDetailChecks li {
+  padding: 12px 14px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: 14px;
+  background: var(--forum-bg-subtle);
+}
+
+.ExtensionDetailChecks-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.ExtensionDetailChecks-head strong {
+  font-size: 14px;
+}
+
+.ExtensionDetailChecks li p,
+.ExtensionDetailChecks li code {
+  display: block;
+  margin: 8px 0 0;
+}
+
+.ExtensionDetailChecks-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ExtensionDetailChecks-status.is-ready {
+  background: #edf8f2;
+  color: #25704d;
+}
+
+.ExtensionDetailChecks-status.is-pending {
+  background: #fff6e8;
+  color: #9a5b00;
+}
+
+.ExtensionDetailChecks-status.is-attention {
+  background: #fff4f4;
+  color: #b54747;
+}
+
+.ExtensionDetailWarnings {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #f0d0d0;
+  border-radius: 14px;
+  background: #fff8f8;
+}
+
+.ExtensionDetailWarnings h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.ExtensionDetailWarnings ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--forum-text-muted);
 }
 
 @media (max-width: 900px) {

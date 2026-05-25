@@ -41,10 +41,11 @@ class Command(BaseCommand):
 
         frontend_admin_dir = extension_dir / "frontend" / "admin"
         backend_dir = extension_dir / "backend"
+        migrations_dir = backend_dir / "migrations"
         docs_dir = extension_dir / "docs"
         locale_dir = extension_dir / "locale"
 
-        for path in (frontend_admin_dir, backend_dir, docs_dir, locale_dir):
+        for path in (frontend_admin_dir, backend_dir, migrations_dir, docs_dir, locale_dir):
             path.mkdir(parents=True, exist_ok=True)
 
         self._write_json(
@@ -72,6 +73,10 @@ class Command(BaseCommand):
             "",
         )
         self._write_text(
+            migrations_dir / "__init__.py",
+            "",
+        )
+        self._write_text(
             backend_dir / "ext.py",
             self._build_backend_entry_source(extension_id, name),
         )
@@ -82,6 +87,10 @@ class Command(BaseCommand):
         self._write_text(
             locale_dir / ".gitkeep",
             "",
+        )
+        self._write_text(
+            locale_dir / "zh-CN.json",
+            self._build_locale_source(name),
         )
 
         self.stdout.write(self.style.SUCCESS("[OK] 已创建扩展脚手架"))
@@ -117,6 +126,7 @@ class Command(BaseCommand):
             "settings_pages": [f"/admin/extensions/{extension_id}/settings"],
             "permissions_pages": [f"/admin/extensions/{extension_id}/permissions"],
             "operations_pages": [f"/admin/extensions/{extension_id}/operations"],
+            "migration_namespace": f"extensions.{extension_id.replace('-', '_')}.backend.migrations",
             "admin_actions": [
                 {
                     "key": "details",
@@ -321,8 +331,15 @@ class Command(BaseCommand):
             f"# {name}\n\n"
             f"- 扩展 ID: `{extension_id}`\n"
             "- 用途：通过脚手架生成的 Bias 扩展样板。\n"
+            "- 迁移目录：`backend/migrations`\n"
             "- 后续可在 `frontend/admin`、`backend`、`locale` 中继续扩展能力。\n"
         )
+
+    def _build_locale_source(self, name: str) -> str:
+        return json.dumps({
+            "extension.name": name,
+            "extension.status.ready": "扩展资源已就绪",
+        }, ensure_ascii=False, indent=2) + "\n"
 
     def _write_json(self, path: Path, payload: dict) -> None:
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

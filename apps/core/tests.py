@@ -159,6 +159,7 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(results[0].manifest.permissions_pages, ("/admin/extensions/sample/permissions",))
             self.assertEqual(results[0].manifest.operations_pages, ("/admin/extensions/sample/operations",))
             self.assertEqual(results[0].manifest.admin_actions[0].key, "details")
+            self.assertEqual(results[0].manifest.migration_namespace, "")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -322,11 +323,15 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertEqual(manifest["name"], "Alpha Tools")
                 self.assertEqual(manifest["frontend_admin_entry"], "extensions/alpha-tools/frontend/admin/index.js")
                 self.assertEqual(manifest["admin_actions"][0]["key"], "details")
+                self.assertEqual(manifest["migration_namespace"], "extensions.alpha_tools.backend.migrations")
                 self.assertTrue((extension_dir / "frontend" / "admin" / "DetailPage.vue").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "index.js").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "SettingsPage.vue").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "OperationsPage.vue").exists())
                 self.assertTrue((extension_dir / "backend" / "ext.py").exists())
+                self.assertTrue((extension_dir / "backend" / "migrations" / "__init__.py").exists())
+                self.assertTrue((extension_dir / "docs" / "README.md").exists())
+                self.assertTrue((extension_dir / "locale" / "zh-CN.json").exists())
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -437,6 +442,8 @@ class ExtensionRegistryTests(TestCase):
         self.assertFalse(sample_extension.runtime.installed)
         self.assertFalse(sample_extension.runtime.enabled)
         self.assertEqual(sample_extension.runtime.status_key, "pending_install")
+        self.assertTrue(any(item.key == "migrations" for item in sample_extension.runtime.delivery_checks))
+        self.assertTrue(any("不会自动回滚数据库迁移" in item for item in sample_extension.runtime.uninstall_warnings))
 
     def test_builtin_adapter_preserves_module_metadata(self):
         module = get_forum_registry().get_module("approval")
@@ -605,6 +612,8 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(payload["admin_actions"][0]["key"], "details")
         self.assertEqual(payload["runtime_status"]["key"], "pending_install")
         self.assertEqual(payload["runtime_actions"][0]["action"], "install")
+        self.assertTrue(any(item["key"] == "migrations" for item in payload["delivery_checks"]))
+        self.assertTrue(any("不会自动回滚数据库迁移" in item for item in payload["uninstall_warnings"]))
 
     def test_extensions_api_can_install_disable_enable_and_uninstall_extension(self):
         install_response = self.client.post(

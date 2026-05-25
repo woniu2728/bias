@@ -8,7 +8,9 @@ from django.db import OperationalError, ProgrammingError
 from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extension
 from apps.core.extensions.exceptions import ExtensionNotFoundError
 from apps.core.extensions.manifest import ExtensionManifestLoader
+from apps.core.extensions.runtime_probe import inspect_extension_runtime
 from apps.core.extensions.types import (
+    ExtensionDeliveryCheckDefinition,
     ExtensionDefinition,
     ExtensionRuntimeActionDefinition,
     ExtensionRuntimeState,
@@ -126,21 +128,24 @@ class ExtensionRegistry:
         )
 
     def _with_runtime_actions(self, definition: ExtensionDefinition) -> ExtensionDefinition:
-        return ExtensionDefinition(
+        runtime_probe = inspect_extension_runtime(definition)
+        runtime_definition = ExtensionDefinition(
             manifest=definition.manifest,
             runtime=ExtensionRuntimeState(
                 installed=definition.runtime.installed,
                 enabled=definition.runtime.enabled,
                 booted=definition.runtime.booted,
-                healthy=definition.runtime.healthy,
+                healthy=bool(runtime_probe["healthy"]),
                 status_key=definition.runtime.status_key,
                 status_label=definition.runtime.status_label,
-                migration_state=definition.runtime.migration_state,
-                migration_label=definition.runtime.migration_label,
+                migration_state=str(runtime_probe["migration_state"]),
+                migration_label=str(runtime_probe["migration_label"]),
                 dependency_state=definition.runtime.dependency_state,
                 dependency_state_label=definition.runtime.dependency_state_label,
-                runtime_issues=definition.runtime.runtime_issues,
-                runtime_actions=_build_runtime_actions(definition),
+                runtime_issues=tuple(runtime_probe["runtime_issues"]),
+                runtime_actions=(),
+                delivery_checks=tuple(runtime_probe["delivery_checks"]),
+                uninstall_warnings=tuple(runtime_probe["uninstall_warnings"]),
             ),
             lifecycle=definition.lifecycle,
             capabilities=definition.capabilities,
@@ -148,6 +153,31 @@ class ExtensionRegistry:
             source=definition.source,
             admin_pages=definition.admin_pages,
             settings_groups=definition.settings_groups,
+        )
+        return ExtensionDefinition(
+            manifest=runtime_definition.manifest,
+            runtime=ExtensionRuntimeState(
+                installed=runtime_definition.runtime.installed,
+                enabled=runtime_definition.runtime.enabled,
+                booted=runtime_definition.runtime.booted,
+                healthy=runtime_definition.runtime.healthy,
+                status_key=runtime_definition.runtime.status_key,
+                status_label=runtime_definition.runtime.status_label,
+                migration_state=runtime_definition.runtime.migration_state,
+                migration_label=runtime_definition.runtime.migration_label,
+                dependency_state=runtime_definition.runtime.dependency_state,
+                dependency_state_label=runtime_definition.runtime.dependency_state_label,
+                runtime_issues=runtime_definition.runtime.runtime_issues,
+                runtime_actions=_build_runtime_actions(runtime_definition),
+                delivery_checks=runtime_definition.runtime.delivery_checks,
+                uninstall_warnings=runtime_definition.runtime.uninstall_warnings,
+            ),
+            lifecycle=runtime_definition.lifecycle,
+            capabilities=runtime_definition.capabilities,
+            module_ids=runtime_definition.module_ids,
+            source=runtime_definition.source,
+            admin_pages=runtime_definition.admin_pages,
+            settings_groups=runtime_definition.settings_groups,
         )
 
 
@@ -256,12 +286,21 @@ def _build_runtime_actions(definition: ExtensionDefinition) -> tuple[ExtensionRu
             label="卸载扩展",
             action="uninstall",
             tone="danger",
-            confirm_title="卸载扩展",
-            confirm_message=f"确定卸载 {definition.name} 吗？当前只会移除安装登记，不会自动回滚数据库迁移。",
-            confirm_text="卸载",
-            success_message="扩展已卸载。",
-            requires_installed=True,
-            order=30,
+                confirm_title="卸载扩展",
+                confirm_message=_build_uninstall_confirm_message(definition),
+                confirm_text="卸载",
+                success_message="扩展已卸载。",
+                requires_installed=True,
+                order=30,
         ))
 
     return tuple(actions)
+
+
+def _build_uninstall_confirm_message(definition: ExtensionDefinition) -> str:
+    warnings = list(definition.runtime.uninstall_warnings or ())
+    if not warnings:
+        return f"确定卸载 {definition.name} 吗？"
+
+    body = "；".join(warnings[:2])
+    return f"确定卸载 {definition.name} 吗？{body}"

@@ -170,6 +170,19 @@ def _serialize_admin_extension(extension):
         "dependency_state": extension.runtime.dependency_state,
         "dependency_state_label": extension.runtime.dependency_state_label,
         "runtime_issues": list(extension.runtime.runtime_issues),
+        "delivery_checks": [
+            {
+                "key": check.key,
+                "label": check.label,
+                "status": check.status,
+                "status_label": check.status_label,
+                "message": check.message,
+                "path": check.path,
+                "optional": check.optional,
+            }
+            for check in extension.runtime.delivery_checks
+        ],
+        "uninstall_warnings": list(extension.runtime.uninstall_warnings),
         "runtime_actions": [
             {
                 "key": action.key,

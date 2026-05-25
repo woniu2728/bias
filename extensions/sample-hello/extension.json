@@ -26,6 +26,7 @@
   "operations_pages": [
     "/admin/extensions/sample-hello/operations"
   ],
+  "migration_namespace": "extensions.sample_hello.backend.migrations",
   "admin_actions": [
     {
       "key": "details",

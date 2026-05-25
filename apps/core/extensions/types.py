@@ -35,6 +35,17 @@ class ExtensionRuntimeActionDefinition:
 
 
 @dataclass(frozen=True)
+class ExtensionDeliveryCheckDefinition:
+    key: str
+    label: str
+    status: str
+    status_label: str
+    message: str = ""
+    path: str = ""
+    optional: bool = False
+
+
+@dataclass(frozen=True)
 class ExtensionLifecyclePhaseDefinition:
     key: str
     label: str
@@ -130,6 +141,8 @@ class ExtensionRuntimeState:
     dependency_state_label: str = "依赖正常"
     runtime_issues: Tuple[str, ...] = ()
     runtime_actions: Tuple[ExtensionRuntimeActionDefinition, ...] = ()
+    delivery_checks: Tuple[ExtensionDeliveryCheckDefinition, ...] = ()
+    uninstall_warnings: Tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
