@@ -30,6 +30,7 @@ from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extensi
 from apps.core.extensions.exceptions import ExtensionStateError
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.registry import ExtensionRegistry
+from apps.core.extensions.validation import validate_extension_manifests
 from apps.core.extension_service import ExtensionService
 from apps.core.forum_events import (
     DiscussionCreatedEvent,
@@ -149,6 +150,121 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(results[0].manifest.settings_pages, ("/admin/extensions/sample",))
             self.assertEqual(results[0].manifest.permissions_pages, ("/admin/extensions/sample/permissions",))
             self.assertEqual(results[0].manifest.operations_pages, ("/admin/extensions/sample/operations",))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_loader_rejects_invalid_extension_id_and_version(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "Bad_Extension"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "Bad_Extension",
+                "name": "Bad Extension",
+                "version": "1.0",
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            with self.assertRaisesMessage(Exception, f"扩展清单 id 非法: {manifest_dir / 'extension.json'}"):
+                loader.discover()
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+class ExtensionValidationTests(TestCase):
+    def test_validate_extension_manifests_reports_missing_dependency_and_missing_admin_entry(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            manifest_path = manifest_dir / "extension.json"
+            manifest_path.write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "dependencies": ["core", "missing-one"],
+                "frontend_admin_entry": "extensions/alpha-tools/frontend/admin/index.js",
+                "settings_pages": ["/admin/extensions/alpha-tools/settings"],
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "missing_dependency" for item in result.issues))
+            self.assertTrue(any(item.code == "missing_frontend_admin_entry" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+class ExtensionManagementCommandTests(TestCase):
+    def test_create_extension_command_scaffolds_manifest_and_admin_entry(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command(
+                    "create_extension",
+                    "alpha-tools",
+                    "--name",
+                    "Alpha Tools",
+                    "--description",
+                    "用于测试脚手架",
+                )
+
+                extension_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+                manifest = json.loads((extension_dir / "extension.json").read_text(encoding="utf-8"))
+                self.assertEqual(manifest["id"], "alpha-tools")
+                self.assertEqual(manifest["name"], "Alpha Tools")
+                self.assertEqual(manifest["frontend_admin_entry"], "extensions/alpha-tools/frontend/admin/index.js")
+                self.assertTrue((extension_dir / "frontend" / "admin" / "index.js").exists())
+                self.assertTrue((extension_dir / "frontend" / "admin" / "SettingsPage.vue").exists())
+                self.assertTrue((extension_dir / "frontend" / "admin" / "OperationsPage.vue").exists())
+                self.assertTrue((extension_dir / "backend" / "ext.py").exists())
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_create_extension_command_rejects_existing_directory_without_force(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            extension_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            extension_dir.mkdir(parents=True, exist_ok=False)
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                with self.assertRaisesMessage(CommandError, f"扩展目录已存在: {extension_dir}。如需覆盖，请传 --force"):
+                    call_command("create_extension", "alpha-tools")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_reports_manifest_errors(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "dependencies": ["missing-one"],
+                "frontend_admin_entry": "extensions/alpha-tools/frontend/admin/index.js",
+                "settings_pages": ["/admin/extensions/alpha-tools/settings"],
+            }, ensure_ascii=False), encoding="utf-8")
+
+            with self.assertRaisesMessage(CommandError, "扩展校验失败，共 2 个错误"):
+                call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_can_pass_in_strict_mode(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command("create_extension", "alpha-tools")
+                call_command(
+                    "validate_extensions",
+                    "--extensions-path",
+                    str(Path(temp_dir) / "extensions"),
+                    "--strict",
+                )
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

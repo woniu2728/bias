@@ -132,6 +132,31 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 3. `approval`、`flags`、`users` 已通过内置扩展宿主页承载原有操作页组件
 4. `tags`、`approval`、`flags`、`users` 旧公共后台路由已改为兼容跳转到扩展宿主页，其他旧入口后续再逐步下线
 
+### 已完成：阶段 6 的第一批开发者工具链
+
+已落地：
+
+1. 扩展 manifest 基础校验已抽成独立验证层：
+   - 扩展 ID 格式
+   - 语义化版本格式
+   - 重复值检查
+   - 必需依赖存在性检查
+   - 后台入口文件存在性检查
+2. 已新增扩展脚手架命令：
+   - `python manage.py create_extension <extension_id>`
+3. 脚手架默认生成：
+   - `extension.json`
+   - `frontend/admin/index.js`
+   - `frontend/admin/SettingsPage.vue`
+   - `frontend/admin/OperationsPage.vue`
+   - `backend/ext.py`
+   - `docs/README.md`
+4. 已新增扩展校验命令：
+   - `python manage.py validate_extensions`
+   - 支持 `--strict`
+
+当前阶段 6 仍未完成 manifest 与前端导出约束的更细粒度校验，也还没有把脚手架接入 CI 自动检查，但“新建扩展”和“本地自检”已经进入主链路。
+
 ## 当前状态
 
 ### 已有能力

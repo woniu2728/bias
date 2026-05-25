@@ -5,6 +5,7 @@ from pathlib import Path
 
 from apps.core.extensions.exceptions import ExtensionManifestError
 from apps.core.extensions.types import ExtensionDiscoveryResult, ExtensionManifest
+from apps.core.extensions.validation import EXTENSION_ID_PATTERN, SEMVER_PATTERN
 
 
 class ExtensionManifestLoader:
@@ -42,6 +43,11 @@ class ExtensionManifestLoader:
             raise ExtensionManifestError(f"扩展清单缺少 name: {manifest_path}")
         if not version:
             raise ExtensionManifestError(f"扩展清单缺少 version: {manifest_path}")
+
+        if not EXTENSION_ID_PATTERN.match(extension_id):
+            raise ExtensionManifestError(f"扩展清单 id 非法: {manifest_path}")
+        if not SEMVER_PATTERN.match(version):
+            raise ExtensionManifestError(f"扩展清单 version 非法: {manifest_path}")
 
         return ExtensionManifest(
             id=extension_id,
