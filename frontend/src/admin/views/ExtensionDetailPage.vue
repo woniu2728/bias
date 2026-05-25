@@ -14,8 +14,8 @@
           <i class="fas fa-arrow-left"></i>
           <span>返回扩展中心</span>
         </router-link>
-        <span class="ExtensionDetailPage-status" :class="extension.enabled ? 'is-enabled' : 'is-disabled'">
-          {{ extension.enabled ? '已启用' : '未启用' }}
+        <span class="ExtensionDetailPage-status" :class="runtimeStatusClass">
+          {{ extension.runtime_status?.label || (extension.enabled ? '已启用' : '未启用') }}
         </span>
       </section>
 
@@ -62,12 +62,15 @@
           </a>
         </template>
         <button
+          v-for="action in runtimeActions"
+          :key="`runtime-${action.key}`"
           type="button"
           class="ExtensionDetailAction"
+          :class="resolveActionToneClass(action)"
           :disabled="actionLoading"
-          @click="toggleExtension()"
+          @click="runRuntimeAction(action)"
         >
-          {{ actionLoading ? '处理中...' : (extension.enabled ? '停用扩展' : '启用扩展') }}
+          {{ actionLoading ? '处理中...' : action.label }}
         </button>
       </section>
 
@@ -144,6 +147,10 @@
           <h3>运行时</h3>
           <div class="ExtensionDetailStack">
             <div>
+              <small>运行状态</small>
+              <strong>{{ extension.runtime_status?.label || '未知' }}</strong>
+            </div>
+            <div>
               <small>安装状态</small>
               <strong>{{ extension.installed ? '已安装' : '未安装' }}</strong>
             </div>
@@ -158,6 +165,10 @@
             <div>
               <small>迁移状态</small>
               <strong>{{ extension.migration_label || '无' }}</strong>
+            </div>
+            <div>
+              <small>可执行操作</small>
+              <strong>{{ runtimeActions.length }}</strong>
             </div>
           </div>
           <p v-if="extension.runtime_issues?.length" class="ExtensionDetailIssues">
@@ -174,6 +185,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '../../api'
 import { useAdminRegistryStore } from '../../stores/adminRegistry'
+import { useModalStore } from '../../stores/modal'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
@@ -184,6 +196,7 @@ import UsersPage from './UsersPage.vue'
 
 const route = useRoute()
 const adminRegistryStore = useAdminRegistryStore()
+const modalStore = useModalStore()
 const loading = ref(true)
 const actionLoading = ref(false)
 const errorMessage = ref('')
@@ -222,6 +235,17 @@ const adminActions = computed(() => {
   return Array.isArray(extension.value?.admin_actions) ? extension.value.admin_actions : []
 })
 
+const runtimeActions = computed(() => {
+  return Array.isArray(extension.value?.runtime_actions) ? extension.value.runtime_actions : []
+})
+
+const runtimeStatusClass = computed(() => {
+  const key = extension.value?.runtime_status?.key
+  if (key === 'active') return 'is-enabled'
+  if (key === 'pending_install') return 'is-pending'
+  return 'is-disabled'
+})
+
 onMounted(async () => {
   await loadExtension()
 })
@@ -255,19 +279,38 @@ async function loadExtension() {
   }
 }
 
-async function toggleExtension() {
-  if (!extension.value) return
+async function runRuntimeAction(action) {
+  if (!extension.value || !action?.action) return
+
+  if (action.confirm_message) {
+    const confirmed = await modalStore.confirm({
+      title: action.confirm_title || action.label,
+      message: action.confirm_message,
+      confirmText: action.confirm_text || action.label,
+      cancelText: '取消',
+      tone: action.tone === 'danger' ? 'danger' : 'primary',
+    })
+    if (!confirmed) {
+      return
+    }
+  }
 
   actionLoading.value = true
   errorMessage.value = ''
 
   try {
-    const action = extension.value.enabled ? 'disable' : 'enable'
-    await api.post(`/admin/extensions/${extension.value.id}/${action}`)
+    await api.post(`/admin/extensions/${extension.value.id}/${action.action}`)
     await loadExtension()
+    if (action.success_message) {
+      await modalStore.alert({
+        title: action.label,
+        message: action.success_message,
+        tone: 'success',
+      })
+    }
   } catch (error) {
-    console.error('切换扩展状态失败:', error)
-    errorMessage.value = error.response?.data?.error || '切换扩展状态失败，请稍后重试'
+    console.error('执行扩展运行操作失败:', error)
+    errorMessage.value = error.response?.data?.error || '执行扩展运行操作失败，请稍后重试'
   } finally {
     actionLoading.value = false
   }
@@ -369,6 +412,11 @@ function syncModulesFromExtension(currentExtension) {
 .ExtensionDetailPage-status.is-disabled {
   background: rgba(220, 53, 69, 0.12);
   color: #b02a37;
+}
+
+.ExtensionDetailPage-status.is-pending {
+  background: rgba(245, 158, 11, 0.14);
+  color: #9a5b00;
 }
 
 .ExtensionDetailPage-summary {

@@ -434,6 +434,9 @@ class ExtensionRegistryTests(TestCase):
         self.assertEqual(sample_extension.source, "filesystem")
         self.assertEqual(sample_extension.manifest.dependencies, ("core",))
         self.assertIn("/admin/extensions/sample-hello/settings", sample_extension.manifest.settings_pages)
+        self.assertFalse(sample_extension.runtime.installed)
+        self.assertFalse(sample_extension.runtime.enabled)
+        self.assertEqual(sample_extension.runtime.status_key, "pending_install")
 
     def test_builtin_adapter_preserves_module_metadata(self):
         module = get_forum_registry().get_module("approval")
@@ -600,8 +603,22 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(payload["action_links"]["operations_page"], "/admin/extensions/sample-hello/operations")
         self.assertEqual(payload["frontend_admin_entry"], "extensions/sample-hello/frontend/admin/index.js")
         self.assertEqual(payload["admin_actions"][0]["key"], "details")
+        self.assertEqual(payload["runtime_status"]["key"], "pending_install")
+        self.assertEqual(payload["runtime_actions"][0]["action"], "install")
 
-    def test_extensions_api_can_disable_and_enable_extension(self):
+    def test_extensions_api_can_install_disable_enable_and_uninstall_extension(self):
+        install_response = self.client.post(
+            "/api/admin/extensions/sample-hello/install",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(install_response.status_code, 200, install_response.content)
+        installed_payload = install_response.json()
+        installed_extension = next(item for item in installed_payload["extensions"] if item["id"] == "sample-hello")
+        self.assertTrue(installed_extension["installed"])
+        self.assertTrue(installed_extension["enabled"])
+        self.assertEqual(installed_extension["runtime_status"]["key"], "active")
+
         disable_response = self.client.post(
             "/api/admin/extensions/sample-hello/disable",
             **self.auth_header(),
@@ -611,7 +628,8 @@ class AdminExtensionsApiTests(TestCase):
         disabled_payload = disable_response.json()
         disabled_extension = next(item for item in disabled_payload["extensions"] if item["id"] == "sample-hello")
         self.assertFalse(disabled_extension["enabled"])
-        self.assertEqual([item["key"] for item in disabled_extension["admin_actions"]], ["details", "documentation"])
+        self.assertEqual(disabled_extension["runtime_status"]["key"], "disabled")
+        self.assertTrue(any(item["action"] == "uninstall" for item in disabled_extension["runtime_actions"]))
 
         installation = ExtensionInstallation.objects.get(extension_id="sample-hello")
         self.assertFalse(installation.enabled)
@@ -631,7 +649,38 @@ class AdminExtensionsApiTests(TestCase):
         self.assertTrue(installation.enabled)
         self.assertTrue(installation.booted)
 
+        disable_response = self.client.post(
+            "/api/admin/extensions/sample-hello/disable",
+            **self.auth_header(),
+        )
+        self.assertEqual(disable_response.status_code, 200, disable_response.content)
+
+        uninstall_response = self.client.post(
+            "/api/admin/extensions/sample-hello/uninstall",
+            **self.auth_header(),
+        )
+        self.assertEqual(uninstall_response.status_code, 200, uninstall_response.content)
+        uninstalled_payload = uninstall_response.json()
+        uninstalled_extension = next(item for item in uninstalled_payload["extensions"] if item["id"] == "sample-hello")
+        self.assertFalse(uninstalled_extension["installed"])
+        self.assertFalse(uninstalled_extension["enabled"])
+        self.assertEqual(uninstalled_extension["runtime_status"]["key"], "pending_install")
+
+        installation.refresh_from_db()
+        self.assertFalse(installation.installed)
+        self.assertFalse(installation.enabled)
+        self.assertFalse(installation.booted)
+
     def test_extensions_api_blocks_enable_when_dependency_disabled(self):
+        self.client.post(
+            "/api/admin/extensions/sample-hello/install",
+            **self.auth_header(),
+        )
+        self.client.post(
+            "/api/admin/extensions/sample-hello/disable",
+            **self.auth_header(),
+        )
+
         ExtensionInstallation.objects.create(
             extension_id="core",
             version="1.0.0",
@@ -651,6 +700,16 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(payload["code"], "extension_enable_blocked")
         self.assertIn("disabled_dependencies", payload["field_errors"])
         self.assertIn("core", payload["field_errors"]["disabled_dependencies"])
+
+    def test_extensions_api_blocks_enable_when_extension_not_installed(self):
+        response = self.client.post(
+            "/api/admin/extensions/sample-hello/enable",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        payload = response.json()
+        self.assertEqual(payload["code"], "extension_enable_not_installed")
 
     def test_extensions_api_blocks_disable_when_other_extensions_depend_on_it(self):
         response = self.client.post(
@@ -674,16 +733,46 @@ class AdminExtensionsApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["code"], "extension_disable_core_blocked")
 
+    def test_extensions_api_blocks_uninstall_when_extension_is_enabled(self):
+        self.client.post(
+            "/api/admin/extensions/sample-hello/install",
+            **self.auth_header(),
+        )
+
+        response = self.client.post(
+            "/api/admin/extensions/sample-hello/uninstall",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        payload = response.json()
+        self.assertEqual(payload["code"], "extension_uninstall_enabled_blocked")
+
 
 class ExtensionServiceTests(TestCase):
+    def test_install_and_uninstall_transition_filesystem_extension(self):
+        installed = ExtensionService.install_extension("sample-hello")
+        self.assertTrue(installed.runtime.installed)
+        self.assertTrue(installed.runtime.enabled)
+
+        disabled = ExtensionService.set_extension_enabled("sample-hello", False)
+        self.assertFalse(disabled.runtime.enabled)
+
+        uninstalled = ExtensionService.uninstall_extension("sample-hello")
+        self.assertFalse(uninstalled.runtime.installed)
+        self.assertFalse(uninstalled.runtime.enabled)
+
     def test_enable_raises_when_required_dependency_missing_or_disabled(self):
-        ExtensionInstallation.objects.create(
+        ExtensionService.install_extension("sample-hello")
+        ExtensionInstallation.objects.update_or_create(
             extension_id="core",
-            version="1.0.0",
-            source="builtin-module",
-            enabled=False,
-            installed=True,
-            booted=False,
+            defaults={
+                "version": "1.0.0",
+                "source": "builtin-module",
+                "enabled": False,
+                "installed": True,
+                "booted": False,
+            },
         )
 
         with self.assertRaises(ExtensionStateError) as context:
@@ -698,6 +787,15 @@ class ExtensionServiceTests(TestCase):
 
         self.assertEqual(context.exception.code, "extension_disable_blocked")
         self.assertIn("approval", context.exception.details["blocking_dependents"])
+
+    def test_uninstall_raises_when_extension_is_enabled(self):
+        installed = ExtensionService.install_extension("sample-hello")
+        self.assertTrue(installed.runtime.enabled)
+
+        with self.assertRaises(ExtensionStateError) as context:
+            ExtensionService.uninstall_extension("sample-hello")
+
+        self.assertEqual(context.exception.code, "extension_uninstall_enabled_blocked")
 
 
 class DomainEventRegistryTests(TestCase):

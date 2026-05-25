@@ -65,6 +65,23 @@ def enable_admin_extension(request, extension_id: str):
     return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
 
 
+@router.post("/extensions/{extension_id}/install", auth=AccessTokenAuth(), tags=["Admin"])
+def install_admin_extension(request, extension_id: str):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    try:
+        ExtensionService.install_extension(
+            extension_id,
+            actor=request.auth,
+            request=request,
+        )
+    except ExtensionStateError as exc:
+        return _legacy().admin_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
+    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+
+
 @router.post("/extensions/{extension_id}/disable", auth=AccessTokenAuth(), tags=["Admin"])
 def disable_admin_extension(request, extension_id: str):
     denied = _require_staff(request)
@@ -75,6 +92,23 @@ def disable_admin_extension(request, extension_id: str):
         ExtensionService.set_extension_enabled(
             extension_id,
             False,
+            actor=request.auth,
+            request=request,
+        )
+    except ExtensionStateError as exc:
+        return _legacy().admin_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
+    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+
+
+@router.post("/extensions/{extension_id}/uninstall", auth=AccessTokenAuth(), tags=["Admin"])
+def uninstall_admin_extension(request, extension_id: str):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    try:
+        ExtensionService.uninstall_extension(
+            extension_id,
             actor=request.auth,
             request=request,
         )
@@ -127,11 +161,31 @@ def _serialize_admin_extension(extension):
         "enabled": extension.runtime.enabled,
         "booted": extension.runtime.booted,
         "healthy": extension.runtime.healthy,
+        "runtime_status": {
+            "key": extension.runtime.status_key,
+            "label": extension.runtime.status_label,
+        },
         "migration_state": extension.runtime.migration_state,
         "migration_label": extension.runtime.migration_label,
         "dependency_state": extension.runtime.dependency_state,
         "dependency_state_label": extension.runtime.dependency_state_label,
         "runtime_issues": list(extension.runtime.runtime_issues),
+        "runtime_actions": [
+            {
+                "key": action.key,
+                "label": action.label,
+                "action": action.action,
+                "tone": action.tone,
+                "confirm_title": action.confirm_title,
+                "confirm_message": action.confirm_message,
+                "confirm_text": action.confirm_text,
+                "success_message": action.success_message,
+                "requires_enabled": action.requires_enabled,
+                "requires_installed": action.requires_installed,
+                "order": action.order,
+            }
+            for action in extension.runtime.runtime_actions
+        ],
         "source": extension.source,
         "module_ids": list(extension.module_ids),
         "admin_pages": list(extension.admin_pages),

@@ -60,8 +60,8 @@
               <div class="ExtensionCard-title">
                 <h3>{{ extension.name }}</h3>
                 <span class="ExtensionBadge">{{ extension.id }}</span>
-                <span class="ExtensionStatus" :class="extension.enabled ? 'is-enabled' : 'is-disabled'">
-                  {{ extension.enabled ? '已启用' : '未启用' }}
+                <span class="ExtensionStatus" :class="resolveRuntimeStatusClass(extension)">
+                  {{ extension.runtime_status?.label || (extension.enabled ? '已启用' : '未启用') }}
                 </span>
               </div>
 
@@ -110,12 +110,15 @@
               </span>
 
               <button
+                v-for="action in getRuntimeActions(extension)"
+                :key="`${extension.id}-runtime-${action.key}`"
                 type="button"
                 class="ExtensionAction"
+                :class="resolveActionToneClass(action)"
                 :disabled="actionLoadingId === extension.id"
-                @click="toggleExtension(extension)"
+                @click="runRuntimeAction(extension, action)"
               >
-                {{ actionLoadingId === extension.id ? '处理中...' : (extension.enabled ? '停用扩展' : '启用扩展') }}
+                {{ actionLoadingId === extension.id ? '处理中...' : action.label }}
               </button>
             </div>
           </div>
@@ -131,12 +134,14 @@
 import { computed, onMounted, ref } from 'vue'
 import api from '../../api'
 import { useAdminRegistryStore } from '../../stores/adminRegistry'
+import { useModalStore } from '../../stores/modal'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import AdminToolbar from '../components/AdminToolbar.vue'
 import AdminFilterTabs from '../components/AdminFilterTabs.vue'
 
 const adminRegistryStore = useAdminRegistryStore()
+const modalStore = useModalStore()
 const loading = ref(true)
 const errorMessage = ref('')
 const summary = ref({})
@@ -229,14 +234,35 @@ function applyPayload(data) {
   }
 }
 
-async function toggleExtension(extension) {
+async function runRuntimeAction(extension, action) {
+  if (!extension?.id || !action?.action) return
+
+  if (action.confirm_message) {
+    const confirmed = await modalStore.confirm({
+      title: action.confirm_title || action.label,
+      message: action.confirm_message,
+      confirmText: action.confirm_text || action.label,
+      cancelText: '取消',
+      tone: action.tone === 'danger' ? 'danger' : 'primary',
+    })
+    if (!confirmed) {
+      return
+    }
+  }
+
   actionLoadingId.value = extension.id
   errorMessage.value = ''
 
   try {
-    const action = extension.enabled ? 'disable' : 'enable'
-    const data = await api.post(`/admin/extensions/${extension.id}/${action}`)
+    const data = await api.post(`/admin/extensions/${extension.id}/${action.action}`)
     applyPayload(data)
+    if (action.success_message) {
+      await modalStore.alert({
+        title: action.label,
+        message: action.success_message,
+        tone: 'success',
+      })
+    }
   } catch (error) {
     console.error('切换扩展状态失败:', error)
     errorMessage.value = error.response?.data?.error || '切换扩展状态失败，请稍后重试'
@@ -247,6 +273,10 @@ async function toggleExtension(extension) {
 
 function getVisibleAdminActions(extension) {
   return Array.isArray(extension?.admin_actions) ? extension.admin_actions : []
+}
+
+function getRuntimeActions(extension) {
+  return Array.isArray(extension?.runtime_actions) ? extension.runtime_actions : []
 }
 
 function resolveActionToneClass(action) {
@@ -260,6 +290,13 @@ function resolveActionToneClass(action) {
     return 'ExtensionAction--subtle'
   }
   return ''
+}
+
+function resolveRuntimeStatusClass(extension) {
+  const key = extension?.runtime_status?.key
+  if (key === 'active') return 'is-enabled'
+  if (key === 'pending_install') return 'is-pending'
+  return 'is-disabled'
 }
 </script>
 
@@ -405,6 +442,11 @@ function resolveActionToneClass(action) {
 .ExtensionStatus.is-disabled {
   background: #f5f7fa;
   color: #6c7988;
+}
+
+.ExtensionStatus.is-pending {
+  background: #fff6e8;
+  color: #9a5b00;
 }
 
 .ExtensionCard-description {

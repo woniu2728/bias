@@ -20,6 +20,21 @@ class ExtensionAdminActionDefinition:
 
 
 @dataclass(frozen=True)
+class ExtensionRuntimeActionDefinition:
+    key: str
+    label: str
+    action: str
+    tone: str = "default"
+    confirm_title: str = ""
+    confirm_message: str = ""
+    confirm_text: str = ""
+    success_message: str = ""
+    requires_enabled: bool = False
+    requires_installed: bool = False
+    order: int = 100
+
+
+@dataclass(frozen=True)
 class ExtensionLifecyclePhaseDefinition:
     key: str
     label: str
@@ -107,11 +122,14 @@ class ExtensionRuntimeState:
     enabled: bool = True
     booted: bool = True
     healthy: bool = True
+    status_key: str = "active"
+    status_label: str = "已启用"
     migration_state: str = "builtin"
     migration_label: str = "内置扩展"
     dependency_state: str = "healthy"
     dependency_state_label: str = "依赖正常"
     runtime_issues: Tuple[str, ...] = ()
+    runtime_actions: Tuple[ExtensionRuntimeActionDefinition, ...] = ()
 
 
 @dataclass(frozen=True)
