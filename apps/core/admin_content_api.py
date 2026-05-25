@@ -1,4 +1,5 @@
 from ninja import Body, Router
+from django.shortcuts import get_object_or_404
 
 from apps.core.extensions import get_extension_registry
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError

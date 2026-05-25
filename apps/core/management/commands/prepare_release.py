@@ -4,6 +4,7 @@ import subprocess
 
 from django.conf import settings
 from django.core.management import BaseCommand, CommandError
+from django.core.management import call_command
 from django.core.management.base import CommandParser
 
 from apps.core.release import (
@@ -48,6 +49,8 @@ class Command(BaseCommand):
 
         if not allow_dirty:
             self._ensure_clean_git_state()
+
+        call_command("validate_extensions", "--strict")
 
         current_version = version_file.read_text(encoding="utf-8").strip()
         validate_semver(current_version, field_name="VERSION")

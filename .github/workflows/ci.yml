@@ -29,6 +29,9 @@ jobs:
       - name: Run critical backend lint
         run: flake8 apps config --jobs 1 --count --select=E9,F63,F7,F82 --show-source --statistics
 
+      - name: Validate extensions
+        run: python manage.py validate_extensions --strict
+
       - name: Run pytest
         run: pytest
 

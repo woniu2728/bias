@@ -197,6 +197,38 @@ class ExtensionValidationTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_validate_extension_manifests_reports_missing_frontend_admin_exports(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            admin_dir = manifest_dir / "frontend" / "admin"
+            admin_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "frontend_admin_entry": "extensions/alpha-tools/frontend/admin/index.js",
+                "settings_pages": ["/admin/extensions/alpha-tools/settings"],
+                "operations_pages": ["/admin/extensions/alpha-tools/operations"],
+            }, ensure_ascii=False), encoding="utf-8")
+            (admin_dir / "index.js").write_text(
+                "export function resolveSettingsPage() { return null }\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(
+                item.code == "missing_frontend_admin_export"
+                and "resolveOperationsPage" in item.message
+                for item in result.issues
+            ))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 class ExtensionManagementCommandTests(TestCase):
     def test_create_extension_command_scaffolds_manifest_and_admin_entry(self):
@@ -265,6 +297,31 @@ class ExtensionManagementCommandTests(TestCase):
                     str(Path(temp_dir) / "extensions"),
                     "--strict",
                 )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_reports_missing_frontend_admin_exports(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            admin_dir = manifest_dir / "frontend" / "admin"
+            admin_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "dependencies": ["core"],
+                "frontend_admin_entry": "extensions/alpha-tools/frontend/admin/index.js",
+                "settings_pages": ["/admin/extensions/alpha-tools/settings"],
+                "operations_pages": ["/admin/extensions/alpha-tools/operations"],
+            }, ensure_ascii=False), encoding="utf-8")
+            (admin_dir / "index.js").write_text(
+                "export function resolveSettingsPage() { return null }\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
+                call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

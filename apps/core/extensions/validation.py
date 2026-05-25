@@ -219,3 +219,22 @@ def _validate_frontend_admin_entry(
             extension_id=manifest.id,
             field="frontend_admin_entry",
         )
+        return
+
+    source = absolute_path.read_text(encoding="utf-8")
+    required_exports = []
+    if manifest.settings_pages:
+        required_exports.append("resolveSettingsPage")
+    if manifest.permissions_pages:
+        required_exports.append("resolvePermissionsPage")
+    if manifest.operations_pages:
+        required_exports.append("resolveOperationsPage")
+
+    for export_name in required_exports:
+        if f"export function {export_name}" not in source:
+            collector.add_error(
+                "missing_frontend_admin_export",
+                f"frontend_admin_entry 缺少导出函数: {export_name}",
+                extension_id=manifest.id,
+                field="frontend_admin_entry",
+            )
