@@ -100,3 +100,20 @@ test('admin routes can match extension permissions child paths', () => {
 
   assert.equal(route?.path, permissionsPath)
 })
+
+test('admin routes preserve compatibility redirects for legacy paths', () => {
+  const legacyPath = uniquePath('legacy')
+  const redirectTarget = '/admin/extensions/tags/settings'
+
+  registerAdminRoute({
+    path: legacyPath,
+    name: `route-${legacyPath}`,
+    label: '旧入口',
+    moduleId: 'tags',
+    redirect: redirectTarget,
+  })
+
+  const route = findAdminRouteByPath(legacyPath)
+
+  assert.equal(route?.redirect, redirectTarget)
+})

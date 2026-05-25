@@ -8,7 +8,6 @@ import FlagsPage from '../../views/FlagsPage.vue'
 import ApprovalQueuePage from '../../views/ApprovalQueuePage.vue'
 import AuditLogsPage from '../../views/AuditLogsPage.vue'
 import AppearancePage from '../../views/AppearancePage.vue'
-import TagsPage from '../../views/TagsPage.vue'
 import MailPage from '../../views/MailPage.vue'
 import AdvancedPage from '../../views/AdvancedPage.vue'
 import DeveloperDocsPage from '../../views/DeveloperDocsPage.vue'
@@ -210,10 +209,10 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/tags',
   name: 'admin-tags',
-  component: TagsPage,
+  redirect: '/admin/extensions/tags/settings',
   icon: 'fas fa-tags',
   label: '标签管理',
-  navDescription: '维护标签结构、排序和可见范围。',
+  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的标签设置页。',
   navSection: 'feature',
   navOrder: 140,
   moduleId: 'tags'

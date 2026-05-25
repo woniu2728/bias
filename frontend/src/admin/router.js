@@ -13,6 +13,7 @@ const routes = [
     path: route.path,
     name: route.name,
     component: route.component,
+    redirect: route.redirect,
   })),
   {
     path: '/:pathMatch(.*)*',
