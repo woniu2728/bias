@@ -3,9 +3,6 @@ import ExtensionsPage from '../../views/ExtensionsPage.vue'
 import ModulesPage from '../../views/ModulesPage.vue'
 import BasicsPage from '../../views/BasicsPage.vue'
 import PermissionsPage from '../../views/PermissionsPage.vue'
-import UsersPage from '../../views/UsersPage.vue'
-import FlagsPage from '../../views/FlagsPage.vue'
-import ApprovalQueuePage from '../../views/ApprovalQueuePage.vue'
 import AuditLogsPage from '../../views/AuditLogsPage.vue'
 import AppearancePage from '../../views/AppearancePage.vue'
 import MailPage from '../../views/MailPage.vue'
@@ -153,10 +150,10 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/users',
   name: 'admin-users',
-  component: UsersPage,
+  redirect: '/admin/extensions/users/operations',
   icon: 'fas fa-users',
   label: '用户管理',
-  navDescription: '查看用户资料、分组和封禁状态。',
+  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的用户管理页。',
   navSection: 'core',
   navOrder: 60,
   showInDashboardActions: true,
@@ -167,10 +164,10 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/approval',
   name: 'admin-approval',
-  component: ApprovalQueuePage,
+  redirect: '/admin/extensions/approval/operations',
   icon: 'fas fa-user-check',
   label: '审核队列',
-  navDescription: '集中处理待审核讨论和回复。',
+  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的审核操作页。',
   navSection: 'feature',
   navOrder: 110,
   showInDashboardActions: true,
@@ -181,10 +178,10 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/flags',
   name: 'admin-flags',
-  component: FlagsPage,
+  redirect: '/admin/extensions/flags/operations',
   icon: 'fas fa-flag',
   label: '举报管理',
-  navDescription: '查看和处理社区举报内容。',
+  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的举报处理页。',
   navSection: 'feature',
   navOrder: 120,
   showInDashboardActions: true,

@@ -37,7 +37,10 @@ import api from '../../api'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { findAdminRouteByPath } from '../registry'
+import ApprovalQueuePage from './ApprovalQueuePage.vue'
+import FlagsPage from './FlagsPage.vue'
 import TagsPage from './TagsPage.vue'
+import UsersPage from './UsersPage.vue'
 
 const route = useRoute()
 const loading = ref(true)
@@ -47,8 +50,17 @@ const resolvedComponent = ref(null)
 
 const adminEntryModules = import.meta.glob('../../../../extensions/*/frontend/admin/index.js')
 const builtinAdminEntries = {
+  'builtin:approval': {
+    resolveOperationsPage: () => ApprovalQueuePage,
+  },
+  'builtin:flags': {
+    resolveOperationsPage: () => FlagsPage,
+  },
   'builtin:tags': {
     resolveSettingsPage: () => TagsPage,
+  },
+  'builtin:users': {
+    resolveOperationsPage: () => UsersPage,
   },
 }
 

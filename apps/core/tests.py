@@ -184,8 +184,9 @@ class ExtensionRegistryTests(TestCase):
         self.assertEqual(extension.name, module.name)
         self.assertEqual(extension.manifest.dependencies, module.dependencies)
         self.assertEqual(extension.runtime.enabled, module.enabled)
+        self.assertEqual(extension.manifest.frontend_admin_entry, "builtin:approval")
         self.assertIn("/admin/permissions", extension.manifest.permissions_pages)
-        self.assertIn("/admin/approval", extension.manifest.operations_pages)
+        self.assertEqual(extension.manifest.operations_pages, ("/admin/extensions/approval/operations",))
 
     def test_builtin_adapter_can_map_tags_to_extension_settings_page(self):
         module = get_forum_registry().get_module("tags")
@@ -194,6 +195,17 @@ class ExtensionRegistryTests(TestCase):
         self.assertEqual(extension.manifest.frontend_admin_entry, "builtin:tags")
         self.assertEqual(extension.manifest.settings_pages, ("/admin/extensions/tags/settings",))
         self.assertEqual(extension.manifest.operations_pages, ())
+
+    def test_builtin_adapter_can_map_builtin_operations_pages_to_extension_host(self):
+        users_module = get_forum_registry().get_module("users")
+        users_extension = adapt_builtin_module_to_extension(users_module)
+        self.assertEqual(users_extension.manifest.frontend_admin_entry, "builtin:users")
+        self.assertEqual(users_extension.manifest.operations_pages, ("/admin/extensions/users/operations",))
+
+        flags_module = get_forum_registry().get_module("flags")
+        flags_extension = adapt_builtin_module_to_extension(flags_module)
+        self.assertEqual(flags_extension.manifest.frontend_admin_entry, "builtin:flags")
+        self.assertEqual(flags_extension.manifest.operations_pages, ("/admin/extensions/flags/operations",))
 
     def test_registry_applies_persisted_installation_state(self):
         ExtensionInstallation.objects.create(
@@ -298,6 +310,18 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(tags_extension["source"], "builtin-module")
         self.assertEqual(tags_extension["frontend_admin_entry"], "builtin:tags")
         self.assertEqual(tags_extension["action_links"]["settings_page"], "/admin/extensions/tags/settings")
+
+        approval_extension = next(item for item in payload["extensions"] if item["id"] == "approval")
+        self.assertEqual(approval_extension["frontend_admin_entry"], "builtin:approval")
+        self.assertEqual(approval_extension["action_links"]["operations_page"], "/admin/extensions/approval/operations")
+
+        users_extension = next(item for item in payload["extensions"] if item["id"] == "users")
+        self.assertEqual(users_extension["frontend_admin_entry"], "builtin:users")
+        self.assertEqual(users_extension["action_links"]["operations_page"], "/admin/extensions/users/operations")
+
+        flags_extension = next(item for item in payload["extensions"] if item["id"] == "flags")
+        self.assertEqual(flags_extension["frontend_admin_entry"], "builtin:flags")
+        self.assertEqual(flags_extension["action_links"]["operations_page"], "/admin/extensions/flags/operations")
 
     def test_extension_detail_api_returns_extension_actions(self):
         response = self.client.get(

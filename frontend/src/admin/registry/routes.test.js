@@ -117,3 +117,37 @@ test('admin routes preserve compatibility redirects for legacy paths', () => {
 
   assert.equal(route?.redirect, redirectTarget)
 })
+
+test('admin routes preserve compatibility redirects for builtin operations pages', () => {
+  const usersLegacyPath = uniquePath('users')
+  const approvalLegacyPath = uniquePath('approval')
+  const flagsLegacyPath = uniquePath('flags')
+
+  registerAdminRoute({
+    path: usersLegacyPath,
+    name: `route-${usersLegacyPath}`,
+    label: '用户旧入口',
+    moduleId: 'users',
+    redirect: '/admin/extensions/users/operations',
+  })
+
+  registerAdminRoute({
+    path: approvalLegacyPath,
+    name: `route-${approvalLegacyPath}`,
+    label: '审核旧入口',
+    moduleId: 'approval',
+    redirect: '/admin/extensions/approval/operations',
+  })
+
+  registerAdminRoute({
+    path: flagsLegacyPath,
+    name: `route-${flagsLegacyPath}`,
+    label: '举报旧入口',
+    moduleId: 'flags',
+    redirect: '/admin/extensions/flags/operations',
+  })
+
+  assert.equal(findAdminRouteByPath(usersLegacyPath)?.redirect, '/admin/extensions/users/operations')
+  assert.equal(findAdminRouteByPath(approvalLegacyPath)?.redirect, '/admin/extensions/approval/operations')
+  assert.equal(findAdminRouteByPath(flagsLegacyPath)?.redirect, '/admin/extensions/flags/operations')
+})
