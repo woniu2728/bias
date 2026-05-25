@@ -6015,6 +6015,38 @@ class ProductionRuntimeCheckTests(TestCase):
         execute_from_command_line_mock.assert_called_once_with(sys.argv)
 
     @patch("apps.core.startup_guard.enforce_production_runtime_checks")
+    @patch("django.core.management.execute_from_command_line")
+    def test_manage_py_main_skips_startup_guard_for_validate_extensions(
+        self,
+        execute_from_command_line_mock,
+        enforce_runtime_checks_mock,
+    ):
+        import manage
+
+        argv = ["manage.py", "validate_extensions"]
+        with patch.object(sys, "argv", argv):
+            manage.main()
+
+        enforce_runtime_checks_mock.assert_not_called()
+        execute_from_command_line_mock.assert_called_once_with(argv)
+
+    @patch("apps.core.startup_guard.enforce_production_runtime_checks")
+    @patch("django.core.management.execute_from_command_line")
+    def test_manage_py_main_skips_startup_guard_for_create_extension(
+        self,
+        execute_from_command_line_mock,
+        enforce_runtime_checks_mock,
+    ):
+        import manage
+
+        argv = ["manage.py", "create_extension", "demo-tools"]
+        with patch.object(sys, "argv", argv):
+            manage.main()
+
+        enforce_runtime_checks_mock.assert_not_called()
+        execute_from_command_line_mock.assert_called_once_with(argv)
+
+    @patch("apps.core.startup_guard.enforce_production_runtime_checks")
     def test_celery_module_enforces_production_runtime_checks(self, enforce_runtime_checks_mock):
         import config.celery as celery_module
 
