@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from apps.core.extensions.types import (
+    ExtensionAdminActionDefinition,
     ExtensionDefinition,
     ExtensionLifecycleDefinition,
     ExtensionLifecyclePhaseDefinition,
@@ -39,6 +40,7 @@ def adapt_builtin_module_to_extension(module: ForumModuleDefinition) -> Extensio
         settings_pages=_resolve_builtin_settings_pages(module),
         permissions_pages=("/admin/permissions",) if module.permissions else (),
         operations_pages=_resolve_builtin_operations_pages(module),
+        admin_actions=_build_builtin_admin_actions(module),
         source="builtin-module",
         path="apps/core/forum_registry_builtin.py",
     )
@@ -113,3 +115,70 @@ def _resolve_builtin_operations_pages(module: ForumModuleDefinition) -> tuple[st
     if module.module_id in hosted_operations_modules:
         return (f"/admin/extensions/{module.module_id}/operations",)
     return tuple(page.path for page in module.admin_pages if not page.settings_group)
+
+
+def _build_builtin_admin_actions(module: ForumModuleDefinition) -> tuple[ExtensionAdminActionDefinition, ...]:
+    settings_page = next(iter(_resolve_builtin_settings_pages(module)), "")
+    permissions_page = "/admin/permissions" if module.permissions else ""
+    operations_page = next(iter(_resolve_builtin_operations_pages(module)), "")
+
+    actions: list[ExtensionAdminActionDefinition] = [
+        ExtensionAdminActionDefinition(
+            key="details",
+            label="查看详情",
+            kind="route",
+            target=f"/admin/extensions/{module.module_id}",
+            icon="fas fa-arrow-right",
+            tone="primary",
+            order=10,
+        )
+    ]
+
+    if settings_page:
+        actions.append(ExtensionAdminActionDefinition(
+            key="settings",
+            label="设置",
+            kind="route",
+            target=settings_page,
+            icon="fas fa-sliders-h",
+            tone="default",
+            requires_enabled=True,
+            order=20,
+        ))
+
+    if permissions_page and permissions_page != settings_page:
+        actions.append(ExtensionAdminActionDefinition(
+            key="permissions",
+            label="权限",
+            kind="route",
+            target=permissions_page,
+            icon="fas fa-user-shield",
+            tone="default",
+            requires_enabled=True,
+            order=30,
+        ))
+
+    if operations_page and operations_page not in {settings_page, permissions_page}:
+        actions.append(ExtensionAdminActionDefinition(
+            key="operations",
+            label="操作",
+            kind="route",
+            target=operations_page,
+            icon="fas fa-screwdriver-wrench",
+            tone="default",
+            requires_enabled=True,
+            order=40,
+        ))
+
+    if module.documentation_url:
+        actions.append(ExtensionAdminActionDefinition(
+            key="documentation",
+            label="文档",
+            kind="link",
+            target=module.documentation_url,
+            icon="fas fa-book",
+            tone="subtle",
+            order=50,
+        ))
+
+    return tuple(actions)

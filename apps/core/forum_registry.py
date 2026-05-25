@@ -403,6 +403,12 @@ def get_forum_registry() -> ForumRegistry:
     return _registry
 
 
+def get_builtin_module_ids() -> Tuple[str, ...]:
+    registry = ForumRegistry()
+    _register_builtin_modules(registry)
+    return tuple(sorted(registry._modules.keys()))
+
+
 def get_registry_permission_codes_by_prefix(prefix: str) -> Tuple[str, ...]:
     normalized_prefix = str(prefix or "").strip()
     if not normalized_prefix:

@@ -138,6 +138,14 @@ class ExtensionManifestLoaderTests(TestCase):
                 "settings_pages": ["/admin/extensions/sample"],
                 "permissions_pages": ["/admin/extensions/sample/permissions"],
                 "operations_pages": ["/admin/extensions/sample/operations"],
+                "admin_actions": [
+                    {
+                        "key": "details",
+                        "label": "查看详情",
+                        "kind": "route",
+                        "target": "/admin/extensions/sample-extension",
+                    }
+                ],
             }, ensure_ascii=False), encoding="utf-8")
 
             loader = ExtensionManifestLoader(base_dir / "extensions")
@@ -150,6 +158,7 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(results[0].manifest.settings_pages, ("/admin/extensions/sample",))
             self.assertEqual(results[0].manifest.permissions_pages, ("/admin/extensions/sample/permissions",))
             self.assertEqual(results[0].manifest.operations_pages, ("/admin/extensions/sample/operations",))
+            self.assertEqual(results[0].manifest.admin_actions[0].key, "details")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -229,8 +238,71 @@ class ExtensionValidationTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_validate_extension_manifests_reports_invalid_admin_actions(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "dependencies": ["core"],
+                "admin_actions": [
+                    {
+                        "key": "broken",
+                        "label": "坏动作",
+                        "kind": "command",
+                        "target": "/admin/extensions/alpha-tools",
+                        "tone": "loud",
+                    },
+                    {
+                        "key": "broken-route",
+                        "label": "坏路由",
+                        "kind": "route",
+                        "target": "admin/extensions/alpha-tools",
+                        "tone": "default",
+                    }
+                ],
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "invalid_admin_action_kind" for item in result.issues))
+            self.assertTrue(any(item.code == "invalid_admin_action_tone" for item in result.issues))
+            self.assertTrue(any(item.code == "invalid_admin_action_target" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 class ExtensionManagementCommandTests(TestCase):
+    def test_extension_management_commands_skip_django_system_checks(self):
+        from apps.core.management.commands.create_extension import Command as CreateExtensionCommand
+        from apps.core.management.commands.validate_extensions import Command as ValidateExtensionsCommand
+
+        self.assertEqual(CreateExtensionCommand.requires_system_checks, [])
+        self.assertEqual(ValidateExtensionsCommand.requires_system_checks, [])
+
+    @patch("apps.core.management.commands.validate_extensions.get_builtin_module_ids", return_value=("core",))
+    def test_validate_extensions_command_uses_builtin_module_snapshot(self, get_builtin_module_ids_mock):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command("create_extension", "alpha-tools")
+                call_command(
+                    "validate_extensions",
+                    "--extensions-path",
+                    str(Path(temp_dir) / "extensions"),
+                    "--strict",
+                )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+        get_builtin_module_ids_mock.assert_called_once_with()
+
     def test_create_extension_command_scaffolds_manifest_and_admin_entry(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -249,6 +321,7 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertEqual(manifest["id"], "alpha-tools")
                 self.assertEqual(manifest["name"], "Alpha Tools")
                 self.assertEqual(manifest["frontend_admin_entry"], "extensions/alpha-tools/frontend/admin/index.js")
+                self.assertEqual(manifest["admin_actions"][0]["key"], "details")
                 self.assertTrue((extension_dir / "frontend" / "admin" / "index.js").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "SettingsPage.vue").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "OperationsPage.vue").exists())
@@ -470,6 +543,7 @@ class AdminExtensionsApiTests(TestCase):
         self.assertIn("phases", core_extension["lifecycle"])
         self.assertTrue(any(phase["key"] == "register" for phase in core_extension["lifecycle"]["phases"]))
         self.assertEqual(core_extension["action_links"]["detail_page"], "/admin/extensions/core")
+        self.assertTrue(any(action["key"] == "details" for action in core_extension["admin_actions"]))
 
         sample_extension = next(item for item in payload["extensions"] if item["id"] == "sample-hello")
         self.assertEqual(sample_extension["source"], "filesystem")
@@ -478,6 +552,8 @@ class AdminExtensionsApiTests(TestCase):
         self.assertIn("/admin/extensions/sample-hello/permissions", sample_extension["permissions_pages"])
         self.assertEqual(sample_extension["action_links"]["settings_page"], "/admin/extensions/sample-hello/settings")
         self.assertEqual(sample_extension["action_links"]["permissions_page"], "/admin/extensions/sample-hello/permissions")
+        self.assertEqual(sample_extension["admin_actions"][0]["key"], "details")
+        self.assertTrue(any(action["key"] == "documentation" for action in sample_extension["admin_actions"]))
 
         tags_extension = next(item for item in payload["extensions"] if item["id"] == "tags")
         self.assertEqual(tags_extension["source"], "builtin-module")
@@ -510,6 +586,7 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(payload["action_links"]["permissions_page"], "/admin/extensions/sample-hello/permissions")
         self.assertEqual(payload["action_links"]["operations_page"], "/admin/extensions/sample-hello/operations")
         self.assertEqual(payload["frontend_admin_entry"], "extensions/sample-hello/frontend/admin/index.js")
+        self.assertEqual(payload["admin_actions"][0]["key"], "details")
 
     def test_extensions_api_can_disable_and_enable_extension(self):
         disable_response = self.client.post(
@@ -521,6 +598,7 @@ class AdminExtensionsApiTests(TestCase):
         disabled_payload = disable_response.json()
         disabled_extension = next(item for item in disabled_payload["extensions"] if item["id"] == "sample-hello")
         self.assertFalse(disabled_extension["enabled"])
+        self.assertEqual([item["key"] for item in disabled_extension["admin_actions"]], ["details", "documentation"])
 
         installation = ExtensionInstallation.objects.get(extension_id="sample-hello")
         self.assertFalse(installation.enabled)

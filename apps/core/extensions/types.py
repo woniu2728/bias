@@ -6,6 +6,20 @@ from typing import Any, Tuple
 
 
 @dataclass(frozen=True)
+class ExtensionAdminActionDefinition:
+    key: str
+    label: str
+    kind: str = "route"
+    target: str = ""
+    icon: str = ""
+    tone: str = "default"
+    opens_in_new_tab: bool = False
+    requires_enabled: bool = False
+    description: str = ""
+    order: int = 100
+
+
+@dataclass(frozen=True)
 class ExtensionLifecyclePhaseDefinition:
     key: str
     label: str
@@ -80,6 +94,7 @@ class ExtensionManifest:
     settings_pages: Tuple[str, ...] = ()
     permissions_pages: Tuple[str, ...] = ()
     operations_pages: Tuple[str, ...] = ()
+    admin_actions: Tuple[ExtensionAdminActionDefinition, ...] = ()
     migration_namespace: str = ""
     source: str = "filesystem"
     path: str = ""

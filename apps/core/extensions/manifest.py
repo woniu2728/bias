@@ -4,7 +4,11 @@ import json
 from pathlib import Path
 
 from apps.core.extensions.exceptions import ExtensionManifestError
-from apps.core.extensions.types import ExtensionDiscoveryResult, ExtensionManifest
+from apps.core.extensions.types import (
+    ExtensionAdminActionDefinition,
+    ExtensionDiscoveryResult,
+    ExtensionManifest,
+)
 from apps.core.extensions.validation import EXTENSION_ID_PATTERN, SEMVER_PATTERN
 
 
@@ -69,8 +73,23 @@ class ExtensionManifestLoader:
             settings_pages=tuple(str(item).strip() for item in payload.get("settings_pages", []) if str(item).strip()),
             permissions_pages=tuple(str(item).strip() for item in payload.get("permissions_pages", []) if str(item).strip()),
             operations_pages=tuple(str(item).strip() for item in payload.get("operations_pages", []) if str(item).strip()),
+            admin_actions=tuple(self._build_admin_action(item) for item in payload.get("admin_actions", []) if isinstance(item, dict)),
             migration_namespace=str(payload.get("migration_namespace") or "").strip(),
             source="filesystem",
             path=str(manifest_path.parent),
             extra=dict(payload.get("extra") or {}),
+        )
+
+    def _build_admin_action(self, payload: dict) -> ExtensionAdminActionDefinition:
+        return ExtensionAdminActionDefinition(
+            key=str(payload.get("key") or "").strip(),
+            label=str(payload.get("label") or "").strip(),
+            kind=str(payload.get("kind") or "route").strip() or "route",
+            target=str(payload.get("target") or "").strip(),
+            icon=str(payload.get("icon") or "").strip(),
+            tone=str(payload.get("tone") or "default").strip() or "default",
+            opens_in_new_tab=bool(payload.get("opens_in_new_tab", False)),
+            requires_enabled=bool(payload.get("requires_enabled", False)),
+            description=str(payload.get("description") or "").strip(),
+            order=int(payload.get("order", 100) or 100),
         )

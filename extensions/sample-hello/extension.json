@@ -26,6 +26,56 @@
   "operations_pages": [
     "/admin/extensions/sample-hello/operations"
   ],
+  "admin_actions": [
+    {
+      "key": "details",
+      "label": "查看详情",
+      "kind": "route",
+      "target": "/admin/extensions/sample-hello",
+      "icon": "fas fa-arrow-right",
+      "tone": "primary",
+      "order": 10
+    },
+    {
+      "key": "settings",
+      "label": "设置",
+      "kind": "route",
+      "target": "/admin/extensions/sample-hello/settings",
+      "icon": "fas fa-sliders-h",
+      "tone": "default",
+      "requires_enabled": true,
+      "order": 20
+    },
+    {
+      "key": "permissions",
+      "label": "权限",
+      "kind": "route",
+      "target": "/admin/extensions/sample-hello/permissions",
+      "icon": "fas fa-user-shield",
+      "tone": "default",
+      "requires_enabled": true,
+      "order": 30
+    },
+    {
+      "key": "operations",
+      "label": "操作",
+      "kind": "route",
+      "target": "/admin/extensions/sample-hello/operations",
+      "icon": "fas fa-screwdriver-wrench",
+      "tone": "default",
+      "requires_enabled": true,
+      "order": 40
+    },
+    {
+      "key": "documentation",
+      "label": "文档",
+      "kind": "link",
+      "target": "/admin.html#/admin/docs?guide=extension-system-roadmap&extension=sample-hello",
+      "icon": "fas fa-book",
+      "tone": "subtle",
+      "order": 50
+    }
+  ],
   "extra": {
     "display_order": 1000,
     "experimental": true

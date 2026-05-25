@@ -82,26 +82,28 @@
             </div>
 
             <div class="ExtensionCard-side">
-              <router-link
-                :to="extension.action_links?.detail_page || `/admin/extensions/${extension.id}`"
-                class="ExtensionAction ExtensionAction--primary"
-              >
-                查看详情
-              </router-link>
-              <router-link
-                v-if="extension.action_links?.settings_page"
-                :to="extension.action_links.settings_page"
-                class="ExtensionAction"
-              >
-                设置入口
-              </router-link>
-              <a
-                v-if="extension.documentation_url"
-                :href="extension.documentation_url"
-                class="ExtensionAction"
-              >
-                查看文档
-              </a>
+              <template v-for="action in getVisibleAdminActions(extension)" :key="`${extension.id}-${action.key}`">
+                <router-link
+                  v-if="action.kind === 'route'"
+                  :to="action.target"
+                  class="ExtensionAction"
+                  :class="resolveActionToneClass(action)"
+                >
+                  <i v-if="action.icon" :class="action.icon"></i>
+                  <span>{{ action.label }}</span>
+                </router-link>
+                <a
+                  v-else
+                  :href="action.target"
+                  class="ExtensionAction"
+                  :class="resolveActionToneClass(action)"
+                  :target="action.opens_in_new_tab ? '_blank' : null"
+                  :rel="action.opens_in_new_tab ? 'noreferrer noopener' : null"
+                >
+                  <i v-if="action.icon" :class="action.icon"></i>
+                  <span>{{ action.label }}</span>
+                </a>
+              </template>
 
               <span class="ExtensionLifecycle">
                 {{ extension.lifecycle?.registration_mode_label || '静态注册' }}
@@ -241,6 +243,23 @@ async function toggleExtension(extension) {
   } finally {
     actionLoadingId.value = ''
   }
+}
+
+function getVisibleAdminActions(extension) {
+  return Array.isArray(extension?.admin_actions) ? extension.admin_actions : []
+}
+
+function resolveActionToneClass(action) {
+  if (action?.tone === 'primary') {
+    return 'ExtensionAction--primary'
+  }
+  if (action?.tone === 'danger') {
+    return 'ExtensionAction--danger'
+  }
+  if (action?.tone === 'subtle') {
+    return 'ExtensionAction--subtle'
+  }
+  return ''
 }
 </script>
 
@@ -431,6 +450,7 @@ async function toggleExtension(extension) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-height: 34px;
   padding: 0 12px;
   border: 1px solid var(--forum-border-color);
@@ -446,6 +466,16 @@ async function toggleExtension(extension) {
   background: #edf4fb;
   border-color: #d6e4f3;
   color: #325b85;
+}
+
+.ExtensionAction--subtle {
+  background: transparent;
+}
+
+.ExtensionAction--danger {
+  background: #fff4f4;
+  border-color: #f0d0d0;
+  color: #b54747;
 }
 
 .ExtensionLifecycle {

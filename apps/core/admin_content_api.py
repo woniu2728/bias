@@ -103,6 +103,7 @@ def _serialize_admin_extension(extension):
     settings_page = next(iter(extension.manifest.settings_pages), "")
     permissions_page = next(iter(extension.manifest.permissions_pages), "")
     operations_page = next(iter(extension.manifest.operations_pages), "")
+    admin_actions = _serialize_extension_admin_actions(extension)
 
     return {
         "id": extension.id,
@@ -135,6 +136,7 @@ def _serialize_admin_extension(extension):
         "module_ids": list(extension.module_ids),
         "admin_pages": list(extension.admin_pages),
         "settings_groups": list(extension.settings_groups),
+        "admin_actions": admin_actions,
         "action_links": {
             "detail_page": detail_page,
             "settings_page": settings_page,
@@ -159,6 +161,26 @@ def _serialize_admin_extension(extension):
             ],
         },
     }
+
+
+def _serialize_extension_admin_actions(extension):
+    actions = []
+    for action in sorted(extension.manifest.admin_actions, key=lambda item: (item.order, item.key)):
+        if action.requires_enabled and not extension.runtime.enabled:
+            continue
+        actions.append({
+            "key": action.key,
+            "label": action.label,
+            "kind": action.kind,
+            "target": action.target,
+            "icon": action.icon,
+            "tone": action.tone,
+            "opens_in_new_tab": action.opens_in_new_tab,
+            "requires_enabled": action.requires_enabled,
+            "description": action.description,
+            "order": action.order,
+        })
+    return actions
 
 
 @router.get("/modules", auth=AccessTokenAuth(), tags=["Admin"])

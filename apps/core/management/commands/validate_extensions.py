@@ -9,11 +9,12 @@ from django.core.management.base import CommandParser
 from apps.core.extensions.exceptions import ExtensionManifestError
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.validation import validate_extension_manifests_with_available_ids
-from apps.core.forum_registry import get_forum_registry
+from apps.core.forum_registry import get_builtin_module_ids
 
 
 class Command(BaseCommand):
     help = "校验扩展 manifest、依赖关系与后台入口约束。"
+    requires_system_checks = []
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
@@ -36,7 +37,7 @@ class Command(BaseCommand):
         except ExtensionManifestError as exc:
             raise CommandError(str(exc)) from exc
 
-        builtin_extension_ids = {module.module_id for module in get_forum_registry().get_modules()}
+        builtin_extension_ids = set(get_builtin_module_ids())
         result = validate_extension_manifests_with_available_ids(
             manifests,
             available_extension_ids=builtin_extension_ids,

@@ -12,6 +12,7 @@ from apps.core.extensions.validation import EXTENSION_ID_PATTERN
 
 class Command(BaseCommand):
     help = "创建 Bias 扩展脚手架，生成 manifest、后台入口与基础目录。"
+    requires_system_checks = []
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("extension_id", help="扩展 ID，例如 sample-tools")
@@ -112,6 +113,56 @@ class Command(BaseCommand):
             "settings_pages": [f"/admin/extensions/{extension_id}/settings"],
             "permissions_pages": [f"/admin/extensions/{extension_id}/permissions"],
             "operations_pages": [f"/admin/extensions/{extension_id}/operations"],
+            "admin_actions": [
+                {
+                    "key": "details",
+                    "label": "查看详情",
+                    "kind": "route",
+                    "target": f"/admin/extensions/{extension_id}",
+                    "icon": "fas fa-arrow-right",
+                    "tone": "primary",
+                    "order": 10,
+                },
+                {
+                    "key": "settings",
+                    "label": "设置",
+                    "kind": "route",
+                    "target": f"/admin/extensions/{extension_id}/settings",
+                    "icon": "fas fa-sliders-h",
+                    "tone": "default",
+                    "requires_enabled": True,
+                    "order": 20,
+                },
+                {
+                    "key": "permissions",
+                    "label": "权限",
+                    "kind": "route",
+                    "target": f"/admin/extensions/{extension_id}/permissions",
+                    "icon": "fas fa-user-shield",
+                    "tone": "default",
+                    "requires_enabled": True,
+                    "order": 30,
+                },
+                {
+                    "key": "operations",
+                    "label": "操作",
+                    "kind": "route",
+                    "target": f"/admin/extensions/{extension_id}/operations",
+                    "icon": "fas fa-screwdriver-wrench",
+                    "tone": "default",
+                    "requires_enabled": True,
+                    "order": 40,
+                },
+                {
+                    "key": "documentation",
+                    "label": "文档",
+                    "kind": "link",
+                    "target": f"/admin.html#/admin/docs?guide=extension-system-roadmap&extension={extension_id}",
+                    "icon": "fas fa-book",
+                    "tone": "subtle",
+                    "order": 50,
+                },
+            ],
             "extra": {
                 "display_order": 1000,
                 "experimental": True,

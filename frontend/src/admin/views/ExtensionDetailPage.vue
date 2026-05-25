@@ -39,34 +39,28 @@
       </section>
 
       <section class="ExtensionDetailPage-actions">
-        <router-link
-          v-if="extension.action_links?.settings_page"
-          :to="extension.action_links.settings_page"
-          class="ExtensionDetailAction ExtensionDetailAction--primary"
-        >
-          设置入口
-        </router-link>
-        <router-link
-          v-if="shouldShowPermissionsLink"
-          :to="extension.action_links.permissions_page"
-          class="ExtensionDetailAction"
-        >
-          权限入口
-        </router-link>
-        <router-link
-          v-if="shouldShowOperationsLink"
-          :to="extension.action_links.operations_page"
-          class="ExtensionDetailAction"
-        >
-          操作入口
-        </router-link>
-        <a
-          v-if="extension.action_links?.documentation_url"
-          :href="extension.action_links.documentation_url"
-          class="ExtensionDetailAction"
-        >
-          查看文档
-        </a>
+        <template v-for="action in adminActions" :key="action.key">
+          <router-link
+            v-if="action.kind === 'route'"
+            :to="action.target"
+            class="ExtensionDetailAction"
+            :class="resolveActionToneClass(action)"
+          >
+            <i v-if="action.icon" :class="action.icon"></i>
+            <span>{{ action.label }}</span>
+          </router-link>
+          <a
+            v-else
+            :href="action.target"
+            class="ExtensionDetailAction"
+            :class="resolveActionToneClass(action)"
+            :target="action.opens_in_new_tab ? '_blank' : null"
+            :rel="action.opens_in_new_tab ? 'noreferrer noopener' : null"
+          >
+            <i v-if="action.icon" :class="action.icon"></i>
+            <span>{{ action.label }}</span>
+          </a>
+        </template>
         <button
           type="button"
           class="ExtensionDetailAction"
@@ -194,18 +188,8 @@ const actionItems = computed(() => {
   ].filter(item => item.value)
 })
 
-const shouldShowPermissionsLink = computed(() => {
-  const link = extension.value?.action_links?.permissions_page || ''
-  return Boolean(link && link !== extension.value?.action_links?.settings_page)
-})
-
-const shouldShowOperationsLink = computed(() => {
-  const link = extension.value?.action_links?.operations_page || ''
-  return Boolean(
-    link
-    && link !== extension.value?.action_links?.settings_page
-    && link !== extension.value?.action_links?.permissions_page
-  )
+const adminActions = computed(() => {
+  return Array.isArray(extension.value?.admin_actions) ? extension.value.admin_actions : []
 })
 
 onMounted(async () => {
@@ -258,6 +242,19 @@ function formatList(items) {
   return Array.isArray(items) && items.length ? items.join('、') : '无'
 }
 
+function resolveActionToneClass(action) {
+  if (action?.tone === 'primary') {
+    return 'ExtensionDetailAction--primary'
+  }
+  if (action?.tone === 'danger') {
+    return 'ExtensionDetailAction--danger'
+  }
+  if (action?.tone === 'subtle') {
+    return 'ExtensionDetailAction--subtle'
+  }
+  return ''
+}
+
 function syncModulesFromExtension(currentExtension) {
   if (!currentExtension || !Array.isArray(currentExtension.module_ids) || !currentExtension.module_ids.length) {
     return
@@ -302,12 +299,23 @@ function syncModulesFromExtension(currentExtension) {
 
 .ExtensionDetailAction {
   cursor: pointer;
+  gap: 8px;
 }
 
 .ExtensionDetailAction--primary {
   border-color: var(--forum-primary-color);
   background: var(--forum-primary-color);
   color: var(--forum-text-inverse);
+}
+
+.ExtensionDetailAction--subtle {
+  background: transparent;
+}
+
+.ExtensionDetailAction--danger {
+  border-color: #f0d0d0;
+  background: #fff4f4;
+  color: #b54747;
 }
 
 .ExtensionDetailPage-status {

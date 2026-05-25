@@ -154,6 +154,7 @@ def _validate_single_manifest(
     _validate_unique_strings(collector, manifest, "settings_pages", manifest.settings_pages)
     _validate_unique_strings(collector, manifest, "permissions_pages", manifest.permissions_pages)
     _validate_unique_strings(collector, manifest, "operations_pages", manifest.operations_pages)
+    _validate_admin_actions(collector, manifest)
 
     for field_name, pages in (
         ("settings_pages", manifest.settings_pages),
@@ -171,6 +172,74 @@ def _validate_single_manifest(
 
     if base_path is not None:
         _validate_frontend_admin_entry(collector, manifest, base_path)
+
+
+def _validate_admin_actions(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+) -> None:
+    seen_keys: set[str] = set()
+    allowed_kinds = {"route", "link"}
+    allowed_tones = {"default", "primary", "subtle", "danger"}
+
+    for action in manifest.admin_actions:
+        if not action.key:
+            collector.add_error(
+                "invalid_admin_action",
+                "admin_actions 中的 key 不能为空",
+                extension_id=manifest.id,
+                field="admin_actions",
+            )
+        elif action.key in seen_keys:
+            collector.add_error(
+                "duplicate_admin_action_key",
+                f"admin_actions 中存在重复 key: {action.key}",
+                extension_id=manifest.id,
+                field="admin_actions",
+            )
+        else:
+            seen_keys.add(action.key)
+
+        if not action.label:
+            collector.add_error(
+                "invalid_admin_action",
+                "admin_actions 中的 label 不能为空",
+                extension_id=manifest.id,
+                field="admin_actions",
+            )
+
+        if action.kind not in allowed_kinds:
+            collector.add_error(
+                "invalid_admin_action_kind",
+                f"admin_actions.kind 不支持: {action.kind}",
+                extension_id=manifest.id,
+                field="admin_actions",
+            )
+
+        if action.tone not in allowed_tones:
+            collector.add_error(
+                "invalid_admin_action_tone",
+                f"admin_actions.tone 不支持: {action.tone}",
+                extension_id=manifest.id,
+                field="admin_actions",
+            )
+
+        if not action.target:
+            collector.add_error(
+                "invalid_admin_action",
+                "admin_actions 中的 target 不能为空",
+                extension_id=manifest.id,
+                field="admin_actions",
+            )
+            continue
+
+        if action.kind == "route" and not action.target.startswith("/"):
+            collector.add_error(
+                "invalid_admin_action_target",
+                "route 类型的 admin_actions.target 必须以 / 开头",
+                extension_id=manifest.id,
+                field="admin_actions",
+            )
 
 
 def _validate_unique_strings(
