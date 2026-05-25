@@ -62,6 +62,7 @@ class ExtensionManifestLoader:
             frontend_forum_entry=str(payload.get("frontend_forum_entry") or "").strip(),
             settings_pages=tuple(str(item).strip() for item in payload.get("settings_pages", []) if str(item).strip()),
             permissions_pages=tuple(str(item).strip() for item in payload.get("permissions_pages", []) if str(item).strip()),
+            operations_pages=tuple(str(item).strip() for item in payload.get("operations_pages", []) if str(item).strip()),
             migration_namespace=str(payload.get("migration_namespace") or "").strip(),
             source="filesystem",
             path=str(manifest_path.parent),

@@ -83,23 +83,22 @@
 
             <div class="ExtensionCard-side">
               <router-link
-                v-if="extension.settings_pages.length"
-                :to="extension.settings_pages[0]"
+                :to="extension.action_links?.detail_page || `/admin/extensions/${extension.id}`"
                 class="ExtensionAction ExtensionAction--primary"
+              >
+                查看详情
+              </router-link>
+              <router-link
+                v-if="extension.action_links?.settings_page"
+                :to="extension.action_links.settings_page"
+                class="ExtensionAction"
               >
                 设置入口
               </router-link>
-              <router-link
-                v-else-if="extension.permissions_pages.length"
-                :to="extension.permissions_pages[0]"
-                class="ExtensionAction ExtensionAction--primary"
-              >
-                权限入口
-              </router-link>
               <a
-                v-else-if="extension.documentation_url"
+                v-if="extension.documentation_url"
                 :href="extension.documentation_url"
-                class="ExtensionAction ExtensionAction--primary"
+                class="ExtensionAction"
               >
                 查看文档
               </a>

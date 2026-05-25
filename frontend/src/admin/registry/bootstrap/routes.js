@@ -12,6 +12,8 @@ import TagsPage from '../../views/TagsPage.vue'
 import MailPage from '../../views/MailPage.vue'
 import AdvancedPage from '../../views/AdvancedPage.vue'
 import DeveloperDocsPage from '../../views/DeveloperDocsPage.vue'
+import ExtensionDetailPage from '../../views/ExtensionDetailPage.vue'
+import ExtensionHostPage from '../../views/ExtensionHostPage.vue'
 import { registerAdminRoute } from '../routes.js'
 
 registerAdminRoute({
@@ -37,6 +39,61 @@ registerAdminRoute({
   navOrder: 20,
   showInDashboardActions: true,
   moduleId: 'core'
+})
+
+registerAdminRoute({
+  path: '/admin/extensions/:extensionId',
+  name: 'admin-extension-detail',
+  component: ExtensionDetailPage,
+  icon: 'fas fa-puzzle-piece',
+  label: '扩展详情',
+  navDescription: '查看扩展详情、后台入口和运行时状态。',
+  navSection: 'core',
+  navOrder: 21,
+  showInNavigation: false,
+  moduleId: 'core'
+})
+
+registerAdminRoute({
+  path: '/admin/extensions/:extensionId/settings',
+  name: 'admin-extension-settings',
+  component: ExtensionHostPage,
+  icon: 'fas fa-sliders-h',
+  label: '扩展设置',
+  navDescription: '加载扩展自带的后台设置页面。',
+  navSection: 'core',
+  navOrder: 22,
+  showInNavigation: false,
+  moduleId: 'core',
+  extensionHostKind: 'settings',
+})
+
+registerAdminRoute({
+  path: '/admin/extensions/:extensionId/permissions',
+  name: 'admin-extension-permissions',
+  component: ExtensionHostPage,
+  icon: 'fas fa-key',
+  label: '扩展权限',
+  navDescription: '加载扩展自带的后台权限页面。',
+  navSection: 'core',
+  navOrder: 23,
+  showInNavigation: false,
+  moduleId: 'core',
+  extensionHostKind: 'permissions',
+})
+
+registerAdminRoute({
+  path: '/admin/extensions/:extensionId/operations',
+  name: 'admin-extension-operations',
+  component: ExtensionHostPage,
+  icon: 'fas fa-screwdriver-wrench',
+  label: '扩展操作',
+  navDescription: '加载扩展自带的后台操作页面。',
+  navSection: 'core',
+  navOrder: 24,
+  showInNavigation: false,
+  moduleId: 'core',
+  extensionHostKind: 'operations',
 })
 
 registerAdminRoute({

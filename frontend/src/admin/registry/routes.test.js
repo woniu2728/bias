@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  findAdminRouteByPath,
   getAdminDashboardActions,
   getAdminNavSections,
   getAdminRoutes,
@@ -47,4 +48,55 @@ test('admin routes respect runtime module visibility filter', () => {
   assert.equal(sections.some(section => section.items.some(item => item.path === disabledPath)), false)
   assert.equal(actions.some(item => item.to === enabledPath), true)
   assert.equal(actions.some(item => item.to === disabledPath), false)
+})
+
+test('admin routes can match dynamic paths for route guards', () => {
+  const detailPath = uniquePath('extensions') + '/:extensionId'
+
+  registerAdminRoute({
+    path: detailPath,
+    name: `route-${detailPath}`,
+    label: '动态详情页',
+    moduleId: 'core',
+    navOrder: 803,
+    showInNavigation: false,
+  })
+
+  const route = findAdminRouteByPath(detailPath.replace('/:extensionId', '/sample-hello'))
+
+  assert.equal(route?.path, detailPath)
+})
+
+test('admin routes can match extension settings child paths', () => {
+  const settingsPath = uniquePath('extensions') + '/:extensionId/settings'
+
+  registerAdminRoute({
+    path: settingsPath,
+    name: `route-${settingsPath}`,
+    label: '扩展设置页',
+    moduleId: 'core',
+    navOrder: 804,
+    showInNavigation: false,
+  })
+
+  const route = findAdminRouteByPath(settingsPath.replace('/:extensionId', '/sample-hello'))
+
+  assert.equal(route?.path, settingsPath)
+})
+
+test('admin routes can match extension permissions child paths', () => {
+  const permissionsPath = uniquePath('extensions') + '/:extensionId/permissions'
+
+  registerAdminRoute({
+    path: permissionsPath,
+    name: `route-${permissionsPath}`,
+    label: '扩展权限页',
+    moduleId: 'core',
+    navOrder: 805,
+    showInNavigation: false,
+  })
+
+  const route = findAdminRouteByPath(permissionsPath.replace('/:extensionId', '/sample-hello'))
+
+  assert.equal(route?.path, permissionsPath)
 })

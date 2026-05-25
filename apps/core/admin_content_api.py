@@ -1,8 +1,7 @@
-from django.shortcuts import get_object_or_404
 from ninja import Body, Router
 
 from apps.core.extensions import get_extension_registry
-from apps.core.extensions.exceptions import ExtensionStateError
+from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
 from apps.core.extension_service import ExtensionService
 from apps.core.jwt_auth import AccessTokenAuth
 
@@ -30,6 +29,21 @@ def list_admin_extensions(request):
         return denied
 
     return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+
+
+@router.get("/extensions/{extension_id}", auth=AccessTokenAuth(), tags=["Admin"])
+def get_admin_extension(request, extension_id: str):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    try:
+        extension = get_extension_registry().get_extension(extension_id)
+    except ExtensionNotFoundError:
+        return _legacy().admin_error("扩展不存在", status=404, code="extension_not_found")
+    return {
+        "extension": _serialize_admin_extension(extension),
+    }
 
 
 @router.post("/extensions/{extension_id}/enable", auth=AccessTokenAuth(), tags=["Admin"])
@@ -69,53 +83,7 @@ def disable_admin_extension(request, extension_id: str):
 
 
 def _serialize_admin_extensions_payload(extensions):
-    payload = [
-        {
-            "id": extension.id,
-            "name": extension.name,
-            "version": extension.version,
-            "description": extension.description,
-            "icon": extension.manifest.icon,
-            "category": extension.manifest.category,
-            "documentation_url": extension.manifest.documentation_url,
-            "dependencies": list(extension.manifest.dependencies),
-            "optional_dependencies": list(extension.manifest.optional_dependencies),
-            "conflicts": list(extension.manifest.conflicts),
-            "provides": list(extension.manifest.provides),
-            "settings_pages": list(extension.manifest.settings_pages),
-            "permissions_pages": list(extension.manifest.permissions_pages),
-            "installed": extension.runtime.installed,
-            "enabled": extension.runtime.enabled,
-            "booted": extension.runtime.booted,
-            "healthy": extension.runtime.healthy,
-            "migration_state": extension.runtime.migration_state,
-            "migration_label": extension.runtime.migration_label,
-            "dependency_state": extension.runtime.dependency_state,
-            "dependency_state_label": extension.runtime.dependency_state_label,
-            "runtime_issues": list(extension.runtime.runtime_issues),
-            "source": extension.source,
-            "module_ids": list(extension.module_ids),
-            "admin_pages": list(extension.admin_pages),
-            "settings_groups": list(extension.settings_groups),
-            "lifecycle": {
-                "registration_mode": extension.lifecycle.registration_mode,
-                "registration_mode_label": extension.lifecycle.registration_mode_label,
-                "readiness_probe": extension.lifecycle.readiness_probe,
-                "supports_disable": extension.lifecycle.supports_disable,
-                "supports_teardown": extension.lifecycle.supports_teardown,
-                "phases": [
-                    {
-                        "key": phase.key,
-                        "label": phase.label,
-                        "description": phase.description,
-                        "optional": phase.optional,
-                    }
-                    for phase in extension.lifecycle.phases
-                ],
-            },
-        }
-        for extension in extensions
-    ]
+    payload = [_serialize_admin_extension(extension) for extension in extensions]
 
     return {
         "summary": {
@@ -126,6 +94,69 @@ def _serialize_admin_extensions_payload(extensions):
             "filesystem_count": sum(1 for item in payload if item["source"] == "filesystem"),
         },
         "extensions": payload,
+    }
+
+
+def _serialize_admin_extension(extension):
+    detail_page = f"/admin/extensions/{extension.id}"
+    settings_page = next(iter(extension.manifest.settings_pages), "")
+    permissions_page = next(iter(extension.manifest.permissions_pages), "")
+    operations_page = next(iter(extension.manifest.operations_pages), "")
+
+    return {
+        "id": extension.id,
+        "name": extension.name,
+        "version": extension.version,
+        "description": extension.description,
+        "icon": extension.manifest.icon,
+        "category": extension.manifest.category,
+        "documentation_url": extension.manifest.documentation_url,
+        "dependencies": list(extension.manifest.dependencies),
+        "optional_dependencies": list(extension.manifest.optional_dependencies),
+        "conflicts": list(extension.manifest.conflicts),
+        "provides": list(extension.manifest.provides),
+        "backend_entry": extension.manifest.backend_entry,
+        "frontend_admin_entry": extension.manifest.frontend_admin_entry,
+        "frontend_forum_entry": extension.manifest.frontend_forum_entry,
+        "settings_pages": list(extension.manifest.settings_pages),
+        "permissions_pages": list(extension.manifest.permissions_pages),
+        "operations_pages": list(extension.manifest.operations_pages),
+        "installed": extension.runtime.installed,
+        "enabled": extension.runtime.enabled,
+        "booted": extension.runtime.booted,
+        "healthy": extension.runtime.healthy,
+        "migration_state": extension.runtime.migration_state,
+        "migration_label": extension.runtime.migration_label,
+        "dependency_state": extension.runtime.dependency_state,
+        "dependency_state_label": extension.runtime.dependency_state_label,
+        "runtime_issues": list(extension.runtime.runtime_issues),
+        "source": extension.source,
+        "module_ids": list(extension.module_ids),
+        "admin_pages": list(extension.admin_pages),
+        "settings_groups": list(extension.settings_groups),
+        "action_links": {
+            "detail_page": detail_page,
+            "settings_page": settings_page,
+            "permissions_page": permissions_page,
+            "operations_page": operations_page,
+            "documentation_url": extension.manifest.documentation_url,
+        },
+        "lifecycle": {
+            "registration_mode": extension.lifecycle.registration_mode,
+            "registration_mode_label": extension.lifecycle.registration_mode_label,
+            "readiness_probe": extension.lifecycle.readiness_probe,
+            "supports_disable": extension.lifecycle.supports_disable,
+            "supports_teardown": extension.lifecycle.supports_teardown,
+            "phases": [
+                {
+                    "key": phase.key,
+                    "label": phase.label,
+                    "description": phase.description,
+                    "optional": phase.optional,
+                }
+                for phase in extension.lifecycle.phases
+            ],
+        },
     }
 
 

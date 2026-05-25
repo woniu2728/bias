@@ -35,8 +35,10 @@ def adapt_builtin_module_to_extension(module: ForumModuleDefinition) -> Extensio
         documentation_url=module.documentation_url,
         dependencies=tuple(module.dependencies),
         provides=tuple(module.capabilities),
-        settings_pages=tuple(page.path for page in module.admin_pages if page.settings_group),
+        frontend_admin_entry=_resolve_builtin_frontend_admin_entry(module),
+        settings_pages=_resolve_builtin_settings_pages(module),
         permissions_pages=("/admin/permissions",) if module.permissions else (),
+        operations_pages=_resolve_builtin_operations_pages(module),
         source="builtin-module",
         path="apps/core/forum_registry_builtin.py",
     )
@@ -82,3 +84,22 @@ def _resolve_builtin_module_icon(module: ForumModuleDefinition) -> str:
     if module.category == "communication":
         return "fas fa-bell"
     return "fas fa-puzzle-piece"
+
+
+def _resolve_builtin_frontend_admin_entry(module: ForumModuleDefinition) -> str:
+    builtin_entries = {
+        "tags": "builtin:tags",
+    }
+    return builtin_entries.get(module.module_id, "")
+
+
+def _resolve_builtin_settings_pages(module: ForumModuleDefinition) -> tuple[str, ...]:
+    if module.module_id == "tags":
+        return (f"/admin/extensions/{module.module_id}/settings",)
+    return tuple(page.path for page in module.admin_pages if page.settings_group)
+
+
+def _resolve_builtin_operations_pages(module: ForumModuleDefinition) -> tuple[str, ...]:
+    if module.module_id == "tags":
+        return ()
+    return tuple(page.path for page in module.admin_pages if not page.settings_group)

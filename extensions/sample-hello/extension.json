@@ -18,7 +18,13 @@
   "backend_entry": "extensions.sample_hello.backend.ext",
   "frontend_admin_entry": "extensions/sample-hello/frontend/admin/index.js",
   "settings_pages": [
-    "/admin/extensions/sample-hello"
+    "/admin/extensions/sample-hello/settings"
+  ],
+  "permissions_pages": [
+    "/admin/extensions/sample-hello/permissions"
+  ],
+  "operations_pages": [
+    "/admin/extensions/sample-hello/operations"
   ],
   "extra": {
     "display_order": 1000,

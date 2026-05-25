@@ -49,7 +49,25 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
   }
 
   function applyModules(nextModules) {
-    modules.value = Array.isArray(nextModules) ? nextModules : []
+    if (!Array.isArray(nextModules)) {
+      modules.value = []
+      loaded.value = true
+      return
+    }
+
+    const byId = new Map((modules.value || []).map(item => [String(item.id || ''), item]))
+    for (const item of nextModules) {
+      const moduleId = String(item?.id || '').trim()
+      if (!moduleId) {
+        continue
+      }
+      byId.set(moduleId, {
+        ...(byId.get(moduleId) || {}),
+        ...item,
+        id: moduleId,
+      })
+    }
+    modules.value = Array.from(byId.values())
     loaded.value = true
   }
 

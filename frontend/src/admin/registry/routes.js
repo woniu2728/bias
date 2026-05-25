@@ -11,6 +11,22 @@ function upsertByPath(target, value) {
   return value
 }
 
+function matchesRoutePath(routePath, currentPath) {
+  if (routePath === currentPath) {
+    return true
+  }
+
+  const pattern = String(routePath || '')
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/:([A-Za-z0-9_]+)/g, '[^/]+')
+
+  if (!pattern) {
+    return false
+  }
+
+  return new RegExp(`^${pattern}$`).test(currentPath)
+}
+
 export function registerAdminRoute(route) {
   const normalizedRoute = {
     navSection: 'feature',
@@ -44,6 +60,10 @@ export function getAdminRoutes(options = {}) {
   return sortAdminRoutes(
     adminRoutes.filter(route => isRouteVisible(route, options))
   )
+}
+
+export function findAdminRouteByPath(path, options = {}) {
+  return getAdminRoutes(options).find(route => matchesRoutePath(route.path, path))
 }
 
 export function getAdminNavSections(options = {}) {

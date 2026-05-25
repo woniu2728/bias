@@ -1,4 +1,5 @@
 export {
+  findAdminRouteByPath,
   getAdminDashboardActions,
   getAdminNavSections,
   getAdminRoutes,

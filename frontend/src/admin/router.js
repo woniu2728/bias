@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { getAdminRoutes } from './registry'
+import { findAdminRouteByPath, getAdminRoutes } from './registry'
 import { useAdminRegistryStore } from '../stores/adminRegistry'
 
 normalizeLegacyAdminHash()
@@ -50,9 +50,9 @@ router.beforeEach(async (to) => {
   const adminRegistryStore = useAdminRegistryStore()
   await adminRegistryStore.fetchModules()
 
-  const route = getAdminRoutes({
+  const route = findAdminRouteByPath(to.path, {
     isModuleEnabled: moduleId => adminRegistryStore.isModuleEnabled(moduleId),
-  }).find(item => item.path === to.path)
+  })
 
   if (!route) {
     return '/admin'

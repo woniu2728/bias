@@ -135,6 +135,8 @@ class ExtensionManifestLoaderTests(TestCase):
                 "description": "A sample extension.",
                 "dependencies": ["core"],
                 "settings_pages": ["/admin/extensions/sample"],
+                "permissions_pages": ["/admin/extensions/sample/permissions"],
+                "operations_pages": ["/admin/extensions/sample/operations"],
             }, ensure_ascii=False), encoding="utf-8")
 
             loader = ExtensionManifestLoader(base_dir / "extensions")
@@ -145,6 +147,8 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(results[0].manifest.name, "Sample Extension")
             self.assertEqual(results[0].manifest.dependencies, ("core",))
             self.assertEqual(results[0].manifest.settings_pages, ("/admin/extensions/sample",))
+            self.assertEqual(results[0].manifest.permissions_pages, ("/admin/extensions/sample/permissions",))
+            self.assertEqual(results[0].manifest.operations_pages, ("/admin/extensions/sample/operations",))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -170,7 +174,7 @@ class ExtensionRegistryTests(TestCase):
         sample_extension = next(item for item in extensions if item.id == "sample-hello")
         self.assertEqual(sample_extension.source, "filesystem")
         self.assertEqual(sample_extension.manifest.dependencies, ("core",))
-        self.assertIn("/admin/extensions/sample-hello", sample_extension.manifest.settings_pages)
+        self.assertIn("/admin/extensions/sample-hello/settings", sample_extension.manifest.settings_pages)
 
     def test_builtin_adapter_preserves_module_metadata(self):
         module = get_forum_registry().get_module("approval")
@@ -181,6 +185,15 @@ class ExtensionRegistryTests(TestCase):
         self.assertEqual(extension.manifest.dependencies, module.dependencies)
         self.assertEqual(extension.runtime.enabled, module.enabled)
         self.assertIn("/admin/permissions", extension.manifest.permissions_pages)
+        self.assertIn("/admin/approval", extension.manifest.operations_pages)
+
+    def test_builtin_adapter_can_map_tags_to_extension_settings_page(self):
+        module = get_forum_registry().get_module("tags")
+        extension = adapt_builtin_module_to_extension(module)
+
+        self.assertEqual(extension.manifest.frontend_admin_entry, "builtin:tags")
+        self.assertEqual(extension.manifest.settings_pages, ("/admin/extensions/tags/settings",))
+        self.assertEqual(extension.manifest.operations_pages, ())
 
     def test_registry_applies_persisted_installation_state(self):
         ExtensionInstallation.objects.create(
@@ -271,10 +284,35 @@ class AdminExtensionsApiTests(TestCase):
         self.assertIn("basic", core_extension["settings_groups"])
         self.assertIn("phases", core_extension["lifecycle"])
         self.assertTrue(any(phase["key"] == "register" for phase in core_extension["lifecycle"]["phases"]))
+        self.assertEqual(core_extension["action_links"]["detail_page"], "/admin/extensions/core")
 
         sample_extension = next(item for item in payload["extensions"] if item["id"] == "sample-hello")
         self.assertEqual(sample_extension["source"], "filesystem")
-        self.assertIn("/admin/extensions/sample-hello", sample_extension["settings_pages"])
+        self.assertEqual(sample_extension["frontend_admin_entry"], "extensions/sample-hello/frontend/admin/index.js")
+        self.assertIn("/admin/extensions/sample-hello/settings", sample_extension["settings_pages"])
+        self.assertIn("/admin/extensions/sample-hello/permissions", sample_extension["permissions_pages"])
+        self.assertEqual(sample_extension["action_links"]["settings_page"], "/admin/extensions/sample-hello/settings")
+        self.assertEqual(sample_extension["action_links"]["permissions_page"], "/admin/extensions/sample-hello/permissions")
+
+        tags_extension = next(item for item in payload["extensions"] if item["id"] == "tags")
+        self.assertEqual(tags_extension["source"], "builtin-module")
+        self.assertEqual(tags_extension["frontend_admin_entry"], "builtin:tags")
+        self.assertEqual(tags_extension["action_links"]["settings_page"], "/admin/extensions/tags/settings")
+
+    def test_extension_detail_api_returns_extension_actions(self):
+        response = self.client.get(
+            "/api/admin/extensions/sample-hello",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()["extension"]
+        self.assertEqual(payload["id"], "sample-hello")
+        self.assertEqual(payload["action_links"]["detail_page"], "/admin/extensions/sample-hello")
+        self.assertEqual(payload["action_links"]["settings_page"], "/admin/extensions/sample-hello/settings")
+        self.assertEqual(payload["action_links"]["permissions_page"], "/admin/extensions/sample-hello/permissions")
+        self.assertEqual(payload["action_links"]["operations_page"], "/admin/extensions/sample-hello/operations")
+        self.assertEqual(payload["frontend_admin_entry"], "extensions/sample-hello/frontend/admin/index.js")
 
     def test_extensions_api_can_disable_and_enable_extension(self):
         disable_response = self.client.post(

@@ -79,6 +79,7 @@ class ExtensionManifest:
     frontend_forum_entry: str = ""
     settings_pages: Tuple[str, ...] = ()
     permissions_pages: Tuple[str, ...] = ()
+    operations_pages: Tuple[str, ...] = ()
     migration_namespace: str = ""
     source: str = "filesystem"
     path: str = ""
