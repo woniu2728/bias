@@ -26,6 +26,23 @@
   "operations_pages": [
     "/admin/extensions/sample-hello/operations"
   ],
+  "compatibility": {
+    "bias_version": "^1.0.0",
+    "api_version": "1.0",
+    "api_stability": "experimental",
+    "api_stability_label": "实验性",
+    "breaking_change_policy": "Bias 在主版本升级前会通过路线图和开发文档提前说明扩展协议 breaking change。"
+  },
+  "security": {
+    "support_email": "security@bias.local",
+    "capabilities_notice": "示例扩展仅用于本地协议验证，不建议直接作为生产能力安装。"
+  },
+  "distribution": {
+    "channel": "private",
+    "channel_label": "私有分发",
+    "signing_key_id": "",
+    "signature_url": ""
+  },
   "migration_namespace": "extensions.sample_hello.backend.migrations",
   "admin_actions": [
     {

@@ -6,8 +6,11 @@ from pathlib import Path
 from apps.core.extensions.exceptions import ExtensionManifestError
 from apps.core.extensions.types import (
     ExtensionAdminActionDefinition,
+    ExtensionCompatibilityDefinition,
     ExtensionDiscoveryResult,
+    ExtensionDistributionDefinition,
     ExtensionManifest,
+    ExtensionSecurityDefinition,
 )
 from apps.core.extensions.validation import EXTENSION_ID_PATTERN, SEMVER_PATTERN
 
@@ -74,6 +77,9 @@ class ExtensionManifestLoader:
             permissions_pages=tuple(str(item).strip() for item in payload.get("permissions_pages", []) if str(item).strip()),
             operations_pages=tuple(str(item).strip() for item in payload.get("operations_pages", []) if str(item).strip()),
             admin_actions=tuple(self._build_admin_action(item) for item in payload.get("admin_actions", []) if isinstance(item, dict)),
+            compatibility=self._build_compatibility(payload.get("compatibility")),
+            security=self._build_security(payload.get("security")),
+            distribution=self._build_distribution(payload.get("distribution")),
             migration_namespace=str(payload.get("migration_namespace") or "").strip(),
             source="filesystem",
             path=str(manifest_path.parent),
@@ -92,4 +98,31 @@ class ExtensionManifestLoader:
             requires_enabled=bool(payload.get("requires_enabled", False)),
             description=str(payload.get("description") or "").strip(),
             order=int(payload.get("order", 100) or 100),
+        )
+
+    def _build_compatibility(self, payload: dict | None) -> ExtensionCompatibilityDefinition:
+        data = payload if isinstance(payload, dict) else {}
+        return ExtensionCompatibilityDefinition(
+            bias_version=str(data.get("bias_version") or "").strip(),
+            api_version=str(data.get("api_version") or "1.0").strip() or "1.0",
+            api_stability=str(data.get("api_stability") or "experimental").strip() or "experimental",
+            api_stability_label=str(data.get("api_stability_label") or "").strip(),
+            breaking_change_policy=str(data.get("breaking_change_policy") or "").strip(),
+        )
+
+    def _build_security(self, payload: dict | None) -> ExtensionSecurityDefinition:
+        data = payload if isinstance(payload, dict) else {}
+        return ExtensionSecurityDefinition(
+            policy_url=str(data.get("policy_url") or "").strip(),
+            support_email=str(data.get("support_email") or "").strip(),
+            capabilities_notice=str(data.get("capabilities_notice") or "").strip(),
+        )
+
+    def _build_distribution(self, payload: dict | None) -> ExtensionDistributionDefinition:
+        data = payload if isinstance(payload, dict) else {}
+        return ExtensionDistributionDefinition(
+            channel=str(data.get("channel") or "private").strip() or "private",
+            channel_label=str(data.get("channel_label") or "").strip(),
+            signing_key_id=str(data.get("signing_key_id") or "").strip(),
+            signature_url=str(data.get("signature_url") or "").strip(),
         )

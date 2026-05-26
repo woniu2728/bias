@@ -7,6 +7,7 @@ from django.conf import settings
 from django.core.management import BaseCommand, CommandError
 from django.core.management.base import CommandParser
 
+from apps.core.version import APP_VERSION
 from apps.core.extensions.validation import EXTENSION_ID_PATTERN
 
 
@@ -126,6 +127,23 @@ class Command(BaseCommand):
             "settings_pages": [f"/admin/extensions/{extension_id}/settings"],
             "permissions_pages": [f"/admin/extensions/{extension_id}/permissions"],
             "operations_pages": [f"/admin/extensions/{extension_id}/operations"],
+            "compatibility": {
+                "bias_version": f"^{APP_VERSION}",
+                "api_version": "1.0",
+                "api_stability": "experimental",
+                "api_stability_label": "实验性",
+                "breaking_change_policy": "Bias 在主版本升级前会优先通过路线图与开发文档公告扩展协议的 breaking change。",
+            },
+            "security": {
+                "support_email": "security@example.com",
+                "capabilities_notice": "此扩展处于实验阶段，请在生产环境启用前完成本地校验与权限审查。",
+            },
+            "distribution": {
+                "channel": "private",
+                "channel_label": "私有分发",
+                "signing_key_id": "",
+                "signature_url": "",
+            },
             "migration_namespace": f"extensions.{extension_id.replace('-', '_')}.backend.migrations",
             "admin_actions": [
                 {

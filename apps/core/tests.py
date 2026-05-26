@@ -160,6 +160,9 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(results[0].manifest.operations_pages, ("/admin/extensions/sample/operations",))
             self.assertEqual(results[0].manifest.admin_actions[0].key, "details")
             self.assertEqual(results[0].manifest.migration_namespace, "")
+            self.assertEqual(results[0].manifest.compatibility.api_version, "1.0")
+            self.assertEqual(results[0].manifest.compatibility.api_stability, "experimental")
+            self.assertEqual(results[0].manifest.distribution.channel, "private")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -336,6 +339,43 @@ class ExtensionValidationTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_validate_extension_manifests_reports_invalid_ecosystem_metadata(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "compatibility": {
+                    "bias_version": "latest",
+                    "api_version": "v1",
+                    "api_stability": "ga",
+                },
+                "distribution": {
+                    "channel": "store",
+                    "signature_url": "https://example.com/signature.txt",
+                },
+                "security": {
+                    "support_email": "security-at-example.com",
+                },
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "invalid_bias_version_range" for item in result.issues))
+            self.assertTrue(any(item.code == "invalid_api_version" for item in result.issues))
+            self.assertTrue(any(item.code == "invalid_api_stability" for item in result.issues))
+            self.assertTrue(any(item.code == "invalid_distribution_channel" for item in result.issues))
+            self.assertTrue(any(item.code == "invalid_security_support_email" for item in result.issues))
+            self.assertTrue(any(item.code == "signature_url_without_key" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 class ExtensionManagementCommandTests(TestCase):
     def test_extension_management_commands_skip_django_system_checks(self):
@@ -382,6 +422,10 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertEqual(manifest["frontend_admin_entry"], "extensions/alpha-tools/frontend/admin/index.js")
                 self.assertEqual(manifest["admin_actions"][0]["key"], "details")
                 self.assertEqual(manifest["migration_namespace"], "extensions.alpha_tools.backend.migrations")
+                self.assertEqual(manifest["compatibility"]["bias_version"], "^1.0.0")
+                self.assertEqual(manifest["compatibility"]["api_stability"], "experimental")
+                self.assertEqual(manifest["distribution"]["channel"], "private")
+                self.assertEqual(manifest["security"]["support_email"], "security@example.com")
                 self.assertTrue((extension_dir / "frontend" / "admin" / "DetailPage.vue").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "index.js").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "SettingsPage.vue").exists())
@@ -649,6 +693,9 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(sample_extension["frontend_admin_entry"], "extensions/sample-hello/frontend/admin/index.js")
         self.assertIn("/admin/extensions/sample-hello/settings", sample_extension["settings_pages"])
         self.assertIn("/admin/extensions/sample-hello/permissions", sample_extension["permissions_pages"])
+        self.assertEqual(sample_extension["compatibility"]["bias_version"], "^1.0.0")
+        self.assertEqual(sample_extension["compatibility"]["api_stability"], "experimental")
+        self.assertEqual(sample_extension["distribution"]["channel"], "private")
         self.assertEqual(sample_extension["action_links"]["settings_page"], "/admin/extensions/sample-hello/settings")
         self.assertEqual(sample_extension["action_links"]["permissions_page"], "/admin/extensions/sample-hello/permissions")
         self.assertEqual(sample_extension["admin_actions"][0]["key"], "details")
@@ -688,6 +735,10 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(payload["admin_actions"][0]["key"], "details")
         self.assertEqual(payload["runtime_status"]["key"], "pending_install")
         self.assertEqual(payload["runtime_actions"][0]["action"], "install")
+        self.assertEqual(payload["compatibility"]["bias_version"], "^1.0.0")
+        self.assertEqual(payload["compatibility"]["api_stability_label"], "实验性")
+        self.assertEqual(payload["distribution"]["channel_label"], "私有分发")
+        self.assertEqual(payload["security"]["support_email"], "security@bias.local")
         self.assertTrue(any(item["key"] == "migrations" for item in payload["delivery_checks"]))
         self.assertTrue(any("不会自动回滚数据库迁移" in item for item in payload["uninstall_warnings"]))
         self.assertEqual(payload["debug_info"]["manifest_path"], str(Path.cwd() / "extensions" / "sample-hello"))

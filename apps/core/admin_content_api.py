@@ -159,6 +159,24 @@ def _serialize_admin_extension(extension):
         "settings_pages": list(extension.manifest.settings_pages),
         "permissions_pages": list(extension.manifest.permissions_pages),
         "operations_pages": list(extension.manifest.operations_pages),
+        "compatibility": {
+            "bias_version": extension.manifest.compatibility.bias_version,
+            "api_version": extension.manifest.compatibility.api_version,
+            "api_stability": extension.manifest.compatibility.api_stability,
+            "api_stability_label": _resolve_api_stability_label(extension),
+            "breaking_change_policy": extension.manifest.compatibility.breaking_change_policy,
+        },
+        "security": {
+            "policy_url": extension.manifest.security.policy_url,
+            "support_email": extension.manifest.security.support_email,
+            "capabilities_notice": extension.manifest.security.capabilities_notice,
+        },
+        "distribution": {
+            "channel": extension.manifest.distribution.channel,
+            "channel_label": _resolve_distribution_channel_label(extension),
+            "signing_key_id": extension.manifest.distribution.signing_key_id,
+            "signature_url": extension.manifest.distribution.signature_url,
+        },
         "installed": extension.runtime.installed,
         "enabled": extension.runtime.enabled,
         "booted": extension.runtime.booted,
@@ -251,6 +269,31 @@ def _serialize_extension_admin_actions(extension):
             "order": action.order,
         })
     return actions
+
+
+def _resolve_api_stability_label(extension):
+    label = str(extension.manifest.compatibility.api_stability_label or "").strip()
+    if label:
+        return label
+    return {
+        "experimental": "实验性",
+        "beta": "测试中",
+        "stable": "稳定",
+        "deprecated": "废弃中",
+        "internal": "内部",
+    }.get(extension.manifest.compatibility.api_stability, extension.manifest.compatibility.api_stability or "未知")
+
+
+def _resolve_distribution_channel_label(extension):
+    label = str(extension.manifest.distribution.channel_label or "").strip()
+    if label:
+        return label
+    return {
+        "private": "私有分发",
+        "bundled": "随平台内置",
+        "partner": "合作方分发",
+        "public": "公开分发",
+    }.get(extension.manifest.distribution.channel, extension.manifest.distribution.channel or "未知")
 
 
 def _build_extension_debug_info(extension):

@@ -100,6 +100,30 @@ class ExtensionLifecycleDefinition:
 
 
 @dataclass(frozen=True)
+class ExtensionCompatibilityDefinition:
+    bias_version: str = ""
+    api_version: str = "1.0"
+    api_stability: str = "experimental"
+    api_stability_label: str = "实验性"
+    breaking_change_policy: str = ""
+
+
+@dataclass(frozen=True)
+class ExtensionSecurityDefinition:
+    policy_url: str = ""
+    support_email: str = ""
+    capabilities_notice: str = ""
+
+
+@dataclass(frozen=True)
+class ExtensionDistributionDefinition:
+    channel: str = "private"
+    channel_label: str = "私有分发"
+    signing_key_id: str = ""
+    signature_url: str = ""
+
+
+@dataclass(frozen=True)
 class ExtensionManifest:
     id: str
     name: str
@@ -121,6 +145,9 @@ class ExtensionManifest:
     permissions_pages: Tuple[str, ...] = ()
     operations_pages: Tuple[str, ...] = ()
     admin_actions: Tuple[ExtensionAdminActionDefinition, ...] = ()
+    compatibility: ExtensionCompatibilityDefinition = ExtensionCompatibilityDefinition()
+    security: ExtensionSecurityDefinition = ExtensionSecurityDefinition()
+    distribution: ExtensionDistributionDefinition = ExtensionDistributionDefinition()
     migration_namespace: str = ""
     source: str = "filesystem"
     path: str = ""

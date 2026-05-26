@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from apps.core.extensions.types import (
     ExtensionAdminActionDefinition,
+    ExtensionCompatibilityDefinition,
     ExtensionDefinition,
+    ExtensionDistributionDefinition,
     ExtensionLifecycleDefinition,
     ExtensionLifecyclePhaseDefinition,
     ExtensionManifest,
     ExtensionRuntimeState,
+    ExtensionSecurityDefinition,
 )
 from apps.core.forum_registry_types import ForumModuleDefinition
 
@@ -41,6 +44,22 @@ def adapt_builtin_module_to_extension(module: ForumModuleDefinition) -> Extensio
         permissions_pages=("/admin/permissions",) if module.permissions else (),
         operations_pages=_resolve_builtin_operations_pages(module),
         admin_actions=_build_builtin_admin_actions(module),
+        compatibility=ExtensionCompatibilityDefinition(
+            bias_version="^1.0.0",
+            api_version="1.0",
+            api_stability="stable" if module.is_core else "internal",
+            api_stability_label="稳定" if module.is_core else "内部",
+            breaking_change_policy="跟随 Bias 主版本升级节奏评估兼容性。",
+        ),
+        security=ExtensionSecurityDefinition(
+            policy_url="",
+            support_email="",
+            capabilities_notice="内置扩展随平台发布，不单独提供第三方安全边界。",
+        ),
+        distribution=ExtensionDistributionDefinition(
+            channel="bundled",
+            channel_label="随平台内置",
+        ),
         source="builtin-module",
         path="apps/core/forum_registry_builtin.py",
     )

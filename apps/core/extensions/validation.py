@@ -11,6 +11,8 @@ from apps.core.extensions.types import ExtensionManifest
 SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 EXTENSION_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 EXPORT_FUNCTION_PATTERN = re.compile(r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(")
+VERSION_RANGE_PATTERN = re.compile(r"^(?:\^|~|>=|<=|>|<)?\d+\.\d+\.\d+$")
+API_VERSION_PATTERN = re.compile(r"^\d+\.\d+$")
 
 
 @dataclass(frozen=True)
@@ -214,6 +216,7 @@ def _validate_single_manifest(
     _validate_unique_strings(collector, manifest, "operations_pages", manifest.operations_pages)
     _validate_admin_actions(collector, manifest)
     _validate_admin_page_bindings(collector, manifest)
+    _validate_ecosystem_metadata(collector, manifest)
 
     for field_name, pages in (
         ("settings_pages", manifest.settings_pages),
@@ -330,6 +333,107 @@ def _validate_admin_page_bindings(
                     extension_id=manifest.id,
                     field=field_name,
                 )
+
+
+def _validate_ecosystem_metadata(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+) -> None:
+    compatibility = manifest.compatibility
+    security = manifest.security
+    distribution = manifest.distribution
+
+    allowed_stability = {
+        "experimental": "实验性",
+        "beta": "测试中",
+        "stable": "稳定",
+        "deprecated": "废弃中",
+        "internal": "内部",
+    }
+    allowed_channels = {
+        "private": "私有分发",
+        "bundled": "随平台内置",
+        "partner": "合作方分发",
+        "public": "公开分发",
+    }
+
+    if compatibility.bias_version and not VERSION_RANGE_PATTERN.match(compatibility.bias_version):
+        collector.add_error(
+            "invalid_bias_version_range",
+            "compatibility.bias_version 必须是简单语义化版本约束，例如 ^1.0.0 或 >=1.2.3",
+            extension_id=manifest.id,
+            field="compatibility.bias_version",
+        )
+
+    if not API_VERSION_PATTERN.match(compatibility.api_version):
+        collector.add_error(
+            "invalid_api_version",
+            "compatibility.api_version 必须是主次版本格式，例如 1.0",
+            extension_id=manifest.id,
+            field="compatibility.api_version",
+        )
+
+    if compatibility.api_stability not in allowed_stability:
+        collector.add_error(
+            "invalid_api_stability",
+            f"compatibility.api_stability 不支持: {compatibility.api_stability}",
+            extension_id=manifest.id,
+            field="compatibility.api_stability",
+        )
+    elif compatibility.api_stability_label and compatibility.api_stability_label != allowed_stability[compatibility.api_stability]:
+        collector.add_warning(
+            "mismatched_api_stability_label",
+            f"compatibility.api_stability_label 建议与 {compatibility.api_stability} 对应的默认标签保持一致",
+            extension_id=manifest.id,
+            field="compatibility.api_stability_label",
+        )
+
+    if distribution.channel not in allowed_channels:
+        collector.add_error(
+            "invalid_distribution_channel",
+            f"distribution.channel 不支持: {distribution.channel}",
+            extension_id=manifest.id,
+            field="distribution.channel",
+        )
+    elif distribution.channel_label and distribution.channel_label != allowed_channels[distribution.channel]:
+        collector.add_warning(
+            "mismatched_distribution_channel_label",
+            f"distribution.channel_label 建议与 {distribution.channel} 对应的默认标签保持一致",
+            extension_id=manifest.id,
+            field="distribution.channel_label",
+        )
+
+    if distribution.signature_url and not distribution.signing_key_id:
+        collector.add_warning(
+            "signature_url_without_key",
+            "distribution.signature_url 已声明，但 signing_key_id 为空",
+            extension_id=manifest.id,
+            field="distribution.signing_key_id",
+        )
+
+    if distribution.signing_key_id and not distribution.signature_url:
+        collector.add_warning(
+            "signing_key_without_signature_url",
+            "distribution.signing_key_id 已声明，但 signature_url 为空",
+            extension_id=manifest.id,
+            field="distribution.signature_url",
+        )
+
+    if security.support_email and "@" not in security.support_email:
+        collector.add_error(
+            "invalid_security_support_email",
+            "security.support_email 必须是有效邮箱格式",
+            extension_id=manifest.id,
+            field="security.support_email",
+        )
+
+    if compatibility.api_stability in {"experimental", "beta"} and not security.capabilities_notice:
+        collector.add_warning(
+            "missing_security_capabilities_notice",
+            "实验性或测试中扩展建议声明 security.capabilities_notice，说明高权限或风险边界",
+            extension_id=manifest.id,
+            field="security.capabilities_notice",
+        )
 
 
 def _validate_unique_strings(

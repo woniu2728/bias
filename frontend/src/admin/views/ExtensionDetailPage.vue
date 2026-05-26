@@ -195,6 +195,45 @@
         </section>
 
         <section class="ExtensionDetailCard">
+          <h3>生态边界</h3>
+          <div class="ExtensionDetailStack">
+            <div>
+              <small>Bias 兼容版本</small>
+              <strong>{{ extension.compatibility?.bias_version || '未声明' }}</strong>
+            </div>
+            <div>
+              <small>扩展 API 版本</small>
+              <strong>{{ extension.compatibility?.api_version || '未声明' }}</strong>
+            </div>
+            <div>
+              <small>稳定等级</small>
+              <strong>{{ extension.compatibility?.api_stability_label || extension.compatibility?.api_stability || '未声明' }}</strong>
+            </div>
+            <div>
+              <small>分发通道</small>
+              <strong>{{ extension.distribution?.channel_label || extension.distribution?.channel || '未声明' }}</strong>
+            </div>
+            <div>
+              <small>签名 Key ID</small>
+              <strong>{{ extension.distribution?.signing_key_id || '未声明' }}</strong>
+            </div>
+            <div>
+              <small>安全联系邮箱</small>
+              <strong>{{ extension.security?.support_email || '未声明' }}</strong>
+            </div>
+          </div>
+          <p v-if="extension.compatibility?.breaking_change_policy" class="ExtensionDetailNote">
+            {{ extension.compatibility.breaking_change_policy }}
+          </p>
+          <p v-if="extension.security?.capabilities_notice" class="ExtensionDetailNote">
+            {{ extension.security.capabilities_notice }}
+          </p>
+          <p v-if="extension.distribution?.signature_url" class="ExtensionDetailNote">
+            签名文件：<code>{{ extension.distribution.signature_url }}</code>
+          </p>
+        </section>
+
+        <section class="ExtensionDetailCard">
           <h3>安装摘要</h3>
           <div class="ExtensionDetailStack">
             <div>
@@ -617,6 +656,11 @@ function syncModulesFromExtension(currentExtension) {
 .ExtensionDetailIssues {
   margin: 16px 0 0;
   color: #b02a37;
+}
+
+.ExtensionDetailNote {
+  margin: 16px 0 0;
+  color: var(--forum-text-muted);
 }
 
 .ExtensionDetailDebugOk {
