@@ -3,12 +3,14 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from apps.core.extensions.types import ExtensionManifest
 
 
 SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 EXTENSION_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+EXPORT_FUNCTION_PATTERN = re.compile(r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(")
 
 
 @dataclass(frozen=True)
@@ -114,6 +116,62 @@ def validate_extension_manifests_with_available_ids(
     return collector.build()
 
 
+def inspect_frontend_admin_entry(
+    manifest: ExtensionManifest,
+    *,
+    extensions_base_path: Path | None = None,
+) -> dict[str, Any]:
+    entry = str(manifest.frontend_admin_entry or "").strip()
+    required_exports = _build_required_frontend_admin_exports(manifest)
+    payload: dict[str, Any] = {
+        "entry": entry,
+        "entry_type": "missing",
+        "required_exports": tuple(required_exports),
+        "optional_exports": ("resolveDetailPage",),
+        "available_exports": (),
+        "exists": False,
+        "resolved_path": "",
+    }
+
+    if not entry:
+        return payload
+
+    if entry.startswith("builtin:"):
+        payload.update({
+            "entry_type": "builtin",
+            "exists": True,
+        })
+        return payload
+
+    if not entry.startswith("extensions/"):
+        payload.update({
+            "entry_type": "external",
+            "exists": False,
+        })
+        return payload
+
+    if extensions_base_path is None:
+        payload.update({
+            "entry_type": "filesystem",
+            "exists": False,
+        })
+        return payload
+
+    absolute_path = Path(extensions_base_path).parent / entry
+    payload.update({
+        "entry_type": "filesystem",
+        "exists": absolute_path.exists(),
+        "resolved_path": str(absolute_path),
+    })
+
+    if not absolute_path.exists():
+        return payload
+
+    source = absolute_path.read_text(encoding="utf-8")
+    payload["available_exports"] = tuple(sorted(set(EXPORT_FUNCTION_PATTERN.findall(source))))
+    return payload
+
+
 def _validate_single_manifest(
     collector: ExtensionValidationCollector,
     manifest: ExtensionManifest,
@@ -155,6 +213,7 @@ def _validate_single_manifest(
     _validate_unique_strings(collector, manifest, "permissions_pages", manifest.permissions_pages)
     _validate_unique_strings(collector, manifest, "operations_pages", manifest.operations_pages)
     _validate_admin_actions(collector, manifest)
+    _validate_admin_page_bindings(collector, manifest)
 
     for field_name, pages in (
         ("settings_pages", manifest.settings_pages),
@@ -242,6 +301,37 @@ def _validate_admin_actions(
             )
 
 
+def _validate_admin_page_bindings(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+) -> None:
+    admin_page_fields = (
+        ("settings_pages", manifest.settings_pages, "settings"),
+        ("permissions_pages", manifest.permissions_pages, "permissions"),
+        ("operations_pages", manifest.operations_pages, "operations"),
+    )
+    has_declared_admin_pages = any(pages for _, pages, _ in admin_page_fields)
+
+    if has_declared_admin_pages and not str(manifest.frontend_admin_entry or "").strip():
+        collector.add_error(
+            "missing_frontend_admin_entry_declaration",
+            "声明后台页面时必须同时提供 frontend_admin_entry",
+            extension_id=manifest.id,
+            field="frontend_admin_entry",
+        )
+
+    for field_name, pages, surface in admin_page_fields:
+        expected_path = f"/admin/extensions/{manifest.id}/{surface}"
+        for page in pages:
+            if page.startswith("/admin/extensions/") and page != expected_path:
+                collector.add_error(
+                    "invalid_extension_admin_page",
+                    f"{field_name} 必须指向当前扩展的标准后台入口: {expected_path}",
+                    extension_id=manifest.id,
+                    field=field_name,
+                )
+
+
 def _validate_unique_strings(
     collector: ExtensionValidationCollector,
     manifest: ExtensionManifest,
@@ -266,12 +356,13 @@ def _validate_frontend_admin_entry(
     manifest: ExtensionManifest,
     base_path: Path,
 ) -> None:
-    entry = str(manifest.frontend_admin_entry or "").strip()
+    debug_payload = inspect_frontend_admin_entry(manifest, extensions_base_path=base_path)
+    entry = str(debug_payload["entry"] or "").strip()
     if not entry:
         return
-    if entry.startswith("builtin:"):
+    if debug_payload["entry_type"] == "builtin":
         return
-    if not entry.startswith("extensions/"):
+    if debug_payload["entry_type"] == "external":
         collector.add_warning(
             "frontend_admin_entry_outside_extensions",
             "frontend_admin_entry 建议使用 extensions/... 相对仓库根目录的路径",
@@ -280,8 +371,7 @@ def _validate_frontend_admin_entry(
         )
         return
 
-    absolute_path = base_path.parent / entry
-    if not absolute_path.exists():
+    if not debug_payload["exists"]:
         collector.add_error(
             "missing_frontend_admin_entry",
             f"找不到 frontend_admin_entry 对应文件: {entry}",
@@ -290,7 +380,28 @@ def _validate_frontend_admin_entry(
         )
         return
 
-    source = absolute_path.read_text(encoding="utf-8")
+    required_exports = list(debug_payload["required_exports"])
+    available_exports = set(debug_payload["available_exports"])
+
+    if not required_exports and "resolveDetailPage" not in available_exports:
+        collector.add_warning(
+            "missing_frontend_admin_detail_export",
+            "frontend_admin_entry 未导出 resolveDetailPage，扩展详情页将回退到平台默认视图",
+            extension_id=manifest.id,
+            field="frontend_admin_entry",
+        )
+
+    for export_name in required_exports:
+        if export_name not in available_exports:
+            collector.add_error(
+                "missing_frontend_admin_export",
+                f"frontend_admin_entry 缺少导出函数: {export_name}",
+                extension_id=manifest.id,
+                field="frontend_admin_entry",
+            )
+
+
+def _build_required_frontend_admin_exports(manifest: ExtensionManifest) -> list[str]:
     required_exports = []
     if manifest.settings_pages:
         required_exports.append("resolveSettingsPage")
@@ -298,12 +409,4 @@ def _validate_frontend_admin_entry(
         required_exports.append("resolvePermissionsPage")
     if manifest.operations_pages:
         required_exports.append("resolveOperationsPage")
-
-    for export_name in required_exports:
-        if f"export function {export_name}" not in source:
-            collector.add_error(
-                "missing_frontend_admin_export",
-                f"frontend_admin_entry 缺少导出函数: {export_name}",
-                extension_id=manifest.id,
-                field="frontend_admin_entry",
-            )
+    return required_exports

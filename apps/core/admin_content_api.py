@@ -3,8 +3,10 @@ from django.shortcuts import get_object_or_404
 
 from apps.core.extensions import get_extension_registry
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
+from apps.core.extensions.validation import inspect_frontend_admin_entry, validate_extension_manifests_with_available_ids
 from apps.core.extension_service import ExtensionService
 from apps.core.jwt_auth import AccessTokenAuth
+from apps.core.forum_registry import get_builtin_module_ids
 
 
 router = Router()
@@ -227,6 +229,7 @@ def _serialize_admin_extension(extension):
                 for phase in extension.lifecycle.phases
             ],
         },
+        "debug_info": _build_extension_debug_info(extension),
     }
 
 
@@ -248,6 +251,68 @@ def _serialize_extension_admin_actions(extension):
             "order": action.order,
         })
     return actions
+
+
+def _build_extension_debug_info(extension):
+    registry = get_extension_registry()
+    inspection = inspect_frontend_admin_entry(
+        extension.manifest,
+        extensions_base_path=registry.extensions_path,
+    )
+    validation_result = validate_extension_manifests_with_available_ids(
+        [extension.manifest],
+        available_extension_ids=set(get_builtin_module_ids()),
+        extensions_base_path=registry.extensions_path,
+    )
+
+    expected_settings_path = f"/admin/extensions/{extension.id}/settings"
+    expected_permissions_path = f"/admin/extensions/{extension.id}/permissions"
+    expected_operations_path = f"/admin/extensions/{extension.id}/operations"
+
+    return {
+        "manifest_path": extension.manifest.path,
+        "frontend_admin_entry": {
+            "entry": inspection["entry"],
+            "entry_type": inspection["entry_type"],
+            "exists": inspection["exists"],
+            "resolved_path": inspection["resolved_path"],
+            "required_exports": list(inspection["required_exports"]),
+            "optional_exports": list(inspection["optional_exports"]),
+            "available_exports": list(inspection["available_exports"]),
+        },
+        "route_bindings": [
+            {
+                "key": "settings",
+                "label": "设置页",
+                "declared": next(iter(extension.manifest.settings_pages), ""),
+                "expected": expected_settings_path,
+                "matches_expected": next(iter(extension.manifest.settings_pages), "") == expected_settings_path if extension.manifest.settings_pages else False,
+            },
+            {
+                "key": "permissions",
+                "label": "权限页",
+                "declared": next(iter(extension.manifest.permissions_pages), ""),
+                "expected": expected_permissions_path,
+                "matches_expected": next(iter(extension.manifest.permissions_pages), "") == expected_permissions_path if extension.manifest.permissions_pages else False,
+            },
+            {
+                "key": "operations",
+                "label": "操作页",
+                "declared": next(iter(extension.manifest.operations_pages), ""),
+                "expected": expected_operations_path,
+                "matches_expected": next(iter(extension.manifest.operations_pages), "") == expected_operations_path if extension.manifest.operations_pages else False,
+            },
+        ],
+        "validation_issues": [
+            {
+                "level": issue.level,
+                "code": issue.code,
+                "field": issue.field,
+                "message": issue.message,
+            }
+            for issue in validation_result.issues
+        ],
+    }
 
 
 @router.get("/modules", auth=AccessTokenAuth(), tags=["Admin"])

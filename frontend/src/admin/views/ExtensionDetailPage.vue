@@ -122,6 +122,57 @@
         </section>
 
         <section class="ExtensionDetailCard">
+          <h3>开发调试</h3>
+          <div class="ExtensionDetailStack">
+            <div>
+              <small>Manifest 目录</small>
+              <code>{{ debugInfo?.manifest_path || '无' }}</code>
+            </div>
+            <div>
+              <small>后台入口类型</small>
+              <strong>{{ debugEntryTypeLabel }}</strong>
+            </div>
+            <div>
+              <small>后台入口解析</small>
+              <code>{{ debugInfo?.frontend_admin_entry?.resolved_path || debugInfo?.frontend_admin_entry?.entry || '无' }}</code>
+            </div>
+            <div>
+              <small>已发现导出</small>
+              <strong>{{ formatList(debugInfo?.frontend_admin_entry?.available_exports) }}</strong>
+            </div>
+            <div>
+              <small>必需导出</small>
+              <strong>{{ formatList(debugInfo?.frontend_admin_entry?.required_exports) }}</strong>
+            </div>
+          </div>
+          <ul v-if="debugRouteBindings.length" class="ExtensionDetailChecks">
+            <li v-for="item in debugRouteBindings" :key="item.key">
+              <div class="ExtensionDetailChecks-head">
+                <strong>{{ item.label }}</strong>
+                <span class="ExtensionDetailChecks-status" :class="item.matches_expected ? 'is-ready' : 'is-attention'">
+                  {{ item.matches_expected ? '已对齐' : '未对齐' }}
+                </span>
+              </div>
+              <p>声明路由：<code>{{ item.declared || '无' }}</code></p>
+              <p>标准路由：<code>{{ item.expected }}</code></p>
+            </li>
+          </ul>
+          <ul v-if="debugValidationIssues.length" class="ExtensionDetailChecks">
+            <li v-for="item in debugValidationIssues" :key="`${item.code}-${item.field}-${item.message}`">
+              <div class="ExtensionDetailChecks-head">
+                <strong>{{ item.code }}</strong>
+                <span class="ExtensionDetailChecks-status" :class="item.level === 'error' ? 'is-attention' : 'is-pending'">
+                  {{ item.level === 'error' ? '错误' : '警告' }}
+                </span>
+              </div>
+              <p>{{ item.message }}</p>
+              <code v-if="item.field">{{ item.field }}</code>
+            </li>
+          </ul>
+          <p v-else class="ExtensionDetailDebugOk">当前 manifest 与后台入口校验通过。</p>
+        </section>
+
+        <section class="ExtensionDetailCard">
           <h3>依赖与能力</h3>
           <div class="ExtensionDetailStack">
             <div>
@@ -263,6 +314,26 @@ const deliveryChecks = computed(() => {
 
 const uninstallWarnings = computed(() => {
   return Array.isArray(extension.value?.uninstall_warnings) ? extension.value.uninstall_warnings : []
+})
+
+const debugInfo = computed(() => {
+  return extension.value?.debug_info || null
+})
+
+const debugRouteBindings = computed(() => {
+  return Array.isArray(debugInfo.value?.route_bindings) ? debugInfo.value.route_bindings : []
+})
+
+const debugValidationIssues = computed(() => {
+  return Array.isArray(debugInfo.value?.validation_issues) ? debugInfo.value.validation_issues : []
+})
+
+const debugEntryTypeLabel = computed(() => {
+  const entryType = debugInfo.value?.frontend_admin_entry?.entry_type
+  if (entryType === 'builtin') return '内置入口'
+  if (entryType === 'filesystem') return '文件系统扩展'
+  if (entryType === 'external') return '外部路径'
+  return '未声明'
 })
 
 const runtimeStatusClass = computed(() => {
@@ -546,6 +617,11 @@ function syncModulesFromExtension(currentExtension) {
 .ExtensionDetailIssues {
   margin: 16px 0 0;
   color: #b02a37;
+}
+
+.ExtensionDetailDebugOk {
+  margin: 18px 0 0;
+  color: #1d7a36;
 }
 
 .ExtensionDetailChecks {

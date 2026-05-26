@@ -30,7 +30,7 @@ from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extensi
 from apps.core.extensions.exceptions import ExtensionStateError
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.registry import ExtensionRegistry
-from apps.core.extensions.validation import validate_extension_manifests
+from apps.core.extensions.validation import inspect_frontend_admin_entry, validate_extension_manifests
 from apps.core.extension_service import ExtensionService
 from apps.core.forum_events import (
     DiscussionCreatedEvent,
@@ -182,6 +182,42 @@ class ExtensionManifestLoaderTests(TestCase):
 
 
 class ExtensionValidationTests(TestCase):
+    def test_inspect_frontend_admin_entry_reports_available_exports(self):
+        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
+        extension = registry.get_extension("sample-hello")
+
+        payload = inspect_frontend_admin_entry(
+            extension.manifest,
+            extensions_base_path=registry.extensions_path,
+        )
+
+        self.assertEqual(payload["entry_type"], "filesystem")
+        self.assertTrue(payload["exists"])
+        self.assertIn("resolveDetailPage", payload["available_exports"])
+        self.assertIn("resolveSettingsPage", payload["available_exports"])
+        self.assertIn("resolveOperationsPage", payload["available_exports"])
+
+    def test_validate_extension_manifests_requires_frontend_admin_entry_for_admin_pages(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "settings_pages": ["/admin/extensions/alpha-tools/settings"],
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "missing_frontend_admin_entry_declaration" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_validate_extension_manifests_reports_missing_dependency_and_missing_admin_entry(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -236,6 +272,28 @@ class ExtensionValidationTests(TestCase):
                 and "resolveOperationsPage" in item.message
                 for item in result.issues
             ))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extension_manifests_reports_mismatched_extension_admin_page(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "frontend_admin_entry": "extensions/alpha-tools/frontend/admin/index.js",
+                "settings_pages": ["/admin/extensions/other-tools/settings"],
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "invalid_extension_admin_page" for item in result.issues))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -410,6 +468,24 @@ class ExtensionManagementCommandTests(TestCase):
                 "export function resolveSettingsPage() { return null }\n",
                 encoding="utf-8",
             )
+
+            with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
+                call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_reports_missing_frontend_admin_entry_declaration(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "dependencies": ["core"],
+                "settings_pages": ["/admin/extensions/alpha-tools/settings"],
+            }, ensure_ascii=False), encoding="utf-8")
 
             with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
                 call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
@@ -614,6 +690,17 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(payload["runtime_actions"][0]["action"], "install")
         self.assertTrue(any(item["key"] == "migrations" for item in payload["delivery_checks"]))
         self.assertTrue(any("不会自动回滚数据库迁移" in item for item in payload["uninstall_warnings"]))
+        self.assertEqual(payload["debug_info"]["manifest_path"], str(Path.cwd() / "extensions" / "sample-hello"))
+        self.assertEqual(payload["debug_info"]["frontend_admin_entry"]["entry_type"], "filesystem")
+        self.assertTrue(payload["debug_info"]["frontend_admin_entry"]["exists"])
+        self.assertIn("resolveDetailPage", payload["debug_info"]["frontend_admin_entry"]["available_exports"])
+        self.assertTrue(any(
+            item["key"] == "settings"
+            and item["matches_expected"]
+            and item["declared"] == "/admin/extensions/sample-hello/settings"
+            for item in payload["debug_info"]["route_bindings"]
+        ))
+        self.assertEqual(payload["debug_info"]["validation_issues"], [])
 
     def test_extensions_api_can_install_disable_enable_and_uninstall_extension(self):
         install_response = self.client.post(

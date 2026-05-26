@@ -40,3 +40,15 @@ test('loadExtensionAdminEntryModule prefers builtin registry for builtin entries
 
   assert.equal(loaded, builtinModule)
 })
+
+test('loadExtensionAdminEntryModule loads filesystem importer entries', async () => {
+  const loaded = await loadExtensionAdminEntryModule('../../../../extensions/sample-hello/frontend/admin/index.js', {
+    importers: {
+      '../../../../extensions/sample-hello/frontend/admin/index.js': async () => ({
+        resolveDetailPage: () => null,
+      }),
+    },
+  })
+
+  assert.equal(typeof loaded.resolveDetailPage, 'function')
+})
