@@ -11,6 +11,7 @@ from apps.core.extensions.types import (
     ExtensionDistributionDefinition,
     ExtensionManifest,
     ExtensionSecurityDefinition,
+    ExtensionManifestRuntimeActionDefinition,
 )
 from apps.core.extensions.validation import EXTENSION_ID_PATTERN, SEMVER_PATTERN
 
@@ -80,6 +81,7 @@ class ExtensionManifestLoader:
             compatibility=self._build_compatibility(payload.get("compatibility")),
             security=self._build_security(payload.get("security")),
             distribution=self._build_distribution(payload.get("distribution")),
+            runtime_actions=tuple(self._build_runtime_action(item) for item in payload.get("runtime_actions", []) if isinstance(item, dict)),
             migration_namespace=str(payload.get("migration_namespace") or "").strip(),
             source="filesystem",
             path=str(manifest_path.parent),
@@ -125,4 +127,20 @@ class ExtensionManifestLoader:
             channel_label=str(data.get("channel_label") or "").strip(),
             signing_key_id=str(data.get("signing_key_id") or "").strip(),
             signature_url=str(data.get("signature_url") or "").strip(),
+        )
+
+    def _build_runtime_action(self, payload: dict) -> ExtensionManifestRuntimeActionDefinition:
+        return ExtensionManifestRuntimeActionDefinition(
+            key=str(payload.get("key") or "").strip(),
+            label=str(payload.get("label") or "").strip(),
+            hook=str(payload.get("hook") or "").strip(),
+            tone=str(payload.get("tone") or "default").strip() or "default",
+            confirm_title=str(payload.get("confirm_title") or "").strip(),
+            confirm_message=str(payload.get("confirm_message") or "").strip(),
+            confirm_text=str(payload.get("confirm_text") or "").strip(),
+            success_message=str(payload.get("success_message") or "").strip(),
+            requires_enabled=bool(payload.get("requires_enabled", False)),
+            requires_installed=bool(payload.get("requires_installed", False)),
+            description=str(payload.get("description") or "").strip(),
+            order=int(payload.get("order", 100) or 100),
         )

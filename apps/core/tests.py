@@ -27,6 +27,7 @@ from unittest.mock import Mock, patch
 
 from apps.core.domain_events import DomainEventBus
 from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extension
+from apps.core.extensions.backend import run_extension_backend_hook
 from apps.core.extensions.exceptions import ExtensionStateError
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.registry import ExtensionRegistry
@@ -150,6 +151,14 @@ class ExtensionManifestLoaderTests(TestCase):
                         "target": "/admin/extensions/sample-extension",
                     }
                 ],
+                "runtime_actions": [
+                    {
+                        "key": "rebuild-cache",
+                        "label": "刷新缓存",
+                        "hook": "run_rebuild_cache",
+                        "requires_enabled": True,
+                    }
+                ],
             }, ensure_ascii=False), encoding="utf-8")
 
             loader = ExtensionManifestLoader(base_dir / "extensions")
@@ -163,6 +172,7 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(results[0].manifest.permissions_pages, ("/admin/extensions/sample/permissions",))
             self.assertEqual(results[0].manifest.operations_pages, ("/admin/extensions/sample/operations",))
             self.assertEqual(results[0].manifest.admin_actions[0].key, "details")
+            self.assertEqual(results[0].manifest.runtime_actions[0].hook, "run_rebuild_cache")
             self.assertEqual(results[0].manifest.migration_namespace, "")
             self.assertEqual(results[0].manifest.compatibility.api_version, "1.0")
             self.assertEqual(results[0].manifest.compatibility.api_stability, "experimental")
@@ -352,6 +362,41 @@ class ExtensionValidationTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_validate_extension_manifests_reports_invalid_runtime_actions(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "runtime_actions": [
+                    {
+                        "key": "rebuild-cache",
+                        "label": "刷新缓存",
+                        "hook": "",
+                    },
+                    {
+                        "key": "rebuild-cache",
+                        "label": "",
+                        "hook": "run_rebuild_cache",
+                        "tone": "loud",
+                    }
+                ],
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertEqual(result.error_count, 4)
+            self.assertTrue(any(item.code == "invalid_runtime_action" for item in result.issues))
+            self.assertTrue(any(item.code == "duplicate_runtime_action_key" for item in result.issues))
+            self.assertTrue(any(item.code == "invalid_runtime_action_tone" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_validate_extension_manifests_reports_invalid_ecosystem_metadata(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -447,6 +492,9 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertTrue((extension_dir / "backend" / "migrations" / "__init__.py").exists())
                 self.assertTrue((extension_dir / "docs" / "README.md").exists())
                 self.assertTrue((extension_dir / "locale" / "zh-CN.json").exists())
+                backend_source = (extension_dir / "backend" / "ext.py").read_text(encoding="utf-8")
+                self.assertIn("def run_install(context):", backend_source)
+                self.assertIn("def run_uninstall(context):", backend_source)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -732,6 +780,7 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(sample_extension["action_links"]["permissions_page"], "/admin/extensions/sample-hello/permissions")
         self.assertEqual(sample_extension["admin_actions"][0]["key"], "details")
         self.assertTrue(any(action["key"] == "documentation" for action in sample_extension["admin_actions"]))
+        self.assertFalse(any(action["action"] == "hook:run_rebuild_cache" for action in sample_extension["runtime_actions"]))
 
         tags_extension = next(item for item in payload["extensions"] if item["id"] == "tags")
         self.assertEqual(tags_extension["source"], "builtin-module")
@@ -784,6 +833,7 @@ class AdminExtensionsApiTests(TestCase):
             for item in payload["debug_info"]["route_bindings"]
         ))
         self.assertEqual(payload["debug_info"]["validation_issues"], [])
+        self.assertEqual(payload["backend_hooks"], [])
 
     def test_extensions_api_can_install_disable_enable_and_uninstall_extension(self):
         install_response = self.client.post(
@@ -797,6 +847,8 @@ class AdminExtensionsApiTests(TestCase):
         self.assertTrue(installed_extension["installed"])
         self.assertTrue(installed_extension["enabled"])
         self.assertEqual(installed_extension["runtime_status"]["key"], "active")
+        self.assertTrue(any(item["hook"] == "run_install" for item in installed_extension["backend_hooks"]))
+        self.assertTrue(any(item["action"] == "hook:run_rebuild_cache" for item in installed_extension["runtime_actions"]))
 
         disable_response = self.client.post(
             "/api/admin/extensions/sample-hello/disable",
@@ -809,10 +861,13 @@ class AdminExtensionsApiTests(TestCase):
         self.assertFalse(disabled_extension["enabled"])
         self.assertEqual(disabled_extension["runtime_status"]["key"], "disabled")
         self.assertTrue(any(item["action"] == "uninstall" for item in disabled_extension["runtime_actions"]))
+        self.assertTrue(any(item["hook"] == "run_disable" for item in disabled_extension["backend_hooks"]))
 
         installation = ExtensionInstallation.objects.get(extension_id="sample-hello")
         self.assertFalse(installation.enabled)
         self.assertFalse(installation.booted)
+        self.assertIn("run_install", installation.meta["backend_hooks"])
+        self.assertIn("run_disable", installation.meta["backend_hooks"])
 
         enable_response = self.client.post(
             "/api/admin/extensions/sample-hello/enable",
@@ -823,6 +878,16 @@ class AdminExtensionsApiTests(TestCase):
         enabled_payload = enable_response.json()
         enabled_extension = next(item for item in enabled_payload["extensions"] if item["id"] == "sample-hello")
         self.assertTrue(enabled_extension["enabled"])
+        self.assertTrue(any(item["hook"] == "run_enable" for item in enabled_extension["backend_hooks"]))
+
+        runtime_hook_response = self.client.post(
+            "/api/admin/extensions/sample-hello/runtime-hooks/run_rebuild_cache",
+            **self.auth_header(),
+        )
+        self.assertEqual(runtime_hook_response.status_code, 200, runtime_hook_response.content)
+        runtime_hook_payload = runtime_hook_response.json()
+        runtime_hook_extension = next(item for item in runtime_hook_payload["extensions"] if item["id"] == "sample-hello")
+        self.assertTrue(any(item["hook"] == "run_rebuild_cache" for item in runtime_hook_extension["backend_hooks"]))
 
         installation.refresh_from_db()
         self.assertTrue(installation.enabled)
@@ -844,6 +909,7 @@ class AdminExtensionsApiTests(TestCase):
         self.assertFalse(uninstalled_extension["installed"])
         self.assertFalse(uninstalled_extension["enabled"])
         self.assertEqual(uninstalled_extension["runtime_status"]["key"], "pending_install")
+        self.assertTrue(any(item["hook"] == "run_uninstall" for item in uninstalled_extension["backend_hooks"]))
 
         installation.refresh_from_db()
         self.assertFalse(installation.installed)
@@ -952,13 +1018,57 @@ class ExtensionServiceTests(TestCase):
         installed = ExtensionService.install_extension("sample-hello")
         self.assertTrue(installed.runtime.installed)
         self.assertTrue(installed.runtime.enabled)
+        self.assertEqual(installed.runtime.backend_hooks["run_install"]["status"], "ok")
 
         disabled = ExtensionService.set_extension_enabled("sample-hello", False)
         self.assertFalse(disabled.runtime.enabled)
+        self.assertEqual(disabled.runtime.backend_hooks["run_disable"]["status"], "ok")
+
+        enabled = ExtensionService.set_extension_enabled("sample-hello", True)
+        self.assertTrue(enabled.runtime.enabled)
+        self.assertEqual(enabled.runtime.backend_hooks["run_enable"]["status"], "ok")
+
+        disabled_again = ExtensionService.set_extension_enabled("sample-hello", False)
+        self.assertFalse(disabled_again.runtime.enabled)
 
         uninstalled = ExtensionService.uninstall_extension("sample-hello")
         self.assertFalse(uninstalled.runtime.installed)
         self.assertFalse(uninstalled.runtime.enabled)
+        self.assertEqual(uninstalled.runtime.backend_hooks["run_uninstall"]["status"], "ok")
+
+    def test_run_extension_backend_hook_skips_builtin_extension(self):
+        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
+        definition = registry.get_extension("core")
+
+        result = run_extension_backend_hook(definition, "run_install")
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["hook"], "run_install")
+
+    def test_run_extension_backend_hook_skips_when_hook_missing(self):
+        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
+        definition = registry.get_extension("sample-hello")
+
+        result = run_extension_backend_hook(definition, "run_reconcile")
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertIn("run_reconcile", result["message"])
+
+    def test_runtime_hook_executes_declared_extension_operation(self):
+        installed = ExtensionService.install_extension("sample-hello")
+        self.assertTrue(installed.runtime.enabled)
+
+        updated = ExtensionService.run_extension_runtime_hook("sample-hello", "run_rebuild_cache")
+
+        self.assertEqual(updated.runtime.backend_hooks["run_rebuild_cache"]["status"], "ok")
+
+    def test_runtime_hook_requires_manifest_declaration(self):
+        ExtensionService.install_extension("sample-hello")
+
+        with self.assertRaises(ExtensionStateError) as context:
+            ExtensionService.run_extension_runtime_hook("sample-hello", "run_unknown")
+
+        self.assertEqual(context.exception.code, "extension_runtime_hook_not_declared")
 
     def test_enable_raises_when_required_dependency_missing_or_disabled(self):
         ExtensionService.install_extension("sample-hello")

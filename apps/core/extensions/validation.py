@@ -261,6 +261,7 @@ def _validate_single_manifest(
     _validate_admin_actions(collector, manifest)
     _validate_admin_page_bindings(collector, manifest)
     _validate_ecosystem_metadata(collector, manifest)
+    _validate_runtime_actions(collector, manifest)
 
     for field_name, pages in (
         ("settings_pages", manifest.settings_pages),
@@ -478,6 +479,55 @@ def _validate_ecosystem_metadata(
             extension_id=manifest.id,
             field="security.capabilities_notice",
         )
+
+def _validate_runtime_actions(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+) -> None:
+    seen_keys: set[str] = set()
+    allowed_tones = {"default", "primary", "subtle", "danger"}
+
+    for action in manifest.runtime_actions:
+        if not action.key:
+            collector.add_error(
+                "invalid_runtime_action",
+                "runtime_actions 中的 key 不能为空",
+                extension_id=manifest.id,
+                field="runtime_actions",
+            )
+        elif action.key in seen_keys:
+            collector.add_error(
+                "duplicate_runtime_action_key",
+                f"runtime_actions 中存在重复 key: {action.key}",
+                extension_id=manifest.id,
+                field="runtime_actions",
+            )
+        else:
+            seen_keys.add(action.key)
+
+        if not action.label:
+            collector.add_error(
+                "invalid_runtime_action",
+                "runtime_actions 中的 label 不能为空",
+                extension_id=manifest.id,
+                field="runtime_actions",
+            )
+
+        if not action.hook:
+            collector.add_error(
+                "invalid_runtime_action",
+                "runtime_actions 中的 hook 不能为空",
+                extension_id=manifest.id,
+                field="runtime_actions",
+            )
+
+        if action.tone not in allowed_tones:
+            collector.add_error(
+                "invalid_runtime_action_tone",
+                f"runtime_actions.tone 不支持: {action.tone}",
+                extension_id=manifest.id,
+                field="runtime_actions",
+            )
 
 
 def _validate_unique_strings(

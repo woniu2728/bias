@@ -86,6 +86,7 @@ class ExtensionRegistry:
             dependency_state_label=definition.runtime.dependency_state_label,
             runtime_issues=definition.runtime.runtime_issues,
             runtime_actions=(),
+            backend_hooks=dict((installation.meta or {}).get("backend_hooks") or {}),
         )
 
         return self._with_runtime_actions(ExtensionDefinition(
@@ -118,6 +119,7 @@ class ExtensionRegistry:
                 dependency_state_label=definition.runtime.dependency_state_label,
                 runtime_issues=definition.runtime.runtime_issues,
                 runtime_actions=(),
+                backend_hooks=dict(definition.runtime.backend_hooks or {}),
             ),
             lifecycle=definition.lifecycle,
             capabilities=definition.capabilities,
@@ -146,6 +148,7 @@ class ExtensionRegistry:
                 runtime_actions=(),
                 delivery_checks=tuple(runtime_probe["delivery_checks"]),
                 uninstall_warnings=tuple(runtime_probe["uninstall_warnings"]),
+                backend_hooks=dict(definition.runtime.backend_hooks or {}),
             ),
             lifecycle=definition.lifecycle,
             capabilities=definition.capabilities,
@@ -171,6 +174,7 @@ class ExtensionRegistry:
                 runtime_actions=_build_runtime_actions(runtime_definition),
                 delivery_checks=runtime_definition.runtime.delivery_checks,
                 uninstall_warnings=runtime_definition.runtime.uninstall_warnings,
+                backend_hooks=dict(runtime_definition.runtime.backend_hooks or {}),
             ),
             lifecycle=runtime_definition.lifecycle,
             capabilities=runtime_definition.capabilities,
@@ -208,9 +212,11 @@ def _build_extension_status_label(installed: bool, enabled: bool) -> str:
 
 
 def _build_runtime_actions(definition: ExtensionDefinition) -> tuple[ExtensionRuntimeActionDefinition, ...]:
+    manifest_actions = _build_manifest_runtime_actions(definition)
+
     if definition.source == "builtin-module":
         if definition.runtime.enabled:
-            return (
+            return tuple(list(manifest_actions) + [
                 ExtensionRuntimeActionDefinition(
                     key="disable",
                     label="停用扩展",
@@ -223,8 +229,8 @@ def _build_runtime_actions(definition: ExtensionDefinition) -> tuple[ExtensionRu
                     requires_installed=True,
                     order=20,
                 ),
-            )
-        return (
+            ])
+        return tuple(list(manifest_actions) + [
             ExtensionRuntimeActionDefinition(
                 key="enable",
                 label="启用扩展",
@@ -237,10 +243,10 @@ def _build_runtime_actions(definition: ExtensionDefinition) -> tuple[ExtensionRu
                 requires_installed=True,
                 order=10,
             ),
-        )
+        ])
 
     if not definition.runtime.installed:
-        return (
+        return tuple(list(manifest_actions) + [
             ExtensionRuntimeActionDefinition(
                 key="install",
                 label="安装扩展",
@@ -252,9 +258,9 @@ def _build_runtime_actions(definition: ExtensionDefinition) -> tuple[ExtensionRu
                 success_message="扩展已安装并启用。",
                 order=10,
             ),
-        )
+        ])
 
-    actions = []
+    actions = list(manifest_actions)
     if definition.runtime.enabled:
         actions.append(ExtensionRuntimeActionDefinition(
             key="disable",
@@ -294,6 +300,29 @@ def _build_runtime_actions(definition: ExtensionDefinition) -> tuple[ExtensionRu
                 order=30,
         ))
 
+    return tuple(actions)
+
+
+def _build_manifest_runtime_actions(definition: ExtensionDefinition) -> tuple[ExtensionRuntimeActionDefinition, ...]:
+    actions = []
+    for action in sorted(definition.manifest.runtime_actions, key=lambda item: (item.order, item.key)):
+        if action.requires_installed and not definition.runtime.installed:
+            continue
+        if action.requires_enabled and not definition.runtime.enabled:
+            continue
+        actions.append(ExtensionRuntimeActionDefinition(
+            key=action.key,
+            label=action.label,
+            action=f"hook:{action.hook}",
+            tone=action.tone,
+            confirm_title=action.confirm_title,
+            confirm_message=action.confirm_message,
+            confirm_text=action.confirm_text,
+            success_message=action.success_message,
+            requires_enabled=action.requires_enabled,
+            requires_installed=action.requires_installed,
+            order=action.order,
+        ))
     return tuple(actions)
 
 

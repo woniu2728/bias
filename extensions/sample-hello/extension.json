@@ -94,6 +94,21 @@
       "order": 50
     }
   ],
+  "runtime_actions": [
+    {
+      "key": "rebuild-cache",
+      "label": "刷新缓存",
+      "hook": "run_rebuild_cache",
+      "tone": "subtle",
+      "confirm_title": "刷新扩展缓存",
+      "confirm_message": "确定执行 Sample Hello 的缓存刷新操作吗？",
+      "confirm_text": "刷新",
+      "success_message": "扩展缓存已刷新。",
+      "requires_enabled": true,
+      "requires_installed": true,
+      "order": 5
+    }
+  ],
   "extra": {
     "display_order": 1000,
     "experimental": true

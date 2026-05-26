@@ -84,6 +84,24 @@ def install_admin_extension(request, extension_id: str):
     return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
 
 
+@router.post("/extensions/{extension_id}/runtime-hooks/{hook_name}", auth=AccessTokenAuth(), tags=["Admin"])
+def run_admin_extension_runtime_hook(request, extension_id: str, hook_name: str):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    try:
+        ExtensionService.run_extension_runtime_hook(
+            extension_id,
+            hook_name,
+            actor=request.auth,
+            request=request,
+        )
+    except ExtensionStateError as exc:
+        return _legacy().admin_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
+    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+
+
 @router.post("/extensions/{extension_id}/disable", auth=AccessTokenAuth(), tags=["Admin"])
 def disable_admin_extension(request, extension_id: str):
     denied = _require_staff(request)
@@ -219,6 +237,7 @@ def _serialize_admin_extension(extension):
             }
             for action in extension.runtime.runtime_actions
         ],
+        "backend_hooks": _serialize_extension_backend_hooks(extension),
         "source": extension.source,
         "module_ids": list(extension.module_ids),
         "admin_pages": list(extension.admin_pages),
@@ -356,6 +375,23 @@ def _build_extension_debug_info(extension):
             for issue in validation_result.issues
         ],
     }
+
+def _serialize_extension_backend_hooks(extension):
+    hooks = []
+    raw_hooks = dict(extension.runtime.backend_hooks or {})
+    for hook_name in sorted(raw_hooks.keys()):
+        payload = raw_hooks.get(hook_name)
+        if not isinstance(payload, dict):
+            continue
+        hooks.append({
+            "hook": str(payload.get("hook") or hook_name),
+            "status": str(payload.get("status") or "ok"),
+            "status_label": str(payload.get("status_label") or "已完成"),
+            "message": str(payload.get("message") or ""),
+            "executed_at": str(payload.get("executed_at") or ""),
+            "details": dict(payload.get("details") or {}),
+        })
+    return hooks
 
 
 @router.get("/modules", auth=AccessTokenAuth(), tags=["Admin"])

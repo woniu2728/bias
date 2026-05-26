@@ -4,6 +4,7 @@ from django.db import transaction
 
 from apps.core.audit import log_admin_action
 from apps.core.extensions import get_extension_registry
+from apps.core.extensions.backend import run_extension_backend_hook
 from apps.core.extensions.exceptions import ExtensionStateError
 from apps.core.extensions.validation import resolve_bias_version_compatibility
 from apps.core.models import ExtensionInstallation
@@ -39,12 +40,18 @@ class ExtensionService:
             )
 
         ExtensionService._validate_bias_compatibility(extension, action="install")
+        install_result = ExtensionService._run_backend_hook(
+            extension,
+            "run_install",
+            meta={"action": "install"},
+        )
 
         updated = ExtensionService._persist_installation_state(
             extension,
             installed=True,
             enabled=True,
             booted=True,
+            meta_updates={"backend_hooks": {"run_install": install_result}},
         )
 
         if request is not None:
@@ -91,11 +98,17 @@ class ExtensionService:
             )
 
         ExtensionService._validate_disable(extension, extensions, uninstalling=True)
+        uninstall_result = ExtensionService._run_backend_hook(
+            extension,
+            "run_uninstall",
+            meta={"action": "uninstall"},
+        )
         updated = ExtensionService._persist_installation_state(
             extension,
             installed=False,
             enabled=False,
             booted=False,
+            meta_updates={"backend_hooks": {"run_uninstall": uninstall_result}},
         )
 
         if request is not None:
@@ -127,11 +140,18 @@ class ExtensionService:
         else:
             ExtensionService._validate_disable(extension, extensions)
 
+        hook_name = "run_enable" if enabled else "run_disable"
+        hook_result = ExtensionService._run_backend_hook(
+            extension,
+            hook_name,
+            meta={"action": "enable" if enabled else "disable"},
+        )
         updated = ExtensionService._persist_installation_state(
             extension,
             installed=True,
             enabled=bool(enabled),
             booted=bool(enabled),
+            meta_updates={"backend_hooks": {hook_name: hook_result}},
         )
 
         if request is not None:
@@ -145,6 +165,68 @@ class ExtensionService:
                     "enabled": updated.runtime.enabled,
                     "source": updated.source,
                     "module_ids": list(updated.module_ids),
+                },
+            )
+
+        return updated
+
+    @staticmethod
+    @transaction.atomic
+    def run_extension_runtime_hook(extension_id: str, hook_name: str, *, actor=None, request=None):
+        registry = get_extension_registry()
+        registry.load(force=True)
+        extension = registry.get_extension(extension_id)
+
+        runtime_action = next(
+            (
+                action for action in extension.manifest.runtime_actions
+                if action.hook == hook_name
+            ),
+            None,
+        )
+        if runtime_action is None:
+            raise ExtensionStateError(
+                f"扩展 {extension.id} 未声明运行操作 {hook_name}",
+                code="extension_runtime_hook_not_declared",
+                details={"extension_id": extension.id, "hook": hook_name},
+            )
+
+        if runtime_action.requires_installed and not extension.runtime.installed:
+            raise ExtensionStateError(
+                f"扩展 {extension.id} 尚未安装，无法执行 {hook_name}",
+                code="extension_runtime_hook_requires_install",
+                details={"extension_id": extension.id, "hook": hook_name},
+            )
+        if runtime_action.requires_enabled and not extension.runtime.enabled:
+            raise ExtensionStateError(
+                f"扩展 {extension.id} 未启用，无法执行 {hook_name}",
+                code="extension_runtime_hook_requires_enable",
+                details={"extension_id": extension.id, "hook": hook_name},
+            )
+
+        hook_result = ExtensionService._run_backend_hook(
+            extension,
+            hook_name,
+            meta={"action": "runtime_hook", "hook": hook_name},
+        )
+        updated = ExtensionService._persist_installation_state(
+            extension,
+            installed=extension.runtime.installed,
+            enabled=extension.runtime.enabled,
+            booted=extension.runtime.booted,
+            meta_updates={"backend_hooks": {hook_name: hook_result}},
+        )
+
+        if request is not None:
+            log_admin_action(
+                request,
+                "admin.extension.runtime_hook",
+                target_type="extension",
+                target_id=None,
+                data={
+                    "extension_id": updated.id,
+                    "hook": hook_name,
+                    "status": hook_result.get("status"),
                 },
             )
 
@@ -241,7 +323,14 @@ class ExtensionService:
         )
 
     @staticmethod
-    def _persist_installation_state(extension, *, installed: bool, enabled: bool, booted: bool):
+    def _persist_installation_state(
+        extension,
+        *,
+        installed: bool,
+        enabled: bool,
+        booted: bool,
+        meta_updates: dict | None = None,
+    ):
         installation, _created = ExtensionInstallation.objects.get_or_create(
             extension_id=extension.id,
             defaults={
@@ -262,11 +351,14 @@ class ExtensionService:
         installation.enabled = bool(enabled)
         installation.installed = bool(installed)
         installation.booted = bool(booted)
-        installation.meta = {
-            **dict(installation.meta or {}),
+        installation.meta = ExtensionService._merge_installation_meta(
+            installation.meta,
+            {
             "module_ids": list(extension.module_ids),
             "settings_groups": list(extension.settings_groups),
-        }
+                **dict(meta_updates or {}),
+            },
+        )
         installation.save(update_fields=[
             "version",
             "source",
@@ -280,3 +372,24 @@ class ExtensionService:
         registry = get_extension_registry()
         registry.load(force=True)
         return registry.get_extension(extension.id)
+
+    @staticmethod
+    def _run_backend_hook(extension, hook_name: str, *, meta: dict | None = None) -> dict:
+        return run_extension_backend_hook(
+            extension,
+            hook_name,
+            meta=meta,
+        )
+
+    @staticmethod
+    def _merge_installation_meta(current_meta: dict | None, updates: dict | None) -> dict:
+        merged = dict(current_meta or {})
+        for key, value in dict(updates or {}).items():
+            if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                merged[key] = {
+                    **dict(merged[key]),
+                    **value,
+                }
+            else:
+                merged[key] = value
+        return merged

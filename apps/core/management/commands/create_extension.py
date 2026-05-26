@@ -195,6 +195,21 @@ class Command(BaseCommand):
                     "order": 50,
                 },
             ],
+            "runtime_actions": [
+                {
+                    "key": "rebuild-cache",
+                    "label": "刷新缓存",
+                    "hook": "run_rebuild_cache",
+                    "tone": "subtle",
+                    "confirm_title": "刷新扩展缓存",
+                    "confirm_message": f"确定执行 {name} 的缓存刷新操作吗？",
+                    "confirm_text": "刷新",
+                    "success_message": "扩展缓存已刷新。",
+                    "requires_enabled": True,
+                    "requires_installed": True,
+                    "order": 5,
+                }
+            ],
             "extra": {
                 "display_order": 1000,
                 "experimental": True,
@@ -341,7 +356,46 @@ class Command(BaseCommand):
         return (
             "from __future__ import annotations\n\n"
             f"EXTENSION_ID = '{extension_id}'\n"
-            f"EXTENSION_NAME = '{name}'\n"
+            f"EXTENSION_NAME = '{name}'\n\n"
+            "\n"
+            "def run_install(context):\n"
+            "    return {\n"
+            "        'status': 'ok',\n"
+            "        'status_label': '已完成',\n"
+            "        'message': f'{context.extension_name} 安装钩子已执行。',\n"
+            "        'details': {\n"
+            "            'extension_id': context.extension_id,\n"
+            "            'migration_namespace': context.migration_namespace,\n"
+            "        },\n"
+            "    }\n\n"
+            "\n"
+            "def run_enable(context):\n"
+            "    return {\n"
+            "        'status': 'ok',\n"
+            "        'status_label': '已启用',\n"
+            "        'message': f'{context.extension_name} 启用钩子已执行。',\n"
+            "    }\n\n"
+            "\n"
+            "def run_disable(context):\n"
+            "    return {\n"
+            "        'status': 'ok',\n"
+            "        'status_label': '已停用',\n"
+            "        'message': f'{context.extension_name} 停用钩子已执行。',\n"
+            "    }\n\n"
+            "\n"
+            "def run_uninstall(context):\n"
+            "    return {\n"
+            "        'status': 'ok',\n"
+            "        'status_label': '已完成',\n"
+            "        'message': f'{context.extension_name} 卸载钩子已执行。',\n"
+            "    }\n\n"
+            "\n"
+            "def run_rebuild_cache(context):\n"
+            "    return {\n"
+            "        'status': 'ok',\n"
+            "        'status_label': '已刷新',\n"
+            "        'message': f'{context.extension_name} 的运行缓存已刷新。',\n"
+            "    }\n"
         )
 
     def _build_readme_source(self, extension_id: str, name: str) -> str:

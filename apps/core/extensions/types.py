@@ -35,6 +35,22 @@ class ExtensionRuntimeActionDefinition:
 
 
 @dataclass(frozen=True)
+class ExtensionManifestRuntimeActionDefinition:
+    key: str
+    label: str
+    hook: str
+    tone: str = "default"
+    confirm_title: str = ""
+    confirm_message: str = ""
+    confirm_text: str = ""
+    success_message: str = ""
+    requires_enabled: bool = False
+    requires_installed: bool = False
+    description: str = ""
+    order: int = 100
+
+
+@dataclass(frozen=True)
 class ExtensionDeliveryCheckDefinition:
     key: str
     label: str
@@ -148,6 +164,7 @@ class ExtensionManifest:
     compatibility: ExtensionCompatibilityDefinition = ExtensionCompatibilityDefinition()
     security: ExtensionSecurityDefinition = ExtensionSecurityDefinition()
     distribution: ExtensionDistributionDefinition = ExtensionDistributionDefinition()
+    runtime_actions: Tuple[ExtensionManifestRuntimeActionDefinition, ...] = ()
     migration_namespace: str = ""
     source: str = "filesystem"
     path: str = ""
@@ -170,6 +187,7 @@ class ExtensionRuntimeState:
     runtime_actions: Tuple[ExtensionRuntimeActionDefinition, ...] = ()
     delivery_checks: Tuple[ExtensionDeliveryCheckDefinition, ...] = ()
     uninstall_warnings: Tuple[str, ...] = ()
+    backend_hooks: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

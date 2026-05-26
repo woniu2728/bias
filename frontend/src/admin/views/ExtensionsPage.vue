@@ -254,7 +254,9 @@ async function runRuntimeAction(extension, action) {
   errorMessage.value = ''
 
   try {
-    const data = await api.post(`/admin/extensions/${extension.id}/${action.action}`)
+    const data = action.action.startsWith('hook:')
+      ? await api.post(`/admin/extensions/${extension.id}/runtime-hooks/${action.action.slice(5)}`)
+      : await api.post(`/admin/extensions/${extension.id}/${action.action}`)
     applyPayload(data)
     if (action.success_message) {
       await modalStore.alert({

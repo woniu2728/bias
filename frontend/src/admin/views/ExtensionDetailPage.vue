@@ -283,6 +283,22 @@
             {{ extension.runtime_issues.join('；') }}
           </p>
         </section>
+
+        <section v-if="backendHooks.length" class="ExtensionDetailCard">
+          <h3>后端执行记录</h3>
+          <ul class="ExtensionDetailChecks">
+            <li v-for="item in backendHooks" :key="item.hook">
+              <div class="ExtensionDetailChecks-head">
+                <strong>{{ item.hook }}</strong>
+                <span class="ExtensionDetailChecks-status" :class="`is-${item.status}`">
+                  {{ item.status_label }}
+                </span>
+              </div>
+              <p v-if="item.message">{{ item.message }}</p>
+              <code v-if="item.executed_at">{{ item.executed_at }}</code>
+            </li>
+          </ul>
+        </section>
       </div>
     </div>
   </AdminPage>
@@ -375,6 +391,10 @@ const debugEntryTypeLabel = computed(() => {
   return '未声明'
 })
 
+const backendHooks = computed(() => {
+  return Array.isArray(extension.value?.backend_hooks) ? extension.value.backend_hooks : []
+})
+
 const runtimeStatusClass = computed(() => {
   const key = extension.value?.runtime_status?.key
   if (key === 'active') return 'is-enabled'
@@ -435,7 +455,11 @@ async function runRuntimeAction(action) {
   errorMessage.value = ''
 
   try {
-    await api.post(`/admin/extensions/${extension.value.id}/${action.action}`)
+    if (action.action.startsWith('hook:')) {
+      await api.post(`/admin/extensions/${extension.value.id}/runtime-hooks/${action.action.slice(5)}`)
+    } else {
+      await api.post(`/admin/extensions/${extension.value.id}/${action.action}`)
+    }
     await loadExtension()
     if (action.success_message) {
       await modalStore.alert({
