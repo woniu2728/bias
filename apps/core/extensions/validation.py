@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from apps.core.extensions.types import ExtensionManifest
+from apps.core.version import APP_VERSION
 
 
 SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
@@ -172,6 +173,49 @@ def inspect_frontend_admin_entry(
     source = absolute_path.read_text(encoding="utf-8")
     payload["available_exports"] = tuple(sorted(set(EXPORT_FUNCTION_PATTERN.findall(source))))
     return payload
+
+
+def resolve_bias_version_compatibility(manifest: ExtensionManifest, *, current_version: str | None = None) -> dict[str, str | bool]:
+    target_version = str(current_version or APP_VERSION or "").strip()
+    version_range = str(manifest.compatibility.bias_version or "").strip()
+    if not version_range:
+        return {
+            "compatible": True,
+            "current_version": target_version,
+            "required_range": "",
+            "message": "",
+        }
+
+    if not target_version or not SEMVER_PATTERN.match(target_version):
+        return {
+            "compatible": False,
+            "current_version": target_version,
+            "required_range": version_range,
+            "message": f"当前 Bias 版本 {target_version or '未知'} 无法用于校验扩展兼容范围 {version_range}。",
+        }
+
+    if not VERSION_RANGE_PATTERN.match(version_range):
+        return {
+            "compatible": False,
+            "current_version": target_version,
+            "required_range": version_range,
+            "message": f"扩展声明的 Bias 兼容范围非法：{version_range}。",
+        }
+
+    compatible = _matches_simple_version_range(target_version, version_range)
+    if compatible:
+        return {
+            "compatible": True,
+            "current_version": target_version,
+            "required_range": version_range,
+            "message": "",
+        }
+    return {
+        "compatible": False,
+        "current_version": target_version,
+        "required_range": version_range,
+        "message": f"当前 Bias 版本 {target_version} 不满足扩展声明的兼容范围 {version_range}。",
+    }
 
 
 def _validate_single_manifest(
@@ -514,3 +558,41 @@ def _build_required_frontend_admin_exports(manifest: ExtensionManifest) -> list[
     if manifest.operations_pages:
         required_exports.append("resolveOperationsPage")
     return required_exports
+
+
+def _matches_simple_version_range(version: str, version_range: str) -> bool:
+    normalized = version_range.strip()
+    operator = ""
+    for candidate in ("^", "~", ">=", "<=", ">", "<"):
+        if normalized.startswith(candidate):
+            operator = candidate
+            normalized = normalized[len(candidate):]
+            break
+
+    current = _parse_semver_tuple(version)
+    target = _parse_semver_tuple(normalized)
+
+    if operator == "^":
+        if current < target:
+            return False
+        upper_bound = (target[0] + 1, 0, 0)
+        return current < upper_bound
+    if operator == "~":
+        if current < target:
+            return False
+        upper_bound = (target[0], target[1] + 1, 0)
+        return current < upper_bound
+    if operator == ">=":
+        return current >= target
+    if operator == "<=":
+        return current <= target
+    if operator == ">":
+        return current > target
+    if operator == "<":
+        return current < target
+    return current == target
+
+
+def _parse_semver_tuple(value: str) -> tuple[int, int, int]:
+    major, minor, patch = value.strip().split(".")
+    return int(major), int(minor), int(patch)

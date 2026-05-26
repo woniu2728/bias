@@ -30,7 +30,11 @@ from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extensi
 from apps.core.extensions.exceptions import ExtensionStateError
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.registry import ExtensionRegistry
-from apps.core.extensions.validation import inspect_frontend_admin_entry, validate_extension_manifests
+from apps.core.extensions.validation import (
+    inspect_frontend_admin_entry,
+    resolve_bias_version_compatibility,
+    validate_extension_manifests,
+)
 from apps.core.extension_service import ExtensionService
 from apps.core.forum_events import (
     DiscussionCreatedEvent,
@@ -185,6 +189,15 @@ class ExtensionManifestLoaderTests(TestCase):
 
 
 class ExtensionValidationTests(TestCase):
+    def test_resolve_bias_version_compatibility_supports_simple_ranges(self):
+        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
+        extension = registry.get_extension("sample-hello")
+
+        self.assertTrue(resolve_bias_version_compatibility(extension.manifest, current_version="1.0.0")["compatible"])
+        self.assertTrue(resolve_bias_version_compatibility(extension.manifest, current_version="1.2.3")["compatible"])
+        self.assertFalse(resolve_bias_version_compatibility(extension.manifest, current_version="2.0.0")["compatible"])
+        self.assertFalse(resolve_bias_version_compatibility(extension.manifest, current_version="0.9.9")["compatible"])
+
     def test_inspect_frontend_admin_entry_reports_available_exports(self):
         registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
         extension = registry.get_extension("sample-hello")
@@ -613,6 +626,25 @@ class ExtensionRegistryTests(TestCase):
         self.assertFalse(extension.runtime.booted)
         self.assertTrue(extension.runtime.installed)
 
+    @patch("apps.core.extensions.runtime_probe.resolve_bias_version_compatibility")
+    def test_registry_marks_extension_unhealthy_when_bias_version_incompatible(self, resolve_bias_version_compatibility_mock):
+        resolve_bias_version_compatibility_mock.return_value = {
+            "compatible": False,
+            "current_version": "1.0.0",
+            "required_range": "^2.0.0",
+            "message": "当前 Bias 版本 1.0.0 不满足扩展声明的兼容范围 ^2.0.0。",
+        }
+
+        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
+        extension = registry.get_extension("sample-hello")
+
+        self.assertFalse(extension.runtime.healthy)
+        self.assertIn("当前 Bias 版本 1.0.0 不满足扩展声明的兼容范围 ^2.0.0。", extension.runtime.runtime_issues)
+        self.assertTrue(any(
+            item.key == "bias-compatibility" and item.status == "attention"
+            for item in extension.runtime.delivery_checks
+        ))
+
     def test_registry_filters_module_capabilities_when_extension_disabled(self):
         ExtensionInstallation.objects.create(
             extension_id="approval",
@@ -858,6 +890,25 @@ class AdminExtensionsApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["code"], "extension_enable_not_installed")
 
+    @patch("apps.core.extension_service.resolve_bias_version_compatibility")
+    def test_extensions_api_blocks_install_when_bias_version_incompatible(self, resolve_bias_version_compatibility_mock):
+        resolve_bias_version_compatibility_mock.return_value = {
+            "compatible": False,
+            "current_version": "1.0.0",
+            "required_range": "^2.0.0",
+            "message": "当前 Bias 版本 1.0.0 不满足扩展声明的兼容范围 ^2.0.0。",
+        }
+
+        response = self.client.post(
+            "/api/admin/extensions/sample-hello/install",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        payload = response.json()
+        self.assertEqual(payload["code"], "extension_install_incompatible_bias_version")
+        self.assertEqual(payload["field_errors"]["required_bias_version"], "^2.0.0")
+
     def test_extensions_api_blocks_disable_when_other_extensions_depend_on_it(self):
         response = self.client.post(
             "/api/admin/extensions/notifications/disable",
@@ -943,6 +994,21 @@ class ExtensionServiceTests(TestCase):
             ExtensionService.uninstall_extension("sample-hello")
 
         self.assertEqual(context.exception.code, "extension_uninstall_enabled_blocked")
+
+    @patch("apps.core.extension_service.resolve_bias_version_compatibility")
+    def test_install_raises_when_bias_version_incompatible(self, resolve_bias_version_compatibility_mock):
+        resolve_bias_version_compatibility_mock.return_value = {
+            "compatible": False,
+            "current_version": "1.0.0",
+            "required_range": "^2.0.0",
+            "message": "当前 Bias 版本 1.0.0 不满足扩展声明的兼容范围 ^2.0.0。",
+        }
+
+        with self.assertRaises(ExtensionStateError) as context:
+            ExtensionService.install_extension("sample-hello")
+
+        self.assertEqual(context.exception.code, "extension_install_incompatible_bias_version")
+        self.assertEqual(context.exception.details["required_bias_version"], "^2.0.0")
 
 
 class DomainEventRegistryTests(TestCase):

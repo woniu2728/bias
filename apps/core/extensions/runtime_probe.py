@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from apps.core.extensions.types import ExtensionDefinition, ExtensionDeliveryCheckDefinition
+from apps.core.extensions.validation import resolve_bias_version_compatibility
 
 
 def inspect_extension_runtime(definition: ExtensionDefinition) -> dict:
@@ -37,6 +38,7 @@ def inspect_extension_runtime(definition: ExtensionDefinition) -> dict:
     checks.append(_build_documentation_check(root_path, definition))
     checks.append(_build_locale_check(root_path))
     checks.append(_build_frontend_forum_check(root_path, definition))
+    checks.append(_build_bias_compatibility_check(definition))
 
     healthy = True
     for check in checks:
@@ -278,6 +280,38 @@ def _build_frontend_forum_check(root_path: Path | None, definition: ExtensionDef
         message="manifest 已声明 frontend_forum_entry，但 frontend/forum/index.js 不存在。",
         path=str(forum_file or ""),
         optional=True,
+    )
+
+
+def _build_bias_compatibility_check(definition: ExtensionDefinition) -> ExtensionDeliveryCheckDefinition:
+    summary = resolve_bias_version_compatibility(definition.manifest)
+    required_range = str(summary["required_range"] or "").strip()
+    if not required_range:
+        return ExtensionDeliveryCheckDefinition(
+            key="bias-compatibility",
+            label="Bias 兼容性",
+            status="pending",
+            status_label="未声明",
+            message="当前扩展未声明 Bias 兼容版本范围。",
+            optional=True,
+        )
+
+    if bool(summary["compatible"]):
+        return ExtensionDeliveryCheckDefinition(
+            key="bias-compatibility",
+            label="Bias 兼容性",
+            status="ready",
+            status_label="兼容",
+            message=f"当前 Bias 版本满足扩展声明的兼容范围 {required_range}。",
+            optional=True,
+        )
+
+    return ExtensionDeliveryCheckDefinition(
+        key="bias-compatibility",
+        label="Bias 兼容性",
+        status="attention",
+        status_label="不兼容",
+        message=str(summary["message"] or f"当前 Bias 版本不满足兼容范围 {required_range}。"),
     )
 
 

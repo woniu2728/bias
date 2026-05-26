@@ -5,6 +5,7 @@ from django.db import transaction
 from apps.core.audit import log_admin_action
 from apps.core.extensions import get_extension_registry
 from apps.core.extensions.exceptions import ExtensionStateError
+from apps.core.extensions.validation import resolve_bias_version_compatibility
 from apps.core.models import ExtensionInstallation
 
 
@@ -36,6 +37,8 @@ class ExtensionService:
                 code="extension_install_already_installed",
                 details={"extension_id": extension.id},
             )
+
+        ExtensionService._validate_bias_compatibility(extension, action="install")
 
         updated = ExtensionService._persist_installation_state(
             extension,
@@ -156,6 +159,8 @@ class ExtensionService:
                 details={"extension_id": extension.id},
             )
 
+        ExtensionService._validate_bias_compatibility(extension, action="enable")
+
         extension_map = {item.id: item for item in extensions}
         missing_dependencies = []
         disabled_dependencies = []
@@ -217,6 +222,23 @@ class ExtensionService:
                     "blocking_dependents": blocking_dependents,
                 },
             )
+
+    @staticmethod
+    def _validate_bias_compatibility(extension, *, action: str) -> None:
+        compatibility = resolve_bias_version_compatibility(extension.manifest)
+        if compatibility["compatible"]:
+            return
+
+        action_label = "安装" if action == "install" else "启用"
+        raise ExtensionStateError(
+            f"无法{action_label}扩展 {extension.id}。{compatibility['message']}",
+            code=f"extension_{action}_incompatible_bias_version",
+            details={
+                "extension_id": extension.id,
+                "current_bias_version": compatibility["current_version"],
+                "required_bias_version": compatibility["required_range"],
+            },
+        )
 
     @staticmethod
     def _persist_installation_state(extension, *, installed: bool, enabled: bool, booted: bool):
