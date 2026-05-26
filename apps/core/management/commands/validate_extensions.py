@@ -42,6 +42,7 @@ class Command(BaseCommand):
             manifests,
             available_extension_ids=builtin_extension_ids,
             extensions_base_path=extensions_path,
+            strict_runtime_hooks=strict,
         )
 
         self.stdout.write(f"已扫描扩展: {len(result.manifests)}")

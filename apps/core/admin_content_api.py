@@ -3,8 +3,9 @@ from django.shortcuts import get_object_or_404
 
 from apps.core.extensions import get_extension_registry
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
-from apps.core.extensions.validation import inspect_frontend_admin_entry, validate_extension_manifests_with_available_ids
+from apps.core.extensions.validation import inspect_backend_entry, inspect_frontend_admin_entry, validate_extension_manifests_with_available_ids
 from apps.core.extension_service import ExtensionService
+from apps.core.extension_settings_service import get_extension_settings, serialize_extension_settings_schema, save_extension_settings
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.forum_registry import get_builtin_module_ids
 
@@ -47,6 +48,52 @@ def get_admin_extension(request, extension_id: str):
     return {
         "extension": _serialize_admin_extension(extension),
     }
+
+
+@router.get("/extensions/{extension_id}/settings", auth=AccessTokenAuth(), tags=["Admin"])
+def get_admin_extension_settings(request, extension_id: str):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    try:
+        extension = get_extension_registry().get_extension(extension_id)
+        return {
+            "extension_id": extension.id,
+            "schema": serialize_extension_settings_schema(extension.id),
+            "settings": get_extension_settings(extension.id),
+        }
+    except ExtensionNotFoundError:
+        return _legacy().admin_error("扩展不存在", status=404, code="extension_not_found")
+
+
+@router.post("/extensions/{extension_id}/settings", auth=AccessTokenAuth(), tags=["Admin"])
+def save_admin_extension_settings(request, extension_id: str, payload: dict = Body(...)):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    try:
+        extension = get_extension_registry().get_extension(extension_id)
+        settings_data = save_extension_settings(extension.id, payload)
+        _legacy().log_admin_action(
+            request,
+            "admin.extension.settings.update",
+            target_type="extension",
+            data={
+                "extension_id": extension.id,
+                "keys": sorted(payload.keys()),
+            },
+        )
+        return {
+            "message": "扩展设置保存成功",
+            "extension_id": extension.id,
+            "settings": settings_data,
+        }
+    except ExtensionNotFoundError:
+        return _legacy().admin_error("扩展不存在", status=404, code="extension_not_found")
+    except ExtensionStateError as exc:
+        return _legacy().admin_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
 
 
 @router.post("/extensions/{extension_id}/enable", auth=AccessTokenAuth(), tags=["Admin"])
@@ -94,6 +141,23 @@ def run_admin_extension_runtime_hook(request, extension_id: str, hook_name: str)
         ExtensionService.run_extension_runtime_hook(
             extension_id,
             hook_name,
+            actor=request.auth,
+            request=request,
+        )
+    except ExtensionStateError as exc:
+        return _legacy().admin_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
+    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+
+
+@router.post("/extensions/{extension_id}/migrations", auth=AccessTokenAuth(), tags=["Admin"])
+def run_admin_extension_migrations(request, extension_id: str):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    try:
+        ExtensionService.run_extension_migrations(
+            extension_id,
             actor=request.auth,
             request=request,
         )
@@ -177,6 +241,8 @@ def _serialize_admin_extension(extension):
         "settings_pages": list(extension.manifest.settings_pages),
         "permissions_pages": list(extension.manifest.permissions_pages),
         "operations_pages": list(extension.manifest.operations_pages),
+        "settings_schema": serialize_extension_settings_schema(extension.id),
+        "settings_values": get_extension_settings(extension.id) if extension.manifest.settings_schema else {},
         "compatibility": {
             "bias_version": extension.manifest.compatibility.bias_version,
             "api_version": extension.manifest.compatibility.api_version,
@@ -205,6 +271,7 @@ def _serialize_admin_extension(extension):
         },
         "migration_state": extension.runtime.migration_state,
         "migration_label": extension.runtime.migration_label,
+        "migration_execution": _serialize_extension_migration_execution(extension),
         "dependency_state": extension.runtime.dependency_state,
         "dependency_state_label": extension.runtime.dependency_state_label,
         "runtime_issues": list(extension.runtime.runtime_issues),
@@ -321,10 +388,15 @@ def _build_extension_debug_info(extension):
         extension.manifest,
         extensions_base_path=registry.extensions_path,
     )
+    backend_inspection = inspect_backend_entry(
+        extension.manifest,
+        extensions_base_path=registry.extensions_path,
+    )
     validation_result = validate_extension_manifests_with_available_ids(
         [extension.manifest],
         available_extension_ids=set(get_builtin_module_ids()),
         extensions_base_path=registry.extensions_path,
+        strict_runtime_hooks=True,
     )
 
     expected_settings_path = f"/admin/extensions/{extension.id}/settings"
@@ -342,6 +414,14 @@ def _build_extension_debug_info(extension):
             "optional_exports": list(inspection["optional_exports"]),
             "available_exports": list(inspection["available_exports"]),
         },
+        "backend_entry": {
+            "entry": backend_inspection["entry"],
+            "entry_type": backend_inspection["entry_type"],
+            "exists": backend_inspection["exists"],
+            "resolved_path": backend_inspection["resolved_path"],
+            "available_hooks": list(backend_inspection["available_hooks"]),
+        },
+        "migration_execution": _serialize_extension_migration_execution(extension),
         "route_bindings": [
             {
                 "key": "settings",
@@ -392,6 +472,20 @@ def _serialize_extension_backend_hooks(extension):
             "details": dict(payload.get("details") or {}),
         })
     return hooks
+
+
+def _serialize_extension_migration_execution(extension):
+    payload = dict(extension.runtime.migration_execution or {})
+    if not payload:
+        return None
+    return {
+        "state": str(payload.get("state") or ""),
+        "label": str(payload.get("label") or ""),
+        "status": str(payload.get("status") or ""),
+        "status_label": str(payload.get("status_label") or ""),
+        "message": str(payload.get("message") or ""),
+        "executed_at": str(payload.get("executed_at") or ""),
+    }
 
 
 @router.get("/modules", auth=AccessTokenAuth(), tags=["Admin"])

@@ -51,6 +51,26 @@ class ExtensionManifestRuntimeActionDefinition:
 
 
 @dataclass(frozen=True)
+class ExtensionManifestSettingOptionDefinition:
+    value: str
+    label: str
+
+
+@dataclass(frozen=True)
+class ExtensionManifestSettingFieldDefinition:
+    key: str
+    label: str
+    type: str = "text"
+    default: Any = ""
+    help_text: str = ""
+    placeholder: str = ""
+    required: bool = False
+    options: Tuple[ExtensionManifestSettingOptionDefinition, ...] = ()
+    multiline: bool = False
+    order: int = 100
+
+
+@dataclass(frozen=True)
 class ExtensionDeliveryCheckDefinition:
     key: str
     label: str
@@ -165,6 +185,7 @@ class ExtensionManifest:
     security: ExtensionSecurityDefinition = ExtensionSecurityDefinition()
     distribution: ExtensionDistributionDefinition = ExtensionDistributionDefinition()
     runtime_actions: Tuple[ExtensionManifestRuntimeActionDefinition, ...] = ()
+    settings_schema: Tuple[ExtensionManifestSettingFieldDefinition, ...] = ()
     migration_namespace: str = ""
     source: str = "filesystem"
     path: str = ""
@@ -188,6 +209,7 @@ class ExtensionRuntimeState:
     delivery_checks: Tuple[ExtensionDeliveryCheckDefinition, ...] = ()
     uninstall_warnings: Tuple[str, ...] = ()
     backend_hooks: dict[str, Any] = field(default_factory=dict)
+    migration_execution: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

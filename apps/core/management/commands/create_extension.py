@@ -127,6 +127,25 @@ class Command(BaseCommand):
             "settings_pages": [f"/admin/extensions/{extension_id}/settings"],
             "permissions_pages": [f"/admin/extensions/{extension_id}/permissions"],
             "operations_pages": [f"/admin/extensions/{extension_id}/operations"],
+            "settings_schema": [
+                {
+                    "key": "welcome_message",
+                    "label": "欢迎语",
+                    "type": "text",
+                    "default": f"欢迎使用 {name}",
+                    "placeholder": "输入展示给管理员或用户的欢迎语",
+                    "help_text": "示例设置项，用于验证扩展设置协议已经打通。",
+                    "order": 10,
+                },
+                {
+                    "key": "feature_enabled",
+                    "label": "启用功能开关",
+                    "type": "boolean",
+                    "default": True,
+                    "help_text": "示例布尔型设置项。",
+                    "order": 20,
+                },
+            ],
             "compatibility": {
                 "bias_version": f"^{APP_VERSION}",
                 "api_version": "1.0",
@@ -395,6 +414,16 @@ class Command(BaseCommand):
             "        'status': 'ok',\n"
             "        'status_label': '已刷新',\n"
             "        'message': f'{context.extension_name} 的运行缓存已刷新。',\n"
+            "    }\n\n"
+            "\n"
+            "def run_migrations(context):\n"
+            "    return {\n"
+            "        'status': 'ok',\n"
+            "        'status_label': '已执行',\n"
+            "        'message': f'{context.extension_name} 的扩展迁移已执行。',\n"
+            "        'details': {\n"
+            "            'migration_namespace': context.migration_namespace,\n"
+            "        },\n"
             "    }\n"
         )
 

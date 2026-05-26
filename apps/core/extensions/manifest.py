@@ -10,6 +10,8 @@ from apps.core.extensions.types import (
     ExtensionDiscoveryResult,
     ExtensionDistributionDefinition,
     ExtensionManifest,
+    ExtensionManifestSettingFieldDefinition,
+    ExtensionManifestSettingOptionDefinition,
     ExtensionSecurityDefinition,
     ExtensionManifestRuntimeActionDefinition,
 )
@@ -82,6 +84,7 @@ class ExtensionManifestLoader:
             security=self._build_security(payload.get("security")),
             distribution=self._build_distribution(payload.get("distribution")),
             runtime_actions=tuple(self._build_runtime_action(item) for item in payload.get("runtime_actions", []) if isinstance(item, dict)),
+            settings_schema=tuple(self._build_settings_field(item) for item in payload.get("settings_schema", []) if isinstance(item, dict)),
             migration_namespace=str(payload.get("migration_namespace") or "").strip(),
             source="filesystem",
             path=str(manifest_path.parent),
@@ -142,5 +145,26 @@ class ExtensionManifestLoader:
             requires_enabled=bool(payload.get("requires_enabled", False)),
             requires_installed=bool(payload.get("requires_installed", False)),
             description=str(payload.get("description") or "").strip(),
+            order=int(payload.get("order", 100) or 100),
+        )
+
+    def _build_settings_field(self, payload: dict) -> ExtensionManifestSettingFieldDefinition:
+        return ExtensionManifestSettingFieldDefinition(
+            key=str(payload.get("key") or "").strip(),
+            label=str(payload.get("label") or "").strip(),
+            type=str(payload.get("type") or "text").strip() or "text",
+            default=payload.get("default", ""),
+            help_text=str(payload.get("help_text") or "").strip(),
+            placeholder=str(payload.get("placeholder") or "").strip(),
+            required=bool(payload.get("required", False)),
+            options=tuple(
+                ExtensionManifestSettingOptionDefinition(
+                    value=str(item.get("value") or "").strip(),
+                    label=str(item.get("label") or "").strip(),
+                )
+                for item in payload.get("options", [])
+                if isinstance(item, dict)
+            ),
+            multiline=bool(payload.get("multiline", False)),
             order=int(payload.get("order", 100) or 100),
         )

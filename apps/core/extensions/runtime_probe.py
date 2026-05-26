@@ -49,11 +49,16 @@ def inspect_extension_runtime(definition: ExtensionDefinition) -> dict:
 
     uninstall_warnings = _build_uninstall_warnings(root_path, definition, checks)
     migration_state, migration_label = _build_migration_summary(root_path, definition)
+    migration_execution = _build_migration_execution_summary(definition)
+    if migration_execution:
+        migration_state = str(migration_execution.get("state") or migration_state)
+        migration_label = str(migration_execution.get("label") or migration_label)
 
     return {
         "healthy": healthy,
         "migration_state": migration_state,
         "migration_label": migration_label,
+        "migration_execution": migration_execution,
         "runtime_issues": tuple(runtime_issues),
         "delivery_checks": tuple(checks),
         "uninstall_warnings": tuple(uninstall_warnings),
@@ -350,3 +355,38 @@ def _build_migration_summary(root_path: Path | None, definition: ExtensionDefini
     if has_migration_dir:
         return "pending", "迁移命名空间待声明"
     return "pending", "未声明迁移"
+
+
+def _build_migration_execution_summary(definition: ExtensionDefinition) -> dict[str, str]:
+    payload = dict(definition.runtime.backend_hooks or {}).get("run_migrations")
+    if not isinstance(payload, dict):
+        payload = dict(definition.runtime.migration_execution or {})
+    if not isinstance(payload, dict) or not payload:
+        return {}
+
+    status = str(payload.get("status") or "").strip()
+    summary = {
+        "status": status or "pending",
+        "status_label": str(payload.get("status_label") or "").strip(),
+        "message": str(payload.get("message") or "").strip(),
+        "executed_at": str(payload.get("executed_at") or "").strip(),
+    }
+    if status == "ok":
+        return {
+            **summary,
+            "state": "applied",
+            "label": "最近已执行",
+        }
+    if status == "skipped":
+        return {
+            **summary,
+            "state": "skipped",
+            "label": "最近已跳过",
+        }
+    if status:
+        return {
+            **summary,
+            "state": "attention",
+            "label": "最近执行异常",
+        }
+    return {}

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from apps.core.extensions.backend import inspect_extension_backend_entry
 from apps.core.extensions.types import ExtensionManifest
 from apps.core.version import APP_VERSION
 
@@ -78,6 +79,7 @@ def validate_extension_manifests(manifests: list[ExtensionManifest], *, extensio
         manifests,
         available_extension_ids=None,
         extensions_base_path=extensions_base_path,
+        strict_runtime_hooks=False,
     )
 
 
@@ -86,6 +88,7 @@ def validate_extension_manifests_with_available_ids(
     *,
     available_extension_ids: set[str] | None,
     extensions_base_path: Path | None = None,
+    strict_runtime_hooks: bool = False,
 ) -> ExtensionValidationResult:
     collector = ExtensionValidationCollector()
     collector.manifests.extend(manifests)
@@ -96,7 +99,13 @@ def validate_extension_manifests_with_available_ids(
     base_path = Path(extensions_base_path) if extensions_base_path else None
 
     for manifest in manifests:
-        _validate_single_manifest(collector, manifest, seen_ids=seen_ids, base_path=base_path)
+        _validate_single_manifest(
+            collector,
+            manifest,
+            seen_ids=seen_ids,
+            base_path=base_path,
+            strict_runtime_hooks=strict_runtime_hooks,
+        )
 
     for manifest in manifests:
         for dependency in manifest.dependencies:
@@ -175,6 +184,47 @@ def inspect_frontend_admin_entry(
     return payload
 
 
+def inspect_backend_entry(
+    manifest: ExtensionManifest,
+    *,
+    extensions_base_path: Path | None = None,
+) -> dict[str, Any]:
+    entry = str(manifest.backend_entry or "").strip()
+    payload: dict[str, Any] = {
+        "entry": entry,
+        "entry_type": "missing",
+        "exists": False,
+        "resolved_path": "",
+        "available_hooks": (),
+    }
+
+    if not entry:
+        return payload
+
+    if not entry.startswith("extensions."):
+        payload.update({
+            "entry_type": "external",
+            "exists": False,
+        })
+        return payload
+
+    if extensions_base_path is None:
+        payload["entry_type"] = "filesystem"
+        return payload
+
+    extension_dir = Path(extensions_base_path) / manifest.id
+    debug_definition = type("_DebugExtensionDefinition", (), {
+        "manifest": type("_DebugManifest", (), {
+            "backend_entry": entry,
+            "path": str(extension_dir),
+        })(),
+        "source": "filesystem",
+    })()
+    inspection = inspect_extension_backend_entry(debug_definition)
+    payload.update(inspection)
+    return payload
+
+
 def resolve_bias_version_compatibility(manifest: ExtensionManifest, *, current_version: str | None = None) -> dict[str, str | bool]:
     target_version = str(current_version or APP_VERSION or "").strip()
     version_range = str(manifest.compatibility.bias_version or "").strip()
@@ -224,6 +274,7 @@ def _validate_single_manifest(
     *,
     seen_ids: set[str],
     base_path: Path | None,
+    strict_runtime_hooks: bool,
 ) -> None:
     if manifest.id in seen_ids:
         collector.add_error(
@@ -262,6 +313,7 @@ def _validate_single_manifest(
     _validate_admin_page_bindings(collector, manifest)
     _validate_ecosystem_metadata(collector, manifest)
     _validate_runtime_actions(collector, manifest)
+    _validate_settings_schema(collector, manifest)
 
     for field_name, pages in (
         ("settings_pages", manifest.settings_pages),
@@ -279,6 +331,12 @@ def _validate_single_manifest(
 
     if base_path is not None:
         _validate_frontend_admin_entry(collector, manifest, base_path)
+        _validate_backend_entry(
+            collector,
+            manifest,
+            base_path,
+            strict_runtime_hooks=strict_runtime_hooks,
+        )
 
 
 def _validate_admin_actions(
@@ -525,6 +583,137 @@ def _validate_runtime_actions(
             collector.add_error(
                 "invalid_runtime_action_tone",
                 f"runtime_actions.tone 不支持: {action.tone}",
+                extension_id=manifest.id,
+                field="runtime_actions",
+            )
+
+
+def _validate_settings_schema(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+) -> None:
+    seen_keys: set[str] = set()
+    allowed_types = {"text", "textarea", "boolean", "select", "number"}
+
+    for field in manifest.settings_schema:
+        if not field.key:
+            collector.add_error(
+                "invalid_extension_setting",
+                "settings_schema 中的 key 不能为空",
+                extension_id=manifest.id,
+                field="settings_schema",
+            )
+            continue
+        if field.key in seen_keys:
+            collector.add_error(
+                "duplicate_extension_setting_key",
+                f"settings_schema 中存在重复 key: {field.key}",
+                extension_id=manifest.id,
+                field="settings_schema",
+            )
+        else:
+            seen_keys.add(field.key)
+
+        if not field.label:
+            collector.add_error(
+                "invalid_extension_setting",
+                f"settings_schema.{field.key} 的 label 不能为空",
+                extension_id=manifest.id,
+                field="settings_schema",
+            )
+
+        if field.type not in allowed_types:
+            collector.add_error(
+                "invalid_extension_setting_type",
+                f"settings_schema.{field.key} 的 type 不支持: {field.type}",
+                extension_id=manifest.id,
+                field="settings_schema",
+            )
+
+        if field.type == "select":
+            if not field.options:
+                collector.add_error(
+                    "invalid_extension_setting_options",
+                    f"settings_schema.{field.key} 是 select 类型时必须提供 options",
+                    extension_id=manifest.id,
+                    field="settings_schema",
+                )
+            option_values = set()
+            for option in field.options:
+                if not option.value or not option.label:
+                    collector.add_error(
+                        "invalid_extension_setting_options",
+                        f"settings_schema.{field.key} 的 options 必须同时提供 value 和 label",
+                        extension_id=manifest.id,
+                        field="settings_schema",
+                    )
+                    continue
+                if option.value in option_values:
+                    collector.add_error(
+                        "duplicate_extension_setting_option",
+                        f"settings_schema.{field.key} 的 options 存在重复 value: {option.value}",
+                        extension_id=manifest.id,
+                        field="settings_schema",
+                    )
+                option_values.add(option.value)
+
+
+def _validate_backend_entry(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+    base_path: Path,
+    *,
+    strict_runtime_hooks: bool,
+) -> None:
+    debug_payload = inspect_backend_entry(manifest, extensions_base_path=base_path)
+    entry = str(debug_payload["entry"] or "").strip()
+    requires_backend = bool(entry or manifest.migration_namespace or manifest.runtime_actions)
+
+    if requires_backend and not entry:
+        collector.add_error(
+            "missing_backend_entry_declaration",
+            "声明 migration_namespace 或 runtime_actions 时必须同时提供 backend_entry",
+            extension_id=manifest.id,
+            field="backend_entry",
+        )
+        return
+
+    if not entry:
+        return
+    if debug_payload["entry_type"] == "external":
+        collector.add_warning(
+            "backend_entry_outside_extensions",
+            "backend_entry 建议使用 extensions.<extension_id>.backend.ext 形式的扩展入口",
+            extension_id=manifest.id,
+            field="backend_entry",
+        )
+        return
+    if not debug_payload["exists"]:
+        collector.add_error(
+            "missing_backend_entry",
+            f"找不到 backend_entry 对应文件: {entry}",
+            extension_id=manifest.id,
+            field="backend_entry",
+        )
+        return
+
+    if not strict_runtime_hooks:
+        return
+
+    available_hooks = set(debug_payload["available_hooks"])
+    if manifest.migration_namespace and "run_migrations" not in available_hooks:
+        collector.add_error(
+            "missing_backend_hook",
+            "已声明 migration_namespace，但 backend/ext.py 缺少 run_migrations",
+            extension_id=manifest.id,
+            field="migration_namespace",
+        )
+
+    for action in manifest.runtime_actions:
+        if action.hook and action.hook not in available_hooks:
+            collector.add_error(
+                "missing_backend_hook",
+                f"runtime_actions 声明的后端钩子不存在: {action.hook}",
                 extension_id=manifest.id,
                 field="runtime_actions",
             )

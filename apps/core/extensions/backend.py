@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -8,6 +9,8 @@ from typing import Any
 from django.utils import timezone
 
 from apps.core.extensions.types import ExtensionDefinition
+
+BACKEND_FUNCTION_PATTERN = re.compile(r"^(?:async\s+)?def\s+([A-Za-z0-9_]+)\s*\(", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -30,7 +33,7 @@ def build_backend_context(
     definition: ExtensionDefinition,
     *,
     meta: dict[str, Any] | None = None,
-) -> ExtensionBackendContext:
+    ) -> ExtensionBackendContext:
     extension_path = str(definition.manifest.path or "").strip()
     manifest_path = str(Path(extension_path) / "extension.json") if extension_path else ""
     return ExtensionBackendContext(
@@ -47,6 +50,45 @@ def build_backend_context(
         booted=bool(definition.runtime.booted),
         meta=dict(meta or {}),
     )
+
+
+def inspect_extension_backend_entry(definition: ExtensionDefinition) -> dict[str, Any]:
+    entry = str(definition.manifest.backend_entry or "").strip()
+    root_path = str(definition.manifest.path or "").strip()
+    payload: dict[str, Any] = {
+        "entry": entry,
+        "entry_type": "missing",
+        "exists": False,
+        "resolved_path": "",
+        "available_hooks": (),
+    }
+
+    if definition.source == "builtin-module":
+        payload.update({
+            "entry_type": "builtin",
+            "exists": True,
+        })
+        return payload
+
+    if not entry:
+        return payload
+
+    if not root_path:
+        payload["entry_type"] = "filesystem"
+        return payload
+
+    backend_file = Path(root_path) / "backend" / "ext.py"
+    payload.update({
+        "entry_type": "filesystem",
+        "exists": backend_file.exists(),
+        "resolved_path": str(backend_file),
+    })
+    if not backend_file.exists():
+        return payload
+
+    source = backend_file.read_text(encoding="utf-8")
+    payload["available_hooks"] = tuple(sorted(set(BACKEND_FUNCTION_PATTERN.findall(source))))
+    return payload
 
 
 def load_extension_backend_module(definition: ExtensionDefinition) -> ModuleType | None:

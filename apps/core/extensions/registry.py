@@ -87,6 +87,7 @@ class ExtensionRegistry:
             runtime_issues=definition.runtime.runtime_issues,
             runtime_actions=(),
             backend_hooks=dict((installation.meta or {}).get("backend_hooks") or {}),
+            migration_execution=dict((installation.meta or {}).get("migration_execution") or {}),
         )
 
         return self._with_runtime_actions(ExtensionDefinition(
@@ -120,6 +121,7 @@ class ExtensionRegistry:
                 runtime_issues=definition.runtime.runtime_issues,
                 runtime_actions=(),
                 backend_hooks=dict(definition.runtime.backend_hooks or {}),
+                migration_execution=dict(definition.runtime.migration_execution or {}),
             ),
             lifecycle=definition.lifecycle,
             capabilities=definition.capabilities,
@@ -149,6 +151,7 @@ class ExtensionRegistry:
                 delivery_checks=tuple(runtime_probe["delivery_checks"]),
                 uninstall_warnings=tuple(runtime_probe["uninstall_warnings"]),
                 backend_hooks=dict(definition.runtime.backend_hooks or {}),
+                migration_execution=dict(runtime_probe.get("migration_execution") or definition.runtime.migration_execution or {}),
             ),
             lifecycle=definition.lifecycle,
             capabilities=definition.capabilities,
@@ -175,6 +178,7 @@ class ExtensionRegistry:
                 delivery_checks=runtime_definition.runtime.delivery_checks,
                 uninstall_warnings=runtime_definition.runtime.uninstall_warnings,
                 backend_hooks=dict(runtime_definition.runtime.backend_hooks or {}),
+                migration_execution=dict(runtime_definition.runtime.migration_execution or {}),
             ),
             lifecycle=runtime_definition.lifecycle,
             capabilities=runtime_definition.capabilities,
@@ -213,10 +217,15 @@ def _build_extension_status_label(installed: bool, enabled: bool) -> str:
 
 def _build_runtime_actions(definition: ExtensionDefinition) -> tuple[ExtensionRuntimeActionDefinition, ...]:
     manifest_actions = _build_manifest_runtime_actions(definition)
+    migration_action = _build_migration_runtime_action(definition)
+    action_prefix = []
+    if migration_action is not None:
+        action_prefix.append(migration_action)
+    action_prefix.extend(list(manifest_actions))
 
     if definition.source == "builtin-module":
         if definition.runtime.enabled:
-            return tuple(list(manifest_actions) + [
+            return tuple(action_prefix + [
                 ExtensionRuntimeActionDefinition(
                     key="disable",
                     label="停用扩展",
@@ -230,7 +239,7 @@ def _build_runtime_actions(definition: ExtensionDefinition) -> tuple[ExtensionRu
                     order=20,
                 ),
             ])
-        return tuple(list(manifest_actions) + [
+        return tuple(action_prefix + [
             ExtensionRuntimeActionDefinition(
                 key="enable",
                 label="启用扩展",
@@ -246,7 +255,7 @@ def _build_runtime_actions(definition: ExtensionDefinition) -> tuple[ExtensionRu
         ])
 
     if not definition.runtime.installed:
-        return tuple(list(manifest_actions) + [
+        return tuple(action_prefix + [
             ExtensionRuntimeActionDefinition(
                 key="install",
                 label="安装扩展",
@@ -260,7 +269,7 @@ def _build_runtime_actions(definition: ExtensionDefinition) -> tuple[ExtensionRu
             ),
         ])
 
-    actions = list(manifest_actions)
+    actions = list(action_prefix)
     if definition.runtime.enabled:
         actions.append(ExtensionRuntimeActionDefinition(
             key="disable",
@@ -324,6 +333,27 @@ def _build_manifest_runtime_actions(definition: ExtensionDefinition) -> tuple[Ex
             order=action.order,
         ))
     return tuple(actions)
+
+
+def _build_migration_runtime_action(definition: ExtensionDefinition) -> ExtensionRuntimeActionDefinition | None:
+    if definition.source == "builtin-module":
+        return None
+    if not definition.runtime.installed:
+        return None
+    if not str(definition.manifest.migration_namespace or "").strip():
+        return None
+    return ExtensionRuntimeActionDefinition(
+        key="migrations",
+        label="执行迁移",
+        action="migrations",
+        tone="default",
+        confirm_title="执行扩展迁移",
+        confirm_message=f"确定执行 {definition.name} 的扩展迁移吗？该操作通常用于安装后补跑或同步迁移摘要。",
+        confirm_text="执行",
+        success_message="扩展迁移已执行。",
+        requires_installed=True,
+        order=15,
+    )
 
 
 def _build_uninstall_confirm_message(definition: ExtensionDefinition) -> str:

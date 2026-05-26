@@ -58,3 +58,15 @@ def run_rebuild_cache(context):
             "cache": "rebuilt",
         },
     }
+
+
+def run_migrations(context):
+    return {
+        "status": "ok",
+        "status_label": "已执行",
+        "message": f"{context.extension_name} 的扩展迁移已执行。",
+        "details": {
+            "migration_namespace": context.migration_namespace,
+            "applied_steps": ["bootstrap", "seed"],
+        },
+    }

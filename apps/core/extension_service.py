@@ -40,18 +40,25 @@ class ExtensionService:
             )
 
         ExtensionService._validate_bias_compatibility(extension, action="install")
+        migration_result = ExtensionService._run_install_migrations_if_declared(extension)
         install_result = ExtensionService._run_backend_hook(
             extension,
             "run_install",
             meta={"action": "install"},
         )
 
+        backend_hooks = {"run_install": install_result}
+        if migration_result is not None:
+            backend_hooks["run_migrations"] = migration_result
         updated = ExtensionService._persist_installation_state(
             extension,
             installed=True,
             enabled=True,
             booted=True,
-            meta_updates={"backend_hooks": {"run_install": install_result}},
+            meta_updates={
+                "backend_hooks": backend_hooks,
+                "migration_execution": dict(migration_result or {}),
+            },
         )
 
         if request is not None:
@@ -233,6 +240,62 @@ class ExtensionService:
         return updated
 
     @staticmethod
+    @transaction.atomic
+    def run_extension_migrations(extension_id: str, *, actor=None, request=None):
+        registry = get_extension_registry()
+        registry.load(force=True)
+        extension = registry.get_extension(extension_id)
+
+        if extension.source == "builtin-module":
+            raise ExtensionStateError(
+                f"内置扩展 {extension.id} 无需执行独立迁移",
+                code="extension_migrations_builtin_blocked",
+                details={"extension_id": extension.id},
+            )
+        if not extension.runtime.installed:
+            raise ExtensionStateError(
+                f"扩展 {extension.id} 尚未安装，无法执行迁移",
+                code="extension_migrations_not_installed",
+                details={"extension_id": extension.id},
+            )
+        if not str(extension.manifest.migration_namespace or "").strip():
+            raise ExtensionStateError(
+                f"扩展 {extension.id} 未声明迁移命名空间",
+                code="extension_migrations_not_declared",
+                details={"extension_id": extension.id},
+            )
+
+        hook_result = ExtensionService._run_backend_hook(
+            extension,
+            "run_migrations",
+            meta={"action": "migrate"},
+        )
+        updated = ExtensionService._persist_installation_state(
+            extension,
+            installed=extension.runtime.installed,
+            enabled=extension.runtime.enabled,
+            booted=extension.runtime.booted,
+            meta_updates={
+                "backend_hooks": {"run_migrations": hook_result},
+                "migration_execution": dict(hook_result or {}),
+            },
+        )
+
+        if request is not None:
+            log_admin_action(
+                request,
+                "admin.extension.migrations",
+                target_type="extension",
+                target_id=None,
+                data={
+                    "extension_id": updated.id,
+                    "status": hook_result.get("status"),
+                },
+            )
+
+        return updated
+
+    @staticmethod
     def _validate_enable(extension, extensions) -> None:
         if not extension.runtime.installed and extension.source == "filesystem":
             raise ExtensionStateError(
@@ -320,6 +383,16 @@ class ExtensionService:
                 "current_bias_version": compatibility["current_version"],
                 "required_bias_version": compatibility["required_range"],
             },
+        )
+
+    @staticmethod
+    def _run_install_migrations_if_declared(extension) -> dict | None:
+        if not str(extension.manifest.migration_namespace or "").strip():
+            return None
+        return ExtensionService._run_backend_hook(
+            extension,
+            "run_migrations",
+            meta={"action": "install_migrations"},
         )
 
     @staticmethod

@@ -137,12 +137,29 @@
               <code>{{ debugInfo?.frontend_admin_entry?.resolved_path || debugInfo?.frontend_admin_entry?.entry || '无' }}</code>
             </div>
             <div>
+              <small>后端入口类型</small>
+              <strong>{{ debugBackendEntryTypeLabel }}</strong>
+            </div>
+            <div>
+              <small>后端入口解析</small>
+              <code>{{ debugInfo?.backend_entry?.resolved_path || debugInfo?.backend_entry?.entry || '无' }}</code>
+            </div>
+            <div>
               <small>已发现导出</small>
               <strong>{{ formatList(debugInfo?.frontend_admin_entry?.available_exports) }}</strong>
             </div>
             <div>
               <small>必需导出</small>
               <strong>{{ formatList(debugInfo?.frontend_admin_entry?.required_exports) }}</strong>
+            </div>
+            <div>
+              <small>已发现后端钩子</small>
+              <strong>{{ formatList(debugInfo?.backend_entry?.available_hooks) }}</strong>
+            </div>
+            <div v-if="debugInfo?.migration_execution?.executed_at">
+              <small>最近迁移执行</small>
+              <strong>{{ debugInfo.migration_execution.label || debugInfo.migration_execution.status_label || '已执行' }}</strong>
+              <code>{{ debugInfo.migration_execution.executed_at }}</code>
             </div>
           </div>
           <ul v-if="debugRouteBindings.length" class="ExtensionDetailChecks">
@@ -256,11 +273,18 @@
               <small>迁移状态</small>
               <strong>{{ extension.migration_label || '无' }}</strong>
             </div>
+            <div v-if="extension.migration_execution?.executed_at">
+              <small>最近迁移时间</small>
+              <strong>{{ extension.migration_execution.executed_at }}</strong>
+            </div>
             <div>
               <small>可执行操作</small>
               <strong>{{ runtimeActions.length }}</strong>
             </div>
           </div>
+          <p v-if="extension.migration_execution?.message" class="ExtensionDetailNote">
+            {{ extension.migration_execution.message }}
+          </p>
           <ul v-if="deliveryChecks.length" class="ExtensionDetailChecks">
             <li v-for="item in deliveryChecks" :key="item.key">
               <div class="ExtensionDetailChecks-head">
@@ -296,6 +320,7 @@
               </div>
               <p v-if="item.message">{{ item.message }}</p>
               <code v-if="item.executed_at">{{ item.executed_at }}</code>
+              <code v-if="item.details?.migration_namespace">{{ item.details.migration_namespace }}</code>
             </li>
           </ul>
         </section>
@@ -385,6 +410,14 @@ const debugValidationIssues = computed(() => {
 
 const debugEntryTypeLabel = computed(() => {
   const entryType = debugInfo.value?.frontend_admin_entry?.entry_type
+  if (entryType === 'builtin') return '内置入口'
+  if (entryType === 'filesystem') return '文件系统扩展'
+  if (entryType === 'external') return '外部路径'
+  return '未声明'
+})
+
+const debugBackendEntryTypeLabel = computed(() => {
+  const entryType = debugInfo.value?.backend_entry?.entry_type
   if (entryType === 'builtin') return '内置入口'
   if (entryType === 'filesystem') return '文件系统扩展'
   if (entryType === 'external') return '外部路径'

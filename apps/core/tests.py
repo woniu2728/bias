@@ -32,9 +32,11 @@ from apps.core.extensions.exceptions import ExtensionStateError
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.registry import ExtensionRegistry
 from apps.core.extensions.validation import (
+    inspect_backend_entry,
     inspect_frontend_admin_entry,
     resolve_bias_version_compatibility,
     validate_extension_manifests,
+    validate_extension_manifests_with_available_ids,
 )
 from apps.core.extension_service import ExtensionService
 from apps.core.forum_events import (
@@ -159,6 +161,18 @@ class ExtensionManifestLoaderTests(TestCase):
                         "requires_enabled": True,
                     }
                 ],
+                "settings_schema": [
+                    {
+                        "key": "theme",
+                        "label": "主题",
+                        "type": "select",
+                        "default": "light",
+                        "options": [
+                            {"value": "light", "label": "浅色"},
+                            {"value": "dark", "label": "深色"}
+                        ]
+                    }
+                ],
             }, ensure_ascii=False), encoding="utf-8")
 
             loader = ExtensionManifestLoader(base_dir / "extensions")
@@ -173,6 +187,7 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(results[0].manifest.operations_pages, ("/admin/extensions/sample/operations",))
             self.assertEqual(results[0].manifest.admin_actions[0].key, "details")
             self.assertEqual(results[0].manifest.runtime_actions[0].hook, "run_rebuild_cache")
+            self.assertEqual(results[0].manifest.settings_schema[0].key, "theme")
             self.assertEqual(results[0].manifest.migration_namespace, "")
             self.assertEqual(results[0].manifest.compatibility.api_version, "1.0")
             self.assertEqual(results[0].manifest.compatibility.api_stability, "experimental")
@@ -222,6 +237,20 @@ class ExtensionValidationTests(TestCase):
         self.assertIn("resolveDetailPage", payload["available_exports"])
         self.assertIn("resolveSettingsPage", payload["available_exports"])
         self.assertIn("resolveOperationsPage", payload["available_exports"])
+
+    def test_inspect_backend_entry_reports_available_hooks(self):
+        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
+        extension = registry.get_extension("sample-hello")
+
+        payload = inspect_backend_entry(
+            extension.manifest,
+            extensions_base_path=registry.extensions_path,
+        )
+
+        self.assertEqual(payload["entry_type"], "filesystem")
+        self.assertTrue(payload["exists"])
+        self.assertIn("run_install", payload["available_hooks"])
+        self.assertIn("run_migrations", payload["available_hooks"])
 
     def test_validate_extension_manifests_requires_frontend_admin_entry_for_admin_pages(self):
         temp_dir = make_workspace_temp_dir()
@@ -390,10 +419,124 @@ class ExtensionValidationTests(TestCase):
             manifests = [item.manifest for item in loader.discover()]
             result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
 
-            self.assertEqual(result.error_count, 4)
+            self.assertEqual(result.error_count, 5)
             self.assertTrue(any(item.code == "invalid_runtime_action" for item in result.issues))
             self.assertTrue(any(item.code == "duplicate_runtime_action_key" for item in result.issues))
             self.assertTrue(any(item.code == "invalid_runtime_action_tone" for item in result.issues))
+            self.assertTrue(any(item.code == "missing_backend_entry_declaration" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extension_manifests_strict_reports_missing_runtime_backend_hook(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            backend_dir = manifest_dir / "backend"
+            backend_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+                "runtime_actions": [
+                    {
+                        "key": "rebuild-cache",
+                        "label": "刷新缓存",
+                        "hook": "run_rebuild_cache",
+                    }
+                ],
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "def run_install(context):\n"
+                "    return {'status': 'ok'}\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests_with_available_ids(
+                manifests,
+                available_extension_ids={"core"},
+                extensions_base_path=Path(temp_dir) / "extensions",
+                strict_runtime_hooks=True,
+            )
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(
+                item.code == "missing_backend_hook" and "run_rebuild_cache" in item.message
+                for item in result.issues
+            ))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extension_manifests_strict_reports_missing_migration_backend_hook(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            backend_dir = manifest_dir / "backend"
+            backend_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+                "migration_namespace": "extensions.alpha_tools.backend.migrations",
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "def run_install(context):\n"
+                "    return {'status': 'ok'}\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests_with_available_ids(
+                manifests,
+                available_extension_ids={"core"},
+                extensions_base_path=Path(temp_dir) / "extensions",
+                strict_runtime_hooks=True,
+            )
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(
+                item.code == "missing_backend_hook" and item.field == "migration_namespace"
+                for item in result.issues
+            ))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extension_manifests_reports_invalid_settings_schema(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "settings_schema": [
+                    {
+                        "key": "mode",
+                        "label": "",
+                        "type": "select",
+                        "options": [],
+                    },
+                    {
+                        "key": "mode",
+                        "label": "模式",
+                        "type": "json",
+                    }
+                ],
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "duplicate_extension_setting_key" for item in result.issues))
+            self.assertTrue(any(item.code == "invalid_extension_setting_type" for item in result.issues))
+            self.assertTrue(any(item.code == "invalid_extension_setting_options" for item in result.issues))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -479,6 +622,7 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertEqual(manifest["name"], "Alpha Tools")
                 self.assertEqual(manifest["frontend_admin_entry"], "extensions/alpha-tools/frontend/admin/index.js")
                 self.assertEqual(manifest["admin_actions"][0]["key"], "details")
+                self.assertEqual(manifest["settings_schema"][0]["key"], "welcome_message")
                 self.assertEqual(manifest["migration_namespace"], "extensions.alpha_tools.backend.migrations")
                 self.assertEqual(manifest["compatibility"]["bias_version"], "^1.0.0")
                 self.assertEqual(manifest["compatibility"]["api_stability"], "experimental")
@@ -494,6 +638,7 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertTrue((extension_dir / "locale" / "zh-CN.json").exists())
                 backend_source = (extension_dir / "backend" / "ext.py").read_text(encoding="utf-8")
                 self.assertIn("def run_install(context):", backend_source)
+                self.assertIn("def run_migrations(context):", backend_source)
                 self.assertIn("def run_uninstall(context):", backend_source)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -594,6 +739,36 @@ class ExtensionManagementCommandTests(TestCase):
 
             with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
                 call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_strict_reports_missing_backend_hook(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            backend_dir = manifest_dir / "backend"
+            backend_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "dependencies": ["core"],
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+                "migration_namespace": "extensions.alpha_tools.backend.migrations",
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "def run_install(context):\n"
+                "    return {'status': 'ok'}\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
+                call_command(
+                    "validate_extensions",
+                    "--extensions-path",
+                    str(Path(temp_dir) / "extensions"),
+                    "--strict",
+                )
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -778,6 +953,7 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(sample_extension["distribution"]["channel"], "private")
         self.assertEqual(sample_extension["action_links"]["settings_page"], "/admin/extensions/sample-hello/settings")
         self.assertEqual(sample_extension["action_links"]["permissions_page"], "/admin/extensions/sample-hello/permissions")
+        self.assertTrue(any(item["key"] == "welcome_message" for item in sample_extension["settings_schema"]))
         self.assertEqual(sample_extension["admin_actions"][0]["key"], "details")
         self.assertTrue(any(action["key"] == "documentation" for action in sample_extension["admin_actions"]))
         self.assertFalse(any(action["action"] == "hook:run_rebuild_cache" for action in sample_extension["runtime_actions"]))
@@ -820,8 +996,11 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(payload["compatibility"]["api_stability_label"], "实验性")
         self.assertEqual(payload["distribution"]["channel_label"], "私有分发")
         self.assertEqual(payload["security"]["support_email"], "security@bias.local")
+        self.assertTrue(any(item["key"] == "card_tone" for item in payload["settings_schema"]))
+        self.assertEqual(payload["settings_values"]["welcome_message"], "欢迎使用 Sample Hello")
         self.assertTrue(any(item["key"] == "migrations" for item in payload["delivery_checks"]))
         self.assertTrue(any("不会自动回滚数据库迁移" in item for item in payload["uninstall_warnings"]))
+        self.assertIsNone(payload["migration_execution"])
         self.assertEqual(payload["debug_info"]["manifest_path"], str(Path.cwd() / "extensions" / "sample-hello"))
         self.assertEqual(payload["debug_info"]["frontend_admin_entry"]["entry_type"], "filesystem")
         self.assertTrue(payload["debug_info"]["frontend_admin_entry"]["exists"])
@@ -835,6 +1014,50 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(payload["debug_info"]["validation_issues"], [])
         self.assertEqual(payload["backend_hooks"], [])
 
+    def test_extension_settings_api_can_read_and_save_declared_schema(self):
+        response = self.client.get(
+            "/api/admin/extensions/sample-hello/settings",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["extension_id"], "sample-hello")
+        self.assertTrue(any(item["key"] == "card_tone" for item in payload["schema"]))
+        self.assertEqual(payload["settings"]["card_tone"], "primary")
+
+        save_response = self.client.post(
+            "/api/admin/extensions/sample-hello/settings",
+            data=json.dumps({
+                "welcome_message": "新的欢迎语",
+                "card_tone": "warm",
+                "show_runtime_tips": False,
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+        self.assertEqual(save_response.status_code, 200, save_response.content)
+        saved_payload = save_response.json()
+        self.assertEqual(saved_payload["settings"]["welcome_message"], "新的欢迎语")
+        self.assertEqual(saved_payload["settings"]["card_tone"], "warm")
+        self.assertFalse(saved_payload["settings"]["show_runtime_tips"])
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="extensions.sample-hello.welcome_message").value),
+            "新的欢迎语",
+        )
+
+    def test_extension_settings_api_rejects_unknown_key(self):
+        response = self.client.post(
+            "/api/admin/extensions/sample-hello/settings",
+            data=json.dumps({"unknown_key": "x"}),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 409, response.content)
+        payload = response.json()
+        self.assertEqual(payload["code"], "extension_settings_unknown_key")
+
     def test_extensions_api_can_install_disable_enable_and_uninstall_extension(self):
         install_response = self.client.post(
             "/api/admin/extensions/sample-hello/install",
@@ -847,7 +1070,13 @@ class AdminExtensionsApiTests(TestCase):
         self.assertTrue(installed_extension["installed"])
         self.assertTrue(installed_extension["enabled"])
         self.assertEqual(installed_extension["runtime_status"]["key"], "active")
+        self.assertEqual(installed_extension["migration_state"], "applied")
+        self.assertEqual(installed_extension["migration_label"], "最近已执行")
+        self.assertEqual(installed_extension["migration_execution"]["state"], "applied")
+        self.assertEqual(installed_extension["migration_execution"]["status"], "ok")
         self.assertTrue(any(item["hook"] == "run_install" for item in installed_extension["backend_hooks"]))
+        self.assertTrue(any(item["hook"] == "run_migrations" for item in installed_extension["backend_hooks"]))
+        self.assertTrue(any(item["action"] == "migrations" for item in installed_extension["runtime_actions"]))
         self.assertTrue(any(item["action"] == "hook:run_rebuild_cache" for item in installed_extension["runtime_actions"]))
 
         disable_response = self.client.post(
@@ -888,6 +1117,17 @@ class AdminExtensionsApiTests(TestCase):
         runtime_hook_payload = runtime_hook_response.json()
         runtime_hook_extension = next(item for item in runtime_hook_payload["extensions"] if item["id"] == "sample-hello")
         self.assertTrue(any(item["hook"] == "run_rebuild_cache" for item in runtime_hook_extension["backend_hooks"]))
+
+        migrations_response = self.client.post(
+            "/api/admin/extensions/sample-hello/migrations",
+            **self.auth_header(),
+        )
+        self.assertEqual(migrations_response.status_code, 200, migrations_response.content)
+        migrations_payload = migrations_response.json()
+        migrations_extension = next(item for item in migrations_payload["extensions"] if item["id"] == "sample-hello")
+        self.assertTrue(any(item["hook"] == "run_migrations" for item in migrations_extension["backend_hooks"]))
+        self.assertEqual(migrations_extension["migration_label"], "最近已执行")
+        self.assertEqual(migrations_extension["migration_execution"]["state"], "applied")
 
         installation.refresh_from_db()
         self.assertTrue(installation.enabled)
@@ -1019,6 +1259,10 @@ class ExtensionServiceTests(TestCase):
         self.assertTrue(installed.runtime.installed)
         self.assertTrue(installed.runtime.enabled)
         self.assertEqual(installed.runtime.backend_hooks["run_install"]["status"], "ok")
+        self.assertEqual(installed.runtime.backend_hooks["run_migrations"]["status"], "ok")
+        self.assertEqual(installed.runtime.migration_state, "applied")
+        self.assertEqual(installed.runtime.migration_label, "最近已执行")
+        self.assertEqual(installed.runtime.migration_execution["state"], "applied")
 
         disabled = ExtensionService.set_extension_enabled("sample-hello", False)
         self.assertFalse(disabled.runtime.enabled)
@@ -1061,6 +1305,23 @@ class ExtensionServiceTests(TestCase):
         updated = ExtensionService.run_extension_runtime_hook("sample-hello", "run_rebuild_cache")
 
         self.assertEqual(updated.runtime.backend_hooks["run_rebuild_cache"]["status"], "ok")
+
+    def test_run_extension_migrations_executes_declared_migration_hook(self):
+        installed = ExtensionService.install_extension("sample-hello")
+        self.assertTrue(installed.runtime.installed)
+
+        updated = ExtensionService.run_extension_migrations("sample-hello")
+
+        self.assertEqual(updated.runtime.backend_hooks["run_migrations"]["status"], "ok")
+        self.assertEqual(updated.runtime.migration_state, "applied")
+        self.assertEqual(updated.runtime.migration_label, "最近已执行")
+        self.assertEqual(updated.runtime.migration_execution["status"], "ok")
+
+    def test_run_extension_migrations_requires_installation(self):
+        with self.assertRaises(ExtensionStateError) as context:
+            ExtensionService.run_extension_migrations("sample-hello")
+
+        self.assertEqual(context.exception.code, "extension_migrations_not_installed")
 
     def test_runtime_hook_requires_manifest_declaration(self):
         ExtensionService.install_extension("sample-hello")
