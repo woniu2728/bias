@@ -17,6 +17,7 @@
   ],
   "backend_entry": "extensions.sample_hello.backend.ext",
   "frontend_admin_entry": "extensions/sample-hello/frontend/admin/index.js",
+  "frontend_forum_entry": "extensions/sample-hello/frontend/forum/index.js",
   "settings_pages": [
     "/admin/extensions/sample-hello/settings"
   ],

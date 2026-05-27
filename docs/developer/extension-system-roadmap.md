@@ -162,6 +162,14 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
    - 扩展启停后的前端状态同步
 4. 论坛公开配置已下发运行时启用模块清单：
    - `/api/forum` 返回 `enabled_modules`
+5. 论坛公开配置现在会同时下发已启用扩展的前台运行清单：
+   - `/api/forum` 返回 `enabled_extensions`
+   - 包含 `frontend_forum_entry`
+   - 包含扩展公开 `settings_values`
+6. 论坛应用启动时已在挂载前动态加载已启用扩展的前台入口：
+   - `frontend_forum_entry` 不再只是 manifest 字段
+   - 已进入真实运行协议
+7. `sample-hello` 已补齐 `frontend/forum/index.js` 样板，验证前台扩展注入链路可用
 5. 论坛前台静态注册中心已按扩展启停状态过滤：
    - 论坛导航
    - 头部菜单
@@ -215,6 +223,7 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 3. 脚手架默认生成：
    - `extension.json`
    - `frontend/admin/index.js`
+   - `frontend/forum/index.js`
    - `frontend/admin/SettingsPage.vue`
    - `frontend/admin/OperationsPage.vue`
    - `backend/ext.py`

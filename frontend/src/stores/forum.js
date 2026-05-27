@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS = {
   user_preferences: [],
   post_types: [],
   enabled_modules: [],
+  enabled_extensions: [],
 }
 
 const CUSTOM_HEAD_MARKER_ATTRIBUTE = 'data-forum-custom-head'
@@ -70,9 +71,7 @@ export const useForumStore = defineStore('forum', () => {
   async function fetchSettings() {
     try {
       const data = await api.get('/forum')
-      settings.value = { ...DEFAULT_SETTINGS, ...data }
-      syncNotificationTypes(settings.value.notification_types)
-      syncPostTypes(settings.value.post_types)
+      applyPublicSettings(data)
     } catch (error) {
       console.error('加载论坛设置失败:', error)
       settings.value = { ...DEFAULT_SETTINGS }
@@ -89,6 +88,12 @@ export const useForumStore = defineStore('forum', () => {
 
     applyPageMeta()
     applyRuntimeAssets()
+  }
+
+  function applyPublicSettings(data = {}) {
+    settings.value = { ...DEFAULT_SETTINGS, ...data }
+    syncNotificationTypes(settings.value.notification_types)
+    syncPostTypes(settings.value.post_types)
   }
 
   function isModuleEnabled(moduleId) {
@@ -330,6 +335,7 @@ export const useForumStore = defineStore('forum', () => {
     enabledModuleIds,
     initialize,
     fetchSettings,
+    applyPublicSettings,
     isModuleEnabled,
     resetPageMeta,
     setPageMeta,

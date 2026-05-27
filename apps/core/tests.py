@@ -621,6 +621,7 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertEqual(manifest["id"], "alpha-tools")
                 self.assertEqual(manifest["name"], "Alpha Tools")
                 self.assertEqual(manifest["frontend_admin_entry"], "extensions/alpha-tools/frontend/admin/index.js")
+                self.assertEqual(manifest["frontend_forum_entry"], "extensions/alpha-tools/frontend/forum/index.js")
                 self.assertEqual(manifest["admin_actions"][0]["key"], "details")
                 self.assertEqual(manifest["settings_schema"][0]["key"], "welcome_message")
                 self.assertEqual(manifest["migration_namespace"], "extensions.alpha_tools.backend.migrations")
@@ -632,6 +633,7 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertTrue((extension_dir / "frontend" / "admin" / "index.js").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "SettingsPage.vue").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "OperationsPage.vue").exists())
+                self.assertTrue((extension_dir / "frontend" / "forum" / "index.js").exists())
                 self.assertTrue((extension_dir / "backend" / "ext.py").exists())
                 self.assertTrue((extension_dir / "backend" / "migrations" / "__init__.py").exists())
                 self.assertTrue((extension_dir / "docs" / "README.md").exists())
@@ -652,6 +654,8 @@ class ExtensionManagementCommandTests(TestCase):
                 entry_source = (Path(temp_dir) / "extensions" / "alpha-tools" / "frontend" / "admin" / "index.js").read_text(encoding="utf-8")
                 self.assertIn("export function resolveDetailPage()", entry_source)
                 self.assertIn("import DetailPage from './DetailPage.vue'", entry_source)
+                forum_entry_source = (Path(temp_dir) / "extensions" / "alpha-tools" / "frontend" / "forum" / "index.js").read_text(encoding="utf-8")
+                self.assertIn("registerForumNavItem", forum_entry_source)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -3474,6 +3478,14 @@ class AdminSettingsApiTests(TestCase):
             key="advanced.auth_human_verification_register_enabled",
             defaults={"value": json.dumps(False)},
         )
+        ExtensionInstallation.objects.create(
+            extension_id="sample-hello",
+            version="0.1.0",
+            source="filesystem",
+            enabled=True,
+            installed=True,
+            booted=True,
+        )
 
         response = self.client.get("/api/forum")
 
@@ -3493,6 +3505,7 @@ class AdminSettingsApiTests(TestCase):
         self.assertTrue(payload["realtime_typing_enabled"])
         self.assertIn("notification_types", payload)
         self.assertIn("enabled_modules", payload)
+        self.assertIn("enabled_extensions", payload)
         self.assertTrue(
             any(
                 item["code"] == "discussionReply"
@@ -3533,6 +3546,14 @@ class AdminSettingsApiTests(TestCase):
         self.assertTrue(any(item["code"] == "discussionRenamed" for item in payload["post_types"]))
         self.assertIn("core", payload["enabled_modules"])
         self.assertIn("users", payload["enabled_modules"])
+        self.assertTrue(
+            any(
+                item["id"] == "sample-hello"
+                and item["frontend_forum_entry"] == "extensions/sample-hello/frontend/forum/index.js"
+                and item["settings_values"]["welcome_message"] == "欢迎使用 Sample Hello"
+                for item in payload["enabled_extensions"]
+            )
+        )
         self.assertNotIn("auth_turnstile_secret_key", payload)
 
     def test_public_forum_settings_expose_realtime_typing_toggle(self):
@@ -3576,6 +3597,7 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
         self.assertNotIn("approval", payload["enabled_modules"])
+        self.assertFalse(any(item["id"] == "approval" for item in payload["enabled_extensions"]))
         self.assertFalse(any(item["module_id"] == "approval" for item in payload["notification_types"]))
         self.assertFalse(any(item["module_id"] == "approval" for item in payload["user_preferences"]))
         self.assertFalse(any(item["module_id"] == "approval" for item in payload["post_types"]))

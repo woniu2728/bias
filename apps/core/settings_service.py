@@ -14,6 +14,8 @@ from apps.core.bootstrap_config import (
     read_site_config,
     write_site_config,
 )
+from apps.core.extensions.registry import get_extension_registry
+from apps.core.extension_settings_service import get_extension_settings
 from apps.core.mail_drivers import serialize_mail_settings
 from apps.core.mail_templates import (
     DEFAULT_PASSWORD_RESET_HTML,
@@ -389,6 +391,24 @@ def get_public_forum_settings() -> dict:
         module.module_id
         for module in FORUM_REGISTRY.get_modules()
         if module.enabled
+    ]
+
+    extension_registry = get_extension_registry()
+    extension_registry.load(force=True)
+
+    forum_settings["enabled_extensions"] = [
+        {
+            "id": extension.id,
+            "name": extension.name,
+            "frontend_forum_entry": extension.manifest.frontend_forum_entry,
+            "source": extension.source,
+            "module_ids": list(extension.module_ids),
+            "settings_values": get_extension_settings(extension.id) if extension.manifest.settings_schema else {},
+        }
+        for extension in extension_registry.get_extensions()
+        if extension.runtime.installed
+        and extension.runtime.enabled
+        and str(extension.manifest.frontend_forum_entry or "").strip()
     ]
 
     if cache_lifetime > 0:

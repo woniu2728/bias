@@ -41,12 +41,13 @@ class Command(BaseCommand):
             raise CommandError(f"扩展目录已存在: {extension_dir}。如需覆盖，请传 --force")
 
         frontend_admin_dir = extension_dir / "frontend" / "admin"
+        frontend_forum_dir = extension_dir / "frontend" / "forum"
         backend_dir = extension_dir / "backend"
         migrations_dir = backend_dir / "migrations"
         docs_dir = extension_dir / "docs"
         locale_dir = extension_dir / "locale"
 
-        for path in (frontend_admin_dir, backend_dir, migrations_dir, docs_dir, locale_dir):
+        for path in (frontend_admin_dir, frontend_forum_dir, backend_dir, migrations_dir, docs_dir, locale_dir):
             path.mkdir(parents=True, exist_ok=True)
 
         self._write_json(
@@ -68,6 +69,10 @@ class Command(BaseCommand):
         self._write_text(
             frontend_admin_dir / "OperationsPage.vue",
             self._build_operations_page_source(name),
+        )
+        self._write_text(
+            frontend_forum_dir / "index.js",
+            self._build_forum_index_source(name),
         )
         self._write_text(
             backend_dir / "__init__.py",
@@ -98,6 +103,7 @@ class Command(BaseCommand):
         self.stdout.write(f"- 扩展目录: {extension_dir}")
         self.stdout.write(f"- manifest: {extension_dir / 'extension.json'}")
         self.stdout.write(f"- 前端后台入口: {frontend_admin_dir / 'index.js'}")
+        self.stdout.write(f"- 前台入口: {frontend_forum_dir / 'index.js'}")
 
     def _build_default_name(self, extension_id: str) -> str:
         return " ".join(part.capitalize() for part in extension_id.split("-"))
@@ -124,6 +130,7 @@ class Command(BaseCommand):
             "provides": [f"{extension_id}-panel"],
             "backend_entry": f"extensions.{extension_id.replace('-', '_')}.backend.ext",
             "frontend_admin_entry": f"extensions/{extension_id}/frontend/admin/index.js",
+            "frontend_forum_entry": f"extensions/{extension_id}/frontend/forum/index.js",
             "settings_pages": [f"/admin/extensions/{extension_id}/settings"],
             "permissions_pages": [f"/admin/extensions/{extension_id}/permissions"],
             "operations_pages": [f"/admin/extensions/{extension_id}/operations"],
@@ -291,6 +298,21 @@ class Command(BaseCommand):
             "  color: var(--forum-text-soft);\n"
             "}\n"
             "</style>\n"
+        )
+
+    def _build_forum_index_source(self, name: str) -> str:
+        return (
+            "import { registerForumNavItem } from '@/forum/registry'\n\n"
+            "registerForumNavItem({\n"
+            f"  key: '{name.lower().replace(' ', '-')}-entry',\n"
+            "  moduleId: 'core',\n"
+            "  section: 'primary',\n"
+            "  order: 90,\n"
+            "  icon: 'fas fa-puzzle-piece',\n"
+            f"  label: '{name}',\n"
+            "  to: '/',\n"
+            "  description: '扩展前台入口已成功注册。',\n"
+            "})\n"
         )
 
     def _build_settings_page_source(self, name: str) -> str:
