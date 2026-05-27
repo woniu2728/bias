@@ -11,6 +11,7 @@ from apps.core.extensions.validation import (
 )
 from apps.core.extension_service import ExtensionService
 from apps.core.extension_settings_service import get_extension_settings, serialize_extension_settings_schema, save_extension_settings
+from apps.core.extensions.runtime_probe import inspect_extension_runtime
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.forum_registry import get_builtin_module_ids
 
@@ -277,6 +278,7 @@ def _serialize_admin_extension(extension):
         "migration_state": extension.runtime.migration_state,
         "migration_label": extension.runtime.migration_label,
         "migration_execution": _serialize_extension_migration_execution(extension),
+        "migration_plan": _serialize_extension_migration_plan(extension),
         "dependency_state": extension.runtime.dependency_state,
         "dependency_state_label": extension.runtime.dependency_state_label,
         "runtime_issues": list(extension.runtime.runtime_issues),
@@ -441,6 +443,7 @@ def _build_extension_debug_info(extension):
             "available_hooks": list(backend_inspection["available_hooks"]),
         },
         "migration_execution": _serialize_extension_migration_execution(extension),
+        "migration_plan": _serialize_extension_migration_plan(extension),
         "route_bindings": [
             {
                 "key": "settings",
@@ -511,6 +514,16 @@ def _serialize_extension_migration_execution(extension):
         "status_label": str(payload.get("status_label") or ""),
         "message": str(payload.get("message") or ""),
         "executed_at": str(payload.get("executed_at") or ""),
+        "details": dict(payload.get("details") or {}),
+    }
+
+
+def _serialize_extension_migration_plan(extension):
+    payload = dict(inspect_extension_runtime(extension).get("migration_plan") or {})
+    return {
+        "declared_files": list(payload.get("declared_files") or []),
+        "applied_files": list(payload.get("applied_files") or []),
+        "pending_files": list(payload.get("pending_files") or []),
     }
 
 

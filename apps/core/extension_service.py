@@ -6,6 +6,7 @@ from apps.core.audit import log_admin_action
 from apps.core.extensions import get_extension_registry
 from apps.core.extensions.backend import run_extension_backend_hook
 from apps.core.extensions.exceptions import ExtensionStateError
+from apps.core.extensions.migrations import run_extension_migrations as run_filesystem_extension_migrations
 from apps.core.extensions.validation import resolve_bias_version_compatibility
 from apps.core.models import ExtensionInstallation
 
@@ -50,6 +51,7 @@ class ExtensionService:
         backend_hooks = {"run_install": install_result}
         if migration_result is not None:
             backend_hooks["run_migrations"] = migration_result
+        applied_files = list((migration_result or {}).get("details", {}).get("migration_files") or [])
         updated = ExtensionService._persist_installation_state(
             extension,
             installed=True,
@@ -58,6 +60,7 @@ class ExtensionService:
             meta_updates={
                 "backend_hooks": backend_hooks,
                 "migration_execution": dict(migration_result or {}),
+                "applied_migration_files": applied_files,
             },
         )
 
@@ -265,11 +268,13 @@ class ExtensionService:
                 details={"extension_id": extension.id},
             )
 
-        hook_result = ExtensionService._run_backend_hook(
+        hook_result = ExtensionService._run_declared_extension_migrations(
             extension,
-            "run_migrations",
-            meta={"action": "migrate"},
+            action="migrate",
         )
+        installation = ExtensionInstallation.objects.filter(extension_id=extension.id).first()
+        existing_applied_files = list(dict((installation.meta or {}) if installation is not None else {}).get("applied_migration_files") or [])
+        latest_applied_files = list(hook_result.get("details", {}).get("migration_files") or [])
         updated = ExtensionService._persist_installation_state(
             extension,
             installed=extension.runtime.installed,
@@ -278,6 +283,7 @@ class ExtensionService:
             meta_updates={
                 "backend_hooks": {"run_migrations": hook_result},
                 "migration_execution": dict(hook_result or {}),
+                "applied_migration_files": list(dict.fromkeys([*existing_applied_files, *latest_applied_files])),
             },
         )
 
@@ -389,11 +395,39 @@ class ExtensionService:
     def _run_install_migrations_if_declared(extension) -> dict | None:
         if not str(extension.manifest.migration_namespace or "").strip():
             return None
-        return ExtensionService._run_backend_hook(
+        return ExtensionService._run_declared_extension_migrations(
+            extension,
+            action="install_migrations",
+        )
+
+    @staticmethod
+    def _run_declared_extension_migrations(extension, *, action: str) -> dict:
+        installation = ExtensionInstallation.objects.filter(extension_id=extension.id).first()
+        installation_meta = dict((installation.meta or {}) if installation is not None else {})
+        previous_execution = dict(installation_meta.get("migration_execution") or {})
+        previous_details = dict(previous_execution.get("details") or {})
+        base_result = run_filesystem_extension_migrations(
+            extension,
+            applied_steps=list(previous_details.get("applied_steps") or []),
+            applied_migration_files=list(installation_meta.get("applied_migration_files") or []),
+        )
+        hook_result = ExtensionService._run_backend_hook(
             extension,
             "run_migrations",
-            meta={"action": "install_migrations"},
+            meta={"action": action},
         )
+        merged_details = {
+            **dict(base_result.get("details") or {}),
+            **dict(hook_result.get("details") or {}),
+        }
+        return {
+            "hook": "run_migrations",
+            "status": hook_result.get("status") or base_result.get("status") or "ok",
+            "status_label": hook_result.get("status_label") or base_result.get("status_label") or "已执行",
+            "message": hook_result.get("message") or base_result.get("message") or "扩展迁移已执行。",
+            "executed_at": hook_result.get("executed_at") or base_result.get("executed_at"),
+            "details": merged_details,
+        }
 
     @staticmethod
     def _persist_installation_state(

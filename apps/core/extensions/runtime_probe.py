@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from apps.core.extensions.types import ExtensionDefinition, ExtensionDeliveryCheckDefinition
 from apps.core.extensions.validation import resolve_bias_version_compatibility
@@ -50,6 +51,7 @@ def inspect_extension_runtime(definition: ExtensionDefinition) -> dict:
     uninstall_warnings = _build_uninstall_warnings(root_path, definition, checks)
     migration_state, migration_label = _build_migration_summary(root_path, definition)
     migration_execution = _build_migration_execution_summary(definition)
+    migration_plan = _build_migration_plan_summary(root_path, definition)
     if migration_execution:
         migration_state = str(migration_execution.get("state") or migration_state)
         migration_label = str(migration_execution.get("label") or migration_label)
@@ -59,6 +61,7 @@ def inspect_extension_runtime(definition: ExtensionDefinition) -> dict:
         "migration_state": migration_state,
         "migration_label": migration_label,
         "migration_execution": migration_execution,
+        "migration_plan": migration_plan,
         "runtime_issues": tuple(runtime_issues),
         "delivery_checks": tuple(checks),
         "uninstall_warnings": tuple(uninstall_warnings),
@@ -368,7 +371,7 @@ def _build_migration_summary(root_path: Path | None, definition: ExtensionDefini
     return "pending", "未声明迁移"
 
 
-def _build_migration_execution_summary(definition: ExtensionDefinition) -> dict[str, str]:
+def _build_migration_execution_summary(definition: ExtensionDefinition) -> dict[str, Any]:
     payload = dict(definition.runtime.backend_hooks or {}).get("run_migrations")
     if not isinstance(payload, dict):
         payload = dict(definition.runtime.migration_execution or {})
@@ -381,6 +384,7 @@ def _build_migration_execution_summary(definition: ExtensionDefinition) -> dict[
         "status_label": str(payload.get("status_label") or "").strip(),
         "message": str(payload.get("message") or "").strip(),
         "executed_at": str(payload.get("executed_at") or "").strip(),
+        "details": dict(payload.get("details") or {}),
     }
     if status == "ok":
         return {
@@ -401,3 +405,28 @@ def _build_migration_execution_summary(definition: ExtensionDefinition) -> dict[
             "label": "最近执行异常",
         }
     return {}
+
+
+def _build_migration_plan_summary(root_path: Path | None, definition: ExtensionDefinition) -> dict[str, Any]:
+    migration_dir = root_path / "backend" / "migrations" if root_path else None
+    if not migration_dir or not migration_dir.exists():
+        return {
+            "declared_files": [],
+            "applied_files": [],
+            "pending_files": [],
+        }
+
+    declared_files = sorted(
+        item.name
+        for item in migration_dir.glob("*.py")
+        if item.name != "__init__.py"
+    )
+    applied_files = list(definition.runtime.applied_migration_files or ())
+
+    applied_file_set = set(applied_files)
+    pending_files = [item for item in declared_files if item not in applied_file_set]
+    return {
+        "declared_files": declared_files,
+        "applied_files": applied_files,
+        "pending_files": pending_files,
+    }

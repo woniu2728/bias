@@ -31,6 +31,7 @@ from apps.core.extensions.backend import run_extension_backend_hook
 from apps.core.extensions.exceptions import ExtensionStateError
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.registry import ExtensionRegistry
+from apps.core.extensions.runtime_probe import inspect_extension_runtime
 from apps.core.extensions.validation import (
     inspect_backend_entry,
     inspect_frontend_admin_entry,
@@ -567,6 +568,69 @@ class ExtensionValidationTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_validate_extension_manifests_reports_missing_migration_files(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            migrations_dir = manifest_dir / "backend" / "migrations"
+            migrations_dir.mkdir(parents=True, exist_ok=False)
+            (migrations_dir / "__init__.py").write_text("", encoding="utf-8")
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+                "migration_namespace": "extensions.alpha_tools.backend.migrations",
+            }, ensure_ascii=False), encoding="utf-8")
+            (manifest_dir / "backend" / "ext.py").write_text(
+                "def run_migrations(context):\n"
+                "    return {'status': 'ok'}\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "missing_extension_migration_files" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extension_manifests_reports_invalid_migration_file_contract(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            migrations_dir = manifest_dir / "backend" / "migrations"
+            migrations_dir.mkdir(parents=True, exist_ok=False)
+            (migrations_dir / "__init__.py").write_text("", encoding="utf-8")
+            (migrations_dir / "initial.py").write_text(
+                "VALUE = 'missing-entrypoint'\n",
+                encoding="utf-8",
+            )
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+                "migration_namespace": "extensions.alpha_tools.backend.migrations",
+            }, ensure_ascii=False), encoding="utf-8")
+            (manifest_dir / "backend" / "ext.py").write_text(
+                "def run_migrations(context):\n"
+                "    return {'status': 'ok'}\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "invalid_extension_migration_filename" for item in result.issues))
+            self.assertTrue(any(item.code == "missing_extension_migration_entrypoint" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_validate_extension_manifests_reports_invalid_settings_schema(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -698,12 +762,15 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertTrue((extension_dir / "frontend" / "forum" / "index.js").exists())
                 self.assertTrue((extension_dir / "backend" / "ext.py").exists())
                 self.assertTrue((extension_dir / "backend" / "migrations" / "__init__.py").exists())
+                self.assertTrue((extension_dir / "backend" / "migrations" / "0001_initial.py").exists())
                 self.assertTrue((extension_dir / "docs" / "README.md").exists())
                 self.assertTrue((extension_dir / "locale" / "zh-CN.json").exists())
                 backend_source = (extension_dir / "backend" / "ext.py").read_text(encoding="utf-8")
                 self.assertIn("def run_install(context):", backend_source)
                 self.assertIn("def run_migrations(context):", backend_source)
                 self.assertIn("def run_uninstall(context):", backend_source)
+                migration_source = (extension_dir / "backend" / "migrations" / "0001_initial.py").read_text(encoding="utf-8")
+                self.assertIn("def apply():", migration_source)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -866,6 +933,8 @@ class ExtensionRegistryTests(TestCase):
         self.assertEqual(sample_extension.runtime.status_key, "pending_install")
         self.assertTrue(any(item.key == "migrations" for item in sample_extension.runtime.delivery_checks))
         self.assertTrue(any("不会自动回滚数据库迁移" in item for item in sample_extension.runtime.uninstall_warnings))
+        runtime_probe = inspect_extension_runtime(sample_extension)
+        self.assertIn("0001_bootstrap.py", runtime_probe["migration_plan"]["pending_files"])
 
     def test_builtin_adapter_preserves_module_metadata(self):
         module = get_forum_registry().get_module("approval")
@@ -1073,6 +1142,7 @@ class AdminExtensionsApiTests(TestCase):
         self.assertIn("resolveDetailPage", payload["debug_info"]["frontend_admin_entry"]["available_exports"])
         self.assertEqual(payload["debug_info"]["frontend_forum_entry"]["entry_type"], "filesystem")
         self.assertTrue(payload["debug_info"]["frontend_forum_entry"]["exists"])
+        self.assertIn("0001_bootstrap.py", payload["migration_plan"]["pending_files"])
         self.assertTrue(any(
             item["key"] == "settings"
             and item["matches_expected"]
@@ -1148,6 +1218,8 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(installed_extension["migration_label"], "最近已执行")
         self.assertEqual(installed_extension["migration_execution"]["state"], "applied")
         self.assertEqual(installed_extension["migration_execution"]["status"], "ok")
+        self.assertEqual(installed_extension["migration_plan"]["pending_files"], [])
+        self.assertIn("0001_bootstrap.py", installed_extension["migration_plan"]["applied_files"])
         self.assertTrue(any(item["hook"] == "run_install" for item in installed_extension["backend_hooks"]))
         self.assertTrue(any(item["hook"] == "run_migrations" for item in installed_extension["backend_hooks"]))
         self.assertTrue(any(item["action"] == "migrations" for item in installed_extension["runtime_actions"]))
@@ -1206,6 +1278,7 @@ class AdminExtensionsApiTests(TestCase):
         installation.refresh_from_db()
         self.assertTrue(installation.enabled)
         self.assertTrue(installation.booted)
+        self.assertIn("0001_bootstrap.py", installation.meta["applied_migration_files"])
 
         disable_response = self.client.post(
             "/api/admin/extensions/sample-hello/disable",
@@ -1337,6 +1410,10 @@ class ExtensionServiceTests(TestCase):
         self.assertEqual(installed.runtime.migration_state, "applied")
         self.assertEqual(installed.runtime.migration_label, "最近已执行")
         self.assertEqual(installed.runtime.migration_execution["state"], "applied")
+        self.assertIn("0001_bootstrap.py", installed.runtime.migration_execution["details"]["migration_files"])
+        self.assertIn("bootstrap", installed.runtime.migration_execution["details"]["applied_steps"])
+        installation = ExtensionInstallation.objects.get(extension_id="sample-hello")
+        self.assertIn("0001_bootstrap.py", installation.meta["applied_migration_files"])
 
         disabled = ExtensionService.set_extension_enabled("sample-hello", False)
         self.assertFalse(disabled.runtime.enabled)
@@ -1390,6 +1467,8 @@ class ExtensionServiceTests(TestCase):
         self.assertEqual(updated.runtime.migration_state, "applied")
         self.assertEqual(updated.runtime.migration_label, "最近已执行")
         self.assertEqual(updated.runtime.migration_execution["status"], "ok")
+        self.assertEqual(updated.runtime.migration_execution["details"]["migration_files"], [])
+        self.assertIn("0001_bootstrap.py", updated.runtime.migration_execution["details"]["skipped_migration_files"])
 
     def test_run_extension_migrations_requires_installation(self):
         with self.assertRaises(ExtensionStateError) as context:

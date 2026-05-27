@@ -15,6 +15,8 @@ EXTENSION_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 EXPORT_FUNCTION_PATTERN = re.compile(r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(")
 VERSION_RANGE_PATTERN = re.compile(r"^(?:\^|~|>=|<=|>|<)?\d+\.\d+\.\d+$")
 API_VERSION_PATTERN = re.compile(r"^\d+\.\d+$")
+MIGRATION_FILE_PATTERN = re.compile(r"^\d{4}_[a-z0-9_]+\.py$")
+MIGRATION_FUNCTION_PATTERN = re.compile(r"^(?:async\s+)?def\s+(apply|run|upgrade)\s*\(", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -385,6 +387,11 @@ def _validate_single_manifest(
             manifest,
             base_path,
             strict_runtime_hooks=strict_runtime_hooks,
+        )
+        _validate_migration_files(
+            collector,
+            manifest,
+            base_path,
         )
 
 
@@ -884,6 +891,57 @@ def _validate_frontend_forum_entry(
                 f"frontend_forum_entry 缺少导出函数: {export_name}",
                 extension_id=manifest.id,
                 field="frontend_forum_entry",
+            )
+
+
+def _validate_migration_files(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+    base_path: Path,
+) -> None:
+    migration_namespace = str(manifest.migration_namespace or "").strip()
+    if not migration_namespace:
+        return
+
+    migration_dir = Path(base_path) / manifest.id / "backend" / "migrations"
+    if not migration_dir.exists():
+        collector.add_error(
+            "missing_extension_migration_dir",
+            "已声明 migration_namespace，但 backend/migrations 目录不存在",
+            extension_id=manifest.id,
+            field="migration_namespace",
+        )
+        return
+
+    migration_files = sorted(
+        item for item in migration_dir.glob("*.py")
+        if item.name != "__init__.py"
+    )
+    if not migration_files:
+        collector.add_error(
+            "missing_extension_migration_files",
+            "已声明 migration_namespace，但 backend/migrations 目录没有可执行迁移文件",
+            extension_id=manifest.id,
+            field="migration_namespace",
+        )
+        return
+
+    for file_path in migration_files:
+        if not MIGRATION_FILE_PATTERN.match(file_path.name):
+            collector.add_warning(
+                "invalid_extension_migration_filename",
+                f"迁移文件命名建议使用四位编号前缀，例如 0001_initial.py：{file_path.name}",
+                extension_id=manifest.id,
+                field="migration_namespace",
+            )
+
+        source = file_path.read_text(encoding="utf-8")
+        if not MIGRATION_FUNCTION_PATTERN.search(source):
+            collector.add_error(
+                "missing_extension_migration_entrypoint",
+                f"迁移文件缺少可执行入口函数 apply/run/upgrade：{file_path.name}",
+                extension_id=manifest.id,
+                field="migration_namespace",
             )
 
 

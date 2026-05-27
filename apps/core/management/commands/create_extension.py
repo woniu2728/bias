@@ -83,6 +83,10 @@ class Command(BaseCommand):
             "",
         )
         self._write_text(
+            migrations_dir / "0001_initial.py",
+            self._build_migration_stub_source(),
+        )
+        self._write_text(
             backend_dir / "ext.py",
             self._build_backend_entry_source(extension_id, name),
         )
@@ -444,11 +448,20 @@ class Command(BaseCommand):
             "    return {\n"
             "        'status': 'ok',\n"
             "        'status_label': '已执行',\n"
-            "        'message': f'{context.extension_name} 的扩展迁移已执行。',\n"
+            "        'message': f'{context.extension_name} 的扩展迁移钩子已执行。',\n"
             "        'details': {\n"
             "            'migration_namespace': context.migration_namespace,\n"
+            "            'hook': 'run_migrations',\n"
             "        },\n"
             "    }\n"
+        )
+
+    def _build_migration_stub_source(self) -> str:
+        return (
+            "from __future__ import annotations\n\n"
+            "\n"
+            "def apply():\n"
+            "    return 'initial'\n"
         )
 
     def _build_readme_source(self, extension_id: str, name: str) -> str:

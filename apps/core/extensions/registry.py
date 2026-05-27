@@ -88,6 +88,7 @@ class ExtensionRegistry:
             runtime_actions=(),
             backend_hooks=dict((installation.meta or {}).get("backend_hooks") or {}),
             migration_execution=dict((installation.meta or {}).get("migration_execution") or {}),
+            applied_migration_files=tuple((installation.meta or {}).get("applied_migration_files") or ()),
         )
 
         return self._with_runtime_actions(ExtensionDefinition(
@@ -122,6 +123,7 @@ class ExtensionRegistry:
                 runtime_actions=(),
                 backend_hooks=dict(definition.runtime.backend_hooks or {}),
                 migration_execution=dict(definition.runtime.migration_execution or {}),
+                applied_migration_files=tuple(definition.runtime.applied_migration_files or ()),
             ),
             lifecycle=definition.lifecycle,
             capabilities=definition.capabilities,
@@ -152,6 +154,7 @@ class ExtensionRegistry:
                 uninstall_warnings=tuple(runtime_probe["uninstall_warnings"]),
                 backend_hooks=dict(definition.runtime.backend_hooks or {}),
                 migration_execution=dict(runtime_probe.get("migration_execution") or definition.runtime.migration_execution or {}),
+                applied_migration_files=tuple(definition.runtime.applied_migration_files or ()),
             ),
             lifecycle=definition.lifecycle,
             capabilities=definition.capabilities,
@@ -179,6 +182,7 @@ class ExtensionRegistry:
                 uninstall_warnings=runtime_definition.runtime.uninstall_warnings,
                 backend_hooks=dict(runtime_definition.runtime.backend_hooks or {}),
                 migration_execution=dict(runtime_definition.runtime.migration_execution or {}),
+                applied_migration_files=tuple(runtime_definition.runtime.applied_migration_files or ()),
             ),
             lifecycle=runtime_definition.lifecycle,
             capabilities=runtime_definition.capabilities,

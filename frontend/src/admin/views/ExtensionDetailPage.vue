@@ -301,6 +301,24 @@
           <p v-if="extension.migration_execution?.message" class="ExtensionDetailNote">
             {{ extension.migration_execution.message }}
           </p>
+          <div
+            v-if="migrationExecutionDetails.appliedSteps.length || migrationExecutionDetails.migrationFiles.length || migrationPlan.appliedFiles.length || migrationPlan.pendingFiles.length"
+            class="ExtensionDetailWarnings ExtensionDetailWarnings--neutral"
+          >
+            <h4>迁移执行明细</h4>
+            <ul v-if="migrationPlan.appliedFiles.length">
+              <li v-for="item in migrationPlan.appliedFiles" :key="`applied-${item}`">已执行迁移：{{ item }}</li>
+            </ul>
+            <ul v-if="migrationPlan.pendingFiles.length">
+              <li v-for="item in migrationPlan.pendingFiles" :key="`pending-${item}`">待执行迁移：{{ item }}</li>
+            </ul>
+            <ul v-if="migrationExecutionDetails.migrationFiles.length">
+              <li v-for="item in migrationExecutionDetails.migrationFiles" :key="`executed-${item}`">本次执行：{{ item }}</li>
+            </ul>
+            <ul v-if="migrationExecutionDetails.appliedSteps.length">
+              <li v-for="item in migrationExecutionDetails.appliedSteps" :key="`step-${item}`">执行步骤：{{ item }}</li>
+            </ul>
+          </div>
           <ul v-if="deliveryChecks.length" class="ExtensionDetailChecks">
             <li v-for="item in deliveryChecks" :key="item.key">
               <div class="ExtensionDetailChecks-head">
@@ -439,6 +457,22 @@ const debugBackendEntryTypeLabel = computed(() => {
 
 const backendHooks = computed(() => {
   return Array.isArray(extension.value?.backend_hooks) ? extension.value.backend_hooks : []
+})
+
+const migrationExecutionDetails = computed(() => {
+  const details = extension.value?.migration_execution?.details || {}
+  return {
+    appliedSteps: Array.isArray(details.applied_steps) ? details.applied_steps : [],
+    migrationFiles: Array.isArray(details.migration_files) ? details.migration_files : [],
+  }
+})
+
+const migrationPlan = computed(() => {
+  const plan = extension.value?.migration_plan || {}
+  return {
+    appliedFiles: Array.isArray(plan.applied_files) ? plan.applied_files : [],
+    pendingFiles: Array.isArray(plan.pending_files) ? plan.pending_files : [],
+  }
 })
 
 const runtimeStatusClass = computed(() => {
@@ -801,6 +835,11 @@ function syncModulesFromExtension(currentExtension) {
   border: 1px solid #f0d0d0;
   border-radius: 14px;
   background: #fff8f8;
+}
+
+.ExtensionDetailWarnings--neutral {
+  border-color: var(--forum-border-color);
+  background: var(--forum-bg-subtle);
 }
 
 .ExtensionDetailWarnings h4 {

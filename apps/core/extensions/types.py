@@ -210,6 +210,7 @@ class ExtensionRuntimeState:
     uninstall_warnings: Tuple[str, ...] = ()
     backend_hooks: dict[str, Any] = field(default_factory=dict)
     migration_execution: dict[str, Any] = field(default_factory=dict)
+    applied_migration_files: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
