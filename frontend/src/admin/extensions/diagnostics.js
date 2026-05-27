@@ -23,3 +23,23 @@ export function resolveExtensionForumEntryState(extension) {
   const availableExports = new Set(debugEntry.available_exports || [])
   return [...requiredExports].every(exportName => availableExports.has(exportName)) ? '已就绪' : '待修复'
 }
+
+export function resolveExtensionMigrationState(extension) {
+  const plan = extension?.migration_plan || {}
+  const pendingFiles = Array.isArray(plan.pending_files) ? plan.pending_files : []
+  const appliedFiles = Array.isArray(plan.applied_files) ? plan.applied_files : []
+
+  if (!extension?.migration_execution && pendingFiles.length) {
+    return '待执行'
+  }
+  if (pendingFiles.length) {
+    return '有更新'
+  }
+  if (appliedFiles.length) {
+    return '已同步'
+  }
+  if (extension?.migration_label) {
+    return extension.migration_label
+  }
+  return '未声明'
+}

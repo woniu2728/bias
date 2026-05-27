@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   resolveExtensionEntryTypeLabel,
   resolveExtensionForumEntryState,
+  resolveExtensionMigrationState,
 } from './diagnostics.js'
 
 test('resolveExtensionEntryTypeLabel maps entry kinds to readable labels', () => {
@@ -33,4 +34,29 @@ test('resolveExtensionForumEntryState detects forum entry health', () => {
       },
     },
   }), '已就绪')
+})
+
+test('resolveExtensionMigrationState reflects pending and applied migration plans', () => {
+  assert.equal(resolveExtensionMigrationState({}), '未声明')
+  assert.equal(resolveExtensionMigrationState({
+    migration_plan: {
+      pending_files: ['0001_initial.py'],
+      applied_files: [],
+    },
+  }), '待执行')
+  assert.equal(resolveExtensionMigrationState({
+    migration_execution: {
+      status: 'ok',
+    },
+    migration_plan: {
+      pending_files: ['0002_seed.py'],
+      applied_files: ['0001_initial.py'],
+    },
+  }), '有更新')
+  assert.equal(resolveExtensionMigrationState({
+    migration_plan: {
+      pending_files: [],
+      applied_files: ['0001_initial.py'],
+    },
+  }), '已同步')
 })

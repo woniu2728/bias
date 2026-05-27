@@ -63,6 +63,13 @@
                 <span class="ExtensionStatus" :class="resolveRuntimeStatusClass(extension)">
                   {{ extension.runtime_status?.label || (extension.enabled ? '已启用' : '未启用') }}
                 </span>
+                <span
+                  v-if="hasMigrationPlan(extension)"
+                  class="ExtensionStatus"
+                  :class="resolveMigrationStatusClass(extension)"
+                >
+                  {{ resolveExtensionMigrationState(extension) }}
+                </span>
               </div>
 
               <p class="ExtensionCard-description">{{ extension.description || '暂无描述' }}</p>
@@ -71,6 +78,7 @@
                 <span><strong>版本</strong> {{ extension.version }}</span>
                 <span><strong>来源</strong> {{ extension.source }}</span>
                 <span><strong>前台</strong> {{ resolveExtensionForumEntryState(extension) }}</span>
+                <span v-if="hasMigrationPlan(extension)"><strong>迁移</strong> {{ resolveMigrationMetaText(extension) }}</span>
                 <span v-if="extension.dependencies.length"><strong>依赖</strong> {{ extension.dependencies.join('、') }}</span>
                 <span v-if="extension.module_ids.length"><strong>模块</strong> {{ extension.module_ids.join('、') }}</span>
               </div>
@@ -140,7 +148,10 @@ import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import AdminToolbar from '../components/AdminToolbar.vue'
 import AdminFilterTabs from '../components/AdminFilterTabs.vue'
-import { resolveExtensionForumEntryState } from '../extensions/diagnostics'
+import {
+  resolveExtensionForumEntryState,
+  resolveExtensionMigrationState,
+} from '../extensions/diagnostics'
 
 const adminRegistryStore = useAdminRegistryStore()
 const modalStore = useModalStore()
@@ -301,6 +312,35 @@ function resolveRuntimeStatusClass(extension) {
   if (key === 'active') return 'is-enabled'
   if (key === 'pending_install') return 'is-pending'
   return 'is-disabled'
+}
+
+function hasMigrationPlan(extension) {
+  return Boolean(extension?.migration_plan)
+}
+
+function resolveMigrationStatusClass(extension) {
+  const state = resolveExtensionMigrationState(extension)
+  if (state === '已同步') return 'is-enabled'
+  if (state === '待执行' || state === '有更新') return 'is-pending'
+  return 'is-disabled'
+}
+
+function resolveMigrationMetaText(extension) {
+  const plan = extension?.migration_plan || {}
+  const declaredFiles = Array.isArray(plan.declared_files) ? plan.declared_files : []
+  const appliedFiles = Array.isArray(plan.applied_files) ? plan.applied_files : []
+  const pendingFiles = Array.isArray(plan.pending_files) ? plan.pending_files : []
+
+  if (pendingFiles.length) {
+    return `${pendingFiles.length} 个待执行`
+  }
+  if (appliedFiles.length) {
+    return `${appliedFiles.length} 个已执行`
+  }
+  if (declaredFiles.length) {
+    return `${declaredFiles.length} 个已声明`
+  }
+  return '未声明'
 }
 </script>
 
