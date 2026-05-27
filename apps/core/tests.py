@@ -929,7 +929,7 @@ class ExtensionManagementCommandTests(TestCase):
                 encoding="utf-8",
             )
 
-            with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
+            with self.assertRaisesMessage(CommandError, "扩展校验失败，共 2 个错误"):
                 call_command(
                     "validate_extensions",
                     "--extensions-path",
