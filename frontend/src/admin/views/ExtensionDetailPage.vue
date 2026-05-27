@@ -137,6 +137,14 @@
               <code>{{ debugInfo?.frontend_admin_entry?.resolved_path || debugInfo?.frontend_admin_entry?.entry || '无' }}</code>
             </div>
             <div>
+              <small>前台入口类型</small>
+              <strong>{{ debugForumEntryTypeLabel }}</strong>
+            </div>
+            <div>
+              <small>前台入口解析</small>
+              <code>{{ debugInfo?.frontend_forum_entry?.resolved_path || debugInfo?.frontend_forum_entry?.entry || '无' }}</code>
+            </div>
+            <div>
               <small>后端入口类型</small>
               <strong>{{ debugBackendEntryTypeLabel }}</strong>
             </div>
@@ -151,6 +159,14 @@
             <div>
               <small>必需导出</small>
               <strong>{{ formatList(debugInfo?.frontend_admin_entry?.required_exports) }}</strong>
+            </div>
+            <div>
+              <small>前台必需导出</small>
+              <strong>{{ formatList(debugInfo?.frontend_forum_entry?.required_exports) }}</strong>
+            </div>
+            <div>
+              <small>前台已发现导出</small>
+              <strong>{{ formatList(debugInfo?.frontend_forum_entry?.available_exports) }}</strong>
             </div>
             <div>
               <small>已发现后端钩子</small>
@@ -338,6 +354,7 @@ import { useModalStore } from '../../stores/modal'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
+import { resolveExtensionEntryTypeLabel } from '../extensions/diagnostics'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
 import FlagsPage from './FlagsPage.vue'
 import TagsPage from './TagsPage.vue'
@@ -409,19 +426,15 @@ const debugValidationIssues = computed(() => {
 })
 
 const debugEntryTypeLabel = computed(() => {
-  const entryType = debugInfo.value?.frontend_admin_entry?.entry_type
-  if (entryType === 'builtin') return '内置入口'
-  if (entryType === 'filesystem') return '文件系统扩展'
-  if (entryType === 'external') return '外部路径'
-  return '未声明'
+  return resolveExtensionEntryTypeLabel(debugInfo.value?.frontend_admin_entry?.entry_type)
+})
+
+const debugForumEntryTypeLabel = computed(() => {
+  return resolveExtensionEntryTypeLabel(debugInfo.value?.frontend_forum_entry?.entry_type)
 })
 
 const debugBackendEntryTypeLabel = computed(() => {
-  const entryType = debugInfo.value?.backend_entry?.entry_type
-  if (entryType === 'builtin') return '内置入口'
-  if (entryType === 'filesystem') return '文件系统扩展'
-  if (entryType === 'external') return '外部路径'
-  return '未声明'
+  return resolveExtensionEntryTypeLabel(debugInfo.value?.backend_entry?.entry_type)
 })
 
 const backendHooks = computed(() => {

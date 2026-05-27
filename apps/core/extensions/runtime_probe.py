@@ -268,6 +268,17 @@ def _build_frontend_forum_check(root_path: Path | None, definition: ExtensionDef
 
     forum_file = root_path / "frontend" / "forum" / "index.js" if root_path else None
     if forum_file and forum_file.exists():
+        source = forum_file.read_text(encoding="utf-8")
+        if "export async function bootForumExtension" not in source and "export function bootForumExtension" not in source:
+            return ExtensionDeliveryCheckDefinition(
+                key="frontend-forum-entry",
+                label="前台入口",
+                status="attention",
+                status_label="缺少导出",
+                message="frontend/forum/index.js 存在，但没有导出 bootForumExtension。",
+                path=str(forum_file),
+                optional=True,
+            )
         return ExtensionDeliveryCheckDefinition(
             key="frontend-forum-entry",
             label="前台入口",

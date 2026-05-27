@@ -26,6 +26,13 @@ export async function loadExtensionForumEntryModule(entryPath, { importers = {} 
   return importer()
 }
 
+export function validateForumExtensionModule(module, extensionId = '') {
+  if (!module || typeof module.bootForumExtension !== 'function') {
+    const suffix = extensionId ? ` (${extensionId})` : ''
+    throw new Error(`扩展前台入口缺少 bootForumExtension 导出${suffix}`)
+  }
+}
+
 export async function loadEnabledForumExtensions({
   forumStore,
   importers = {},
@@ -53,7 +60,13 @@ export async function loadEnabledForumExtensions({
       continue
     }
 
-    await loadExtensionForumEntryModule(entryPath, { importers })
+    const module = await loadExtensionForumEntryModule(entryPath, { importers })
+    validateForumExtensionModule(module, extensionId)
+    await module.bootForumExtension({
+      forumStore,
+      extension,
+      loadedExtensionIds: loadedIds,
+    })
     loadedIds.add(extensionId)
   }
 

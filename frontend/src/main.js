@@ -17,10 +17,11 @@ app.use(router)
 
 primeCsrfProtection().catch(() => {})
 const forumStore = useForumStore(pinia)
-const forumExtensionModules = import.meta.glob('../../../extensions/*/frontend/forum/index.js')
+const forumExtensionModules = import.meta.glob('../../extensions/*/frontend/forum/index.js')
 useForumUiStore(pinia)
 
 async function bootstrap() {
+  await forumStore.initialize()
   try {
     await loadEnabledForumExtensions({
       forumStore,
@@ -28,7 +29,6 @@ async function bootstrap() {
     })
   } catch (error) {
     console.error('加载前台扩展入口失败:', error)
-    await forumStore.initialize()
   }
 
   app.mount('#app')

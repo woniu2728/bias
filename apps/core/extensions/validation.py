@@ -184,6 +184,54 @@ def inspect_frontend_admin_entry(
     return payload
 
 
+def inspect_frontend_forum_entry(
+    manifest: ExtensionManifest,
+    *,
+    extensions_base_path: Path | None = None,
+) -> dict[str, Any]:
+    entry = str(manifest.frontend_forum_entry or "").strip()
+    payload: dict[str, Any] = {
+        "entry": entry,
+        "entry_type": "missing",
+        "required_exports": ("bootForumExtension",),
+        "optional_exports": ("bootForumExtension",),
+        "available_exports": (),
+        "exists": False,
+        "resolved_path": "",
+    }
+
+    if not entry:
+        return payload
+
+    if not entry.startswith("extensions/"):
+        payload.update({
+            "entry_type": "external",
+            "exists": False,
+        })
+        return payload
+
+    if extensions_base_path is None:
+        payload.update({
+            "entry_type": "filesystem",
+            "exists": False,
+        })
+        return payload
+
+    absolute_path = Path(extensions_base_path).parent / entry
+    payload.update({
+        "entry_type": "filesystem",
+        "exists": absolute_path.exists(),
+        "resolved_path": str(absolute_path),
+    })
+
+    if not absolute_path.exists():
+        return payload
+
+    source = absolute_path.read_text(encoding="utf-8")
+    payload["available_exports"] = tuple(sorted(set(EXPORT_FUNCTION_PATTERN.findall(source))))
+    return payload
+
+
 def inspect_backend_entry(
     manifest: ExtensionManifest,
     *,
@@ -331,6 +379,7 @@ def _validate_single_manifest(
 
     if base_path is not None:
         _validate_frontend_admin_entry(collector, manifest, base_path)
+        _validate_frontend_forum_entry(collector, manifest, base_path)
         _validate_backend_entry(
             collector,
             manifest,
@@ -797,6 +846,45 @@ def _build_required_frontend_admin_exports(manifest: ExtensionManifest) -> list[
     if manifest.operations_pages:
         required_exports.append("resolveOperationsPage")
     return required_exports
+
+
+def _validate_frontend_forum_entry(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+    base_path: Path,
+) -> None:
+    debug_payload = inspect_frontend_forum_entry(manifest, extensions_base_path=base_path)
+    entry = str(debug_payload["entry"] or "").strip()
+    if not entry:
+        return
+    if debug_payload["entry_type"] == "external":
+        collector.add_warning(
+            "frontend_forum_entry_outside_extensions",
+            "frontend_forum_entry 建议使用 extensions/... 相对仓库根目录的路径",
+            extension_id=manifest.id,
+            field="frontend_forum_entry",
+        )
+        return
+
+    if not debug_payload["exists"]:
+        collector.add_error(
+            "missing_frontend_forum_entry",
+            f"找不到 frontend_forum_entry 对应文件: {entry}",
+            extension_id=manifest.id,
+            field="frontend_forum_entry",
+        )
+        return
+
+    required_exports = list(debug_payload["required_exports"])
+    available_exports = set(debug_payload["available_exports"])
+    for export_name in required_exports:
+        if export_name not in available_exports:
+            collector.add_error(
+                "missing_frontend_forum_export",
+                f"frontend_forum_entry 缺少导出函数: {export_name}",
+                extension_id=manifest.id,
+                field="frontend_forum_entry",
+            )
 
 
 def _matches_simple_version_range(version: str, version_range: str) -> bool:

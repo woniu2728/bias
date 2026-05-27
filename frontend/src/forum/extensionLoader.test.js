@@ -5,6 +5,7 @@ import {
   loadEnabledForumExtensions,
   loadExtensionForumEntryModule,
   normalizeExtensionForumEntry,
+  validateForumExtensionModule,
 } from './extensionLoader.js'
 
 test('normalizeExtensionForumEntry rewrites extension paths', () => {
@@ -25,6 +26,13 @@ test('loadExtensionForumEntryModule loads filesystem importer entries', async ()
   })
 
   assert.equal(loaded.boot, true)
+})
+
+test('validateForumExtensionModule rejects modules without bootForumExtension', () => {
+  assert.throws(
+    () => validateForumExtensionModule({}),
+    /bootForumExtension/,
+  )
 })
 
 test('loadEnabledForumExtensions loads enabled extension entries once and applies payload', async () => {
@@ -55,12 +63,16 @@ test('loadEnabledForumExtensions loads enabled extension entries once and applie
     importers: {
       '../../../extensions/sample-hello/frontend/forum/index.js': async () => {
         calls.push('sample-hello')
-        return {}
+        return {
+          bootForumExtension: async ({ extension }) => {
+            calls.push(extension.id)
+          },
+        }
       },
     },
   })
 
-  assert.equal(calls.length, 1)
+  assert.equal(calls.length, 2)
   assert.equal(result.loadedExtensionIds.has('sample-hello'), true)
   assert.equal(forumStore.applied, payload)
 })

@@ -3,7 +3,12 @@ from django.shortcuts import get_object_or_404
 
 from apps.core.extensions import get_extension_registry
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
-from apps.core.extensions.validation import inspect_backend_entry, inspect_frontend_admin_entry, validate_extension_manifests_with_available_ids
+from apps.core.extensions.validation import (
+    inspect_backend_entry,
+    inspect_frontend_admin_entry,
+    inspect_frontend_forum_entry,
+    validate_extension_manifests_with_available_ids,
+)
 from apps.core.extension_service import ExtensionService
 from apps.core.extension_settings_service import get_extension_settings, serialize_extension_settings_schema, save_extension_settings
 from apps.core.jwt_auth import AccessTokenAuth
@@ -388,6 +393,10 @@ def _build_extension_debug_info(extension):
         extension.manifest,
         extensions_base_path=registry.extensions_path,
     )
+    forum_inspection = inspect_frontend_forum_entry(
+        extension.manifest,
+        extensions_base_path=registry.extensions_path,
+    )
     backend_inspection = inspect_backend_entry(
         extension.manifest,
         extensions_base_path=registry.extensions_path,
@@ -402,6 +411,7 @@ def _build_extension_debug_info(extension):
     expected_settings_path = f"/admin/extensions/{extension.id}/settings"
     expected_permissions_path = f"/admin/extensions/{extension.id}/permissions"
     expected_operations_path = f"/admin/extensions/{extension.id}/operations"
+    expected_forum_entry = f"extensions/{extension.id}/frontend/forum/index.js"
 
     return {
         "manifest_path": extension.manifest.path,
@@ -413,6 +423,15 @@ def _build_extension_debug_info(extension):
             "required_exports": list(inspection["required_exports"]),
             "optional_exports": list(inspection["optional_exports"]),
             "available_exports": list(inspection["available_exports"]),
+        },
+        "frontend_forum_entry": {
+            "entry": forum_inspection["entry"],
+            "entry_type": forum_inspection["entry_type"],
+            "exists": forum_inspection["exists"],
+            "resolved_path": forum_inspection["resolved_path"],
+            "required_exports": list(forum_inspection["required_exports"]),
+            "optional_exports": list(forum_inspection["optional_exports"]),
+            "available_exports": list(forum_inspection["available_exports"]),
         },
         "backend_entry": {
             "entry": backend_inspection["entry"],
@@ -443,6 +462,13 @@ def _build_extension_debug_info(extension):
                 "declared": next(iter(extension.manifest.operations_pages), ""),
                 "expected": expected_operations_path,
                 "matches_expected": next(iter(extension.manifest.operations_pages), "") == expected_operations_path if extension.manifest.operations_pages else False,
+            },
+            {
+                "key": "frontend_forum_entry",
+                "label": "前台入口",
+                "declared": extension.manifest.frontend_forum_entry,
+                "expected": expected_forum_entry,
+                "matches_expected": str(extension.manifest.frontend_forum_entry or "").strip() == expected_forum_entry,
             },
         ],
         "validation_issues": [

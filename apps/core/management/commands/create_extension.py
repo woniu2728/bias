@@ -303,16 +303,18 @@ class Command(BaseCommand):
     def _build_forum_index_source(self, name: str) -> str:
         return (
             "import { registerForumNavItem } from '@/forum/registry'\n\n"
-            "registerForumNavItem({\n"
-            f"  key: '{name.lower().replace(' ', '-')}-entry',\n"
-            "  moduleId: 'core',\n"
-            "  section: 'primary',\n"
-            "  order: 90,\n"
-            "  icon: 'fas fa-puzzle-piece',\n"
-            f"  label: '{name}',\n"
-            "  to: '/',\n"
-            "  description: '扩展前台入口已成功注册。',\n"
-            "})\n"
+            "export async function bootForumExtension() {\n"
+            "  registerForumNavItem({\n"
+            f"    key: '{name.lower().replace(' ', '-')}-entry',\n"
+            "    moduleId: 'core',\n"
+            "    section: 'primary',\n"
+            "    order: 90,\n"
+            "    icon: 'fas fa-puzzle-piece',\n"
+            f"    label: '{name}',\n"
+            "    to: '/',\n"
+            "    description: '扩展前台入口已成功注册。',\n"
+            "  })\n"
+            "}\n"
         )
 
     def _build_settings_page_source(self, name: str) -> str:

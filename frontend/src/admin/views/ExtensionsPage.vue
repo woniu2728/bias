@@ -70,6 +70,7 @@
               <div class="ExtensionCard-meta">
                 <span><strong>版本</strong> {{ extension.version }}</span>
                 <span><strong>来源</strong> {{ extension.source }}</span>
+                <span><strong>前台</strong> {{ resolveExtensionForumEntryState(extension) }}</span>
                 <span v-if="extension.dependencies.length"><strong>依赖</strong> {{ extension.dependencies.join('、') }}</span>
                 <span v-if="extension.module_ids.length"><strong>模块</strong> {{ extension.module_ids.join('、') }}</span>
               </div>
@@ -139,6 +140,7 @@ import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import AdminToolbar from '../components/AdminToolbar.vue'
 import AdminFilterTabs from '../components/AdminFilterTabs.vue'
+import { resolveExtensionForumEntryState } from '../extensions/diagnostics'
 
 const adminRegistryStore = useAdminRegistryStore()
 const modalStore = useModalStore()

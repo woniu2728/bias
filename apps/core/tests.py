@@ -34,6 +34,7 @@ from apps.core.extensions.registry import ExtensionRegistry
 from apps.core.extensions.validation import (
     inspect_backend_entry,
     inspect_frontend_admin_entry,
+    inspect_frontend_forum_entry,
     resolve_bias_version_compatibility,
     validate_extension_manifests,
     validate_extension_manifests_with_available_ids,
@@ -252,6 +253,20 @@ class ExtensionValidationTests(TestCase):
         self.assertIn("run_install", payload["available_hooks"])
         self.assertIn("run_migrations", payload["available_hooks"])
 
+    def test_inspect_frontend_forum_entry_reports_available_exports(self):
+        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
+        extension = registry.get_extension("sample-hello")
+
+        payload = inspect_frontend_forum_entry(
+            extension.manifest,
+            extensions_base_path=registry.extensions_path,
+        )
+
+        self.assertEqual(payload["entry_type"], "filesystem")
+        self.assertTrue(payload["exists"])
+        self.assertIn("available_exports", payload)
+        self.assertEqual(payload["resolved_path"].endswith("extensions\\sample-hello\\frontend\\forum\\index.js") or payload["resolved_path"].endswith("extensions/sample-hello/frontend/forum/index.js"), True)
+
     def test_validate_extension_manifests_requires_frontend_admin_entry_for_admin_pages(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -327,6 +342,53 @@ class ExtensionValidationTests(TestCase):
                 and "resolveOperationsPage" in item.message
                 for item in result.issues
             ))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extension_manifests_reports_missing_frontend_forum_entry(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "frontend_forum_entry": "extensions/alpha-tools/frontend/forum/index.js",
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "missing_frontend_forum_entry" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extension_manifests_reports_missing_frontend_forum_export(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            forum_dir = manifest_dir / "frontend" / "forum"
+            forum_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "frontend_forum_entry": "extensions/alpha-tools/frontend/forum/index.js",
+            }, ensure_ascii=False), encoding="utf-8")
+            (forum_dir / "index.js").write_text(
+                "export const bootForumExtension = null\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "missing_frontend_forum_export" for item in result.issues))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -1009,10 +1071,18 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(payload["debug_info"]["frontend_admin_entry"]["entry_type"], "filesystem")
         self.assertTrue(payload["debug_info"]["frontend_admin_entry"]["exists"])
         self.assertIn("resolveDetailPage", payload["debug_info"]["frontend_admin_entry"]["available_exports"])
+        self.assertEqual(payload["debug_info"]["frontend_forum_entry"]["entry_type"], "filesystem")
+        self.assertTrue(payload["debug_info"]["frontend_forum_entry"]["exists"])
         self.assertTrue(any(
             item["key"] == "settings"
             and item["matches_expected"]
             and item["declared"] == "/admin/extensions/sample-hello/settings"
+            for item in payload["debug_info"]["route_bindings"]
+        ))
+        self.assertTrue(any(
+            item["key"] == "frontend_forum_entry"
+            and item["matches_expected"]
+            and item["declared"] == "extensions/sample-hello/frontend/forum/index.js"
             for item in payload["debug_info"]["route_bindings"]
         ))
         self.assertEqual(payload["debug_info"]["validation_issues"], [])
