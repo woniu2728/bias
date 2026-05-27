@@ -4,7 +4,9 @@ import assert from 'node:assert/strict'
 import {
   loadExtensionAdminEntryModule,
   normalizeExtensionAdminEntry,
+  resolveFallbackAdminComponent,
   resolveAdminEntryFactory,
+  resolveExtensionAdminComponent,
 } from './entryResolver.js'
 
 
@@ -51,4 +53,58 @@ test('loadExtensionAdminEntryModule loads filesystem importer entries', async ()
   })
 
   assert.equal(typeof loaded.resolveDetailPage, 'function')
+})
+
+test('resolveFallbackAdminComponent returns the first matching fallback component', async () => {
+  const component = await resolveFallbackAdminComponent(
+    { id: 'demo' },
+    'settings',
+    {
+      fallbacks: [
+        () => null,
+        () => ({ name: 'FallbackSettingsPage' }),
+      ],
+    },
+  )
+
+  assert.equal(component.name, 'FallbackSettingsPage')
+})
+
+test('resolveExtensionAdminComponent falls back when admin entry is missing', async () => {
+  const component = await resolveExtensionAdminComponent(
+    {
+      id: 'demo',
+      frontend_admin_entry: '',
+    },
+    'settings',
+    {
+      fallbacks: [
+        () => ({ name: 'GeneratedSettingsPage' }),
+      ],
+    },
+  )
+
+  assert.equal(component.name, 'GeneratedSettingsPage')
+})
+
+test('resolveExtensionAdminComponent falls back when admin entry does not export current surface', async () => {
+  const component = await resolveExtensionAdminComponent(
+    {
+      id: 'demo',
+      frontend_admin_entry: 'extensions/demo/frontend/admin/index.js',
+    },
+    'settings',
+    {
+      importers: {
+        '../../../../extensions/demo/frontend/admin/index.js': async () => ({
+          resolveDetailPage: () => null,
+        }),
+      },
+      fallbacks: [
+        () => ({ name: 'GeneratedSettingsPage' }),
+      ],
+    },
+  )
+
+  assert.equal(component.name, 'GeneratedSettingsPage')
 })

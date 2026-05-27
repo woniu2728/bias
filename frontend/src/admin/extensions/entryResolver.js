@@ -28,6 +28,25 @@ export function resolveAdminEntryFactory(module, surface) {
   return module.resolveSettingsPage
 }
 
+export async function resolveFallbackAdminComponent(
+  extension,
+  surface,
+  {
+    fallbacks = [],
+  } = {},
+) {
+  for (const resolver of fallbacks) {
+    if (typeof resolver !== 'function') {
+      continue
+    }
+    const component = await resolver({ extension, surface })
+    if (component) {
+      return markRaw(component.default || component)
+    }
+  }
+  return null
+}
+
 
 export async function resolveExtensionAdminComponent(
   extension,
@@ -35,11 +54,12 @@ export async function resolveExtensionAdminComponent(
   {
     importers = {},
     builtins = {},
+    fallbacks = [],
   } = {},
 ) {
   const entryPath = normalizeExtensionAdminEntry(extension?.frontend_admin_entry)
   if (!entryPath) {
-    return null
+    return resolveFallbackAdminComponent(extension, surface, { fallbacks })
   }
 
   const module = await loadExtensionAdminEntryModule(entryPath, {
@@ -52,7 +72,7 @@ export async function resolveExtensionAdminComponent(
     : null
 
   if (!component) {
-    return null
+    return resolveFallbackAdminComponent(extension, surface, { fallbacks })
   }
 
   return markRaw(component.default || component)

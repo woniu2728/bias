@@ -37,6 +37,7 @@ import api from '../../api'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
+import { resolveFallbackExtensionSettingsPage } from '../extensions/fallbacks'
 import { findAdminRouteByPath } from '../registry'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
 import FlagsPage from './FlagsPage.vue'
@@ -126,6 +127,7 @@ async function resolveExtensionComponent(currentExtension, currentHostKind) {
   return resolveExtensionAdminComponent(currentExtension, currentHostKind, {
     importers: adminEntryModules,
     builtins: builtinAdminEntries,
+    fallbacks: [resolveFallbackExtensionSettingsPage],
   })
 }
 </script>
