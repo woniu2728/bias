@@ -108,3 +108,34 @@ test('resolveExtensionAdminComponent falls back when admin entry does not export
 
   assert.equal(component.name, 'GeneratedSettingsPage')
 })
+
+test('resolveExtensionAdminComponent can resolve different surface fallbacks', async () => {
+  const operationsComponent = await resolveExtensionAdminComponent(
+    {
+      id: 'demo',
+      frontend_admin_entry: '',
+    },
+    'operations',
+    {
+      fallbacks: [
+        ({ surface }) => (surface === 'operations' ? { name: 'GeneratedOperationsPage' } : null),
+      ],
+    },
+  )
+
+  const permissionsComponent = await resolveExtensionAdminComponent(
+    {
+      id: 'demo',
+      frontend_admin_entry: '',
+    },
+    'permissions',
+    {
+      fallbacks: [
+        ({ surface }) => (surface === 'permissions' ? { name: 'GeneratedPermissionsPage' } : null),
+      ],
+    },
+  )
+
+  assert.equal(operationsComponent.name, 'GeneratedOperationsPage')
+  assert.equal(permissionsComponent.name, 'GeneratedPermissionsPage')
+})

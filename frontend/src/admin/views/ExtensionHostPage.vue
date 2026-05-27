@@ -22,6 +22,7 @@
         v-if="resolvedComponent"
         :extension="extension"
         :host-kind="hostKind"
+        @extension-updated="handleExtensionUpdated"
       />
       <AdminStateBlock v-else tone="subtle">
         当前扩展尚未提供 {{ pageKindLabel }} 组件。
@@ -37,7 +38,11 @@ import api from '../../api'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
-import { resolveFallbackExtensionSettingsPage } from '../extensions/fallbacks'
+import {
+  resolveFallbackExtensionOperationsPage,
+  resolveFallbackExtensionPermissionsPage,
+  resolveFallbackExtensionSettingsPage,
+} from '../extensions/fallbacks'
 import { findAdminRouteByPath } from '../registry'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
 import FlagsPage from './FlagsPage.vue'
@@ -127,8 +132,28 @@ async function resolveExtensionComponent(currentExtension, currentHostKind) {
   return resolveExtensionAdminComponent(currentExtension, currentHostKind, {
     importers: adminEntryModules,
     builtins: builtinAdminEntries,
-    fallbacks: [resolveFallbackExtensionSettingsPage],
+    fallbacks: [
+      resolveFallbackExtensionSettingsPage,
+      resolveFallbackExtensionPermissionsPage,
+      resolveFallbackExtensionOperationsPage,
+    ],
   })
+}
+
+function handleExtensionUpdated(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return
+  }
+  if (payload.extension && typeof payload.extension === 'object') {
+    extension.value = payload.extension
+    return
+  }
+  if (Array.isArray(payload.extensions) && extension.value?.id) {
+    const updated = payload.extensions.find(item => item.id === extension.value.id)
+    if (updated) {
+      extension.value = updated
+    }
+  }
 }
 </script>
 
