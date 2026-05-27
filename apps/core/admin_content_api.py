@@ -7,6 +7,7 @@ from apps.core.extensions.validation import (
     inspect_backend_entry,
     inspect_frontend_admin_entry,
     inspect_frontend_forum_entry,
+    resolve_admin_surface_implementation,
     validate_extension_manifests_with_available_ids,
 )
 from apps.core.extension_service import ExtensionService
@@ -414,6 +415,28 @@ def _build_extension_debug_info(extension):
     expected_permissions_path = f"/admin/extensions/{extension.id}/permissions"
     expected_operations_path = f"/admin/extensions/{extension.id}/operations"
     expected_forum_entry = f"extensions/{extension.id}/frontend/forum/index.js"
+    admin_surface_statuses = [
+        {
+            "key": "detail",
+            "label": "详情页",
+            **resolve_admin_surface_implementation(extension.manifest, "detail", inspection["available_exports"]),
+        },
+        {
+            "key": "settings",
+            "label": "设置页",
+            **resolve_admin_surface_implementation(extension.manifest, "settings", inspection["available_exports"]),
+        },
+        {
+            "key": "permissions",
+            "label": "权限页",
+            **resolve_admin_surface_implementation(extension.manifest, "permissions", inspection["available_exports"]),
+        },
+        {
+            "key": "operations",
+            "label": "操作页",
+            **resolve_admin_surface_implementation(extension.manifest, "operations", inspection["available_exports"]),
+        },
+    ]
 
     return {
         "manifest_path": extension.manifest.path,
@@ -444,6 +467,7 @@ def _build_extension_debug_info(extension):
         },
         "migration_execution": _serialize_extension_migration_execution(extension),
         "migration_plan": _serialize_extension_migration_plan(extension),
+        "admin_surface_statuses": admin_surface_statuses,
         "route_bindings": [
             {
                 "key": "settings",

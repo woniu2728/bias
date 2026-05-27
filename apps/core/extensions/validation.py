@@ -186,6 +186,57 @@ def inspect_frontend_admin_entry(
     return payload
 
 
+def resolve_admin_surface_implementation(
+    manifest: ExtensionManifest,
+    surface: str,
+    available_exports: list[str] | tuple[str, ...] | set[str] | None = None,
+) -> dict[str, str | bool]:
+    normalized_surface = str(surface or "").strip()
+    export_names = {
+        "detail": "resolveDetailPage",
+        "settings": "resolveSettingsPage",
+        "permissions": "resolvePermissionsPage",
+        "operations": "resolveOperationsPage",
+    }
+    export_name = export_names.get(normalized_surface, "")
+    export_set = set(available_exports or [])
+
+    if export_name and export_name in export_set:
+        return {
+            "surface": normalized_surface,
+            "mode": "custom",
+            "mode_label": "自定义组件",
+            "export_name": export_name,
+            "available": True,
+        }
+
+    if normalized_surface == "settings" and manifest.settings_schema:
+        return {
+            "surface": normalized_surface,
+            "mode": "generated",
+            "mode_label": "自动生成表单",
+            "export_name": export_name,
+            "available": True,
+        }
+
+    if normalized_surface == "detail":
+        return {
+            "surface": normalized_surface,
+            "mode": "default",
+            "mode_label": "平台默认详情",
+            "export_name": export_name,
+            "available": True,
+        }
+
+    return {
+        "surface": normalized_surface,
+        "mode": "missing",
+        "mode_label": "未提供",
+        "export_name": export_name,
+        "available": False,
+    }
+
+
 def inspect_frontend_forum_entry(
     manifest: ExtensionManifest,
     *,
@@ -835,6 +886,8 @@ def _validate_frontend_admin_entry(
         )
 
     for export_name in required_exports:
+        if export_name == "resolveSettingsPage" and manifest.settings_schema:
+            continue
         if export_name not in available_exports:
             collector.add_error(
                 "missing_frontend_admin_export",

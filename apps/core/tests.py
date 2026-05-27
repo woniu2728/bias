@@ -346,6 +346,40 @@ class ExtensionValidationTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_validate_extension_manifests_allows_generated_settings_surface(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            admin_dir = manifest_dir / "frontend" / "admin"
+            admin_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "frontend_admin_entry": "extensions/alpha-tools/frontend/admin/index.js",
+                "settings_pages": ["/admin/extensions/alpha-tools/settings"],
+                "settings_schema": [
+                    {
+                        "key": "welcome_message",
+                        "label": "欢迎语",
+                        "type": "text",
+                        "default": "hello",
+                    }
+                ],
+            }, ensure_ascii=False), encoding="utf-8")
+            (admin_dir / "index.js").write_text(
+                "export function resolveDetailPage() { return null }\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertTrue(result.ok)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_validate_extension_manifests_reports_missing_frontend_forum_entry(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -1154,6 +1188,12 @@ class AdminExtensionsApiTests(TestCase):
             and item["matches_expected"]
             and item["declared"] == "extensions/sample-hello/frontend/forum/index.js"
             for item in payload["debug_info"]["route_bindings"]
+        ))
+        self.assertTrue(any(
+            item["key"] == "settings"
+            and item["mode"] == "custom"
+            and item["mode_label"] == "自定义组件"
+            for item in payload["debug_info"]["admin_surface_statuses"]
         ))
         self.assertEqual(payload["debug_info"]["validation_issues"], [])
         self.assertEqual(payload["backend_hooks"], [])

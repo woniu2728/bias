@@ -137,6 +137,10 @@
               <code>{{ debugInfo?.frontend_admin_entry?.resolved_path || debugInfo?.frontend_admin_entry?.entry || '无' }}</code>
             </div>
             <div>
+              <small>后台宿主实现</small>
+              <strong>{{ adminSurfaceSummary }}</strong>
+            </div>
+            <div>
               <small>前台入口类型</small>
               <strong>{{ debugForumEntryTypeLabel }}</strong>
             </div>
@@ -178,6 +182,18 @@
               <code>{{ debugInfo.migration_execution.executed_at }}</code>
             </div>
           </div>
+          <ul v-if="adminSurfaceStatuses.length" class="ExtensionDetailChecks">
+            <li v-for="item in adminSurfaceStatuses" :key="`surface-${item.key}`">
+              <div class="ExtensionDetailChecks-head">
+                <strong>{{ item.label }}</strong>
+                <span class="ExtensionDetailChecks-status" :class="resolveAdminSurfaceStatusClass(item)">
+                  {{ item.mode_label || '未知' }}
+                </span>
+              </div>
+              <p>实现方式：{{ item.mode_label || '未知' }}</p>
+              <code v-if="item.export_name">{{ item.export_name }}</code>
+            </li>
+          </ul>
           <ul v-if="debugRouteBindings.length" class="ExtensionDetailChecks">
             <li v-for="item in debugRouteBindings" :key="item.key">
               <div class="ExtensionDetailChecks-head">
@@ -443,6 +459,19 @@ const debugValidationIssues = computed(() => {
   return Array.isArray(debugInfo.value?.validation_issues) ? debugInfo.value.validation_issues : []
 })
 
+const adminSurfaceStatuses = computed(() => {
+  return Array.isArray(debugInfo.value?.admin_surface_statuses) ? debugInfo.value.admin_surface_statuses : []
+})
+
+const adminSurfaceSummary = computed(() => {
+  if (!adminSurfaceStatuses.value.length) {
+    return '无'
+  }
+  return adminSurfaceStatuses.value
+    .map(item => `${item.label}${item.mode === 'custom' ? '自定义' : item.mode === 'generated' ? '自动生成' : item.mode === 'default' ? '默认' : '缺失'}`)
+    .join('；')
+})
+
 const debugEntryTypeLabel = computed(() => {
   return resolveExtensionEntryTypeLabel(debugInfo.value?.frontend_admin_entry?.entry_type)
 })
@@ -571,6 +600,16 @@ function resolveActionToneClass(action) {
     return 'ExtensionDetailAction--subtle'
   }
   return ''
+}
+
+function resolveAdminSurfaceStatusClass(item) {
+  if (item?.mode === 'custom' || item?.mode === 'default') {
+    return 'is-ready'
+  }
+  if (item?.mode === 'generated') {
+    return 'is-pending'
+  }
+  return 'is-attention'
 }
 
 function syncModulesFromExtension(currentExtension) {
