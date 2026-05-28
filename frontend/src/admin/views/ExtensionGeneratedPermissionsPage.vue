@@ -94,8 +94,14 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
+import {
+  buildExtensionDetailRouteTarget,
+  resolveExtensionNavigationSource,
+} from '../extensions/diagnostics'
 
+const route = useRoute()
 const props = defineProps({
   extension: {
     type: Object,
@@ -103,7 +109,9 @@ const props = defineProps({
   },
 })
 
-const detailPath = computed(() => `/admin/extensions/${String(props.extension?.id || '').trim()}`)
+const detailPath = computed(() => (
+  buildExtensionDetailRouteTarget(props.extension?.id, resolveExtensionNavigationSource(route))
+))
 const hasPermissionsRoute = computed(() => Boolean(props.extension?.action_links?.permissions_page))
 const permissionSummary = computed(() => (
   props.extension?.permission_summary || { permission_count: 0, section_count: 0, module_count: 0 }

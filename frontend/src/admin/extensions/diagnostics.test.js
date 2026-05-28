@@ -2,12 +2,16 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  buildExtensionDetailRouteTarget,
+  buildExtensionRouteTarget,
+  resolveExtensionBackTarget,
   resolveExtensionAdminPageCards,
   resolveExtensionAdminPageLabels,
   resolveExtensionAdminSurfaceCards,
   resolveExtensionEntryTypeLabel,
   resolveExtensionForumEntryState,
   resolveExtensionMigrationState,
+  resolveExtensionNavigationSource,
 } from './diagnostics.js'
 
 test('resolveExtensionEntryTypeLabel maps entry kinds to readable labels', () => {
@@ -122,4 +126,22 @@ test('resolveExtensionAdminPageLabels extracts readable labels from admin pages'
       { path: '/admin/mail', label: '邮件设置' },
     ],
   }), ['基础设置', '邮件设置'])
+})
+
+test('extension navigation helpers preserve source and fallback targets', () => {
+  assert.equal(resolveExtensionNavigationSource('extensions'), 'extensions')
+  assert.equal(resolveExtensionNavigationSource({ query: { from: 'extensions' } }), 'extensions')
+  assert.equal(resolveExtensionNavigationSource({ query: {} }), '')
+
+  assert.deepEqual(buildExtensionRouteTarget('/admin/extensions/core/settings', 'extensions'), {
+    path: '/admin/extensions/core/settings',
+    query: { from: 'extensions' },
+  })
+  assert.equal(buildExtensionRouteTarget('/admin/extensions/core/settings', ''), '/admin/extensions/core/settings')
+  assert.deepEqual(buildExtensionDetailRouteTarget('core', { query: { from: 'extensions' } }), {
+    path: '/admin/extensions/core',
+    query: { from: 'extensions' },
+  })
+  assert.equal(resolveExtensionBackTarget({ query: { from: 'extensions' } }, '/admin'), '/admin/extensions')
+  assert.equal(resolveExtensionBackTarget({ query: {} }, '/admin'), '/admin')
 })

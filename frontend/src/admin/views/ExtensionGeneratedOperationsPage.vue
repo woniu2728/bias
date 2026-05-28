@@ -75,10 +75,15 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import api from '../../api'
 import { useModalStore } from '../../stores/modal'
 import AdminInlineMessage from '../components/AdminInlineMessage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
+import {
+  buildExtensionRouteTarget,
+  resolveExtensionNavigationSource,
+} from '../extensions/diagnostics'
 
 const props = defineProps({
   extension: {
@@ -89,12 +94,21 @@ const props = defineProps({
 
 const emit = defineEmits(['extension-updated'])
 
+const route = useRoute()
 const modalStore = useModalStore()
 const actionLoading = ref(false)
 const errorMessage = ref('')
 
 const adminActions = computed(() => (
-  Array.isArray(props.extension?.admin_actions) ? props.extension.admin_actions : []
+  (Array.isArray(props.extension?.admin_actions) ? props.extension.admin_actions : []).map((action) => {
+    if (action?.kind !== 'route') {
+      return action
+    }
+    return {
+      ...action,
+      target: buildExtensionRouteTarget(action.target, resolveExtensionNavigationSource(route)),
+    }
+  })
 ))
 
 const runtimeActions = computed(() => (

@@ -424,6 +424,8 @@ import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
 import {
+  buildExtensionRouteTarget,
+  resolveExtensionBackTarget,
   resolveExtensionAdminPageCards,
   resolveExtensionAdminSurfaceCards,
   resolveExtensionEntryTypeLabel,
@@ -443,11 +445,7 @@ const extension = ref(null)
 const detailComponent = ref(null)
 
 const backTarget = computed(() => {
-  const from = String(route.query.from || '').trim()
-  if (from === 'extensions') {
-    return '/admin/extensions'
-  }
-  return '/admin/extensions'
+  return resolveExtensionBackTarget(route, '/admin/extensions')
 })
 
 const adminEntryModules = import.meta.glob('../../../../extensions/*/frontend/admin/index.js')
@@ -483,7 +481,16 @@ const adminPageDetails = computed(() => {
 })
 
 const adminActions = computed(() => {
-  return Array.isArray(extension.value?.admin_actions) ? extension.value.admin_actions : []
+  const actions = Array.isArray(extension.value?.admin_actions) ? extension.value.admin_actions : []
+  return actions.map((action) => {
+    if (action?.kind !== 'route') {
+      return action
+    }
+    return {
+      ...action,
+      target: buildExtensionRouteTarget(action.target, route),
+    }
+  })
 })
 
 const runtimeActions = computed(() => {

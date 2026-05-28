@@ -43,6 +43,10 @@ import {
   resolveFallbackExtensionPermissionsPage,
   resolveFallbackExtensionSettingsPage,
 } from '../extensions/fallbacks'
+import {
+  buildExtensionDetailRouteTarget,
+  resolveExtensionNavigationSource,
+} from '../extensions/diagnostics'
 import { findAdminRouteByPath } from '../registry'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
 import CoreExtensionHostPage from './CoreExtensionHostPage.vue'
@@ -83,11 +87,7 @@ const hostKind = computed(() => {
 
 const detailPath = computed(() => {
   const extensionId = String(route.params.extensionId || '').trim()
-  const from = String(route.query.from || '').trim()
-  return {
-    path: `/admin/extensions/${extensionId}`,
-    query: from ? { from } : {},
-  }
+  return buildExtensionDetailRouteTarget(extensionId, resolveExtensionNavigationSource(route))
 })
 const pageKindLabel = computed(() => {
   if (hostKind.value === 'operations') {

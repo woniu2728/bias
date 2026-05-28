@@ -5,6 +5,47 @@ export function resolveExtensionEntryTypeLabel(entryType) {
   return '未声明'
 }
 
+export function resolveExtensionNavigationSource(source) {
+  if (source && typeof source === 'object' && source.query) {
+    return String(source.query.from || '').trim()
+  }
+  return String(source || '').trim()
+}
+
+export function buildExtensionRouteTarget(path, source = '') {
+  const normalizedPath = String(path || '').trim()
+  const from = resolveExtensionNavigationSource(source)
+
+  if (!normalizedPath) {
+    return from ? { path: '/admin/extensions', query: { from } } : '/admin/extensions'
+  }
+
+  if (!from) {
+    return normalizedPath
+  }
+
+  return {
+    path: normalizedPath,
+    query: { from },
+  }
+}
+
+export function buildExtensionDetailRouteTarget(extensionId, source = '') {
+  const normalizedId = String(extensionId || '').trim()
+  if (!normalizedId) {
+    return buildExtensionRouteTarget('/admin/extensions', source)
+  }
+  return buildExtensionRouteTarget(`/admin/extensions/${normalizedId}`, source)
+}
+
+export function resolveExtensionBackTarget(source, fallback = '/admin/extensions') {
+  const from = resolveExtensionNavigationSource(source)
+  if (from === 'extensions') {
+    return '/admin/extensions'
+  }
+  return fallback
+}
+
 export function resolveExtensionForumEntryState(extension) {
   if (!extension?.frontend_forum_entry) {
     return '未声明'

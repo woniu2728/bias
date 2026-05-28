@@ -163,6 +163,7 @@ import AdminStateBlock from '../components/AdminStateBlock.vue'
 import AdminToolbar from '../components/AdminToolbar.vue'
 import AdminFilterTabs from '../components/AdminFilterTabs.vue'
 import {
+  buildExtensionRouteTarget,
   resolveExtensionAdminPageCards,
   resolveExtensionForumEntryState,
   resolveExtensionMigrationState,
@@ -321,14 +322,7 @@ function getRuntimeActions(extension) {
 }
 
 function buildRouteTarget(path) {
-  const normalizedPath = String(path || '').trim()
-  if (!normalizedPath) {
-    return '/admin/extensions'
-  }
-  return {
-    path: normalizedPath,
-    query: { from: 'extensions' },
-  }
+  return buildExtensionRouteTarget(path, 'extensions')
 }
 
 function resolveActionToneClass(action) {
