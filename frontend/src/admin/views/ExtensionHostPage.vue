@@ -45,7 +45,6 @@ import {
 } from '../extensions/fallbacks'
 import {
   buildExtensionDetailRouteTarget,
-  resolveExtensionNavigationSource,
 } from '../extensions/diagnostics'
 import { findAdminRouteByPath } from '../registry'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
@@ -87,7 +86,7 @@ const hostKind = computed(() => {
 
 const detailPath = computed(() => {
   const extensionId = String(route.params.extensionId || '').trim()
-  return buildExtensionDetailRouteTarget(extensionId, resolveExtensionNavigationSource(route))
+  return buildExtensionDetailRouteTarget(extensionId, route)
 })
 const pageKindLabel = computed(() => {
   if (hostKind.value === 'operations') {

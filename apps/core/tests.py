@@ -1318,6 +1318,38 @@ class AdminExtensionsApiTests(TestCase):
             for section in payload["permission_sections"]
             for permission in section["permissions"]
         ))
+        self.assertGreaterEqual(payload["capability_summary"]["notification_type_count"], 1)
+        self.assertGreaterEqual(payload["capability_summary"]["user_preference_count"], 1)
+        self.assertGreaterEqual(payload["capability_summary"]["event_listener_count"], 1)
+        self.assertTrue(any(item["module_id"] == "approval" for item in payload["notification_types"]))
+        self.assertTrue(any(item["module_id"] == "approval" for item in payload["user_preferences"]))
+        self.assertTrue(any(item["module_id"] == "approval" for item in payload["event_listeners"]))
+
+    def test_extension_detail_api_surfaces_registered_capabilities_for_discussions_extension(self):
+        response = self.client.get(
+            "/api/admin/extensions/discussions",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()["extension"]
+        self.assertGreaterEqual(payload["capability_summary"]["search_filter_count"], 1)
+        self.assertGreaterEqual(payload["capability_summary"]["discussion_sort_count"], 1)
+        self.assertGreaterEqual(payload["capability_summary"]["discussion_list_filter_count"], 1)
+        self.assertTrue(any(item["module_id"] == "discussions" for item in payload["search_filters"]))
+        self.assertTrue(any(item["module_id"] == "discussions" for item in payload["discussion_sorts"]))
+        self.assertTrue(any(item["module_id"] == "discussions" for item in payload["discussion_list_filters"]))
+
+    def test_extension_detail_api_surfaces_registered_resources_for_tags_extension(self):
+        response = self.client.get(
+            "/api/admin/extensions/tags",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()["extension"]
+        self.assertGreaterEqual(payload["capability_summary"]["resource_field_count"], 1)
+        self.assertTrue(any(item["module_id"] == "tags" for item in payload["resource_fields"]))
 
     def test_extension_settings_api_can_read_and_save_declared_schema(self):
         response = self.client.get(
@@ -6357,9 +6389,14 @@ class AdminPermissionsApiTests(TestCase):
         self.assertEqual(core_module["extension"]["id"], "core")
         self.assertEqual(core_module["extension"]["source"], "builtin-module")
         self.assertTrue(core_module["extension"]["runtime"]["installed"])
+        self.assertEqual(core_module["extension"]["action_links"]["detail_page"], "/admin/extensions/core")
+        self.assertEqual(core_module["extension"]["action_links"]["settings_page"], "/admin/extensions/core/settings")
+        self.assertTrue(any(action["key"] == "details" for action in core_module["extension"]["admin_actions"]))
         self.assertIn("debug_items", core_module["runtime"])
         self.assertIn("lifecycle_phases", core_module["runtime"])
+        self.assertIn("detail_entry_path", core_module["runtime"])
         self.assertIn("permissions_entry_path", core_module["runtime"])
+        self.assertIn("operations_entry_path", core_module["runtime"])
         self.assertIn("module_center_path", core_module["runtime"])
         self.assertEqual(core_module["lifecycle"]["registration_mode"], "static")
         self.assertEqual(core_module["lifecycle"]["registration_mode_label"], "启动时静态注册")
@@ -6380,7 +6417,8 @@ class AdminPermissionsApiTests(TestCase):
         self.assertEqual(core_module["runtime"]["boot_mode"], "static")
         self.assertEqual(core_module["runtime"]["module_center_path"], "/admin/modules?module=core")
         self.assertTrue(any(item["key"] == "module_id" and item["value"] == "core" for item in core_module["runtime"]["debug_items"]))
-        self.assertEqual(approval_module["runtime"]["permissions_entry_path"], "/admin/permissions")
+        self.assertEqual(approval_module["runtime"]["permissions_entry_path"], "/admin/extensions/approval/permissions")
+        self.assertEqual(approval_module["runtime"]["operations_entry_path"], "/admin/extensions/approval/operations")
         discussions_module = next(module for module in payload["modules"] if module["id"] == "discussions")
         self.assertIn("discussion_sorts", discussions_module)
         self.assertIn("discussion_list_filters", discussions_module)

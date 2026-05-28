@@ -280,6 +280,45 @@
               <strong>{{ formatList(extension.provides) }}</strong>
             </div>
           </div>
+          <div v-if="capabilitySummaryItems.length" class="ExtensionDetailCapabilitySummary">
+            <article
+              v-for="item in capabilitySummaryItems"
+              :key="item.key"
+              class="ExtensionDetailCapabilitySummaryCard"
+            >
+              <small>{{ item.label }}</small>
+              <strong>{{ item.count }}</strong>
+            </article>
+          </div>
+          <div v-if="capabilityPanels.length" class="ExtensionDetailCapabilityPanels">
+            <section
+              v-for="panel in capabilityPanels"
+              :key="panel.key"
+              class="ExtensionDetailCapabilityPanel"
+            >
+              <div class="ExtensionDetailChecks-head">
+                <strong>{{ panel.label }}</strong>
+                <span class="ExtensionDetailChecks-status is-ready">{{ panel.items.length }}</span>
+              </div>
+              <ul class="ExtensionDetailCapabilityList">
+                <li v-for="item in panel.items" :key="item.key">
+                  <router-link
+                    v-if="item.moduleTarget"
+                    :to="item.moduleTarget"
+                    class="ExtensionDetailCapabilityLink"
+                  >
+                    <strong>{{ item.label }}</strong>
+                    <code>{{ item.meta }}</code>
+                  </router-link>
+                  <template v-else>
+                    <strong>{{ item.label }}</strong>
+                    <code>{{ item.meta }}</code>
+                  </template>
+                  <p v-if="item.description">{{ item.description }}</p>
+                </li>
+              </ul>
+            </section>
+          </div>
         </section>
 
         <section class="ExtensionDetailCard">
@@ -432,6 +471,8 @@ import {
   resolveExtensionBackTarget,
   resolveExtensionAdminPageCards,
   resolveExtensionAdminSurfaceCards,
+  resolveExtensionCapabilityPanels,
+  resolveExtensionCapabilitySummaryItems,
   resolveExtensionEntryTypeLabel,
 } from '../extensions/diagnostics'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
@@ -583,6 +624,28 @@ const runtimeStatusClass = computed(() => {
   if (key === 'active') return 'is-enabled'
   if (key === 'pending_install') return 'is-pending'
   return 'is-disabled'
+})
+
+const capabilitySummaryItems = computed(() => {
+  return resolveExtensionCapabilitySummaryItems(extension.value)
+})
+
+const capabilityPanels = computed(() => {
+  return resolveExtensionCapabilityPanels(extension.value).map((panel) => ({
+    ...panel,
+    items: panel.items.map((item) => ({
+      ...item,
+      moduleTarget: item.moduleId
+        ? buildExtensionRouteTarget('/admin/modules', {
+          query: {
+            from: 'extensions',
+            extension: extension.value?.id || '',
+            module: item.moduleId,
+          },
+        })
+        : null,
+    })),
+  }))
 })
 
 onMounted(async () => {
@@ -937,6 +1000,69 @@ function syncModulesFromExtension(currentExtension) {
 .ExtensionDetailStack {
   display: grid;
   gap: 14px;
+}
+
+.ExtensionDetailCapabilitySummary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.ExtensionDetailCapabilitySummaryCard,
+.ExtensionDetailCapabilityPanel {
+  border: 1px solid var(--forum-border-color);
+  border-radius: 14px;
+  background: var(--forum-bg-subtle);
+}
+
+.ExtensionDetailCapabilitySummaryCard {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.ExtensionDetailCapabilitySummaryCard small {
+  color: var(--forum-text-soft);
+}
+
+.ExtensionDetailCapabilitySummaryCard strong {
+  color: var(--forum-text-color);
+}
+
+.ExtensionDetailCapabilityPanels {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.ExtensionDetailCapabilityPanel {
+  padding: 14px;
+}
+
+.ExtensionDetailCapabilityList {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 12px 0 0;
+  list-style: none;
+}
+
+.ExtensionDetailCapabilityList li {
+  display: grid;
+  gap: 6px;
+}
+
+.ExtensionDetailCapabilityLink {
+  display: grid;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.ExtensionDetailCapabilityList li p,
+.ExtensionDetailCapabilityList li code {
+  margin: 0;
 }
 
 .ExtensionDetailIssues {

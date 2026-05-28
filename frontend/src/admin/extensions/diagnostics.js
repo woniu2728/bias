@@ -12,21 +12,52 @@ export function resolveExtensionNavigationSource(source) {
   return String(source || '').trim()
 }
 
-export function buildExtensionRouteTarget(path, source = '') {
-  const normalizedPath = String(path || '').trim()
-  const from = resolveExtensionNavigationSource(source)
+export function resolveExtensionRouteQuery(source = '', extraQuery = {}) {
+  const query = {}
 
-  if (!normalizedPath) {
-    return from ? { path: '/admin/extensions', query: { from } } : '/admin/extensions'
+  if (source && typeof source === 'object' && source.query && typeof source.query === 'object') {
+    for (const [key, value] of Object.entries(source.query)) {
+      const normalizedKey = String(key || '').trim()
+      const normalizedValue = normalizeRouteQueryValue(value)
+      if (normalizedKey && normalizedValue) {
+        query[normalizedKey] = normalizedValue
+      }
+    }
+  } else {
+    const from = resolveExtensionNavigationSource(source)
+    if (from) {
+      query.from = from
+    }
   }
 
-  if (!from) {
+  if (extraQuery && typeof extraQuery === 'object') {
+    for (const [key, value] of Object.entries(extraQuery)) {
+      const normalizedKey = String(key || '').trim()
+      const normalizedValue = normalizeRouteQueryValue(value)
+      if (normalizedKey && normalizedValue) {
+        query[normalizedKey] = normalizedValue
+      }
+    }
+  }
+
+  return query
+}
+
+export function buildExtensionRouteTarget(path, source = '') {
+  const normalizedPath = String(path || '').trim()
+  const query = resolveExtensionRouteQuery(source)
+
+  if (!normalizedPath) {
+    return Object.keys(query).length ? { path: '/admin/extensions', query } : '/admin/extensions'
+  }
+
+  if (!Object.keys(query).length) {
     return normalizedPath
   }
 
   return {
     path: normalizedPath,
-    query: { from },
+    query,
   }
 }
 
@@ -39,6 +70,19 @@ export function buildExtensionDetailRouteTarget(extensionId, source = '') {
 }
 
 export function resolveExtensionBackTarget(source, fallback = '/admin/extensions') {
+  if (source && typeof source === 'object' && source.query) {
+    const from = String(source.query.from || '').trim()
+    const moduleId = String(source.query.module || '').trim()
+    if (from === 'modules' && moduleId) {
+      return {
+        path: '/admin/modules',
+        query: {
+          from: 'modules',
+          module: moduleId,
+        },
+      }
+    }
+  }
   const from = resolveExtensionNavigationSource(source)
   if (from === 'extensions') {
     return '/admin/extensions'
@@ -155,6 +199,109 @@ export function resolveExtensionAdminPageLabels(extension) {
     .filter(Boolean)
 }
 
+export function resolveExtensionCapabilitySummaryItems(extension) {
+  const summary = extension?.capability_summary || {}
+  return [
+    { key: 'notification_type_count', label: '通知类型', count: Number(summary.notification_type_count || 0) },
+    { key: 'user_preference_count', label: '用户偏好', count: Number(summary.user_preference_count || 0) },
+    { key: 'event_listener_count', label: '事件监听', count: Number(summary.event_listener_count || 0) },
+    { key: 'search_filter_count', label: '搜索过滤', count: Number(summary.search_filter_count || 0) },
+    { key: 'discussion_sort_count', label: '讨论排序', count: Number(summary.discussion_sort_count || 0) },
+    { key: 'discussion_list_filter_count', label: '列表过滤', count: Number(summary.discussion_list_filter_count || 0) },
+    { key: 'resource_field_count', label: '资源字段', count: Number(summary.resource_field_count || 0) },
+    { key: 'resource_relationship_count', label: '资源关系', count: Number(summary.resource_relationship_count || 0) },
+    { key: 'resource_definition_count', label: '资源定义', count: Number(summary.resource_definition_count || 0) },
+    { key: 'post_type_count', label: '帖子类型', count: Number(summary.post_type_count || 0) },
+    { key: 'language_pack_count', label: '语言包', count: Number(summary.language_pack_count || 0) },
+  ].filter(item => item.count > 0)
+}
+
+export function resolveExtensionCapabilityPanels(extension) {
+  if (!extension) {
+    return []
+  }
+
+  return [
+    buildCapabilityPanel('notification_types', '通知类型', extension?.notification_types, (item) => ({
+      key: `${item.module_id}-${item.code}`,
+      label: item.label || item.code,
+      meta: item.preference_key || item.code,
+      description: item.description,
+      moduleId: item.module_id,
+    })),
+    buildCapabilityPanel('user_preferences', '用户偏好', extension?.user_preferences, (item) => ({
+      key: `${item.module_id}-${item.key}`,
+      label: item.label || item.key,
+      meta: item.key,
+      description: item.description,
+      moduleId: item.module_id,
+    })),
+    buildCapabilityPanel('event_listeners', '事件监听', extension?.event_listeners, (item) => ({
+      key: `${item.module_id}-${item.event}-${item.listener}`,
+      label: item.event,
+      meta: item.listener,
+      description: item.description,
+      moduleId: item.module_id,
+    })),
+    buildCapabilityPanel('search_filters', '搜索过滤', extension?.search_filters, (item) => ({
+      key: `${item.module_id}-${item.target}-${item.code}`,
+      label: item.label || item.code,
+      meta: item.syntax || `${item.target}:${item.code}`,
+      description: item.description,
+      moduleId: item.module_id,
+    })),
+    buildCapabilityPanel('discussion_sorts', '讨论排序', extension?.discussion_sorts, (item) => ({
+      key: `${item.module_id}-${item.code}`,
+      label: item.label || item.code,
+      meta: item.code,
+      description: item.description,
+      moduleId: item.module_id,
+    })),
+    buildCapabilityPanel('discussion_list_filters', '列表过滤', extension?.discussion_list_filters, (item) => ({
+      key: `${item.module_id}-${item.code}`,
+      label: item.label || item.code,
+      meta: item.route_path || item.code,
+      description: item.description,
+      moduleId: item.module_id,
+    })),
+    buildCapabilityPanel('resource_fields', '资源字段', extension?.resource_fields, (item) => ({
+      key: `${item.module_id}-${item.resource}-${item.field}`,
+      label: `${item.resource}.${item.field}`,
+      meta: item.module_id,
+      description: item.description,
+      moduleId: item.module_id,
+    })),
+    buildCapabilityPanel('resource_relationships', '资源关系', extension?.resource_relationships, (item) => ({
+      key: `${item.module_id}-${item.resource}-${item.relationship}`,
+      label: `${item.resource}.${item.relationship}`,
+      meta: item.module_id,
+      description: item.description,
+      moduleId: item.module_id,
+    })),
+    buildCapabilityPanel('resource_definitions', '资源定义', extension?.resource_definitions, (item) => ({
+      key: `${item.module_id}-${item.resource}`,
+      label: item.resource,
+      meta: item.module_id,
+      description: item.description,
+      moduleId: item.module_id,
+    })),
+    buildCapabilityPanel('post_types', '帖子类型', extension?.post_types, (item) => ({
+      key: `${item.module_id}-${item.code}`,
+      label: item.label || item.code,
+      meta: item.code,
+      description: item.description,
+      moduleId: item.module_id,
+    })),
+    buildCapabilityPanel('language_packs', '语言包', extension?.language_packs, (item) => ({
+      key: `${item.module_id}-${item.code}`,
+      label: item.label || item.code,
+      meta: item.code,
+      description: item.description,
+      moduleId: item.module_id,
+    })),
+  ].filter(panel => panel.items.length > 0)
+}
+
 function shouldIncludeAdminPageCard(page, hostKind) {
   const path = String(page?.path || '').trim()
   if (!path || path === '/admin' || path === '/admin/modules' || path === '/admin/permissions') {
@@ -170,6 +317,28 @@ function shouldIncludeAdminPageCard(page, hostKind) {
   }
 
   return true
+}
+
+function buildCapabilityPanel(key, label, items, mapper) {
+  return {
+    key,
+    label,
+    items: mapCapabilityItems(items, mapper),
+  }
+}
+
+function mapCapabilityItems(items, mapper) {
+  if (!Array.isArray(items)) {
+    return []
+  }
+  return items.map(mapper)
+}
+
+function normalizeRouteQueryValue(value) {
+  if (value === null || value === undefined) {
+    return ''
+  }
+  return String(value).trim()
 }
 
 function resolveSettingsSurfaceSummary(settingsSchema, status) {

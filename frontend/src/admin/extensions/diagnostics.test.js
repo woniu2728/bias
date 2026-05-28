@@ -8,6 +8,8 @@ import {
   resolveExtensionAdminPageCards,
   resolveExtensionAdminPageLabels,
   resolveExtensionAdminSurfaceCards,
+  resolveExtensionCapabilityPanels,
+  resolveExtensionCapabilitySummaryItems,
   resolveExtensionEntryTypeLabel,
   resolveExtensionForumEntryState,
   resolveExtensionMigrationState,
@@ -142,6 +144,84 @@ test('extension navigation helpers preserve source and fallback targets', () => 
     path: '/admin/extensions/core',
     query: { from: 'extensions' },
   })
+  assert.deepEqual(buildExtensionRouteTarget('/admin/modules', {
+    query: {
+      from: 'extensions',
+      module: 'approval',
+    },
+  }), {
+    path: '/admin/modules',
+    query: {
+      from: 'extensions',
+      module: 'approval',
+    },
+  })
+  assert.deepEqual(resolveExtensionBackTarget({ query: { from: 'modules', module: 'approval' } }, '/admin'), {
+    path: '/admin/modules',
+    query: {
+      from: 'modules',
+      module: 'approval',
+    },
+  })
   assert.equal(resolveExtensionBackTarget({ query: { from: 'extensions' } }, '/admin'), '/admin/extensions')
   assert.equal(resolveExtensionBackTarget({ query: {} }, '/admin'), '/admin')
+})
+
+test('resolveExtensionCapabilitySummaryItems keeps only non-zero capability counters', () => {
+  const items = resolveExtensionCapabilitySummaryItems({
+    capability_summary: {
+      notification_type_count: 2,
+      user_preference_count: 0,
+      event_listener_count: 1,
+      search_filter_count: 0,
+      resource_field_count: 3,
+    },
+  })
+
+  assert.deepEqual(items, [
+    { key: 'notification_type_count', label: '通知类型', count: 2 },
+    { key: 'event_listener_count', label: '事件监听', count: 1 },
+    { key: 'resource_field_count', label: '资源字段', count: 3 },
+  ])
+})
+
+test('resolveExtensionCapabilityPanels normalizes capability groups for detail page', () => {
+  const panels = resolveExtensionCapabilityPanels({
+    notification_types: [
+      {
+        module_id: 'approval',
+        code: 'discussionApproved',
+        label: '讨论审核通过',
+        preference_key: 'notify_discussion_approval',
+        description: '通知作者其讨论已通过审核。',
+      },
+    ],
+    search_filters: [
+      {
+        module_id: 'discussions',
+        target: 'discussion',
+        code: 'author',
+        label: '按作者过滤',
+        syntax: 'author:<username>',
+        description: '按讨论作者用户名过滤搜索结果。',
+      },
+    ],
+    resource_fields: [
+      {
+        module_id: 'tags',
+        resource: 'tag',
+        field: 'can_start_discussion',
+        description: '标签是否允许发帖。',
+      },
+    ],
+  })
+
+  assert.equal(panels.length, 3)
+  assert.deepEqual(panels.map(item => item.key), ['notification_types', 'search_filters', 'resource_fields'])
+  assert.equal(panels[0].items[0].meta, 'notify_discussion_approval')
+  assert.equal(panels[0].items[0].moduleId, 'approval')
+  assert.equal(panels[1].items[0].meta, 'author:<username>')
+  assert.equal(panels[1].items[0].moduleId, 'discussions')
+  assert.equal(panels[2].items[0].label, 'tag.can_start_discussion')
+  assert.equal(panels[2].items[0].moduleId, 'tags')
 })

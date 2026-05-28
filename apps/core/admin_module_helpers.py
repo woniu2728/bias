@@ -100,6 +100,25 @@ def resolve_module_documentation_url(module) -> str:
     return f"/admin.html#/admin/docs?guide=module-development&module={module.module_id}"
 
 
+def serialize_extension_admin_actions(extension_definition) -> list[dict[str, Any]]:
+    return [
+        {
+            "key": action.key,
+            "label": action.label,
+            "kind": action.kind,
+            "target": action.target,
+            "icon": action.icon,
+            "tone": action.tone,
+            "opens_in_new_tab": action.opens_in_new_tab,
+            "requires_enabled": action.requires_enabled,
+            "description": action.description,
+            "order": action.order,
+        }
+        for action in sorted(extension_definition.manifest.admin_actions, key=lambda item: (item.order, item.key))
+        if not action.requires_enabled or extension_definition.runtime.enabled
+    ]
+
+
 def build_module_runtime_state(module) -> Dict[str, Any]:
     lifecycle = getattr(module, "lifecycle", None)
     registration_mode = getattr(lifecycle, "registration_mode", "static")
@@ -132,6 +151,11 @@ def build_module_runtime_state(module) -> Dict[str, Any]:
             "advanced": "/admin/advanced",
         }.get(group_name)
 
+    extension_definition = adapt_builtin_module_to_extension(module)
+    detail_page = f"/admin/extensions/{module.module_id}"
+    permissions_page = next(iter(extension_definition.manifest.permissions_pages), "")
+    operations_page = next(iter(extension_definition.manifest.operations_pages), "")
+
     return {
         "migration_state": migration_state,
         "migration_label": migration_label,
@@ -142,7 +166,9 @@ def build_module_runtime_state(module) -> Dict[str, Any]:
         "supports_teardown": supports_teardown,
         "lifecycle_phases": phases,
         "settings_entry_path": settings_entry_path,
-        "permissions_entry_path": "/admin/permissions" if module.permissions else "",
+        "detail_entry_path": detail_page,
+        "permissions_entry_path": permissions_page,
+        "operations_entry_path": operations_page,
         "module_center_path": f"/admin/modules?module={module.module_id}",
         "debug_items": [
             {"key": "module_id", "label": "模块 ID", "value": module.module_id},
@@ -249,6 +275,14 @@ def serialize_module_definition(
             "module_ids": list(extension_definition.module_ids),
             "settings_groups": list(extension_definition.settings_groups),
             "admin_pages": list(extension_definition.admin_pages),
+            "action_links": {
+                "detail_page": f"/admin/extensions/{extension_definition.id}",
+                "settings_page": next(iter(extension_definition.manifest.settings_pages), ""),
+                "permissions_page": next(iter(extension_definition.manifest.permissions_pages), ""),
+                "operations_page": next(iter(extension_definition.manifest.operations_pages), ""),
+                "documentation_url": extension_definition.manifest.documentation_url,
+            },
+            "admin_actions": serialize_extension_admin_actions(extension_definition),
             "runtime": {
                 "installed": extension_definition.runtime.installed,
                 "enabled": extension_definition.runtime.enabled,

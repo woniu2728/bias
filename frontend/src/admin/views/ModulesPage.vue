@@ -14,6 +14,18 @@
           <p>{{ modulesCopy?.moduleListDescription || '这里展示内置模块注册结果。当前重点是注册覆盖面、依赖健康和后台接入，不再只是静态清单。' }}</p>
         </div>
 
+        <div v-if="routeBackTarget || focusedModule" class="ModulesPage-contextBar">
+          <router-link v-if="routeBackTarget" :to="routeBackTarget" class="ModulesPage-contextBack">
+            <i class="fas fa-arrow-left"></i>
+            <span>{{ routeBackLabel }}</span>
+          </router-link>
+          <p v-if="focusedModule" class="ModulesPage-contextHint">
+            当前已聚焦模块
+            <strong>{{ focusedModule.name }}</strong>
+            <code>{{ focusedModule.id }}</code>
+          </p>
+        </div>
+
         <div class="ModulesPage-overview">
           <div class="ModulesPage-overviewStats">
             <span class="ModulesPage-overviewItem">
@@ -130,18 +142,11 @@
                   {{ module.enabled ? (modulesCopy?.enabledStatusLabel || '已启用') : (modulesCopy?.disabledStatusLabel || '未启用') }}
                 </span>
                 <router-link
-                  v-if="module.runtime?.settings_entry_path"
+                  v-if="resolveModulePrimaryTarget(module)"
                   class="ModuleActionLink ModuleActionLink--primary"
-                  :to="module.runtime.settings_entry_path"
+                  :to="resolveModulePrimaryTarget(module)"
                 >
-                  {{ modulesCopy?.settingsEntryActionLabel || '配置入口' }}
-                </router-link>
-                <router-link
-                  v-else-if="module.runtime?.permissions_entry_path"
-                  class="ModuleActionLink ModuleActionLink--primary"
-                  :to="module.runtime.permissions_entry_path"
-                >
-                  {{ modulesCopy?.permissionsEntryActionLabel || '权限入口' }}
+                  {{ resolveModulePrimaryLabel(module) }}
                 </router-link>
                 <a
                   v-else-if="module.documentation_url"
@@ -576,7 +581,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import AdminToolbar from '../components/AdminToolbar.vue'
@@ -584,11 +590,17 @@ import AdminFilterTabs from '../components/AdminFilterTabs.vue'
 import api from '../../api'
 import { getResolvedNotificationTypes } from '../../forum/notificationTypes'
 import {
+  buildExtensionDetailRouteTarget,
+  buildExtensionRouteTarget,
+  resolveExtensionNavigationSource,
+} from '../extensions/diagnostics'
+import {
   getAdminModulesPageActionMeta,
   getAdminModulesPageConfig,
   getAdminModulesPageCopy,
 } from '../registry'
 
+const route = useRoute()
 const loading = ref(true)
 const errorMessage = ref('')
 const summary = ref({})
@@ -751,6 +763,33 @@ const overviewHighlights = computed(() => {
 })
 
 const moduleNameMap = computed(() => Object.fromEntries(modules.value.map(item => [item.id, item.name])))
+const focusedModuleId = computed(() => normalizeModuleId(route.query.module))
+const focusedModule = computed(() => {
+  if (!focusedModuleId.value) {
+    return null
+  }
+  return modules.value.find(item => item.id === focusedModuleId.value) || null
+})
+const routeSource = computed(() => resolveExtensionNavigationSource(route))
+const routeBackTarget = computed(() => {
+  if (routeSource.value !== 'extensions') {
+    return ''
+  }
+
+  const extensionId = normalizeModuleId(route.query.extension)
+  if (extensionId) {
+    return buildExtensionDetailRouteTarget(extensionId, {
+      query: {
+        from: 'extensions',
+      },
+    })
+  }
+
+  return buildExtensionRouteTarget('/admin/extensions', 'extensions')
+})
+const routeBackLabel = computed(() => (
+  normalizeModuleId(route.query.extension) ? '返回扩展详情' : '返回扩展中心'
+))
 
 function resolveCategoryLabel(category) {
   if (category === 'core') return modulesCopy.value?.coreCategoryLabel || '核心'
@@ -797,9 +836,36 @@ function normalizeModule(module) {
   }
 }
 
+function syncRouteModuleFocus() {
+  const targetModuleId = normalizeModuleId(route.query.module)
+  if (!targetModuleId) {
+    return
+  }
+
+  const matchedModule = modules.value.find(item => item.id === targetModuleId)
+  if (!matchedModule) {
+    return
+  }
+
+  searchQuery.value = matchedModule.name || matchedModule.id
+  categoryFilter.value = matchedModule.category || 'all'
+  statusFilter.value = 'all'
+  if (!expandedModuleIds.value.includes(targetModuleId)) {
+    expandedModuleIds.value = [...expandedModuleIds.value, targetModuleId]
+  }
+}
+
 onMounted(async () => {
   await loadModules()
+  syncRouteModuleFocus()
 })
+
+watch(
+  () => route.query.module,
+  () => {
+    syncRouteModuleFocus()
+  }
+)
 
 async function loadModules() {
   loading.value = true
@@ -886,6 +952,63 @@ function buildModuleInlineStats(module) {
   ].filter(item => Number(item.value) > 0)
 }
 
+function resolveModulePrimaryTarget(module) {
+  const settingsPath = String(module.runtime?.settings_entry_path || '').trim()
+  if (settingsPath) {
+    return buildExtensionRouteTarget(settingsPath, {
+      query: {
+        from: 'modules',
+        module: module.id,
+      },
+    })
+  }
+
+  const permissionsPath = String(module.runtime?.permissions_entry_path || '').trim()
+  if (permissionsPath) {
+    return buildExtensionRouteTarget(permissionsPath, {
+      query: {
+        from: 'modules',
+        module: module.id,
+      },
+    })
+  }
+
+  const operationsPath = String(module.runtime?.operations_entry_path || '').trim()
+  if (operationsPath) {
+    return buildExtensionRouteTarget(operationsPath, {
+      query: {
+        from: 'modules',
+        module: module.id,
+      },
+    })
+  }
+
+  const detailPath = String(module.runtime?.detail_entry_path || module.extension?.action_links?.detail_page || '').trim()
+  if (!detailPath) {
+    return ''
+  }
+
+  return buildExtensionRouteTarget(detailPath, {
+    query: {
+      from: 'modules',
+      module: module.id,
+    },
+  })
+}
+
+function resolveModulePrimaryLabel(module) {
+  if (String(module.runtime?.settings_entry_path || '').trim()) {
+    return modulesCopy.value?.settingsEntryActionLabel || '配置入口'
+  }
+  if (String(module.runtime?.permissions_entry_path || '').trim()) {
+    return modulesCopy.value?.permissionsEntryActionLabel || '权限入口'
+  }
+  if (String(module.runtime?.operations_entry_path || '').trim()) {
+    return '操作入口'
+  }
+  return '扩展详情'
+}
+
 function formatPostTypeCapabilities(postType) {
   const labels = []
   if (postType.is_default) labels.push(modulesCopy.value?.defaultCapabilityLabel || '默认')
@@ -928,6 +1051,42 @@ function formatLifecycleLabels(module) {
   margin: 0;
   color: var(--forum-text-muted);
   line-height: 1.6;
+}
+
+.ModulesPage-contextBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.ModulesPage-contextBack {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: 999px;
+  background: var(--forum-bg-subtle);
+  color: var(--forum-text-color);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ModulesPage-contextHint {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  color: var(--forum-text-muted);
+}
+
+.ModulesPage-contextHint strong,
+.ModulesPage-contextHint code {
+  color: var(--forum-text-color);
 }
 
 .ModulesPage-overview {

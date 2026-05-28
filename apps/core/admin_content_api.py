@@ -15,6 +15,7 @@ from apps.core.extension_settings_service import get_extension_settings, seriali
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.forum_registry import get_builtin_module_ids, get_forum_registry
+from apps.core.resource_registry import get_resource_registry
 
 
 router = Router()
@@ -233,6 +234,30 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
     permission_summary = _build_extension_permission_summary(permission_sections)
     permission_modules = _build_extension_permission_modules(permission_sections)
     admin_page_details = _build_extension_admin_page_details(extension)
+    notification_types = _build_extension_notification_types(extension)
+    user_preferences = _build_extension_user_preferences(extension)
+    event_listeners = _build_extension_event_listeners(extension)
+    post_types = _build_extension_post_types(extension)
+    search_filters = _build_extension_search_filters(extension)
+    discussion_sorts = _build_extension_discussion_sorts(extension)
+    discussion_list_filters = _build_extension_discussion_list_filters(extension)
+    resource_definitions = _build_extension_resource_definitions(extension)
+    resource_relationships = _build_extension_resource_relationships(extension)
+    resource_fields = _build_extension_resource_fields(extension)
+    language_packs = _build_extension_language_packs(extension)
+    capability_summary = _build_extension_capability_summary(
+        notification_types=notification_types,
+        user_preferences=user_preferences,
+        event_listeners=event_listeners,
+        post_types=post_types,
+        search_filters=search_filters,
+        discussion_sorts=discussion_sorts,
+        discussion_list_filters=discussion_list_filters,
+        resource_definitions=resource_definitions,
+        resource_relationships=resource_relationships,
+        resource_fields=resource_fields,
+        language_packs=language_packs,
+    )
 
     return {
         "id": extension.id,
@@ -326,6 +351,18 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "permission_summary": permission_summary,
         "permission_modules": permission_modules,
         "permission_sections": permission_sections,
+        "notification_types": notification_types,
+        "user_preferences": user_preferences,
+        "event_listeners": event_listeners,
+        "post_types": post_types,
+        "search_filters": search_filters,
+        "discussion_sorts": discussion_sorts,
+        "discussion_list_filters": discussion_list_filters,
+        "resource_definitions": resource_definitions,
+        "resource_relationships": resource_relationships,
+        "resource_fields": resource_fields,
+        "language_packs": language_packs,
+        "capability_summary": capability_summary,
         "action_links": {
             "detail_page": detail_page,
             "settings_page": settings_page,
@@ -428,6 +465,245 @@ def _build_extension_permission_modules(sections):
         }
         for module_id in sorted(counts.keys())
     ]
+
+
+def _build_extension_notification_types(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "code": item.code,
+            "label": item.label,
+            "module_id": item.module_id,
+            "description": item.description,
+            "icon": item.icon,
+            "navigation_scope": item.navigation_scope,
+            "preference_key": item.preference_key,
+            "preference_label": item.preference_label,
+        }
+        for item in get_forum_registry().get_notification_types()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_user_preferences(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "key": item.key,
+            "label": item.label,
+            "module_id": item.module_id,
+            "description": item.description,
+            "category": item.category,
+            "default_value": item.default_value,
+        }
+        for item in get_forum_registry().get_user_preferences()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_event_listeners(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "event": item.event,
+            "listener": item.listener,
+            "module_id": item.module_id,
+            "description": item.description,
+        }
+        for item in get_forum_registry().get_event_listeners()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_post_types(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "code": item.code,
+            "label": item.label,
+            "module_id": item.module_id,
+            "description": item.description,
+            "icon": item.icon,
+            "is_default": item.is_default,
+            "is_stream_visible": item.is_stream_visible,
+            "counts_toward_discussion": item.counts_toward_discussion,
+            "counts_toward_user": item.counts_toward_user,
+            "searchable": item.searchable,
+        }
+        for item in get_forum_registry().get_post_types()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_search_filters(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "code": item.code,
+            "label": item.label,
+            "module_id": item.module_id,
+            "target": item.target,
+            "syntax": item.syntax,
+            "description": item.description,
+        }
+        for item in get_forum_registry().get_search_filters()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_discussion_sorts(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "code": item.code,
+            "label": item.label,
+            "module_id": item.module_id,
+            "description": item.description,
+            "icon": item.icon,
+            "is_default": item.is_default,
+            "toolbar_visible": item.toolbar_visible,
+        }
+        for item in get_forum_registry().get_discussion_sorts()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_discussion_list_filters(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "code": item.code,
+            "label": item.label,
+            "module_id": item.module_id,
+            "description": item.description,
+            "icon": item.icon,
+            "is_default": item.is_default,
+            "requires_authenticated_user": item.requires_authenticated_user,
+            "sidebar_visible": item.sidebar_visible,
+            "route_path": item.route_path,
+        }
+        for item in get_forum_registry().get_discussion_list_filters()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_resource_definitions(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "resource": item.resource,
+            "module_id": item.module_id,
+            "description": item.description,
+        }
+        for item in get_resource_registry().get_resources()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_resource_relationships(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "resource": item.resource,
+            "relationship": item.relationship,
+            "module_id": item.module_id,
+            "description": item.description,
+        }
+        for item in get_resource_registry().get_all_relationships()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_resource_fields(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "resource": item.resource,
+            "field": item.field,
+            "module_id": item.module_id,
+            "description": item.description,
+        }
+        for item in get_resource_registry().get_all_fields()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_language_packs(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "code": item.code,
+            "label": item.label,
+            "native_label": item.native_label,
+            "module_id": item.module_id,
+            "description": item.description,
+            "is_default": item.is_default,
+        }
+        for item in get_forum_registry().get_language_packs()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_capability_summary(
+    *,
+    notification_types,
+    user_preferences,
+    event_listeners,
+    post_types,
+    search_filters,
+    discussion_sorts,
+    discussion_list_filters,
+    resource_definitions,
+    resource_relationships,
+    resource_fields,
+    language_packs,
+):
+    return {
+        "notification_type_count": len(notification_types),
+        "user_preference_count": len(user_preferences),
+        "event_listener_count": len(event_listeners),
+        "post_type_count": len(post_types),
+        "search_filter_count": len(search_filters),
+        "discussion_sort_count": len(discussion_sorts),
+        "discussion_list_filter_count": len(discussion_list_filters),
+        "resource_definition_count": len(resource_definitions),
+        "resource_relationship_count": len(resource_relationships),
+        "resource_field_count": len(resource_fields),
+        "language_pack_count": len(language_packs),
+    }
 
 
 def _serialize_extension_admin_actions(extension):
