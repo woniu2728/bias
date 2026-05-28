@@ -88,6 +88,20 @@
                   {{ capability }}
                 </span>
               </div>
+
+              <div v-if="resolveAdminPageLinks(extension).length" class="ExtensionCard-adminPages">
+                <span class="ExtensionCard-adminPagesLabel">后台页</span>
+                <div class="ExtensionCard-adminPagesList">
+                  <router-link
+                    v-for="page in resolveAdminPageLinks(extension)"
+                    :key="`${extension.id}-page-${page.key}`"
+                    :to="page.target"
+                    class="ExtensionToken"
+                  >
+                    {{ page.label }}
+                  </router-link>
+                </div>
+              </div>
             </div>
 
             <div class="ExtensionCard-side">
@@ -149,6 +163,7 @@ import AdminStateBlock from '../components/AdminStateBlock.vue'
 import AdminToolbar from '../components/AdminToolbar.vue'
 import AdminFilterTabs from '../components/AdminFilterTabs.vue'
 import {
+  resolveExtensionAdminPageCards,
   resolveExtensionForumEntryState,
   resolveExtensionMigrationState,
 } from '../extensions/diagnostics'
@@ -342,6 +357,10 @@ function resolveMigrationMetaText(extension) {
   }
   return '未声明'
 }
+
+function resolveAdminPageLinks(extension) {
+  return resolveExtensionAdminPageCards(extension)
+}
 </script>
 
 <style scoped>
@@ -513,6 +532,24 @@ function resolveMigrationMetaText(extension) {
 }
 
 .ExtensionCard-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ExtensionCard-adminPages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ExtensionCard-adminPagesLabel {
+  color: var(--forum-text-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ExtensionCard-adminPagesList {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

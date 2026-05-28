@@ -258,6 +258,7 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
    - 标准后台路由绑定状态
    - 当前 manifest 校验结果摘要
 5. 内置 `core` 模块的后台入口已开始宿主化：
+   - `/admin/basics`、`/admin/appearance` 已重定向到 `/admin/extensions/core/settings`
    - `/admin/mail` 重定向到 `/admin/extensions/core/settings`
    - `/admin/advanced` 重定向到 `/admin/extensions/core/operations`
    - `/admin/audit-logs`、`/admin/docs` 也已收敛到 `core` 的操作宿主页
@@ -265,6 +266,10 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 6. 扩展详情页现在会展示结构化后台页清单：
    - 显示扩展关联的真实后台页面
    - 与 settings / permissions / operations 宿主摘要并列展示
+7. 扩展中心与宿主页已开始复用统一后台页解析层：
+   - `admin_page_details` 到最终路由目标的解析已共享
+   - 扩展中心列表可直接点击扩展关联的后台页
+   - `core` 宿主页、扩展详情页、扩展中心不再各自维护一套页面映射
 
 ### 已完成：阶段 7 的第一批生态元数据预留
 

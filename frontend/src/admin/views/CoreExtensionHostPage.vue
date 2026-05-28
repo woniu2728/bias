@@ -37,6 +37,7 @@
 <script setup>
 import { computed } from 'vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
+import { resolveExtensionAdminPageCards } from '../extensions/diagnostics'
 
 const props = defineProps({
   extension: {
@@ -49,33 +50,14 @@ const props = defineProps({
   },
 })
 
-const internalPageTargets = {
-  '/admin/mail': '/admin/internal/core/mail',
-  '/admin/advanced': '/admin/internal/core/advanced',
-  '/admin/audit-logs': '/admin/internal/core/audit-logs',
-  '/admin/docs': '/admin/internal/core/docs',
-}
-
 const cards = computed(() => (
-  (Array.isArray(props.extension?.admin_page_details) ? props.extension.admin_page_details : [])
-    .filter((page) => {
-      const path = String(page?.path || '').trim()
-      if (!path || path === '/admin' || path === '/admin/modules' || path === '/admin/permissions') {
-        return false
-      }
-
-      if (props.hostKind === 'operations') {
-        return ['/admin/advanced', '/admin/audit-logs', '/admin/docs'].includes(path)
-      }
-
-      return Boolean(page?.settings_group) && path !== '/admin/advanced'
-    })
-    .map((page) => ({
-      key: page.path,
-      title: page.label,
-      description: page.description || '查看当前核心后台页面。',
-      path: internalPageTargets[page.path] || page.path,
-      icon: page.icon || 'fas fa-cog',
+  resolveExtensionAdminPageCards(props.extension, { hostKind: props.hostKind })
+    .map(item => ({
+      key: item.key,
+      title: item.label,
+      description: item.description || '查看当前核心后台页面。',
+      path: item.target,
+      icon: item.icon || 'fas fa-cog',
     }))
 ))
 

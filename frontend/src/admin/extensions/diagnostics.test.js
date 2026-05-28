@@ -2,6 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  resolveExtensionAdminPageCards,
+  resolveExtensionAdminPageLabels,
   resolveExtensionAdminSurfaceCards,
   resolveExtensionEntryTypeLabel,
   resolveExtensionForumEntryState,
@@ -90,4 +92,34 @@ test('resolveExtensionAdminSurfaceCards builds readable admin host summaries', (
   assert.equal(cards[0].summary, '自动生成 2 个设置项')
   assert.equal(cards[1].summary, '3 项权限，2 个分组')
   assert.equal(cards[2].summary, '2 个后台动作，1 个运行操作')
+})
+
+test('resolveExtensionAdminPageCards normalizes core internal carrier targets', () => {
+  const cards = resolveExtensionAdminPageCards({
+    admin_page_details: [
+      { path: '/admin', label: '仪表盘' },
+      { path: '/admin/basics', label: '基础设置', settings_group: 'basic', icon: 'fas fa-pencil-alt' },
+      { path: '/admin/appearance', label: '外观设置', settings_group: 'appearance' },
+      { path: '/admin/mail', label: '邮件设置', settings_group: 'mail' },
+      { path: '/admin/advanced', label: '高级设置', settings_group: 'advanced' },
+      { path: '/admin/audit-logs', label: '审计日志' },
+      { path: '/admin/docs', label: '开发者文档' },
+    ],
+  }, { hostKind: 'operations' })
+
+  assert.deepEqual(cards.map(item => item.path), ['/admin/advanced', '/admin/audit-logs', '/admin/docs'])
+  assert.deepEqual(cards.map(item => item.target), [
+    '/admin/internal/core/advanced',
+    '/admin/internal/core/audit-logs',
+    '/admin/internal/core/docs',
+  ])
+})
+
+test('resolveExtensionAdminPageLabels extracts readable labels from admin pages', () => {
+  assert.deepEqual(resolveExtensionAdminPageLabels({
+    admin_page_details: [
+      { path: '/admin/basics', label: '基础设置' },
+      { path: '/admin/mail', label: '邮件设置' },
+    ],
+  }), ['基础设置', '邮件设置'])
 })

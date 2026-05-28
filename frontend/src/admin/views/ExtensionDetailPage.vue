@@ -423,7 +423,11 @@ import { useModalStore } from '../../stores/modal'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
-import { resolveExtensionAdminSurfaceCards, resolveExtensionEntryTypeLabel } from '../extensions/diagnostics'
+import {
+  resolveExtensionAdminPageCards,
+  resolveExtensionAdminSurfaceCards,
+  resolveExtensionEntryTypeLabel,
+} from '../extensions/diagnostics'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
 import FlagsPage from './FlagsPage.vue'
 import TagsPage from './TagsPage.vue'
@@ -467,7 +471,7 @@ const actionItems = computed(() => {
 })
 
 const adminPageDetails = computed(() => {
-  return Array.isArray(extension.value?.admin_page_details) ? extension.value.admin_page_details : []
+  return resolveExtensionAdminPageCards(extension.value)
 })
 
 const adminActions = computed(() => {

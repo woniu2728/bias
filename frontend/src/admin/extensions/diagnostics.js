@@ -84,6 +84,53 @@ export function resolveExtensionAdminSurfaceCards(extension) {
   ]
 }
 
+export function resolveExtensionAdminPageCards(extension, { hostKind = '' } = {}) {
+  const internalPageTargets = {
+    '/admin/basics': '/admin/internal/core/basics',
+    '/admin/appearance': '/admin/internal/core/appearance',
+    '/admin/mail': '/admin/internal/core/mail',
+    '/admin/advanced': '/admin/internal/core/advanced',
+    '/admin/audit-logs': '/admin/internal/core/audit-logs',
+    '/admin/docs': '/admin/internal/core/docs',
+  }
+
+  const pages = Array.isArray(extension?.admin_page_details) ? extension.admin_page_details : []
+  return pages
+    .filter((page) => shouldIncludeAdminPageCard(page, hostKind))
+    .map((page) => ({
+      key: page.path,
+      label: page.label || '',
+      description: page.description || '查看当前扩展关联的后台页面。',
+      icon: page.icon || 'fas fa-link',
+      path: page.path || '',
+      target: internalPageTargets[page.path] || page.path || '',
+      settingsGroup: page.settings_group || '',
+    }))
+}
+
+export function resolveExtensionAdminPageLabels(extension) {
+  return resolveExtensionAdminPageCards(extension)
+    .map(item => String(item.label || '').trim())
+    .filter(Boolean)
+}
+
+function shouldIncludeAdminPageCard(page, hostKind) {
+  const path = String(page?.path || '').trim()
+  if (!path || path === '/admin' || path === '/admin/modules' || path === '/admin/permissions') {
+    return false
+  }
+
+  if (hostKind === 'operations') {
+    return ['/admin/advanced', '/admin/audit-logs', '/admin/docs'].includes(path)
+  }
+
+  if (hostKind === 'settings') {
+    return Boolean(page?.settings_group) && path !== '/admin/advanced'
+  }
+
+  return true
+}
+
 function resolveSettingsSurfaceSummary(settingsSchema, status) {
   if (status?.mode === 'custom') {
     return settingsSchema.length ? `${settingsSchema.length} 个设置项` : '自定义设置组件'

@@ -154,6 +154,22 @@ test('admin routes preserve compatibility redirects for builtin operations pages
 
 test('admin routes can match internal core extension carrier pages', () => {
   registerAdminRoute({
+    path: '/admin/internal/core/basics',
+    name: 'admin-core-basics-internal',
+    label: '核心基础设置',
+    moduleId: 'core',
+    showInNavigation: false,
+  })
+
+  registerAdminRoute({
+    path: '/admin/internal/core/appearance',
+    name: 'admin-core-appearance-internal',
+    label: '核心外观设置',
+    moduleId: 'core',
+    showInNavigation: false,
+  })
+
+  registerAdminRoute({
     path: '/admin/internal/core/mail',
     name: 'admin-core-mail-internal',
     label: '核心邮件设置',
@@ -185,6 +201,8 @@ test('admin routes can match internal core extension carrier pages', () => {
     showInNavigation: false,
   })
 
+  assert.equal(findAdminRouteByPath('/admin/internal/core/basics')?.name, 'admin-core-basics-internal')
+  assert.equal(findAdminRouteByPath('/admin/internal/core/appearance')?.name, 'admin-core-appearance-internal')
   assert.equal(findAdminRouteByPath('/admin/internal/core/mail')?.name, 'admin-core-mail-internal')
   assert.equal(findAdminRouteByPath('/admin/internal/core/advanced')?.name, 'admin-core-advanced-internal')
   assert.equal(findAdminRouteByPath('/admin/internal/core/audit-logs')?.name, 'admin-core-audit-logs-internal')

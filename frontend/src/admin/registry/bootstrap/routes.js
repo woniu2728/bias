@@ -93,6 +93,32 @@ registerAdminRoute({
 })
 
 registerAdminRoute({
+  path: '/admin/internal/core/basics',
+  name: 'admin-core-basics-internal',
+  component: BasicsPage,
+  icon: 'fas fa-pencil-alt',
+  label: '核心基础设置',
+  navDescription: '核心扩展宿主页内部承载的基础设置页。',
+  navSection: 'core',
+  navOrder: 24,
+  showInNavigation: false,
+  moduleId: 'core',
+})
+
+registerAdminRoute({
+  path: '/admin/internal/core/appearance',
+  name: 'admin-core-appearance-internal',
+  component: AppearancePage,
+  icon: 'fas fa-paint-brush',
+  label: '核心外观设置',
+  navDescription: '核心扩展宿主页内部承载的外观设置页。',
+  navSection: 'core',
+  navOrder: 24,
+  showInNavigation: false,
+  moduleId: 'core',
+})
+
+registerAdminRoute({
   path: '/admin/internal/core/mail',
   name: 'admin-core-mail-internal',
   component: MailPage,
@@ -160,10 +186,10 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/basics',
   name: 'admin-basics',
-  component: BasicsPage,
+  redirect: '/admin/extensions/core/settings',
   icon: 'fas fa-pencil-alt',
   label: '基础设置',
-  navDescription: '维护论坛标题、公告和基础信息。',
+  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心设置页。',
   navSection: 'core',
   navOrder: 30,
   showInDashboardActions: true,
@@ -188,10 +214,10 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/appearance',
   name: 'admin-appearance',
-  component: AppearancePage,
+  redirect: '/admin/extensions/core/settings',
   icon: 'fas fa-paint-brush',
   label: '外观设置',
-  navDescription: '调整主题、Logo 和界面外观。',
+  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心设置页。',
   navSection: 'core',
   navOrder: 50,
   showInDashboardActions: true,

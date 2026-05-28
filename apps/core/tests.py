@@ -1185,6 +1185,8 @@ class AdminExtensionsApiTests(TestCase):
         self.assertTrue(core_extension["installed"])
         self.assertTrue(core_extension["enabled"])
         self.assertIn("/admin", core_extension["admin_pages"])
+        self.assertTrue(any(page["path"] == "/admin/basics" for page in core_extension["admin_page_details"]))
+        self.assertTrue(any(page["path"] == "/admin/appearance" for page in core_extension["admin_page_details"]))
         self.assertTrue(any(page["path"] == "/admin/mail" for page in core_extension["admin_page_details"]))
         self.assertTrue(any(page["path"] == "/admin/advanced" for page in core_extension["admin_page_details"]))
         self.assertTrue(any(page["path"] == "/admin/audit-logs" for page in core_extension["admin_page_details"]))
