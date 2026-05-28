@@ -95,7 +95,7 @@
                   <router-link
                     v-for="page in resolveAdminPageLinks(extension)"
                     :key="`${extension.id}-page-${page.key}`"
-                    :to="page.target"
+                    :to="buildRouteTarget(page.target)"
                     class="ExtensionToken"
                   >
                     {{ page.label }}
@@ -108,7 +108,7 @@
               <template v-for="action in getVisibleAdminActions(extension)" :key="`${extension.id}-${action.key}`">
                 <router-link
                   v-if="action.kind === 'route'"
-                  :to="action.target"
+                  :to="buildRouteTarget(action.target)"
                   class="ExtensionAction"
                   :class="resolveActionToneClass(action)"
                 >
@@ -318,6 +318,17 @@ function getVisibleAdminActions(extension) {
 
 function getRuntimeActions(extension) {
   return Array.isArray(extension?.runtime_actions) ? extension.runtime_actions : []
+}
+
+function buildRouteTarget(path) {
+  const normalizedPath = String(path || '').trim()
+  if (!normalizedPath) {
+    return '/admin/extensions'
+  }
+  return {
+    path: normalizedPath,
+    query: { from: 'extensions' },
+  }
 }
 
 function resolveActionToneClass(action) {

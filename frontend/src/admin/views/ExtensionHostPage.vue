@@ -81,7 +81,14 @@ const hostKind = computed(() => {
   return matchedRoute?.extensionHostKind || 'settings'
 })
 
-const detailPath = computed(() => `/admin/extensions/${String(route.params.extensionId || '').trim()}`)
+const detailPath = computed(() => {
+  const extensionId = String(route.params.extensionId || '').trim()
+  const from = String(route.query.from || '').trim()
+  return {
+    path: `/admin/extensions/${extensionId}`,
+    query: from ? { from } : {},
+  }
+})
 const pageKindLabel = computed(() => {
   if (hostKind.value === 'operations') {
     return '操作页'

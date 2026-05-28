@@ -10,7 +10,7 @@
 
     <div v-else-if="extension" class="ExtensionDetailPage-content">
       <section class="ExtensionDetailPage-topbar">
-        <router-link to="/admin/extensions" class="ExtensionDetailPage-back">
+        <router-link :to="backTarget" class="ExtensionDetailPage-back">
           <i class="fas fa-arrow-left"></i>
           <span>返回扩展中心</span>
         </router-link>
@@ -441,6 +441,14 @@ const actionLoading = ref(false)
 const errorMessage = ref('')
 const extension = ref(null)
 const detailComponent = ref(null)
+
+const backTarget = computed(() => {
+  const from = String(route.query.from || '').trim()
+  if (from === 'extensions') {
+    return '/admin/extensions'
+  }
+  return '/admin/extensions'
+})
 
 const adminEntryModules = import.meta.glob('../../../../extensions/*/frontend/admin/index.js')
 const builtinAdminEntries = {
