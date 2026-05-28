@@ -120,9 +120,11 @@
             </li>
           </ul>
           <div v-if="adminPageDetails.length" class="ExtensionDetailEntryGrid">
-            <article
+            <component
               v-for="page in adminPageDetails"
               :key="page.path"
+              :is="page.routeTarget ? 'router-link' : 'article'"
+              :to="page.routeTarget || null"
               class="ExtensionDetailEntryCard"
             >
               <div class="ExtensionDetailEntryCard-head">
@@ -136,12 +138,14 @@
               </div>
               <p>{{ page.description || '当前扩展关联的后台管理页面。' }}</p>
               <code>{{ page.path }}</code>
-            </article>
+            </component>
           </div>
           <div v-if="adminSurfaceCards.length" class="ExtensionDetailSurfaceGrid">
-            <article
+            <component
               v-for="item in adminSurfaceCards"
               :key="item.key"
+              :is="item.routeTarget ? 'router-link' : 'article'"
+              :to="item.routeTarget || null"
               class="ExtensionDetailSurfaceCard"
             >
               <div class="ExtensionDetailSurfaceCard-head">
@@ -152,7 +156,7 @@
               </div>
               <p>{{ item.summary }}</p>
               <code v-if="item.route">{{ item.route }}</code>
-            </article>
+            </component>
           </div>
         </section>
 
@@ -477,7 +481,10 @@ const actionItems = computed(() => {
 })
 
 const adminPageDetails = computed(() => {
-  return resolveExtensionAdminPageCards(extension.value)
+  return resolveExtensionAdminPageCards(extension.value).map((page) => ({
+    ...page,
+    routeTarget: page.target ? buildExtensionRouteTarget(page.target, route) : null,
+  }))
 })
 
 const adminActions = computed(() => {
@@ -522,7 +529,12 @@ const adminSurfaceStatuses = computed(() => {
 })
 
 const adminSurfaceCards = computed(() => (
-  extension.value ? resolveExtensionAdminSurfaceCards(extension.value) : []
+  extension.value
+    ? resolveExtensionAdminSurfaceCards(extension.value).map((item) => ({
+      ...item,
+      routeTarget: item.route ? buildExtensionRouteTarget(item.route, route) : null,
+    }))
+    : []
 ))
 
 const adminSurfaceSummary = computed(() => {
@@ -870,6 +882,8 @@ function syncModulesFromExtension(currentExtension) {
   border: 1px solid var(--forum-border-color);
   border-radius: 14px;
   background: var(--forum-bg-subtle);
+  color: inherit;
+  text-decoration: none;
 }
 
 .ExtensionDetailEntryCard-head,
@@ -895,6 +909,13 @@ function syncModulesFromExtension(currentExtension) {
   border: 1px solid var(--forum-border-color);
   border-radius: 14px;
   background: var(--forum-bg-subtle);
+  color: inherit;
+  text-decoration: none;
+}
+
+.ExtensionDetailEntryCard[href],
+.ExtensionDetailSurfaceCard[href] {
+  cursor: pointer;
 }
 
 .ExtensionDetailSurfaceCard-head {

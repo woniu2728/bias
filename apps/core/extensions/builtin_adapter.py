@@ -41,7 +41,7 @@ def adapt_builtin_module_to_extension(module: ForumModuleDefinition) -> Extensio
         provides=tuple(module.capabilities),
         frontend_admin_entry=_resolve_builtin_frontend_admin_entry(module),
         settings_pages=_resolve_builtin_settings_pages(module),
-        permissions_pages=("/admin/permissions",) if module.permissions else (),
+        permissions_pages=_resolve_builtin_permissions_pages(module),
         operations_pages=_resolve_builtin_operations_pages(module),
         admin_actions=_build_builtin_admin_actions(module),
         compatibility=ExtensionCompatibilityDefinition(
@@ -126,6 +126,14 @@ def _resolve_builtin_settings_pages(module: ForumModuleDefinition) -> tuple[str,
     return tuple(page.path for page in module.admin_pages if page.settings_group)
 
 
+def _resolve_builtin_permissions_pages(module: ForumModuleDefinition) -> tuple[str, ...]:
+    if module.module_id == "core":
+        return (f"/admin/extensions/{module.module_id}/permissions",)
+    if not module.permissions:
+        return ()
+    return (f"/admin/extensions/{module.module_id}/permissions",)
+
+
 def _resolve_builtin_operations_pages(module: ForumModuleDefinition) -> tuple[str, ...]:
     hosted_operations_modules = {
         "approval",
@@ -143,7 +151,7 @@ def _resolve_builtin_operations_pages(module: ForumModuleDefinition) -> tuple[st
 
 def _build_builtin_admin_actions(module: ForumModuleDefinition) -> tuple[ExtensionAdminActionDefinition, ...]:
     settings_page = next(iter(_resolve_builtin_settings_pages(module)), "")
-    permissions_page = "/admin/permissions" if module.permissions else ""
+    permissions_page = next(iter(_resolve_builtin_permissions_pages(module)), "")
     operations_page = next(iter(_resolve_builtin_operations_pages(module)), "")
 
     actions: list[ExtensionAdminActionDefinition] = [

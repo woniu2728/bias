@@ -1049,7 +1049,7 @@ class ExtensionRegistryTests(TestCase):
         self.assertEqual(extension.manifest.dependencies, module.dependencies)
         self.assertEqual(extension.runtime.enabled, module.enabled)
         self.assertEqual(extension.manifest.frontend_admin_entry, "builtin:approval")
-        self.assertIn("/admin/permissions", extension.manifest.permissions_pages)
+        self.assertEqual(extension.manifest.permissions_pages, ("/admin/extensions/approval/permissions",))
         self.assertEqual(extension.manifest.operations_pages, ("/admin/extensions/approval/operations",))
 
     def test_builtin_adapter_can_map_tags_to_extension_settings_page(self):
@@ -1065,11 +1065,13 @@ class ExtensionRegistryTests(TestCase):
         users_extension = adapt_builtin_module_to_extension(users_module)
         self.assertEqual(users_extension.manifest.frontend_admin_entry, "builtin:users")
         self.assertEqual(users_extension.manifest.operations_pages, ("/admin/extensions/users/operations",))
+        self.assertEqual(users_extension.manifest.permissions_pages, ("/admin/extensions/users/permissions",))
 
         flags_module = get_forum_registry().get_module("flags")
         flags_extension = adapt_builtin_module_to_extension(flags_module)
         self.assertEqual(flags_extension.manifest.frontend_admin_entry, "builtin:flags")
         self.assertEqual(flags_extension.manifest.operations_pages, ("/admin/extensions/flags/operations",))
+        self.assertEqual(flags_extension.manifest.permissions_pages, ("/admin/extensions/flags/permissions",))
 
     def test_builtin_adapter_can_map_core_pages_to_extension_host(self):
         module = get_forum_registry().get_module("core")
@@ -1077,6 +1079,7 @@ class ExtensionRegistryTests(TestCase):
 
         self.assertEqual(extension.manifest.frontend_admin_entry, "builtin:core")
         self.assertEqual(extension.manifest.settings_pages, ("/admin/extensions/core/settings",))
+        self.assertEqual(extension.manifest.permissions_pages, ("/admin/extensions/core/permissions",))
         self.assertEqual(extension.manifest.operations_pages, ("/admin/extensions/core/operations",))
 
     def test_registry_applies_persisted_installation_state(self):
@@ -1196,6 +1199,7 @@ class AdminExtensionsApiTests(TestCase):
         self.assertTrue(any(phase["key"] == "register" for phase in core_extension["lifecycle"]["phases"]))
         self.assertEqual(core_extension["action_links"]["detail_page"], "/admin/extensions/core")
         self.assertEqual(core_extension["action_links"]["settings_page"], "/admin/extensions/core/settings")
+        self.assertEqual(core_extension["action_links"]["permissions_page"], "/admin/extensions/core/permissions")
         self.assertEqual(core_extension["action_links"]["operations_page"], "/admin/extensions/core/operations")
         self.assertTrue(any(action["key"] == "details" for action in core_extension["admin_actions"]))
 
@@ -1221,14 +1225,17 @@ class AdminExtensionsApiTests(TestCase):
 
         approval_extension = next(item for item in payload["extensions"] if item["id"] == "approval")
         self.assertEqual(approval_extension["frontend_admin_entry"], "builtin:approval")
+        self.assertEqual(approval_extension["action_links"]["permissions_page"], "/admin/extensions/approval/permissions")
         self.assertEqual(approval_extension["action_links"]["operations_page"], "/admin/extensions/approval/operations")
 
         users_extension = next(item for item in payload["extensions"] if item["id"] == "users")
         self.assertEqual(users_extension["frontend_admin_entry"], "builtin:users")
+        self.assertEqual(users_extension["action_links"]["permissions_page"], "/admin/extensions/users/permissions")
         self.assertEqual(users_extension["action_links"]["operations_page"], "/admin/extensions/users/operations")
 
         flags_extension = next(item for item in payload["extensions"] if item["id"] == "flags")
         self.assertEqual(flags_extension["frontend_admin_entry"], "builtin:flags")
+        self.assertEqual(flags_extension["action_links"]["permissions_page"], "/admin/extensions/flags/permissions")
         self.assertEqual(flags_extension["action_links"]["operations_page"], "/admin/extensions/flags/operations")
 
     def test_extension_detail_api_returns_extension_actions(self):
