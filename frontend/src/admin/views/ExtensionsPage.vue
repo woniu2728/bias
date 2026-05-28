@@ -302,7 +302,18 @@ async function runRuntimeAction(extension, action) {
 }
 
 function getVisibleAdminActions(extension) {
-  return Array.isArray(extension?.admin_actions) ? extension.admin_actions : []
+  const actions = Array.isArray(extension?.admin_actions) ? extension.admin_actions : []
+  const pageTargets = new Set(resolveAdminPageLinks(extension).map(item => item.target))
+
+  return actions.filter((action) => {
+    if (action?.kind !== 'route') {
+      return true
+    }
+    if (action?.key === 'details' || action?.key === 'documentation') {
+      return true
+    }
+    return !pageTargets.has(String(action?.target || '').trim())
+  })
 }
 
 function getRuntimeActions(extension) {
