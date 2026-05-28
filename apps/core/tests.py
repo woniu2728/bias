@@ -380,6 +380,41 @@ class ExtensionValidationTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_validate_extension_manifests_allows_generated_permissions_and_operations_surfaces(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            admin_dir = manifest_dir / "frontend" / "admin"
+            admin_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "frontend_admin_entry": "extensions/alpha-tools/frontend/admin/index.js",
+                "permissions_pages": ["/admin/extensions/alpha-tools/permissions"],
+                "operations_pages": ["/admin/extensions/alpha-tools/operations"],
+                "admin_actions": [
+                    {
+                        "key": "details",
+                        "label": "查看详情",
+                        "kind": "route",
+                        "target": "/admin/extensions/alpha-tools",
+                    }
+                ],
+            }, ensure_ascii=False), encoding="utf-8")
+            (admin_dir / "index.js").write_text(
+                "export function resolveDetailPage() { return null }\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertTrue(result.ok)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_validate_extension_manifests_reports_missing_frontend_forum_entry(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -891,6 +926,38 @@ class ExtensionManagementCommandTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_validate_extensions_command_allows_generated_permissions_and_operations_surfaces(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            admin_dir = manifest_dir / "frontend" / "admin"
+            admin_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "dependencies": ["core"],
+                "frontend_admin_entry": "extensions/alpha-tools/frontend/admin/index.js",
+                "permissions_pages": ["/admin/extensions/alpha-tools/permissions"],
+                "operations_pages": ["/admin/extensions/alpha-tools/operations"],
+                "admin_actions": [
+                    {
+                        "key": "details",
+                        "label": "查看详情",
+                        "kind": "route",
+                        "target": "/admin/extensions/alpha-tools",
+                    }
+                ],
+            }, ensure_ascii=False), encoding="utf-8")
+            (admin_dir / "index.js").write_text(
+                "export function resolveDetailPage() { return null }\n",
+                encoding="utf-8",
+            )
+
+            call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_validate_extensions_command_reports_missing_frontend_admin_entry_declaration(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -954,6 +1021,9 @@ class ExtensionRegistryTests(TestCase):
 
         core_extension = next(item for item in extensions if item.id == "core")
         self.assertEqual(core_extension.manifest.category, "core")
+        self.assertEqual(core_extension.manifest.frontend_admin_entry, "builtin:core")
+        self.assertEqual(core_extension.manifest.settings_pages, ("/admin/extensions/core/settings",))
+        self.assertEqual(core_extension.manifest.operations_pages, ("/admin/extensions/core/operations",))
         self.assertIn("/admin", core_extension.admin_pages)
         self.assertIn("basic", core_extension.settings_groups)
         self.assertEqual(core_extension.lifecycle.registration_mode, "static")
@@ -1000,6 +1070,14 @@ class ExtensionRegistryTests(TestCase):
         flags_extension = adapt_builtin_module_to_extension(flags_module)
         self.assertEqual(flags_extension.manifest.frontend_admin_entry, "builtin:flags")
         self.assertEqual(flags_extension.manifest.operations_pages, ("/admin/extensions/flags/operations",))
+
+    def test_builtin_adapter_can_map_core_pages_to_extension_host(self):
+        module = get_forum_registry().get_module("core")
+        extension = adapt_builtin_module_to_extension(module)
+
+        self.assertEqual(extension.manifest.frontend_admin_entry, "builtin:core")
+        self.assertEqual(extension.manifest.settings_pages, ("/admin/extensions/core/settings",))
+        self.assertEqual(extension.manifest.operations_pages, ("/admin/extensions/core/operations",))
 
     def test_registry_applies_persisted_installation_state(self):
         ExtensionInstallation.objects.create(
@@ -1103,13 +1181,20 @@ class AdminExtensionsApiTests(TestCase):
         core_extension = next(item for item in payload["extensions"] if item["id"] == "core")
         self.assertEqual(core_extension["source"], "builtin-module")
         self.assertEqual(core_extension["category"], "core")
+        self.assertEqual(core_extension["frontend_admin_entry"], "builtin:core")
         self.assertTrue(core_extension["installed"])
         self.assertTrue(core_extension["enabled"])
         self.assertIn("/admin", core_extension["admin_pages"])
+        self.assertTrue(any(page["path"] == "/admin/mail" for page in core_extension["admin_page_details"]))
+        self.assertTrue(any(page["path"] == "/admin/advanced" for page in core_extension["admin_page_details"]))
+        self.assertTrue(any(page["path"] == "/admin/audit-logs" for page in core_extension["admin_page_details"]))
+        self.assertTrue(any(page["path"] == "/admin/docs" for page in core_extension["admin_page_details"]))
         self.assertIn("basic", core_extension["settings_groups"])
         self.assertIn("phases", core_extension["lifecycle"])
         self.assertTrue(any(phase["key"] == "register" for phase in core_extension["lifecycle"]["phases"]))
         self.assertEqual(core_extension["action_links"]["detail_page"], "/admin/extensions/core")
+        self.assertEqual(core_extension["action_links"]["settings_page"], "/admin/extensions/core/settings")
+        self.assertEqual(core_extension["action_links"]["operations_page"], "/admin/extensions/core/operations")
         self.assertTrue(any(action["key"] == "details" for action in core_extension["admin_actions"]))
 
         sample_extension = next(item for item in payload["extensions"] if item["id"] == "sample-hello")
@@ -1197,6 +1282,33 @@ class AdminExtensionsApiTests(TestCase):
         ))
         self.assertEqual(payload["debug_info"]["validation_issues"], [])
         self.assertEqual(payload["backend_hooks"], [])
+        self.assertEqual(payload["permission_summary"]["permission_count"], 0)
+        self.assertEqual(payload["permission_summary"]["section_count"], 0)
+        self.assertEqual(payload["permission_modules"], [])
+        self.assertEqual(payload["permission_sections"], [])
+        self.assertEqual(payload["admin_page_details"], [])
+
+    def test_extension_detail_api_aggregates_builtin_extension_permissions(self):
+        response = self.client.get(
+            "/api/admin/extensions/approval",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()["extension"]
+        self.assertGreater(payload["permission_summary"]["permission_count"], 0)
+        self.assertGreater(payload["permission_summary"]["section_count"], 0)
+        self.assertTrue(any(item["module_id"] == "approval" for item in payload["permission_modules"]))
+        self.assertTrue(any(
+            permission["module_id"] == "approval"
+            for section in payload["permission_sections"]
+            for permission in section["permissions"]
+        ))
+        self.assertFalse(any(
+            permission["module_id"] != "approval"
+            for section in payload["permission_sections"]
+            for permission in section["permissions"]
+        ))
 
     def test_extension_settings_api_can_read_and_save_declared_schema(self):
         response = self.client.get(

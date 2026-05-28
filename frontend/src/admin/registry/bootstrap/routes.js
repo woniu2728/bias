@@ -93,6 +93,58 @@ registerAdminRoute({
 })
 
 registerAdminRoute({
+  path: '/admin/internal/core/mail',
+  name: 'admin-core-mail-internal',
+  component: MailPage,
+  icon: 'fas fa-envelope',
+  label: '核心邮件设置',
+  navDescription: '核心扩展宿主页内部承载的邮件设置页。',
+  navSection: 'core',
+  navOrder: 24,
+  showInNavigation: false,
+  moduleId: 'core',
+})
+
+registerAdminRoute({
+  path: '/admin/internal/core/advanced',
+  name: 'admin-core-advanced-internal',
+  component: AdvancedPage,
+  icon: 'fas fa-cog',
+  label: '核心高级设置',
+  navDescription: '核心扩展宿主页内部承载的高级设置页。',
+  navSection: 'core',
+  navOrder: 24,
+  showInNavigation: false,
+  moduleId: 'core',
+})
+
+registerAdminRoute({
+  path: '/admin/internal/core/audit-logs',
+  name: 'admin-core-audit-logs-internal',
+  component: AuditLogsPage,
+  icon: 'fas fa-clipboard-list',
+  label: '核心审计日志',
+  navDescription: '核心扩展宿主页内部承载的审计日志页。',
+  navSection: 'core',
+  navOrder: 24,
+  showInNavigation: false,
+  moduleId: 'core',
+})
+
+registerAdminRoute({
+  path: '/admin/internal/core/docs',
+  name: 'admin-core-docs-internal',
+  component: DeveloperDocsPage,
+  icon: 'fas fa-book',
+  label: '核心开发者文档',
+  navDescription: '核心扩展宿主页内部承载的开发者文档页。',
+  navSection: 'core',
+  navOrder: 24,
+  showInNavigation: false,
+  moduleId: 'core',
+})
+
+registerAdminRoute({
   path: '/admin/modules',
   name: 'admin-modules',
   component: ModulesPage,
@@ -192,10 +244,10 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/audit-logs',
   name: 'admin-audit-logs',
-  component: AuditLogsPage,
+  redirect: '/admin/extensions/core/operations',
   icon: 'fas fa-clipboard-list',
   label: '审计日志',
-  navDescription: '追踪后台关键操作记录。',
+  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心维护页。',
   navSection: 'feature',
   navOrder: 130,
   showInDashboardActions: true,
@@ -218,10 +270,10 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/mail',
   name: 'admin-mail',
-  component: MailPage,
+  redirect: '/admin/extensions/core/settings',
   icon: 'fas fa-envelope',
   label: '邮件设置',
-  navDescription: '配置邮件服务和发信能力。',
+  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心设置页。',
   navSection: 'feature',
   navOrder: 150,
   moduleId: 'core'
@@ -230,10 +282,10 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/advanced',
   name: 'admin-advanced',
-  component: AdvancedPage,
+  redirect: '/admin/extensions/core/operations',
   icon: 'fas fa-cog',
   label: '高级设置',
-  navDescription: '管理缓存、队列和系统级能力。',
+  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心操作页。',
   navSection: 'feature',
   navOrder: 160,
   moduleId: 'core'
@@ -242,10 +294,10 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/docs',
   name: 'admin-developer-docs',
-  component: DeveloperDocsPage,
+  redirect: '/admin/extensions/core/operations',
   icon: 'fas fa-book',
   label: '开发者文档',
-  navDescription: '查看模块开发、资源字段、事件订阅和注册接入指南。',
+  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心维护页。',
   navSection: 'feature',
   navOrder: 170,
   moduleId: 'core'

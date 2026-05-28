@@ -109,6 +109,7 @@ def _resolve_builtin_module_icon(module: ForumModuleDefinition) -> str:
 
 def _resolve_builtin_frontend_admin_entry(module: ForumModuleDefinition) -> str:
     builtin_entries = {
+        "core": "builtin:core",
         "approval": "builtin:approval",
         "tags": "builtin:tags",
         "flags": "builtin:flags",
@@ -120,6 +121,8 @@ def _resolve_builtin_frontend_admin_entry(module: ForumModuleDefinition) -> str:
 def _resolve_builtin_settings_pages(module: ForumModuleDefinition) -> tuple[str, ...]:
     if module.module_id == "tags":
         return (f"/admin/extensions/{module.module_id}/settings",)
+    if module.module_id == "core":
+        return (f"/admin/extensions/{module.module_id}/settings",)
     return tuple(page.path for page in module.admin_pages if page.settings_group)
 
 
@@ -129,6 +132,8 @@ def _resolve_builtin_operations_pages(module: ForumModuleDefinition) -> tuple[st
         "flags",
         "users",
     }
+    if module.module_id == "core":
+        return (f"/admin/extensions/{module.module_id}/operations",)
     if module.module_id == "tags":
         return ()
     if module.module_id in hosted_operations_modules:

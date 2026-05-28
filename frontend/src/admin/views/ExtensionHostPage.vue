@@ -45,6 +45,7 @@ import {
 } from '../extensions/fallbacks'
 import { findAdminRouteByPath } from '../registry'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
+import CoreExtensionHostPage from './CoreExtensionHostPage.vue'
 import FlagsPage from './FlagsPage.vue'
 import TagsPage from './TagsPage.vue'
 import UsersPage from './UsersPage.vue'
@@ -57,6 +58,10 @@ const resolvedComponent = ref(null)
 
 const adminEntryModules = import.meta.glob('../../../../extensions/*/frontend/admin/index.js')
 const builtinAdminEntries = {
+  'builtin:core': {
+    resolveSettingsPage: () => CoreExtensionHostPage,
+    resolveOperationsPage: () => CoreExtensionHostPage,
+  },
   'builtin:approval': {
     resolveOperationsPage: () => ApprovalQueuePage,
   },

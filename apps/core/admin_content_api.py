@@ -14,7 +14,7 @@ from apps.core.extension_service import ExtensionService
 from apps.core.extension_settings_service import get_extension_settings, serialize_extension_settings_schema, save_extension_settings
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
 from apps.core.jwt_auth import AccessTokenAuth
-from apps.core.forum_registry import get_builtin_module_ids
+from apps.core.forum_registry import get_builtin_module_ids, get_forum_registry
 
 
 router = Router()
@@ -53,7 +53,7 @@ def get_admin_extension(request, extension_id: str):
     except ExtensionNotFoundError:
         return _legacy().admin_error("扩展不存在", status=404, code="extension_not_found")
     return {
-        "extension": _serialize_admin_extension(extension),
+        "extension": _serialize_admin_extension(extension, include_permission_details=True),
     }
 
 
@@ -223,12 +223,16 @@ def _serialize_admin_extensions_payload(extensions):
     }
 
 
-def _serialize_admin_extension(extension):
+def _serialize_admin_extension(extension, include_permission_details: bool = False):
     detail_page = f"/admin/extensions/{extension.id}"
     settings_page = next(iter(extension.manifest.settings_pages), "")
     permissions_page = next(iter(extension.manifest.permissions_pages), "")
     operations_page = next(iter(extension.manifest.operations_pages), "")
     admin_actions = _serialize_extension_admin_actions(extension)
+    permission_sections = _build_extension_permission_sections(extension) if include_permission_details else []
+    permission_summary = _build_extension_permission_summary(permission_sections)
+    permission_modules = _build_extension_permission_modules(permission_sections)
+    admin_page_details = _build_extension_admin_page_details(extension)
 
     return {
         "id": extension.id,
@@ -316,8 +320,12 @@ def _serialize_admin_extension(extension):
         "source": extension.source,
         "module_ids": list(extension.module_ids),
         "admin_pages": list(extension.admin_pages),
+        "admin_page_details": admin_page_details,
         "settings_groups": list(extension.settings_groups),
         "admin_actions": admin_actions,
+        "permission_summary": permission_summary,
+        "permission_modules": permission_modules,
+        "permission_sections": permission_sections,
         "action_links": {
             "detail_page": detail_page,
             "settings_page": settings_page,
@@ -343,6 +351,83 @@ def _serialize_admin_extension(extension):
         },
         "debug_info": _build_extension_debug_info(extension),
     }
+
+
+def _build_extension_admin_page_details(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    pages = []
+    seen_paths = set()
+    for page in get_forum_registry().get_admin_pages():
+        if page.module_id not in module_ids:
+            continue
+        if page.path in seen_paths:
+            continue
+        seen_paths.add(page.path)
+        pages.append({
+            "path": page.path,
+            "label": page.label,
+            "icon": page.icon,
+            "module_id": page.module_id,
+            "nav_section": page.nav_section,
+            "description": page.description,
+            "settings_group": page.settings_group,
+        })
+    return pages
+
+
+def _build_extension_permission_sections(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    sections = []
+    for section in get_forum_registry().get_permission_sections():
+        permissions = [
+            permission
+            for permission in section.get("permissions", [])
+            if permission.get("module_id") in module_ids
+        ]
+        if not permissions:
+            continue
+        sections.append({
+            "name": section.get("name", ""),
+            "label": section.get("label", ""),
+            "permission_count": len(permissions),
+            "permissions": permissions,
+        })
+    return sections
+
+
+def _build_extension_permission_summary(sections):
+    permission_count = sum(len(section["permissions"]) for section in sections)
+    module_ids = {
+        permission["module_id"]
+        for section in sections
+        for permission in section["permissions"]
+    }
+    return {
+        "section_count": len(sections),
+        "permission_count": permission_count,
+        "module_count": len(module_ids),
+    }
+
+
+def _build_extension_permission_modules(sections):
+    counts = {}
+    for section in sections:
+        for permission in section["permissions"]:
+            module_id = permission["module_id"]
+            counts[module_id] = counts.get(module_id, 0) + 1
+    return [
+        {
+            "module_id": module_id,
+            "permission_count": counts[module_id],
+        }
+        for module_id in sorted(counts.keys())
+    ]
 
 
 def _serialize_extension_admin_actions(extension):

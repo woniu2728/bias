@@ -151,3 +151,42 @@ test('admin routes preserve compatibility redirects for builtin operations pages
   assert.equal(findAdminRouteByPath(approvalLegacyPath)?.redirect, '/admin/extensions/approval/operations')
   assert.equal(findAdminRouteByPath(flagsLegacyPath)?.redirect, '/admin/extensions/flags/operations')
 })
+
+test('admin routes can match internal core extension carrier pages', () => {
+  registerAdminRoute({
+    path: '/admin/internal/core/mail',
+    name: 'admin-core-mail-internal',
+    label: '核心邮件设置',
+    moduleId: 'core',
+    showInNavigation: false,
+  })
+
+  registerAdminRoute({
+    path: '/admin/internal/core/advanced',
+    name: 'admin-core-advanced-internal',
+    label: '核心高级设置',
+    moduleId: 'core',
+    showInNavigation: false,
+  })
+
+  registerAdminRoute({
+    path: '/admin/internal/core/audit-logs',
+    name: 'admin-core-audit-logs-internal',
+    label: '核心审计日志',
+    moduleId: 'core',
+    showInNavigation: false,
+  })
+
+  registerAdminRoute({
+    path: '/admin/internal/core/docs',
+    name: 'admin-core-docs-internal',
+    label: '核心开发者文档',
+    moduleId: 'core',
+    showInNavigation: false,
+  })
+
+  assert.equal(findAdminRouteByPath('/admin/internal/core/mail')?.name, 'admin-core-mail-internal')
+  assert.equal(findAdminRouteByPath('/admin/internal/core/advanced')?.name, 'admin-core-advanced-internal')
+  assert.equal(findAdminRouteByPath('/admin/internal/core/audit-logs')?.name, 'admin-core-audit-logs-internal')
+  assert.equal(findAdminRouteByPath('/admin/internal/core/docs')?.name, 'admin-core-docs-internal')
+})

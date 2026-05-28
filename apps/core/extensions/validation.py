@@ -219,6 +219,26 @@ def resolve_admin_surface_implementation(
             "available": True,
         }
 
+    if normalized_surface == "permissions" and manifest.permissions_pages:
+        return {
+            "surface": normalized_surface,
+            "mode": "generated",
+            "mode_label": "统一权限宿主",
+            "export_name": export_name,
+            "available": True,
+        }
+
+    if normalized_surface == "operations" and manifest.operations_pages and (
+        manifest.admin_actions or manifest.runtime_actions
+    ):
+        return {
+            "surface": normalized_surface,
+            "mode": "generated",
+            "mode_label": "统一操作宿主",
+            "export_name": export_name,
+            "available": True,
+        }
+
     if normalized_surface == "detail":
         return {
             "surface": normalized_surface,
@@ -886,7 +906,8 @@ def _validate_frontend_admin_entry(
         )
 
     for export_name in required_exports:
-        if export_name == "resolveSettingsPage" and manifest.settings_schema:
+        surface = _resolve_surface_from_export_name(export_name)
+        if surface and resolve_admin_surface_implementation(manifest, surface, available_exports).get("mode") == "generated":
             continue
         if export_name not in available_exports:
             collector.add_error(
@@ -906,6 +927,15 @@ def _build_required_frontend_admin_exports(manifest: ExtensionManifest) -> list[
     if manifest.operations_pages:
         required_exports.append("resolveOperationsPage")
     return required_exports
+
+
+def _resolve_surface_from_export_name(export_name: str) -> str:
+    return {
+        "resolveSettingsPage": "settings",
+        "resolvePermissionsPage": "permissions",
+        "resolveOperationsPage": "operations",
+        "resolveDetailPage": "detail",
+    }.get(str(export_name or "").strip(), "")
 
 
 def _validate_frontend_forum_entry(

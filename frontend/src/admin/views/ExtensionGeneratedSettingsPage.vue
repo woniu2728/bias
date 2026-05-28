@@ -26,53 +26,43 @@
     <AdminStateBlock v-else-if="!fields.length" tone="subtle">当前扩展未声明可配置项。</AdminStateBlock>
 
     <form v-else class="ExtensionGeneratedSettings-form" @submit.prevent="handleSubmit">
-      <div
-        v-for="field in fields"
-        :key="field.key"
-        class="ExtensionGeneratedSettings-field"
-      >
-        <label :for="resolveFieldId(field.key)">{{ field.label }}</label>
+      <div class="ExtensionGeneratedSettings-layout">
+        <section class="ExtensionGeneratedSettings-fieldsCard">
+          <header class="ExtensionGeneratedSettings-sectionHead">
+            <div>
+              <h3>设置项</h3>
+              <p>由扩展声明的 `settings_schema` 自动生成。</p>
+            </div>
+          </header>
 
-        <input
-          v-if="field.type === 'text' || field.type === 'number'"
-          :id="resolveFieldId(field.key)"
-          v-model="settings[field.key]"
-          :type="field.type === 'number' ? 'number' : 'text'"
-          class="FormControl"
-          :placeholder="field.placeholder || ''"
-        />
+          <div class="ExtensionGeneratedSettings-fields">
+            <AdminSettingField
+              v-for="field in fields"
+              :key="field.key"
+              :field="field"
+              :model-value="settings[field.key]"
+              @update:modelValue="settings[field.key] = $event"
+            />
+          </div>
+        </section>
 
-        <textarea
-          v-else-if="field.type === 'textarea'"
-          :id="resolveFieldId(field.key)"
-          v-model="settings[field.key]"
-          class="FormControl"
-          rows="4"
-          :placeholder="field.placeholder || ''"
-        ></textarea>
-
-        <AdminSelectMenu
-          v-else-if="field.type === 'select'"
-          :input-id="resolveFieldId(field.key)"
-          v-model="settings[field.key]"
-          :options="field.options || []"
-          :placeholder="field.placeholder || '请选择'"
-          :aria-label="field.label"
-        />
-
-        <label v-else-if="field.type === 'boolean'" class="ExtensionGeneratedSettings-toggle">
-          <input
-            :id="resolveFieldId(field.key)"
-            v-model="settings[field.key]"
-            type="checkbox"
-            class="FormControl-checkbox"
-          />
-          <span>{{ field.help_text || '启用该设置项' }}</span>
-        </label>
-
-        <p v-if="field.type !== 'boolean' && field.help_text" class="Form-help">
-          {{ field.help_text }}
-        </p>
+        <aside class="ExtensionGeneratedSettings-sideCard">
+          <h3>当前宿主</h3>
+          <dl class="ExtensionGeneratedSettings-sideMeta">
+            <div>
+              <dt>承载方式</dt>
+              <dd>自动生成表单</dd>
+            </div>
+            <div>
+              <dt>入口类型</dt>
+              <dd>{{ hostKindLabel }}</dd>
+            </div>
+            <div>
+              <dt>字段数量</dt>
+              <dd>{{ fields.length }}</dd>
+            </div>
+          </dl>
+        </aside>
       </div>
 
       <div class="ExtensionGeneratedSettings-actions">
@@ -93,7 +83,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import api from '../../api'
 import AdminInlineMessage from '../components/AdminInlineMessage.vue'
-import AdminSelectMenu from '../components/AdminSelectMenu.vue'
+import AdminSettingField from '../components/AdminSettingField.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { useAdminSaveFeedback } from '../composables/useAdminSaveFeedback'
 
@@ -185,18 +175,9 @@ async function handleSubmit() {
 function buildSubmitPayload() {
   const payload = {}
   for (const field of fields.value) {
-    if (field.type === 'number') {
-      const value = settings.value[field.key]
-      payload[field.key] = value === '' || value === null || value === undefined ? '' : Number(value)
-      continue
-    }
     payload[field.key] = settings.value[field.key]
   }
   return payload
-}
-
-function resolveFieldId(key) {
-  return `extension-generated-setting-${key}`
 }
 </script>
 
@@ -264,19 +245,69 @@ function resolveFieldId(key) {
   gap: 16px;
 }
 
-.ExtensionGeneratedSettings-field {
+.ExtensionGeneratedSettings-layout {
   display: grid;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
 }
 
-.ExtensionGeneratedSettings-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
+.ExtensionGeneratedSettings-fieldsCard,
+.ExtensionGeneratedSettings-sideCard {
+  border: 1px solid var(--forum-border-color);
+  border-radius: 16px;
+  background: var(--forum-bg-subtle);
+  padding: 18px;
+}
+
+.ExtensionGeneratedSettings-sectionHead {
+  margin-bottom: 16px;
+}
+
+.ExtensionGeneratedSettings-sectionHead h3,
+.ExtensionGeneratedSettings-sideCard h3 {
+  margin: 0 0 8px;
+}
+
+.ExtensionGeneratedSettings-sectionHead p {
+  margin: 0;
+  color: var(--forum-text-soft);
+}
+
+.ExtensionGeneratedSettings-fields {
+  display: grid;
+  gap: 16px;
+}
+
+.ExtensionGeneratedSettings-sideMeta {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.ExtensionGeneratedSettings-sideMeta div {
+  display: grid;
+  gap: 4px;
+}
+
+.ExtensionGeneratedSettings-sideMeta dt {
+  color: var(--forum-text-soft);
+}
+
+.ExtensionGeneratedSettings-sideMeta dd {
+  margin: 0;
+  color: var(--forum-text-color);
+  font-weight: 600;
 }
 
 .ExtensionGeneratedSettings-actions {
   display: flex;
   justify-content: flex-start;
+}
+
+@media (max-width: 900px) {
+  .ExtensionGeneratedSettings-layout {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

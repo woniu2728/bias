@@ -119,6 +119,41 @@
               <code>{{ item.value }}</code>
             </li>
           </ul>
+          <div v-if="adminPageDetails.length" class="ExtensionDetailEntryGrid">
+            <article
+              v-for="page in adminPageDetails"
+              :key="page.path"
+              class="ExtensionDetailEntryCard"
+            >
+              <div class="ExtensionDetailEntryCard-head">
+                <div class="ExtensionDetailEntryCard-title">
+                  <i :class="page.icon || 'fas fa-link'"></i>
+                  <strong>{{ page.label }}</strong>
+                </div>
+                <span v-if="page.settings_group" class="ExtensionDetailChecks-status is-pending">
+                  {{ page.settings_group }}
+                </span>
+              </div>
+              <p>{{ page.description || '当前扩展关联的后台管理页面。' }}</p>
+              <code>{{ page.path }}</code>
+            </article>
+          </div>
+          <div v-if="adminSurfaceCards.length" class="ExtensionDetailSurfaceGrid">
+            <article
+              v-for="item in adminSurfaceCards"
+              :key="item.key"
+              class="ExtensionDetailSurfaceCard"
+            >
+              <div class="ExtensionDetailSurfaceCard-head">
+                <strong>{{ item.label }}</strong>
+                <span class="ExtensionDetailChecks-status" :class="resolveAdminSurfaceStatusClass(item)">
+                  {{ item.modeLabel }}
+                </span>
+              </div>
+              <p>{{ item.summary }}</p>
+              <code v-if="item.route">{{ item.route }}</code>
+            </article>
+          </div>
         </section>
 
         <section class="ExtensionDetailCard">
@@ -388,7 +423,7 @@ import { useModalStore } from '../../stores/modal'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
-import { resolveExtensionEntryTypeLabel } from '../extensions/diagnostics'
+import { resolveExtensionAdminSurfaceCards, resolveExtensionEntryTypeLabel } from '../extensions/diagnostics'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
 import FlagsPage from './FlagsPage.vue'
 import TagsPage from './TagsPage.vue'
@@ -431,6 +466,10 @@ const actionItems = computed(() => {
   ].filter(item => item.value)
 })
 
+const adminPageDetails = computed(() => {
+  return Array.isArray(extension.value?.admin_page_details) ? extension.value.admin_page_details : []
+})
+
 const adminActions = computed(() => {
   return Array.isArray(extension.value?.admin_actions) ? extension.value.admin_actions : []
 })
@@ -462,6 +501,10 @@ const debugValidationIssues = computed(() => {
 const adminSurfaceStatuses = computed(() => {
   return Array.isArray(debugInfo.value?.admin_surface_statuses) ? debugInfo.value.admin_surface_statuses : []
 })
+
+const adminSurfaceCards = computed(() => (
+  extension.value ? resolveExtensionAdminSurfaceCards(extension.value) : []
+))
 
 const adminSurfaceSummary = computed(() => {
   if (!adminSurfaceStatuses.value.length) {
@@ -785,6 +828,66 @@ function syncModulesFromExtension(currentExtension) {
 .ExtensionDetailStack div {
   display: grid;
   gap: 6px;
+}
+
+.ExtensionDetailSurfaceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.ExtensionDetailEntryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.ExtensionDetailEntryCard {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: 14px;
+  background: var(--forum-bg-subtle);
+}
+
+.ExtensionDetailEntryCard-head,
+.ExtensionDetailEntryCard-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ExtensionDetailEntryCard-head {
+  justify-content: space-between;
+}
+
+.ExtensionDetailEntryCard p,
+.ExtensionDetailEntryCard code {
+  margin: 0;
+}
+
+.ExtensionDetailSurfaceCard {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: 14px;
+  background: var(--forum-bg-subtle);
+}
+
+.ExtensionDetailSurfaceCard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ExtensionDetailSurfaceCard p,
+.ExtensionDetailSurfaceCard code {
+  margin: 0;
 }
 
 .ExtensionDetailLinks code {
