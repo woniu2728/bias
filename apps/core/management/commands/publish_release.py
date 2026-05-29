@@ -20,6 +20,12 @@ class Command(BaseCommand):
         parser.add_argument("--commit-message", help="可选的发布 commit 信息，默认使用“发布 X.Y.Z”")
         parser.add_argument("--push", action="store_true", help="创建 tag 后自动 push 到 origin main --tags")
         parser.add_argument("--dry-run", action="store_true", help="只做校验和预演，不写文件、不创建 tag")
+        parser.add_argument("--extension-report", help="可选：把扩展诊断快照写入指定 JSON 文件")
+        parser.add_argument(
+            "--allow-extension-attention",
+            action="store_true",
+            help="允许存在扩展关注项继续发布；默认存在关注项就阻止发布",
+        )
 
     def handle(self, *args, **options):
         version = str(options["set_version"]).strip()
@@ -29,6 +35,8 @@ class Command(BaseCommand):
         allow_dirty = bool(options.get("allow_dirty"))
         push = bool(options.get("push"))
         dry_run = bool(options.get("dry_run"))
+        extension_report = str(options.get("extension_report") or "").strip()
+        allow_extension_attention = bool(options.get("allow_extension_attention"))
 
         self.stdout.write(self.style.MIGRATE_HEADING("开始准备发布 Bias"))
 
@@ -45,11 +53,15 @@ class Command(BaseCommand):
 
         if allow_dirty:
             prepare_args.append("--allow-dirty")
+        if allow_extension_attention:
+            prepare_args.append("--allow-extension-attention")
         if dry_run:
             prepare_args.append("--dry-run")
             finalize_args.append("--dry-run")
         if message:
             finalize_args.extend(["--message", str(message)])
+        if extension_report:
+            prepare_args.extend(["--extension-report", extension_report])
 
         call_command("prepare_release", *prepare_args)
 

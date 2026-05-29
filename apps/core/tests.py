@@ -6008,8 +6008,15 @@ class ReleaseVersionControlTests(TestCase):
                 encoding="utf-8",
             )
 
-            with override_settings(BASE_DIR=base_dir):
-                call_command("prepare_release", "--tag", "v1.2.3")
+            with patch("apps.core.management.commands.prepare_release.Command._inspect_extensions") as inspect_mock:
+                inspect_mock.return_value = {
+                    "summary": {
+                        "attention_count": 0,
+                    },
+                    "extensions": [],
+                }
+                with override_settings(BASE_DIR=base_dir):
+                    call_command("prepare_release", "--tag", "v1.2.3")
 
             self.assertEqual((base_dir / "VERSION").read_text(encoding="utf-8").strip(), "1.2.3")
             package_json = json.loads((base_dir / "frontend" / "package.json").read_text(encoding="utf-8"))
@@ -6023,6 +6030,73 @@ class ReleaseVersionControlTests(TestCase):
     def test_prepare_release_rejects_mismatched_version_and_tag(self):
         with self.assertRaisesMessage(CommandError, "--set-version 与 --tag 不一致"):
             call_command("prepare_release", "--set-version", "1.0.1", "--tag", "v1.0.2", "--allow-dirty")
+
+    def test_prepare_release_rejects_extension_attention_by_default(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            base_dir = Path(temp_dir)
+            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
+            (base_dir / "VERSION").write_text("1.0.0\n", encoding="utf-8")
+            (base_dir / "frontend" / "package.json").write_text(
+                json.dumps({"name": "bias-frontend", "version": "1.0.0"}) + "\n",
+                encoding="utf-8",
+            )
+            (base_dir / "frontend" / "package-lock.json").write_text(
+                json.dumps({"name": "bias-frontend", "version": "1.0.0", "packages": {"": {"version": "1.0.0"}}}) + "\n",
+                encoding="utf-8",
+            )
+
+            with patch("apps.core.management.commands.prepare_release.Command._inspect_extensions") as inspect_mock:
+                inspect_mock.return_value = {
+                    "summary": {
+                        "attention_count": 2,
+                    },
+                    "extensions": [],
+                }
+                with override_settings(BASE_DIR=base_dir):
+                    with self.assertRaisesMessage(CommandError, "扩展诊断存在 2 个关注项"):
+                        call_command("prepare_release", "--set-version", "1.0.0", "--allow-dirty")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_prepare_release_can_write_extension_report(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            base_dir = Path(temp_dir)
+            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
+            (base_dir / "VERSION").write_text("1.0.0\n", encoding="utf-8")
+            (base_dir / "frontend" / "package.json").write_text(
+                json.dumps({"name": "bias-frontend", "version": "1.0.0"}) + "\n",
+                encoding="utf-8",
+            )
+            (base_dir / "frontend" / "package-lock.json").write_text(
+                json.dumps({"name": "bias-frontend", "version": "1.0.0", "packages": {"": {"version": "1.0.0"}}}) + "\n",
+                encoding="utf-8",
+            )
+            report_path = base_dir / "artifacts" / "extensions-report.json"
+
+            with patch("apps.core.management.commands.prepare_release.Command._inspect_extensions") as inspect_mock:
+                inspect_mock.return_value = {
+                    "summary": {
+                        "attention_count": 0,
+                    },
+                    "extensions": [{"id": "core"}],
+                }
+                with override_settings(BASE_DIR=base_dir):
+                    call_command(
+                        "prepare_release",
+                        "--set-version",
+                        "1.0.0",
+                        "--allow-dirty",
+                        "--extension-report",
+                        str(report_path),
+                    )
+
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["summary"]["attention_count"], 0)
+            self.assertEqual(payload["extensions"][0]["id"], "core")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
     @patch("apps.core.management.commands.prepare_release.subprocess.run")
     def test_prepare_release_requires_clean_git_state_by_default(self, mock_run):
@@ -6189,12 +6263,15 @@ class ReleaseVersionControlTests(TestCase):
             "1.2.3",
             "--dry-run",
             "--allow-dirty",
+            "--allow-extension-attention",
+            "--extension-report",
+            "artifacts/extensions.json",
         )
 
         self.assertEqual(
             [call.args for call in mock_call_command.call_args_list],
             [
-                ("prepare_release", "--set-version", "1.2.3", "--tag", "v1.2.3", "--allow-dirty", "--dry-run"),
+                ("prepare_release", "--set-version", "1.2.3", "--tag", "v1.2.3", "--allow-dirty", "--allow-extension-attention", "--dry-run", "--extension-report", "artifacts/extensions.json"),
                 ("finalize_release", "--tag", "v1.2.3", "--dry-run"),
             ],
         )
