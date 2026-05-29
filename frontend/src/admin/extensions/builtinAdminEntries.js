@@ -1,6 +1,14 @@
 import ApprovalQueuePage from '../views/ApprovalQueuePage.vue'
 import CoreExtensionHostPage from '../views/CoreExtensionHostPage.vue'
+import DiscussionsExtensionHostPage from '../views/DiscussionsExtensionHostPage.vue'
 import FlagsPage from '../views/FlagsPage.vue'
+import LikesExtensionHostPage from '../views/LikesExtensionHostPage.vue'
+import MentionsExtensionHostPage from '../views/MentionsExtensionHostPage.vue'
+import NotificationsExtensionHostPage from '../views/NotificationsExtensionHostPage.vue'
+import PostsExtensionHostPage from '../views/PostsExtensionHostPage.vue'
+import RealtimeExtensionHostPage from '../views/RealtimeExtensionHostPage.vue'
+import SubscriptionsExtensionHostPage from '../views/SubscriptionsExtensionHostPage.vue'
+import TagStatsExtensionHostPage from '../views/TagStatsExtensionHostPage.vue'
 import TagsPage from '../views/TagsPage.vue'
 import UsersPage from '../views/UsersPage.vue'
 
@@ -9,8 +17,13 @@ export const builtinAdminEntries = {
     resolveSettingsPage: () => CoreExtensionHostPage,
     resolveOperationsPage: () => CoreExtensionHostPage,
   },
-  'builtin:discussions': {},
-  'builtin:posts': {},
+  'builtin:discussions': {
+    resolvePermissionsPage: () => DiscussionsExtensionHostPage,
+    resolveOperationsPage: () => DiscussionsExtensionHostPage,
+  },
+  'builtin:posts': {
+    resolveOperationsPage: () => PostsExtensionHostPage,
+  },
   'builtin:approval': {
     resolveOperationsPage: () => ApprovalQueuePage,
   },
@@ -23,10 +36,22 @@ export const builtinAdminEntries = {
   'builtin:users': {
     resolveOperationsPage: () => UsersPage,
   },
-  'builtin:notifications': {},
-  'builtin:mentions': {},
-  'builtin:subscriptions': {},
-  'builtin:realtime': {},
-  'builtin:likes': {},
-  'builtin:tag-stats': {},
+  'builtin:notifications': {
+    resolveOperationsPage: () => NotificationsExtensionHostPage,
+  },
+  'builtin:mentions': {
+    resolveOperationsPage: () => MentionsExtensionHostPage,
+  },
+  'builtin:subscriptions': {
+    resolveOperationsPage: () => SubscriptionsExtensionHostPage,
+  },
+  'builtin:realtime': {
+    resolveOperationsPage: () => RealtimeExtensionHostPage,
+  },
+  'builtin:likes': {
+    resolveOperationsPage: () => LikesExtensionHostPage,
+  },
+  'builtin:tag-stats': {
+    resolveOperationsPage: () => TagStatsExtensionHostPage,
+  },
 }

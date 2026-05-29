@@ -76,6 +76,28 @@ test('loadExtensionAdminEntryModule accepts builtin discussion operation hosts',
   assert.equal(loaded, builtinModule)
 })
 
+test('resolveAdminEntryFactory can expose builtin discussion and post host components', () => {
+  const discussionModule = {
+    resolvePermissionsPage: 'discussion-permissions',
+    resolveOperationsPage: 'discussion-operations',
+  }
+  const postModule = {
+    resolveOperationsPage: 'post-operations',
+  }
+  const notificationModule = {
+    resolveOperationsPage: 'notification-operations',
+  }
+  const realtimeModule = {
+    resolveOperationsPage: 'realtime-operations',
+  }
+
+  assert.equal(resolveAdminEntryFactory(discussionModule, 'permissions'), 'discussion-permissions')
+  assert.equal(resolveAdminEntryFactory(discussionModule, 'operations'), 'discussion-operations')
+  assert.equal(resolveAdminEntryFactory(postModule, 'operations'), 'post-operations')
+  assert.equal(resolveAdminEntryFactory(notificationModule, 'operations'), 'notification-operations')
+  assert.equal(resolveAdminEntryFactory(realtimeModule, 'operations'), 'realtime-operations')
+})
+
 test('loadExtensionAdminEntryModule loads filesystem importer entries', async () => {
   const loaded = await loadExtensionAdminEntryModule('../../../../extensions/sample-hello/frontend/admin/index.js', {
     importers: {
