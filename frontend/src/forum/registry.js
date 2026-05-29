@@ -285,7 +285,6 @@ registerHeaderItem({
 
 registerHeaderItem({
   key: 'user-admin-menu',
-  moduleId: 'core',
   placement: 'user-menu',
   order: 30,
   icon: 'fas fa-cog',
@@ -336,7 +335,6 @@ registerHeaderItem({
 
 registerHeaderItem({
   key: 'mobile-admin',
-  moduleId: 'core',
   placement: 'mobile-drawer-user',
   order: 10,
   icon: 'fas fa-cog',

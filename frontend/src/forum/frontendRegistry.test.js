@@ -312,6 +312,53 @@ test('registered items with module id are filtered by forum runtime state', () =
   assert.equal(getPostActions(context).some(item => item.key === postActionKey), false)
 })
 
+test('admin header entry remains visible for staff even when forum modules are filtered', () => {
+  const key = uniqueKey('staff-header-item')
+  const mobileKey = uniqueKey('staff-mobile-item')
+
+  registerHeaderItem({
+    key,
+    placement: 'user-menu',
+    order: 10,
+    label: '管理后台',
+    href: '/admin.html',
+    isVisible: ({ authStore }) => Boolean(authStore?.user?.is_staff),
+  })
+  registerHeaderItem({
+    key: mobileKey,
+    placement: 'mobile-drawer-user',
+    order: 10,
+    label: '管理后台',
+    href: '/admin.html',
+    isVisible: ({ authStore }) => Boolean(authStore?.user?.is_staff),
+  })
+
+  const staffContext = {
+    forumStore: {
+      isModuleEnabled() {
+        return false
+      },
+    },
+    state: {
+      icon: 'fas fa-shield-alt',
+      label: '管理员',
+    },
+    authStore: {
+      user: {
+        id: 1,
+        username: 'admin',
+        is_staff: true,
+      },
+    },
+  }
+
+  const userMenuItems = getHeaderItems(staffContext, 'user-menu')
+  const mobileUserItems = getHeaderItems(staffContext, 'mobile-drawer-user')
+
+  assert.equal(userMenuItems.some(item => item.key === key), true)
+  assert.equal(mobileUserItems.some(item => item.key === mobileKey), true)
+})
+
 test('post review banner prefers matching surface-specific item', () => {
   const fallbackKey = uniqueKey('post-review-fallback')
   const scopedKey = uniqueKey('post-review-scoped')

@@ -4370,6 +4370,34 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(direct_response.json()["forum_title"], "缓存标题 C")
 
     @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
+    def test_public_forum_settings_rebuilds_legacy_cache_payload_missing_runtime_fields(self):
+        Setting.objects.update_or_create(
+            key="advanced.cache_lifetime",
+            defaults={"value": json.dumps(60)},
+        )
+        clear_runtime_setting_caches()
+        from django.core.cache import cache
+
+        cache.set(
+            "settings.public.forum",
+            {
+                "forum_title": "旧缓存标题",
+                "notification_types": [],
+                "user_preferences": [],
+                "post_types": [],
+            },
+            60,
+        )
+
+        response = self.client.get("/api/forum")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertIn("enabled_modules", payload)
+        self.assertIn("enabled_extensions", payload)
+        self.assertIn("core", payload["enabled_modules"])
+
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
     def test_maintenance_mode_blocks_public_api_but_keeps_admin_paths_available(self):
         Setting.objects.update_or_create(
             key="advanced.maintenance_mode",

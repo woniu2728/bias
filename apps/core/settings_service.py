@@ -256,6 +256,24 @@ def _cache_delete(key):
     return True
 
 
+def _is_valid_public_forum_settings_cache(payload) -> bool:
+    if not isinstance(payload, dict):
+        return False
+
+    required_list_fields = (
+        "notification_types",
+        "user_preferences",
+        "post_types",
+        "enabled_modules",
+        "enabled_extensions",
+    )
+    for field in required_list_fields:
+        if field not in payload or not isinstance(payload.get(field), list):
+            return False
+
+    return True
+
+
 def get_advanced_settings() -> dict:
     advanced_settings = get_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS)
     advanced_settings["cache_driver"] = (
@@ -311,8 +329,10 @@ def get_public_forum_settings() -> dict:
     cache_lifetime = get_cache_lifetime()
     if cache_lifetime > 0:
         cached = _cache_get(PUBLIC_FORUM_SETTINGS_CACHE_KEY)
-        if cached is not None:
+        if _is_valid_public_forum_settings_cache(cached):
             return cached
+        if cached is not None:
+            _cache_delete(PUBLIC_FORUM_SETTINGS_CACHE_KEY)
 
     forum_settings = get_setting_group("basic", BASIC_SETTINGS_DEFAULTS)
     forum_settings.update(get_setting_group("appearance", APPEARANCE_SETTINGS_DEFAULTS))
