@@ -835,9 +835,11 @@ class ExtensionValidationTests(TestCase):
 class ExtensionManagementCommandTests(TestCase):
     def test_extension_management_commands_skip_django_system_checks(self):
         from apps.core.management.commands.create_extension import Command as CreateExtensionCommand
+        from apps.core.management.commands.inspect_extensions import Command as InspectExtensionsCommand
         from apps.core.management.commands.validate_extensions import Command as ValidateExtensionsCommand
 
         self.assertEqual(CreateExtensionCommand.requires_system_checks, [])
+        self.assertEqual(InspectExtensionsCommand.requires_system_checks, [])
         self.assertEqual(ValidateExtensionsCommand.requires_system_checks, [])
 
     @patch("apps.core.management.commands.validate_extensions.get_builtin_module_ids", return_value=("core",))
@@ -1123,6 +1125,63 @@ class ExtensionManagementCommandTests(TestCase):
                 )
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_inspect_extensions_command_outputs_extension_snapshot(self):
+        stdout = StringIO()
+        call_command("inspect_extensions", stdout=stdout)
+        payload = json.loads(stdout.getvalue())
+
+        self.assertIn("summary", payload)
+        self.assertIn("extensions", payload)
+        self.assertIn("meta", payload)
+        self.assertGreaterEqual(payload["summary"]["extension_count"], 1)
+        self.assertIn("attention_count", payload["summary"])
+        self.assertTrue(any(item["id"] == "core" for item in payload["extensions"]))
+        self.assertTrue(any(item["id"] == "sample-hello" for item in payload["extensions"]))
+
+    def test_inspect_extensions_command_can_focus_single_extension_with_permissions(self):
+        stdout = StringIO()
+        call_command(
+            "inspect_extensions",
+            "--extension-id",
+            "sample-hello",
+            "--include-permissions",
+            stdout=stdout,
+        )
+        payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(payload["summary"]["extension_count"], 1)
+        self.assertEqual(payload["meta"]["extension_id"], "sample-hello")
+        self.assertEqual(payload["extensions"][0]["id"], "sample-hello")
+        self.assertIn("permission_sections", payload["extensions"][0])
+
+    def test_inspect_extensions_command_can_filter_attention_only(self):
+        ExtensionInstallation.objects.create(
+            extension_id="sample-hello",
+            version="0.1.0",
+            source="filesystem",
+            enabled=True,
+            installed=True,
+            booted=True,
+            meta={
+                "migration_execution": {
+                    "status": "error",
+                    "status_label": "失败",
+                    "message": "迁移执行失败",
+                },
+            },
+        )
+
+        stdout = StringIO()
+        call_command("inspect_extensions", "--only-attention", stdout=stdout)
+        payload = json.loads(stdout.getvalue())
+
+        self.assertGreaterEqual(payload["summary"]["attention_count"], 1)
+        self.assertTrue(any(item["id"] == "sample-hello" for item in payload["extensions"]))
+
+    def test_inspect_extensions_command_reports_missing_extension(self):
+        with self.assertRaisesMessage(CommandError, "扩展不存在: missing-extension"):
+            call_command("inspect_extensions", "--extension-id", "missing-extension")
 
 
 class ExtensionRegistryTests(TestCase):
@@ -7375,6 +7434,22 @@ class ProductionRuntimeCheckTests(TestCase):
         import manage
 
         argv = ["manage.py", "create_extension", "demo-tools"]
+        with patch.object(sys, "argv", argv):
+            manage.main()
+
+        enforce_runtime_checks_mock.assert_not_called()
+        execute_from_command_line_mock.assert_called_once_with(argv)
+
+    @patch("apps.core.startup_guard.enforce_production_runtime_checks")
+    @patch("django.core.management.execute_from_command_line")
+    def test_manage_py_main_skips_startup_guard_for_inspect_extensions(
+        self,
+        execute_from_command_line_mock,
+        enforce_runtime_checks_mock,
+    ):
+        import manage
+
+        argv = ["manage.py", "inspect_extensions"]
         with patch.object(sys, "argv", argv):
             manage.main()
 

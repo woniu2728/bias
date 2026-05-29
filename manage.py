@@ -6,6 +6,7 @@ import sys
 
 STARTUP_GUARD_EXEMPT_COMMANDS = {
     "create_extension",
+    "inspect_extensions",
     "validate_extensions",
 }
 
