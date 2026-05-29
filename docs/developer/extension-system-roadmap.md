@@ -284,6 +284,11 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
    - 不再把内置扩展权限按钮直接指向全局 `/admin/permissions`
    - `core / users / approval / flags` 已改为各自的 `/admin/extensions/<id>/permissions`
    - 统一由扩展权限宿主承接，再跳转全局权限矩阵完成授权
+12. 扩展开发工具链的结构约束已继续收严：
+   - `frontend_admin_entry` 必须指向当前扩展自己的标准后台入口
+   - `frontend_forum_entry` 必须指向当前扩展自己的标准前台入口
+   - `backend_entry` 与 `migration_namespace` 必须归属当前扩展命名空间
+   - `create_extension` 已补齐独立 `PermissionsPage.vue` 样板
 
 ### 已完成：阶段 7 的第一批生态元数据预留
 

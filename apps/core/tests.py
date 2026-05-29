@@ -346,6 +346,29 @@ class ExtensionValidationTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_validate_extension_manifests_reports_mismatched_frontend_entry_paths(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "frontend_admin_entry": "extensions/other-tools/frontend/admin/index.js",
+                "frontend_forum_entry": "extensions/other-tools/frontend/forum/index.js",
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "invalid_frontend_admin_entry_path" for item in result.issues))
+            self.assertTrue(any(item.code == "invalid_frontend_forum_entry_path" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_validate_extension_manifests_allows_generated_settings_surface(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -637,6 +660,41 @@ class ExtensionValidationTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_validate_extension_manifests_reports_invalid_backend_and_migration_namespace(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            backend_dir = manifest_dir / "backend"
+            migrations_dir = backend_dir / "migrations"
+            migrations_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "backend_entry": "extensions.other_tools.backend.ext",
+                "migration_namespace": "extensions.other_tools.backend.migrations",
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "def run_install(context):\n"
+                "    return {'status': 'ok'}\n",
+                encoding="utf-8",
+            )
+            (migrations_dir / "0001_initial.py").write_text(
+                "def apply():\n"
+                "    return 'ok'\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "invalid_backend_entry_namespace" for item in result.issues))
+            self.assertTrue(any(item.code == "invalid_migration_namespace" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_validate_extension_manifests_reports_missing_migration_files(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -827,6 +885,7 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertTrue((extension_dir / "frontend" / "admin" / "DetailPage.vue").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "index.js").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "SettingsPage.vue").exists())
+                self.assertTrue((extension_dir / "frontend" / "admin" / "PermissionsPage.vue").exists())
                 self.assertTrue((extension_dir / "frontend" / "admin" / "OperationsPage.vue").exists())
                 self.assertTrue((extension_dir / "frontend" / "forum" / "index.js").exists())
                 self.assertTrue((extension_dir / "backend" / "ext.py").exists())
@@ -852,6 +911,8 @@ class ExtensionManagementCommandTests(TestCase):
                 entry_source = (Path(temp_dir) / "extensions" / "alpha-tools" / "frontend" / "admin" / "index.js").read_text(encoding="utf-8")
                 self.assertIn("export function resolveDetailPage()", entry_source)
                 self.assertIn("import DetailPage from './DetailPage.vue'", entry_source)
+                self.assertIn("import PermissionsPage from './PermissionsPage.vue'", entry_source)
+                self.assertIn("export function resolvePermissionsPage()", entry_source)
                 forum_entry_source = (Path(temp_dir) / "extensions" / "alpha-tools" / "frontend" / "forum" / "index.js").read_text(encoding="utf-8")
                 self.assertIn("registerForumNavItem", forum_entry_source)
         finally:

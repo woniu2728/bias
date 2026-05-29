@@ -815,6 +815,15 @@ def _validate_backend_entry(
             field="backend_entry",
         )
         return
+    expected_backend_prefix = f"extensions.{manifest.id.replace('-', '_')}.backend."
+    if not entry.startswith(expected_backend_prefix):
+        collector.add_error(
+            "invalid_backend_entry_namespace",
+            f"backend_entry 必须归属当前扩展命名空间，建议使用 {expected_backend_prefix}...",
+            extension_id=manifest.id,
+            field="backend_entry",
+        )
+        return
     if not debug_payload["exists"]:
         collector.add_error(
             "missing_backend_entry",
@@ -880,6 +889,15 @@ def _validate_frontend_admin_entry(
         collector.add_warning(
             "frontend_admin_entry_outside_extensions",
             "frontend_admin_entry 建议使用 extensions/... 相对仓库根目录的路径",
+            extension_id=manifest.id,
+            field="frontend_admin_entry",
+        )
+        return
+    expected_entry = f"extensions/{manifest.id}/frontend/admin/index.js"
+    if entry != expected_entry:
+        collector.add_error(
+            "invalid_frontend_admin_entry_path",
+            f"frontend_admin_entry 必须指向当前扩展的标准后台入口: {expected_entry}",
             extension_id=manifest.id,
             field="frontend_admin_entry",
         )
@@ -955,6 +973,15 @@ def _validate_frontend_forum_entry(
             field="frontend_forum_entry",
         )
         return
+    expected_entry = f"extensions/{manifest.id}/frontend/forum/index.js"
+    if entry != expected_entry:
+        collector.add_error(
+            "invalid_frontend_forum_entry_path",
+            f"frontend_forum_entry 必须指向当前扩展的标准前台入口: {expected_entry}",
+            extension_id=manifest.id,
+            field="frontend_forum_entry",
+        )
+        return
 
     if not debug_payload["exists"]:
         collector.add_error(
@@ -984,6 +1011,15 @@ def _validate_migration_files(
 ) -> None:
     migration_namespace = str(manifest.migration_namespace or "").strip()
     if not migration_namespace:
+        return
+    expected_namespace = f"extensions.{manifest.id.replace('-', '_')}.backend.migrations"
+    if migration_namespace != expected_namespace:
+        collector.add_error(
+            "invalid_migration_namespace",
+            f"migration_namespace 必须指向当前扩展的标准迁移命名空间: {expected_namespace}",
+            extension_id=manifest.id,
+            field="migration_namespace",
+        )
         return
 
     migration_dir = Path(base_path) / manifest.id / "backend" / "migrations"

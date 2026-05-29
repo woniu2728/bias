@@ -67,6 +67,10 @@ class Command(BaseCommand):
             self._build_settings_page_source(name),
         )
         self._write_text(
+            frontend_admin_dir / "PermissionsPage.vue",
+            self._build_permissions_page_source(name),
+        )
+        self._write_text(
             frontend_admin_dir / "OperationsPage.vue",
             self._build_operations_page_source(name),
         )
@@ -250,6 +254,7 @@ class Command(BaseCommand):
         return (
             "import DetailPage from './DetailPage.vue'\n"
             "import OperationsPage from './OperationsPage.vue'\n"
+            "import PermissionsPage from './PermissionsPage.vue'\n"
             "import SettingsPage from './SettingsPage.vue'\n\n"
             "export function resolveDetailPage() {\n"
             "  return DetailPage\n"
@@ -258,7 +263,7 @@ class Command(BaseCommand):
             "  return SettingsPage\n"
             "}\n\n"
             "export function resolvePermissionsPage() {\n"
-            "  return SettingsPage\n"
+            "  return PermissionsPage\n"
             "}\n\n"
             "export function resolveOperationsPage() {\n"
             "  return OperationsPage\n"
@@ -379,6 +384,45 @@ class Command(BaseCommand):
             "  hostKind: {\n"
             "    type: String,\n"
             "    default: 'operations',\n"
+            "  },\n"
+            "})\n"
+            "</script>\n\n"
+            "<style scoped>\n"
+            ".ExtensionScaffoldCard {\n"
+            "  padding: 24px;\n"
+            "  border: 1px solid var(--forum-border-color);\n"
+            "  border-radius: var(--forum-radius-md);\n"
+            "  background: var(--forum-bg-elevated);\n"
+            "}\n"
+            ".ExtensionScaffoldCard h2 {\n"
+            "  margin: 0 0 8px;\n"
+            "}\n"
+            ".ExtensionScaffoldCard p {\n"
+            "  margin: 0;\n"
+            "  color: var(--forum-text-soft);\n"
+            "}\n"
+            "</style>\n"
+        )
+
+    def _build_permissions_page_source(self, name: str) -> str:
+        return (
+            "<template>\n"
+            "  <section class=\"ExtensionScaffoldCard\">\n"
+            "    <header>\n"
+            f"      <h2>{name} 权限</h2>\n"
+            "      <p>这里承载扩展自己的授权说明、权限分组摘要或更细粒度的授权向导。</p>\n"
+            "    </header>\n"
+            "  </section>\n"
+            "</template>\n\n"
+            "<script setup>\n"
+            "defineProps({\n"
+            "  extension: {\n"
+            "    type: Object,\n"
+            "    default: () => ({}),\n"
+            "  },\n"
+            "  hostKind: {\n"
+            "    type: String,\n"
+            "    default: 'permissions',\n"
             "  },\n"
             "})\n"
             "</script>\n\n"
