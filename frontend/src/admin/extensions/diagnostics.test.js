@@ -7,6 +7,9 @@ import {
   resolveExtensionBackTarget,
   resolveExtensionAdminPageCards,
   resolveExtensionAdminPageLabels,
+  resolveExtensionDiagnostics,
+  resolveExtensionDiagnosticsBadges,
+  resolveExtensionDiagnosticsPreview,
   resolveExtensionPrimaryAdminAction,
   resolveExtensionOperationsActionGroups,
   resolveExtensionOperationsProfile,
@@ -74,6 +77,45 @@ test('resolveExtensionMigrationState reflects pending and applied migration plan
       applied_files: ['0001_initial.py'],
     },
   }), '已同步')
+})
+
+test('resolveExtensionDiagnostics normalizes blocking and warning payloads', () => {
+  const diagnostics = resolveExtensionDiagnostics({
+    diagnostics: {
+      blocking: true,
+      warning: true,
+      has_attention: true,
+      blocking_reasons: ['运行时健康检查未通过'],
+      warning_reasons: ['迁移状态待完善'],
+    },
+  })
+
+  assert.equal(diagnostics.blocking, true)
+  assert.equal(diagnostics.warning, true)
+  assert.equal(diagnostics.hasAttention, true)
+  assert.deepEqual(diagnostics.blockingReasons, ['运行时健康检查未通过'])
+  assert.deepEqual(diagnostics.warningReasons, ['迁移状态待完善'])
+})
+
+test('resolveExtensionDiagnosticsBadges and preview build concise UI payloads', () => {
+  const extension = {
+    diagnostics: {
+      blocking: true,
+      warning: true,
+      has_attention: true,
+      blocking_reasons: ['存在运行时问题', '依赖状态异常'],
+      warning_reasons: ['迁移状态待完善'],
+    },
+  }
+
+  assert.deepEqual(resolveExtensionDiagnosticsBadges(extension), [
+    { key: 'blocking', label: '阻断 2', tone: 'danger' },
+    { key: 'warning', label: '告警 1', tone: 'warning' },
+  ])
+  assert.deepEqual(resolveExtensionDiagnosticsPreview(extension), [
+    { key: 'blocking-存在运行时问题', tone: 'danger', text: '存在运行时问题' },
+    { key: 'blocking-依赖状态异常', tone: 'danger', text: '依赖状态异常' },
+  ])
 })
 
 test('resolveExtensionAdminSurfaceCards builds readable admin host summaries', () => {

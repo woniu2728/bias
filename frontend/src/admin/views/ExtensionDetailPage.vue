@@ -36,6 +36,14 @@
           <small>依赖状态</small>
           <strong>{{ extension.dependency_state_label || '依赖正常' }}</strong>
         </article>
+        <article class="ExtensionDetailPage-summaryCard">
+          <small>阻断项</small>
+          <strong>{{ diagnostics.blockingReasons.length }}</strong>
+        </article>
+        <article class="ExtensionDetailPage-summaryCard">
+          <small>告警项</small>
+          <strong>{{ diagnostics.warningReasons.length }}</strong>
+        </article>
       </section>
 
       <section class="ExtensionDetailPage-actions">
@@ -83,6 +91,36 @@
       />
 
       <div class="ExtensionDetailPage-grid">
+        <section class="ExtensionDetailCard">
+          <h3>诊断摘要</h3>
+          <div class="ExtensionDetailDiagnosticsSummary">
+            <span class="ExtensionDetailChecks-status" :class="diagnostics.blocking ? 'is-danger' : 'is-ready'">
+              {{ diagnostics.blocking ? '存在阻断项' : '无阻断项' }}
+            </span>
+            <span class="ExtensionDetailChecks-status" :class="diagnostics.warning ? 'is-warning' : 'is-ready'">
+              {{ diagnostics.warning ? '存在告警项' : '无告警项' }}
+            </span>
+          </div>
+          <div
+            v-if="diagnostics.blockingReasons.length || diagnostics.warningReasons.length"
+            class="ExtensionDetailDiagnosticsLists"
+          >
+            <div v-if="diagnostics.blockingReasons.length" class="ExtensionDetailWarnings">
+              <h4>阻断原因</h4>
+              <ul>
+                <li v-for="item in diagnostics.blockingReasons" :key="`blocking-${item}`">{{ item }}</li>
+              </ul>
+            </div>
+            <div v-if="diagnostics.warningReasons.length" class="ExtensionDetailWarnings ExtensionDetailWarnings--neutral">
+              <h4>告警原因</h4>
+              <ul>
+                <li v-for="item in diagnostics.warningReasons" :key="`warning-${item}`">{{ item }}</li>
+              </ul>
+            </div>
+          </div>
+          <p v-else class="ExtensionDetailDebugOk">当前扩展没有阻断项或告警项。</p>
+        </section>
+
         <section class="ExtensionDetailCard">
           <h3>生命周期</h3>
           <dl class="ExtensionDetailMeta">
@@ -260,6 +298,32 @@
             </li>
           </ul>
           <p v-else class="ExtensionDetailDebugOk">当前 manifest 与后台入口校验通过。</p>
+        </section>
+
+        <section class="ExtensionDetailCard">
+          <h3>交付产物</h3>
+          <div class="ExtensionDetailStack">
+            <div>
+              <small>扩展根目录</small>
+              <code>{{ deliveryAssets.root_path || '内置交付' }}</code>
+            </div>
+            <div>
+              <small>已发现资源</small>
+              <strong>{{ deliveryAssets.asset_count || 0 }}</strong>
+            </div>
+          </div>
+          <ul v-if="deliveryAssetItems.length" class="ExtensionDetailChecks">
+            <li v-for="item in deliveryAssetItems" :key="item.key">
+              <div class="ExtensionDetailChecks-head">
+                <strong>{{ item.label }}</strong>
+                <span class="ExtensionDetailChecks-status" :class="item.exists ? 'is-ready' : 'is-pending'">
+                  {{ item.status_label }}
+                </span>
+              </div>
+              <p>{{ item.kind }}</p>
+              <code v-if="item.path">{{ item.path }}</code>
+            </li>
+          </ul>
         </section>
 
         <section class="ExtensionDetailCard">
@@ -476,6 +540,7 @@ import {
   resolveExtensionAdminSurfaceCards,
   resolveExtensionCapabilityPanels,
   resolveExtensionCapabilitySummaryItems,
+  resolveExtensionDiagnostics,
   resolveExtensionEntryTypeLabel,
 } from '../extensions/diagnostics'
 
@@ -532,6 +597,14 @@ const runtimeActions = computed(() => {
 
 const deliveryChecks = computed(() => {
   return Array.isArray(extension.value?.delivery_checks) ? extension.value.delivery_checks : []
+})
+
+const deliveryAssets = computed(() => {
+  return extension.value?.delivery_assets || {}
+})
+
+const deliveryAssetItems = computed(() => {
+  return Array.isArray(deliveryAssets.value?.assets) ? deliveryAssets.value.assets : []
 })
 
 const uninstallWarnings = computed(() => {
@@ -609,6 +682,10 @@ const runtimeStatusClass = computed(() => {
   if (key === 'active') return 'is-enabled'
   if (key === 'pending_install') return 'is-pending'
   return 'is-disabled'
+})
+
+const diagnostics = computed(() => {
+  return resolveExtensionDiagnostics(extension.value)
 })
 
 const capabilitySummaryItems = computed(() => {
@@ -1028,6 +1105,18 @@ function syncModulesFromExtension(currentExtension) {
   margin-top: 16px;
 }
 
+.ExtensionDetailDiagnosticsSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ExtensionDetailDiagnosticsLists {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 .ExtensionDetailCapabilityPanel {
   padding: 14px;
 }
@@ -1117,6 +1206,16 @@ function syncModulesFromExtension(currentExtension) {
 .ExtensionDetailChecks-status.is-ready {
   background: #edf8f2;
   color: #25704d;
+}
+
+.ExtensionDetailChecks-status.is-danger {
+  background: #fff1f1;
+  color: #b54747;
+}
+
+.ExtensionDetailChecks-status.is-warning {
+  background: #fff6e8;
+  color: #9a5b00;
 }
 
 .ExtensionDetailChecks-status.is-pending {

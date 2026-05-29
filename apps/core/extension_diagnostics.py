@@ -19,6 +19,9 @@ def classify_extension_diagnostics(item: dict) -> dict:
     if migration_status and migration_status not in {"ok", "skipped"}:
         blocking_reasons.append("最近迁移执行异常")
 
+    migration_plan = item.get("migration_plan") or {}
+    pending_migration_files = migration_plan.get("pending_files") or []
+
     delivery_checks = item.get("delivery_checks") or []
     for check in delivery_checks:
         if check.get("status") != "attention":
@@ -30,7 +33,7 @@ def classify_extension_diagnostics(item: dict) -> dict:
 
     if item.get("migration_state") == "attention":
         blocking_reasons.append("迁移状态异常")
-    elif item.get("migration_state") in {"pending"}:
+    elif item.get("migration_state") in {"pending"} or pending_migration_files:
         warning_reasons.append("迁移状态待完善")
 
     return {
@@ -51,6 +54,19 @@ def summarize_extension_diagnostics(items: list[dict]) -> dict:
     }
 
 
+def summarize_extension_delivery(items: list[dict]) -> dict:
+    return {
+        "asset_count": sum(int((item.get("delivery_assets") or {}).get("asset_count") or 0) for item in items),
+        "frontend_bundle_count": sum(
+            1 for item in items
+            if _has_delivery_asset(item, "frontend_admin_entry") or _has_delivery_asset(item, "frontend_forum_entry")
+        ),
+        "migration_bundle_count": sum(1 for item in items if _has_delivery_asset(item, "migrations")),
+        "locale_bundle_count": sum(1 for item in items if _has_delivery_asset(item, "locale")),
+        "signed_extension_count": sum(1 for item in items if _has_delivery_asset(item, "signature")),
+    }
+
+
 def _dedupe(items: list[str]) -> list[str]:
     seen = set()
     results = []
@@ -61,3 +77,13 @@ def _dedupe(items: list[str]) -> list[str]:
         seen.add(key)
         results.append(key)
     return results
+
+
+def _has_delivery_asset(item: dict, key: str) -> bool:
+    delivery_assets = item.get("delivery_assets") or {}
+    assets = delivery_assets.get("assets") or []
+    return any(
+        asset.get("key") == key and asset.get("exists")
+        for asset in assets
+        if isinstance(asset, dict)
+    )

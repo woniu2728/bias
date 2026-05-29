@@ -129,6 +129,64 @@ export function resolveExtensionMigrationState(extension) {
   return '未声明'
 }
 
+export function resolveExtensionDiagnostics(extension) {
+  const diagnostics = extension?.diagnostics || {}
+  const blockingReasons = Array.isArray(diagnostics.blocking_reasons) ? diagnostics.blocking_reasons : []
+  const warningReasons = Array.isArray(diagnostics.warning_reasons) ? diagnostics.warning_reasons : []
+
+  return {
+    blocking: Boolean(diagnostics.blocking),
+    warning: Boolean(diagnostics.warning),
+    hasAttention: Boolean(diagnostics.has_attention || diagnostics.blocking || diagnostics.warning),
+    blockingReasons,
+    warningReasons,
+  }
+}
+
+export function resolveExtensionDiagnosticsBadges(extension) {
+  const diagnostics = resolveExtensionDiagnostics(extension)
+  const badges = []
+
+  if (diagnostics.blocking) {
+    badges.push({
+      key: 'blocking',
+      label: `阻断 ${diagnostics.blockingReasons.length || 1}`,
+      tone: 'danger',
+    })
+  }
+  if (diagnostics.warning) {
+    badges.push({
+      key: 'warning',
+      label: `告警 ${diagnostics.warningReasons.length || 1}`,
+      tone: 'warning',
+    })
+  }
+
+  return badges
+}
+
+export function resolveExtensionDiagnosticsPreview(extension, limit = 2) {
+  const diagnostics = resolveExtensionDiagnostics(extension)
+  const preview = []
+
+  for (const reason of diagnostics.blockingReasons.slice(0, limit)) {
+    preview.push({
+      key: `blocking-${reason}`,
+      tone: 'danger',
+      text: reason,
+    })
+  }
+  for (const reason of diagnostics.warningReasons.slice(0, Math.max(0, limit - preview.length))) {
+    preview.push({
+      key: `warning-${reason}`,
+      tone: 'warning',
+      text: reason,
+    })
+  }
+
+  return preview
+}
+
 export function resolveExtensionAdminSurfaceCards(extension) {
   const statuses = Array.isArray(extension?.debug_info?.admin_surface_statuses)
     ? extension.debug_info.admin_surface_statuses

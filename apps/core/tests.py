@@ -41,6 +41,7 @@ from apps.core.extensions.validation import (
     validate_extension_manifests,
     validate_extension_manifests_with_available_ids,
 )
+from apps.core.extension_diagnostics import classify_extension_diagnostics, summarize_extension_delivery
 from apps.core.extension_service import ExtensionService
 from apps.core.forum_events import (
     DiscussionCreatedEvent,
@@ -1138,6 +1139,8 @@ class ExtensionManagementCommandTests(TestCase):
         self.assertIn("attention_count", payload["summary"])
         self.assertIn("blocking_count", payload["summary"])
         self.assertIn("warning_count", payload["summary"])
+        self.assertIn("frontend_bundle_count", payload["summary"])
+        self.assertIn("migration_bundle_count", payload["summary"])
         self.assertIn("diagnostics", payload["extensions"][0])
         self.assertTrue(any(item["id"] == "core" for item in payload["extensions"]))
         self.assertTrue(any(item["id"] == "sample-hello" for item in payload["extensions"]))
@@ -1209,6 +1212,53 @@ class ExtensionManagementCommandTests(TestCase):
     def test_inspect_extensions_command_reports_missing_extension(self):
         with self.assertRaisesMessage(CommandError, "扩展不存在: missing-extension"):
             call_command("inspect_extensions", "--extension-id", "missing-extension")
+
+
+class ExtensionDiagnosticsTests(TestCase):
+    def test_classify_extension_diagnostics_marks_pending_migration_plan_as_warning(self):
+        diagnostics = classify_extension_diagnostics({
+            "healthy": True,
+            "runtime_issues": [],
+            "dependency_state": "healthy",
+            "migration_plan": {
+                "pending_files": ["0001_bootstrap.py"],
+            },
+            "delivery_checks": [],
+        })
+
+        self.assertFalse(diagnostics["blocking"])
+        self.assertTrue(diagnostics["warning"])
+        self.assertIn("迁移状态待完善", diagnostics["warning_reasons"])
+
+    def test_summarize_extension_delivery_counts_frontend_migration_and_signed_assets(self):
+        summary = summarize_extension_delivery([
+            {
+                "delivery_assets": {
+                    "asset_count": 4,
+                    "assets": [
+                        {"key": "frontend_admin_entry", "exists": True},
+                        {"key": "migrations", "exists": True},
+                        {"key": "locale", "exists": False},
+                    ],
+                },
+            },
+            {
+                "delivery_assets": {
+                    "asset_count": 3,
+                    "assets": [
+                        {"key": "frontend_forum_entry", "exists": True},
+                        {"key": "locale", "exists": True},
+                        {"key": "signature", "exists": True},
+                    ],
+                },
+            },
+        ])
+
+        self.assertEqual(summary["asset_count"], 7)
+        self.assertEqual(summary["frontend_bundle_count"], 2)
+        self.assertEqual(summary["migration_bundle_count"], 1)
+        self.assertEqual(summary["locale_bundle_count"], 1)
+        self.assertEqual(summary["signed_extension_count"], 1)
 
 
 class ExtensionRegistryTests(TestCase):
@@ -1420,6 +1470,11 @@ class AdminExtensionsApiTests(TestCase):
         self.assertGreaterEqual(payload["summary"]["extension_count"], 1)
         self.assertGreaterEqual(payload["summary"]["builtin_count"], 1)
         self.assertGreaterEqual(payload["summary"]["filesystem_count"], 1)
+        self.assertIn("blocking_count", payload["summary"])
+        self.assertIn("warning_count", payload["summary"])
+        self.assertIn("attention_count", payload["summary"])
+        self.assertIn("frontend_bundle_count", payload["summary"])
+        self.assertIn("migration_bundle_count", payload["summary"])
 
         extension_ids = {item["id"] for item in payload["extensions"]}
         self.assertIn("core", extension_ids)
@@ -1432,6 +1487,11 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(core_extension["frontend_admin_entry"], "builtin:core")
         self.assertTrue(core_extension["installed"])
         self.assertTrue(core_extension["enabled"])
+        self.assertIn("diagnostics", core_extension)
+        self.assertIn("blocking", core_extension["diagnostics"])
+        self.assertIn("warning", core_extension["diagnostics"])
+        self.assertIn("blocking_reasons", core_extension["diagnostics"])
+        self.assertIn("warning_reasons", core_extension["diagnostics"])
         self.assertIn("/admin", core_extension["admin_pages"])
         self.assertTrue(any(page["path"] == "/admin/basics" for page in core_extension["admin_page_details"]))
         self.assertTrue(any(page["path"] == "/admin/appearance" for page in core_extension["admin_page_details"]))
@@ -1539,6 +1599,14 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(payload["security"]["support_email"], "security@bias.local")
         self.assertTrue(any(item["key"] == "card_tone" for item in payload["settings_schema"]))
         self.assertEqual(payload["settings_values"]["welcome_message"], "欢迎使用 Sample Hello")
+        self.assertIn("diagnostics", payload)
+        self.assertIn("delivery_assets", payload)
+        self.assertGreaterEqual(payload["delivery_assets"]["asset_count"], 4)
+        self.assertTrue(any(item["key"] == "backend_entry" and item["exists"] for item in payload["delivery_assets"]["assets"]))
+        self.assertTrue(any(item["key"] == "frontend_admin_entry" and item["exists"] for item in payload["delivery_assets"]["assets"]))
+        self.assertTrue(payload["diagnostics"]["warning"])
+        self.assertFalse(payload["diagnostics"]["blocking"])
+        self.assertIn("迁移状态待完善", payload["diagnostics"]["warning_reasons"])
         self.assertTrue(any(item["key"] == "migrations" for item in payload["delivery_checks"]))
         self.assertTrue(any("不会自动回滚数据库迁移" in item for item in payload["uninstall_warnings"]))
         self.assertIsNone(payload["migration_execution"])
@@ -6110,6 +6178,11 @@ class ReleaseVersionControlTests(TestCase):
                         "blocking_count": 0,
                         "warning_count": 0,
                         "attention_count": 0,
+                        "asset_count": 5,
+                        "frontend_bundle_count": 2,
+                        "migration_bundle_count": 1,
+                        "locale_bundle_count": 1,
+                        "signed_extension_count": 0,
                     },
                     "extensions": [{"id": "core"}],
                 }
@@ -6125,6 +6198,8 @@ class ReleaseVersionControlTests(TestCase):
 
             payload = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary"]["attention_count"], 0)
+            self.assertEqual(payload["summary"]["asset_count"], 5)
+            self.assertEqual(payload["summary"]["frontend_bundle_count"], 2)
             self.assertEqual(payload["extensions"][0]["id"], "core")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)

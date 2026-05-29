@@ -1,5 +1,6 @@
 from ninja import Body, Router
 from django.shortcuts import get_object_or_404
+from pathlib import Path
 
 from apps.core.extensions import get_extension_registry
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
@@ -9,6 +10,11 @@ from apps.core.extensions.validation import (
     inspect_frontend_forum_entry,
     resolve_admin_surface_implementation,
     validate_extension_manifests_with_available_ids,
+)
+from apps.core.extension_diagnostics import (
+    classify_extension_diagnostics,
+    summarize_extension_delivery,
+    summarize_extension_diagnostics,
 )
 from apps.core.extension_service import ExtensionService
 from apps.core.extension_settings_service import get_extension_settings, serialize_extension_settings_schema, save_extension_settings
@@ -211,6 +217,8 @@ def uninstall_admin_extension(request, extension_id: str):
 
 def _serialize_admin_extensions_payload(extensions):
     payload = [_serialize_admin_extension(extension) for extension in extensions]
+    diagnostics_summary = summarize_extension_diagnostics(payload)
+    delivery_summary = summarize_extension_delivery(payload)
 
     return {
         "summary": {
@@ -219,6 +227,14 @@ def _serialize_admin_extensions_payload(extensions):
             "healthy_count": sum(1 for item in payload if item["healthy"]),
             "builtin_count": sum(1 for item in payload if item["source"] == "builtin-module"),
             "filesystem_count": sum(1 for item in payload if item["source"] == "filesystem"),
+            "blocking_count": diagnostics_summary["blocking_count"],
+            "warning_count": diagnostics_summary["warning_count"],
+            "attention_count": diagnostics_summary["attention_count"],
+            "asset_count": delivery_summary["asset_count"],
+            "frontend_bundle_count": delivery_summary["frontend_bundle_count"],
+            "migration_bundle_count": delivery_summary["migration_bundle_count"],
+            "locale_bundle_count": delivery_summary["locale_bundle_count"],
+            "signed_extension_count": delivery_summary["signed_extension_count"],
         },
         "extensions": payload,
     }
@@ -245,6 +261,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
     resource_relationships = _build_extension_resource_relationships(extension)
     resource_fields = _build_extension_resource_fields(extension)
     language_packs = _build_extension_language_packs(extension)
+    delivery_assets = _build_extension_delivery_assets(extension)
     capability_summary = _build_extension_capability_summary(
         notification_types=notification_types,
         user_preferences=user_preferences,
@@ -259,7 +276,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         language_packs=language_packs,
     )
 
-    return {
+    payload = {
         "id": extension.id,
         "name": extension.name,
         "version": extension.version,
@@ -362,6 +379,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "resource_relationships": resource_relationships,
         "resource_fields": resource_fields,
         "language_packs": language_packs,
+        "delivery_assets": delivery_assets,
         "capability_summary": capability_summary,
         "action_links": {
             "detail_page": detail_page,
@@ -388,6 +406,8 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         },
         "debug_info": _build_extension_debug_info(extension),
     }
+    payload["diagnostics"] = classify_extension_diagnostics(payload)
+    return payload
 
 
 def _build_extension_admin_page_details(extension):
@@ -675,6 +695,102 @@ def _build_extension_language_packs(extension):
         for item in get_forum_registry().get_language_packs()
         if item.module_id in module_ids
     ]
+
+
+def _build_extension_delivery_assets(extension):
+    if extension.source == "builtin-module":
+        return {
+            "root_path": "",
+            "root_exists": False,
+            "asset_count": 1,
+            "assets": [
+                {
+                    "key": "builtin-bundle",
+                    "label": "内置交付",
+                    "status": "ready",
+                    "status_label": "已就绪",
+                    "path": "builtin://core-bundle",
+                    "kind": "builtin",
+                    "exists": True,
+                }
+            ],
+        }
+
+    root_path = Path(extension.manifest.path) if extension.manifest.path else None
+    asset_specs = [
+        {
+            "key": "backend_entry",
+            "label": "后端入口",
+            "path": root_path / "backend" / "ext.py" if root_path else None,
+            "kind": "backend",
+        },
+        {
+            "key": "migrations",
+            "label": "迁移目录",
+            "path": root_path / "backend" / "migrations" if root_path else None,
+            "kind": "migration",
+        },
+        {
+            "key": "frontend_admin_entry",
+            "label": "后台入口",
+            "path": root_path / "frontend" / "admin" / "index.js" if root_path else None,
+            "kind": "frontend-admin",
+        },
+        {
+            "key": "frontend_forum_entry",
+            "label": "前台入口",
+            "path": root_path / "frontend" / "forum" / "index.js" if root_path else None,
+            "kind": "frontend-forum",
+        },
+        {
+            "key": "locale",
+            "label": "语言目录",
+            "path": root_path / "locale" if root_path else None,
+            "kind": "locale",
+        },
+        {
+            "key": "docs",
+            "label": "文档资源",
+            "path": root_path / "docs" / "README.md" if root_path else None,
+            "kind": "docs",
+        },
+    ]
+    if str(extension.manifest.distribution.signature_url or "").strip():
+        asset_specs.append({
+            "key": "signature",
+            "label": "签名文件",
+            "path": extension.manifest.distribution.signature_url,
+            "kind": "signature",
+        })
+
+    assets = []
+    for item in asset_specs:
+        asset_path = item["path"]
+        exists = False
+        normalized_path = ""
+        if isinstance(asset_path, Path):
+            exists = asset_path.exists()
+            normalized_path = str(asset_path)
+        elif asset_path:
+            normalized_path = str(asset_path)
+            exists = True
+
+        assets.append({
+            "key": item["key"],
+            "label": item["label"],
+            "status": "ready" if exists else "pending",
+            "status_label": "已就绪" if exists else "未提供",
+            "path": normalized_path,
+            "kind": item["kind"],
+            "exists": exists,
+        })
+
+    return {
+        "root_path": str(root_path or ""),
+        "root_exists": bool(root_path and root_path.exists()),
+        "asset_count": sum(1 for item in assets if item["exists"]),
+        "assets": assets,
+    }
 
 
 def _build_extension_capability_summary(

@@ -66,6 +66,11 @@ class Command(BaseCommand):
         blocking_count = int(summary.get("blocking_count") or 0)
         warning_count = int(summary.get("warning_count") or 0)
         attention_count = int(summary.get("attention_count") or 0)
+        asset_count = int(summary.get("asset_count") or 0)
+        frontend_bundle_count = int(summary.get("frontend_bundle_count") or 0)
+        migration_bundle_count = int(summary.get("migration_bundle_count") or 0)
+        locale_bundle_count = int(summary.get("locale_bundle_count") or 0)
+        signed_extension_count = int(summary.get("signed_extension_count") or 0)
         if blocking_count and not allow_extension_attention:
             raise CommandError(
                 f"扩展诊断存在 {blocking_count} 个阻断项，请先处理；如需继续请传 --allow-extension-attention"
@@ -94,6 +99,11 @@ class Command(BaseCommand):
         self.stdout.write(f"- 扩展阻断项: {blocking_count}")
         self.stdout.write(f"- 扩展告警项: {warning_count}")
         self.stdout.write(f"- 扩展关注项: {attention_count}")
+        self.stdout.write(f"- 扩展交付资源: {asset_count}")
+        self.stdout.write(f"- 含前端交付扩展: {frontend_bundle_count}")
+        self.stdout.write(f"- 含迁移交付扩展: {migration_bundle_count}")
+        self.stdout.write(f"- 含语言资源扩展: {locale_bundle_count}")
+        self.stdout.write(f"- 已签名扩展: {signed_extension_count}")
         if extension_report:
             self.stdout.write(f"- 扩展报告: {extension_report}")
         if tag:

@@ -23,6 +23,22 @@
           <span>健康</span>
         </article>
         <article class="ExtensionsPage-summaryCard">
+          <strong>{{ summary.blocking_count ?? 0 }}</strong>
+          <span>阻断项</span>
+        </article>
+        <article class="ExtensionsPage-summaryCard">
+          <strong>{{ summary.warning_count ?? 0 }}</strong>
+          <span>告警项</span>
+        </article>
+        <article class="ExtensionsPage-summaryCard">
+          <strong>{{ summary.frontend_bundle_count ?? 0 }}</strong>
+          <span>前端交付</span>
+        </article>
+        <article class="ExtensionsPage-summaryCard">
+          <strong>{{ summary.migration_bundle_count ?? 0 }}</strong>
+          <span>迁移交付</span>
+        </article>
+        <article class="ExtensionsPage-summaryCard">
           <strong>{{ summary.filesystem_count ?? 0 }}</strong>
           <span>目录扩展</span>
         </article>
@@ -70,9 +86,27 @@
                 >
                   {{ resolveExtensionMigrationState(extension) }}
                 </span>
+                <span
+                  v-for="badge in resolveDiagnosticsBadges(extension)"
+                  :key="`${extension.id}-${badge.key}`"
+                  class="ExtensionStatus"
+                  :class="resolveDiagnosticsBadgeClass(badge)"
+                >
+                  {{ badge.label }}
+                </span>
               </div>
 
               <p class="ExtensionCard-description">{{ extension.description || '暂无描述' }}</p>
+
+              <ul v-if="resolveDiagnosticsPreview(extension).length" class="ExtensionCard-diagnostics">
+                <li
+                  v-for="item in resolveDiagnosticsPreview(extension)"
+                  :key="item.key"
+                  :class="resolveDiagnosticsItemClass(item)"
+                >
+                  {{ item.text }}
+                </li>
+              </ul>
 
               <div class="ExtensionCard-meta">
                 <span><strong>版本</strong> {{ extension.version }}</span>
@@ -171,6 +205,8 @@ import AdminFilterTabs from '../components/AdminFilterTabs.vue'
 import {
   buildExtensionRouteTarget,
   resolveExtensionAdminPageCards,
+  resolveExtensionDiagnosticsBadges,
+  resolveExtensionDiagnosticsPreview,
   resolveExtensionForumEntryState,
   resolveExtensionMigrationState,
   resolveExtensionPrimaryAdminAction,
@@ -367,6 +403,28 @@ function resolveMigrationStatusClass(extension) {
   return 'is-disabled'
 }
 
+function resolveDiagnosticsBadges(extension) {
+  return resolveExtensionDiagnosticsBadges(extension)
+}
+
+function resolveDiagnosticsPreview(extension) {
+  return resolveExtensionDiagnosticsPreview(extension)
+}
+
+function resolveDiagnosticsBadgeClass(item) {
+  if (item?.tone === 'danger') {
+    return 'is-danger'
+  }
+  if (item?.tone === 'warning') {
+    return 'is-warning'
+  }
+  return 'is-disabled'
+}
+
+function resolveDiagnosticsItemClass(item) {
+  return item?.tone === 'danger' ? 'is-danger' : 'is-warning'
+}
+
 function resolveMigrationMetaText(extension) {
   const plan = extension?.migration_plan || {}
   const declaredFiles = Array.isArray(plan.declared_files) ? plan.declared_files : []
@@ -539,10 +597,50 @@ function resolveAdminPageLinks(extension) {
   color: #9a5b00;
 }
 
+.ExtensionStatus.is-danger {
+  background: #fff1f1;
+  color: #b54747;
+}
+
+.ExtensionStatus.is-warning {
+  background: #fff6e8;
+  color: #9a5b00;
+}
+
 .ExtensionCard-description {
   margin: 0;
   color: var(--forum-text-muted);
   line-height: 1.6;
+}
+
+.ExtensionCard-diagnostics {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.ExtensionCard-diagnostics li {
+  padding: 8px 10px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: 12px;
+  background: var(--forum-bg-subtle);
+  color: var(--forum-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ExtensionCard-diagnostics li.is-danger {
+  border-color: #f2d4d4;
+  background: #fff7f7;
+  color: #b54747;
+}
+
+.ExtensionCard-diagnostics li.is-warning {
+  border-color: #f4e1bc;
+  background: #fffaf1;
+  color: #9a5b00;
 }
 
 .ExtensionCard-meta {

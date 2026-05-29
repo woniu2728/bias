@@ -8,6 +8,7 @@ from django.core.management.base import CommandParser
 
 from apps.core.extension_diagnostics import (
     classify_extension_diagnostics,
+    summarize_extension_delivery,
     summarize_extension_diagnostics,
 )
 from apps.core.extension_serialization import (
@@ -111,6 +112,7 @@ class Command(BaseCommand):
             ]
 
         diagnostics_summary = summarize_extension_diagnostics(serialized_extensions)
+        delivery_summary = summarize_extension_delivery(serialized_extensions)
         payload = {
             **payload,
             "extensions": serialized_extensions,
@@ -122,6 +124,7 @@ class Command(BaseCommand):
                 "builtin_count": sum(1 for item in serialized_extensions if item["source"] == "builtin-module"),
                 "filesystem_count": sum(1 for item in serialized_extensions if item["source"] == "filesystem"),
                 **diagnostics_summary,
+                **delivery_summary,
             },
         }
 
