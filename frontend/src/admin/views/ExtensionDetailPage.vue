@@ -113,12 +113,6 @@
 
         <section class="ExtensionDetailCard">
           <h3>后台入口</h3>
-          <ul class="ExtensionDetailLinks">
-            <li v-for="item in actionItems" :key="item.label">
-              <span>{{ item.label }}</span>
-              <code>{{ item.value }}</code>
-            </li>
-          </ul>
           <div v-if="adminPageDetails.length" class="ExtensionDetailEntryGrid">
             <component
               v-for="page in adminPageDetails"
@@ -170,6 +164,14 @@
             <div>
               <small>后台入口类型</small>
               <strong>{{ debugEntryTypeLabel }}</strong>
+            </div>
+            <div>
+              <small>后台入口文件</small>
+              <code>{{ extension?.frontend_admin_entry || '无' }}</code>
+            </div>
+            <div>
+              <small>标准后台路由</small>
+              <strong>{{ formatActionItems(actionItems) }}</strong>
             </div>
             <div>
               <small>后台入口解析</small>
@@ -707,6 +709,13 @@ async function runRuntimeAction(action) {
 
 function formatList(items) {
   return Array.isArray(items) && items.length ? items.join('、') : '无'
+}
+
+function formatActionItems(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return '无'
+  }
+  return items.map(item => item.label).join('、')
 }
 
 function resolveActionToneClass(action) {

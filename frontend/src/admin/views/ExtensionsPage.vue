@@ -93,13 +93,19 @@
                 <span class="ExtensionCard-adminPagesLabel">后台页</span>
                 <div class="ExtensionCard-adminPagesList">
                   <router-link
-                    v-for="page in resolveAdminPageLinks(extension)"
+                    v-for="page in resolveAdminPageLinks(extension).slice(0, 2)"
                     :key="`${extension.id}-page-${page.key}`"
                     :to="buildRouteTarget(page.target)"
                     class="ExtensionToken"
                   >
                     {{ page.label }}
                   </router-link>
+                  <span
+                    v-if="resolveAdminPageLinks(extension).length > 2"
+                    class="ExtensionToken"
+                  >
+                    +{{ resolveAdminPageLinks(extension).length - 2 }}
+                  </span>
                 </div>
               </div>
             </div>

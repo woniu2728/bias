@@ -187,14 +187,25 @@
                 </section>
 
                 <section class="ModulePanelCard">
-                  <h5>{{ modulesCopy?.adminEntriesTitle || '后台入口' }}</h5>
-                  <ul v-if="module.admin_pages.length" class="ModuleCompactList">
-                    <li v-for="page in module.admin_pages" :key="`${module.id}-${page.path}`">
-                      <router-link :to="page.path">{{ page.label }}</router-link>
-                      <small>{{ page.path }}</small>
-                    </li>
-                  </ul>
-                  <p v-else class="ModuleEmpty">{{ modulesCopy?.noAdminEntriesText || '暂无后台入口' }}</p>
+                  <h5>扩展承载</h5>
+                  <div class="ModulePanelSummary">
+                    <div class="ModulePanelSummary-row">
+                      <span>详情页</span>
+                      <strong>{{ module.extension?.action_links?.detail_page ? '已接入' : '无' }}</strong>
+                    </div>
+                    <div class="ModulePanelSummary-row">
+                      <span>设置页</span>
+                      <strong>{{ module.runtime?.settings_entry_path ? '已接入' : (modulesCopy?.noValueText || '无') }}</strong>
+                    </div>
+                    <div class="ModulePanelSummary-row">
+                      <span>权限页</span>
+                      <strong>{{ module.runtime?.permissions_entry_path ? '已接入' : (modulesCopy?.noValueText || '无') }}</strong>
+                    </div>
+                    <div class="ModulePanelSummary-row">
+                      <span>操作页</span>
+                      <strong>{{ module.runtime?.operations_entry_path ? '已接入' : (modulesCopy?.noValueText || '无') }}</strong>
+                    </div>
+                  </div>
                 </section>
 
                 <section class="ModulePanelCard">
@@ -220,23 +231,23 @@
                 </section>
 
                 <section class="ModulePanelCard">
-                  <h5>{{ modulesCopy?.permissionsTitle || '权限注册' }}</h5>
+                  <h5>扩展摘要</h5>
                   <div class="ModulePanelSummary">
                     <div class="ModulePanelSummary-row">
-                      <span>{{ modulesCopy?.permissionsTitle || '权限注册' }}</span>
-                      <strong>{{ formatPreviewList(module.permissions.map(item => item.label || item.code), 3) }}</strong>
+                      <span>扩展 ID</span>
+                      <strong>{{ module.extension?.id || (modulesCopy?.noValueText || '无') }}</strong>
                     </div>
                     <div class="ModulePanelSummary-row">
-                      <span>{{ modulesCopy?.notificationTypesTitle || '通知类型' }}</span>
-                      <strong>{{ formatPreviewList(module.notification_types.map(item => item.label || item.code), 3) }}</strong>
+                      <span>来源</span>
+                      <strong>{{ module.extension?.source || (modulesCopy?.noValueText || '无') }}</strong>
                     </div>
                     <div class="ModulePanelSummary-row">
-                      <span>{{ modulesCopy?.resourceFieldsTitle || '资源字段' }}</span>
-                      <strong>{{ formatPreviewList(module.resource_fields.map(item => `${item.resource}.${item.field}`), 2) }}</strong>
+                      <span>模块归属</span>
+                      <strong>{{ formatPreviewList(module.extension?.module_ids || [], 3) }}</strong>
                     </div>
                     <div class="ModulePanelSummary-row">
-                      <span>{{ modulesCopy?.eventListenersTitle || '事件监听' }}</span>
-                      <strong>{{ module.event_listeners.length ? `${module.event_listeners.length} 项` : (modulesCopy?.noValueText || '无') }}</strong>
+                      <span>主要入口</span>
+                      <strong>{{ resolveModulePrimaryLabel(module) }}</strong>
                     </div>
                   </div>
                 </section>
