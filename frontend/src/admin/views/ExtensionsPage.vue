@@ -167,6 +167,7 @@ import {
   resolveExtensionAdminPageCards,
   resolveExtensionForumEntryState,
   resolveExtensionMigrationState,
+  resolveExtensionPrimaryAdminAction,
 } from '../extensions/diagnostics'
 
 const adminRegistryStore = useAdminRegistryStore()
@@ -305,9 +306,13 @@ async function runRuntimeAction(extension, action) {
 function getVisibleAdminActions(extension) {
   const actions = Array.isArray(extension?.admin_actions) ? extension.admin_actions : []
   const pageTargets = new Set(resolveAdminPageLinks(extension).map(item => item.target))
+  const primaryAction = resolveExtensionPrimaryAdminAction(extension)
 
   return actions.filter((action) => {
     if (action?.kind !== 'route') {
+      return true
+    }
+    if (primaryAction && action.key === primaryAction.key) {
       return true
     }
     if (action?.key === 'details' || action?.key === 'documentation') {

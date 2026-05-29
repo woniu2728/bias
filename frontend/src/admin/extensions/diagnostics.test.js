@@ -7,6 +7,12 @@ import {
   resolveExtensionBackTarget,
   resolveExtensionAdminPageCards,
   resolveExtensionAdminPageLabels,
+  resolveExtensionPrimaryAdminAction,
+  resolveExtensionOperationsActionGroups,
+  resolveExtensionOperationsProfile,
+  resolveExtensionOperationsFocusSections,
+  resolveExtensionOperationsNextSteps,
+  resolveExtensionOperationsSections,
   resolveExtensionAdminSurfaceCards,
   resolveExtensionCapabilityPanels,
   resolveExtensionCapabilitySummaryItems,
@@ -224,4 +230,172 @@ test('resolveExtensionCapabilityPanels normalizes capability groups for detail p
   assert.equal(panels[1].items[0].moduleId, 'discussions')
   assert.equal(panels[2].items[0].label, 'tag.can_start_discussion')
   assert.equal(panels[2].items[0].moduleId, 'tags')
+})
+
+test('resolveExtensionAdminPageCards can isolate operations host pages', () => {
+  const cards = resolveExtensionAdminPageCards({
+    admin_page_details: [
+      { path: '/admin/advanced', label: '高级设置', icon: 'fas fa-cog' },
+      { path: '/admin/audit-logs', label: '审计日志', icon: 'fas fa-clipboard-list' },
+      { path: '/admin/docs', label: '开发者文档', icon: 'fas fa-book' },
+      { path: '/admin/mail', label: '邮件设置', settings_group: 'mail' },
+    ],
+  }, { hostKind: 'operations' })
+
+  assert.deepEqual(cards.map(item => item.path), [
+    '/admin/advanced',
+    '/admin/audit-logs',
+    '/admin/docs',
+  ])
+})
+
+test('resolveExtensionPrimaryAdminAction prefers hosted settings and operations routes', () => {
+  assert.equal(resolveExtensionPrimaryAdminAction({
+    admin_actions: [
+      { key: 'details', kind: 'route', target: '/admin/extensions/notifications' },
+      { key: 'operations', kind: 'route', target: '/admin/extensions/notifications/operations' },
+    ],
+  })?.key, 'operations')
+
+  assert.equal(resolveExtensionPrimaryAdminAction({
+    admin_actions: [
+      { key: 'details', kind: 'route', target: '/admin/extensions/tags' },
+      { key: 'settings', kind: 'route', target: '/admin/extensions/tags/settings' },
+    ],
+  })?.key, 'settings')
+})
+
+test('resolveExtensionOperationsProfile exposes dedicated copy for second-batch builtin modules', () => {
+  const notificationsProfile = resolveExtensionOperationsProfile({ id: 'notifications' })
+  const realtimeProfile = resolveExtensionOperationsProfile({ id: 'realtime' })
+  const likesProfile = resolveExtensionOperationsProfile({ id: 'likes' })
+  const discussionsProfile = resolveExtensionOperationsProfile({ id: 'discussions' })
+
+  assert.equal(notificationsProfile.kicker, 'Notification Hub')
+  assert.equal(realtimeProfile.title, '实时连接与广播')
+  assert.equal(likesProfile.title, '点赞互动与提醒')
+  assert.equal(discussionsProfile.title, '讨论流与内容治理')
+  assert.ok(notificationsProfile.highlights.includes('通知类型'))
+  assert.ok(realtimeProfile.highlights.includes('事件监听'))
+})
+
+test('resolveExtensionOperationsFocusSections maps profile focus panels to capability groups', () => {
+  const sections = resolveExtensionOperationsFocusSections({
+    id: 'subscriptions',
+    user_preferences: [
+      {
+        module_id: 'subscriptions',
+        key: 'follow_after_reply',
+        label: '回复后自动关注',
+        description: '参与讨论后自动关注。',
+      },
+    ],
+    discussion_list_filters: [
+      {
+        module_id: 'subscriptions',
+        code: 'following',
+        label: '关注中',
+        route_path: '/following',
+        description: '仅看已关注讨论。',
+      },
+    ],
+    event_listeners: [
+      {
+        module_id: 'subscriptions',
+        event: 'PostCreatedEvent',
+        listener: 'handle_post_created',
+        description: '回复后分发关注通知。',
+      },
+    ],
+  })
+
+  assert.deepEqual(sections.map(item => item.key), [
+    'user_preferences',
+    'discussion_list_filters',
+    'event_listeners',
+  ])
+  assert.equal(sections[0].title, '关注偏好')
+  assert.equal(sections[1].items[0].label, '关注中')
+})
+
+test('resolveExtensionOperationsActionGroups promotes primary actions and keeps runtime actions separate', () => {
+  const groups = resolveExtensionOperationsActionGroups({
+    admin_actions: [
+      { key: 'details', kind: 'route', target: '/admin/extensions/likes' },
+      { key: 'operations', kind: 'route', target: '/admin/extensions/likes/operations' },
+      { key: 'documentation', kind: 'link', target: 'https://example.com/docs' },
+    ],
+    runtime_actions: [
+      { key: 'enable', action: 'enable', label: '启用' },
+    ],
+  })
+
+  assert.deepEqual(groups.map(item => item.key), ['recommended', 'admin', 'runtime'])
+  assert.deepEqual(groups[0].actions.map(item => item.key), ['operations', 'details'])
+  assert.deepEqual(groups[1].actions.map(item => item.key), ['documentation'])
+  assert.deepEqual(groups[2].actions.map(item => item.key), ['enable'])
+})
+
+test('resolveExtensionOperationsNextSteps warns when extension still uses generated operations host', () => {
+  const nextSteps = resolveExtensionOperationsNextSteps({
+    id: 'tag-stats',
+    debug_info: {
+      admin_surface_statuses: [
+        { key: 'operations', mode: 'generated' },
+      ],
+    },
+  })
+
+  assert.ok(nextSteps.some(item => item.includes('resolveOperationsPage')))
+})
+
+test('resolveExtensionOperationsSections returns a normalized operations payload', () => {
+  const sections = resolveExtensionOperationsSections({
+    id: 'mentions',
+    admin_actions: [
+      { key: 'operations', kind: 'route', target: '/admin/extensions/mentions/operations' },
+    ],
+    notification_types: [
+      {
+        module_id: 'mentions',
+        code: 'userMentioned',
+        label: '@提及通知',
+        preference_key: 'notify_user_mentioned',
+      },
+    ],
+  })
+
+  assert.equal(sections.profile.title, '提及规则与提醒')
+  assert.equal(sections.capabilitySummaryItems[0].key, 'notification_type_count')
+  assert.equal(sections.actionGroups[0].key, 'recommended')
+})
+
+test('resolveExtensionOperationsSections can summarize core discussion capabilities without backend counters', () => {
+  const sections = resolveExtensionOperationsSections({
+    id: 'discussions',
+    admin_actions: [
+      { key: 'permissions', kind: 'route', target: '/admin/extensions/discussions/permissions' },
+      { key: 'operations', kind: 'route', target: '/admin/extensions/discussions/operations' },
+    ],
+    discussion_sorts: [
+      { module_id: 'discussions', code: 'latest', label: '最新活跃' },
+    ],
+    discussion_list_filters: [
+      { module_id: 'discussions', code: 'all', label: '全部讨论', route_path: '/' },
+    ],
+    search_filters: [
+      { module_id: 'discussions', target: 'discussion', code: 'author', label: '按作者过滤', syntax: 'author:<username>' },
+    ],
+  })
+
+  assert.deepEqual(sections.capabilitySummaryItems.map(item => item.key), [
+    'search_filter_count',
+    'discussion_sort_count',
+    'discussion_list_filter_count',
+  ])
+  assert.deepEqual(sections.focusSections.map(item => item.key), [
+    'discussion_sorts',
+    'discussion_list_filters',
+    'search_filters',
+  ])
 })

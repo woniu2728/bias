@@ -1061,6 +1061,17 @@ class ExtensionRegistryTests(TestCase):
         self.assertEqual(extension.manifest.operations_pages, ())
 
     def test_builtin_adapter_can_map_builtin_operations_pages_to_extension_host(self):
+        discussions_module = get_forum_registry().get_module("discussions")
+        discussions_extension = adapt_builtin_module_to_extension(discussions_module)
+        self.assertEqual(discussions_extension.manifest.frontend_admin_entry, "builtin:discussions")
+        self.assertEqual(discussions_extension.manifest.operations_pages, ("/admin/extensions/discussions/operations",))
+        self.assertEqual(discussions_extension.manifest.permissions_pages, ("/admin/extensions/discussions/permissions",))
+
+        posts_module = get_forum_registry().get_module("posts")
+        posts_extension = adapt_builtin_module_to_extension(posts_module)
+        self.assertEqual(posts_extension.manifest.frontend_admin_entry, "builtin:posts")
+        self.assertEqual(posts_extension.manifest.operations_pages, ("/admin/extensions/posts/operations",))
+
         users_module = get_forum_registry().get_module("users")
         users_extension = adapt_builtin_module_to_extension(users_module)
         self.assertEqual(users_extension.manifest.frontend_admin_entry, "builtin:users")
@@ -1072,6 +1083,36 @@ class ExtensionRegistryTests(TestCase):
         self.assertEqual(flags_extension.manifest.frontend_admin_entry, "builtin:flags")
         self.assertEqual(flags_extension.manifest.operations_pages, ("/admin/extensions/flags/operations",))
         self.assertEqual(flags_extension.manifest.permissions_pages, ("/admin/extensions/flags/permissions",))
+
+        notifications_module = get_forum_registry().get_module("notifications")
+        notifications_extension = adapt_builtin_module_to_extension(notifications_module)
+        self.assertEqual(notifications_extension.manifest.frontend_admin_entry, "builtin:notifications")
+        self.assertEqual(notifications_extension.manifest.operations_pages, ("/admin/extensions/notifications/operations",))
+
+        mentions_module = get_forum_registry().get_module("mentions")
+        mentions_extension = adapt_builtin_module_to_extension(mentions_module)
+        self.assertEqual(mentions_extension.manifest.frontend_admin_entry, "builtin:mentions")
+        self.assertEqual(mentions_extension.manifest.operations_pages, ("/admin/extensions/mentions/operations",))
+
+        subscriptions_module = get_forum_registry().get_module("subscriptions")
+        subscriptions_extension = adapt_builtin_module_to_extension(subscriptions_module)
+        self.assertEqual(subscriptions_extension.manifest.frontend_admin_entry, "builtin:subscriptions")
+        self.assertEqual(subscriptions_extension.manifest.operations_pages, ("/admin/extensions/subscriptions/operations",))
+
+        realtime_module = get_forum_registry().get_module("realtime")
+        realtime_extension = adapt_builtin_module_to_extension(realtime_module)
+        self.assertEqual(realtime_extension.manifest.frontend_admin_entry, "builtin:realtime")
+        self.assertEqual(realtime_extension.manifest.operations_pages, ("/admin/extensions/realtime/operations",))
+
+        likes_module = get_forum_registry().get_module("likes")
+        likes_extension = adapt_builtin_module_to_extension(likes_module)
+        self.assertEqual(likes_extension.manifest.frontend_admin_entry, "builtin:likes")
+        self.assertEqual(likes_extension.manifest.operations_pages, ("/admin/extensions/likes/operations",))
+
+        tag_stats_module = get_forum_registry().get_module("tag-stats")
+        tag_stats_extension = adapt_builtin_module_to_extension(tag_stats_module)
+        self.assertEqual(tag_stats_extension.manifest.frontend_admin_entry, "builtin:tag-stats")
+        self.assertEqual(tag_stats_extension.manifest.operations_pages, ("/admin/extensions/tag-stats/operations",))
 
     def test_builtin_adapter_can_map_core_pages_to_extension_host(self):
         module = get_forum_registry().get_module("core")
@@ -1223,6 +1264,15 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(tags_extension["frontend_admin_entry"], "builtin:tags")
         self.assertEqual(tags_extension["action_links"]["settings_page"], "/admin/extensions/tags/settings")
 
+        discussions_extension = next(item for item in payload["extensions"] if item["id"] == "discussions")
+        self.assertEqual(discussions_extension["frontend_admin_entry"], "builtin:discussions")
+        self.assertEqual(discussions_extension["action_links"]["permissions_page"], "/admin/extensions/discussions/permissions")
+        self.assertEqual(discussions_extension["action_links"]["operations_page"], "/admin/extensions/discussions/operations")
+
+        posts_extension = next(item for item in payload["extensions"] if item["id"] == "posts")
+        self.assertEqual(posts_extension["frontend_admin_entry"], "builtin:posts")
+        self.assertEqual(posts_extension["action_links"]["operations_page"], "/admin/extensions/posts/operations")
+
         approval_extension = next(item for item in payload["extensions"] if item["id"] == "approval")
         self.assertEqual(approval_extension["frontend_admin_entry"], "builtin:approval")
         self.assertEqual(approval_extension["action_links"]["permissions_page"], "/admin/extensions/approval/permissions")
@@ -1237,6 +1287,30 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(flags_extension["frontend_admin_entry"], "builtin:flags")
         self.assertEqual(flags_extension["action_links"]["permissions_page"], "/admin/extensions/flags/permissions")
         self.assertEqual(flags_extension["action_links"]["operations_page"], "/admin/extensions/flags/operations")
+
+        notifications_extension = next(item for item in payload["extensions"] if item["id"] == "notifications")
+        self.assertEqual(notifications_extension["frontend_admin_entry"], "builtin:notifications")
+        self.assertEqual(notifications_extension["action_links"]["operations_page"], "/admin/extensions/notifications/operations")
+
+        mentions_extension = next(item for item in payload["extensions"] if item["id"] == "mentions")
+        self.assertEqual(mentions_extension["frontend_admin_entry"], "builtin:mentions")
+        self.assertEqual(mentions_extension["action_links"]["operations_page"], "/admin/extensions/mentions/operations")
+
+        subscriptions_extension = next(item for item in payload["extensions"] if item["id"] == "subscriptions")
+        self.assertEqual(subscriptions_extension["frontend_admin_entry"], "builtin:subscriptions")
+        self.assertEqual(subscriptions_extension["action_links"]["operations_page"], "/admin/extensions/subscriptions/operations")
+
+        realtime_extension = next(item for item in payload["extensions"] if item["id"] == "realtime")
+        self.assertEqual(realtime_extension["frontend_admin_entry"], "builtin:realtime")
+        self.assertEqual(realtime_extension["action_links"]["operations_page"], "/admin/extensions/realtime/operations")
+
+        likes_extension = next(item for item in payload["extensions"] if item["id"] == "likes")
+        self.assertEqual(likes_extension["frontend_admin_entry"], "builtin:likes")
+        self.assertEqual(likes_extension["action_links"]["operations_page"], "/admin/extensions/likes/operations")
+
+        tag_stats_extension = next(item for item in payload["extensions"] if item["id"] == "tag-stats")
+        self.assertEqual(tag_stats_extension["frontend_admin_entry"], "builtin:tag-stats")
+        self.assertEqual(tag_stats_extension["action_links"]["operations_page"], "/admin/extensions/tag-stats/operations")
 
     def test_extension_detail_api_returns_extension_actions(self):
         response = self.client.get(

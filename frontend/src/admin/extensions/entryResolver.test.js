@@ -43,6 +43,39 @@ test('loadExtensionAdminEntryModule prefers builtin registry for builtin entries
   assert.equal(loaded, builtinModule)
 })
 
+test('loadExtensionAdminEntryModule accepts builtin operation hosts without custom exports', async () => {
+  const builtinModule = {}
+  const loaded = await loadExtensionAdminEntryModule('builtin:notifications', {
+    builtins: {
+      'builtin:notifications': builtinModule,
+    },
+  })
+
+  assert.equal(loaded, builtinModule)
+})
+
+test('loadExtensionAdminEntryModule accepts additional builtin operation hosts', async () => {
+  const builtinModule = {}
+  const loaded = await loadExtensionAdminEntryModule('builtin:likes', {
+    builtins: {
+      'builtin:likes': builtinModule,
+    },
+  })
+
+  assert.equal(loaded, builtinModule)
+})
+
+test('loadExtensionAdminEntryModule accepts builtin discussion operation hosts', async () => {
+  const builtinModule = {}
+  const loaded = await loadExtensionAdminEntryModule('builtin:discussions', {
+    builtins: {
+      'builtin:discussions': builtinModule,
+    },
+  })
+
+  assert.equal(loaded, builtinModule)
+})
+
 test('loadExtensionAdminEntryModule loads filesystem importer entries', async () => {
   const loaded = await loadExtensionAdminEntryModule('../../../../extensions/sample-hello/frontend/admin/index.js', {
     importers: {

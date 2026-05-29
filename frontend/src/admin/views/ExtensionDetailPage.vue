@@ -465,6 +465,7 @@ import { useAdminRegistryStore } from '../../stores/adminRegistry'
 import { useModalStore } from '../../stores/modal'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
+import { builtinAdminEntries } from '../extensions/builtinAdminEntries'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
 import {
   buildExtensionRouteTarget,
@@ -475,10 +476,6 @@ import {
   resolveExtensionCapabilitySummaryItems,
   resolveExtensionEntryTypeLabel,
 } from '../extensions/diagnostics'
-import ApprovalQueuePage from './ApprovalQueuePage.vue'
-import FlagsPage from './FlagsPage.vue'
-import TagsPage from './TagsPage.vue'
-import UsersPage from './UsersPage.vue'
 
 const route = useRoute()
 const adminRegistryStore = useAdminRegistryStore()
@@ -494,20 +491,6 @@ const backTarget = computed(() => {
 })
 
 const adminEntryModules = import.meta.glob('../../../../extensions/*/frontend/admin/index.js')
-const builtinAdminEntries = {
-  'builtin:approval': {
-    resolveOperationsPage: () => ApprovalQueuePage,
-  },
-  'builtin:flags': {
-    resolveOperationsPage: () => FlagsPage,
-  },
-  'builtin:tags': {
-    resolveSettingsPage: () => TagsPage,
-  },
-  'builtin:users': {
-    resolveOperationsPage: () => UsersPage,
-  },
-}
 
 const actionItems = computed(() => {
   if (!extension.value) return []

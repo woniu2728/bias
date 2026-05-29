@@ -37,6 +37,7 @@ import { useRoute } from 'vue-router'
 import api from '../../api'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
+import { builtinAdminEntries } from '../extensions/builtinAdminEntries'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
 import {
   resolveFallbackExtensionOperationsPage,
@@ -47,11 +48,6 @@ import {
   buildExtensionDetailRouteTarget,
 } from '../extensions/diagnostics'
 import { findAdminRouteByPath } from '../registry'
-import ApprovalQueuePage from './ApprovalQueuePage.vue'
-import CoreExtensionHostPage from './CoreExtensionHostPage.vue'
-import FlagsPage from './FlagsPage.vue'
-import TagsPage from './TagsPage.vue'
-import UsersPage from './UsersPage.vue'
 
 const route = useRoute()
 const loading = ref(true)
@@ -60,24 +56,6 @@ const extension = ref(null)
 const resolvedComponent = ref(null)
 
 const adminEntryModules = import.meta.glob('../../../../extensions/*/frontend/admin/index.js')
-const builtinAdminEntries = {
-  'builtin:core': {
-    resolveSettingsPage: () => CoreExtensionHostPage,
-    resolveOperationsPage: () => CoreExtensionHostPage,
-  },
-  'builtin:approval': {
-    resolveOperationsPage: () => ApprovalQueuePage,
-  },
-  'builtin:flags': {
-    resolveOperationsPage: () => FlagsPage,
-  },
-  'builtin:tags': {
-    resolveSettingsPage: () => TagsPage,
-  },
-  'builtin:users': {
-    resolveOperationsPage: () => UsersPage,
-  },
-}
 
 const hostKind = computed(() => {
   const matchedRoute = findAdminRouteByPath(route.path)

@@ -110,10 +110,18 @@ def _resolve_builtin_module_icon(module: ForumModuleDefinition) -> str:
 def _resolve_builtin_frontend_admin_entry(module: ForumModuleDefinition) -> str:
     builtin_entries = {
         "core": "builtin:core",
+        "discussions": "builtin:discussions",
+        "posts": "builtin:posts",
         "approval": "builtin:approval",
         "tags": "builtin:tags",
         "flags": "builtin:flags",
         "users": "builtin:users",
+        "notifications": "builtin:notifications",
+        "mentions": "builtin:mentions",
+        "subscriptions": "builtin:subscriptions",
+        "realtime": "builtin:realtime",
+        "likes": "builtin:likes",
+        "tag-stats": "builtin:tag-stats",
     }
     return builtin_entries.get(module.module_id, "")
 
@@ -136,9 +144,17 @@ def _resolve_builtin_permissions_pages(module: ForumModuleDefinition) -> tuple[s
 
 def _resolve_builtin_operations_pages(module: ForumModuleDefinition) -> tuple[str, ...]:
     hosted_operations_modules = {
+        "discussions",
+        "posts",
         "approval",
         "flags",
         "users",
+        "notifications",
+        "mentions",
+        "subscriptions",
+        "realtime",
+        "likes",
+        "tag-stats",
     }
     if module.module_id == "core":
         return (f"/admin/extensions/{module.module_id}/operations",)
