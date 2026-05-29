@@ -289,6 +289,9 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
    - `frontend_forum_entry` 必须指向当前扩展自己的标准前台入口
    - `backend_entry` 与 `migration_namespace` 必须归属当前扩展命名空间
    - `create_extension` 已补齐独立 `PermissionsPage.vue` 样板
+13. `validate_extensions` 已支持结构化 JSON 输出：
+   - 可直接在 CI、发布脚本和后续自动化工具中消费
+   - 保留原有文本输出和失败退出语义
 
 ### 已完成：阶段 7 的第一批生态元数据预留
 

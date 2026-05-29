@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from django.conf import settings
@@ -26,10 +27,17 @@ class Command(BaseCommand):
             action="store_true",
             help="将 warning 也视为失败",
         )
+        parser.add_argument(
+            "--format",
+            choices=("text", "json"),
+            default="text",
+            help="输出格式，默认 text，可选 json 便于 CI 消费",
+        )
 
     def handle(self, *args, **options):
         extensions_path = Path(options.get("extensions_path") or (Path(settings.BASE_DIR) / "extensions"))
         strict = bool(options.get("strict"))
+        output_format = str(options.get("format") or "text").strip() or "text"
 
         loader = ExtensionManifestLoader(extensions_path)
         try:
@@ -44,6 +52,45 @@ class Command(BaseCommand):
             extensions_base_path=extensions_path,
             strict_runtime_hooks=strict,
         )
+
+        payload = {
+            "extensions_path": str(extensions_path),
+            "strict": strict,
+            "summary": {
+                "manifest_count": len(result.manifests),
+                "error_count": result.error_count,
+                "warning_count": result.warning_count,
+                "ok": result.ok and not (strict and result.warning_count),
+            },
+            "manifests": [
+                {
+                    "id": manifest.id,
+                    "name": manifest.name,
+                    "version": manifest.version,
+                    "source": manifest.source,
+                    "path": manifest.path,
+                }
+                for manifest in result.manifests
+            ],
+            "issues": [
+                {
+                    "level": issue.level,
+                    "code": issue.code,
+                    "field": issue.field,
+                    "message": issue.message,
+                    "extension_id": issue.extension_id,
+                }
+                for issue in result.issues
+            ],
+        }
+
+        if output_format == "json":
+            self.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2))
+            if result.error_count:
+                raise CommandError(f"扩展校验失败，共 {result.error_count} 个错误")
+            if strict and result.warning_count:
+                raise CommandError(f"扩展严格校验失败，共 {result.warning_count} 个警告")
+            return
 
         self.stdout.write(f"已扫描扩展: {len(result.manifests)}")
         for issue in result.issues:

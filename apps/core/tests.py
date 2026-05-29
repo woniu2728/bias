@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+from io import StringIO
 from subprocess import CompletedProcess
 import sys
 from types import SimpleNamespace
@@ -1034,6 +1035,62 @@ class ExtensionManagementCommandTests(TestCase):
 
             with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
                 call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_can_emit_json_payload(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command("create_extension", "alpha-tools")
+                stdout = StringIO()
+                call_command(
+                    "validate_extensions",
+                    "--extensions-path",
+                    str(Path(temp_dir) / "extensions"),
+                    "--format",
+                    "json",
+                    stdout=stdout,
+                )
+
+                payload = json.loads(stdout.getvalue())
+                self.assertEqual(payload["summary"]["manifest_count"], 1)
+                self.assertEqual(payload["summary"]["error_count"], 0)
+                self.assertEqual(payload["summary"]["warning_count"], 0)
+                self.assertTrue(payload["summary"]["ok"])
+                self.assertEqual(payload["manifests"][0]["id"], "alpha-tools")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_json_payload_still_fails_on_errors(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "dependencies": ["missing-one"],
+                "frontend_admin_entry": "extensions/alpha-tools/frontend/admin/index.js",
+                "settings_pages": ["/admin/extensions/alpha-tools/settings"],
+            }, ensure_ascii=False), encoding="utf-8")
+
+            stdout = StringIO()
+            with self.assertRaisesMessage(CommandError, "扩展校验失败，共 2 个错误"):
+                call_command(
+                    "validate_extensions",
+                    "--extensions-path",
+                    str(Path(temp_dir) / "extensions"),
+                    "--format",
+                    "json",
+                    stdout=stdout,
+                )
+
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["summary"]["error_count"], 2)
+            self.assertFalse(payload["summary"]["ok"])
+            self.assertTrue(any(item["code"] == "missing_dependency" for item in payload["issues"]))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
