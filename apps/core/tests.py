@@ -1136,6 +1136,9 @@ class ExtensionManagementCommandTests(TestCase):
         self.assertIn("meta", payload)
         self.assertGreaterEqual(payload["summary"]["extension_count"], 1)
         self.assertIn("attention_count", payload["summary"])
+        self.assertIn("blocking_count", payload["summary"])
+        self.assertIn("warning_count", payload["summary"])
+        self.assertIn("diagnostics", payload["extensions"][0])
         self.assertTrue(any(item["id"] == "core" for item in payload["extensions"]))
         self.assertTrue(any(item["id"] == "sample-hello" for item in payload["extensions"]))
 
@@ -1178,6 +1181,30 @@ class ExtensionManagementCommandTests(TestCase):
 
         self.assertGreaterEqual(payload["summary"]["attention_count"], 1)
         self.assertTrue(any(item["id"] == "sample-hello" for item in payload["extensions"]))
+
+    def test_inspect_extensions_command_can_filter_blocking_only(self):
+        ExtensionInstallation.objects.create(
+            extension_id="sample-hello",
+            version="0.1.0",
+            source="filesystem",
+            enabled=True,
+            installed=True,
+            booted=True,
+            meta={
+                "migration_execution": {
+                    "status": "error",
+                    "status_label": "失败",
+                    "message": "迁移执行失败",
+                },
+            },
+        )
+
+        stdout = StringIO()
+        call_command("inspect_extensions", "--only-blocking", stdout=stdout)
+        payload = json.loads(stdout.getvalue())
+
+        self.assertGreaterEqual(payload["summary"]["blocking_count"], 1)
+        self.assertTrue(all(item["diagnostics"]["blocking"] for item in payload["extensions"]))
 
     def test_inspect_extensions_command_reports_missing_extension(self):
         with self.assertRaisesMessage(CommandError, "扩展不存在: missing-extension"):
@@ -6049,12 +6076,14 @@ class ReleaseVersionControlTests(TestCase):
             with patch("apps.core.management.commands.prepare_release.Command._inspect_extensions") as inspect_mock:
                 inspect_mock.return_value = {
                     "summary": {
+                        "blocking_count": 2,
+                        "warning_count": 0,
                         "attention_count": 2,
                     },
                     "extensions": [],
                 }
                 with override_settings(BASE_DIR=base_dir):
-                    with self.assertRaisesMessage(CommandError, "扩展诊断存在 2 个关注项"):
+                    with self.assertRaisesMessage(CommandError, "扩展诊断存在 2 个阻断项"):
                         call_command("prepare_release", "--set-version", "1.0.0", "--allow-dirty")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -6078,6 +6107,8 @@ class ReleaseVersionControlTests(TestCase):
             with patch("apps.core.management.commands.prepare_release.Command._inspect_extensions") as inspect_mock:
                 inspect_mock.return_value = {
                     "summary": {
+                        "blocking_count": 0,
+                        "warning_count": 0,
                         "attention_count": 0,
                     },
                     "extensions": [{"id": "core"}],

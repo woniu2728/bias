@@ -62,10 +62,13 @@ class Command(BaseCommand):
 
         call_command("validate_extensions", "--strict")
         inspection_payload = self._inspect_extensions()
-        attention_count = int((inspection_payload.get("summary") or {}).get("attention_count") or 0)
-        if attention_count and not allow_extension_attention:
+        summary = inspection_payload.get("summary") or {}
+        blocking_count = int(summary.get("blocking_count") or 0)
+        warning_count = int(summary.get("warning_count") or 0)
+        attention_count = int(summary.get("attention_count") or 0)
+        if blocking_count and not allow_extension_attention:
             raise CommandError(
-                f"扩展诊断存在 {attention_count} 个关注项，请先处理；如需继续请传 --allow-extension-attention"
+                f"扩展诊断存在 {blocking_count} 个阻断项，请先处理；如需继续请传 --allow-extension-attention"
             )
         if extension_report:
             self._write_extension_report(extension_report, inspection_payload)
@@ -88,6 +91,8 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("[OK] 版本文件一致性检查通过"))
         self.stdout.write(f"- VERSION: {state.version}")
         self.stdout.write(f"- frontend/package.json: {state.frontend_version}")
+        self.stdout.write(f"- 扩展阻断项: {blocking_count}")
+        self.stdout.write(f"- 扩展告警项: {warning_count}")
         self.stdout.write(f"- 扩展关注项: {attention_count}")
         if extension_report:
             self.stdout.write(f"- 扩展报告: {extension_report}")

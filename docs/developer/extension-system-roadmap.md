@@ -301,6 +301,10 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
    - 默认存在扩展关注项就阻止发布，可显式放行
    - 可把扩展诊断快照落盘为 JSON，供发布记录和 CI 归档
    - `publish_release` 已透传扩展报告和放行参数
+16. 扩展诊断已开始分级：
+   - 区分阻断发布的 blocking 项和仅告警的 warning 项
+   - `inspect_extensions` 已支持 `--only-blocking`
+   - 发布链路当前默认只拦截 blocking 项，不再把所有 attention 一刀切
 
 ### 已完成：阶段 7 的第一批生态元数据预留
 
