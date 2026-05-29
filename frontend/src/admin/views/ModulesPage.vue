@@ -3,7 +3,7 @@
     class-name="ModulesPage"
     icon="fas fa-cubes"
     :title="modulesCopy?.pageTitle || '模块中心'"
-    :description="modulesCopy?.pageDescription || '围绕注册中心查看模块边界、依赖健康、扩展注入面与后台入口。'"
+    :description="modulesCopy?.pageDescription || '从扩展兼容视角查看内置模块的承载状态、主要入口和运行风险。'"
   >
     <AdminStateBlock v-if="loading" tone="subtle">{{ modulesCopy?.loadingText || '加载模块信息中...' }}</AdminStateBlock>
     <AdminStateBlock v-else-if="errorMessage" tone="danger">{{ errorMessage }}</AdminStateBlock>
@@ -11,7 +11,7 @@
       <section class="ModulesPage-section">
         <div class="ModulesPage-sectionHeader">
           <h3>{{ modulesCopy?.moduleListTitle || '模块列表' }}</h3>
-          <p>{{ modulesCopy?.moduleListDescription || '这里展示内置模块注册结果。当前重点是注册覆盖面、依赖健康和后台接入，不再只是静态清单。' }}</p>
+          <p>{{ modulesCopy?.moduleListDescription || '这里优先查看每个模块是否已经被扩展宿主承接、主要入口是否可用，以及当前是否存在依赖或运行风险。' }}</p>
         </div>
 
         <div v-if="routeBackTarget || focusedModule" class="ModulesPage-contextBar">
@@ -109,7 +109,8 @@
                 <div class="ModuleRow-meta">
                   <span><strong>{{ modulesCopy?.versionLabel || '版本' }}</strong> {{ module.version }}</span>
                   <span v-if="module.dependencies.length"><strong>{{ modulesCopy?.dependenciesLabel || '依赖' }}</strong> {{ formatPreviewList(module.dependencies, 3) }}</span>
-                  <span v-if="module.settings?.groups?.length"><strong>{{ modulesCopy?.settingsGroupLabel || '设置组' }}</strong> {{ formatPreviewList(module.settings.groups, 1) }}</span>
+                  <span><strong>{{ modulesCopy?.hostStateLabel || '扩展承载' }}</strong> {{ resolveModuleHostStatusLabel(module) }}</span>
+                  <span><strong>{{ modulesCopy?.primaryEntryLabel || '主要入口' }}</strong> {{ resolveModulePrimaryLabel(module) }}</span>
                   <span><strong>{{ modulesCopy?.bootModeLabel || '启动方式' }}</strong> {{ module.runtime?.boot_mode_label || modulesCopy?.staticBootModeLabel || '静态注册' }}</span>
                 </div>
 
@@ -133,6 +134,18 @@
                   </span>
                   <span v-else-if="module.health_issues.length">
                     {{ module.health_issues[0] }}
+                  </span>
+                </div>
+
+                <div v-if="buildModuleSurfaceChips(module).length" class="ModuleRow-surfaces">
+                  <span
+                    v-for="surface in buildModuleSurfaceChips(module)"
+                    :key="`${module.id}-${surface.key}`"
+                    class="ModuleRow-surface"
+                    :class="surface.toneClass"
+                  >
+                    <i :class="surface.icon"></i>
+                    <span>{{ surface.label }}</span>
                   </span>
                 </div>
               </div>
@@ -187,23 +200,23 @@
                 </section>
 
                 <section class="ModulePanelCard">
-                  <h5>扩展承载</h5>
+                  <h5>{{ modulesCopy?.extensionHostTitle || '扩展承载' }}</h5>
                   <div class="ModulePanelSummary">
                     <div class="ModulePanelSummary-row">
-                      <span>详情页</span>
-                      <strong>{{ module.extension?.action_links?.detail_page ? '已接入' : '无' }}</strong>
+                      <span>{{ modulesCopy?.detailSurfaceLabel || '详情页' }}</span>
+                      <strong>{{ module.extension?.action_links?.detail_page ? (modulesCopy?.hostedStateLabel || '已接入') : (modulesCopy?.noValueText || '无') }}</strong>
                     </div>
                     <div class="ModulePanelSummary-row">
-                      <span>设置页</span>
-                      <strong>{{ module.runtime?.settings_entry_path ? '已接入' : (modulesCopy?.noValueText || '无') }}</strong>
+                      <span>{{ modulesCopy?.settingsSurfaceLabel || '设置页' }}</span>
+                      <strong>{{ module.runtime?.settings_entry_path ? (modulesCopy?.hostedStateLabel || '已接入') : (modulesCopy?.noValueText || '无') }}</strong>
                     </div>
                     <div class="ModulePanelSummary-row">
-                      <span>权限页</span>
-                      <strong>{{ module.runtime?.permissions_entry_path ? '已接入' : (modulesCopy?.noValueText || '无') }}</strong>
+                      <span>{{ modulesCopy?.permissionsSurfaceLabel || '权限页' }}</span>
+                      <strong>{{ module.runtime?.permissions_entry_path ? (modulesCopy?.hostedStateLabel || '已接入') : (modulesCopy?.noValueText || '无') }}</strong>
                     </div>
                     <div class="ModulePanelSummary-row">
-                      <span>操作页</span>
-                      <strong>{{ module.runtime?.operations_entry_path ? '已接入' : (modulesCopy?.noValueText || '无') }}</strong>
+                      <span>{{ modulesCopy?.operationsSurfaceLabel || '操作页' }}</span>
+                      <strong>{{ module.runtime?.operations_entry_path ? (modulesCopy?.hostedStateLabel || '已接入') : (modulesCopy?.noValueText || '无') }}</strong>
                     </div>
                   </div>
                 </section>
@@ -231,22 +244,22 @@
                 </section>
 
                 <section class="ModulePanelCard">
-                  <h5>扩展摘要</h5>
+                  <h5>{{ modulesCopy?.extensionSummaryTitle || '扩展摘要' }}</h5>
                   <div class="ModulePanelSummary">
                     <div class="ModulePanelSummary-row">
-                      <span>扩展 ID</span>
+                      <span>{{ modulesCopy?.extensionIdLabel || '扩展 ID' }}</span>
                       <strong>{{ module.extension?.id || (modulesCopy?.noValueText || '无') }}</strong>
                     </div>
                     <div class="ModulePanelSummary-row">
-                      <span>来源</span>
+                      <span>{{ modulesCopy?.sourceLabel || '来源' }}</span>
                       <strong>{{ module.extension?.source || (modulesCopy?.noValueText || '无') }}</strong>
                     </div>
                     <div class="ModulePanelSummary-row">
-                      <span>模块归属</span>
+                      <span>{{ modulesCopy?.moduleOwnershipLabel || '模块归属' }}</span>
                       <strong>{{ formatPreviewList(module.extension?.module_ids || [], 3) }}</strong>
                     </div>
                     <div class="ModulePanelSummary-row">
-                      <span>主要入口</span>
+                      <span>{{ modulesCopy?.primaryEntryLabel || '主要入口' }}</span>
                       <strong>{{ resolveModulePrimaryLabel(module) }}</strong>
                     </div>
                   </div>
@@ -266,8 +279,8 @@
 
       <details class="ModulesPage-archive">
         <summary class="ModulesPage-archiveSummary">
-          <span>开发快照</span>
-          <small>保留模块注册明细，默认收起</small>
+          <span>{{ modulesCopy?.archiveSummaryTitle || '开发快照' }}</span>
+          <small>{{ modulesCopy?.archiveSummaryDescription || '保留注册表明细用于调试与协议核对，默认收起。' }}</small>
         </summary>
 
       <section class="ModulesPage-section">
@@ -603,6 +616,7 @@ import { getResolvedNotificationTypes } from '../../forum/notificationTypes'
 import {
   buildExtensionDetailRouteTarget,
   buildExtensionRouteTarget,
+  resolveExtensionAdminSurfaceCards,
   resolveExtensionNavigationSource,
 } from '../extensions/diagnostics'
 import {
@@ -961,6 +975,65 @@ function buildModuleInlineStats(module) {
     { label: '通知', value: counts.notification_types ?? module.notification_types?.length ?? 0 },
     { label: '字段', value: counts.resource_fields ?? module.resource_fields?.length ?? 0 },
   ].filter(item => Number(item.value) > 0)
+}
+
+function buildModuleSurfaceChips(module) {
+  const extension = {
+    ...module.extension,
+    action_links: module.extension?.action_links || {},
+    debug_info: {
+      admin_surface_statuses: [
+        {
+          key: 'settings',
+          mode: String(module.runtime?.settings_entry_path || '').trim() ? 'custom' : 'missing',
+          mode_label: String(module.runtime?.settings_entry_path || '').trim() ? '已接入' : '缺失',
+        },
+        {
+          key: 'permissions',
+          mode: String(module.runtime?.permissions_entry_path || '').trim() ? 'custom' : 'missing',
+          mode_label: String(module.runtime?.permissions_entry_path || '').trim() ? '已接入' : '缺失',
+        },
+        {
+          key: 'operations',
+          mode: String(module.runtime?.operations_entry_path || '').trim() ? 'custom' : 'missing',
+          mode_label: String(module.runtime?.operations_entry_path || '').trim() ? '已接入' : '缺失',
+        },
+      ],
+    },
+    settings_schema: [],
+    permission_summary: {
+      permission_count: module.permissions?.length || 0,
+      section_count: 0,
+    },
+    admin_actions: [],
+    runtime_actions: [],
+  }
+
+  return resolveExtensionAdminSurfaceCards(extension).map((item) => {
+    const ready = item.mode !== 'missing'
+    return {
+      key: item.key,
+      label: `${item.label}${ready ? (modulesCopy.value?.hostedStateLabel || '已接入') : (modulesCopy.value?.missingStateLabel || '缺失')}`,
+      icon: item.key === 'settings'
+        ? 'fas fa-sliders-h'
+        : item.key === 'permissions'
+          ? 'fas fa-key'
+          : 'fas fa-screwdriver-wrench',
+      toneClass: ready ? 'ModuleRow-surface--ready' : 'ModuleRow-surface--missing',
+    }
+  })
+}
+
+function resolveModuleHostStatusLabel(module) {
+  const surfaces = buildModuleSurfaceChips(module)
+  const readyCount = surfaces.filter(item => item.toneClass === 'ModuleRow-surface--ready').length
+  if (!surfaces.length || readyCount === 0) {
+    return modulesCopy.value?.missingStateLabel || '缺失'
+  }
+  if (readyCount === surfaces.length) {
+    return modulesCopy.value?.fullyHostedLabel || '完整承载'
+  }
+  return `${readyCount}/${surfaces.length} ${modulesCopy.value?.hostedStateLabel || '已接入'}`
 }
 
 function resolveModulePrimaryTarget(module) {
@@ -1343,6 +1416,38 @@ function formatLifecycleLabels(module) {
   gap: 8px;
   color: #9b660d;
   font-size: 13px;
+}
+
+.ModuleRow-surfaces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ModuleRow-surface {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--forum-border-color);
+  background: var(--forum-bg-subtle);
+  color: var(--forum-text-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ModuleRow-surface--ready {
+  border-color: #d7e8d9;
+  background: #f2faf3;
+  color: #2a7448;
+}
+
+.ModuleRow-surface--missing {
+  border-color: #ebdfc5;
+  background: #fff8ec;
+  color: #9a6b18;
 }
 
 .ModuleRow-actions {
