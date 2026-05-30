@@ -277,329 +277,6 @@
         <AdminStateBlock v-else tone="subtle">{{ modulesCopy?.emptyFilteredModulesText || '当前筛选下没有匹配的模块。' }}</AdminStateBlock>
       </section>
 
-      <details class="ModulesPage-archive">
-        <summary class="ModulesPage-archiveSummary">
-          <span>{{ modulesCopy?.archiveSummaryTitle || '开发快照' }}</span>
-          <small>{{ modulesCopy?.archiveSummaryDescription || '保留注册表明细用于调试与协议核对，默认收起。' }}</small>
-        </summary>
-
-      <section class="ModulesPage-section">
-        <div class="ModulesPage-sectionHeader">
-          <h3>{{ modulesCopy?.adminEntriesSectionTitle || '后台注册入口' }}</h3>
-          <p>{{ modulesCopy?.adminEntriesSectionDescription || '按当前筛选结果列出后台页面，便于检查导航是否已经真正从模块注册元数据派生。' }}</p>
-        </div>
-
-        <div class="AdminTableWrap">
-          <table class="AdminTable">
-            <thead>
-              <tr>
-                <th>{{ modulesCopy?.adminPageHeader || '页面' }}</th>
-                <th>{{ modulesCopy?.pathHeader || '路径' }}</th>
-                <th>{{ modulesCopy?.moduleHeader || '归属模块' }}</th>
-                <th>{{ modulesCopy?.navSectionHeader || '导航分组' }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="page in filteredAdminPages" :key="page.path">
-                <td>
-                  <router-link :to="page.path">{{ page.label }}</router-link>
-                </td>
-                <td><code>{{ page.path }}</code></td>
-                <td>{{ moduleNameMap[page.module_id] || page.module_id }}</td>
-                <td>{{ page.nav_section === 'core' ? (modulesCopy?.coreNavLabel || '核心') : (modulesCopy?.featureNavLabel || '功能') }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="ModulesPage-section">
-        <div class="ModulesPage-sectionHeader">
-          <h3>{{ modulesCopy?.notificationEventsSectionTitle || '通知类型与事件监听' }}</h3>
-          <p>{{ modulesCopy?.notificationEventsSectionDescription || '用于校验模块通知协议和领域事件挂接是否持续沿统一机制注册。' }}</p>
-        </div>
-
-        <div class="ModulesPage-grid ModulesPage-grid--secondary">
-          <article class="ModuleCard">
-            <div class="ModuleCard-header">
-              <div>
-                <div class="ModuleCard-titleRow">
-                  <h4>{{ modulesCopy?.notificationTypesCardTitle || '通知类型' }}</h4>
-                </div>
-                <p>{{ modulesCopy?.notificationTypesCardDescription || '所有已在注册中心声明的站内通知类型。' }}</p>
-              </div>
-            </div>
-
-            <ul v-if="filteredNotificationTypes.length" class="ModuleList ModuleList--dense">
-              <li v-for="notificationType in filteredNotificationTypes" :key="notificationType.code">
-                <code>{{ notificationType.code }}</code>
-                <span>{{ notificationType.label }}</span>
-                <small>{{ moduleNameMap[notificationType.module_id] || notificationType.module_id }}</small>
-              </li>
-            </ul>
-            <p v-else class="ModuleEmpty">{{ modulesCopy?.noNotificationTypesText || '暂无通知类型' }}</p>
-          </article>
-
-          <article class="ModuleCard">
-            <div class="ModuleCard-header">
-              <div>
-                <div class="ModuleCard-titleRow">
-                  <h4>{{ modulesCopy?.notificationRenderersCardTitle || '通知渲染器' }}</h4>
-                </div>
-                <p>{{ modulesCopy?.notificationRenderersCardDescription || '当前前端已注册的通知展示与跳转 renderer。' }}</p>
-              </div>
-            </div>
-
-            <ul v-if="filteredNotificationRenderers.length" class="ModuleList ModuleList--dense">
-              <li v-for="renderer in filteredNotificationRenderers" :key="`${renderer.module_id}:${renderer.code}`">
-                <code>{{ renderer.code }}</code>
-                <span>{{ renderer.label }}</span>
-                <small>{{ moduleNameMap[renderer.module_id] || renderer.module_id }} · {{ renderer.navigation_scope }}</small>
-              </li>
-            </ul>
-            <p v-else class="ModuleEmpty">{{ modulesCopy?.noNotificationRenderersText || '暂无通知渲染器' }}</p>
-          </article>
-
-          <article class="ModuleCard">
-            <div class="ModuleCard-header">
-              <div>
-                <div class="ModuleCard-titleRow">
-                  <h4>{{ modulesCopy?.eventListenersCardTitle || '事件监听器' }}</h4>
-                </div>
-                <p>{{ modulesCopy?.eventListenersCardDescription || '当前模块通过事件总线挂接的监听入口。' }}</p>
-              </div>
-            </div>
-
-            <ul v-if="filteredEventListeners.length" class="ModuleList ModuleList--dense">
-              <li
-                v-for="listener in filteredEventListeners"
-                :key="`${listener.event}:${listener.listener}:${listener.module_id}`"
-              >
-                <code>{{ listener.event }}</code>
-                <span>{{ listener.listener }}</span>
-                <small>{{ moduleNameMap[listener.module_id] || listener.module_id }}</small>
-              </li>
-            </ul>
-            <p v-else class="ModuleEmpty">{{ modulesCopy?.noEventListenersCardText || '暂无事件监听器' }}</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="ModulesPage-section">
-        <div class="ModulesPage-sectionHeader">
-          <h3>{{ modulesCopy?.languagePacksSectionTitle || '语言包注册' }}</h3>
-          <p>{{ modulesCopy?.languagePacksSectionDescription || '列出模块通过注册中心声明的语言包，作为阶段 6 国际化准备的最小快照。' }}</p>
-        </div>
-
-        <table class="AdminTable">
-          <thead>
-            <tr>
-              <th>{{ modulesCopy?.nameHeader || '名称' }}</th>
-              <th>{{ modulesCopy?.descriptionHeader || '说明' }}</th>
-              <th>{{ modulesCopy?.moduleHeader || '归属模块' }}</th>
-              <th>{{ modulesCopy?.defaultHeader || '默认' }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="languagePack in filteredLanguagePacks" :key="`${languagePack.module_id}:${languagePack.code}`">
-              <td><code>{{ languagePack.code }}</code></td>
-              <td>{{ languagePack.native_label ? `${languagePack.native_label} (${languagePack.label})` : languagePack.label }}</td>
-              <td>{{ moduleNameMap[languagePack.module_id] || languagePack.module_id }}</td>
-              <td>{{ languagePack.is_default ? (modulesCopy?.yesText || '是') : (modulesCopy?.noText || '否') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section class="ModulesPage-section">
-        <div class="ModulesPage-sectionHeader">
-          <h3>{{ modulesCopy?.userPreferencesSectionTitle || '用户偏好注册' }}</h3>
-          <p>{{ modulesCopy?.userPreferencesSectionDescription || '这里检查模块是否通过统一注册协议声明通知和个性化偏好，而不是散落在页面局部状态中。' }}</p>
-        </div>
-
-        <div class="AdminTableWrap">
-          <table class="AdminTable">
-            <thead>
-              <tr>
-                <th>{{ modulesCopy?.preferenceKeyHeader || '偏好键' }}</th>
-                <th>{{ modulesCopy?.moduleHeader || '归属模块' }}</th>
-                <th>{{ modulesCopy?.preferenceCategoryHeader || '分类' }}</th>
-                <th>{{ modulesCopy?.preferenceDefaultHeader || '默认值' }}</th>
-                <th>{{ modulesCopy?.descriptionHeader || '说明' }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="preference in filteredUserPreferences" :key="`${preference.module_id}:${preference.key}`">
-                <td><code>{{ preference.key }}</code></td>
-                <td>{{ moduleNameMap[preference.module_id] || preference.module_id }}</td>
-                <td><code>{{ preference.category }}</code></td>
-                <td>{{ preference.default_value ? (modulesCopy?.enabledToggleText || '开启') : (modulesCopy?.disabledToggleText || '关闭') }}</td>
-                <td>{{ preference.description || preference.label }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="ModulesPage-section">
-        <div class="ModulesPage-sectionHeader">
-          <h3>{{ modulesCopy?.postTypesSectionTitle || '帖子类型注册' }}</h3>
-          <p>{{ modulesCopy?.postTypesSectionDescription || '用于承接系统事件帖、状态变更帖和普通回复的统一协议。' }}</p>
-        </div>
-
-        <div class="AdminTableWrap">
-          <table class="AdminTable">
-            <thead>
-              <tr>
-                <th>{{ modulesCopy?.postTypeCodeHeader || '类型' }}</th>
-                <th>{{ modulesCopy?.moduleHeader || '归属模块' }}</th>
-                <th>{{ modulesCopy?.capabilitiesHeader || '能力' }}</th>
-                <th>{{ modulesCopy?.descriptionHeader || '说明' }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="postType in filteredPostTypes" :key="`${postType.module_id}:${postType.code}`">
-                <td><code>{{ postType.code }}</code></td>
-                <td>{{ moduleNameMap[postType.module_id] || postType.module_id }}</td>
-                <td>{{ formatPostTypeCapabilities(postType) }}</td>
-                <td>{{ postType.description || postType.label }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="ModulesPage-section">
-        <div class="ModulesPage-sectionHeader">
-          <h3>{{ modulesCopy?.resourceFieldsSectionTitle || '资源字段注册' }}</h3>
-          <p>{{ modulesCopy?.resourceFieldsSectionDescription || '汇总 Discussion、Post、Tag、Search 等资源上的扩展字段，作为统一 Resource 协议快照。' }}</p>
-        </div>
-
-        <div class="AdminTableWrap">
-          <table class="AdminTable">
-            <thead>
-              <tr>
-                <th>{{ modulesCopy?.resourceHeader || '资源' }}</th>
-                <th>{{ modulesCopy?.fieldHeader || '字段' }}</th>
-                <th>{{ modulesCopy?.moduleHeader || '归属模块' }}</th>
-                <th>{{ modulesCopy?.descriptionHeader || '说明' }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="resourceField in filteredResourceFields"
-                :key="`${resourceField.resource}:${resourceField.field}:${resourceField.module_id}`"
-              >
-                <td><code>{{ resourceField.resource }}</code></td>
-                <td><code>{{ resourceField.field }}</code></td>
-                <td>{{ moduleNameMap[resourceField.module_id] || resourceField.module_id }}</td>
-                <td>{{ resourceField.description || modulesCopy?.resourceFieldFallbackText || '已注册资源扩展字段' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="ModulesPage-section">
-        <div class="ModulesPage-sectionHeader">
-          <h3>{{ modulesCopy?.searchFiltersSectionTitle || '搜索过滤器注册' }}</h3>
-          <p>{{ modulesCopy?.searchFiltersSectionDescription || '列出模块通过注册中心声明的搜索过滤语法，帮助检查搜索扩展点的覆盖度。' }}</p>
-        </div>
-
-        <div class="AdminTableWrap">
-          <table class="AdminTable">
-            <thead>
-              <tr>
-                <th>{{ modulesCopy?.syntaxHeader || '语法' }}</th>
-                <th>{{ modulesCopy?.targetHeader || '目标资源' }}</th>
-                <th>{{ modulesCopy?.moduleHeader || '归属模块' }}</th>
-                <th>{{ modulesCopy?.descriptionHeader || '说明' }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="searchFilter in filteredSearchFilters"
-                :key="`${searchFilter.module_id}:${searchFilter.target}:${searchFilter.code}`"
-              >
-                <td><code>{{ searchFilter.syntax || searchFilter.code }}</code></td>
-                <td><code>{{ searchFilter.target }}</code></td>
-                <td>{{ moduleNameMap[searchFilter.module_id] || searchFilter.module_id }}</td>
-                <td>{{ searchFilter.description || searchFilter.label }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="ModulesPage-section">
-        <div class="ModulesPage-sectionHeader">
-          <h3>{{ modulesCopy?.discussionSortsSectionTitle || '讨论排序注册' }}</h3>
-          <p>{{ modulesCopy?.discussionSortsSectionDescription || '列出模块通过注册中心声明的讨论列表排序能力，便于检查论坛首页和标签页的扩展面。' }}</p>
-        </div>
-
-        <div class="AdminTableWrap">
-          <table class="AdminTable">
-            <thead>
-              <tr>
-                <th>{{ modulesCopy?.sortCodeHeader || '排序码' }}</th>
-                <th>{{ modulesCopy?.nameHeader || '名称' }}</th>
-                <th>{{ modulesCopy?.moduleHeader || '归属模块' }}</th>
-                <th>{{ modulesCopy?.defaultHeader || '默认' }}</th>
-                <th>{{ modulesCopy?.descriptionHeader || '说明' }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="discussionSort in filteredDiscussionSorts"
-                :key="`${discussionSort.module_id}:${discussionSort.code}`"
-              >
-                <td><code>{{ discussionSort.code }}</code></td>
-                <td>{{ discussionSort.label }}</td>
-                <td>{{ moduleNameMap[discussionSort.module_id] || discussionSort.module_id }}</td>
-                <td>{{ discussionSort.is_default ? (modulesCopy?.yesText || '是') : (modulesCopy?.noText || '否') }}</td>
-                <td>{{ discussionSort.description || discussionSort.label }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="ModulesPage-section">
-        <div class="ModulesPage-sectionHeader">
-          <h3>{{ modulesCopy?.discussionListFiltersSectionTitle || '讨论列表过滤注册' }}</h3>
-          <p>{{ modulesCopy?.discussionListFiltersSectionDescription || '列出模块通过注册中心声明的讨论列表过滤能力，帮助检查首页、关注页和用户列表是否正在共用统一协议。' }}</p>
-        </div>
-
-        <div class="AdminTableWrap">
-          <table class="AdminTable">
-            <thead>
-              <tr>
-                <th>{{ modulesCopy?.filterCodeHeader || '过滤码' }}</th>
-                <th>{{ modulesCopy?.nameHeader || '名称' }}</th>
-                <th>{{ modulesCopy?.moduleHeader || '归属模块' }}</th>
-                <th>{{ modulesCopy?.requiresAuthHeader || '需登录' }}</th>
-                <th>{{ modulesCopy?.defaultHeader || '默认' }}</th>
-                <th>{{ modulesCopy?.descriptionHeader || '说明' }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="discussionListFilter in filteredDiscussionListFilters"
-                :key="`${discussionListFilter.module_id}:${discussionListFilter.code}`"
-              >
-                <td><code>{{ discussionListFilter.code }}</code></td>
-                <td>{{ discussionListFilter.label }}</td>
-                <td>{{ moduleNameMap[discussionListFilter.module_id] || discussionListFilter.module_id }}</td>
-                <td>{{ discussionListFilter.requires_authenticated_user ? (modulesCopy?.yesText || '是') : (modulesCopy?.noText || '否') }}</td>
-                <td>{{ discussionListFilter.is_default ? (modulesCopy?.yesText || '是') : (modulesCopy?.noText || '否') }}</td>
-                <td>{{ discussionListFilter.description || discussionListFilter.label }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      </details>
     </div>
   </AdminPage>
 </template>
@@ -612,7 +289,6 @@ import AdminStateBlock from '../components/AdminStateBlock.vue'
 import AdminToolbar from '../components/AdminToolbar.vue'
 import AdminFilterTabs from '../components/AdminFilterTabs.vue'
 import api from '../../api'
-import { getResolvedNotificationTypes } from '../../forum/notificationTypes'
 import {
   buildExtensionDetailRouteTarget,
   buildExtensionRouteTarget,
@@ -632,40 +308,6 @@ const summary = ref({})
 const modules = ref([])
 const categorySummaries = ref([])
 const dependencyAttention = ref([])
-const adminPages = ref([])
-const notificationTypes = ref([])
-const languagePacks = ref([])
-const notificationRenderers = computed(() => {
-  const moduleIdsByCode = Object.fromEntries(
-    notificationTypes.value.map(item => [item.code, item.module_id])
-  )
-
-  return getResolvedNotificationTypes()
-    .map(item => {
-      const code = String(item.type || item.code || item.key || '').trim()
-      const moduleId = normalizeModuleId(item.moduleId || item.module_id || moduleIdsByCode[code])
-      if (!code || !moduleId) {
-        return null
-      }
-
-      return {
-        code,
-        label: item.label || code,
-        module_id: moduleId,
-        icon: item.icon || 'fas fa-bell',
-        navigation_scope: item.navigationScope || item.navigation_scope || 'notifications',
-        group_label: item.groupLabel || '',
-      }
-    })
-    .filter(Boolean)
-})
-const userPreferences = ref([])
-const eventListeners = ref([])
-const postTypes = ref([])
-const resourceFields = ref([])
-const searchFilters = ref([])
-const discussionSorts = ref([])
-const discussionListFilters = ref([])
 const categoryFilter = ref('all')
 const statusFilter = ref('all')
 const searchQuery = ref('')
@@ -717,9 +359,6 @@ const filteredModules = computed(() => {
       ...module.capabilities,
       ...module.dependencies,
       ...module.permissions.map(item => item.code),
-      ...module.admin_pages.map(item => item.path),
-      ...module.notification_renderers.map(item => item.code),
-      ...module.notification_renderers.map(item => item.label),
     ]
       .filter(Boolean)
       .join(' ')
@@ -740,22 +379,9 @@ const displayedModules = computed(() => (
   })
 ))
 
-const filteredModuleIds = computed(() => new Set(filteredModules.value.map(item => item.id)))
 const runtimeDependencyModules = computed(() => (
   filteredModules.value.filter(module => module.runtime_dependency_summary?.status !== 'healthy')
 ))
-
-const filteredAdminPages = computed(() => adminPages.value.filter(item => filteredModuleIds.value.has(item.module_id)))
-const filteredNotificationTypes = computed(() => notificationTypes.value.filter(item => filteredModuleIds.value.has(item.module_id)))
-const filteredNotificationRenderers = computed(() => notificationRenderers.value.filter(item => filteredModuleIds.value.has(item.module_id)))
-const filteredLanguagePacks = computed(() => languagePacks.value.filter(item => filteredModuleIds.value.has(item.module_id)))
-const filteredUserPreferences = computed(() => userPreferences.value.filter(item => filteredModuleIds.value.has(item.module_id)))
-const filteredEventListeners = computed(() => eventListeners.value.filter(item => filteredModuleIds.value.has(item.module_id)))
-const filteredPostTypes = computed(() => postTypes.value.filter(item => filteredModuleIds.value.has(item.module_id)))
-const filteredResourceFields = computed(() => resourceFields.value.filter(item => filteredModuleIds.value.has(item.module_id)))
-const filteredSearchFilters = computed(() => searchFilters.value.filter(item => filteredModuleIds.value.has(item.module_id)))
-const filteredDiscussionSorts = computed(() => discussionSorts.value.filter(item => filteredModuleIds.value.has(item.module_id)))
-const filteredDiscussionListFilters = computed(() => discussionListFilters.value.filter(item => filteredModuleIds.value.has(item.module_id)))
 
 const moduleAttentionCount = computed(() => displayedModules.value.filter(moduleNeedsAttention).length)
 
@@ -787,7 +413,6 @@ const overviewHighlights = computed(() => {
   return items.slice(0, 2)
 })
 
-const moduleNameMap = computed(() => Object.fromEntries(modules.value.map(item => [item.id, item.name])))
 const focusedModuleId = computed(() => normalizeModuleId(route.query.module))
 const focusedModule = computed(() => {
   if (!focusedModuleId.value) {
@@ -810,10 +435,10 @@ const routeBackTarget = computed(() => {
     })
   }
 
-  return buildExtensionRouteTarget('/admin/extensions', 'extensions')
+  return '/admin'
 })
 const routeBackLabel = computed(() => (
-  normalizeModuleId(route.query.extension) ? '返回扩展详情' : '返回扩展中心'
+  normalizeModuleId(route.query.extension) ? '返回扩展详情' : '返回后台'
 ))
 
 function resolveCategoryLabel(category) {
@@ -834,17 +459,6 @@ function normalizeModule(module) {
     capabilities: module.capabilities || [],
     dependencies: module.dependencies || [],
     permissions: module.permissions || [],
-    admin_pages: module.admin_pages || [],
-    notification_types: module.notification_types || [],
-    notification_renderers: notificationRenderers.value.filter(item => item.module_id === moduleId),
-    language_packs: module.language_packs || [],
-    user_preferences: module.user_preferences || [],
-    event_listeners: module.event_listeners || [],
-    post_types: module.post_types || [],
-    resource_fields: module.resource_fields || [],
-    search_filters: module.search_filters || [],
-    discussion_sorts: module.discussion_sorts || [],
-    discussion_list_filters: module.discussion_list_filters || [],
     missing_dependencies: module.missing_dependencies || [],
     disabled_dependencies: module.disabled_dependencies || [],
     dependency_status: module.dependency_status || 'healthy',
@@ -901,17 +515,7 @@ async function loadModules() {
     summary.value = data.summary || {}
     categorySummaries.value = data.category_summaries || []
     dependencyAttention.value = data.dependency_attention || []
-    adminPages.value = data.admin_pages || []
-    notificationTypes.value = data.notification_types || []
-    languagePacks.value = data.language_packs || []
     modules.value = (data.modules || []).map(normalizeModule)
-    userPreferences.value = data.user_preferences || []
-    eventListeners.value = data.event_listeners || []
-    postTypes.value = data.post_types || []
-    resourceFields.value = data.resource_fields || []
-    searchFilters.value = data.search_filters || []
-    discussionSorts.value = data.discussion_sorts || []
-    discussionListFilters.value = data.discussion_list_filters || []
   } catch (error) {
     console.error('加载模块信息失败:', error)
     errorMessage.value = error.response?.data?.error || modulesActionMeta.value?.loadErrorText || '加载模块信息失败，请稍后重试'
@@ -971,7 +575,6 @@ function buildModuleInlineStats(module) {
   const counts = module.registration_counts || {}
   return [
     { label: '权限', value: counts.permissions ?? module.permissions?.length ?? 0 },
-    { label: '后台页', value: counts.admin_pages ?? module.admin_pages?.length ?? 0 },
     { label: '通知', value: counts.notification_types ?? module.notification_types?.length ?? 0 },
     { label: '字段', value: counts.resource_fields ?? module.resource_fields?.length ?? 0 },
   ].filter(item => Number(item.value) > 0)
@@ -1259,22 +862,6 @@ function formatLifecycleLabels(module) {
   color: var(--forum-text-color);
 }
 
-.ModulesPage-alerts,
-.CategorySummaryGrid,
-.ModulesPage-grid {
-  display: grid;
-  gap: 16px;
-}
-
-.ModulesPage-alerts,
-.CategorySummaryGrid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.ModulesPage-grid {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-}
-
 .ModuleShelf {
   display: flex;
   flex-direction: column;
@@ -1528,96 +1115,6 @@ function formatLifecycleLabels(module) {
   color: var(--forum-text-soft);
 }
 
-.ModulesPage-archive {
-  border: 1px solid var(--forum-border-color);
-  border-radius: 18px;
-  background: #fcfcfd;
-  padding: 14px 16px 18px;
-}
-
-.ModulesPage-archiveSummary {
-  cursor: pointer;
-  color: var(--forum-text-muted);
-  font-size: 14px;
-  font-weight: 700;
-  list-style: none;
-  display: inline-flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.ModulesPage-archiveSummary small {
-  color: var(--forum-text-soft);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.ModulesPage-archiveSummary::-webkit-details-marker {
-  display: none;
-}
-
-.ModuleAttentionCard,
-.CategorySummaryCard,
-.ModuleCard {
-  min-width: 0;
-  border: 1px solid var(--forum-border-color);
-  border-radius: 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%);
-  box-shadow: var(--forum-shadow-sm);
-}
-
-.ModuleAttentionCard,
-.CategorySummaryCard {
-  padding: 16px 18px;
-}
-
-.ModuleCard {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px;
-}
-
-.ModuleAttentionCard-header,
-.CategorySummaryCard-header,
-.ModuleCard-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.ModuleAttentionCard p,
-.CategorySummaryCard-meta,
-.ModuleCard p {
-  margin: 0;
-  color: var(--forum-text-muted);
-  line-height: 1.6;
-}
-
-.CategorySummaryCard h4,
-.ModuleCard h4 {
-  margin: 0;
-  color: var(--forum-text-color);
-  font-size: 18px;
-}
-
-.CategorySummaryCard-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 10px;
-  font-size: 13px;
-}
-
-.ModuleCard-titleRow {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
 .ModuleBadge,
 .ModuleStatus,
 .ModuleToken {
@@ -1662,11 +1159,6 @@ function formatLifecycleLabels(module) {
   color: #9b660d;
 }
 
-.ModuleMeta {
-  display: grid;
-  gap: 10px;
-}
-
 .ModuleMeta-row {
   display: flex;
   align-items: baseline;
@@ -1685,30 +1177,6 @@ function formatLifecycleLabels(module) {
   text-align: right;
   color: var(--forum-text-color);
   overflow-wrap: anywhere;
-}
-
-.ModuleWarnings {
-  display: grid;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid #f2d29b;
-  border-radius: 12px;
-  background: #fff9ef;
-}
-
-.ModuleWarnings--neutral {
-  border-color: var(--forum-border-color);
-  background: var(--forum-bg-subtle);
-}
-
-.ModuleWarnings p {
-  margin: 0;
-}
-
-.ModuleActionBar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
 }
 
 .ModuleActionLink {
@@ -1749,103 +1217,6 @@ function formatLifecycleLabels(module) {
   color: var(--forum-text-muted);
 }
 
-.ModuleLists {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.ModuleLists h5 {
-  margin: 0 0 10px;
-  color: var(--forum-text-color);
-  font-size: 14px;
-}
-
-.ModuleList {
-  margin: 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  color: var(--forum-text-muted);
-}
-
-.ModuleList li {
-  overflow-wrap: anywhere;
-}
-
-.ModuleList small {
-  display: block;
-  color: var(--forum-text-soft);
-  line-height: 1.5;
-}
-
-.ModuleList li small {
-  display: block;
-  margin-top: 4px;
-  color: var(--forum-text-soft);
-}
-
-.ModuleList--dense {
-  gap: 10px;
-}
-
-.ModuleList--dense li {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.ModuleList--dense small {
-  color: var(--forum-text-soft);
-  font-size: 12px;
-}
-
-.ModuleList code {
-  margin-right: 8px;
-}
-
-.ModuleEmpty {
-  margin: 0;
-  color: var(--forum-text-soft);
-  font-size: 13px;
-}
-
-.AdminTableWrap {
-  overflow-x: auto;
-  border: 1px solid var(--forum-border-color);
-  border-radius: 14px;
-  background: var(--forum-bg-elevated);
-}
-
-.AdminTable {
-  width: 100%;
-  min-width: 720px;
-  border-collapse: collapse;
-}
-
-.AdminTable th,
-.AdminTable td {
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--forum-border-soft);
-  text-align: left;
-  color: var(--forum-text-muted);
-}
-
-.AdminTable th {
-  background: var(--forum-bg-subtle);
-  color: var(--forum-text-color);
-  font-size: 13px;
-}
-
-.AdminTable td code {
-  color: var(--forum-text-color);
-}
-
-.ModulesPage-grid--secondary {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1864,15 +1235,6 @@ function formatLifecycleLabels(module) {
   }
 
   .ModulesPage-toolbarGroup {
-    flex-direction: column;
-  }
-
-  .ModuleAttentionCard-header,
-  .CategorySummaryCard-header,
-  .ModuleCard-header,
-  .ModuleLists {
-    grid-template-columns: 1fr;
-    display: flex;
     flex-direction: column;
   }
 

@@ -108,32 +108,66 @@ onBeforeUnmount(() => {
 
 .Admin-content {
   padding-top: 56px;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .Admin-content .container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: var(--forum-space-7) var(--forum-space-5);
+  max-width: none;
+  margin: 0;
+  padding: 20px 30px 0;
   display: flex;
   align-items: flex-start;
-  gap: var(--forum-space-7);
+  gap: 30px;
+  height: calc(100vh - 56px);
+  overflow: hidden;
 }
 
 .Admin-main {
   flex: 1;
   min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  padding-bottom: 28px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 142, 158, 0.9) transparent;
+}
+
+.Admin-main::-webkit-scrollbar {
+  width: 12px;
+}
+
+.Admin-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.Admin-main::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(128, 142, 158, 0.85);
+  background-clip: padding-box;
 }
 
 @media (max-width: 960px) {
+  .Admin-content {
+    height: auto;
+    overflow: visible;
+  }
+
   .Admin-content .container {
     flex-direction: column;
     align-items: stretch;
     gap: 18px;
     padding: 18px 14px 28px;
+    height: auto;
+    overflow: visible;
   }
 
   .Admin-main {
     width: 100%;
+    height: auto;
+    overflow: visible;
+    padding-bottom: 0;
   }
 }
 

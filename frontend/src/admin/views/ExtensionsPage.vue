@@ -293,7 +293,9 @@ async function loadExtensions() {
 
 function applyPayload(data) {
   summary.value = data.summary || {}
-  extensions.value = data.extensions || []
+  extensions.value = Array.isArray(data.extensions)
+    ? data.extensions.filter(item => item?.product_visible !== false)
+    : []
   const moduleEntries = extensions.value.flatMap(extension => {
     const moduleIds = Array.isArray(extension.module_ids) ? extension.module_ids : []
     return moduleIds.map(moduleId => ({

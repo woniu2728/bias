@@ -1294,6 +1294,12 @@ class ExtensionRegistryTests(TestCase):
         runtime_probe = inspect_extension_runtime(sample_extension)
         self.assertIn("0001_bootstrap.py", runtime_probe["migration_plan"]["pending_files"])
 
+        emoji_extension = next(item for item in extensions if item.id == "emoji")
+        self.assertEqual(emoji_extension.source, "filesystem")
+        self.assertTrue(emoji_extension.runtime.installed)
+        self.assertTrue(emoji_extension.runtime.enabled)
+        self.assertEqual(emoji_extension.runtime.status_key, "active")
+
     def test_builtin_adapter_preserves_module_metadata(self):
         module = get_forum_registry().get_module("approval")
         extension = adapt_builtin_module_to_extension(module)
@@ -1470,6 +1476,7 @@ class AdminExtensionsApiTests(TestCase):
         self.assertGreaterEqual(payload["summary"]["extension_count"], 1)
         self.assertGreaterEqual(payload["summary"]["builtin_count"], 1)
         self.assertGreaterEqual(payload["summary"]["filesystem_count"], 1)
+        self.assertGreaterEqual(payload["summary"]["product_visible_count"], 1)
         self.assertIn("blocking_count", payload["summary"])
         self.assertIn("warning_count", payload["summary"])
         self.assertIn("attention_count", payload["summary"])
@@ -1510,6 +1517,7 @@ class AdminExtensionsApiTests(TestCase):
 
         sample_extension = next(item for item in payload["extensions"] if item["id"] == "sample-hello")
         self.assertEqual(sample_extension["source"], "filesystem")
+        self.assertFalse(sample_extension["product_visible"])
         self.assertEqual(sample_extension["frontend_admin_entry"], "extensions/sample-hello/frontend/admin/index.js")
         self.assertIn("/admin/extensions/sample-hello/settings", sample_extension["settings_pages"])
         self.assertIn("/admin/extensions/sample-hello/permissions", sample_extension["permissions_pages"])
@@ -1522,6 +1530,14 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(sample_extension["admin_actions"][0]["key"], "details")
         self.assertTrue(any(action["key"] == "documentation" for action in sample_extension["admin_actions"]))
         self.assertFalse(any(action["action"] == "hook:run_rebuild_cache" for action in sample_extension["runtime_actions"]))
+
+        emoji_extension = next(item for item in payload["extensions"] if item["id"] == "emoji")
+        self.assertEqual(emoji_extension["source"], "filesystem")
+        self.assertTrue(emoji_extension["product_visible"])
+        self.assertTrue(emoji_extension["installed"])
+        self.assertTrue(emoji_extension["enabled"])
+        self.assertEqual(emoji_extension["frontend_forum_entry"], "extensions/emoji/frontend/forum/index.js")
+        self.assertTrue(any(item["key"] == "cdn_url" for item in emoji_extension["settings_schema"]))
 
         tags_extension = next(item for item in payload["extensions"] if item["id"] == "tags")
         self.assertEqual(tags_extension["source"], "builtin-module")
@@ -4236,12 +4252,13 @@ class AdminSettingsApiTests(TestCase):
         self.assertIn("users", payload["enabled_modules"])
         self.assertTrue(
             any(
-                item["id"] == "sample-hello"
-                and item["frontend_forum_entry"] == "extensions/sample-hello/frontend/forum/index.js"
-                and item["settings_values"]["welcome_message"] == "欢迎使用 Sample Hello"
+                item["id"] == "emoji"
+                and item["frontend_forum_entry"] == "extensions/emoji/frontend/forum/index.js"
+                and item["settings_values"]["cdn_url"] == ""
                 for item in payload["enabled_extensions"]
             )
         )
+        self.assertFalse(any(item["id"] == "sample-hello" for item in payload["enabled_extensions"]))
         self.assertNotIn("auth_turnstile_secret_key", payload)
 
     def test_public_forum_settings_expose_realtime_typing_toggle(self):

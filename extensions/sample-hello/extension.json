@@ -153,6 +153,7 @@
   ],
   "extra": {
     "display_order": 1000,
-    "experimental": true
+    "experimental": true,
+    "product_hidden": true
   }
 }

@@ -5855,16 +5855,6 @@ registerComposerMentionProvider({
   },
 })
 
-registerComposerPreviewTransformer({
-  key: 'twemoji-preview',
-  order: 10,
-  async transform({ html }) {
-    return {
-      html: renderTwemojiHtml(html || ''),
-    }
-  },
-})
-
 registerComposerSubmitGuard({
   key: 'suspension',
   order: 10,

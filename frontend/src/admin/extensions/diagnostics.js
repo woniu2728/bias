@@ -48,7 +48,7 @@ export function buildExtensionRouteTarget(path, source = '') {
   const query = resolveExtensionRouteQuery(source)
 
   if (!normalizedPath) {
-    return Object.keys(query).length ? { path: '/admin/extensions', query } : '/admin/extensions'
+    return Object.keys(query).length ? { path: '/admin', query } : '/admin'
   }
 
   if (!Object.keys(query).length) {
@@ -64,12 +64,12 @@ export function buildExtensionRouteTarget(path, source = '') {
 export function buildExtensionDetailRouteTarget(extensionId, source = '') {
   const normalizedId = String(extensionId || '').trim()
   if (!normalizedId) {
-    return buildExtensionRouteTarget('/admin/extensions', source)
+    return buildExtensionRouteTarget('/admin', source)
   }
   return buildExtensionRouteTarget(`/admin/extensions/${normalizedId}`, source)
 }
 
-export function resolveExtensionBackTarget(source, fallback = '/admin/extensions') {
+export function resolveExtensionBackTarget(source, fallback = '/admin') {
   if (source && typeof source === 'object' && source.query) {
     const from = String(source.query.from || '').trim()
     const moduleId = String(source.query.module || '').trim()
@@ -85,7 +85,7 @@ export function resolveExtensionBackTarget(source, fallback = '/admin/extensions
   }
   const from = resolveExtensionNavigationSource(source)
   if (from === 'extensions') {
-    return '/admin/extensions'
+    return '/admin'
   }
   return fallback
 }
@@ -228,15 +228,6 @@ export function resolveExtensionAdminSurfaceCards(extension) {
 }
 
 export function resolveExtensionAdminPageCards(extension, { hostKind = '' } = {}) {
-  const internalPageTargets = {
-    '/admin/basics': '/admin/internal/core/basics',
-    '/admin/appearance': '/admin/internal/core/appearance',
-    '/admin/mail': '/admin/internal/core/mail',
-    '/admin/advanced': '/admin/internal/core/advanced',
-    '/admin/audit-logs': '/admin/internal/core/audit-logs',
-    '/admin/docs': '/admin/internal/core/docs',
-  }
-
   const pages = Array.isArray(extension?.admin_page_details) ? extension.admin_page_details : []
   return pages
     .filter((page) => shouldIncludeAdminPageCard(page, hostKind))
@@ -246,7 +237,7 @@ export function resolveExtensionAdminPageCards(extension, { hostKind = '' } = {}
       description: page.description || '查看当前扩展关联的后台页面。',
       icon: page.icon || 'fas fa-link',
       path: page.path || '',
-      target: internalPageTargets[page.path] || page.path || '',
+      target: page.path || '',
       settingsGroup: page.settings_group || '',
     }))
 }
@@ -590,12 +581,12 @@ export function resolveExtensionCapabilityPanels(extension) {
 
 function shouldIncludeAdminPageCard(page, hostKind) {
   const path = String(page?.path || '').trim()
-  if (!path || path === '/admin' || path === '/admin/modules' || path === '/admin/permissions') {
+  if (!path || path === '/admin' || path === '/admin/modules' || path === '/admin/permissions' || path === '/admin/docs') {
     return false
   }
 
   if (hostKind === 'operations') {
-    return ['/admin/advanced', '/admin/audit-logs', '/admin/docs'].includes(path)
+    return ['/admin/advanced', '/admin/audit-logs'].includes(path)
   }
 
   if (hostKind === 'settings') {

@@ -152,59 +152,113 @@ test('admin routes preserve compatibility redirects for builtin operations pages
   assert.equal(findAdminRouteByPath(flagsLegacyPath)?.redirect, '/admin/extensions/flags/operations')
 })
 
-test('admin routes can match internal core extension carrier pages', () => {
+test('admin dashboard actions exclude redirect-only compatibility routes', () => {
+  const directPath = uniquePath('direct-action')
+  const redirectPath = uniquePath('redirect-action')
+
   registerAdminRoute({
-    path: '/admin/internal/core/basics',
-    name: 'admin-core-basics-internal',
-    label: '核心基础设置',
+    path: directPath,
+    name: `route-${directPath}`,
+    label: '直接操作',
+    moduleId: 'core',
+    showInDashboardActions: true,
+  })
+
+  registerAdminRoute({
+    path: redirectPath,
+    name: `route-${redirectPath}`,
+    label: '兼容跳转操作',
+    moduleId: 'approval',
+    redirect: '/admin/extensions/approval/operations',
+    showInDashboardActions: true,
+  })
+
+  const actions = getAdminDashboardActions({ isModuleEnabled: () => true })
+
+  assert.equal(actions.some(item => item.to === directPath), true)
+  assert.equal(actions.some(item => item.to === redirectPath), false)
+})
+
+test('admin routes can match first-class core admin pages directly', () => {
+  registerAdminRoute({
+    path: '/admin/basics',
+    name: 'admin-core-basics',
+    label: '基础设置',
     moduleId: 'core',
     showInNavigation: false,
   })
 
   registerAdminRoute({
-    path: '/admin/internal/core/appearance',
-    name: 'admin-core-appearance-internal',
-    label: '核心外观设置',
+    path: '/admin/appearance',
+    name: 'admin-core-appearance',
+    label: '外观设置',
     moduleId: 'core',
     showInNavigation: false,
   })
 
   registerAdminRoute({
-    path: '/admin/internal/core/mail',
-    name: 'admin-core-mail-internal',
-    label: '核心邮件设置',
+    path: '/admin/mail',
+    name: 'admin-core-mail',
+    label: '邮件设置',
     moduleId: 'core',
     showInNavigation: false,
   })
 
   registerAdminRoute({
-    path: '/admin/internal/core/advanced',
-    name: 'admin-core-advanced-internal',
-    label: '核心高级设置',
+    path: '/admin/advanced',
+    name: 'admin-core-advanced',
+    label: '高级设置',
     moduleId: 'core',
     showInNavigation: false,
   })
 
   registerAdminRoute({
-    path: '/admin/internal/core/audit-logs',
-    name: 'admin-core-audit-logs-internal',
-    label: '核心审计日志',
+    path: '/admin/audit-logs',
+    name: 'admin-core-audit-logs',
+    label: '审计日志',
     moduleId: 'core',
     showInNavigation: false,
   })
 
   registerAdminRoute({
-    path: '/admin/internal/core/docs',
-    name: 'admin-core-docs-internal',
-    label: '核心开发者文档',
+    path: '/admin/approval',
+    name: 'admin-core-approval',
+    label: '审核队列',
+    moduleId: 'approval',
+    showInNavigation: false,
+  })
+
+  registerAdminRoute({
+    path: '/admin/flags',
+    name: 'admin-core-flags',
+    label: '举报管理',
+    moduleId: 'flags',
+    showInNavigation: false,
+  })
+
+  registerAdminRoute({
+    path: '/admin/tags',
+    name: 'admin-core-tags',
+    label: '标签管理',
+    moduleId: 'tags',
+    showInNavigation: false,
+  })
+
+  registerAdminRoute({
+    path: '/admin/docs',
+    name: 'admin-core-docs',
+    label: '开发者文档',
     moduleId: 'core',
     showInNavigation: false,
   })
 
-  assert.equal(findAdminRouteByPath('/admin/internal/core/basics')?.name, 'admin-core-basics-internal')
-  assert.equal(findAdminRouteByPath('/admin/internal/core/appearance')?.name, 'admin-core-appearance-internal')
-  assert.equal(findAdminRouteByPath('/admin/internal/core/mail')?.name, 'admin-core-mail-internal')
-  assert.equal(findAdminRouteByPath('/admin/internal/core/advanced')?.name, 'admin-core-advanced-internal')
-  assert.equal(findAdminRouteByPath('/admin/internal/core/audit-logs')?.name, 'admin-core-audit-logs-internal')
-  assert.equal(findAdminRouteByPath('/admin/internal/core/docs')?.name, 'admin-core-docs-internal')
+  assert.equal(findAdminRouteByPath('/admin/basics')?.name, 'admin-core-basics')
+  assert.equal(findAdminRouteByPath('/admin/appearance')?.name, 'admin-core-appearance')
+  assert.equal(findAdminRouteByPath('/admin/mail')?.name, 'admin-core-mail')
+  assert.equal(findAdminRouteByPath('/admin/advanced')?.name, 'admin-core-advanced')
+  assert.equal(findAdminRouteByPath('/admin/audit-logs')?.name, 'admin-core-audit-logs')
+  assert.equal(findAdminRouteByPath('/admin/approval')?.name, 'admin-core-approval')
+  assert.equal(findAdminRouteByPath('/admin/flags')?.name, 'admin-core-flags')
+  assert.equal(findAdminRouteByPath('/admin/tags')?.name, 'admin-core-tags')
+  assert.equal(findAdminRouteByPath('/admin/docs')?.name, 'admin-core-docs')
 })

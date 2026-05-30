@@ -2,15 +2,21 @@ import twemoji from '@twemoji/api'
 
 const htmlCache = new Map()
 const textCache = new Map()
+let twemojiBaseUrlOverride = ''
+let twemojiEnabled = false
 
 function buildTwemojiOptions() {
-  return {
+  const options = {
     attributes: () => ({
       loading: 'lazy',
       decoding: 'async',
       draggable: 'false'
     })
   }
+  if (twemojiBaseUrlOverride) {
+    options.base = twemojiBaseUrlOverride
+  }
+  return options
 }
 
 function parseHtml(html) {
@@ -30,7 +36,7 @@ function escapeHtml(value) {
 
 export function renderTwemojiHtml(html) {
   const source = String(html || '')
-  if (!source || typeof document === 'undefined') {
+  if (!source || typeof document === 'undefined' || !twemojiEnabled) {
     return source
   }
 
@@ -49,7 +55,7 @@ export function renderTwemojiHtml(html) {
 
 export function renderTwemojiText(text) {
   const source = String(text || '')
-  if (!source || typeof document === 'undefined') {
+  if (!source || typeof document === 'undefined' || !twemojiEnabled) {
     return escapeHtml(source)
   }
 
@@ -61,4 +67,24 @@ export function renderTwemojiText(text) {
   const renderedHtml = renderTwemojiHtml(escapeHtml(source))
   textCache.set(source, renderedHtml)
   return renderedHtml
+}
+
+export function setTwemojiBaseUrl(url) {
+  const normalized = String(url || '').trim()
+  if (twemojiBaseUrlOverride === normalized) {
+    return
+  }
+  twemojiBaseUrlOverride = normalized
+  htmlCache.clear()
+  textCache.clear()
+}
+
+export function setTwemojiEnabled(value) {
+  const nextValue = Boolean(value)
+  if (twemojiEnabled === nextValue) {
+    return
+  }
+  twemojiEnabled = nextValue
+  htmlCache.clear()
+  textCache.clear()
 }

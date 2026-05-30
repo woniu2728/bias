@@ -4,6 +4,7 @@ import api from '@/api'
 
 export const useAdminRegistryStore = defineStore('adminRegistry', () => {
   const modules = ref([])
+  const extensions = ref([])
   const loading = ref(false)
   const loaded = ref(false)
 
@@ -27,8 +28,14 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
 
     loading.value = true
     try {
-      const data = await api.get('/admin/modules')
-      modules.value = Array.isArray(data?.modules) ? data.modules : []
+      const [modulesData, extensionsData] = await Promise.all([
+        api.get('/admin/modules'),
+        api.get('/admin/extensions'),
+      ])
+      modules.value = Array.isArray(modulesData?.modules) ? modulesData.modules : []
+      extensions.value = Array.isArray(extensionsData?.extensions)
+        ? extensionsData.extensions.filter(item => item?.product_visible !== false)
+        : []
       loaded.value = true
     } catch (error) {
       console.error('加载后台模块注册表失败:', error)
@@ -71,13 +78,23 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
     loaded.value = true
   }
 
+  function applyExtensions(nextExtensions) {
+    if (!Array.isArray(nextExtensions)) {
+      extensions.value = []
+      return
+    }
+    extensions.value = nextExtensions.filter(item => item?.product_visible !== false)
+  }
+
   return {
     modules,
+    extensions,
     loading,
     loaded,
     enabledModuleIds,
     fetchModules,
     isModuleEnabled,
     applyModules,
+    applyExtensions,
   }
 })

@@ -47,12 +47,12 @@ test('loadEnabledForumExtensions loads enabled extension entries once and applie
   const payload = {
     enabled_extensions: [
       {
-        id: 'sample-hello',
-        frontend_forum_entry: 'extensions/sample-hello/frontend/forum/index.js',
+        id: 'emoji',
+        frontend_forum_entry: 'extensions/emoji/frontend/forum/index.js',
       },
       {
-        id: 'sample-hello',
-        frontend_forum_entry: 'extensions/sample-hello/frontend/forum/index.js',
+        id: 'emoji',
+        frontend_forum_entry: 'extensions/emoji/frontend/forum/index.js',
       },
     ],
   }
@@ -61,8 +61,8 @@ test('loadEnabledForumExtensions loads enabled extension entries once and applie
     forumStore,
     fetchPayload: async () => payload,
     importers: {
-      '../../../extensions/sample-hello/frontend/forum/index.js': async () => {
-        calls.push('sample-hello')
+      '../../../extensions/emoji/frontend/forum/index.js': async () => {
+        calls.push('emoji')
         return {
           bootForumExtension: async ({ extension }) => {
             calls.push(extension.id)
@@ -73,6 +73,6 @@ test('loadEnabledForumExtensions loads enabled extension entries once and applie
   })
 
   assert.equal(calls.length, 2)
-  assert.equal(result.loadedExtensionIds.has('sample-hello'), true)
+  assert.equal(result.loadedExtensionIds.has('emoji'), true)
   assert.equal(forumStore.applied, payload)
 })

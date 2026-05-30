@@ -148,7 +148,7 @@ test('resolveExtensionAdminSurfaceCards builds readable admin host summaries', (
   assert.equal(cards[2].summary, '2 个后台动作，1 个运行操作')
 })
 
-test('resolveExtensionAdminPageCards normalizes core internal carrier targets', () => {
+test('resolveExtensionAdminPageCards keeps core admin targets as first-class admin routes', () => {
   const cards = resolveExtensionAdminPageCards({
     admin_page_details: [
       { path: '/admin', label: '仪表盘' },
@@ -161,11 +161,10 @@ test('resolveExtensionAdminPageCards normalizes core internal carrier targets', 
     ],
   }, { hostKind: 'operations' })
 
-  assert.deepEqual(cards.map(item => item.path), ['/admin/advanced', '/admin/audit-logs', '/admin/docs'])
+  assert.deepEqual(cards.map(item => item.path), ['/admin/advanced', '/admin/audit-logs'])
   assert.deepEqual(cards.map(item => item.target), [
-    '/admin/internal/core/advanced',
-    '/admin/internal/core/audit-logs',
-    '/admin/internal/core/docs',
+    '/admin/advanced',
+    '/admin/audit-logs',
   ])
 })
 
@@ -211,7 +210,7 @@ test('extension navigation helpers preserve source and fallback targets', () => 
       module: 'approval',
     },
   })
-  assert.equal(resolveExtensionBackTarget({ query: { from: 'extensions' } }, '/admin'), '/admin/extensions')
+  assert.equal(resolveExtensionBackTarget({ query: { from: 'extensions' } }, '/admin'), '/admin')
   assert.equal(resolveExtensionBackTarget({ query: {} }, '/admin'), '/admin')
 })
 
@@ -287,7 +286,6 @@ test('resolveExtensionAdminPageCards can isolate operations host pages', () => {
   assert.deepEqual(cards.map(item => item.path), [
     '/admin/advanced',
     '/admin/audit-logs',
-    '/admin/docs',
   ])
 })
 

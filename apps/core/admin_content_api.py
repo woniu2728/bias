@@ -18,6 +18,7 @@ from apps.core.extension_diagnostics import (
 )
 from apps.core.extension_service import ExtensionService
 from apps.core.extension_settings_service import get_extension_settings, serialize_extension_settings_schema, save_extension_settings
+from apps.core.extensions.product import is_product_visible_extension
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.forum_registry import get_builtin_module_ids, get_forum_registry
@@ -235,6 +236,7 @@ def _serialize_admin_extensions_payload(extensions):
             "migration_bundle_count": delivery_summary["migration_bundle_count"],
             "locale_bundle_count": delivery_summary["locale_bundle_count"],
             "signed_extension_count": delivery_summary["signed_extension_count"],
+            "product_visible_count": sum(1 for item in payload if item["product_visible"]),
         },
         "extensions": payload,
     }
@@ -360,6 +362,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         ],
         "backend_hooks": _serialize_extension_backend_hooks(extension),
         "source": extension.source,
+        "product_visible": is_product_visible_extension(extension),
         "module_ids": list(extension.module_ids),
         "admin_pages": list(extension.admin_pages),
         "admin_page_details": admin_page_details,

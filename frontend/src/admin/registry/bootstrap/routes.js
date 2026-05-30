@@ -1,5 +1,4 @@
 import DashboardPage from '../../views/DashboardPage.vue'
-import ExtensionsPage from '../../views/ExtensionsPage.vue'
 import ModulesPage from '../../views/ModulesPage.vue'
 import BasicsPage from '../../views/BasicsPage.vue'
 import PermissionsPage from '../../views/PermissionsPage.vue'
@@ -8,6 +7,10 @@ import AppearancePage from '../../views/AppearancePage.vue'
 import MailPage from '../../views/MailPage.vue'
 import AdvancedPage from '../../views/AdvancedPage.vue'
 import DeveloperDocsPage from '../../views/DeveloperDocsPage.vue'
+import ApprovalQueuePage from '../../views/ApprovalQueuePage.vue'
+import FlagsPage from '../../views/FlagsPage.vue'
+import TagsPage from '../../views/TagsPage.vue'
+import UsersPage from '../../views/UsersPage.vue'
 import ExtensionDetailPage from '../../views/ExtensionDetailPage.vue'
 import ExtensionHostPage from '../../views/ExtensionHostPage.vue'
 import { registerAdminRoute } from '../routes.js'
@@ -21,19 +24,6 @@ registerAdminRoute({
   navDescription: '查看论坛运行状态、模块概况和系统入口。',
   navSection: 'core',
   navOrder: 10,
-  moduleId: 'core'
-})
-
-registerAdminRoute({
-  path: '/admin/extensions',
-  name: 'admin-extensions',
-  component: ExtensionsPage,
-  icon: 'fas fa-plug',
-  label: '扩展中心',
-  navDescription: '查看扩展清单、状态、依赖与未来设置入口。',
-  navSection: 'core',
-  navOrder: 20,
-  showInDashboardActions: true,
   moduleId: 'core'
 })
 
@@ -93,84 +83,6 @@ registerAdminRoute({
 })
 
 registerAdminRoute({
-  path: '/admin/internal/core/basics',
-  name: 'admin-core-basics-internal',
-  component: BasicsPage,
-  icon: 'fas fa-pencil-alt',
-  label: '核心基础设置',
-  navDescription: '核心扩展宿主页内部承载的基础设置页。',
-  navSection: 'core',
-  navOrder: 24,
-  showInNavigation: false,
-  moduleId: 'core',
-})
-
-registerAdminRoute({
-  path: '/admin/internal/core/appearance',
-  name: 'admin-core-appearance-internal',
-  component: AppearancePage,
-  icon: 'fas fa-paint-brush',
-  label: '核心外观设置',
-  navDescription: '核心扩展宿主页内部承载的外观设置页。',
-  navSection: 'core',
-  navOrder: 24,
-  showInNavigation: false,
-  moduleId: 'core',
-})
-
-registerAdminRoute({
-  path: '/admin/internal/core/mail',
-  name: 'admin-core-mail-internal',
-  component: MailPage,
-  icon: 'fas fa-envelope',
-  label: '核心邮件设置',
-  navDescription: '核心扩展宿主页内部承载的邮件设置页。',
-  navSection: 'core',
-  navOrder: 24,
-  showInNavigation: false,
-  moduleId: 'core',
-})
-
-registerAdminRoute({
-  path: '/admin/internal/core/advanced',
-  name: 'admin-core-advanced-internal',
-  component: AdvancedPage,
-  icon: 'fas fa-cog',
-  label: '核心高级设置',
-  navDescription: '核心扩展宿主页内部承载的高级设置页。',
-  navSection: 'core',
-  navOrder: 24,
-  showInNavigation: false,
-  moduleId: 'core',
-})
-
-registerAdminRoute({
-  path: '/admin/internal/core/audit-logs',
-  name: 'admin-core-audit-logs-internal',
-  component: AuditLogsPage,
-  icon: 'fas fa-clipboard-list',
-  label: '核心审计日志',
-  navDescription: '核心扩展宿主页内部承载的审计日志页。',
-  navSection: 'core',
-  navOrder: 24,
-  showInNavigation: false,
-  moduleId: 'core',
-})
-
-registerAdminRoute({
-  path: '/admin/internal/core/docs',
-  name: 'admin-core-docs-internal',
-  component: DeveloperDocsPage,
-  icon: 'fas fa-book',
-  label: '核心开发者文档',
-  navDescription: '核心扩展宿主页内部承载的开发者文档页。',
-  navSection: 'core',
-  navOrder: 24,
-  showInNavigation: false,
-  moduleId: 'core',
-})
-
-registerAdminRoute({
   path: '/admin/modules',
   name: 'admin-modules',
   component: ModulesPage,
@@ -179,17 +91,18 @@ registerAdminRoute({
   navDescription: '查看内置模块、扩展能力和注册快照。',
   navSection: 'core',
   navOrder: 25,
-  showInDashboardActions: true,
+  showInNavigation: false,
+  showInDashboardActions: false,
   moduleId: 'core'
 })
 
 registerAdminRoute({
   path: '/admin/basics',
   name: 'admin-basics',
-  redirect: '/admin/extensions/core/settings',
+  component: BasicsPage,
   icon: 'fas fa-pencil-alt',
   label: '基础设置',
-  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心设置页。',
+  navDescription: '配置论坛的基本信息。',
   navSection: 'core',
   navOrder: 30,
   showInDashboardActions: true,
@@ -205,7 +118,7 @@ registerAdminRoute({
   label: '权限管理',
   navDescription: '管理用户组和访问权限矩阵。',
   navSection: 'core',
-  navOrder: 40,
+  navOrder: 70,
   showInDashboardActions: true,
   dashboardActionLabel: '管理权限',
   moduleId: 'core'
@@ -214,12 +127,12 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/appearance',
   name: 'admin-appearance',
-  redirect: '/admin/extensions/core/settings',
+  component: AppearancePage,
   icon: 'fas fa-paint-brush',
   label: '外观设置',
-  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心设置页。',
+  navDescription: '自定义论坛外观和品牌资源。',
   navSection: 'core',
-  navOrder: 50,
+  navOrder: 40,
   showInDashboardActions: true,
   dashboardActionLabel: '自定义外观',
   moduleId: 'core'
@@ -228,12 +141,12 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/users',
   name: 'admin-users',
-  redirect: '/admin/extensions/users/operations',
+  component: UsersPage,
   icon: 'fas fa-users',
   label: '用户管理',
-  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的用户管理页。',
+  navDescription: '管理论坛用户账号、状态和用户组。',
   navSection: 'core',
-  navOrder: 60,
+  navOrder: 80,
   showInDashboardActions: true,
   dashboardActionLabel: '管理用户',
   moduleId: 'users'
@@ -242,12 +155,13 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/approval',
   name: 'admin-approval',
-  redirect: '/admin/extensions/approval/operations',
+  component: ApprovalQueuePage,
   icon: 'fas fa-user-check',
   label: '审核队列',
-  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的审核操作页。',
-  navSection: 'feature',
+  navDescription: '审核待放行的讨论和回复内容。',
+  navSection: 'core',
   navOrder: 110,
+  showInNavigation: true,
   showInDashboardActions: true,
   dashboardActionLabel: '处理审核',
   moduleId: 'approval'
@@ -256,12 +170,13 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/flags',
   name: 'admin-flags',
-  redirect: '/admin/extensions/flags/operations',
+  component: FlagsPage,
   icon: 'fas fa-flag',
   label: '举报管理',
-  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的举报处理页。',
-  navSection: 'feature',
-  navOrder: 120,
+  navDescription: '处理用户提交的举报与内容风险。',
+  navSection: 'core',
+  navOrder: 100,
+  showInNavigation: true,
   showInDashboardActions: true,
   dashboardActionLabel: '处理举报',
   moduleId: 'flags'
@@ -270,12 +185,12 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/audit-logs',
   name: 'admin-audit-logs',
-  redirect: '/admin/extensions/core/operations',
+  component: AuditLogsPage,
   icon: 'fas fa-clipboard-list',
   label: '审计日志',
-  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心维护页。',
+  navDescription: '查看后台操作和敏感变更记录。',
   navSection: 'feature',
-  navOrder: 130,
+  navOrder: 120,
   showInDashboardActions: true,
   dashboardActionLabel: '查看审计',
   moduleId: 'core'
@@ -284,47 +199,51 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/tags',
   name: 'admin-tags',
-  redirect: '/admin/extensions/tags/settings',
+  component: TagsPage,
   icon: 'fas fa-tags',
   label: '标签管理',
-  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的标签设置页。',
-  navSection: 'feature',
-  navOrder: 140,
+  navDescription: '管理论坛标签层级、排序与发帖限制。',
+  navSection: 'core',
+  navOrder: 90,
+  showInNavigation: true,
+  showInDashboardActions: true,
+  dashboardActionLabel: '管理标签',
   moduleId: 'tags'
 })
 
 registerAdminRoute({
   path: '/admin/mail',
   name: 'admin-mail',
-  redirect: '/admin/extensions/core/settings',
+  component: MailPage,
   icon: 'fas fa-envelope',
   label: '邮件设置',
-  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心设置页。',
+  navDescription: '配置邮件发送方式和发件信息。',
   navSection: 'feature',
-  navOrder: 150,
+  navOrder: 50,
   moduleId: 'core'
 })
 
 registerAdminRoute({
   path: '/admin/advanced',
   name: 'admin-advanced',
-  redirect: '/admin/extensions/core/operations',
+  component: AdvancedPage,
   icon: 'fas fa-cog',
   label: '高级设置',
-  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心操作页。',
+  navDescription: '管理高级运行与站点配置。',
   navSection: 'feature',
-  navOrder: 160,
+  navOrder: 60,
   moduleId: 'core'
 })
 
 registerAdminRoute({
   path: '/admin/docs',
   name: 'admin-developer-docs',
-  redirect: '/admin/extensions/core/operations',
+  component: DeveloperDocsPage,
   icon: 'fas fa-book',
   label: '开发者文档',
-  navDescription: '兼容旧入口，统一跳转到扩展宿主页中的核心维护页。',
+  navDescription: '查看开发者文档与接入说明。',
   navSection: 'feature',
   navOrder: 170,
+  showInNavigation: false,
   moduleId: 'core'
 })

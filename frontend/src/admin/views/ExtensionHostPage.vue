@@ -9,14 +9,6 @@
     <AdminStateBlock v-else-if="errorMessage" tone="danger">{{ errorMessage }}</AdminStateBlock>
 
     <div v-else-if="extension" class="ExtensionHostPage-content">
-      <section class="ExtensionHostPage-topbar">
-        <router-link :to="detailPath" class="ExtensionHostPage-back">
-          <i class="fas fa-arrow-left"></i>
-          <span>返回扩展详情</span>
-        </router-link>
-        <span class="ExtensionHostPage-kind">{{ pageKindLabel }}</span>
-      </section>
-
       <component
         :is="resolvedComponent"
         v-if="resolvedComponent"
@@ -44,9 +36,6 @@ import {
   resolveFallbackExtensionPermissionsPage,
   resolveFallbackExtensionSettingsPage,
 } from '../extensions/fallbacks'
-import {
-  buildExtensionDetailRouteTarget,
-} from '../extensions/diagnostics'
 import { findAdminRouteByPath } from '../registry'
 
 const route = useRoute()
@@ -62,10 +51,6 @@ const hostKind = computed(() => {
   return matchedRoute?.extensionHostKind || 'settings'
 })
 
-const detailPath = computed(() => {
-  const extensionId = String(route.params.extensionId || '').trim()
-  return buildExtensionDetailRouteTarget(extensionId, route)
-})
 const pageKindLabel = computed(() => {
   if (hostKind.value === 'operations') {
     return '操作页'
@@ -150,34 +135,6 @@ function handleExtensionUpdated(payload) {
 .ExtensionHostPage-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
-
-.ExtensionHostPage-topbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-}
-
-.ExtensionHostPage-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid var(--forum-border-color);
-  border-radius: var(--forum-radius-sm);
-  background: var(--forum-bg-subtle);
-  color: var(--forum-text-color);
-  text-decoration: none;
-}
-
-.ExtensionHostPage-kind {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: var(--forum-bg-subtle);
-  color: var(--forum-text-soft);
-  font-size: var(--forum-font-size-sm);
-  font-weight: 600;
+  gap: 16px;
 }
 </style>

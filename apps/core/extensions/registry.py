@@ -8,6 +8,7 @@ from django.db import OperationalError, ProgrammingError
 from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extension
 from apps.core.extensions.exceptions import ExtensionNotFoundError
 from apps.core.extensions.manifest import ExtensionManifestLoader
+from apps.core.extensions.product import is_extension_auto_enabled, is_extension_auto_installed
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
 from apps.core.extensions.types import (
     ExtensionDeliveryCheckDefinition,
@@ -105,6 +106,36 @@ class ExtensionRegistry:
     def _build_uninstalled_definition(self, definition: ExtensionDefinition) -> ExtensionDefinition:
         if definition.source == "builtin-module":
             return definition
+
+        auto_installed = is_extension_auto_installed(definition)
+        auto_enabled = is_extension_auto_enabled(definition)
+        if auto_installed:
+            return ExtensionDefinition(
+                manifest=definition.manifest,
+                runtime=ExtensionRuntimeState(
+                    installed=True,
+                    enabled=auto_enabled,
+                    booted=auto_enabled,
+                    healthy=definition.runtime.healthy,
+                    status_key=_build_extension_status_key(True, auto_enabled),
+                    status_label=_build_extension_status_label(True, auto_enabled),
+                    migration_state=definition.runtime.migration_state,
+                    migration_label=definition.runtime.migration_label,
+                    dependency_state=definition.runtime.dependency_state,
+                    dependency_state_label=definition.runtime.dependency_state_label,
+                    runtime_issues=definition.runtime.runtime_issues,
+                    runtime_actions=(),
+                    backend_hooks=dict(definition.runtime.backend_hooks or {}),
+                    migration_execution=dict(definition.runtime.migration_execution or {}),
+                    applied_migration_files=tuple(definition.runtime.applied_migration_files or ()),
+                ),
+                lifecycle=definition.lifecycle,
+                capabilities=definition.capabilities,
+                module_ids=definition.module_ids,
+                source=definition.source,
+                admin_pages=definition.admin_pages,
+                settings_groups=definition.settings_groups,
+            )
 
         return ExtensionDefinition(
             manifest=definition.manifest,

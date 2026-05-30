@@ -99,7 +99,7 @@ export function getAdminNavSections(options = {}) {
 
 export function getAdminDashboardActions(options = {}) {
   return getAdminRoutes(options)
-    .filter(route => route.showInDashboardActions)
+    .filter(route => route.showInDashboardActions && !route.redirect)
     .sort((left, right) => {
       const leftOrder = left.dashboardActionOrder ?? left.navOrder ?? 100
       const rightOrder = right.dashboardActionOrder ?? right.navOrder ?? 100

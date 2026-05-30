@@ -1,5 +1,4 @@
 import ApprovalQueuePage from '../views/ApprovalQueuePage.vue'
-import CoreExtensionHostPage from '../views/CoreExtensionHostPage.vue'
 import DiscussionsExtensionHostPage from '../views/DiscussionsExtensionHostPage.vue'
 import FlagsPage from '../views/FlagsPage.vue'
 import LikesExtensionHostPage from '../views/LikesExtensionHostPage.vue'
@@ -13,10 +12,6 @@ import TagsPage from '../views/TagsPage.vue'
 import UsersPage from '../views/UsersPage.vue'
 
 export const builtinAdminEntries = {
-  'builtin:core': {
-    resolveSettingsPage: () => CoreExtensionHostPage,
-    resolveOperationsPage: () => CoreExtensionHostPage,
-  },
   'builtin:discussions': {
     resolvePermissionsPage: () => DiscussionsExtensionHostPage,
     resolveOperationsPage: () => DiscussionsExtensionHostPage,

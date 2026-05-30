@@ -15,6 +15,7 @@ from apps.core.bootstrap_config import (
     write_site_config,
 )
 from apps.core.extensions.registry import get_extension_registry
+from apps.core.extensions.product import is_product_visible_extension
 from apps.core.extension_settings_service import get_extension_settings
 from apps.core.mail_drivers import serialize_mail_settings
 from apps.core.mail_templates import (
@@ -422,12 +423,14 @@ def get_public_forum_settings() -> dict:
             "name": extension.name,
             "frontend_forum_entry": extension.manifest.frontend_forum_entry,
             "source": extension.source,
+            "product_visible": is_product_visible_extension(extension),
             "module_ids": list(extension.module_ids),
             "settings_values": get_extension_settings(extension.id) if extension.manifest.settings_schema else {},
         }
         for extension in extension_registry.get_extensions()
         if extension.runtime.installed
         and extension.runtime.enabled
+        and is_product_visible_extension(extension)
         and str(extension.manifest.frontend_forum_entry or "").strip()
     ]
 

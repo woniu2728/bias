@@ -1,4 +1,4 @@
-import { getAdminNavSections as getRegisteredAdminNavSections } from './registry'
+import { getAdminRoutes } from './registry'
 import { useAdminRegistryStore } from '../stores/adminRegistry'
 
 export function isAdminPathActive(currentPath, targetPath) {
@@ -11,9 +11,78 @@ export function isAdminPathActive(currentPath, targetPath) {
 
 export function getAdminNavSections() {
   const adminRegistryStore = useAdminRegistryStore()
-  return getRegisteredAdminNavSections({
+  const routes = getAdminRoutes({
     isModuleEnabled: moduleId => adminRegistryStore.isModuleEnabled(moduleId),
   })
+  const visibleRoutes = routes.filter(route => route.showInNavigation !== false)
+  const coreModuleIds = new Set(
+    visibleRoutes
+      .filter(route => !route.redirect)
+      .map(route => String(route.moduleId || 'core').trim())
+      .filter(Boolean)
+  )
+  const coreItems = visibleRoutes
+    .filter((route) => {
+      if (route.path === '/admin/modules') {
+        return false
+      }
+      if (route.path.startsWith('/admin/extensions/')) {
+        return false
+      }
+      if (route.redirect) {
+        return false
+      }
+      return true
+    })
+    .map(route => ({
+      path: route.path,
+      icon: route.icon,
+      label: route.label,
+      description: route.navDescription || '',
+      badge: route.navBadge || '',
+      moduleId: route.moduleId || 'core',
+      navOrder: route.navOrder || 100,
+    }))
+
+  const filteredSections = coreItems.length ? [{
+    key: 'core',
+    title: '核心配置',
+    items: coreItems,
+  }] : []
+
+  const extensionItems = (adminRegistryStore.extensions || [])
+    .map(section => ({
+      ...section,
+    }))
+    .filter(item => item?.id && item.id !== 'core')
+    .filter(item => item?.product_visible !== false)
+    .filter(item => !coreModuleIds.has(String(item.id || '').trim()))
+    .map(item => ({
+      path: `/admin/extensions/${item.id}`,
+      icon: item.icon || 'fas fa-puzzle-piece',
+      label: item.name || item.id,
+      description: item.description || '',
+      badge: item.enabled === false ? '' : ' ',
+      moduleId: '',
+      navOrder: Number(item.display_order || item.order || 1000),
+      activeWhen: item.active_when || '',
+    }))
+    .sort((left, right) => {
+      if (left.navOrder !== right.navOrder) {
+        return left.navOrder - right.navOrder
+      }
+      return String(left.label || '').localeCompare(String(right.label || ''), 'zh-CN')
+    })
+
+  if (extensionItems.length) {
+    filteredSections.push({
+      key: 'extensions',
+      title: '扩展',
+      items: extensionItems,
+    })
+  }
+
+  return filteredSections
 }
 
 export function getAdminRouteMeta(currentPath) {
