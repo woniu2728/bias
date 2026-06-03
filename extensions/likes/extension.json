@@ -1,0 +1,39 @@
+{
+  "id": "likes",
+  "name": "Likes",
+  "description": "帖子点赞与点赞通知。",
+  "version": "1.0.0",
+  "category": "feature",
+  "icon": "fas fa-thumbs-up",
+  "dependencies": [
+    "core",
+    "posts",
+    "notifications"
+  ],
+  "capabilities": [
+    "post-likes"
+  ],
+  "backend_entry": "extensions.likes.backend.ext",
+  "operations_pages": [
+    "/admin/extensions/likes/operations"
+  ],
+  "compatibility": {
+    "bias_version": "^1.0.0",
+    "api_version": "1.0",
+    "api_stability": "experimental",
+    "api_stability_label": "实验性",
+    "breaking_change_policy": "扩展协议调整会随 Bias 主版本升级同步说明。"
+  },
+  "security": {
+    "support_email": "",
+    "capabilities_notice": "该扩展影响帖子点赞、点赞状态字段和点赞通知偏好。"
+  },
+  "distribution": {
+    "channel": "private",
+    "channel_label": "私有分发"
+  },
+  "extra": {
+    "auto_install": true,
+    "auto_enable": true
+  }
+}

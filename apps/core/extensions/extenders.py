@@ -1,0 +1,1542 @@
+from __future__ import annotations
+
+from dataclasses import replace
+from dataclasses import dataclass
+from typing import Any, Callable
+from typing import Protocol, TYPE_CHECKING
+
+from apps.core.extensions.container import resolve_container_value, wrap_callback
+from apps.core.extensions.types import (
+    ExtensionAdminActionDefinition,
+    ExtensionDiscussionLifecycleDefinition,
+    ExtensionEventListenerDefinition,
+    ExtensionFrontendRouteDefinition,
+    ExtensionFormatterCallback,
+    ExtensionModelCastDefinition,
+    ExtensionModelDefaultDefinition,
+    ExtensionManifestRuntimeActionDefinition,
+    ExtensionManifestSettingFieldDefinition,
+    ExtensionModelDefinition,
+    ExtensionModelRelationDefinition,
+    ExtensionModelSlugDriverDefinition,
+    ExtensionModelVisibilityDefinition,
+    ExtensionResourceDefinition,
+    ExtensionResourceEndpointDefinition,
+    ExtensionResourceFieldMutatorDefinition,
+    ExtensionResourceFieldDefinition,
+    ExtensionResourceObjectDefinition,
+    ExtensionResourceRelationshipDefinition,
+    ExtensionResourceSortDefinition,
+    ExtensionRealtimeIncludedDefinition,
+    ExtensionSearchDriverDefinition,
+    ExtensionValidatorDefinition,
+    ExtensionMailDefinition,
+)
+from apps.core.forum_registry_types import (
+    AdminPageDefinition,
+    DiscussionListFilterDefinition,
+    DiscussionSortDefinition,
+    NotificationTypeDefinition,
+    PermissionDefinition,
+    PostTypeDefinition,
+    SearchFilterDefinition,
+    UserPreferenceDefinition,
+)
+from apps.core.resource_objects import ResourceEndpoint, ResourceField, ResourceRelationship, ResourceSort
+from apps.core.resource_registry import ResourceRegistry
+
+if TYPE_CHECKING:
+    from apps.core.extensions.application import ExtensionHost, ExtensionRuntimeView
+    from apps.core.extensions.backend import ExtensionBackendContext
+
+
+class ExtenderInterface(Protocol):
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        ...
+
+
+class LifecycleInterface(Protocol):
+    def on_install(self, context: "ExtensionBackendContext") -> Any:
+        ...
+
+    def on_enable(self, context: "ExtensionBackendContext") -> Any:
+        ...
+
+    def on_disable(self, context: "ExtensionBackendContext") -> Any:
+        ...
+
+    def on_uninstall(self, context: "ExtensionBackendContext") -> Any:
+        ...
+
+
+@dataclass(frozen=True)
+class LifecycleExtender:
+    install: Callable[["ExtensionBackendContext"], Any] | None = None
+    enable: Callable[["ExtensionBackendContext"], Any] | None = None
+    disable: Callable[["ExtensionBackendContext"], Any] | None = None
+    uninstall: Callable[["ExtensionBackendContext"], Any] | None = None
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        app.register_lifecycle_extender(extension.extension_id, self)
+
+    def on_install(self, context: "ExtensionBackendContext") -> Any:
+        if self.install is None:
+            return None
+        return self.install(context)
+
+    def on_enable(self, context: "ExtensionBackendContext") -> Any:
+        if self.enable is None:
+            return None
+        return self.enable(context)
+
+    def on_disable(self, context: "ExtensionBackendContext") -> Any:
+        if self.disable is None:
+            return None
+        return self.disable(context)
+
+    def on_uninstall(self, context: "ExtensionBackendContext") -> Any:
+        if self.uninstall is None:
+            return None
+        return self.uninstall(context)
+
+
+@dataclass(frozen=True)
+class FrontendExtender:
+    admin_entry: str = ""
+    forum_entry: str = ""
+    common_entry: str = ""
+    css_files: tuple[str, ...] = ()
+    js_directories: tuple[str, ...] = ()
+    preloads: tuple[Any, ...] = ()
+    content_callbacks: tuple[Any, ...] = ()
+    document_attributes: tuple[Any, ...] = ()
+    title_driver: Any = None
+    routes: tuple[ExtensionFrontendRouteDefinition, ...] = ()
+
+    def css(self, path: str) -> "FrontendExtender":
+        return FrontendExtender(
+            admin_entry=self.admin_entry,
+            forum_entry=self.forum_entry,
+            common_entry=self.common_entry,
+            css_files=tuple([*self.css_files, path]),
+            js_directories=self.js_directories,
+            preloads=self.preloads,
+            content_callbacks=self.content_callbacks,
+            document_attributes=self.document_attributes,
+            title_driver=self.title_driver,
+            routes=self.routes,
+        )
+
+    def js_directory(self, path: str) -> "FrontendExtender":
+        return FrontendExtender(
+            admin_entry=self.admin_entry,
+            forum_entry=self.forum_entry,
+            common_entry=self.common_entry,
+            css_files=self.css_files,
+            js_directories=tuple([*self.js_directories, path]),
+            preloads=self.preloads,
+            content_callbacks=self.content_callbacks,
+            document_attributes=self.document_attributes,
+            title_driver=self.title_driver,
+            routes=self.routes,
+        )
+
+    def preload(self, *items: Any) -> "FrontendExtender":
+        return FrontendExtender(
+            admin_entry=self.admin_entry,
+            forum_entry=self.forum_entry,
+            common_entry=self.common_entry,
+            css_files=self.css_files,
+            js_directories=self.js_directories,
+            preloads=tuple([*self.preloads, *items]),
+            content_callbacks=self.content_callbacks,
+            document_attributes=self.document_attributes,
+            title_driver=self.title_driver,
+            routes=self.routes,
+        )
+
+    def content(self, callback: Any, priority: int = 0) -> "FrontendExtender":
+        return FrontendExtender(
+            admin_entry=self.admin_entry,
+            forum_entry=self.forum_entry,
+            common_entry=self.common_entry,
+            css_files=self.css_files,
+            js_directories=self.js_directories,
+            preloads=self.preloads,
+            content_callbacks=tuple([
+                *self.content_callbacks,
+                {
+                    "callback": callback,
+                    "priority": int(priority),
+                },
+            ]),
+            document_attributes=self.document_attributes,
+            title_driver=self.title_driver,
+            routes=self.routes,
+        )
+
+    def extra_document_attributes(self, attributes: Any) -> "FrontendExtender":
+        return FrontendExtender(
+            admin_entry=self.admin_entry,
+            forum_entry=self.forum_entry,
+            common_entry=self.common_entry,
+            css_files=self.css_files,
+            js_directories=self.js_directories,
+            preloads=self.preloads,
+            content_callbacks=self.content_callbacks,
+            document_attributes=tuple([*self.document_attributes, attributes]),
+            title_driver=self.title_driver,
+            routes=self.routes,
+        )
+
+    def extra_document_classes(self, classes: Any) -> "FrontendExtender":
+        return self.extra_document_attributes({"class": classes})
+
+    def title(self, driver: Any) -> "FrontendExtender":
+        return FrontendExtender(
+            admin_entry=self.admin_entry,
+            forum_entry=self.forum_entry,
+            common_entry=self.common_entry,
+            css_files=self.css_files,
+            js_directories=self.js_directories,
+            preloads=self.preloads,
+            content_callbacks=self.content_callbacks,
+            document_attributes=self.document_attributes,
+            title_driver=driver,
+            routes=self.routes,
+        )
+
+    def remove_route(self, name: str, *, frontend: str = "forum") -> "FrontendExtender":
+        normalized = str(name or "").strip()
+        if not normalized:
+            return self
+        route = ExtensionFrontendRouteDefinition(
+            path="",
+            name=normalized,
+            component="",
+            frontend=str(frontend or "forum").strip() or "forum",
+            removed=True,
+        )
+        return FrontendExtender(
+            admin_entry=self.admin_entry,
+            forum_entry=self.forum_entry,
+            common_entry=self.common_entry,
+            css_files=self.css_files,
+            js_directories=self.js_directories,
+            preloads=self.preloads,
+            content_callbacks=self.content_callbacks,
+            document_attributes=self.document_attributes,
+            title_driver=self.title_driver,
+            routes=tuple([*self.routes, route]),
+        )
+
+    def route(
+        self,
+        path: str,
+        name: str,
+        component: str,
+        *,
+        frontend: str = "forum",
+        title: str = "",
+        description: str = "",
+        requires_auth: bool = False,
+        order: int = 100,
+    ) -> "FrontendExtender":
+        route = ExtensionFrontendRouteDefinition(
+            path=str(path or "").strip(),
+            name=str(name or "").strip(),
+            component=str(component or "").strip(),
+            frontend=str(frontend or "forum").strip() or "forum",
+            title=str(title or "").strip(),
+            description=str(description or "").strip(),
+            requires_auth=bool(requires_auth),
+            order=int(order),
+        )
+        return FrontendExtender(
+            admin_entry=self.admin_entry,
+            forum_entry=self.forum_entry,
+            common_entry=self.common_entry,
+            css_files=self.css_files,
+            js_directories=self.js_directories,
+            preloads=self.preloads,
+            content_callbacks=self.content_callbacks,
+            document_attributes=self.document_attributes,
+            title_driver=self.title_driver,
+            routes=tuple([*self.routes, route]),
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        extension_id = extension.extension_id
+
+        def apply(frontend, host: "ExtensionHost"):
+            frontend.set_extension(
+                extension_id,
+                admin_entry=self.admin_entry or None,
+                forum_entry=self.forum_entry or None,
+                common_entry=self.common_entry or None,
+                css=self.css_files,
+                js_directories=self.js_directories,
+                preloads=self.preloads,
+                content_callbacks=self.content_callbacks,
+                document_attributes=self.document_attributes,
+                title_driver=self.title_driver,
+            routes=tuple(
+                    route if route.module_id else replace(route, module_id=extension_id)
+                    for route in self.routes
+                    if route.name and (route.removed or (route.path and route.component))
+                ),
+            )
+            return frontend
+
+        app.resolving("frontend", apply)
+
+
+@dataclass(frozen=True)
+class LocalesExtender:
+    paths: tuple[str, ...] = ()
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.paths:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(locales, host: "ExtensionHost"):
+            for path in self.paths:
+                locales.register_path(extension_id, path)
+            return locales
+
+        app.resolving("locales", apply)
+
+
+@dataclass(frozen=True)
+class FormatterExtender:
+    transforms: tuple[ExtensionFormatterCallback, ...] = ()
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.transforms:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(formatters, host: "ExtensionHost"):
+            for transform in self.transforms:
+                formatters.register_transform(extension_id, transform)
+            return formatters
+
+        app.resolving("formatters", apply)
+
+
+@dataclass(frozen=True)
+class ResourceExtender:
+    resources: tuple[Any, ...] = ()
+    fields: tuple[ExtensionResourceFieldDefinition, ...] = ()
+    field_mutators: tuple[ExtensionResourceFieldMutatorDefinition, ...] = ()
+    relationships: tuple[ExtensionResourceRelationshipDefinition, ...] = ()
+    endpoints: tuple[ExtensionResourceEndpointDefinition, ...] = ()
+    sorts: tuple[ExtensionResourceSortDefinition, ...] = ()
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not (self.resources or self.fields or self.field_mutators or self.relationships or self.endpoints or self.sorts):
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(resources, host: "ExtensionHost"):
+            for definition in self.resources:
+                resolved = resolve_container_value(definition, host)
+                resources.register_resource(self._with_module_id(resolved, extension_id), extension_id=extension_id)
+                self._register_api_resource_contract(host, resolved)
+            for definition in self.fields:
+                resources.register_field(self._with_module_id(self._resolve_definition_callbacks(definition, host), extension_id), extension_id=extension_id)
+            for definition in self.field_mutators:
+                resources.register_field_mutator(self._with_module_id(self._resolve_definition_callbacks(definition, host), extension_id), extension_id=extension_id)
+            for definition in self.relationships:
+                resources.register_relationship(self._with_module_id(self._resolve_definition_callbacks(definition, host), extension_id), extension_id=extension_id)
+            for definition in self.endpoints:
+                resources.register_endpoint(self._with_module_id(self._resolve_definition_callbacks(definition, host), extension_id), extension_id=extension_id)
+            for definition in self.sorts:
+                resources.register_sort(self._with_module_id(self._resolve_definition_callbacks(definition, host), extension_id), extension_id=extension_id)
+            return resources
+
+        app.resolving("resources", apply)
+
+    @staticmethod
+    def _register_api_resource_contract(host, resource: Any) -> None:
+        resource_class = resource if isinstance(resource, type) else type(resource)
+        if resource_class is type(None):
+            return
+
+        def add_resource(app, resources):
+            output = list(resources or [])
+            if resource_class not in output:
+                output.append(resource_class)
+            return output
+
+        host.extend("bias.api.resources", add_resource)
+
+    @staticmethod
+    def _with_module_id(definition, extension_id: str):
+        if isinstance(definition, type):
+            return definition
+        if not hasattr(definition, "module_id"):
+            return definition
+        if getattr(definition, "module_id", ""):
+            return definition
+        return replace(definition, module_id=extension_id)
+
+    @staticmethod
+    def _resolve_definition_callbacks(definition, host):
+        replacements = {}
+        for attr in ("resolver", "handler", "mutator", "setter", "validator", "condition"):
+            if hasattr(definition, attr):
+                value = getattr(definition, attr)
+                if isinstance(value, str) or isinstance(value, type):
+                    replacements[attr] = wrap_callback(value, host)
+        return replace(definition, **replacements) if replacements else definition
+
+
+@dataclass(frozen=True, init=False)
+class ApiResourceExtender:
+    resource: Any = None
+    _fields: tuple[Any, ...] = ()
+    _field_mutators: tuple[ExtensionResourceFieldMutatorDefinition, ...] = ()
+    _relationships: tuple[Any, ...] = ()
+    _endpoints: tuple[Any, ...] = ()
+    _sorts: tuple[Any, ...] = ()
+
+    def __init__(
+        self,
+        resource: Any = None,
+        fields: tuple[Any, ...] = (),
+        field_mutators: tuple[ExtensionResourceFieldMutatorDefinition, ...] = (),
+        relationships: tuple[Any, ...] = (),
+        endpoints: tuple[Any, ...] = (),
+        sorts: tuple[Any, ...] = (),
+    ) -> None:
+        object.__setattr__(self, "resource", resource)
+        object.__setattr__(self, "_fields", tuple(fields or ()))
+        object.__setattr__(self, "_field_mutators", tuple(field_mutators or ()))
+        object.__setattr__(self, "_relationships", tuple(relationships or ()))
+        object.__setattr__(self, "_endpoints", tuple(endpoints or ()))
+        object.__setattr__(self, "_sorts", tuple(sorts or ()))
+
+    @property
+    def resource_name(self) -> str:
+        if self.resource is not None:
+            if isinstance(self.resource, ExtensionResourceObjectDefinition):
+                return self._resource_object_name(self.resource.resource)
+            return getattr(self.resource, "resource", "") or self._resource_object_name(self.resource)
+        for definitions in (
+            self._fields,
+            self._relationships,
+            self._endpoints,
+            self._sorts,
+            self._field_mutators,
+        ):
+            for definition in definitions:
+                resource = getattr(definition, "resource", "")
+                if resource:
+                    return resource
+        return ""
+
+    @staticmethod
+    def from_resource(resource) -> "ApiResourceExtender":
+        return ApiResourceExtender(resource=resource)
+
+    def fields(self, fields: Any = None, *definitions: ExtensionResourceFieldDefinition) -> "ApiResourceExtender":
+        if fields is None:
+            items = definitions
+        else:
+            items = (fields, *definitions)
+        return self.fields_with(*items)
+
+    def fields_with(self, *definitions: Any) -> "ApiResourceExtender":
+        return ApiResourceExtender(
+            resource=self.resource,
+            fields=tuple([*self._fields, *definitions]),
+            field_mutators=self._field_mutators,
+            relationships=self._relationships,
+            endpoints=self._endpoints,
+            sorts=self._sorts,
+        )
+
+    def fields_before(self, anchor: str, *definitions: ExtensionResourceFieldDefinition) -> "ApiResourceExtender":
+        return self._field_mutators_with_operation("before", anchor, *definitions)
+
+    def fields_after(self, anchor: str, *definitions: ExtensionResourceFieldDefinition) -> "ApiResourceExtender":
+        return self._field_mutators_with_operation("after", anchor, *definitions)
+
+    def remove_fields(self, *fields: str, condition: Callable[[dict], bool] | None = None) -> "ApiResourceExtender":
+        definitions = tuple(
+            ExtensionResourceFieldMutatorDefinition(
+                resource=self.resource_name,
+                field=field,
+                module_id="",
+                operation="remove",
+                mutator=lambda current: current,
+                condition=condition,
+                kind="field",
+            )
+            for field in fields
+        )
+        return self.field(*definitions)
+
+    def field(self, *definitions) -> "ApiResourceExtender":
+        if self._is_named_mutator_call(definitions):
+            definitions = self._named_field_mutators(definitions[0], definitions[1])
+        return ApiResourceExtender(
+            resource=self.resource,
+            fields=self._fields,
+            field_mutators=tuple([*self._field_mutators, *definitions]),
+            relationships=self._relationships,
+            endpoints=self._endpoints,
+            sorts=self._sorts,
+        )
+
+    def relationships(self, relationships: Any = None, *definitions: ExtensionResourceRelationshipDefinition) -> "ApiResourceExtender":
+        if relationships is None:
+            items = definitions
+        else:
+            items = (relationships, *definitions)
+        return self.relationships_with(*items)
+
+    def relationships_with(self, *definitions: Any) -> "ApiResourceExtender":
+        return ApiResourceExtender(
+            resource=self.resource,
+            fields=self._fields,
+            field_mutators=self._field_mutators,
+            relationships=tuple([*self._relationships, *definitions]),
+            endpoints=self._endpoints,
+            sorts=self._sorts,
+        )
+
+    def relationships_before(
+        self,
+        anchor: str,
+        *definitions: ExtensionResourceRelationshipDefinition,
+    ) -> "ApiResourceExtender":
+        return self._relationship_mutators_with_operation("before", anchor, *definitions)
+
+    def relationships_after(
+        self,
+        anchor: str,
+        *definitions: ExtensionResourceRelationshipDefinition,
+    ) -> "ApiResourceExtender":
+        return self._relationship_mutators_with_operation("after", anchor, *definitions)
+
+    def endpoints(self, endpoints: Any = None, *definitions: ExtensionResourceEndpointDefinition) -> "ApiResourceExtender":
+        if endpoints is None:
+            items = definitions
+        else:
+            items = (endpoints, *definitions)
+        return self.endpoints_with(*items)
+
+    def endpoints_with(self, *definitions: Any) -> "ApiResourceExtender":
+        return self.endpoint(*definitions)
+
+    def endpoints_before(self, anchor: str, *definitions: ExtensionResourceEndpointDefinition) -> "ApiResourceExtender":
+        return self._endpoints_with_operation("before", anchor, *definitions)
+
+    def endpoints_after(self, anchor: str, *definitions: ExtensionResourceEndpointDefinition) -> "ApiResourceExtender":
+        return self._endpoints_with_operation("after", anchor, *definitions)
+
+    def endpoints_before_all(self, *definitions: ExtensionResourceEndpointDefinition) -> "ApiResourceExtender":
+        return self._endpoints_with_operation("before_all", "", *definitions)
+
+    def remove_endpoints(self, *endpoints: str, condition: Callable[[dict], bool] | None = None) -> "ApiResourceExtender":
+        definitions = tuple(
+            ExtensionResourceEndpointDefinition(
+                resource=self.resource_name,
+                endpoint=endpoint,
+                module_id="",
+                operation="remove",
+                condition=condition,
+            )
+            for endpoint in endpoints
+        )
+        return self.endpoint(*definitions)
+
+    def endpoint(self, *definitions) -> "ApiResourceExtender":
+        if self._is_named_mutator_call(definitions):
+            definitions = self._named_endpoint_mutators(definitions[0], definitions[1])
+        return ApiResourceExtender(
+            resource=self.resource,
+            fields=self._fields,
+            field_mutators=self._field_mutators,
+            relationships=self._relationships,
+            endpoints=tuple([*self._endpoints, *definitions]),
+            sorts=self._sorts,
+        )
+
+    def sorts(self, sorts: Any = None, *definitions: ExtensionResourceSortDefinition) -> "ApiResourceExtender":
+        if sorts is None:
+            items = definitions
+        else:
+            items = (sorts, *definitions)
+        return self.sort(*items)
+
+    def sorts_with(self, *definitions: Any) -> "ApiResourceExtender":
+        return self.sort(*definitions)
+
+    def sorts_before(self, anchor: str, *definitions: ExtensionResourceSortDefinition) -> "ApiResourceExtender":
+        return self._sorts_with_operation("before", anchor, *definitions)
+
+    def sorts_after(self, anchor: str, *definitions: ExtensionResourceSortDefinition) -> "ApiResourceExtender":
+        return self._sorts_with_operation("after", anchor, *definitions)
+
+    def sorts_before_all(self, *definitions: ExtensionResourceSortDefinition) -> "ApiResourceExtender":
+        return self._sorts_with_operation("before_all", "", *definitions)
+
+    def remove_sorts(self, *sorts: str, condition: Callable[[dict], bool] | None = None) -> "ApiResourceExtender":
+        definitions = tuple(
+            ExtensionResourceSortDefinition(
+                resource=self.resource_name,
+                sort=sort,
+                module_id="",
+                operation="remove",
+                condition=condition,
+            )
+            for sort in sorts
+        )
+        return self.sort(*definitions)
+
+    def sort(self, *definitions) -> "ApiResourceExtender":
+        if self._is_named_mutator_call(definitions):
+            definitions = self._named_sort_mutators(definitions[0], definitions[1])
+        return ApiResourceExtender(
+            resource=self.resource,
+            fields=self._fields,
+            field_mutators=self._field_mutators,
+            relationships=self._relationships,
+            endpoints=self._endpoints,
+            sorts=tuple([*self._sorts, *definitions]),
+        )
+
+    def _field_mutators_with_operation(
+        self,
+        operation: str,
+        anchor: str,
+        *definitions: ExtensionResourceFieldDefinition,
+    ) -> "ApiResourceExtender":
+        mutators = tuple(
+            ExtensionResourceFieldMutatorDefinition(
+                resource=definition.resource,
+                field=definition.field,
+                module_id=definition.module_id,
+                operation=operation,
+                anchor=anchor,
+                mutator=lambda current, value=definition: value,
+                kind="field",
+            )
+            for definition in definitions
+        )
+        return self.field(*mutators)
+
+    def _named_field_mutators(self, fields, mutator: Callable[[Any], Any]):
+        return tuple(
+            ExtensionResourceFieldMutatorDefinition(
+                resource=self.resource_name,
+                field=field,
+                module_id="",
+                operation="mutate",
+                mutator=mutator,
+            )
+            for field in self._normalize_names(fields)
+        )
+
+    def _named_endpoint_mutators(self, endpoints, mutator: Callable[[Any], Any]):
+        return tuple(
+            ExtensionResourceEndpointDefinition(
+                resource=self.resource_name,
+                endpoint=endpoint,
+                module_id="",
+                operation="mutate",
+                mutator=mutator,
+            )
+            for endpoint in self._normalize_names(endpoints)
+        )
+
+    def _named_sort_mutators(self, sorts, mutator: Callable[[Any], Any]):
+        return tuple(
+            ExtensionResourceSortDefinition(
+                resource=self.resource_name,
+                sort=sort,
+                module_id="",
+                operation="mutate",
+                mutator=mutator,
+            )
+            for sort in self._normalize_names(sorts)
+        )
+
+    def _relationship_mutators_with_operation(
+        self,
+        operation: str,
+        anchor: str,
+        *definitions: ExtensionResourceRelationshipDefinition,
+    ) -> "ApiResourceExtender":
+        mutators = tuple(
+            ExtensionResourceFieldMutatorDefinition(
+                resource=definition.resource,
+                field=definition.relationship,
+                module_id=definition.module_id,
+                operation=operation,
+                anchor=anchor,
+                mutator=lambda current, value=definition: value,
+                kind="relationship",
+            )
+            for definition in definitions
+        )
+        return self.field(*mutators)
+
+    def _endpoints_with_operation(
+        self,
+        operation: str,
+        anchor: str,
+        *definitions: ExtensionResourceEndpointDefinition,
+    ) -> "ApiResourceExtender":
+        endpoints = tuple(
+            replace(definition, operation=operation, anchor=anchor)
+            for definition in definitions
+        )
+        return self.endpoint(*endpoints)
+
+    def _sorts_with_operation(
+        self,
+        operation: str,
+        anchor: str,
+        *definitions: ExtensionResourceSortDefinition,
+    ) -> "ApiResourceExtender":
+        sorts = tuple(
+            replace(definition, operation=operation, anchor=anchor)
+            for definition in definitions
+        )
+        return self.sort(*sorts)
+
+    @staticmethod
+    def _is_named_mutator_call(definitions) -> bool:
+        if len(definitions) != 2 or not callable(definitions[1]):
+            return False
+        names = definitions[0]
+        if isinstance(names, str):
+            return True
+        if isinstance(names, (tuple, list, set)):
+            return all(isinstance(name, str) for name in names)
+        return False
+
+    @staticmethod
+    def _normalize_names(names) -> tuple[str, ...]:
+        if isinstance(names, str):
+            return (names,)
+        return tuple(names)
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        resources = (self.resource,) if self.resource is not None else ()
+        fields = self._normalize_resource_fields(self._resolve_definition_groups(self._fields, app))
+        relationships = self._normalize_resource_relationships(self._resolve_definition_groups(self._relationships, app))
+        endpoints = self._normalize_resource_endpoints(self._resolve_definition_groups(self._endpoints, app))
+        sorts = self._normalize_resource_sorts(self._resolve_definition_groups(self._sorts, app))
+        ResourceExtender(
+            resources=resources,
+            fields=fields,
+            field_mutators=self._field_mutators,
+            relationships=relationships,
+            endpoints=endpoints,
+            sorts=sorts,
+        ).extend(app, extension)
+
+    @staticmethod
+    def _resolve_definition_groups(items: tuple[Any, ...], host) -> tuple[Any, ...]:
+        output = []
+        for item in items:
+            if isinstance(item, str) or isinstance(item, type):
+                item = wrap_callback(item, host)
+            if callable(item) and not hasattr(item, "resource"):
+                item = item()
+            if item is None:
+                continue
+            if isinstance(item, (list, tuple)):
+                output.extend(item)
+            else:
+                output.append(item)
+        return tuple(output)
+
+    def _normalize_resource_fields(self, items: tuple[Any, ...]) -> tuple[Any, ...]:
+        return tuple(
+            ResourceRegistry._field_to_definition(self.resource_name, item)
+            if isinstance(item, ResourceField) and not isinstance(item, ResourceRelationship)
+            else item
+            for item in items
+        )
+
+    def _normalize_resource_relationships(self, items: tuple[Any, ...]) -> tuple[Any, ...]:
+        return tuple(
+            ResourceRegistry._relationship_to_definition(self.resource_name, item)
+            if isinstance(item, ResourceRelationship)
+            else item
+            for item in items
+        )
+
+    def _normalize_resource_endpoints(self, items: tuple[Any, ...]) -> tuple[Any, ...]:
+        return tuple(
+            ResourceRegistry._endpoint_to_definition(self.resource_name, item)
+            if isinstance(item, ResourceEndpoint)
+            else item
+            for item in items
+        )
+
+    def _normalize_resource_sorts(self, items: tuple[Any, ...]) -> tuple[Any, ...]:
+        return tuple(
+            ResourceRegistry._sort_to_definition(self.resource_name, item)
+            if isinstance(item, ResourceSort)
+            else item
+            for item in items
+        )
+
+    @staticmethod
+    def _resource_object_name(resource) -> str:
+        if resource is None:
+            return ""
+        resource_object = resource
+        if isinstance(resource, type):
+            try:
+                resource_object = resource()
+            except TypeError:
+                return ""
+        type_method = getattr(resource_object, "type", None)
+        if callable(type_method):
+            return str(type_method() or "").strip()
+        return ""
+
+
+@dataclass(frozen=True)
+class ModelExtender:
+    definitions: tuple[ExtensionModelDefinition, ...] = ()
+    visibility: tuple[ExtensionModelVisibilityDefinition, ...] = ()
+    relations: tuple[ExtensionModelRelationDefinition, ...] = ()
+    casts: tuple[ExtensionModelCastDefinition, ...] = ()
+    defaults: tuple[ExtensionModelDefaultDefinition, ...] = ()
+
+    def relationship(self, *definitions: ExtensionModelRelationDefinition) -> "ModelExtender":
+        return ModelExtender(
+            definitions=self.definitions,
+            visibility=self.visibility,
+            relations=tuple([*self.relations, *definitions]),
+            casts=self.casts,
+            defaults=self.defaults,
+        )
+
+    def cast(self, *definitions: ExtensionModelCastDefinition) -> "ModelExtender":
+        return ModelExtender(
+            definitions=self.definitions,
+            visibility=self.visibility,
+            relations=self.relations,
+            casts=tuple([*self.casts, *definitions]),
+            defaults=self.defaults,
+        )
+
+    def default(self, *definitions: ExtensionModelDefaultDefinition) -> "ModelExtender":
+        return ModelExtender(
+            definitions=self.definitions,
+            visibility=self.visibility,
+            relations=self.relations,
+            casts=self.casts,
+            defaults=tuple([*self.defaults, *definitions]),
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not (self.definitions or self.visibility or self.relations or self.casts or self.defaults):
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(models, host: "ExtensionHost"):
+            for definition in self.definitions:
+                models.register(extension_id, definition)
+            for definition in self.visibility:
+                models.register_visibility(extension_id, definition)
+            for definition in self.relations:
+                models.register_relation(extension_id, definition)
+            for definition in self.casts:
+                models.register_cast(extension_id, definition)
+            for definition in self.defaults:
+                models.register_default(extension_id, definition)
+            return models
+
+        app.resolving("models", apply)
+
+
+@dataclass(frozen=True)
+class ModelVisibilityExtender:
+    definitions: tuple[ExtensionModelVisibilityDefinition, ...] = ()
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        ModelExtender(visibility=self.definitions).extend(app, extension)
+
+
+@dataclass(frozen=True)
+class ModelUrlExtender:
+    model: Any
+    slug_drivers: tuple[ExtensionModelSlugDriverDefinition, ...] = ()
+
+    def add_slug_driver(
+        self,
+        identifier: str,
+        driver: Any,
+        *,
+        field: str = "slug",
+        source_field: str = "name",
+        max_length: int | None = None,
+        description: str = "",
+    ) -> "ModelUrlExtender":
+        return ModelUrlExtender(
+            model=self.model,
+            slug_drivers=tuple([
+                *self.slug_drivers,
+                ExtensionModelSlugDriverDefinition(
+                    model=self.model,
+                    identifier=str(identifier or "").strip() or "default",
+                    driver=driver,
+                    field=str(field or "slug").strip() or "slug",
+                    source_field=str(source_field or "name").strip() or "name",
+                    max_length=max_length,
+                    description=str(description or "").strip(),
+                ),
+            ]),
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.slug_drivers:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(model_urls, host: "ExtensionHost"):
+            for definition in self.slug_drivers:
+                model_urls.register_slug_driver(extension_id, definition)
+            return model_urls
+
+        app.resolving("model.urls", apply)
+
+
+@dataclass(frozen=True)
+class SearchDriverExtender:
+    driver: Any = "database"
+    drivers: tuple[ExtensionSearchDriverDefinition, ...] = ()
+
+    def __init__(self, driver: Any = "database", drivers: tuple[ExtensionSearchDriverDefinition, ...] = ()) -> None:
+        object.__setattr__(self, "driver", driver)
+        object.__setattr__(self, "drivers", tuple(drivers or ()))
+
+    def add_searcher(self, model: Any, searcher: Any, *, target: str = "") -> "SearchDriverExtender":
+        return self._append_definition(ExtensionSearchDriverDefinition(
+            target=target or self._target_from_model(model),
+            driver=self.driver,
+            model=model,
+            searcher=searcher,
+        ))
+
+    def add_filter(self, searcher: Any, filter_definition: Any, *, target: str = "") -> "SearchDriverExtender":
+        return self._append_definition(ExtensionSearchDriverDefinition(
+            target=target or self._target_from_model(searcher),
+            driver=self.driver,
+            searcher=searcher,
+            driver_filters=(filter_definition,),
+        ))
+
+    def replace_filter(self, searcher: Any, replace: str, filter_definition: Any, *, target: str = "") -> "SearchDriverExtender":
+        return self._append_definition(ExtensionSearchDriverDefinition(
+            target=target or self._target_from_model(searcher),
+            driver=self.driver,
+            searcher=searcher,
+            replace_filters=((replace, filter_definition),),
+        ))
+
+    def set_fulltext(self, searcher: Any, fulltext: Any, *, target: str = "") -> "SearchDriverExtender":
+        return self._append_definition(ExtensionSearchDriverDefinition(
+            target=target or self._target_from_model(searcher),
+            driver=self.driver,
+            searcher=searcher,
+            fulltext=fulltext,
+        ))
+
+    def add_mutator(self, searcher: Any, callback: Any, *, target: str = "") -> "SearchDriverExtender":
+        return self._append_definition(ExtensionSearchDriverDefinition(
+            target=target or self._target_from_model(searcher),
+            driver=self.driver,
+            searcher=searcher,
+            driver_mutators=(callback,),
+        ))
+
+    def add_indexer(self, model: Any, indexer: Any, *, target: str = "") -> "SearchDriverExtender":
+        return self._append_definition(ExtensionSearchDriverDefinition(
+            target=target or self._target_from_model(model),
+            driver=self.driver,
+            model=model,
+            indexers=(indexer,),
+        ))
+
+    def _append_definition(self, definition: ExtensionSearchDriverDefinition) -> "SearchDriverExtender":
+        return SearchDriverExtender(driver=self.driver, drivers=tuple([*self.drivers, definition]))
+
+    @staticmethod
+    def _target_from_model(model: Any) -> str:
+        name = getattr(model, "__name__", "") if model is not None else ""
+        return str(name or "").strip()
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.drivers:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(search, host: "ExtensionHost"):
+            for definition in self.drivers:
+                search.register_driver(extension_id, definition)
+            return search
+
+        app.resolving("search", apply)
+
+
+@dataclass(frozen=True)
+class ValidatorExtender:
+    definitions: tuple[ExtensionValidatorDefinition, ...] = ()
+
+    def validator(
+        self,
+        key: str,
+        target: str,
+        callback: Callable[[Any, dict], Any],
+        *,
+        description: str = "",
+    ) -> "ValidatorExtender":
+        definition = ExtensionValidatorDefinition(
+            key=str(key or "").strip(),
+            target=str(target or "").strip(),
+            callback=callback,
+            description=str(description or "").strip(),
+        )
+        return ValidatorExtender(definitions=tuple([*self.definitions, definition]))
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.definitions:
+            return
+        extension_id = extension.extension_id
+
+        def apply(validators, host: "ExtensionHost"):
+            for definition in self.definitions:
+                if not definition.key or not definition.target:
+                    continue
+                validators.register(extension_id, replace(definition, module_id=definition.module_id or extension_id))
+            return validators
+
+        app.resolving("validators", apply)
+
+
+@dataclass(frozen=True)
+class MailExtender:
+    definitions: tuple[ExtensionMailDefinition, ...] = ()
+
+    def driver(
+        self,
+        key: str,
+        callback: Callable[[Any, dict], Any],
+        *,
+        description: str = "",
+    ) -> "MailExtender":
+        definition = ExtensionMailDefinition(
+            key=str(key or "").strip(),
+            callback=callback,
+            description=str(description or "").strip(),
+        )
+        return MailExtender(definitions=tuple([*self.definitions, definition]))
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.definitions:
+            return
+        extension_id = extension.extension_id
+
+        def apply(mail, host: "ExtensionHost"):
+            for definition in self.definitions:
+                if not definition.key:
+                    continue
+                mail.register(extension_id, replace(definition, module_id=definition.module_id or extension_id))
+            return mail
+
+        app.resolving("mail", apply)
+
+
+@dataclass(frozen=True)
+class EventListenersExtender:
+    listeners: tuple[ExtensionEventListenerDefinition, ...] = ()
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.listeners:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(events, host: "ExtensionHost"):
+            for listener in self.listeners:
+                events.register_listener(extension_id, listener)
+            return events
+
+        app.resolving("events", apply)
+
+
+@dataclass(frozen=True)
+class RealtimeExtender:
+    included: tuple[ExtensionRealtimeIncludedDefinition, ...] = ()
+
+    def included_payload(self, key: str, handler: Any, *, description: str = "") -> "RealtimeExtender":
+        return RealtimeExtender(
+            included=tuple([
+                *self.included,
+                ExtensionRealtimeIncludedDefinition(
+                    key=str(key or "").strip(),
+                    handler=handler,
+                    description=str(description or "").strip(),
+                ),
+            ]),
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.included:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(realtime, host: "ExtensionHost"):
+            for definition in self.included:
+                handler = definition.handler
+                if isinstance(handler, str) or isinstance(handler, type):
+                    handler = wrap_callback(handler, host)
+                    definition = replace(definition, handler=handler)
+                realtime.register_included_enricher(extension_id, definition)
+            return realtime
+
+        app.resolving("realtime", apply)
+
+
+@dataclass(frozen=True)
+class DiscussionLifecycleExtender:
+    definitions: tuple[ExtensionDiscussionLifecycleDefinition, ...] = ()
+
+    def handler(
+        self,
+        key: str,
+        *,
+        prepare_create: Any = None,
+        apply_create: Any = None,
+        prepare_update: Any = None,
+        apply_update: Any = None,
+        prepare_delete: Any = None,
+        apply_delete: Any = None,
+        apply_hidden: Any = None,
+        apply_approved: Any = None,
+        apply_rejected: Any = None,
+        description: str = "",
+    ) -> "DiscussionLifecycleExtender":
+        return DiscussionLifecycleExtender(
+            definitions=tuple([
+                *self.definitions,
+                ExtensionDiscussionLifecycleDefinition(
+                    key=str(key or "").strip(),
+                    prepare_create=prepare_create,
+                    apply_create=apply_create,
+                    prepare_update=prepare_update,
+                    apply_update=apply_update,
+                    prepare_delete=prepare_delete,
+                    apply_delete=apply_delete,
+                    apply_hidden=apply_hidden,
+                    apply_approved=apply_approved,
+                    apply_rejected=apply_rejected,
+                    description=str(description or "").strip(),
+                ),
+            ]),
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.definitions:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(discussion_lifecycle, host: "ExtensionHost"):
+            for definition in self.definitions:
+                replacements = {}
+                for attr in (
+                    "prepare_create",
+                    "apply_create",
+                    "prepare_update",
+                    "apply_update",
+                    "prepare_delete",
+                    "apply_delete",
+                    "apply_hidden",
+                    "apply_approved",
+                    "apply_rejected",
+                ):
+                    value = getattr(definition, attr)
+                    if isinstance(value, str) or isinstance(value, type):
+                        replacements[attr] = wrap_callback(value, host)
+                if replacements:
+                    definition = replace(definition, **replacements)
+                discussion_lifecycle.register(extension_id, definition)
+            return discussion_lifecycle
+
+        app.resolving("discussion.lifecycle", apply)
+
+
+@dataclass(frozen=True)
+class SettingsExtender:
+    fields: tuple[ExtensionManifestSettingFieldDefinition, ...] = ()
+    expose_to_forum: tuple[str, ...] = ()
+    generated_page: bool = True
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        extension_id = extension.extension_id
+
+        def apply(settings, host: "ExtensionHost"):
+            settings.register_fields(
+                extension_id,
+                self.fields,
+                expose_to_forum=self.expose_to_forum,
+                generated_page=self.generated_page,
+            )
+            return settings
+
+        app.resolving("settings", apply)
+
+
+@dataclass(frozen=True)
+class AdminSurfaceExtender:
+    permissions: tuple[PermissionDefinition, ...] = ()
+    admin_pages: tuple[AdminPageDefinition, ...] = ()
+    generated_permissions_page: bool = False
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        extension_id = extension.extension_id
+
+        def apply(forum, host: "ExtensionHost"):
+            for definition in self.permissions:
+                forum.register_permission(definition, extension_id=extension_id)
+            for definition in self.admin_pages:
+                forum.register_admin_page(definition, extension_id=extension_id)
+            return forum
+
+        if self.permissions or self.admin_pages:
+            app.resolving("forum", apply)
+        if self.generated_permissions_page:
+            def apply_actions(actions, host: "ExtensionHost"):
+                actions.mark_generated_permissions_page(extension_id)
+                return actions
+
+            app.resolving("actions", apply_actions)
+
+
+@dataclass(frozen=True)
+class NotificationsExtender:
+    notification_types: tuple[NotificationTypeDefinition, ...] = ()
+    user_preferences: tuple[UserPreferenceDefinition, ...] = ()
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not (self.notification_types or self.user_preferences):
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(forum, host: "ExtensionHost"):
+            for definition in self.notification_types:
+                forum.register_notification_type(definition, extension_id=extension_id)
+            for definition in self.user_preferences:
+                forum.register_user_preference(definition, extension_id=extension_id)
+            return forum
+
+        app.resolving("forum", apply)
+
+
+@dataclass(frozen=True)
+class ForumCapabilitiesExtender:
+    post_types: tuple[PostTypeDefinition, ...] = ()
+    search_filters: tuple[SearchFilterDefinition, ...] = ()
+    discussion_sorts: tuple[DiscussionSortDefinition, ...] = ()
+    discussion_list_filters: tuple[DiscussionListFilterDefinition, ...] = ()
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not (
+            self.post_types
+            or self.search_filters
+            or self.discussion_sorts
+            or self.discussion_list_filters
+        ):
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(forum, host: "ExtensionHost"):
+            for definition in self.post_types:
+                forum.register_post_type(definition, extension_id=extension_id)
+            for definition in self.search_filters:
+                forum.register_search_filter(definition, extension_id=extension_id)
+            for definition in self.discussion_sorts:
+                forum.register_discussion_sort(definition, extension_id=extension_id)
+            for definition in self.discussion_list_filters:
+                forum.register_discussion_list_filter(definition, extension_id=extension_id)
+            return forum
+
+        app.resolving("forum", apply)
+
+
+@dataclass(frozen=True)
+class RuntimeActionsExtender:
+    actions: tuple[ExtensionManifestRuntimeActionDefinition, ...] = ()
+    generated_page: bool = False
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        extension_id = extension.extension_id
+
+        def apply(actions, host: "ExtensionHost"):
+            actions.register_runtime_actions(
+                extension_id,
+                self.actions,
+                generated_page=self.generated_page,
+            )
+            return actions
+
+        app.resolving("actions", apply)
+
+
+@dataclass(frozen=True)
+class AdminNavigationExtender:
+    actions: tuple[ExtensionAdminActionDefinition, ...] = ()
+    generated_permissions_page: bool = False
+    generated_operations_page: bool = False
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        extension_id = extension.extension_id
+
+        def apply(actions, host: "ExtensionHost"):
+            actions.register_admin_actions(
+                extension_id,
+                self.actions,
+                generated_permissions_page=self.generated_permissions_page,
+                generated_operations_page=self.generated_operations_page,
+            )
+            return actions
+
+        app.resolving("actions", apply)
+
+
+@dataclass(frozen=True)
+class ServiceProviderExtender:
+    key: str
+    provider: Any
+    singleton: bool = True
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if self.provider is None:
+            return
+        extension_id = extension.extension_id
+
+        def apply(providers, host: "ExtensionHost"):
+            host.register(
+                self.provider,
+                key=self.key,
+                extension_id=extension_id,
+                singleton=self.singleton,
+            )
+            return providers
+
+        app.resolving("providers", apply)
+
+
+@dataclass(frozen=True)
+class RoutesExtender:
+    app_name: str = "api"
+    routes: tuple[tuple[str, str, str, Any], ...] = ()
+    removed_routes: tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        normalized_app = str(self.app_name or "api").strip() or "api"
+        if normalized_app != "api":
+            raise ValueError("RoutesExtender 目前只注册后端 API 命名路由；前台/后台页面路由请使用 FrontendExtender.route()")
+        object.__setattr__(self, "app_name", normalized_app)
+
+    def get(self, path: str, name: str, handler: Any) -> "RoutesExtender":
+        return self.route("GET", path, name, handler)
+
+    def post(self, path: str, name: str, handler: Any) -> "RoutesExtender":
+        return self.route("POST", path, name, handler)
+
+    def put(self, path: str, name: str, handler: Any) -> "RoutesExtender":
+        return self.route("PUT", path, name, handler)
+
+    def patch(self, path: str, name: str, handler: Any) -> "RoutesExtender":
+        return self.route("PATCH", path, name, handler)
+
+    def delete(self, path: str, name: str, handler: Any) -> "RoutesExtender":
+        return self.route("DELETE", path, name, handler)
+
+    def route(self, method: str, path: str, name: str, handler: Any) -> "RoutesExtender":
+        return RoutesExtender(
+            app_name=self.app_name,
+            routes=tuple([*self.routes, (str(method or "GET").strip().upper(), path, name, handler)]),
+            removed_routes=self.removed_routes,
+            tags=self.tags,
+        )
+
+    def remove(self, name: str) -> "RoutesExtender":
+        normalized = str(name or "").strip()
+        if not normalized:
+            return self
+        return RoutesExtender(
+            app_name=self.app_name,
+            routes=self.routes,
+            removed_routes=tuple([*self.removed_routes, normalized]),
+            tags=self.tags,
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.routes and not self.removed_routes:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(routes, host: "ExtensionHost"):
+            for name in self.removed_routes:
+                routes.remove_route(extension_id, self.app_name, name)
+            for method, path, name, handler in self.routes:
+                resolved_handler = handler
+                if isinstance(resolved_handler, str) or isinstance(resolved_handler, type):
+                    resolved_handler = wrap_callback(resolved_handler, host)
+                routes.add_route(
+                    extension_id,
+                    self.app_name,
+                    method,
+                    path,
+                    name,
+                    resolved_handler,
+                    tags=self.tags,
+                )
+            return routes
+
+        app.resolving("routes", apply)
+
+
+@dataclass(frozen=True)
+class ApiRoutesExtender:
+    mounts: tuple[tuple[str, Any], ...] = ()
+    tags: tuple[str, ...] = ()
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        mounts = tuple(
+            (str(prefix or "").strip(), router)
+            for prefix, router in self.mounts
+            if router is not None
+        )
+        if not mounts:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(routes, host: "ExtensionHost"):
+            routes.remove_mounts(extension_id)
+            for prefix, router in mounts:
+                routes.mount(extension_id, prefix, router, tags=self.tags)
+            return routes
+
+        app.resolving("routes", apply)
+
+
+@dataclass(frozen=True)
+class MiddlewareExtender:
+    mounts: tuple[tuple[str, Any, int], ...] = ()
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.mounts:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(middleware_service, host: "ExtensionHost"):
+            for target, middleware, order in self.mounts:
+                if middleware is None:
+                    continue
+                middleware_service.mount(extension_id, target, middleware, order=order)
+            return middleware_service
+
+        app.resolving("middleware", apply)
+
+
+@dataclass(frozen=True)
+class PolicyExtender:
+    mounts: tuple[tuple[str, Callable[..., bool]], ...] = ()
+    global_policies: tuple[Callable[..., bool], ...] = ()
+    model_policies: tuple[tuple[Any, Callable[..., bool]], ...] = ()
+
+    def global_policy(self, handler: Callable[..., bool]) -> "PolicyExtender":
+        return PolicyExtender(
+            mounts=self.mounts,
+            global_policies=tuple([*self.global_policies, handler]),
+            model_policies=self.model_policies,
+        )
+
+    def model_policy(self, model: Any, handler: Callable[..., bool]) -> "PolicyExtender":
+        return PolicyExtender(
+            mounts=self.mounts,
+            global_policies=self.global_policies,
+            model_policies=tuple([*self.model_policies, (model, handler)]),
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.mounts and not self.global_policies and not self.model_policies:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(policies, host: "ExtensionHost"):
+            for key, handler in self.mounts:
+                policies.mount(extension_id, key, handler)
+            for handler in self.global_policies:
+                policies.global_policy(extension_id, handler)
+            for model, handler in self.model_policies:
+                policies.model_policy(extension_id, model, handler)
+            return policies
+
+        app.resolving("policies", apply)
+
+
+@dataclass(frozen=True)
+class ConditionalExtender:
+    callbacks: tuple[Callable[["ExtensionHost"], Any], ...] = ()
+
+    def when(self, condition: Callable[["ExtensionHost"], bool], callback: Callable[[], Any]) -> "ConditionalExtender":
+        def resolver(host: "ExtensionHost"):
+            if not condition(host):
+                return []
+            return callback()
+
+        return ConditionalExtender(callbacks=tuple([*self.callbacks, resolver]))
+
+    def when_extension_enabled(self, extension_id: str, callback: Callable[[], Any]) -> "ConditionalExtender":
+        normalized = str(extension_id or "").strip()
+
+        def condition(host: "ExtensionHost") -> bool:
+            extension = host.get_runtime_extension(normalized)
+            return bool(extension and extension.runtime.enabled)
+
+        return self.when(condition, callback)
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        for resolver in self.callbacks:
+            extenders = resolver(app)
+            if extenders is None:
+                continue
+            if not isinstance(extenders, (list, tuple)):
+                extenders = [extenders]
+            for extender in extenders:
+                extend_fn = getattr(extender, "extend", None)
+                if callable(extend_fn):
+                    app._mark_extension_extender(extension.extension_id, extender)
+                    extend_fn(app, extension)

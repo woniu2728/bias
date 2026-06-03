@@ -17,21 +17,6 @@
     "emoji-renderer"
   ],
   "backend_entry": "extensions.emoji.backend.ext",
-  "frontend_forum_entry": "extensions/emoji/frontend/forum/index.js",
-  "settings_pages": [
-    "/admin/extensions/emoji/settings"
-  ],
-  "settings_schema": [
-    {
-      "key": "cdn_url",
-      "label": "Twemoji CDN",
-      "type": "text",
-      "default": "",
-      "placeholder": "留空时使用默认 Twemoji CDN",
-      "help_text": "用于覆盖表情图片资源地址，格式与 Flarum Emoji 扩展保持一致。",
-      "order": 10
-    }
-  ],
   "compatibility": {
     "bias_version": "^1.0.0",
     "api_version": "1.0",

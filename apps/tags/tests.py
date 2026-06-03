@@ -5,11 +5,28 @@ from io import StringIO
 from unittest.mock import patch
 
 from apps.discussions.services import DiscussionService
+from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.tags.models import DiscussionTag, Tag
 from apps.tags.services import TagService
 from apps.users.models import User
 from apps.users.models import Group, Permission
+from extensions.tags.backend.ext import tag_resource_endpoints
+
+
+def discussion_tags_payload(tag_ids):
+    return {
+        "data": {
+            "relationships": {
+                "tags": {
+                    "data": [
+                        {"type": "tag", "id": str(tag_id)}
+                        for tag_id in tag_ids
+                    ],
+                },
+            },
+        },
+    }
 
 
 class TagStatsTests(TestCase):
@@ -32,14 +49,14 @@ class TagStatsTests(TestCase):
                 title="生活讨论 1",
                 content="第一条生活内容",
                 user=self.user,
-                tag_ids=[self.tag.id],
+                extension_payload=discussion_tags_payload([self.tag.id]),
             )
         with self.captureOnCommitCallbacks(execute=True):
             DiscussionService.create_discussion(
                 title="生活讨论 2",
                 content="第二条生活内容",
                 user=self.user,
-                tag_ids=[self.tag.id],
+                extension_payload=discussion_tags_payload([self.tag.id]),
             )
 
         self.tag.refresh_from_db()
@@ -106,7 +123,7 @@ class TagStatsTests(TestCase):
                 title="待审核标签讨论",
                 content="等待审核",
                 user=self.user,
-                tag_ids=[self.tag.id],
+                extension_payload=discussion_tags_payload([self.tag.id]),
             )
         self.tag.refresh_from_db()
         self.assertEqual(self.tag.discussion_count, 0)
@@ -135,7 +152,7 @@ class TagStatsTests(TestCase):
                 title="标签回复刷新",
                 content="首帖",
                 user=self.user,
-                tag_ids=[self.tag.id],
+                extension_payload=discussion_tags_payload([self.tag.id]),
             )
         self.tag.refresh_from_db()
         initial_last_posted_at = self.tag.last_posted_at
@@ -211,7 +228,7 @@ class TagAccessApiTests(TestCase):
                 title="标签详情附加字段",
                 content="用于验证资源注册输出",
                 user=self.admin,
-                tag_ids=[self.members_tag.id],
+                extension_payload=discussion_tags_payload([self.members_tag.id]),
             )
 
         response = self.client.get(
@@ -230,7 +247,7 @@ class TagAccessApiTests(TestCase):
             title="标签字段裁剪",
             content="用于裁剪",
             user=self.admin,
-            tag_ids=[self.members_tag.id],
+            extension_payload=discussion_tags_payload([self.members_tag.id]),
         )
 
         response = self.client.get(
@@ -250,7 +267,7 @@ class TagAccessApiTests(TestCase):
             title="标签 include 讨论",
             content="用于 include",
             user=self.admin,
-            tag_ids=[self.members_tag.id],
+            extension_payload=discussion_tags_payload([self.members_tag.id]),
         )
         TagService.refresh_tag_stats([self.members_tag.id])
 
@@ -265,6 +282,44 @@ class TagAccessApiTests(TestCase):
         self.assertIn("can_reply", payload)
         self.assertIn("last_posted_discussion", payload)
         self.assertEqual(payload["last_posted_discussion"]["id"], discussion.id)
+
+    def test_tag_detail_static_route_uses_resource_endpoint_mutator(self):
+        def mutate_endpoint(endpoint):
+            def handler(context):
+                payload = endpoint.handler(context)
+                payload["mutated_by_resource_endpoint"] = True
+                return payload
+
+            return ResourceEndpointDefinition(
+                resource=endpoint.resource,
+                endpoint=endpoint.endpoint,
+                module_id="test",
+                handler=handler,
+                methods=endpoint.methods,
+            )
+
+        registry = ResourceRegistry()
+        for endpoint in tag_resource_endpoints():
+            registry.register_endpoint(endpoint)
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="tag",
+                endpoint="show",
+                module_id="test",
+                operation="mutate",
+                mutator=mutate_endpoint,
+            )
+        )
+
+        with patch("apps.tags.api.get_runtime_resource_registry", return_value=registry):
+            with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
+                response = self.client.get(
+                    f"/api/tags/{self.members_tag.id}",
+                    **self.auth_header(self.admin),
+                )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["mutated_by_resource_endpoint"])
 
     def test_guest_cannot_view_staff_tag_detail(self):
         response = self.client.get(f"/api/tags/{self.staff_tag.id}")

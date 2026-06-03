@@ -4,7 +4,7 @@ from apps.discussions.models import Discussion
 
 class Tag(models.Model):
     """
-    标签模型 - 对标Flarum的Tag模型
+    标签模型
     """
     ACCESS_PUBLIC = "public"
     ACCESS_MEMBERS = "members"
@@ -75,7 +75,7 @@ class Tag(models.Model):
 
 class DiscussionTag(models.Model):
     """
-    讨论-标签关联表 - 对标Flarum的discussion_tag表
+    讨论-标签关联表
     """
     discussion = models.ForeignKey(Discussion, on_delete=models.CASCADE, related_name='discussion_tags')
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name='discussion_tags')

@@ -32,18 +32,21 @@ from apps.core.resource_api import (
     merge_resource_includes,
     parse_resource_query_options,
 )
-from apps.core.resource_registry import get_resource_registry
+from apps.core.extensions.runtime_access import get_runtime_resource_registry
 from apps.core.services import SearchService
 from apps.users.services import UserService
 
 router = Router()
-RESOURCE_REGISTRY = get_resource_registry()
+
+
+def _get_resource_registry():
+    return get_runtime_resource_registry()
 
 
 @router.get("/forum", tags=["Forum"])
 def get_forum_settings(request):
     """获取前台公开论坛设置"""
-    return get_public_forum_settings()
+    return get_public_forum_settings(user=get_optional_user(request))
 
 
 @router.get("/system/status", tags=["System"])
@@ -103,7 +106,7 @@ def upload_attachment(request):
 
 def serialize_discussion_search_result(discussion, resource_options=None):
     resource_options = resource_options or ResourceQueryOptions()
-    return RESOURCE_REGISTRY.serialize(
+    return _get_resource_registry().serialize(
         "search_discussion",
         discussion,
         only=resource_options.fields,
@@ -113,7 +116,7 @@ def serialize_discussion_search_result(discussion, resource_options=None):
 
 def serialize_post_search_result(post, resource_options=None):
     resource_options = resource_options or ResourceQueryOptions()
-    return RESOURCE_REGISTRY.serialize(
+    return _get_resource_registry().serialize(
         "search_post",
         post,
         only=resource_options.fields,
@@ -123,7 +126,7 @@ def serialize_post_search_result(post, resource_options=None):
 
 def serialize_user_search_result(user, resource_options=None):
     resource_options = resource_options or ResourceQueryOptions()
-    return RESOURCE_REGISTRY.serialize(
+    return _get_resource_registry().serialize(
         "search_user",
         user,
         only=resource_options.fields,
@@ -243,7 +246,7 @@ def search(
             user=user,
             context=context,
             preload=lambda queryset: apply_resource_preloads(
-                RESOURCE_REGISTRY,
+                _get_resource_registry(),
                 queryset,
                 "search_discussion",
                 resource_options=discussion_resource_options,
@@ -276,7 +279,7 @@ def search(
             user=user,
             context=context,
             preload=lambda queryset: apply_resource_preloads(
-                RESOURCE_REGISTRY,
+                _get_resource_registry(),
                 queryset,
                 "search_post",
                 resource_options=post_resource_options,
@@ -311,7 +314,7 @@ def search(
             limit,
             context=context,
             preload=lambda queryset: apply_resource_preloads(
-                RESOURCE_REGISTRY,
+                _get_resource_registry(),
                 queryset,
                 "search_user",
                 resource_options=user_resource_options,

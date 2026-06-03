@@ -1,0 +1,292 @@
+from __future__ import annotations
+
+from typing import Any
+
+from apps.core.extension_settings_service import get_extension_settings
+from apps.core.extensions.bootstrap import get_extension_host
+from apps.core.extensions.product import is_product_visible_extension
+
+
+_frontend_runtime_catalog: dict[str, dict[str, Any]] = {}
+_frontend_runtime_bootstrapped = False
+
+
+def clear_extension_frontend_runtime_cache() -> None:
+    global _frontend_runtime_catalog
+    global _frontend_runtime_bootstrapped
+    _frontend_runtime_catalog = {}
+    _frontend_runtime_bootstrapped = False
+
+
+def bootstrap_extension_frontend_runtime() -> None:
+    global _frontend_runtime_catalog
+    global _frontend_runtime_bootstrapped
+    if _frontend_runtime_bootstrapped:
+        return
+
+    catalog: dict[str, dict[str, Any]] = {}
+    host = get_extension_host(force=True)
+    if host is None:
+        _frontend_runtime_catalog = {}
+        _frontend_runtime_bootstrapped = True
+        return
+
+    extension_map = {
+        item.id: item
+        for item in host.get_runtime_extensions()
+    }
+    frontend_map = {
+        item.extension_id: item
+        for item in host.get_frontend_extensions()
+    }
+    for extension_id, extension in extension_map.items():
+        runtime_view = host.get_extension_view(extension_id)
+        frontend = frontend_map.get(extension_id)
+        if extension is None:
+            continue
+        if runtime_view is None:
+            continue
+        admin_entry = str((frontend.admin_entry if frontend else runtime_view.frontend_admin_entry) or "").strip()
+        forum_entry = str((frontend.forum_entry if frontend else runtime_view.frontend_forum_entry) or "").strip()
+        common_entry = str((frontend.common_entry if frontend else runtime_view.frontend_common_entry) or "").strip()
+        frontend_routes = tuple((frontend.routes if frontend else runtime_view.frontend_routes) or ())
+        catalog[extension_id] = {
+            "id": extension_id,
+            "name": extension.name,
+            "source": extension.source,
+            "module_ids": list(runtime_view.module_ids),
+            "frontend_admin_entry": admin_entry,
+            "frontend_forum_entry": forum_entry,
+            "frontend_common_entry": common_entry,
+            "frontend_routes": _serialize_frontend_routes(frontend_routes),
+            "frontend_document": _build_frontend_document_payload(runtime_view),
+            "settings_pages": list((frontend.settings_pages if frontend else runtime_view.settings_pages) or ()),
+            "permissions_pages": list((frontend.permissions_pages if frontend else runtime_view.permissions_pages) or ()),
+            "operations_pages": list((frontend.operations_pages if frontend else runtime_view.operations_pages) or ()),
+            "locale_paths": list(runtime_view.locale_paths),
+            "formatter_pipeline": list(runtime_view.formatter_pipeline),
+            "product_visible": _is_product_visible_frontend_extension(
+                extension,
+                admin_entry=admin_entry,
+                forum_entry=forum_entry,
+                common_entry=common_entry,
+                frontend_routes=frontend_routes,
+                runtime_view=runtime_view,
+            ),
+        }
+
+    _frontend_runtime_catalog = catalog
+    _frontend_runtime_bootstrapped = True
+
+
+def get_enabled_extension_runtime_entries(*, product_visible_only: bool = False) -> list[dict[str, Any]]:
+    bootstrap_extension_frontend_runtime()
+    host = get_extension_host()
+    if host is None:
+        return []
+    extension_map = {
+        item.id: item
+        for item in host.get_runtime_extensions()
+    }
+
+    entries = []
+    for extension in host.get_runtime_extensions():
+        runtime_view = host.get_extension_view(extension.id)
+        if extension is None:
+            continue
+        if runtime_view is None:
+            continue
+        entry = _build_runtime_entry(host, runtime_view, extension)
+        if product_visible_only and not entry["product_visible"]:
+            continue
+        entries.append(entry)
+    return entries
+
+
+def get_enabled_extension_locales() -> list[dict[str, Any]]:
+    from apps.core.extensions.locale_service import get_enabled_extension_locales as load_enabled_extension_locales
+
+    return load_enabled_extension_locales()
+
+
+def apply_enabled_extension_formatters(html: str) -> str:
+    from apps.core.extensions.formatter_service import apply_extension_formatters
+
+    return apply_extension_formatters(html)
+
+
+def _build_runtime_entry(
+    host,
+    runtime_view,
+    extension,
+) -> dict[str, Any]:
+    static_entry = dict(_frontend_runtime_catalog.get(runtime_view.extension_id) or {})
+    frontend = host.get_frontend_extension(runtime_view.extension_id)
+    admin_entry = str((frontend.admin_entry if frontend else runtime_view.frontend_admin_entry) or "").strip()
+    forum_entry = str((frontend.forum_entry if frontend else runtime_view.frontend_forum_entry) or "").strip()
+    common_entry = str((frontend.common_entry if frontend else runtime_view.frontend_common_entry) or "").strip()
+    frontend_routes = tuple((frontend.routes if frontend else runtime_view.frontend_routes) or ())
+    settings_definition = {
+        "forum_settings_keys": tuple(runtime_view.forum_settings_keys),
+    } if runtime_view.settings_schema else None
+    settings_values = get_extension_settings(runtime_view.extension_id) if settings_definition else {}
+    forum_settings = _build_extension_forum_settings(settings_definition, settings_values)
+
+    static_entry.update({
+        "id": runtime_view.extension_id,
+        "name": extension.name,
+        "source": extension.source,
+        "module_ids": list(runtime_view.module_ids),
+        "frontend_admin_entry": admin_entry,
+        "frontend_forum_entry": forum_entry,
+        "frontend_common_entry": common_entry,
+        "frontend_routes": _serialize_frontend_routes(frontend_routes),
+        "frontend_document": _build_frontend_document_payload(runtime_view),
+        "settings_pages": list((frontend.settings_pages if frontend else runtime_view.settings_pages) or ()),
+        "permissions_pages": list((frontend.permissions_pages if frontend else runtime_view.permissions_pages) or ()),
+        "operations_pages": list((frontend.operations_pages if frontend else runtime_view.operations_pages) or ()),
+        "settings_values": settings_values,
+        "forum_settings": forum_settings,
+        "locale_paths": list(runtime_view.locale_paths),
+        "formatter_pipeline": list(runtime_view.formatter_pipeline),
+        "product_visible": _is_product_visible_frontend_extension(
+            extension,
+            admin_entry=admin_entry,
+            forum_entry=forum_entry,
+            common_entry=common_entry,
+            frontend_routes=frontend_routes,
+            runtime_view=runtime_view,
+        ),
+    })
+    return static_entry
+
+
+def _is_product_visible_frontend_extension(
+    extension,
+    *,
+    admin_entry: str,
+    forum_entry: str,
+    common_entry: str,
+    frontend_routes,
+    runtime_view,
+) -> bool:
+    if not is_product_visible_extension(extension):
+        return False
+    return bool(admin_entry or forum_entry or common_entry or frontend_routes or runtime_view.settings_schema)
+
+
+def _serialize_frontend_routes(routes) -> list[dict[str, Any]]:
+    output = []
+    for route in routes or ():
+        frontend = str(getattr(route, "frontend", "") or "forum").strip() or "forum"
+        removed = bool(getattr(route, "removed", False))
+        output.append({
+            "path": str(getattr(route, "path", "") or "").strip(),
+            "name": str(getattr(route, "name", "") or "").strip(),
+            "component": str(getattr(route, "component", "") or "").strip(),
+            "frontend": frontend,
+            "module_id": str(getattr(route, "module_id", "") or "").strip(),
+            "title": str(getattr(route, "title", "") or "").strip(),
+            "description": str(getattr(route, "description", "") or "").strip(),
+            "requires_auth": bool(getattr(route, "requires_auth", False)),
+            "order": int(getattr(route, "order", 100) or 100),
+            "removed": removed,
+        })
+    return [
+        item
+        for item in output
+        if item["name"] and (item["removed"] or (item["path"] and item["component"]))
+    ]
+
+
+def build_enabled_frontend_document_payload() -> dict[str, Any]:
+    entries = get_enabled_extension_runtime_entries(product_visible_only=False)
+    preloads = []
+    document_attributes = {}
+    title_drivers = []
+    content_callbacks = []
+
+    for entry in entries:
+        document = dict(entry.get("frontend_document") or {})
+        for preload in document.get("preloads") or []:
+            if preload and preload not in preloads:
+                preloads.append(preload)
+        for attributes in document.get("document_attributes") or []:
+            if isinstance(attributes, dict):
+                document_attributes.update(attributes)
+        title_driver = document.get("title_driver")
+        if title_driver:
+            title_drivers.append({
+                "extension_id": entry["id"],
+                "driver": title_driver,
+            })
+        for callback in document.get("content_callbacks") or []:
+            callback_payload = _normalize_content_callback_payload(callback)
+            if callback_payload["callback"]:
+                content_callbacks.append({
+                    "extension_id": entry["id"],
+                    **callback_payload,
+                })
+
+    content_callbacks.sort(key=lambda item: int(item.get("priority") or 0), reverse=True)
+
+    return {
+        "preloads": preloads,
+        "document_attributes": document_attributes,
+        "title_drivers": title_drivers,
+        "content_callbacks": content_callbacks,
+    }
+
+
+def _build_frontend_document_payload(runtime_view) -> dict[str, Any]:
+    return {
+        "preloads": _serialize_frontend_values(getattr(runtime_view, "frontend_preloads", ()) or ()),
+        "document_attributes": _serialize_frontend_values(getattr(runtime_view, "frontend_document_attributes", ()) or ()),
+        "title_driver": _serialize_frontend_value(getattr(runtime_view, "frontend_title_driver", None)),
+        "content_callbacks": _serialize_frontend_values(getattr(runtime_view, "frontend_content_callbacks", ()) or ()),
+    }
+
+
+def _normalize_content_callback_payload(callback) -> dict[str, Any]:
+    if isinstance(callback, dict):
+        return {
+            "callback": _serialize_frontend_value(callback.get("callback")),
+            "priority": int(callback.get("priority") or 0),
+        }
+    return {
+        "callback": _serialize_frontend_value(callback),
+        "priority": 0,
+    }
+
+
+def _serialize_frontend_values(values) -> list:
+    return [_serialize_frontend_value(value) for value in values]
+
+
+def _serialize_frontend_value(value):
+    if value is None:
+        return ""
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {
+            str(key): _serialize_frontend_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_serialize_frontend_value(item) for item in value]
+    return getattr(value, "__name__", str(value))
+
+
+def _build_extension_forum_settings(
+    settings_definition: dict[str, Any] | None,
+    settings_values: dict[str, Any],
+) -> dict[str, Any]:
+    keys = tuple((settings_definition or {}).get("forum_settings_keys") or ())
+    if not keys:
+        return {}
+
+    return {
+        key: settings_values.get(key)
+        for key in keys
+    }

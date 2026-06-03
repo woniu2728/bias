@@ -421,7 +421,7 @@ apps/
   tags/
   users/
 extensions/
-  flarum_compat/
+  sample_extension/
   approval/
     extension.json
     backend/

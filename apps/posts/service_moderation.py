@@ -7,8 +7,10 @@ from django.utils import timezone
 
 from apps.core.domain_events import dispatch_forum_event_after_commit
 from apps.core.forum_events import (
-    DiscussionTagStatsRefreshEvent,
     PostApprovedEvent,
+    PostFlagCreatedEvent,
+    PostFlagsDeletedEvent,
+    PostFlagsResolvedEvent,
     PostLikedEvent,
     PostRejectedEvent,
     UserMentionedEvent,
@@ -16,9 +18,7 @@ from apps.core.forum_events import (
 from apps.core.mentions import extract_mentioned_usernames
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post, PostFlag, PostLike, PostMentionsUser
-from apps.tags.services import TagService
 from apps.users.models import User
-from apps.users.preferences import get_user_preference_value
 from apps.users.services import UserService
 
 
@@ -68,7 +68,7 @@ def report_post(post_id: int, user: User, reason: str, message: str = "", *, can
 
     if not user or not user.is_authenticated:
         raise PermissionDenied("请先登录")
-    if post.user_id == user.id:
+    if post.user_id == user.id and not _can_flag_own_post():
         raise ValueError("不能举报自己的帖子")
     if post.hidden_at is not None:
         raise ValueError("该帖子已被隐藏")
@@ -84,15 +84,24 @@ def report_post(post_id: int, user: User, reason: str, message: str = "", *, can
         existing.save(update_fields=["reason", "message"])
         return existing
     except PostFlag.DoesNotExist:
-        return PostFlag.objects.create(
+        flag = PostFlag.objects.create(
             post=post,
             user=user,
             reason=reason,
             message=message,
         )
+        dispatch_forum_event_after_commit(
+            PostFlagCreatedEvent(
+                flag_id=flag.id,
+                post_id=post.id,
+                discussion_id=post.discussion_id,
+                actor_user_id=user.id,
+            )
+        )
+        return flag
 
 
-def get_flag_list(status: Optional[str] = None, page: int = 1, limit: int = 20):
+def get_flag_list(status: Optional[str] = None, page: int = 1, limit: int = 20, *, user: User | None = None):
     queryset = PostFlag.objects.select_related(
         "post",
         "post__discussion",
@@ -104,9 +113,25 @@ def get_flag_list(status: Optional[str] = None, page: int = 1, limit: int = 20):
     if status:
         queryset = queryset.filter(status=status)
 
+    if user is not None:
+        from apps.core.extensions.runtime_access import apply_runtime_model_visibility
+
+        queryset = apply_runtime_model_visibility(
+            PostFlag,
+            queryset,
+            {"user": user, "ability": "view"},
+        )
+
     total = queryset.count()
     offset = (page - 1) * limit
     return list(queryset[offset:offset + limit]), total
+
+
+def _can_flag_own_post() -> bool:
+    from apps.core.extension_settings_service import get_extension_settings
+
+    settings = get_extension_settings("flags")
+    return bool(settings.get("can_flag_own", False))
 
 
 def resolve_flag(flag_id: int, admin_user: User, status: str, resolution_note: str = "") -> PostFlag:
@@ -119,6 +144,15 @@ def resolve_flag(flag_id: int, admin_user: User, status: str, resolution_note: s
     flag.resolved_by = admin_user
     flag.resolved_at = timezone.now()
     flag.save(update_fields=["status", "resolution_note", "resolved_by", "resolved_at"])
+    dispatch_forum_event_after_commit(
+        PostFlagsResolvedEvent(
+            flag_ids=(flag.id,),
+            post_id=flag.post_id,
+            discussion_id=flag.post.discussion_id,
+            actor_user_id=admin_user.id,
+            status=status,
+        )
+    )
     return flag
 
 
@@ -143,7 +177,40 @@ def resolve_post_flags(post_id: int, admin_user: User, status: str, resolution_n
         open_flags,
         ["status", "resolution_note", "resolved_by", "resolved_at"],
     )
+    first_flag = open_flags[0]
+    dispatch_forum_event_after_commit(
+        PostFlagsResolvedEvent(
+            flag_ids=tuple(flag.id for flag in open_flags),
+            post_id=post_id,
+            discussion_id=first_flag.post.discussion_id,
+            actor_user_id=admin_user.id,
+            status=status,
+        )
+    )
     return len(open_flags)
+
+
+def delete_post_flags(post_id: int, user: User, *, can_view_post) -> int:
+    post = Post.objects.select_related("discussion").get(id=post_id)
+    if not can_view_post(post, user):
+        raise PermissionDenied("没有权限查看此帖子")
+    if not UserService.has_forum_permission(user, "admin.flag.view"):
+        raise PermissionDenied("无权查看举报")
+
+    with transaction.atomic():
+        flag_ids = tuple(PostFlag.objects.filter(post_id=post.id).values_list("id", flat=True))
+        if not flag_ids:
+            return 0
+        PostFlag.objects.filter(id__in=flag_ids).delete()
+        dispatch_forum_event_after_commit(
+            PostFlagsDeletedEvent(
+                flag_ids=flag_ids,
+                post_id=post.id,
+                discussion_id=post.discussion_id,
+                actor_user_id=user.id,
+            )
+        )
+        return len(flag_ids)
 
 
 def refresh_discussion_approved_stats(discussion: Discussion, *, discussion_counted_post_types, user_counted_post_types):
@@ -176,9 +243,6 @@ def refresh_discussion_approved_stats(discussion: Discussion, *, discussion_coun
         "last_posted_at",
         "last_posted_user",
     ])
-    dispatch_forum_event_after_commit(
-        DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
-    )
     return discussion
 
 
@@ -247,13 +311,10 @@ def approve_post(
             if post.user and post.type in user_counted_post_types:
                 post.user.comment_count = F("comment_count") + 1
                 post.user.save(update_fields=["comment_count"])
-                follow_after_reply = get_user_preference_value(post.user, "follow_after_reply", fallback=False)
                 approval_defaults = {
                     "last_read_at": now,
                     "last_read_post_number": post.number,
                 }
-                if follow_after_reply:
-                    approval_defaults["is_subscribed"] = True
                 DiscussionUser.objects.update_or_create(
                     discussion=discussion,
                     user=post.user,
@@ -272,11 +333,6 @@ def approve_post(
                     previous_status=previous_status,
                 )
             )
-        else:
-            dispatch_forum_event_after_commit(
-                DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
-            )
-
     post.refresh_from_db()
     return post
 

@@ -11,7 +11,6 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import transaction
-from django.db.models import Max
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -31,6 +30,7 @@ from apps.core.mail_drivers import (
 from apps.core.queue_service import QueueService
 from apps.core.forum_registry import get_forum_registry
 from apps.core.resource_registry import get_resource_registry
+from apps.core.extensions.runtime_access import get_runtime_resource_registry
 from apps.core.search_index_service import SearchIndexService
 from apps.core.file_service import FileUploadService
 from apps.core.domain_events import dispatch_forum_event_after_commit
@@ -63,8 +63,6 @@ from apps.discussions.models import Discussion
 from apps.discussions.services import DiscussionService
 from apps.posts.models import Post, PostFlag
 from apps.posts.services import PostService
-from apps.tags.models import Tag
-from apps.tags.services import TagService
 from apps.users.group_utils import get_primary_group, serialize_group_badge
 from apps.users.services import UserService
 from apps.core.services import PaginationService
@@ -80,8 +78,27 @@ router.add_router("", moderation_router)
 router.add_router("", settings_router)
 router.add_router("", users_router)
 
-REGISTRY = get_forum_registry()
-RESOURCE_REGISTRY = get_resource_registry()
+
+def _get_forum_registry():
+    return get_forum_registry()
+
+
+def _get_resource_registry():
+    return get_runtime_resource_registry()
+
+
+class _RuntimeRegistryProxy:
+    def __getattr__(self, item):
+        return getattr(_get_forum_registry(), item)
+
+
+class _RuntimeResourceRegistryProxy:
+    def __getattr__(self, item):
+        return getattr(_get_resource_registry(), item)
+
+
+REGISTRY = _RuntimeRegistryProxy()
+RESOURCE_REGISTRY = _RuntimeResourceRegistryProxy()
 
 BUILTIN_GROUPS = {
     1: "Admin",
@@ -130,47 +147,6 @@ def serialize_group(group: Group) -> Dict[str, Any]:
     return payload
 
 
-def serialize_admin_tag(tag: Tag) -> Dict[str, Any]:
-    return {
-        "id": tag.id,
-        "name": tag.name,
-        "slug": tag.slug,
-        "description": tag.description,
-        "color": tag.color or "#888",
-        "icon": tag.icon,
-        "position": tag.position,
-        "parent_id": tag.parent_id,
-        "parent_name": tag.parent.name if tag.parent else None,
-        "discussion_count": tag.discussion_count,
-        "is_hidden": tag.is_hidden,
-        "is_restricted": tag.is_restricted,
-        "view_scope": tag.view_scope,
-        "start_discussion_scope": tag.start_discussion_scope,
-        "reply_scope": tag.reply_scope,
-        "view_scope_label": TagService.get_scope_label(tag.view_scope),
-        "start_discussion_scope_label": TagService.get_scope_label(tag.start_discussion_scope),
-        "reply_scope_label": TagService.get_scope_label(tag.reply_scope),
-    }
-
-
-def normalize_optional_tag_parent(payload: Dict[str, Any]) -> Dict[str, Any]:
-    normalized = dict(payload)
-    if "parent_id" in normalized:
-        parent_id = normalized.get("parent_id")
-        normalized["parent_id"] = None if parent_id in ("", 0, "0") else parent_id
-    return normalized
-
-
-def normalize_tag_position(payload: Dict[str, Any], parent_id=None, current_tag: Tag = None) -> int:
-    if "position" in payload and payload.get("position") is not None:
-        return int(payload["position"])
-
-    queryset = Tag.objects.filter(parent_id=parent_id)
-    if current_tag is not None:
-        queryset = queryset.exclude(id=current_tag.id)
-    return (queryset.aggregate(max_position=Max("position")).get("max_position") or 0) + 1
-
-
 def validate_group_payload(payload: Dict[str, Any], group: Group = None):
     name = (payload.get("name") or "").strip()
     if not name:
@@ -197,7 +173,7 @@ def is_builtin_group(group: Group) -> bool:
 
 
 def normalize_permission_code(permission: str):
-    return REGISTRY.normalize_permission_code(permission)
+    return _get_forum_registry().normalize_permission_code(permission)
 
 
 def serialize_admin_user(user: User, include_details: bool = False) -> Dict[str, Any]:
@@ -292,7 +268,7 @@ def serialize_module_definition(module, module_map: Dict[str, Any]) -> Dict[str,
     return admin_module_helpers.serialize_module_definition(
         module,
         module_map,
-        resource_registry=RESOURCE_REGISTRY,
+        resource_registry=_get_resource_registry(),
         runtime_dependency_summary_builder=build_runtime_dependency_summary,
         setting_model=Setting,
         basic_settings_defaults=BASIC_SETTINGS_DEFAULTS,

@@ -1,0 +1,47 @@
+{
+  "id": "flags",
+  "name": "Flags",
+  "version": "0.1.0",
+  "description": "提供帖子举报、举报队列、举报处理权限和帖子举报状态字段。",
+  "icon": "fas fa-flag",
+  "category": "feature",
+  "authors": [
+    "Bias"
+  ],
+  "dependencies": [
+    "core",
+    "discussions",
+    "posts",
+    "users"
+  ],
+  "provides": [
+    "post-flags",
+    "flag-resolution"
+  ],
+  "backend_entry": "extensions.flags.backend.ext",
+  "permissions_pages": [
+    "/admin/extensions/flags/permissions"
+  ],
+  "operations_pages": [
+    "/admin/extensions/flags/operations"
+  ],
+  "compatibility": {
+    "bias_version": "^1.0.0",
+    "api_version": "1.0",
+    "api_stability": "experimental",
+    "api_stability_label": "实验性",
+    "breaking_change_policy": "扩展协议调整会随 Bias 主版本升级同步说明。"
+  },
+  "security": {
+    "support_email": "",
+    "capabilities_notice": "该扩展影响帖子举报入口、举报处理权限和举报状态字段。"
+  },
+  "distribution": {
+    "channel": "private",
+    "channel_label": "私有分发"
+  },
+  "extra": {
+    "auto_install": true,
+    "auto_enable": true
+  }
+}

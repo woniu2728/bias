@@ -29,6 +29,7 @@ from apps.core.models import ExtensionInstallation
 class ForumRegistry:
     def __init__(self):
         self._modules: Dict[str, ForumModuleDefinition] = {}
+        self._external_enabled_module_ids: set[str] = set()
         self._permissions: Dict[str, PermissionDefinition] = {}
         self._permission_aliases: Dict[str, str] = {}
         self._admin_pages: List[AdminPageDefinition] = []
@@ -45,18 +46,16 @@ class ForumRegistry:
         self._modules[module.module_id] = module
 
         for permission in module.permissions:
-            self._permissions[permission.code] = permission
-            for alias in permission.aliases:
-                self._permission_aliases[alias] = permission.code
+            self.register_permission(permission)
 
         for page in module.admin_pages:
-            self._admin_pages.append(page)
+            self.register_admin_page(page)
 
         for notification_type in module.notification_types:
-            self._notification_types[notification_type.code] = notification_type
+            self.register_notification_type(notification_type)
 
         for preference in module.user_preferences:
-            self._user_preferences[preference.key] = preference
+            self.register_user_preference(preference)
 
         for language_pack in module.language_packs:
             self._language_packs[(language_pack.module_id, language_pack.code)] = language_pack
@@ -65,21 +64,62 @@ class ForumRegistry:
             self._event_listeners.append(event_listener)
 
         for post_type in module.post_types:
-            self._post_types[post_type.code] = post_type
+            self.register_post_type(post_type)
 
         for search_filter in module.search_filters:
-            self._search_filters.append(search_filter)
+            self.register_search_filter(search_filter)
 
         for discussion_sort in module.discussion_sorts:
-            self._discussion_sorts[discussion_sort.code] = discussion_sort
+            self.register_discussion_sort(discussion_sort)
 
         for discussion_list_filter in module.discussion_list_filters:
-            self._discussion_list_filters[discussion_list_filter.code] = discussion_list_filter
-
-        self._admin_pages.sort(key=lambda item: (item.nav_section, item.label, item.path))
-        self._event_listeners.sort(key=lambda item: (item.event, item.module_id, item.listener))
-        self._search_filters.sort(key=lambda item: (item.target, item.module_id, item.code))
+            self.register_discussion_list_filter(discussion_list_filter)
         return module
+
+    def register_permission(self, definition: PermissionDefinition) -> None:
+        self._permissions[definition.code] = definition
+        for alias in definition.aliases:
+            self._permission_aliases[alias] = definition.code
+
+    def register_external_module_id(self, module_id: str) -> None:
+        normalized = str(module_id or "").strip()
+        if normalized:
+            self._external_enabled_module_ids.add(normalized)
+
+    def register_admin_page(self, definition: AdminPageDefinition) -> None:
+        self._admin_pages = [
+            item for item in self._admin_pages
+            if not (item.path == definition.path and item.module_id == definition.module_id)
+        ]
+        self._admin_pages.append(definition)
+        self._admin_pages.sort(key=lambda item: (item.nav_section, item.label, item.path))
+
+    def register_notification_type(self, definition: NotificationTypeDefinition) -> None:
+        self._notification_types[definition.code] = definition
+
+    def register_user_preference(self, definition: UserPreferenceDefinition) -> None:
+        self._user_preferences[definition.key] = definition
+
+    def register_post_type(self, definition: PostTypeDefinition) -> None:
+        self._post_types[definition.code] = definition
+
+    def register_search_filter(self, definition: SearchFilterDefinition) -> None:
+        self._search_filters = [
+            item for item in self._search_filters
+            if not (
+                item.code == definition.code
+                and item.target == definition.target
+                and item.module_id == definition.module_id
+            )
+        ]
+        self._search_filters.append(definition)
+        self._search_filters.sort(key=lambda item: (item.target, item.module_id, item.code))
+
+    def register_discussion_sort(self, definition: DiscussionSortDefinition) -> None:
+        self._discussion_sorts[definition.code] = definition
+
+    def register_discussion_list_filter(self, definition: DiscussionListFilterDefinition) -> None:
+        self._discussion_list_filters[definition.code] = definition
 
     def _get_extension_state_overrides(self) -> Dict[str, bool]:
         try:
@@ -103,11 +143,17 @@ class ForumRegistry:
         ]
 
     def _get_enabled_module_ids(self) -> set[str]:
+        enabled_overrides = self._get_extension_state_overrides()
+        external_enabled_module_ids = {
+            module_id
+            for module_id in self._external_enabled_module_ids
+            if enabled_overrides.get(module_id, True)
+        }
         return {
             module.module_id
             for module in self._get_runtime_modules()
             if module.enabled
-        }
+        } | external_enabled_module_ids
 
     def get_modules(self) -> List[ForumModuleDefinition]:
         return sorted(
@@ -128,27 +174,25 @@ class ForumRegistry:
         return self._apply_module_runtime_state(module, enabled_overrides)
 
     def get_permission(self, code: str) -> PermissionDefinition | None:
-        definition = self._permissions.get(code)
-        if definition is None:
-            return None
-        if definition.module_id not in self._get_enabled_module_ids():
-            return None
-        return definition
+        definitions = {
+            item.code: item
+            for item in self.get_all_permissions()
+        }
+        return definitions.get(code)
 
     def get_permission_aliases(self) -> Dict[str, str]:
-        return dict(sorted(self._permission_aliases.items()))
+        aliases = dict(self._permission_aliases)
+        for definition in self.get_all_permissions():
+            for alias in definition.aliases:
+                aliases[alias] = definition.code
+        return dict(sorted(aliases.items()))
 
     def get_valid_permission_codes(self) -> set[str]:
-        enabled_module_ids = self._get_enabled_module_ids()
-        return {
-            code
-            for code, definition in self._permissions.items()
-            if definition.module_id in enabled_module_ids
-        }
+        return {definition.code for definition in self.get_all_permissions()}
 
     def normalize_permission_code(self, permission: str) -> str | None:
         normalized = self._permission_aliases.get(permission, permission)
-        if normalized in self._permissions:
+        if normalized in self.get_valid_permission_codes():
             return normalized
         return None
 
@@ -159,6 +203,17 @@ class ForumRegistry:
             for page in self._admin_pages
             if page.module_id in enabled_module_ids
         ]
+
+    def get_all_permissions(self) -> List[PermissionDefinition]:
+        enabled_module_ids = self._get_enabled_module_ids()
+        return sorted(
+            [
+                item
+                for item in self._permissions.values()
+                if item.module_id in enabled_module_ids
+            ],
+            key=lambda item: (item.section, item.module_id, item.label, item.code),
+        )
 
     def get_notification_types(self) -> List[NotificationTypeDefinition]:
         enabled_module_ids = self._get_enabled_module_ids()
@@ -172,24 +227,20 @@ class ForumRegistry:
         )
 
     def get_notification_type(self, code: str) -> NotificationTypeDefinition | None:
-        definition = self._notification_types.get(code)
-        if definition is None:
-            return None
-        if definition.module_id not in self._get_enabled_module_ids():
-            return None
-        return definition
+        definitions = {item.code: item for item in self.get_notification_types()}
+        return definitions.get(code)
 
     def get_user_preferences(self, category: str | None = None) -> List[UserPreferenceDefinition]:
         enabled_module_ids = self._get_enabled_module_ids()
-        preferences = [
+        preferences_list = [
             item
             for item in self._user_preferences.values()
             if item.module_id in enabled_module_ids
         ]
         if category is not None:
-            preferences = [item for item in preferences if item.category == category]
+            preferences_list = [item for item in preferences_list if item.category == category]
         return sorted(
-            preferences,
+            preferences_list,
             key=lambda item: (item.category, item.module_id, item.label, item.key),
         )
 
@@ -232,12 +283,8 @@ class ForumRegistry:
         )
 
     def get_post_type(self, code: str) -> PostTypeDefinition | None:
-        definition = self._post_types.get(code)
-        if definition is None:
-            return None
-        if definition.module_id not in self._get_enabled_module_ids():
-            return None
-        return definition
+        definitions = {item.code: item for item in self.get_post_types()}
+        return definitions.get(code)
 
     def get_default_post_type_code(self) -> str:
         for definition in self.get_post_types():
@@ -282,7 +329,7 @@ class ForumRegistry:
         ]
         if target is not None:
             filters = [definition for definition in filters if definition.target == target]
-        return filters
+        return sorted(filters, key=lambda item: (item.target, item.module_id, item.code))
 
     def get_discussion_sorts(self) -> List[DiscussionSortDefinition]:
         enabled_module_ids = self._get_enabled_module_ids()
@@ -340,9 +387,7 @@ class ForumRegistry:
 
     def get_permission_sections(self) -> List[dict]:
         sections: Dict[str, dict] = {}
-        for permission in self._permissions.values():
-            if permission.module_id not in self._get_enabled_module_ids():
-                continue
+        for permission in self.get_all_permissions():
             section = sections.setdefault(
                 permission.section,
                 {
@@ -396,7 +441,18 @@ _registry: ForumRegistry | None = None
 
 
 def get_forum_registry() -> ForumRegistry:
+    from apps.core.extensions.bootstrap_state import is_extension_host_bootstrapped
+
     global _registry
+    if is_extension_host_bootstrapped():
+        try:
+            from apps.core.extensions.bootstrap import get_extension_host
+
+            host = get_extension_host()
+            if host is not None:
+                return host.forum
+        except Exception:
+            pass
     if _registry is None:
         _registry = ForumRegistry()
         _register_builtin_modules(_registry)

@@ -3,6 +3,10 @@ import { computed, ref } from 'vue'
 import api from '@/api'
 import { syncNotificationTypes } from '@/forum/notificationTypes'
 import { syncPostTypes } from '@/forum/postTypes'
+import {
+  applyExtensionDocumentState,
+  resolveExtensionPageMeta,
+} from '@/forum/documentRuntime'
 
 const DEFAULT_SETTINGS = {
   forum_title: 'Bias',
@@ -248,11 +252,16 @@ export const useForumStore = defineStore('forum', () => {
   }
 
   function setPageMeta(meta = {}) {
-    applyPageMeta(meta)
+    const state = resolveExtensionPageMeta(meta, {
+      settings: settings.value,
+      route: typeof window === 'undefined' ? null : window.location,
+    })
+    applyPageMeta(state.meta)
+    applyExtensionDocumentState(state)
   }
 
   function resetPageMeta() {
-    applyPageMeta()
+    setPageMeta()
   }
 
   function normalizeMetaText(value) {

@@ -107,10 +107,12 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import api from '@/api'
-import AdminInlineMessage from '@/admin/components/AdminInlineMessage.vue'
-import AdminStateBlock from '@/admin/components/AdminStateBlock.vue'
-import { useAdminSaveFeedback } from '@/admin/composables/useAdminSaveFeedback'
+import {
+  adminApi,
+  AdminInlineMessage,
+  AdminStateBlock,
+  useAdminSaveFeedback,
+} from '@/admin/registry'
 
 const props = defineProps({
   extension: {
@@ -164,7 +166,7 @@ async function loadSettings() {
   resetSaveFeedback()
 
   try {
-    const data = await api.get(`/admin/extensions/${props.extension.id}/settings`)
+    const data = await adminApi.get(`/admin/extensions/${props.extension.id}/settings`)
     fields.value = Array.isArray(data.schema) ? data.schema : []
     settings.value = { ...(data.settings || {}) }
   } catch (error) {
@@ -185,7 +187,7 @@ async function handleSubmit() {
 
   try {
     const payload = buildSubmitPayload()
-    const data = await api.post(`/admin/extensions/${props.extension.id}/settings`, payload)
+    const data = await adminApi.post(`/admin/extensions/${props.extension.id}/settings`, payload)
     settings.value = { ...(data.settings || settings.value) }
     showSaveSuccess()
   } catch (error) {

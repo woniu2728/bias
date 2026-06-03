@@ -137,30 +137,6 @@ class Command(BaseCommand):
             "dependencies": ["core"],
             "provides": [f"{extension_id}-panel"],
             "backend_entry": f"extensions.{extension_id.replace('-', '_')}.backend.ext",
-            "frontend_admin_entry": f"extensions/{extension_id}/frontend/admin/index.js",
-            "frontend_forum_entry": f"extensions/{extension_id}/frontend/forum/index.js",
-            "settings_pages": [f"/admin/extensions/{extension_id}/settings"],
-            "permissions_pages": [f"/admin/extensions/{extension_id}/permissions"],
-            "operations_pages": [f"/admin/extensions/{extension_id}/operations"],
-            "settings_schema": [
-                {
-                    "key": "welcome_message",
-                    "label": "欢迎语",
-                    "type": "text",
-                    "default": f"欢迎使用 {name}",
-                    "placeholder": "输入展示给管理员或用户的欢迎语",
-                    "help_text": "示例设置项，用于验证扩展设置协议已经打通。",
-                    "order": 10,
-                },
-                {
-                    "key": "feature_enabled",
-                    "label": "启用功能开关",
-                    "type": "boolean",
-                    "default": True,
-                    "help_text": "示例布尔型设置项。",
-                    "order": 20,
-                },
-            ],
             "compatibility": {
                 "bias_version": f"^{APP_VERSION}",
                 "api_version": "1.0",
@@ -179,71 +155,6 @@ class Command(BaseCommand):
                 "signature_url": "",
             },
             "migration_namespace": f"extensions.{extension_id.replace('-', '_')}.backend.migrations",
-            "admin_actions": [
-                {
-                    "key": "details",
-                    "label": "查看详情",
-                    "kind": "route",
-                    "target": f"/admin/extensions/{extension_id}",
-                    "icon": "fas fa-arrow-right",
-                    "tone": "primary",
-                    "order": 10,
-                },
-                {
-                    "key": "settings",
-                    "label": "设置",
-                    "kind": "route",
-                    "target": f"/admin/extensions/{extension_id}/settings",
-                    "icon": "fas fa-sliders-h",
-                    "tone": "default",
-                    "requires_enabled": True,
-                    "order": 20,
-                },
-                {
-                    "key": "permissions",
-                    "label": "权限",
-                    "kind": "route",
-                    "target": f"/admin/extensions/{extension_id}/permissions",
-                    "icon": "fas fa-user-shield",
-                    "tone": "default",
-                    "requires_enabled": True,
-                    "order": 30,
-                },
-                {
-                    "key": "operations",
-                    "label": "操作",
-                    "kind": "route",
-                    "target": f"/admin/extensions/{extension_id}/operations",
-                    "icon": "fas fa-screwdriver-wrench",
-                    "tone": "default",
-                    "requires_enabled": True,
-                    "order": 40,
-                },
-                {
-                    "key": "documentation",
-                    "label": "文档",
-                    "kind": "link",
-                    "target": f"/admin.html#/admin/docs?guide=extension-system-roadmap&extension={extension_id}",
-                    "icon": "fas fa-book",
-                    "tone": "subtle",
-                    "order": 50,
-                },
-            ],
-            "runtime_actions": [
-                {
-                    "key": "rebuild-cache",
-                    "label": "刷新缓存",
-                    "hook": "run_rebuild_cache",
-                    "tone": "subtle",
-                    "confirm_title": "刷新扩展缓存",
-                    "confirm_message": f"确定执行 {name} 的缓存刷新操作吗？",
-                    "confirm_text": "刷新",
-                    "success_message": "扩展缓存已刷新。",
-                    "requires_enabled": True,
-                    "requires_installed": True,
-                    "order": 5,
-                }
-            ],
             "extra": {
                 "display_order": 1000,
                 "experimental": True,
@@ -446,39 +357,90 @@ class Command(BaseCommand):
     def _build_backend_entry_source(self, extension_id: str, name: str) -> str:
         return (
             "from __future__ import annotations\n\n"
+            "from apps.core.extensions import AdminNavigationExtender, FrontendExtender, LifecycleExtender, RuntimeActionsExtender, SettingsExtender\n"
+            "from apps.core.extensions.backend import _build_runtime_action_definition, _build_setting_field_definition\n\n"
             f"EXTENSION_ID = '{extension_id}'\n"
             f"EXTENSION_NAME = '{name}'\n\n"
             "\n"
-            "def run_install(context):\n"
+            "def extend():\n"
+            "    return [\n"
+            "        FrontendExtender(\n"
+            f"            admin_entry='extensions/{extension_id}/frontend/admin/index.js',\n"
+            f"            forum_entry='extensions/{extension_id}/frontend/forum/index.js',\n"
+            "        ),\n"
+            "        SettingsExtender(fields=(\n"
+            "            _build_setting_field_definition({\n"
+            "                'key': 'welcome_message',\n"
+            "                'label': '欢迎语',\n"
+            "                'type': 'text',\n"
+            f"                'default': '欢迎使用 {name}',\n"
+            "                'placeholder': '输入展示给管理员或用户的欢迎语',\n"
+            "                'help_text': '示例设置项，用于验证扩展设置协议已经打通。',\n"
+            "                'order': 10,\n"
+            "            }),\n"
+            "            _build_setting_field_definition({\n"
+            "                'key': 'feature_enabled',\n"
+            "                'label': '启用功能开关',\n"
+            "                'type': 'boolean',\n"
+            "                'default': True,\n"
+            "                'help_text': '示例布尔型设置项。',\n"
+            "                'order': 20,\n"
+            "            }),\n"
+            "        )),\n"
+            "        RuntimeActionsExtender(actions=(\n"
+            "            _build_runtime_action_definition({\n"
+            "                'key': 'rebuild-cache',\n"
+            "                'label': '刷新缓存',\n"
+            "                'hook': 'run_rebuild_cache',\n"
+            "                'tone': 'subtle',\n"
+            "                'confirm_title': '刷新扩展缓存',\n"
+            f"                'confirm_message': '确定执行 {name} 的缓存刷新操作吗？',\n"
+            "                'confirm_text': '刷新',\n"
+            "                'success_message': '扩展缓存已刷新。',\n"
+            "                'requires_enabled': True,\n"
+            "                'requires_installed': True,\n"
+            "                'order': 5,\n"
+            "            }),\n"
+            "        ), generated_page=True),\n"
+            "        AdminNavigationExtender(generated_permissions_page=True),\n"
+            "        LifecycleExtender(\n"
+            "            install=install,\n"
+            "            enable=enable,\n"
+            "            disable=disable,\n"
+            "            uninstall=uninstall,\n"
+            "        ),\n"
+            "    ]\n\n"
+            "\n"
+            "def install(context):\n"
             "    return {\n"
             "        'status': 'ok',\n"
             "        'status_label': '已完成',\n"
-            "        'message': f'{context.extension_name} 安装钩子已执行。',\n"
+            "        'message': f'{context.extension_name} 安装生命周期已执行。',\n"
             "        'details': {\n"
             "            'extension_id': context.extension_id,\n"
             "            'migration_namespace': context.migration_namespace,\n"
             "        },\n"
             "    }\n\n"
             "\n"
-            "def run_enable(context):\n"
+            "def enable(context):\n"
             "    return {\n"
             "        'status': 'ok',\n"
             "        'status_label': '已启用',\n"
-            "        'message': f'{context.extension_name} 启用钩子已执行。',\n"
+            "        'message': f'{context.extension_name} 启用生命周期已执行。',\n"
             "    }\n\n"
             "\n"
-            "def run_disable(context):\n"
+            "def disable(context):\n"
             "    return {\n"
             "        'status': 'ok',\n"
             "        'status_label': '已停用',\n"
-            "        'message': f'{context.extension_name} 停用钩子已执行。',\n"
+            "        'message': f'{context.extension_name} 停用生命周期已执行。',\n"
             "    }\n\n"
             "\n"
-            "def run_uninstall(context):\n"
+            "def uninstall(context):\n"
             "    return {\n"
             "        'status': 'ok',\n"
             "        'status_label': '已完成',\n"
-            "        'message': f'{context.extension_name} 卸载钩子已执行。',\n"
+            "        'message': f'{context.extension_name} 卸载生命周期已执行。',\n"
             "    }\n\n"
             "\n"
             "def run_rebuild_cache(context):\n"

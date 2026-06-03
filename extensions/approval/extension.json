@@ -1,0 +1,47 @@
+{
+  "id": "approval",
+  "name": "Approval",
+  "version": "0.1.0",
+  "description": "提供讨论与回复审核队列、审核权限、审核通知和审核时间线能力。",
+  "icon": "fas fa-user-check",
+  "category": "feature",
+  "authors": [
+    "Bias"
+  ],
+  "dependencies": [
+    "core",
+    "discussions",
+    "posts",
+    "notifications"
+  ],
+  "provides": [
+    "discussion-approval",
+    "post-approval"
+  ],
+  "backend_entry": "extensions.approval.backend.ext",
+  "permissions_pages": [
+    "/admin/extensions/approval/permissions"
+  ],
+  "operations_pages": [
+    "/admin/extensions/approval/operations"
+  ],
+  "compatibility": {
+    "bias_version": "^1.0.0",
+    "api_version": "1.0",
+    "api_stability": "experimental",
+    "api_stability_label": "实验性",
+    "breaking_change_policy": "扩展协议调整会随 Bias 主版本升级同步说明。"
+  },
+  "security": {
+    "support_email": "",
+    "capabilities_notice": "该扩展影响内容审核队列、审核权限、审核通知和审核系统事件帖。"
+  },
+  "distribution": {
+    "channel": "private",
+    "channel_label": "私有分发"
+  },
+  "extra": {
+    "auto_install": true,
+    "auto_enable": true
+  }
+}

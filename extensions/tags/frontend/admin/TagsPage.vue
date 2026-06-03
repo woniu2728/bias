@@ -384,19 +384,19 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import AdminSelectMenu from '../components/AdminSelectMenu.vue'
-import AdminColorField from '../components/AdminColorField.vue'
-import AdminPage from '../components/AdminPage.vue'
-import AdminStateBlock from '../components/AdminStateBlock.vue'
-import AdminSummaryGrid from '../components/AdminSummaryGrid.vue'
-import AdminToolbar from '../components/AdminToolbar.vue'
-import api from '../../api'
-import { useModalStore } from '../../stores/modal'
 import {
+  adminApi,
+  AdminColorField,
+  AdminPage,
+  AdminSelectMenu,
+  AdminStateBlock,
+  AdminSummaryGrid,
+  AdminToolbar,
   getAdminTagsPageActionMeta,
   getAdminTagsPageConfig,
   getAdminTagsPageCopy,
-} from '../registry'
+  useModalStore,
+} from '@/admin/registry'
 
 const tags = ref([])
 const loading = ref(true)
@@ -500,7 +500,7 @@ async function loadTags() {
   loading.value = true
   loadError.value = ''
   try {
-    const data = await api.get('/admin/tags')
+    const data = await adminApi.get('/admin/tags')
     tags.value = Array.isArray(data) ? data : []
   } catch (error) {
     console.error('加载标签失败:', error)
@@ -583,9 +583,9 @@ async function saveTag() {
     }
 
     if (showEditModal.value) {
-      await api.put(`/admin/tags/${editingTag.value.id}`, payload)
+      await adminApi.put(`/admin/tags/${editingTag.value.id}`, payload)
     } else {
-      await api.post('/admin/tags', payload)
+      await adminApi.post('/admin/tags', payload)
     }
 
     closeModal()
@@ -620,7 +620,7 @@ async function deleteTag(tag) {
   }
 
   try {
-    await api.delete(`/admin/tags/${tag.id}`)
+    await adminApi.delete(`/admin/tags/${tag.id}`)
     await loadTags()
     await modalStore.alert({
       title: tagsActionMeta.value?.deleteSuccessTitle || '标签已删除',
@@ -650,7 +650,7 @@ async function refreshTagStats() {
 
   refreshingStats.value = true
   try {
-    await api.post('/admin/tags/stats/refresh')
+    await adminApi.post('/admin/tags/stats/refresh')
     await loadTags()
   } catch (error) {
     await modalStore.alert({
@@ -668,8 +668,8 @@ async function moveTag(tag, direction) {
 
   movingTagId.value = tag.id
   try {
-    const response = await api.post(`/admin/tags/${tag.id}/move`, { direction })
-    tags.value = Array.isArray(response.data) ? response.data : tags.value
+    const data = await adminApi.post(`/admin/tags/${tag.id}/move`, { direction })
+    tags.value = Array.isArray(data) ? data : tags.value
   } catch (error) {
     const errorMsg = error.response?.data?.error
       || error.response?.data?.detail

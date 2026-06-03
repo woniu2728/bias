@@ -20,6 +20,34 @@
         </div>
       </div>
 
+      <div v-if="extensionRuntimeErrors.length || extensionRecoveryNotice" class="Form-section">
+        <h3 class="Section-title">{{ advancedCopy?.extensionDiagnosticsTitle || '扩展恢复与诊断' }}</h3>
+
+        <AdminInlineMessage v-if="extensionRecoveryNotice" tone="warning">
+          {{ extensionRecoveryNotice }}
+        </AdminInlineMessage>
+
+        <div v-if="extensionRuntimeErrors.length" class="RuntimeSnapshot">
+          <div class="RuntimeSnapshot-tags">
+            <span class="RuntimeSnapshot-tagsLabel">{{ advancedCopy?.extensionRuntimeErrorsLabel || '运行时错误' }}</span>
+            <button type="button" class="Button Button--small" @click="clearRuntimeErrors">
+              {{ advancedCopy?.clearRuntimeErrorsLabel || '清除记录' }}
+            </button>
+          </div>
+          <div class="RuntimeErrorList">
+            <div
+              v-for="item in extensionRuntimeErrors"
+              :key="`${item.extensionId}-${item.operation}-${item.occurredAt}`"
+              class="RuntimeErrorList-item"
+            >
+              <strong>{{ item.extensionId || 'unknown' }}</strong>
+              <span>{{ item.operation || 'runtime' }}</span>
+              <p>{{ item.message || '扩展运行时错误' }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="Form-section">
         <h3 class="Section-title">{{ advancedCopy?.dependencyHealthTitle || '依赖健康' }}</h3>
 
@@ -741,6 +769,33 @@
             :placeholder="advancedConfig?.placeholders?.maintenanceMessage || '论坛正在维护中，请稍后再试...'"
           ></textarea>
         </div>
+
+        <div class="Form-group">
+          <label>
+            <input
+              id="advanced-extension-safe-mode"
+              v-model="settings.extension_safe_mode"
+              name="extension_safe_mode"
+              type="checkbox"
+              class="FormControl-checkbox"
+            />
+            {{ advancedCopy?.extensionSafeModeLabel || '启用扩展恢复模式' }}
+          </label>
+          <p class="Form-help">{{ advancedCopy?.extensionSafeModeHelpText || '启用后只启动内置扩展和白名单扩展，用于排查扩展导致的启动或运行异常。' }}</p>
+        </div>
+
+        <div class="Form-group">
+          <label for="advanced-extension-safe-mode-extensions">{{ advancedCopy?.extensionSafeModeExtensionsLabel || '恢复模式扩展白名单' }}</label>
+          <input
+            id="advanced-extension-safe-mode-extensions"
+            v-model="extensionSafeModeExtensionsText"
+            name="extension_safe_mode_extensions"
+            type="text"
+            class="FormControl"
+            :placeholder="advancedConfig?.placeholders?.extensionSafeModeExtensions || 'tags, notifications'"
+          />
+          <p class="Form-help">{{ advancedCopy?.extensionSafeModeExtensionsHelpText || '填写扩展 ID，多个扩展用英文逗号分隔。留空时只启动内置扩展。' }}</p>
+        </div>
       </div>
 
       <div class="Form-section">
@@ -799,6 +854,7 @@ import AdminPage from '../components/AdminPage.vue'
 import AdminSelectMenu from '../components/AdminSelectMenu.vue'
 import { useAdminSaveFeedback } from '../composables/useAdminSaveFeedback'
 import api from '../../api'
+import { clearExtensionRuntimeErrors, getExtensionRuntimeErrors } from '../../common/extensionRuntime'
 import { useModalStore } from '../../stores/modal'
 import {
   getAdminAdvancedPageActionMeta,
@@ -813,6 +869,7 @@ const settings = ref({})
 const searchIndexStatus = ref(null)
 const searchIndexStatusError = ref('')
 const adminStats = ref(null)
+const extensionRuntimeErrors = ref([])
 
 const saving = ref(false)
 const clearing = ref(false)
@@ -833,10 +890,32 @@ const runtimeDependencyChecks = computed(() => (
 const runtimeDependencyActions = computed(() => (
   runtimeDependencyChecks.value.filter(item => item?.recommended_action)
 ))
+const extensionRecoveryNotice = computed(() => {
+  if (settings.value.extension_safe_mode) {
+    const allowed = extensionSafeModeExtensionsText.value
+    return allowed
+      ? `扩展恢复模式已启用，只启动内置扩展和白名单：${allowed}`
+      : '扩展恢复模式已启用，当前只启动内置扩展。'
+  }
+  return ''
+})
 const turnstileMisconfigured = computed(() => (
   settings.value.auth_human_verification_provider === 'turnstile'
   && (!settings.value.auth_turnstile_site_key || !settings.value.auth_turnstile_secret_key)
 ))
+const extensionSafeModeExtensionsText = computed({
+  get() {
+    return Array.isArray(settings.value.extension_safe_mode_extensions)
+      ? settings.value.extension_safe_mode_extensions.join(', ')
+      : String(settings.value.extension_safe_mode_extensions || '')
+  },
+  set(value) {
+    settings.value.extension_safe_mode_extensions = String(value || '')
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean)
+  },
+})
 
 function defaultSettings() {
   return {
@@ -847,6 +926,8 @@ function defaultSettings() {
     realtime_typing_enabled: true,
     maintenance_mode: false,
     maintenance_message: '',
+    extension_safe_mode: false,
+    extension_safe_mode_extensions: [],
     debug_mode: false,
     log_queries: false,
     auth_human_verification_provider: 'off',
@@ -899,6 +980,7 @@ onMounted(async () => {
     loadAdminStats(),
     loadSearchIndexStatus(),
   ])
+  refreshRuntimeErrors()
 })
 
 async function loadAdvancedSettings() {
@@ -929,6 +1011,15 @@ async function loadAdminStats() {
   } catch (error) {
     console.error('加载后台运行状态失败:', error)
   }
+}
+
+function refreshRuntimeErrors() {
+  extensionRuntimeErrors.value = getExtensionRuntimeErrors()
+}
+
+function clearRuntimeErrors() {
+  clearExtensionRuntimeErrors()
+  refreshRuntimeErrors()
 }
 
 async function saveSettings() {
@@ -1033,6 +1124,10 @@ async function rebuildSearchIndexes() {
 function createSettingsSnapshot(value) {
   return {
     maintenance_mode: Boolean(value.maintenance_mode),
+    extension_safe_mode: Boolean(value.extension_safe_mode),
+    extension_safe_mode_extensions: Array.isArray(value.extension_safe_mode_extensions)
+      ? value.extension_safe_mode_extensions.join(',')
+      : String(value.extension_safe_mode_extensions || ''),
     queue_enabled: Boolean(value.queue_enabled),
     realtime_typing_enabled: Boolean(value.realtime_typing_enabled),
     queue_driver: value.queue_driver,

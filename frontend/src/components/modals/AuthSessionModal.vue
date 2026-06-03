@@ -454,7 +454,7 @@ const subtitleText = computed(() => getUiCopy({
   surface: 'auth-session-subtitle',
   mode: activeMode.value,
 })?.text || (activeMode.value === 'register'
-  ? '参考 Flarum 的会话流程，注册完成后即可回到当前页面继续操作。'
+  ? '注册完成后即可回到当前页面继续操作。'
   : (activeMode.value === 'forgot-password'
       ? '输入注册邮箱，我们会向你发送重置密码链接。'
       : '欢迎回来，登录后即可继续回复、关注和管理你的内容。')))

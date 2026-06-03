@@ -130,12 +130,20 @@ def validate_extension_manifests_with_available_ids(
     return collector.build()
 
 
+def _resolve_frontend_admin_entry(target: ExtensionManifest) -> str:
+    return str(getattr(target, "frontend_admin_entry", "") or "").strip()
+
+
+def _resolve_frontend_forum_entry(target: ExtensionManifest) -> str:
+    return str(getattr(target, "frontend_forum_entry", "") or "").strip()
+
+
 def inspect_frontend_admin_entry(
     manifest: ExtensionManifest,
     *,
     extensions_base_path: Path | None = None,
 ) -> dict[str, Any]:
-    entry = str(manifest.frontend_admin_entry or "").strip()
+    entry = _resolve_frontend_admin_entry(manifest)
     required_exports = _build_required_frontend_admin_exports(manifest)
     payload: dict[str, Any] = {
         "entry": entry,
@@ -210,7 +218,7 @@ def resolve_admin_surface_implementation(
             "available": True,
         }
 
-    if normalized_surface == "settings" and manifest.settings_schema:
+    if normalized_surface == "settings" and getattr(manifest, "settings_schema", ()):
         return {
             "surface": normalized_surface,
             "mode": "generated",
@@ -219,7 +227,7 @@ def resolve_admin_surface_implementation(
             "available": True,
         }
 
-    if normalized_surface == "permissions" and manifest.permissions_pages:
+    if normalized_surface == "permissions" and getattr(manifest, "permissions_pages", ()):
         return {
             "surface": normalized_surface,
             "mode": "generated",
@@ -228,8 +236,8 @@ def resolve_admin_surface_implementation(
             "available": True,
         }
 
-    if normalized_surface == "operations" and manifest.operations_pages and (
-        manifest.admin_actions or manifest.runtime_actions
+    if normalized_surface == "operations" and getattr(manifest, "operations_pages", ()) and (
+        getattr(manifest, "admin_actions", ()) or getattr(manifest, "runtime_actions", ())
     ):
         return {
             "surface": normalized_surface,
@@ -262,7 +270,7 @@ def inspect_frontend_forum_entry(
     *,
     extensions_base_path: Path | None = None,
 ) -> dict[str, Any]:
-    entry = str(manifest.frontend_forum_entry or "").strip()
+    entry = _resolve_frontend_forum_entry(manifest)
     payload: dict[str, Any] = {
         "entry": entry,
         "entry_type": "missing",
@@ -336,6 +344,7 @@ def inspect_backend_entry(
     extension_dir = Path(extensions_base_path) / manifest.id
     debug_definition = type("_DebugExtensionDefinition", (), {
         "manifest": type("_DebugManifest", (), {
+            "id": manifest.id,
             "backend_entry": entry,
             "path": str(extension_dir),
         })(),
@@ -545,10 +554,16 @@ def _validate_admin_page_bindings(
     )
     has_declared_admin_pages = any(pages for _, pages, _ in admin_page_fields)
 
-    if has_declared_admin_pages and not str(manifest.frontend_admin_entry or "").strip():
+    has_generated_admin_surface = bool(
+        manifest.settings_schema
+        or manifest.runtime_actions
+        or manifest.admin_actions
+    )
+
+    if has_declared_admin_pages and not str(manifest.frontend_admin_entry or "").strip() and not has_generated_admin_surface:
         collector.add_error(
             "missing_frontend_admin_entry_declaration",
-            "声明后台页面时必须同时提供 frontend_admin_entry",
+            "声明后台页面时必须同时提供 frontend_admin_entry，或通过代码声明生成式后台能力",
             extension_id=manifest.id,
             field="frontend_admin_entry",
         )

@@ -114,9 +114,21 @@ def serialize_extension_admin_actions(extension_definition) -> list[dict[str, An
             "description": action.description,
             "order": action.order,
         }
-        for action in sorted(extension_definition.manifest.admin_actions, key=lambda item: (item.order, item.key))
+        for action in sorted(extension_definition.admin_actions, key=lambda item: (item.order, item.key))
         if not action.requires_enabled or extension_definition.runtime.enabled
     ]
+
+
+def resolve_module_extension_definition(module):
+    try:
+        from apps.core.extensions import get_extension_registry
+
+        extension = get_extension_registry().get_extension(module.module_id)
+        if extension is not None:
+            return extension
+    except Exception:
+        pass
+    return adapt_builtin_module_to_extension(module)
 
 
 def build_module_runtime_state(module) -> Dict[str, Any]:
@@ -151,10 +163,10 @@ def build_module_runtime_state(module) -> Dict[str, Any]:
             "advanced": "/admin/advanced",
         }.get(group_name)
 
-    extension_definition = adapt_builtin_module_to_extension(module)
+    extension_definition = resolve_module_extension_definition(module)
     detail_page = f"/admin/extensions/{module.module_id}"
-    permissions_page = next(iter(extension_definition.manifest.permissions_pages), "")
-    operations_page = next(iter(extension_definition.manifest.operations_pages), "")
+    permissions_page = next(iter(extension_definition.permissions_pages), "")
+    operations_page = next(iter(extension_definition.operations_pages), "")
 
     return {
         "migration_state": migration_state,
@@ -192,7 +204,7 @@ def serialize_module_definition(
     advanced_settings_defaults: Dict[str, Any],
     mail_settings_defaults: Dict[str, Any],
 ) -> Dict[str, Any]:
-    extension_definition = adapt_builtin_module_to_extension(module)
+    extension_definition = resolve_module_extension_definition(module)
     dependency_state = build_module_dependency_state(module, module_map)
     health_state = build_module_health_state(module, dependency_state)
     settings_overview = build_module_settings_overview(
@@ -277,9 +289,9 @@ def serialize_module_definition(
             "admin_pages": list(extension_definition.admin_pages),
             "action_links": {
                 "detail_page": f"/admin/extensions/{extension_definition.id}",
-                "settings_page": next(iter(extension_definition.manifest.settings_pages), ""),
-                "permissions_page": next(iter(extension_definition.manifest.permissions_pages), ""),
-                "operations_page": next(iter(extension_definition.manifest.operations_pages), ""),
+                "settings_page": next(iter(extension_definition.settings_pages), ""),
+                "permissions_page": next(iter(extension_definition.permissions_pages), ""),
+                "operations_page": next(iter(extension_definition.operations_pages), ""),
                 "documentation_url": extension_definition.manifest.documentation_url,
             },
             "admin_actions": serialize_extension_admin_actions(extension_definition),

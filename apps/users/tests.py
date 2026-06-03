@@ -15,6 +15,7 @@ from ninja_jwt.tokens import RefreshToken
 
 from apps.core.models import Setting
 from apps.core.jwt_auth import ACCESS_TOKEN_COOKIE_NAME
+from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.users.models import Group
 from apps.users.models import EmailToken, PasswordToken, Permission, User
@@ -261,6 +262,45 @@ class UserProfileApiTests(TestCase):
         self.assertEqual(payload["primary_group"]["name"], "SupportInclude")
         self.assertIn("groups", payload)
         self.assertEqual(payload["groups"][0]["name"], "SupportInclude")
+
+    def test_user_detail_static_route_uses_resource_endpoint_mutator(self):
+        user = User.objects.create_user(
+            username="resource-profile",
+            email="resource-profile@example.com",
+            password="password123",
+        )
+
+        def mutate_endpoint(endpoint):
+            def handler(context):
+                payload = endpoint.handler(context)
+                payload["mutated_by_resource_endpoint"] = True
+                return payload
+
+            return ResourceEndpointDefinition(
+                resource=endpoint.resource,
+                endpoint=endpoint.endpoint,
+                module_id="test",
+                handler=handler,
+                methods=endpoint.methods,
+            )
+
+        registry = ResourceRegistry()
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="user_detail",
+                endpoint="show",
+                module_id="test",
+                operation="mutate",
+                mutator=mutate_endpoint,
+            )
+        )
+
+        with patch("apps.users.api.get_runtime_resource_registry", return_value=registry):
+            with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
+                response = self.client.get(f"/api/users/{user.id}")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["mutated_by_resource_endpoint"])
 
     def test_current_user_exposes_forum_permissions(self):
         user = User.objects.create_user(

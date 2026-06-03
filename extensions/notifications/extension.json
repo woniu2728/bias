@@ -1,0 +1,43 @@
+{
+  "id": "notifications",
+  "name": "Notifications",
+  "version": "0.1.0",
+  "description": "提供站内通知、未读状态、通知列表、通知偏好和通知投递能力。",
+  "icon": "far fa-bell",
+  "category": "feature",
+  "authors": [
+    "Bias"
+  ],
+  "dependencies": [
+    "core",
+    "users"
+  ],
+  "provides": [
+    "in-app-notifications",
+    "notification-stats",
+    "notification-websocket"
+  ],
+  "backend_entry": "extensions.notifications.backend.ext",
+  "operations_pages": [
+    "/admin/extensions/notifications/operations"
+  ],
+  "compatibility": {
+    "bias_version": "^1.0.0",
+    "api_version": "1.0",
+    "api_stability": "experimental",
+    "api_stability_label": "实验性",
+    "breaking_change_policy": "扩展协议调整会随 Bias 主版本升级同步说明。"
+  },
+  "security": {
+    "support_email": "",
+    "capabilities_notice": "该扩展负责站内通知数据展示、用户通知偏好和实时通知投递。"
+  },
+  "distribution": {
+    "channel": "private",
+    "channel_label": "私有分发"
+  },
+  "extra": {
+    "auto_install": true,
+    "auto_enable": true
+  }
+}

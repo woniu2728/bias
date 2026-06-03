@@ -2,6 +2,7 @@
 论坛设置读取与保存服务
 """
 import json
+from types import SimpleNamespace
 
 from django.conf import settings
 from django.core.cache import cache
@@ -14,9 +15,12 @@ from apps.core.bootstrap_config import (
     read_site_config,
     write_site_config,
 )
-from apps.core.extensions.registry import get_extension_registry
-from apps.core.extensions.product import is_product_visible_extension
-from apps.core.extension_settings_service import get_extension_settings
+from apps.core.extensions.runtime_service import (
+    get_enabled_extension_locales,
+    get_enabled_extension_runtime_entries,
+)
+from apps.core.extensions.frontend_runtime_service import build_enabled_frontend_document_payload
+from apps.core.extensions.recovery import serialize_extension_recovery_state
 from apps.core.mail_drivers import serialize_mail_settings
 from apps.core.mail_templates import (
     DEFAULT_PASSWORD_RESET_HTML,
@@ -32,7 +36,10 @@ from apps.core.forum_registry import get_forum_registry
 
 ADVANCED_SETTINGS_CACHE_KEY = "settings.group.advanced"
 PUBLIC_FORUM_SETTINGS_CACHE_KEY = "settings.public.forum"
-FORUM_REGISTRY = get_forum_registry()
+
+
+def _get_forum_registry():
+    return get_forum_registry()
 
 
 BASIC_SETTINGS_DEFAULTS = {
@@ -79,6 +86,8 @@ ADVANCED_SETTINGS_DEFAULTS = {
     "realtime_typing_enabled": True,
     "maintenance_mode": False,
     "maintenance_message": "论坛正在维护中，请稍后再试...",
+    "extension_safe_mode": False,
+    "extension_safe_mode_extensions": [],
     "debug_mode": settings.DEBUG,
     "log_queries": False,
     "storage_driver": "local",
@@ -272,6 +281,9 @@ def _is_valid_public_forum_settings_cache(payload) -> bool:
         if field not in payload or not isinstance(payload.get(field), list):
             return False
 
+    if "extension_document" not in payload or not isinstance(payload.get("extension_document"), dict):
+        return False
+
     return True
 
 
@@ -326,8 +338,8 @@ def save_setting_group(prefix: str, defaults: dict, payload: dict) -> dict:
     return values
 
 
-def get_public_forum_settings() -> dict:
-    cache_lifetime = get_cache_lifetime()
+def get_public_forum_settings(user=None) -> dict:
+    cache_lifetime = 0 if user is not None else get_cache_lifetime()
     if cache_lifetime > 0:
         cached = _cache_get(PUBLIC_FORUM_SETTINGS_CACHE_KEY)
         if _is_valid_public_forum_settings_cache(cached):
@@ -377,7 +389,7 @@ def get_public_forum_settings() -> dict:
             "preference_description": definition.preference_description,
             "preference_default_enabled": definition.preference_default_enabled,
         }
-        for definition in FORUM_REGISTRY.get_notification_types()
+        for definition in _get_forum_registry().get_notification_types()
     ]
 
     forum_settings["user_preferences"] = [
@@ -389,7 +401,7 @@ def get_public_forum_settings() -> dict:
             "category": definition.category,
             "default_value": definition.default_value,
         }
-        for definition in FORUM_REGISTRY.get_user_preferences()
+        for definition in _get_forum_registry().get_user_preferences()
     ]
 
     forum_settings["post_types"] = [
@@ -405,36 +417,68 @@ def get_public_forum_settings() -> dict:
             "counts_toward_user": definition.counts_toward_user,
             "searchable": definition.searchable,
         }
-        for definition in FORUM_REGISTRY.get_post_types()
+        for definition in _get_forum_registry().get_post_types()
     ]
 
     forum_settings["enabled_modules"] = [
         module.module_id
-        for module in FORUM_REGISTRY.get_modules()
+        for module in _get_forum_registry().get_modules()
         if module.enabled
     ]
 
-    extension_registry = get_extension_registry()
-    extension_registry.load(force=True)
-
+    forum_settings["extension_runtime"] = _serialize_extension_runtime_stamp()
+    forum_settings["extension_recovery"] = serialize_extension_recovery_state()
     forum_settings["enabled_extensions"] = [
         {
-            "id": extension.id,
-            "name": extension.name,
-            "frontend_forum_entry": extension.manifest.frontend_forum_entry,
-            "source": extension.source,
-            "product_visible": is_product_visible_extension(extension),
-            "module_ids": list(extension.module_ids),
-            "settings_values": get_extension_settings(extension.id) if extension.manifest.settings_schema else {},
+            "id": extension["id"],
+            "name": extension["name"],
+            "frontend_common_entry": extension.get("frontend_common_entry", ""),
+            "frontend_forum_entry": extension["frontend_forum_entry"],
+            "frontend_routes": [
+                route
+                for route in extension.get("frontend_routes", [])
+                if route.get("frontend") == "forum"
+            ],
+            "source": extension["source"],
+            "product_visible": extension["product_visible"],
+            "module_ids": extension["module_ids"],
+            "settings_values": extension["settings_values"],
+            "forum_settings": extension["forum_settings"],
         }
-        for extension in extension_registry.get_extensions()
-        if extension.runtime.installed
-        and extension.runtime.enabled
-        and is_product_visible_extension(extension)
-        and str(extension.manifest.frontend_forum_entry or "").strip()
+        for extension in get_enabled_extension_runtime_entries(product_visible_only=True)
+        if str(extension["frontend_forum_entry"] or "").strip()
+        or str(extension.get("frontend_common_entry", "") or "").strip()
+        or any(route.get("frontend") == "forum" for route in extension.get("frontend_routes", []))
     ]
+
+    forum_settings["extension_locales"] = get_enabled_extension_locales()
+    forum_settings["extension_document"] = build_enabled_frontend_document_payload()
+    forum_settings.update(_serialize_forum_resource_fields(forum_settings, user=user))
 
     if cache_lifetime > 0:
         _cache_set(PUBLIC_FORUM_SETTINGS_CACHE_KEY, forum_settings, cache_lifetime)
 
     return forum_settings
+
+
+def _serialize_extension_runtime_stamp() -> dict:
+    from apps.core.models import Setting
+
+    enabled_order = Setting.objects.filter(key="extensions_enabled_order").first()
+    rebuild_marker = Setting.objects.filter(key="extensions_runtime_rebuild_required").first()
+    raw_order = str(getattr(enabled_order, "value", "") or "")
+    raw_marker = str(getattr(rebuild_marker, "value", "") or "")
+    return {
+        "stamp": f"{raw_order}:{raw_marker}",
+        "rebuild_required": bool(raw_marker),
+    }
+
+
+def _serialize_forum_resource_fields(forum_settings: dict, *, user=None) -> dict:
+    from apps.core.extensions.runtime_access import get_runtime_resource_registry
+
+    return get_runtime_resource_registry().serialize(
+        "forum",
+        SimpleNamespace(settings=forum_settings),
+        {"user": user},
+    )

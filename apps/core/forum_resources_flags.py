@@ -1,59 +1,66 @@
 from __future__ import annotations
 
-from apps.core.resource_registry import ResourceFieldDefinition, get_resource_registry
+from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
+from apps.posts.models import PostFlag
+from apps.users.services import UserService
 
 
-def register_forum_flag_resource_fields() -> None:
-    registry = get_resource_registry()
+def _serialize_flag_base(flag, context: dict) -> dict:
+    from extensions.flags.backend.handlers import serialize_flag
 
-    registry.register_field(
-        ResourceFieldDefinition(
-            resource="post",
-            field="viewer_has_open_flag",
-            module_id="flags",
-            resolver=_resolve_post_viewer_has_open_flag,
-            description="当前用户是否已对该回复提交待处理举报。",
-        )
+    return serialize_flag(flag)
+
+
+def _resolve_forum_can_view_flags(forum, context: dict) -> bool:
+    user = context.get("user")
+    return bool(
+        user
+        and user.is_authenticated
+        and UserService.has_forum_permission(user, "admin.flag.view")
     )
-    registry.register_field(
-        ResourceFieldDefinition(
-            resource="post",
-            field="open_flag_count",
-            module_id="flags",
-            resolver=_resolve_post_open_flag_count,
-            description="当前回复的待处理举报数量。",
-        )
-    )
-    registry.register_field(
-        ResourceFieldDefinition(
-            resource="post",
-            field="open_flags",
-            module_id="flags",
-            resolver=_resolve_post_open_flags,
-            description="当前回复的待处理举报明细。",
-        )
-    )
-    registry.register_field(
-        ResourceFieldDefinition(
-            resource="post",
-            field="can_moderate_flags",
-            module_id="flags",
-            resolver=_resolve_post_can_moderate_flags,
-            description="当前用户是否可在前台处理举报。",
-        )
-    )
+
+
+def _resolve_forum_flag_count(forum, context: dict) -> int:
+    user = context.get("user")
+    queryset = scope_flag_visibility(PostFlag.objects.filter(status=PostFlag.STATUS_OPEN), {"user": user})
+    return queryset.values("post_id").distinct().count()
 
 
 def _resolve_post_viewer_has_open_flag(post, context: dict) -> bool:
     return bool(getattr(post, "viewer_has_open_flag", False))
 
 
+def _resolve_post_can_flag(post, context: dict) -> bool:
+    user = context.get("user")
+    if not user or not user.is_authenticated:
+        return False
+    if getattr(post, "hidden_at", None) is not None:
+        return False
+    if post.user_id != user.id:
+        return True
+
+    from apps.core.extension_settings_service import get_extension_settings
+
+    settings = get_extension_settings("flags")
+    return bool(settings.get("can_flag_own", False))
+
+
 def _resolve_post_open_flag_count(post, context: dict) -> int:
     return int(getattr(post, "open_flag_count", 0) or 0)
 
 
+def _resolve_post_flag_objects(post, context: dict):
+    cached = getattr(post, "open_flags_cache", None)
+    if cached is not None:
+        return cached
+    return PostFlag.objects.filter(
+        post_id=post.id,
+        status=PostFlag.STATUS_OPEN,
+    ).select_related("post", "post__discussion", "post__user", "user", "resolved_by")
+
+
 def _resolve_post_open_flags(post, context: dict) -> list[dict]:
-    open_flags = getattr(post, "open_flags_cache", [])
+    open_flags = _resolve_post_flag_objects(post, context)
     return [
         {
             "id": flag.id,
@@ -70,6 +77,52 @@ def _resolve_post_open_flags(post, context: dict) -> list[dict]:
     ]
 
 
+def _resolve_post_flags(post, context: dict) -> list[dict]:
+    from extensions.flags.backend.handlers import serialize_flag
+
+    return [
+        serialize_flag(flag)
+        for flag in _resolve_post_flag_objects(post, context)
+    ]
+
+
+def _resolve_post_flag_identifiers(post, context: dict) -> list[dict]:
+    return [
+        {
+            "type": "flag",
+            "id": str(flag.id),
+        }
+        for flag in _resolve_post_flag_objects(post, context)
+    ]
+
+
 def _resolve_post_can_moderate_flags(post, context: dict) -> bool:
     user = context.get("user")
-    return bool(user and user.is_staff)
+    return bool(user and UserService.has_forum_permission(user, "admin.flag.view"))
+
+
+def _resolve_user_new_flag_count(user, context: dict) -> int:
+    actor = context.get("user")
+    if (
+        not actor
+        or not actor.is_authenticated
+        or actor.id != user.id
+        or not UserService.has_forum_permission(actor, "admin.flag.view")
+    ):
+        return 0
+    queryset = scope_flag_visibility(PostFlag.objects.filter(status=PostFlag.STATUS_OPEN), {"user": actor})
+    return queryset.values("post_id").distinct().count()
+
+
+def scope_flag_visibility(queryset, context: dict):
+    user = context.get("user")
+    if (
+        not user
+        or not user.is_authenticated
+        or not UserService.has_forum_permission(user, "admin.flag.view")
+    ):
+        return queryset.none()
+    return queryset.filter(
+        build_post_visibility_q(user, prefix="post__"),
+        build_discussion_visibility_q(user, prefix="post__discussion__"),
+    )

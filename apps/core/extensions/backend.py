@@ -1,16 +1,22 @@
 from __future__ import annotations
 
-import importlib.util
-import re
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
 from typing import Any
+
 from django.utils import timezone
 
-from apps.core.extensions.types import ExtensionDefinition
-
-BACKEND_FUNCTION_PATTERN = re.compile(r"^(?:async\s+)?def\s+([A-Za-z0-9_]+)\s*\(", re.MULTILINE)
+from apps.core.extensions.module_loader import (
+    inspect_extension_backend_module,
+    load_extension_backend_module,
+)
+from apps.core.extensions.extension_runtime import Extension
+from apps.core.extensions.types import (
+    ExtensionAdminActionDefinition,
+    ExtensionManifestRuntimeActionDefinition,
+    ExtensionManifestSettingFieldDefinition,
+    ExtensionManifestSettingOptionDefinition,
+)
 
 
 @dataclass(frozen=True)
@@ -30,10 +36,10 @@ class ExtensionBackendContext:
 
 
 def build_backend_context(
-    definition: ExtensionDefinition,
+    definition: Extension,
     *,
     meta: dict[str, Any] | None = None,
-    ) -> ExtensionBackendContext:
+) -> ExtensionBackendContext:
     extension_path = str(definition.manifest.path or "").strip()
     manifest_path = str(Path(extension_path) / "extension.json") if extension_path else ""
     return ExtensionBackendContext(
@@ -52,70 +58,12 @@ def build_backend_context(
     )
 
 
-def inspect_extension_backend_entry(definition: ExtensionDefinition) -> dict[str, Any]:
-    entry = str(definition.manifest.backend_entry or "").strip()
-    root_path = str(definition.manifest.path or "").strip()
-    payload: dict[str, Any] = {
-        "entry": entry,
-        "entry_type": "missing",
-        "exists": False,
-        "resolved_path": "",
-        "available_hooks": (),
-    }
-
-    if definition.source == "builtin-module":
-        payload.update({
-            "entry_type": "builtin",
-            "exists": True,
-        })
-        return payload
-
-    if not entry:
-        return payload
-
-    if not root_path:
-        payload["entry_type"] = "filesystem"
-        return payload
-
-    backend_file = Path(root_path) / "backend" / "ext.py"
-    payload.update({
-        "entry_type": "filesystem",
-        "exists": backend_file.exists(),
-        "resolved_path": str(backend_file),
-    })
-    if not backend_file.exists():
-        return payload
-
-    source = backend_file.read_text(encoding="utf-8")
-    payload["available_hooks"] = tuple(sorted(set(BACKEND_FUNCTION_PATTERN.findall(source))))
-    return payload
-
-
-def load_extension_backend_module(definition: ExtensionDefinition) -> ModuleType | None:
-    if definition.source == "builtin-module":
-        return None
-
-    backend_entry = str(definition.manifest.backend_entry or "").strip()
-    root_path = str(definition.manifest.path or "").strip()
-    if not backend_entry or not root_path:
-        return None
-
-    backend_file = Path(root_path) / "backend" / "ext.py"
-    if not backend_file.exists():
-        return None
-
-    module_name = f"bias_extension_backend_{definition.id.replace('-', '_')}"
-    spec = importlib.util.spec_from_file_location(module_name, backend_file)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"无法加载扩展后端入口: {backend_file}")
-
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def inspect_extension_backend_entry(definition: Extension) -> dict[str, Any]:
+    return inspect_extension_backend_module(definition)
 
 
 def run_extension_backend_hook(
-    definition: ExtensionDefinition,
+    definition: Extension,
     hook_name: str,
     *,
     meta: dict[str, Any] | None = None,
@@ -166,3 +114,57 @@ def run_extension_backend_hook(
         "message": str(result),
         "executed_at": timestamp,
     }
+
+
+def _build_setting_field_definition(payload: dict[str, Any]) -> ExtensionManifestSettingFieldDefinition:
+    return ExtensionManifestSettingFieldDefinition(
+        key=str(payload.get("key") or "").strip(),
+        label=str(payload.get("label") or "").strip(),
+        type=str(payload.get("type") or "text").strip() or "text",
+        default=payload.get("default", ""),
+        help_text=str(payload.get("help_text") or "").strip(),
+        placeholder=str(payload.get("placeholder") or "").strip(),
+        required=bool(payload.get("required", False)),
+        options=tuple(
+            ExtensionManifestSettingOptionDefinition(
+                value=str(item.get("value") or "").strip(),
+                label=str(item.get("label") or "").strip(),
+            )
+            for item in payload.get("options", [])
+            if isinstance(item, dict)
+        ),
+        multiline=bool(payload.get("multiline", False)),
+        order=int(payload.get("order", 100) or 100),
+    )
+
+
+def _build_runtime_action_definition(payload: dict[str, Any]) -> ExtensionManifestRuntimeActionDefinition:
+    return ExtensionManifestRuntimeActionDefinition(
+        key=str(payload.get("key") or "").strip(),
+        label=str(payload.get("label") or "").strip(),
+        hook=str(payload.get("hook") or "").strip(),
+        tone=str(payload.get("tone") or "default").strip() or "default",
+        confirm_title=str(payload.get("confirm_title") or "").strip(),
+        confirm_message=str(payload.get("confirm_message") or "").strip(),
+        confirm_text=str(payload.get("confirm_text") or "").strip(),
+        success_message=str(payload.get("success_message") or "").strip(),
+        requires_enabled=bool(payload.get("requires_enabled", False)),
+        requires_installed=bool(payload.get("requires_installed", False)),
+        description=str(payload.get("description") or "").strip(),
+        order=int(payload.get("order", 100) or 100),
+    )
+
+
+def _build_admin_action_definition(payload: dict[str, Any]) -> ExtensionAdminActionDefinition:
+    return ExtensionAdminActionDefinition(
+        key=str(payload.get("key") or "").strip(),
+        label=str(payload.get("label") or "").strip(),
+        kind=str(payload.get("kind") or "route").strip() or "route",
+        target=str(payload.get("target") or "").strip(),
+        icon=str(payload.get("icon") or "").strip(),
+        tone=str(payload.get("tone") or "default").strip() or "default",
+        opens_in_new_tab=bool(payload.get("opens_in_new_tab", False)),
+        requires_enabled=bool(payload.get("requires_enabled", False)),
+        description=str(payload.get("description") or "").strip(),
+        order=int(payload.get("order", 100) or 100),
+    )

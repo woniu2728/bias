@@ -1,6 +1,6 @@
 <template>
   <div class="home">
-    <div class="flarum-container">
+    <div class="bias-container">
       <ForumHeroPanel
         :title="heroBindings.title"
         :description="heroBindings.description"
@@ -54,7 +54,7 @@ const {
   background: var(--forum-bg-canvas);
 }
 
-.flarum-container {
+.bias-container {
   text-align: center;
   max-width: 600px;
   padding: var(--forum-space-8);

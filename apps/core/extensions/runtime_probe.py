@@ -3,16 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from apps.core.extensions.types import ExtensionDefinition, ExtensionDeliveryCheckDefinition
+from apps.core.extensions.extension_runtime import Extension
+from apps.core.extensions.module_loader import resolve_extension_backend_file
+from apps.core.extensions.types import ExtensionDeliveryCheckDefinition
 from apps.core.extensions.validation import resolve_bias_version_compatibility
 
 
-def inspect_extension_runtime(definition: ExtensionDefinition) -> dict:
-    if definition.source == "builtin-module":
+def inspect_extension_runtime(extension: Extension) -> dict:
+    if extension.source == "builtin-module":
         return {
             "healthy": True,
-            "migration_state": definition.runtime.migration_state,
-            "migration_label": definition.runtime.migration_label,
+            "migration_state": extension.runtime.migration_state,
+            "migration_label": extension.runtime.migration_label,
             "runtime_issues": (),
             "delivery_checks": (
                 ExtensionDeliveryCheckDefinition(
@@ -28,18 +30,18 @@ def inspect_extension_runtime(definition: ExtensionDefinition) -> dict:
             ),
         }
 
-    root_path = Path(definition.manifest.path) if definition.manifest.path else None
+    root_path = Path(extension.manifest.path) if extension.manifest.path else None
     checks: list[ExtensionDeliveryCheckDefinition] = []
     runtime_issues: list[str] = []
 
     checks.append(_build_root_check(root_path))
-    checks.append(_build_backend_entry_check(root_path, definition))
-    checks.append(_build_frontend_admin_check(root_path, definition))
-    checks.append(_build_migration_check(root_path, definition))
-    checks.append(_build_documentation_check(root_path, definition))
+    checks.append(_build_backend_entry_check(root_path, extension))
+    checks.append(_build_frontend_admin_check(root_path, extension))
+    checks.append(_build_migration_check(root_path, extension))
+    checks.append(_build_documentation_check(root_path, extension))
     checks.append(_build_locale_check(root_path))
-    checks.append(_build_frontend_forum_check(root_path, definition))
-    checks.append(_build_bias_compatibility_check(definition))
+    checks.append(_build_frontend_forum_check(root_path, extension))
+    checks.append(_build_bias_compatibility_check(extension))
 
     healthy = True
     for check in checks:
@@ -48,10 +50,10 @@ def inspect_extension_runtime(definition: ExtensionDefinition) -> dict:
             if check.message:
                 runtime_issues.append(check.message)
 
-    uninstall_warnings = _build_uninstall_warnings(root_path, definition, checks)
-    migration_state, migration_label = _build_migration_summary(root_path, definition)
-    migration_execution = _build_migration_execution_summary(definition)
-    migration_plan = _build_migration_plan_summary(root_path, definition)
+    uninstall_warnings = _build_uninstall_warnings(root_path, extension, checks)
+    migration_state, migration_label = _build_migration_summary(root_path, extension)
+    migration_execution = _build_migration_execution_summary(extension)
+    migration_plan = _build_migration_plan_summary(root_path, extension)
     if migration_execution:
         migration_state = str(migration_execution.get("state") or migration_state)
         migration_label = str(migration_execution.get("label") or migration_label)
@@ -66,6 +68,14 @@ def inspect_extension_runtime(definition: ExtensionDefinition) -> dict:
         "delivery_checks": tuple(checks),
         "uninstall_warnings": tuple(uninstall_warnings),
     }
+
+
+def resolve_extension_frontend_admin_entry(extension: Extension) -> str:
+    return extension.frontend_admin_entry
+
+
+def resolve_extension_frontend_forum_entry(extension: Extension) -> str:
+    return extension.frontend_forum_entry
 
 
 def _build_root_check(root_path: Path | None) -> ExtensionDeliveryCheckDefinition:
@@ -88,9 +98,9 @@ def _build_root_check(root_path: Path | None) -> ExtensionDeliveryCheckDefinitio
     )
 
 
-def _build_backend_entry_check(root_path: Path | None, definition: ExtensionDefinition) -> ExtensionDeliveryCheckDefinition:
-    backend_entry = str(definition.manifest.backend_entry or "").strip()
-    backend_file = root_path / "backend" / "ext.py" if root_path else None
+def _build_backend_entry_check(root_path: Path | None, extension: Extension) -> ExtensionDeliveryCheckDefinition:
+    backend_entry = str(extension.manifest.backend_entry or "").strip()
+    backend_file = resolve_extension_backend_file(extension) if root_path else None
     if not backend_entry:
         return ExtensionDeliveryCheckDefinition(
             key="backend-entry",
@@ -114,13 +124,13 @@ def _build_backend_entry_check(root_path: Path | None, definition: ExtensionDefi
         label="后端入口",
         status="attention",
         status_label="缺失",
-        message="manifest 已声明 backend_entry，但 backend/ext.py 不存在。",
+        message="manifest 已声明 backend_entry，但对应后端入口文件不存在。",
         path=str(backend_file or ""),
     )
 
 
-def _build_frontend_admin_check(root_path: Path | None, definition: ExtensionDefinition) -> ExtensionDeliveryCheckDefinition:
-    admin_entry = str(definition.manifest.frontend_admin_entry or "").strip()
+def _build_frontend_admin_check(root_path: Path | None, extension: Extension) -> ExtensionDeliveryCheckDefinition:
+    admin_entry = resolve_extension_frontend_admin_entry(extension)
     admin_file = root_path / "frontend" / "admin" / "index.js" if root_path else None
     if not admin_entry:
         return ExtensionDeliveryCheckDefinition(
@@ -140,18 +150,18 @@ def _build_frontend_admin_check(root_path: Path | None, definition: ExtensionDef
             message="后台入口文件存在。",
             path=str(admin_file),
         )
-    return ExtensionDeliveryCheckDefinition(
-        key="frontend-admin-entry",
-        label="后台入口",
-        status="attention",
-        status_label="缺失",
-        message="manifest 已声明 frontend_admin_entry，但 frontend/admin/index.js 不存在。",
-        path=str(admin_file or ""),
-    )
+        return ExtensionDeliveryCheckDefinition(
+            key="frontend-admin-entry",
+            label="后台入口",
+            status="attention",
+            status_label="缺失",
+            message="contract 已声明 frontend_admin_entry，但 frontend/admin/index.js 不存在。",
+            path=str(admin_file or ""),
+        )
 
 
-def _build_migration_check(root_path: Path | None, definition: ExtensionDefinition) -> ExtensionDeliveryCheckDefinition:
-    migration_namespace = str(definition.manifest.migration_namespace or "").strip()
+def _build_migration_check(root_path: Path | None, extension: Extension) -> ExtensionDeliveryCheckDefinition:
+    migration_namespace = str(extension.manifest.migration_namespace or "").strip()
     migration_dir = root_path / "backend" / "migrations" if root_path else None
     has_migration_dir = bool(migration_dir and migration_dir.exists())
 
@@ -192,7 +202,7 @@ def _build_migration_check(root_path: Path | None, definition: ExtensionDefiniti
     )
 
 
-def _build_documentation_check(root_path: Path | None, definition: ExtensionDefinition) -> ExtensionDeliveryCheckDefinition:
+def _build_documentation_check(root_path: Path | None, extension: Extension) -> ExtensionDeliveryCheckDefinition:
     docs_file = root_path / "docs" / "README.md" if root_path else None
     if docs_file and docs_file.exists():
         return ExtensionDeliveryCheckDefinition(
@@ -204,14 +214,14 @@ def _build_documentation_check(root_path: Path | None, definition: ExtensionDefi
             path=str(docs_file),
             optional=True,
         )
-    if definition.manifest.documentation_url:
+    if extension.manifest.documentation_url:
         return ExtensionDeliveryCheckDefinition(
             key="documentation",
             label="文档资源",
             status="ready",
             status_label="已链接",
             message="当前扩展通过 documentation_url 提供文档入口。",
-            path=definition.manifest.documentation_url,
+            path=extension.manifest.documentation_url,
             optional=True,
         )
     return ExtensionDeliveryCheckDefinition(
@@ -257,8 +267,8 @@ def _build_locale_check(root_path: Path | None) -> ExtensionDeliveryCheckDefinit
     )
 
 
-def _build_frontend_forum_check(root_path: Path | None, definition: ExtensionDefinition) -> ExtensionDeliveryCheckDefinition:
-    forum_entry = str(definition.manifest.frontend_forum_entry or "").strip()
+def _build_frontend_forum_check(root_path: Path | None, extension: Extension) -> ExtensionDeliveryCheckDefinition:
+    forum_entry = resolve_extension_frontend_forum_entry(extension)
     if not forum_entry:
         return ExtensionDeliveryCheckDefinition(
             key="frontend-forum-entry",
@@ -296,14 +306,14 @@ def _build_frontend_forum_check(root_path: Path | None, definition: ExtensionDef
         label="前台入口",
         status="attention",
         status_label="缺失",
-        message="manifest 已声明 frontend_forum_entry，但 frontend/forum/index.js 不存在。",
+        message="contract 已声明 frontend_forum_entry，但 frontend/forum/index.js 不存在。",
         path=str(forum_file or ""),
         optional=True,
     )
 
 
-def _build_bias_compatibility_check(definition: ExtensionDefinition) -> ExtensionDeliveryCheckDefinition:
-    summary = resolve_bias_version_compatibility(definition.manifest)
+def _build_bias_compatibility_check(extension: Extension) -> ExtensionDeliveryCheckDefinition:
+    summary = resolve_bias_version_compatibility(extension.manifest)
     required_range = str(summary["required_range"] or "").strip()
     if not required_range:
         return ExtensionDeliveryCheckDefinition(
@@ -336,7 +346,7 @@ def _build_bias_compatibility_check(definition: ExtensionDefinition) -> Extensio
 
 def _build_uninstall_warnings(
     root_path: Path | None,
-    definition: ExtensionDefinition,
+    extension: Extension,
     checks: list[ExtensionDeliveryCheckDefinition],
 ) -> list[str]:
     warnings = [
@@ -345,11 +355,14 @@ def _build_uninstall_warnings(
     ]
 
     migration_dir = root_path / "backend" / "migrations" if root_path else None
-    has_migrations = bool(str(definition.manifest.migration_namespace or "").strip()) or bool(migration_dir and migration_dir.exists())
+    has_migrations = bool(str(extension.manifest.migration_namespace or "").strip()) or bool(migration_dir and migration_dir.exists())
     if has_migrations:
         warnings.append("如果该扩展已经执行过数据库迁移，需要由开发者或运维显式处理回滚/清理策略。")
 
-    has_frontend_assets = bool(definition.manifest.frontend_admin_entry or definition.manifest.frontend_forum_entry)
+    has_frontend_assets = bool(
+        resolve_extension_frontend_admin_entry(extension)
+        or resolve_extension_frontend_forum_entry(extension)
+    )
     has_locale_assets = any(item.key == "locale-assets" and item.status == "ready" for item in checks)
     if has_frontend_assets or has_locale_assets:
         warnings.append("如已构建静态资源或语言包产物，卸载后仍可能需要手动清理发布目录中的残留文件。")
@@ -357,8 +370,8 @@ def _build_uninstall_warnings(
     return warnings
 
 
-def _build_migration_summary(root_path: Path | None, definition: ExtensionDefinition) -> tuple[str, str]:
-    migration_namespace = str(definition.manifest.migration_namespace or "").strip()
+def _build_migration_summary(root_path: Path | None, extension: Extension) -> tuple[str, str]:
+    migration_namespace = str(extension.manifest.migration_namespace or "").strip()
     migration_dir = root_path / "backend" / "migrations" if root_path else None
     has_migration_dir = bool(migration_dir and migration_dir.exists())
 
@@ -371,10 +384,10 @@ def _build_migration_summary(root_path: Path | None, definition: ExtensionDefini
     return "pending", "未声明迁移"
 
 
-def _build_migration_execution_summary(definition: ExtensionDefinition) -> dict[str, Any]:
-    payload = dict(definition.runtime.backend_hooks or {}).get("run_migrations")
+def _build_migration_execution_summary(extension: Extension) -> dict[str, Any]:
+    payload = dict(extension.runtime.backend_hooks or {}).get("run_migrations")
     if not isinstance(payload, dict):
-        payload = dict(definition.runtime.migration_execution or {})
+        payload = dict(extension.runtime.migration_execution or {})
     if not isinstance(payload, dict) or not payload:
         return {}
 
@@ -407,7 +420,7 @@ def _build_migration_execution_summary(definition: ExtensionDefinition) -> dict[
     return {}
 
 
-def _build_migration_plan_summary(root_path: Path | None, definition: ExtensionDefinition) -> dict[str, Any]:
+def _build_migration_plan_summary(root_path: Path | None, extension: Extension) -> dict[str, Any]:
     migration_dir = root_path / "backend" / "migrations" if root_path else None
     if not migration_dir or not migration_dir.exists():
         return {
@@ -421,7 +434,7 @@ def _build_migration_plan_summary(root_path: Path | None, definition: ExtensionD
         for item in migration_dir.glob("*.py")
         if item.name != "__init__.py"
     )
-    applied_files = list(definition.runtime.applied_migration_files or ())
+    applied_files = list(extension.runtime.applied_migration_files or ())
 
     applied_file_set = set(applied_files)
     pending_files = [item for item in declared_files if item not in applied_file_set]

@@ -1,9 +1,11 @@
 import logging
+import inspect
 
-from asgiref.sync import iscoroutinefunction, markcoroutinefunction, sync_to_async
+from asgiref.sync import async_to_sync, iscoroutinefunction, markcoroutinefunction, sync_to_async
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.utils.html import escape
+from apps.core.extensions.bootstrap import get_extension_application
 from apps.core.jwt_auth import resolve_authenticated_user
 from apps.core.runtime_state import get_runtime_status
 from apps.core.settings_service import (
@@ -160,6 +162,141 @@ class QueryLoggingMiddleware:
         # Async endpoints should still work when query logging is enabled.
         # Detailed per-query capture remains on the sync path.
         return await self.get_response(request)
+
+
+class ExtensionRequestMiddleware:
+    sync_capable = True
+    async_capable = True
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self._is_async = iscoroutinefunction(get_response)
+        if self._is_async:
+            markcoroutinefunction(self)
+
+    def __call__(self, request):
+        if self._is_async:
+            return self.__acall__(request)
+
+        handler = self._build_sync_chain(request)
+        return handler(request)
+
+    async def __acall__(self, request):
+        handler = await sync_to_async(self._build_async_chain, thread_sensitive=True)(request)
+        return await handler(request)
+
+    def _build_sync_chain(self, request):
+        handler = self.get_response
+        for mount in reversed(self._resolve_mounts(request)):
+            handler = self._wrap_sync_handler(mount.middleware, handler)
+        return handler
+
+    def _build_async_chain(self, request):
+        handler = self.get_response
+        for mount in reversed(self._resolve_mounts(request)):
+            handler = self._wrap_async_handler(mount.middleware, handler)
+        return handler
+
+    def _resolve_mounts(self, request):
+        application = get_extension_application()
+        if application is None:
+            return []
+        mounts = []
+        for target in self._resolve_targets(request):
+            mounts.extend(application.get_middleware_mounts(target=target))
+        return mounts
+
+    def _resolve_targets(self, request) -> list[str]:
+        path = request.path or "/"
+        targets = ["global"]
+
+        if path.startswith("/api/admin") or path.startswith("/admin/"):
+            if path.startswith("/api/"):
+                targets.append("api")
+            targets.append("admin")
+            return targets
+
+        if path.startswith("/api/"):
+            targets.append("api")
+            return targets
+
+        targets.append("forum")
+        return targets
+
+    def _wrap_sync_handler(self, middleware, next_handler):
+        def handler(request):
+            if self._accepts_next_handler(middleware):
+                if iscoroutinefunction(middleware):
+                    return async_to_sync(middleware)(request, next_handler)
+                return middleware(request, next_handler)
+
+            if iscoroutinefunction(middleware):
+                result = async_to_sync(middleware)(request)
+            else:
+                result = middleware(request)
+            if result is None:
+                return next_handler(request)
+            return result
+
+        return handler
+
+    def _wrap_async_handler(self, middleware, next_handler):
+        if self._accepts_next_handler(middleware):
+            if iscoroutinefunction(middleware):
+                async def handler(request):
+                    return await middleware(request, next_handler)
+
+                return handler
+
+            async def handler(request):
+                def invoke():
+                    def sync_next(inner_request):
+                        return async_to_sync(next_handler)(inner_request)
+
+                    return middleware(request, sync_next)
+
+                return await sync_to_async(invoke, thread_sensitive=True)()
+
+            return handler
+
+        if iscoroutinefunction(middleware):
+            async def handler(request):
+                result = await middleware(request)
+                if result is None:
+                    return await next_handler(request)
+                return result
+
+            return handler
+
+        async def handler(request):
+            result = await sync_to_async(middleware, thread_sensitive=True)(request)
+            if result is None:
+                return await next_handler(request)
+            return result
+
+        return handler
+
+    @staticmethod
+    def _accepts_next_handler(middleware) -> bool:
+        try:
+            signature = inspect.signature(middleware)
+        except (TypeError, ValueError):
+            return False
+
+        positional_params = [
+            parameter
+            for parameter in signature.parameters.values()
+            if parameter.kind in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
+        ]
+        if len(positional_params) >= 2:
+            return True
+        return any(
+            parameter.kind == inspect.Parameter.VAR_POSITIONAL
+            for parameter in signature.parameters.values()
+        )
 
 
 class MaintenanceModeMiddleware:

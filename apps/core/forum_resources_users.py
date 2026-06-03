@@ -222,14 +222,18 @@ def serialize_user_summary(user) -> dict | None:
     if not user:
         return None
 
-    return get_resource_registry().serialize("user_summary", user)
+    from apps.core.extensions.runtime_access import get_runtime_resource_registry
+
+    return get_runtime_resource_registry().serialize("user_summary", user)
 
 
 def serialize_user_payload(user, resource: str = "user_detail") -> dict | None:
     if not user:
         return None
 
-    return get_resource_registry().serialize(resource, user)
+    from apps.core.extensions.runtime_access import get_runtime_resource_registry
+
+    return get_runtime_resource_registry().serialize(resource, user)
 
 
 def _serialize_user_summary_base(user, context: dict) -> dict:

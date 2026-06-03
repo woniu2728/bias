@@ -5,20 +5,36 @@ from django.db import IntegrityError
 
 from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
+from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
+from apps.core.extensions.runtime_access import apply_runtime_model_visibility
 from apps.core.forum_registry import get_forum_registry
 from apps.discussions.models import Discussion
 from apps.posts import post_query_service, service_lifecycle, service_moderation
 from apps.posts.models import Post, PostFlag
-from apps.tags.services import TagService
 from apps.users.models import User
 from apps.users.services import UserService
 
 
-FORUM_REGISTRY = get_forum_registry()
-DEFAULT_POST_TYPE = FORUM_REGISTRY.get_default_post_type_code()
-STREAM_POST_TYPES = FORUM_REGISTRY.get_stream_post_type_codes()
-DISCUSSION_COUNTED_POST_TYPES = FORUM_REGISTRY.get_discussion_counted_post_type_codes()
-USER_COUNTED_POST_TYPES = FORUM_REGISTRY.get_user_counted_post_type_codes()
+def _get_forum_registry():
+    return get_forum_registry()
+
+
+def _get_default_post_type() -> str:
+    return _get_forum_registry().get_default_post_type_code()
+
+
+def _get_stream_post_types() -> tuple[str, ...]:
+    return _get_forum_registry().get_stream_post_type_codes()
+
+
+def _get_discussion_counted_post_types() -> tuple[str, ...]:
+    return _get_forum_registry().get_discussion_counted_post_type_codes()
+
+
+def _get_user_counted_post_types() -> tuple[str, ...]:
+    return _get_forum_registry().get_user_counted_post_type_codes()
+
+
 PostStreamWindow = post_query_service.PostStreamWindow
 
 
@@ -37,7 +53,12 @@ class PostService:
 
     @staticmethod
     def apply_visibility_filters(queryset, user: Optional[User] = None):
-        return post_query_service.apply_visibility_filters(queryset, user)
+        queryset = post_query_service.apply_visibility_filters(queryset, user)
+        return apply_runtime_model_visibility(
+            Post,
+            queryset,
+            {"user": user, "ability": "view"},
+        )
 
     @staticmethod
     @sqlite_write_retry()
@@ -66,7 +87,7 @@ class PostService:
             content,
             user,
             reply_to_post_id=reply_to_post_id,
-            default_post_type=DEFAULT_POST_TYPE,
+            default_post_type=_get_default_post_type(),
             can_reply_in_discussion=PostService._validate_replyable_discussion,
             render_markdown_cb=PostService._render_markdown,
             process_mentions_cb=PostService._process_mentions,
@@ -100,7 +121,7 @@ class PostService:
             limit=limit,
             user=user,
             preload=preload,
-            stream_post_types=STREAM_POST_TYPES,
+            stream_post_types=_get_stream_post_types(),
             annotate_flag_state_cb=PostService.annotate_flag_state,
             apply_visibility_filters_cb=PostService.apply_visibility_filters,
         )
@@ -113,7 +134,7 @@ class PostService:
     ):
         return post_query_service.build_visible_post_queryset(
             discussion_id,
-            stream_post_types=STREAM_POST_TYPES,
+            stream_post_types=_get_stream_post_types(),
             user=user,
             preload=preload,
         )
@@ -132,7 +153,7 @@ class PostService:
     ) -> PostStreamWindow:
         return post_query_service.get_post_window(
             discussion_id,
-            stream_post_types=STREAM_POST_TYPES,
+            stream_post_types=_get_stream_post_types(),
             limit=limit,
             page=page,
             near=near,
@@ -152,7 +173,7 @@ class PostService:
         return post_query_service.get_page_for_near_post(
             discussion_id,
             near,
-            stream_post_types=STREAM_POST_TYPES,
+            stream_post_types=_get_stream_post_types(),
             limit=limit,
             user=user,
         )
@@ -229,8 +250,8 @@ class PostService:
             post_id,
             user,
             can_delete_post_cb=PostService.can_delete_post,
-            discussion_counted_post_types=DISCUSSION_COUNTED_POST_TYPES,
-            user_counted_post_types=USER_COUNTED_POST_TYPES,
+            discussion_counted_post_types=_get_discussion_counted_post_types(),
+            user_counted_post_types=_get_user_counted_post_types(),
             refresh_discussion_approved_stats_cb=PostService._refresh_discussion_approved_stats,
         )
 
@@ -240,8 +261,8 @@ class PostService:
             post,
             admin_user,
             is_hidden,
-            discussion_counted_post_types=DISCUSSION_COUNTED_POST_TYPES,
-            user_counted_post_types=USER_COUNTED_POST_TYPES,
+            discussion_counted_post_types=_get_discussion_counted_post_types(),
+            user_counted_post_types=_get_user_counted_post_types(),
             refresh_discussion_approved_stats_cb=PostService._refresh_discussion_approved_stats,
         )
 
@@ -288,7 +309,7 @@ class PostService:
     def _refresh_discussion_approved_stats(discussion: Discussion) -> Discussion:
         return service_lifecycle.refresh_discussion_approved_stats(
             discussion,
-            discussion_counted_post_types=DISCUSSION_COUNTED_POST_TYPES,
+            discussion_counted_post_types=_get_discussion_counted_post_types(),
         )
 
     @staticmethod
@@ -310,8 +331,8 @@ class PostService:
         )
 
     @staticmethod
-    def get_flag_list(status: Optional[str] = None, page: int = 1, limit: int = 20):
-        return service_moderation.get_flag_list(status=status, page=page, limit=limit)
+    def get_flag_list(status: Optional[str] = None, page: int = 1, limit: int = 20, *, user: User | None = None):
+        return service_moderation.get_flag_list(status=status, page=page, limit=limit, user=user)
 
     @staticmethod
     def resolve_flag(flag_id: int, admin_user: User, status: str, resolution_note: str = "") -> PostFlag:
@@ -332,13 +353,21 @@ class PostService:
         )
 
     @staticmethod
+    def delete_post_flags(post_id: int, user: User) -> int:
+        return service_moderation.delete_post_flags(
+            post_id,
+            user,
+            can_view_post=PostService._can_view_post,
+        )
+
+    @staticmethod
     def approve_post(post: Post, admin_user: User, note: str = "") -> Post:
         return service_moderation.approve_post(
             post,
             admin_user,
             note=note,
-            discussion_counted_post_types=DISCUSSION_COUNTED_POST_TYPES,
-            user_counted_post_types=USER_COUNTED_POST_TYPES,
+            discussion_counted_post_types=_get_discussion_counted_post_types(),
+            user_counted_post_types=_get_user_counted_post_types(),
             process_mentions_cb=PostService._process_mentions,
             refresh_discussion_approved_stats_cb=PostService._refresh_discussion_approved_stats,
         )
@@ -349,8 +378,8 @@ class PostService:
             post,
             admin_user,
             note=note,
-            discussion_counted_post_types=DISCUSSION_COUNTED_POST_TYPES,
-            user_counted_post_types=USER_COUNTED_POST_TYPES,
+            discussion_counted_post_types=_get_discussion_counted_post_types(),
+            user_counted_post_types=_get_user_counted_post_types(),
             refresh_discussion_approved_stats_cb=PostService._refresh_discussion_approved_stats,
         )
 
@@ -369,11 +398,17 @@ class PostService:
             return False
         if user.is_suspended:
             return False
+        allowed = False
         if UserService.has_forum_permission(user, "discussion.edit"):
-            return True
-        if post.user_id == user.id:
-            return UserService.has_forum_permission(user, "discussion.editOwn")
-        return False
+            allowed = True
+        elif post.user_id == user.id:
+            allowed = UserService.has_forum_permission(user, "discussion.editOwn")
+        return bool(evaluate_extension_policy(
+            "post.edit",
+            default=allowed,
+            user=user,
+            post=post,
+        ))
 
     @staticmethod
     def can_delete_post(post: Post, user: User) -> bool:
@@ -382,11 +417,17 @@ class PostService:
             return False
         if user.is_suspended:
             return False
+        allowed = False
         if UserService.has_forum_permission(user, "discussion.delete"):
-            return True
-        if post.user_id == user.id:
-            return UserService.has_forum_permission(user, "discussion.deleteOwn")
-        return False
+            allowed = True
+        elif post.user_id == user.id:
+            allowed = UserService.has_forum_permission(user, "discussion.deleteOwn")
+        return bool(evaluate_extension_policy(
+            "post.delete",
+            default=allowed,
+            user=user,
+            post=post,
+        ))
 
     @staticmethod
     def can_like_post(post: Post, user: User) -> bool:
@@ -397,7 +438,12 @@ class PostService:
             return False
         if post.user_id == user.id:
             return False
-        return True
+        return bool(evaluate_extension_policy(
+            "post.like",
+            default=True,
+            user=user,
+            post=post,
+        ))
 
     @staticmethod
     def _process_mentions(post: Post, content: str):

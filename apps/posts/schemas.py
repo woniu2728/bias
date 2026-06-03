@@ -29,39 +29,6 @@ class PostUpdateSchema(BaseModel):
         return v.strip()
 
 
-class PostReportSchema(BaseModel):
-    """举报帖子"""
-    reason: str = Field(..., min_length=1, max_length=100, description="举报原因")
-    message: str = Field("", max_length=1000, description="补充说明")
-
-    @validator('reason')
-    def validate_reason(cls, v):
-        if not v.strip():
-            raise ValueError('举报原因不能为空')
-        return v.strip()
-
-    @validator('message')
-    def validate_message(cls, v):
-        return (v or "").strip()
-
-
-class PostFlagResolveSchema(BaseModel):
-    """前台处理举报"""
-    status: str = Field(..., description="处理状态")
-    resolution_note: str = Field("", max_length=1000, description="处理备注")
-
-    @validator('status')
-    def validate_status(cls, v):
-        normalized = (v or "").strip()
-        if normalized not in {"resolved", "ignored"}:
-            raise ValueError('无效的处理状态')
-        return normalized
-
-    @validator('resolution_note')
-    def validate_resolution_note(cls, v):
-        return (v or "").strip()
-
-
 class PostFilterSchema(BaseModel):
     """帖子列表过滤"""
     author: Optional[str] = Field(None, description="作者用户名")
@@ -114,11 +81,13 @@ class PostOutSchema(BaseModel):
     can_edit: bool = False
     can_delete: bool = False
     can_like: bool = False
+    can_flag: bool = False
     post_type: Optional[dict] = None
     event_data: Optional[dict] = None
     viewer_has_open_flag: bool = False
     open_flag_count: int = 0
     open_flags: List[dict] = []
+    flags: List[dict] = []
     can_moderate_flags: bool = False
 
     class Config:

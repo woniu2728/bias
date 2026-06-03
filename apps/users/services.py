@@ -13,6 +13,7 @@ import secrets
 from .models import User, Group, Permission, EmailToken, PasswordToken
 from apps.core.models import AuditLog
 from apps.core.email_service import EmailService
+from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
 from apps.core.forum_registry import get_registry_permission_codes_by_prefix
 
 
@@ -163,7 +164,28 @@ class UserService:
             permission_names = [permission_names]
 
         permissions = UserService.get_forum_permission_set(user)
-        return any(permission in permissions for permission in permission_names)
+        normalized_permissions = tuple(
+            str(permission or "").strip()
+            for permission in permission_names
+            if str(permission or "").strip()
+        )
+        allowed = any(permission in permissions for permission in normalized_permissions)
+        decision = evaluate_extension_policy(
+            "forum.permission",
+            default=allowed,
+            user=user,
+            permission_names=normalized_permissions,
+            granted_permissions=tuple(sorted(permissions)),
+        )
+        if len(normalized_permissions) == 1:
+            decision = evaluate_extension_policy(
+                f"forum.permission.{normalized_permissions[0]}",
+                default=decision,
+                user=user,
+                permission_name=normalized_permissions[0],
+                granted_permissions=tuple(sorted(permissions)),
+            )
+        return bool(decision)
 
     @staticmethod
     def ensure_forum_permission(user: User, permission_names, message: str):

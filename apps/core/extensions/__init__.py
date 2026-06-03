@@ -1,3 +1,64 @@
-from apps.core.extensions.registry import get_extension_registry
+from apps.core.extensions.extenders import (
+    AdminNavigationExtender,
+    AdminSurfaceExtender,
+    ApiResourceExtender,
+    ApiRoutesExtender,
+    ConditionalExtender,
+    DiscussionLifecycleExtender,
+    EventListenersExtender,
+    ForumCapabilitiesExtender,
+    FormatterExtender,
+    FrontendExtender,
+    LifecycleExtender,
+    LifecycleInterface,
+    LocalesExtender,
+    MiddlewareExtender,
+    ModelExtender,
+    ModelUrlExtender,
+    ModelVisibilityExtender,
+    NotificationsExtender,
+    PolicyExtender,
+    RealtimeExtender,
+    ResourceExtender,
+    RoutesExtender,
+    SearchDriverExtender,
+    ServiceProviderExtender,
+    RuntimeActionsExtender,
+    SettingsExtender,
+)
 
-__all__ = ["get_extension_registry"]
+__all__ = [
+    "AdminNavigationExtender",
+    "AdminSurfaceExtender",
+    "ApiResourceExtender",
+    "ApiRoutesExtender",
+    "ConditionalExtender",
+    "DiscussionLifecycleExtender",
+    "EventListenersExtender",
+    "ForumCapabilitiesExtender",
+    "FormatterExtender",
+    "FrontendExtender",
+    "LifecycleExtender",
+    "LifecycleInterface",
+    "LocalesExtender",
+    "MiddlewareExtender",
+    "ModelExtender",
+    "ModelUrlExtender",
+    "ModelVisibilityExtender",
+    "NotificationsExtender",
+    "PolicyExtender",
+    "RealtimeExtender",
+    "ResourceExtender",
+    "RoutesExtender",
+    "SearchDriverExtender",
+    "ServiceProviderExtender",
+    "RuntimeActionsExtender",
+    "SettingsExtender",
+    "get_extension_registry",
+]
+
+
+def get_extension_registry():
+    from apps.core.extensions.registry import get_extension_registry as _get_extension_registry
+
+    return _get_extension_registry()

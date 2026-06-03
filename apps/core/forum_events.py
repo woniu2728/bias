@@ -9,7 +9,6 @@ from apps.core.domain_events import DomainEvent
 class DiscussionCreatedEvent(DomainEvent):
     discussion_id: int
     actor_user_id: int
-    tag_ids: tuple[int, ...] = ()
     is_approved: bool = True
 
 
@@ -26,15 +25,6 @@ class DiscussionRenamedEvent(DomainEvent):
     actor_user_id: int
     old_title: str
     new_title: str
-
-
-@dataclass(frozen=True)
-class DiscussionTaggedEvent(DomainEvent):
-    discussion_id: int
-    actor_user_id: int
-    added_tags: tuple[str, ...] = ()
-    removed_tags: tuple[str, ...] = ()
-    tag_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -120,11 +110,45 @@ class PostHiddenEvent(DomainEvent):
 
 
 @dataclass(frozen=True)
+class PostDeletedEvent(DomainEvent):
+    post_id: int
+    discussion_id: int
+    actor_user_id: int
+    post_number: int | None
+    flag_ids: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
 class PostLikedEvent(DomainEvent):
     post_id: int
     discussion_id: int
     actor_user_id: int
     post_number: int | None = None
+
+
+@dataclass(frozen=True)
+class PostFlagCreatedEvent(DomainEvent):
+    flag_id: int
+    post_id: int
+    discussion_id: int
+    actor_user_id: int
+
+
+@dataclass(frozen=True)
+class PostFlagsResolvedEvent(DomainEvent):
+    flag_ids: tuple[int, ...]
+    post_id: int
+    discussion_id: int
+    actor_user_id: int
+    status: str
+
+
+@dataclass(frozen=True)
+class PostFlagsDeletedEvent(DomainEvent):
+    flag_ids: tuple[int, ...]
+    post_id: int
+    discussion_id: int
+    actor_user_id: int
 
 
 @dataclass(frozen=True)
@@ -147,12 +171,3 @@ class UserUnsuspendedEvent(DomainEvent):
     user_id: int
     actor_user_id: int | None
 
-
-@dataclass(frozen=True)
-class DiscussionTagStatsRefreshEvent(DomainEvent):
-    discussion_id: int
-
-
-@dataclass(frozen=True)
-class TagStatsRefreshRequestedEvent(DomainEvent):
-    tag_ids: tuple[int, ...] = ()

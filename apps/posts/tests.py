@@ -7,15 +7,32 @@ from datetime import timedelta
 from ninja_jwt.tokens import RefreshToken
 from unittest.mock import Mock, patch
 
-from apps.core.forum_events import DiscussionTagStatsRefreshEvent
-from apps.core.models import AuditLog
+from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent
+from apps.core.models import AuditLog, Setting
+from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.discussions.models import DiscussionUser
 from apps.discussions.services import DiscussionService
+from apps.notifications.models import Notification
 from apps.posts.models import Post
 from apps.posts.models import PostFlag
 from apps.posts.services import PostService
 from apps.tags.models import Tag
 from apps.users.models import Group, Permission, User
+
+
+def discussion_tags_payload(tag_ids):
+    return {
+        "data": {
+            "relationships": {
+                "tags": {
+                    "data": [
+                        {"type": "tag", "id": str(tag_id)}
+                        for tag_id in tag_ids
+                    ],
+                },
+            },
+        },
+    }
 
 
 class PostPaginationTests(TestCase):
@@ -147,6 +164,32 @@ class PostPaginationTests(TestCase):
         self.assertEqual(state.last_read_post_number, reply.number)
         self.assertFalse(state.is_subscribed)
 
+    def test_own_reply_auto_follows_through_subscriptions_extension(self):
+        self.user.preferences = {"follow_after_reply": True}
+        self.user.save(update_fields=["preferences"])
+
+        discussion = DiscussionService.create_discussion(
+            title="Auto follow discussion",
+            content="First post",
+            user=self.user,
+        )
+
+        DiscussionUser.objects.filter(discussion=discussion, user=self.user).update(
+            last_read_post_number=1,
+            is_subscribed=False,
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            reply = PostService.create_post(
+                discussion_id=discussion.id,
+                content="My followed reply",
+                user=self.user,
+            )
+
+        state = DiscussionUser.objects.get(discussion=discussion, user=self.user)
+        self.assertEqual(state.last_read_post_number, reply.number)
+        self.assertTrue(state.is_subscribed)
+
     def test_create_post_locks_discussion_before_allocating_floor_number(self):
         discussion = DiscussionService.create_discussion(
             title="Locked numbering discussion",
@@ -166,7 +209,7 @@ class PostPaginationTests(TestCase):
 
         self.assertTrue(lock_discussion_mock.called)
 
-    def test_refresh_discussion_stats_dispatches_tag_refresh_event(self):
+    def test_refresh_discussion_stats_recomputes_discussion_counters(self):
         discussion = DiscussionService.create_discussion(
             title="Stats refresh discussion",
             content="First post",
@@ -178,14 +221,11 @@ class PostPaginationTests(TestCase):
             user=self.user,
         )
 
-        mocked_bus = Mock()
-        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
-            with self.captureOnCommitCallbacks(execute=True):
-                PostService._refresh_discussion_approved_stats(discussion)
+        PostService._refresh_discussion_approved_stats(discussion)
+        discussion.refresh_from_db()
 
-        event = mocked_bus.dispatch.call_args.args[0]
-        self.assertIsInstance(event, DiscussionTagStatsRefreshEvent)
-        self.assertEqual(event.discussion_id, discussion.id)
+        self.assertEqual(discussion.comment_count, 2)
+        self.assertEqual(discussion.last_post_number, 2)
 
     def test_create_post_dispatches_created_event_after_commit(self):
         discussion = DiscussionService.create_discussion(
@@ -280,6 +320,39 @@ class PostFlagApiTests(TestCase):
         payload = response.json()
         self.assertIn("edited_user", payload)
 
+    def test_post_detail_static_route_uses_resource_endpoint_mutator(self):
+        def mutate_endpoint(endpoint):
+            def handler(context):
+                payload = endpoint.handler(context)
+                payload["mutated_by_resource_endpoint"] = True
+                return payload
+
+            return ResourceEndpointDefinition(
+                resource=endpoint.resource,
+                endpoint=endpoint.endpoint,
+                module_id="test",
+                handler=handler,
+                methods=endpoint.methods,
+            )
+
+        registry = ResourceRegistry()
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="post",
+                endpoint="show",
+                module_id="test",
+                operation="mutate",
+                mutator=mutate_endpoint,
+            )
+        )
+
+        with patch("apps.posts.api.get_runtime_resource_registry", return_value=registry):
+            with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
+                response = self.client.get(f"/api/posts/{self.post.id}")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["mutated_by_resource_endpoint"])
+
     def test_post_list_avoids_n_plus_one_for_registered_user_summary(self):
         for index in range(3):
             PostService.create_post(
@@ -315,6 +388,177 @@ class PostFlagApiTests(TestCase):
         flag = PostFlag.objects.get(post=self.post, user=self.reporter)
         self.assertEqual(flag.message, "包含明显违规信息")
 
+    def test_flag_resource_create_creates_flag_via_jsonapi(self):
+        payload = {
+            "data": {
+                "type": "flag",
+                "attributes": {
+                    "reason": "违规内容",
+                    "reason_detail": "JSON:API 举报",
+                },
+                "relationships": {
+                    "post": {
+                        "data": {
+                            "type": "post",
+                            "id": str(self.post.id),
+                        },
+                    },
+                },
+            },
+        }
+
+        mocked_bus = Mock()
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                response = self.client.post(
+                    "/api/resources/flag/create",
+                    data=payload,
+                    content_type="application/json",
+                    **self.auth_header(),
+                )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(len(callbacks), 1)
+        event = mocked_bus.dispatch.call_args.args[0]
+        self.assertIsInstance(event, PostFlagCreatedEvent)
+        self.assertEqual(PostFlag.objects.count(), 1)
+
+        flag = PostFlag.objects.get(post=self.post, user=self.reporter)
+        self.assertEqual(flag.reason, "违规内容")
+        self.assertEqual(flag.message, "JSON:API 举报")
+
+        data = response.json()["data"]
+        self.assertEqual(data["type"], "flag")
+        self.assertEqual(data["id"], str(flag.id))
+        self.assertEqual(data["attributes"]["reason"], "违规内容")
+        self.assertEqual(data["attributes"]["reason_detail"], "JSON:API 举报")
+        self.assertEqual(data["relationships"]["post"]["data"], {"type": "post", "id": str(self.post.id)})
+        self.assertEqual(data["relationships"]["user"]["data"], {"type": "user_summary", "id": str(self.reporter.id)})
+
+    def test_flag_resource_index_lists_latest_visible_open_flags_for_staff(self):
+        PostService.report_post(
+            self.post.id,
+            self.reporter,
+            reason="第一次举报",
+            message="应被后续同帖举报折叠",
+        )
+        second_reporter = User.objects.create_user(
+            username="second-reporter",
+            email="second-reporter@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        latest_flag = PostService.report_post(
+            self.post.id,
+            second_reporter,
+            reason="第二次举报",
+            message="同帖最新举报",
+        )
+
+        response = self.client.get(
+            "/api/resources/flag/index",
+            **self.admin_auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["meta"]["total"], 1)
+        self.assertEqual(len(payload["data"]), 1)
+        self.assertEqual(payload["data"][0]["id"], str(latest_flag.id))
+        self.assertEqual(payload["data"][0]["attributes"]["reason"], "第二次举报")
+        self.assertEqual(payload["data"][0]["relationships"]["post"]["data"], {"type": "post", "id": str(self.post.id)})
+        self.assertEqual(payload["data"][0]["relationships"]["user"]["data"], {"type": "user_summary", "id": str(second_reporter.id)})
+
+        reporter_response = self.client.get(
+            "/api/resources/flag/index",
+            **self.auth_header(),
+        )
+        self.assertEqual(reporter_response.status_code, 200, reporter_response.content)
+        self.assertEqual(reporter_response.json()["data"], [])
+
+    def test_flags_extension_adds_flags_to_post_default_includes_for_staff(self):
+        flag = PostFlag.objects.create(
+            post=self.post,
+            user=self.reporter,
+            reason="默认 include",
+            message="Flarum flags style include",
+        )
+
+        detail_response = self.client.get(
+            f"/api/posts/{self.post.id}",
+            **self.admin_auth_header(),
+        )
+        self.assertEqual(detail_response.status_code, 200, detail_response.content)
+        detail_payload = detail_response.json()
+        self.assertEqual(detail_payload["flags"], [{"type": "flag", "id": str(flag.id)}])
+
+        list_response = self.client.get(
+            f"/api/discussions/{self.discussion.id}/posts",
+            **self.admin_auth_header(),
+        )
+        self.assertEqual(list_response.status_code, 200, list_response.content)
+        target = next(item for item in list_response.json()["data"] if item["id"] == self.post.id)
+        self.assertEqual(target["flags"], [{"type": "flag", "id": str(flag.id)}])
+
+        reporter_response = self.client.get(
+            f"/api/posts/{self.post.id}",
+            **self.auth_header(),
+        )
+        self.assertEqual(reporter_response.status_code, 200, reporter_response.content)
+        self.assertNotIn("flags", reporter_response.json())
+
+    def test_staff_can_delete_post_flags_through_flags_extension_endpoint(self):
+        first = PostFlag.objects.create(
+            post=self.post,
+            user=self.reporter,
+            reason="第一条",
+            message="待删除",
+        )
+        second_reporter = User.objects.create_user(
+            username="delete-flags-reporter",
+            email="delete-flags-reporter@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        second = PostFlag.objects.create(
+            post=self.post,
+            user=second_reporter,
+            reason="第二条",
+            message="待删除",
+        )
+
+        mocked_bus = Mock()
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                response = self.client.delete(
+                    f"/api/posts/{self.post.id}/flags",
+                    **self.admin_auth_header(),
+                )
+
+        self.assertEqual(response.status_code, 204, response.content)
+        self.assertEqual(len(callbacks), 1)
+        self.assertFalse(PostFlag.objects.filter(post=self.post).exists())
+        event = mocked_bus.dispatch.call_args.args[0]
+        self.assertIsInstance(event, PostFlagsDeletedEvent)
+        self.assertEqual(set(event.flag_ids), {first.id, second.id})
+        self.assertEqual(event.post_id, self.post.id)
+
+    def test_non_staff_cannot_delete_post_flags_through_flags_extension_endpoint(self):
+        PostFlag.objects.create(
+            post=self.post,
+            user=self.reporter,
+            reason="越权删除",
+            message="应保留",
+        )
+
+        response = self.client.delete(
+            f"/api/posts/{self.post.id}/flags",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertEqual(PostFlag.objects.filter(post=self.post).count(), 1)
+
     def test_reported_post_exposes_flag_feedback_for_reporter(self):
         self.client.post(
             f"/api/posts/{self.post.id}/report",
@@ -332,6 +576,37 @@ class PostFlagApiTests(TestCase):
         target = next(item for item in response.json()["data"] if item["id"] == self.post.id)
         self.assertTrue(target["viewer_has_open_flag"])
         self.assertEqual(target["open_flag_count"], 0)
+        self.assertTrue(target["can_flag"])
+
+    def test_author_can_flag_post_when_flags_extension_setting_allows_it(self):
+        denied_response = self.client.post(
+            f"/api/posts/{self.post.id}/report",
+            data='{"reason":"补充说明","message":"作者默认不能举报自己"}',
+            content_type="application/json",
+            **self.auth_header_for(self.author),
+        )
+        self.assertEqual(denied_response.status_code, 400, denied_response.content)
+
+        Setting.objects.update_or_create(
+            key="extensions.flags.can_flag_own",
+            defaults={"value": "true"},
+        )
+
+        response = self.client.get(
+            f"/api/posts/{self.post.id}",
+            **self.auth_header_for(self.author),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["can_flag"])
+
+        report_response = self.client.post(
+            f"/api/posts/{self.post.id}/report",
+            data='{"reason":"补充说明","message":"设置允许作者举报自己"}',
+            content_type="application/json",
+            **self.auth_header_for(self.author),
+        )
+        self.assertEqual(report_response.status_code, 200, report_response.content)
+        self.assertEqual(report_response.json()["user"]["id"], self.author.id)
 
     def test_discussion_posts_api_supports_windowed_queries(self):
         for index in range(3, 13):
@@ -387,7 +662,12 @@ class PostFlagApiTests(TestCase):
         target = next(item for item in response.json()["data"] if item["id"] == self.post.id)
         self.assertEqual(target["open_flag_count"], 1)
         self.assertEqual(len(target["open_flags"]), 1)
+        self.assertEqual(len(target["flags"]), 1)
         self.assertTrue(target["can_moderate_flags"])
+
+        me_response = self.client.get("/api/users/me", **self.admin_auth_header())
+        self.assertEqual(me_response.status_code, 200, me_response.content)
+        self.assertEqual(me_response.json()["new_flag_count"], 1)
 
         resolve_response = self.client.post(
             f"/api/posts/{self.post.id}/flags/resolve",
@@ -501,6 +781,30 @@ class PostFlagApiTests(TestCase):
         self.reporter.refresh_from_db()
         self.assertEqual(self.reporter.comment_count, 0)
 
+    def test_delete_post_cleans_discussion_reply_notifications_through_subscriptions_extension(self):
+        trailing_reply = PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="带通知的回复",
+            user=self.reporter,
+        )
+        notification = Notification.objects.create(
+            user=self.author,
+            from_user=self.reporter,
+            type="discussionReply",
+            subject_type="discussion",
+            subject_id=self.discussion.id,
+            data={
+                "discussion_id": self.discussion.id,
+                "post_id": trailing_reply.id,
+                "post_number": trailing_reply.number,
+            },
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.delete_post(trailing_reply.id, self.reporter)
+
+        self.assertFalse(Notification.objects.filter(id=notification.id).exists())
+
     def test_delete_pending_reply_does_not_decrement_comment_stats(self):
         trusted_group = Group.objects.create(name="DeletePendingReplyTrusted", color="#4d698e")
         Permission.objects.create(group=trusted_group, permission="replyWithoutApproval")
@@ -571,6 +875,25 @@ class PostFlagApiTests(TestCase):
         self.author.refresh_from_db()
         self.assertEqual(self.discussion.comment_count, 2)
         self.assertEqual(self.author.comment_count, 1)
+
+    def test_hiding_post_cleans_discussion_reply_notifications_through_subscriptions_extension(self):
+        notification = Notification.objects.create(
+            user=self.reporter,
+            from_user=self.author,
+            type="discussionReply",
+            subject_type="discussion",
+            subject_id=self.discussion.id,
+            data={
+                "discussion_id": self.discussion.id,
+                "post_id": self.post.id,
+                "post_number": self.post.number,
+            },
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            PostService.set_hidden_state(self.post, self.admin, True)
+
+        self.assertFalse(Notification.objects.filter(id=notification.id).exists())
 
     def test_post_hide_endpoint_toggles_hidden_state_for_admin(self):
         response = self.client.post(
@@ -935,7 +1258,7 @@ class PostFlagApiTests(TestCase):
             title="限制回复讨论",
             content="只有管理员能回复",
             user=admin,
-            tag_ids=[restricted_tag.id],
+            extension_payload=discussion_tags_payload([restricted_tag.id]),
         )
 
         response = self.client.post(

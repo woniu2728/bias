@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Optional
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -15,17 +15,102 @@ from apps.core.forum_events import (
     DiscussionRenamedEvent,
     DiscussionResubmittedEvent,
     DiscussionStickyChangedEvent,
-    DiscussionTagStatsRefreshEvent,
-    DiscussionTaggedEvent,
-    TagStatsRefreshRequestedEvent,
+)
+from apps.core.extensions.runtime_access import (
+    get_runtime_discussion_lifecycle_service,
+    get_runtime_resource_registry,
 )
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post
-from apps.tags.models import DiscussionTag
-from apps.tags.services import TagService
 from apps.users.models import User
-from apps.users.preferences import get_user_preference_value
 from apps.users.services import UserService
+
+
+def _prepare_discussion_create_extensions(discussion_lifecycle, *, user, payload: dict) -> dict:
+    if discussion_lifecycle is None:
+        return {}
+    return discussion_lifecycle.prepare_create(user=user, payload=payload)
+
+
+def _apply_discussion_create_extensions(discussion_lifecycle, *, discussion, states: dict, context: dict) -> dict:
+    if discussion_lifecycle is None:
+        return {}
+    return discussion_lifecycle.apply_create(discussion=discussion, states=states, context=context)
+
+
+def _prepare_discussion_update_extensions(discussion_lifecycle, *, discussion, user, payload: dict) -> dict:
+    if discussion_lifecycle is None:
+        return {}
+    return discussion_lifecycle.prepare_update(discussion=discussion, user=user, payload=payload)
+
+
+def _apply_discussion_update_extensions(discussion_lifecycle, *, discussion, states: dict, context: dict) -> dict:
+    if discussion_lifecycle is None:
+        return {}
+    return discussion_lifecycle.apply_update(discussion=discussion, states=states, context=context)
+
+
+def _prepare_discussion_delete_extensions(discussion_lifecycle, *, discussion, user, context: dict) -> dict:
+    if discussion_lifecycle is None:
+        return {}
+    return discussion_lifecycle.prepare_delete(discussion=discussion, user=user, context=context)
+
+
+def _apply_discussion_delete_extensions(discussion_lifecycle, *, states: dict, context: dict) -> dict:
+    if discussion_lifecycle is None:
+        return {}
+    return discussion_lifecycle.apply_delete(states=states, context=context)
+
+
+def _apply_discussion_hidden_extensions(discussion_lifecycle, *, discussion, context: dict) -> dict:
+    if discussion_lifecycle is None:
+        return {}
+    return discussion_lifecycle.apply_hidden(discussion=discussion, context=context)
+
+
+def _apply_discussion_approved_extensions(discussion_lifecycle, *, discussion, context: dict) -> dict:
+    if discussion_lifecycle is None:
+        return {}
+    return discussion_lifecycle.apply_approved(discussion=discussion, context=context)
+
+
+def _apply_discussion_rejected_extensions(discussion_lifecycle, *, discussion, context: dict) -> dict:
+    if discussion_lifecycle is None:
+        return {}
+    return discussion_lifecycle.apply_rejected(discussion=discussion, context=context)
+
+
+def _apply_discussion_resource_relationships(
+    discussion: Discussion,
+    *,
+    payload: dict,
+    user: User,
+    creating: bool,
+    actor_user_id: int,
+) -> None:
+    relationship_payload = _discussion_relationship_payload(payload)
+    if not relationship_payload:
+        return
+    registry = get_runtime_resource_registry()
+    registry.apply_resource_payload(
+        "discussion",
+        discussion,
+        {},
+        {
+            "payload": relationship_payload,
+            "user": user,
+            "actor_user_id": actor_user_id,
+        },
+        creating=creating,
+    )
+
+
+def _discussion_relationship_payload(payload: dict) -> dict:
+    payload = dict(payload or {})
+    data = payload.get("data")
+    if isinstance(data, dict) and isinstance(data.get("relationships"), dict):
+        return {"data": {"relationships": dict(data["relationships"])}}
+    return {}
 
 
 def create_discussion(
@@ -33,7 +118,7 @@ def create_discussion(
     content: str,
     user: User,
     *,
-    tag_ids: Optional[List[int]] = None,
+    extension_payload: Optional[dict] = None,
     default_post_type,
     render_markdown_cb,
 ) -> Discussion:
@@ -44,7 +129,13 @@ def create_discussion(
     approval_status = Discussion.APPROVAL_PENDING if requires_approval else Discussion.APPROVAL_APPROVED
     approved_at = None if requires_approval else timezone.now()
     approved_by = None if requires_approval else user
-    tags = TagService.ensure_can_start_discussion(user, tag_ids)
+    extension_payload = dict(extension_payload or {})
+    discussion_lifecycle = get_runtime_discussion_lifecycle_service()
+    extension_states = _prepare_discussion_create_extensions(
+        discussion_lifecycle,
+        user=user,
+        payload=extension_payload,
+    )
 
     with transaction.atomic():
         discussion = Discussion.objects.create(
@@ -76,9 +167,22 @@ def create_discussion(
         discussion.participant_count = 1
         discussion.save()
 
-        if tags:
-            for tag in tags:
-                DiscussionTag.objects.create(discussion=discussion, tag=tag)
+        _apply_discussion_create_extensions(
+            discussion_lifecycle,
+            discussion=discussion,
+            states=extension_states,
+            context={
+                "actor_user_id": user.id,
+                "payload": extension_payload,
+            },
+        )
+        _apply_discussion_resource_relationships(
+            discussion,
+            payload=extension_payload,
+            user=user,
+            creating=True,
+            actor_user_id=user.id,
+        )
 
         if not requires_approval:
             user.discussion_count = F("discussion_count") + 1
@@ -89,14 +193,13 @@ def create_discussion(
             user=user,
             last_read_at=timezone.now(),
             last_read_post_number=1,
-            is_subscribed=get_user_preference_value(user, "follow_after_create", fallback=False),
+            is_subscribed=False,
         )
 
         dispatch_forum_event_after_commit(
             DiscussionCreatedEvent(
                 discussion_id=discussion.id,
                 actor_user_id=user.id,
-                tag_ids=tuple(tag.id for tag in tags),
                 is_approved=not requires_approval,
             )
         )
@@ -109,7 +212,7 @@ def update_discussion(
     *,
     title: Optional[str] = None,
     content: Optional[str] = None,
-    tag_ids: Optional[List[int]] = None,
+    extension_payload: Optional[dict] = None,
     is_locked: Optional[bool] = None,
     is_sticky: Optional[bool] = None,
     is_hidden: Optional[bool] = None,
@@ -125,12 +228,15 @@ def update_discussion(
     if not can_edit_discussion_cb(discussion, user):
         raise PermissionDenied("没有权限编辑此讨论")
 
+    extension_payload = dict(extension_payload or {})
+
     with transaction.atomic():
-        previous_tag_ids = list(discussion.discussion_tags.values_list("tag_id", flat=True))
-        previous_tag_names = list(
-            discussion.discussion_tags.select_related("tag")
-            .order_by("tag__name")
-            .values_list("tag__name", flat=True)
+        discussion_lifecycle = get_runtime_discussion_lifecycle_service()
+        extension_states = _prepare_discussion_update_extensions(
+            discussion_lifecycle,
+            discussion=discussion,
+            user=user,
+            payload=extension_payload,
         )
         previous_title = discussion.title
         first_post = None
@@ -148,13 +254,22 @@ def update_discussion(
             first_post.edited_user = user
             first_post.save(update_fields=["content", "content_html", "edited_at", "edited_user"])
 
-        if tag_ids is not None:
-            tags = TagService.ensure_can_start_discussion(user, tag_ids)
-            DiscussionTag.objects.filter(discussion=discussion).delete()
-            DiscussionTag.objects.bulk_create([
-                DiscussionTag(discussion=discussion, tag=tag)
-                for tag in tags
-            ])
+        _apply_discussion_update_extensions(
+            discussion_lifecycle,
+            discussion=discussion,
+            states=extension_states,
+            context={
+                "actor_user_id": user.id,
+                "payload": extension_payload,
+            },
+        )
+        _apply_discussion_resource_relationships(
+            discussion,
+            payload=extension_payload,
+            user=user,
+            creating=False,
+            actor_user_id=user.id,
+        )
 
         should_persist_discussion = True
 
@@ -222,37 +337,6 @@ def update_discussion(
                 )
             )
 
-        if tag_ids is not None:
-            current_tag_names = list(
-                discussion.discussion_tags.select_related("tag")
-                .order_by("tag__name")
-                .values_list("tag__name", flat=True)
-            )
-            current_tag_ids = list(
-                discussion.discussion_tags.order_by("tag_id").values_list("tag_id", flat=True)
-            )
-            added_tags = [name for name in current_tag_names if name not in previous_tag_names]
-            removed_tags = [name for name in previous_tag_names if name not in current_tag_names]
-            if added_tags or removed_tags:
-                dispatch_forum_event_after_commit(
-                    DiscussionTaggedEvent(
-                        discussion_id=discussion.id,
-                        actor_user_id=user.id,
-                        added_tags=tuple(added_tags),
-                        removed_tags=tuple(removed_tags),
-                        tag_ids=tuple(sorted(set(previous_tag_ids) | set(current_tag_ids))),
-                    )
-                )
-
-        if is_hidden is not None or tag_ids is not None:
-            refreshed_tag_ids = set(previous_tag_ids) | set(
-                discussion.discussion_tags.values_list("tag_id", flat=True)
-            )
-            if refreshed_tag_ids:
-                dispatch_forum_event_after_commit(
-                    TagStatsRefreshRequestedEvent(tag_ids=tuple(sorted(refreshed_tag_ids)))
-                )
-
         return discussion
 
 
@@ -299,8 +383,13 @@ def set_hidden_state(
                 is_hidden=is_hidden,
             )
         )
-        dispatch_forum_event_after_commit(
-            DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
+        _apply_discussion_hidden_extensions(
+            get_runtime_discussion_lifecycle_service(),
+            discussion=discussion,
+            context={
+                "actor_user_id": user.id,
+                "is_hidden": is_hidden,
+            },
         )
     return discussion
 
@@ -357,8 +446,13 @@ def approve_discussion(
                 )
             )
         else:
-            dispatch_forum_event_after_commit(
-                DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
+            _apply_discussion_approved_extensions(
+                get_runtime_discussion_lifecycle_service(),
+                discussion=discussion,
+                context={
+                    "admin_user_id": admin_user.id,
+                    "was_counted": was_counted,
+                },
             )
 
     discussion.refresh_from_db()
@@ -419,8 +513,13 @@ def reject_discussion(
                     previous_status=previous_status,
                 )
             )
-        dispatch_forum_event_after_commit(
-            DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
+        _apply_discussion_rejected_extensions(
+            get_runtime_discussion_lifecycle_service(),
+            discussion=discussion,
+            context={
+                "admin_user_id": admin_user.id,
+                "previous_status": previous_status,
+            },
         )
 
     discussion.refresh_from_db()
@@ -457,6 +556,13 @@ def delete_discussion(
         raise PermissionDenied("没有权限删除此讨论")
 
     with transaction.atomic():
+        discussion_lifecycle = get_runtime_discussion_lifecycle_service()
+        extension_states = _prepare_discussion_delete_extensions(
+            discussion_lifecycle,
+            discussion=discussion,
+            user=user,
+            context={"actor_user_id": user.id},
+        )
         counted_discussion = (
             discussion.approval_status == Discussion.APPROVAL_APPROVED
             and discussion.hidden_at is None
@@ -466,13 +572,13 @@ def delete_discussion(
             approved_reply_counts = approved_reply_counts_by_author_cb(discussion)
 
         Post.objects.filter(discussion=discussion).delete()
-        tag_ids = list(discussion.discussion_tags.values_list("tag_id", flat=True))
         discussion.delete()
 
-        if tag_ids:
-            dispatch_forum_event_after_commit(
-                TagStatsRefreshRequestedEvent(tag_ids=tuple(sorted(tag_ids)))
-            )
+        _apply_discussion_delete_extensions(
+            discussion_lifecycle,
+            states=extension_states,
+            context={"actor_user_id": user.id},
+        )
 
         if counted_discussion and discussion.user:
             User.objects.filter(id=discussion.user_id).update(

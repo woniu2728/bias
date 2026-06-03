@@ -10,7 +10,6 @@ class DiscussionCreateSchema(BaseModel):
     """创建讨论"""
     title: str = Field(..., min_length=1, max_length=200, description="讨论标题")
     content: str = Field(..., min_length=1, description="第一条帖子内容")
-    tag_ids: Optional[List[int]] = Field(default=[], description="标签ID列表")
 
     @validator('title')
     def validate_title(cls, v):
@@ -23,7 +22,6 @@ class DiscussionUpdateSchema(BaseModel):
     """更新讨论"""
     title: Optional[str] = Field(None, min_length=1, max_length=200, description="讨论标题")
     content: Optional[str] = Field(None, min_length=1, description="第一条帖子内容")
-    tag_ids: Optional[List[int]] = Field(default=None, description="标签ID列表")
     is_locked: Optional[bool] = Field(None, description="是否锁定")
     is_sticky: Optional[bool] = Field(None, description="是否置顶")
     is_hidden: Optional[bool] = Field(None, description="是否隐藏")

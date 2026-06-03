@@ -9,6 +9,10 @@
     <AdminStateBlock v-else-if="errorMessage" tone="danger">{{ errorMessage }}</AdminStateBlock>
 
     <div v-else class="ExtensionsPage-content">
+      <AdminStateBlock v-if="recoveryNotice" :tone="recoveryNotice.tone">
+        {{ recoveryNotice.text }}
+      </AdminStateBlock>
+
       <section class="ExtensionsPage-summary">
         <article class="ExtensionsPage-summaryCard">
           <strong>{{ summary.extension_count ?? extensions.length }}</strong>
@@ -93,6 +97,13 @@
                   :class="resolveDiagnosticsBadgeClass(badge)"
                 >
                   {{ badge.label }}
+                </span>
+                <span
+                  v-if="resolveRecoveryBadge(extension)"
+                  class="ExtensionStatus"
+                  :class="resolveRecoveryBadge(extension).className"
+                >
+                  {{ resolveRecoveryBadge(extension).label }}
                 </span>
               </div>
 
@@ -217,11 +228,35 @@ const modalStore = useModalStore()
 const loading = ref(true)
 const errorMessage = ref('')
 const summary = ref({})
+const runtime = ref({})
 const extensions = ref([])
 const sourceFilter = ref('all')
 const statusFilter = ref('all')
 const searchQuery = ref('')
 const actionLoadingId = ref('')
+
+const recoveryNotice = computed(() => {
+  const recovery = runtime.value?.recovery || {}
+  if (recovery?.bisect?.active) {
+    const current = Array.isArray(recovery.bisect.current) ? recovery.bisect.current.join('、') : ''
+    return {
+      tone: 'warning',
+      text: current
+        ? `扩展二分排查进行中，当前只启动：${current}`
+        : '扩展二分排查进行中，当前启用集合已被临时调整。',
+    }
+  }
+  if (recovery.safe_mode) {
+    const allowed = Array.isArray(recovery.safe_mode_extensions) ? recovery.safe_mode_extensions.join('、') : ''
+    return {
+      tone: 'warning',
+      text: allowed
+        ? `扩展恢复模式已启用，只启动内置扩展和白名单：${allowed}`
+        : '扩展恢复模式已启用，当前只启动内置扩展。',
+    }
+  }
+  return null
+})
 
 const sourceOptions = [
   { value: 'all', label: '全部来源', icon: 'fas fa-layer-group' },
@@ -293,6 +328,7 @@ async function loadExtensions() {
 
 function applyPayload(data) {
   summary.value = data.summary || {}
+  runtime.value = data.runtime || {}
   extensions.value = Array.isArray(data.extensions)
     ? data.extensions.filter(item => item?.product_visible !== false)
     : []
@@ -421,6 +457,22 @@ function resolveDiagnosticsBadgeClass(item) {
     return 'is-warning'
   }
   return 'is-disabled'
+}
+
+function resolveRecoveryBadge(extension) {
+  const status = extension?.recovery_status || {}
+  if (status.bisect_culprit) {
+    return { label: '二分命中', className: 'is-danger' }
+  }
+  if (status.bisect_active && status.bisect_candidate) {
+    return status.bisect_current
+      ? { label: '二分启用', className: 'is-warning' }
+      : { label: '二分停用', className: 'is-disabled' }
+  }
+  if (status.safe_mode && !status.safe_mode_allowed) {
+    return { label: '恢复模式停用', className: 'is-warning' }
+  }
+  return null
 }
 
 function resolveDiagnosticsItemClass(item) {

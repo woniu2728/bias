@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from apps.core.extensions.application import ExtensionHost
+from apps.core.extensions.extension_runtime import Extension
 from apps.core.extensions.types import (
     ExtensionAdminActionDefinition,
     ExtensionCompatibilityDefinition,
-    ExtensionDefinition,
     ExtensionDistributionDefinition,
     ExtensionLifecycleDefinition,
     ExtensionLifecyclePhaseDefinition,
@@ -14,7 +15,7 @@ from apps.core.extensions.types import (
 from apps.core.forum_registry_types import ForumModuleDefinition
 
 
-def adapt_builtin_module_to_extension(module: ForumModuleDefinition) -> ExtensionDefinition:
+def adapt_builtin_module_to_extension(module: ForumModuleDefinition) -> Extension:
     lifecycle = module.lifecycle
     phases = tuple(
         ExtensionLifecyclePhaseDefinition(
@@ -76,8 +77,56 @@ def adapt_builtin_module_to_extension(module: ForumModuleDefinition) -> Extensio
         runtime_issues=(),
     )
 
-    return ExtensionDefinition(
+    def bootstrapper(extension: Extension, host: ExtensionHost):
+        runtime_view = host.get_or_create_runtime_view(
+            extension.id,
+            name=extension.name,
+            source=extension.source,
+            module_ids=extension.module_ids,
+        )
+        host.frontend.register_entries(
+            extension.id,
+            admin_entry=extension.manifest.frontend_admin_entry,
+            forum_entry=extension.manifest.frontend_forum_entry,
+        )
+        host.frontend.register_pages(
+            extension.id,
+            settings_pages=extension.manifest.settings_pages,
+            permissions_pages=extension.manifest.permissions_pages,
+            operations_pages=extension.manifest.operations_pages,
+        )
+        for definition in module.permissions:
+            host.forum.register_permission(definition, extension_id=extension.id)
+        for definition in module.admin_pages:
+            host.forum.register_admin_page(definition, extension_id=extension.id)
+        for definition in module.notification_types:
+            host.forum.register_notification_type(definition, extension_id=extension.id)
+        for definition in module.user_preferences:
+            host.forum.register_user_preference(definition, extension_id=extension.id)
+        for definition in module.post_types:
+            host.forum.register_post_type(definition, extension_id=extension.id)
+        for definition in module.search_filters:
+            host.forum.register_search_filter(definition, extension_id=extension.id)
+        for definition in module.discussion_sorts:
+            host.forum.register_discussion_sort(definition, extension_id=extension.id)
+        for definition in module.discussion_list_filters:
+            host.forum.register_discussion_list_filter(definition, extension_id=extension.id)
+        host.actions.register_runtime_actions(
+            extension.id,
+            extension.manifest.runtime_actions,
+            generated_page=False,
+        )
+        host.actions.register_admin_actions(
+            extension.id,
+            extension.manifest.admin_actions,
+            generated_permissions_page=False,
+            generated_operations_page=False,
+        )
+        return runtime_view
+
+    return Extension(
         manifest=manifest,
+        module=None,
         runtime=runtime,
         lifecycle=ExtensionLifecycleDefinition(
             registration_mode=lifecycle.registration_mode,
@@ -92,6 +141,7 @@ def adapt_builtin_module_to_extension(module: ForumModuleDefinition) -> Extensio
         source="builtin-module",
         admin_pages=tuple(page.path for page in module.admin_pages),
         settings_groups=tuple(module.settings_groups),
+        bootstrapper=bootstrapper,
     )
 
 
@@ -112,16 +162,10 @@ def _resolve_builtin_frontend_admin_entry(module: ForumModuleDefinition) -> str:
         "core": "builtin:core",
         "discussions": "builtin:discussions",
         "posts": "builtin:posts",
-        "approval": "builtin:approval",
         "tags": "builtin:tags",
-        "flags": "builtin:flags",
         "users": "builtin:users",
         "notifications": "builtin:notifications",
-        "mentions": "builtin:mentions",
-        "subscriptions": "builtin:subscriptions",
         "realtime": "builtin:realtime",
-        "likes": "builtin:likes",
-        "tag-stats": "builtin:tag-stats",
     }
     return builtin_entries.get(module.module_id, "")
 
@@ -146,15 +190,9 @@ def _resolve_builtin_operations_pages(module: ForumModuleDefinition) -> tuple[st
     hosted_operations_modules = {
         "discussions",
         "posts",
-        "approval",
-        "flags",
         "users",
         "notifications",
-        "mentions",
-        "subscriptions",
         "realtime",
-        "likes",
-        "tag-stats",
     }
     if module.module_id == "core":
         return (f"/admin/extensions/{module.module_id}/operations",)

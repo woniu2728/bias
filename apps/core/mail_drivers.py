@@ -54,7 +54,7 @@ MAIL_DRIVER_DEFINITIONS = {
 
 def normalize_mail_driver(driver: str | None) -> str:
     normalized = str(driver or "").strip().lower()
-    return normalized if normalized in MAIL_DRIVER_DEFINITIONS else "smtp"
+    return normalized if normalized in get_driver_definitions() else "smtp"
 
 
 def build_mail_from(address: str | None, name: str | None) -> str:
@@ -80,7 +80,31 @@ def parse_mail_from(value: str | None) -> tuple[str, str]:
 
 
 def get_driver_definitions() -> dict:
-    return deepcopy(MAIL_DRIVER_DEFINITIONS)
+    definitions = deepcopy(MAIL_DRIVER_DEFINITIONS)
+    try:
+        from apps.core.extensions.bootstrap import get_extension_host
+
+        host = get_extension_host()
+        mail = getattr(host, "mail", None) if host is not None else None
+        if mail is not None:
+            for definition in mail.get_definitions():
+                try:
+                    payload = definition.callback(definition, {}) if callable(definition.callback) else {}
+                except Exception:
+                    payload = {}
+                if payload is None:
+                    payload = {}
+                if not isinstance(payload, dict):
+                    payload = {"label": str(payload)}
+                definitions[definition.key] = {
+                    "label": definition.key,
+                    "description": definition.description,
+                    "fields": [],
+                    **payload,
+                }
+    except Exception:
+        return definitions
+    return definitions
 
 
 def serialize_mail_settings(settings_data: dict) -> dict:
@@ -137,3 +161,26 @@ def validate_mail_settings(settings_data: dict) -> dict[str, list[str]]:
 def can_mail_driver_send(settings_data: dict, errors: dict | None = None) -> bool:
     values = serialize_mail_settings(settings_data)
     return not bool(errors or validate_mail_settings(values))
+
+
+def resolve_extension_mail_driver(driver: str | None):
+    normalized = str(driver or "").strip().lower()
+    if not normalized or normalized == "smtp":
+        return None
+    try:
+        from apps.core.extensions.bootstrap import get_extension_host
+
+        host = get_extension_host()
+        mail = getattr(host, "mail", None) if host is not None else None
+        if mail is None:
+            return None
+        return mail.get_driver(normalized)
+    except Exception:
+        return None
+
+
+def send_with_extension_mail_driver(driver: str | None, message: dict, context: dict | None = None):
+    definition = resolve_extension_mail_driver(driver)
+    if definition is None:
+        return None
+    return definition.callback(message, dict(context or {}))

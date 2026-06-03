@@ -4,10 +4,13 @@ from typing import List, Optional
 
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 
+from apps.core.extensions.runtime_access import (
+    apply_runtime_model_visibility,
+    evaluate_runtime_model_policy,
+)
 from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
 from apps.discussions.models import Discussion
 from apps.posts.models import Post, PostFlag, PostLike
-from apps.tags.services import TagService
 from apps.users.models import User
 
 
@@ -45,7 +48,13 @@ def annotate_flag_state(queryset, user: Optional[User] = None):
         ).prefetch_related(
             Prefetch(
                 "flags",
-                queryset=PostFlag.objects.filter(status=PostFlag.STATUS_OPEN).select_related("user"),
+                queryset=PostFlag.objects.filter(status=PostFlag.STATUS_OPEN).select_related(
+                    "post",
+                    "post__discussion",
+                    "post__user",
+                    "user",
+                    "resolved_by",
+                ),
                 to_attr="open_flags_cache",
             )
         )
@@ -84,7 +93,14 @@ def can_view_post(post: Post, user: Optional[User]) -> bool:
         )
         if not can_view_rejected_own_post:
             return False
-    if not TagService.can_view_discussion_tags(post.discussion, user):
+    if evaluate_runtime_model_policy(
+        "view",
+        user=user,
+        model=post,
+        default=True,
+        post=post,
+        discussion=getattr(post, "discussion", None),
+    ) is False:
         return False
     if post.approval_status == Post.APPROVAL_APPROVED:
         return True
@@ -122,7 +138,11 @@ def build_visible_post_queryset(
         queryset = preload(queryset)
     queryset = annotate_flag_state(queryset, user)
     queryset = apply_visibility_filters(queryset, user)
-    queryset = TagService.filter_posts_for_user(queryset, user)
+    queryset = apply_runtime_model_visibility(
+        Post,
+        queryset,
+        {"user": user, "ability": "view"},
+    )
     return queryset.order_by("number")
 
 
@@ -236,7 +256,11 @@ def get_page_for_near_post(
     )
 
     queryset = apply_visibility_filters(queryset, user)
-    queryset = TagService.filter_posts_for_user(queryset, user)
+    queryset = apply_runtime_model_visibility(
+        Post,
+        queryset,
+        {"user": user, "ability": "view"},
+    )
 
     position = queryset.count()
     if position <= 0:

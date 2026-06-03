@@ -5,9 +5,9 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import F
 from django.utils import timezone
 
+from apps.core.extensions.runtime_access import evaluate_runtime_model_policy
 from apps.core.visibility import build_discussion_visibility_q
 from apps.discussions.models import Discussion, DiscussionUser
-from apps.tags.services import TagService
 from apps.users.models import User
 
 
@@ -202,7 +202,13 @@ def can_view_discussion(discussion: Discussion, user: Optional[User]) -> bool:
         )
         if not can_view_rejected_own_discussion:
             return False
-    if not TagService.can_view_discussion_tags(discussion, user):
+    if evaluate_runtime_model_policy(
+        "view",
+        user=user,
+        model=discussion,
+        default=True,
+        discussion=discussion,
+    ) is False:
         return False
     if discussion.approval_status == Discussion.APPROVAL_APPROVED:
         return True

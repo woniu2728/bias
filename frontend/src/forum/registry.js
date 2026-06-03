@@ -82,7 +82,7 @@ import {
   runComposerSubmitSuccess,
 } from '@/forum/frontendRegistry'
 import { highlightSearchText } from '@/utils/search'
-import { renderTwemojiHtml } from '@/utils/twemoji'
+import { renderTwemojiHtml, setTwemojiBaseUrl, setTwemojiEnabled } from '@/utils/twemoji'
 
 export {
   getForumNavItems,
@@ -150,6 +150,9 @@ export {
   getProfilePanels,
   getSearchSources,
   getUserBadges,
+  renderTwemojiHtml,
+  setTwemojiBaseUrl,
+  setTwemojiEnabled,
 }
 
 registerForumNavSection({
@@ -187,18 +190,6 @@ registerForumNavItem({
   order: 20,
   surfaces: ['discussion-sidebar', 'mobile-drawer'],
   isVisible: ({ authStore }) => Boolean(authStore?.user)
-})
-
-registerForumNavItem({
-  key: 'tags',
-  moduleId: 'tags',
-  to: '/tags',
-  icon: 'fas fa-tags',
-  label: '全部标签',
-  description: '按标签浏览论坛主题。',
-  section: 'primary',
-  order: 30,
-  surfaces: ['primary-nav', 'mobile-drawer']
 })
 
 registerForumNavItem({
@@ -2092,7 +2083,7 @@ registerUiCopy({
   order: 450,
   surfaces: ['search-modal-description'],
   resolve: () => ({
-    text: '按讨论、帖子、用户快速定位内容，交互参考 Flarum 的全局搜索流程。',
+    text: '按讨论、帖子、用户快速定位内容。',
   }),
 })
 
@@ -5350,7 +5341,7 @@ registerUiCopy({
   surfaces: ['auth-session-subtitle'],
   resolve: ({ mode }) => ({
     text: mode === 'register'
-      ? '参考 Flarum 的会话流程，注册完成后即可回到当前页面继续操作。'
+      ? '注册完成后即可回到当前页面继续操作。'
       : (mode === 'forgot-password'
           ? '输入注册邮箱，我们会向你发送重置密码链接。'
           : '欢迎回来，登录后即可继续回复、关注和管理你的内容。'),

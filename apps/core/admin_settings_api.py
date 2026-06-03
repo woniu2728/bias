@@ -369,6 +369,12 @@ def clear_cache(request):
     try:
         legacy.cache.clear()
         legacy.clear_runtime_setting_caches()
+        from apps.core.extensions.event_bus import get_extension_event_bus
+        from apps.core.extensions.events import RuntimeCacheClearedEvent
+        from apps.core.extensions.runtime_event_listeners import bootstrap_extension_runtime_event_listeners
+
+        bootstrap_extension_runtime_event_listeners()
+        get_extension_event_bus().dispatch(RuntimeCacheClearedEvent())
     except Exception as exc:
         return legacy.admin_error(f"缓存清理失败: {exc}", status=503)
 

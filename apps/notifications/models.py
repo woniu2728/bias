@@ -6,7 +6,7 @@ from apps.users.models import User
 
 class Notification(models.Model):
     """
-    通知模型 - 对标Flarum的Notification模型
+    通知模型
     """
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
     from_user = models.ForeignKey(

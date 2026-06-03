@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from apps.core.extensions import get_extension_registry
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
+from apps.core.extensions.settings_runtime_service import get_extension_settings_definition
 from apps.core.models import Setting
 
 
@@ -18,11 +18,11 @@ ALLOWED_EXTENSION_SETTING_TYPES = {
 
 
 def build_extension_settings_defaults(extension_id: str) -> dict[str, Any]:
-    extension = get_extension_registry().get_extension(extension_id)
-    defaults: dict[str, Any] = {}
-    for field in extension.manifest.settings_schema:
-        defaults[field.key] = field.default
-    return defaults
+    try:
+        definition = get_extension_settings_definition(extension_id)
+    except ExtensionNotFoundError:
+        return {}
+    return dict(definition["defaults"])
 
 
 def get_extension_settings(extension_id: str) -> dict[str, Any]:
@@ -43,15 +43,8 @@ def get_extension_settings(extension_id: str) -> dict[str, Any]:
 
 
 def save_extension_settings(extension_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    extension = get_extension_registry().get_extension(extension_id)
-    if not extension.manifest.settings_schema:
-        raise ExtensionStateError(
-            f"扩展 {extension.id} 未声明设置项",
-            code="extension_settings_not_declared",
-            details={"extension_id": extension.id},
-        )
-
-    schema_map = {field.key: field for field in extension.manifest.settings_schema}
+    definition = get_extension_settings_definition(extension_id)
+    schema_map = dict(definition["field_map"])
     normalized = get_extension_settings(extension_id)
     prefix = _build_extension_settings_prefix(extension_id)
 
@@ -59,9 +52,9 @@ def save_extension_settings(extension_id: str, payload: dict[str, Any]) -> dict[
         field = schema_map.get(key)
         if field is None:
             raise ExtensionStateError(
-                f"扩展 {extension.id} 不支持设置项 {key}",
+                f"扩展 {extension_id} 不支持设置项 {key}",
                 code="extension_settings_unknown_key",
-                details={"extension_id": extension.id, "key": key},
+                details={"extension_id": extension_id, "key": key},
             )
         normalized_value = _normalize_extension_setting_value(field, raw_value)
         normalized[key] = normalized_value
@@ -74,7 +67,10 @@ def save_extension_settings(extension_id: str, payload: dict[str, Any]) -> dict[
 
 
 def serialize_extension_settings_schema(extension_id: str) -> list[dict[str, Any]]:
-    extension = get_extension_registry().get_extension(extension_id)
+    try:
+        definition = get_extension_settings_definition(extension_id)
+    except ExtensionNotFoundError:
+        return []
     return [
         {
             "key": field.key,
@@ -94,7 +90,7 @@ def serialize_extension_settings_schema(extension_id: str) -> list[dict[str, Any
                 for option in field.options
             ],
         }
-        for field in sorted(extension.manifest.settings_schema, key=lambda item: (item.order, item.key))
+        for field in definition["fields"]
     ]
 
 

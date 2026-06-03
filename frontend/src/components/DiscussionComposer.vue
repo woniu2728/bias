@@ -824,11 +824,10 @@ async function submitDiscussion() {
 
     let data
     if (isEditingDiscussion.value) {
-      data = await api.patch(`/discussions/${composerStore.current.discussionId}`, {
-        title: form.value.title,
-        content: form.value.content,
-        tag_ids: selectedTagIds.value,
-      })
+      data = await api.patch(
+        `/discussions/${composerStore.current.discussionId}`,
+        buildDiscussionResourcePayload(),
+      )
 
       window.dispatchEvent(new CustomEvent('bias:discussion-updated', {
         detail: {
@@ -857,11 +856,7 @@ async function submitDiscussion() {
         })
       }
     } else {
-      data = await api.post('/discussions/', {
-        title: form.value.title,
-        content: form.value.content,
-        tag_ids: selectedTagIds.value,
-      })
+      data = await api.post('/discussions/', buildDiscussionResourcePayload())
 
       if (data.approval_status === 'pending') {
         await modalStore.alert({
@@ -899,6 +894,26 @@ async function submitDiscussion() {
         })?.text || '提交失败，请稍后重试')
   } finally {
     submitting.value = false
+  }
+}
+
+function buildDiscussionResourcePayload() {
+  return {
+    data: {
+      type: 'discussion',
+      attributes: {
+        title: form.value.title,
+        content: form.value.content,
+      },
+      relationships: {
+        tags: {
+          data: selectedTagIds.value.map(tagId => ({
+            type: 'tag',
+            id: String(tagId),
+          })),
+        },
+      },
+    },
   }
 }
 

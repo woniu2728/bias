@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+from importlib import metadata
 from pathlib import Path
 
+from django.conf import settings
+
+from apps.core.extensions.definition_assembler import resolve_extension_discovery_result
 from apps.core.extensions.exceptions import ExtensionManifestError
 from apps.core.extensions.types import (
     ExtensionAdminActionDefinition,
@@ -18,24 +22,68 @@ from apps.core.extensions.types import (
 from apps.core.extensions.validation import EXTENSION_ID_PATTERN, SEMVER_PATTERN
 
 
+_distribution_manifest_cache: list[ExtensionManifest] | None = None
+
+
 class ExtensionManifestLoader:
     def __init__(self, base_path: Path):
         self.base_path = Path(base_path)
 
     def discover(self) -> list[ExtensionDiscoveryResult]:
+        return [
+            resolve_extension_discovery_result(manifest)
+            for manifest in self.discover_manifests()
+        ]
+
+    def discover_manifests(self) -> list[ExtensionManifest]:
+        results: list[ExtensionManifest] = []
+
         if not self.base_path.exists():
-            return []
+            results.extend(self.discover_distribution_manifests())
+            return self._deduplicate_manifests(results)
 
-        results: list[ExtensionDiscoveryResult] = []
         for manifest_path in sorted(self.base_path.glob("*/extension.json")):
-            manifest = self.load_manifest(manifest_path)
-            results.append(ExtensionDiscoveryResult(
-                manifest=manifest,
-                path=manifest_path.parent,
-            ))
-        return results
+            results.append(self.load_manifest_only(manifest_path))
+        results.extend(self.discover_distribution_manifests())
+        return self._deduplicate_manifests(results)
 
-    def load_manifest(self, manifest_path: Path) -> ExtensionManifest:
+    def discover_distribution_manifests(self) -> list[ExtensionManifest]:
+        global _distribution_manifest_cache
+        if not getattr(settings, "BIAS_EXTENSION_PACKAGE_DISCOVERY", True):
+            return []
+        if _distribution_manifest_cache is not None:
+            return list(_distribution_manifest_cache)
+
+        manifests: list[ExtensionManifest] = []
+        for distribution in sorted(metadata.distributions(), key=lambda item: (item.metadata.get("Name") or "").lower()):
+            extension_files = [
+                file
+                for file in (distribution.files or ())
+                if self._is_distribution_manifest_file(str(file).replace("\\", "/"))
+            ]
+            for file in extension_files:
+                manifest_path = Path(str(distribution.locate_file(file)))
+                if not manifest_path.exists():
+                    continue
+                try:
+                    manifest = self.load_manifest_only(manifest_path)
+                except ExtensionManifestError:
+                    continue
+                package_name = distribution.metadata.get("Name") or ""
+                manifest = self._with_distribution_source(
+                    manifest,
+                    package_name=str(package_name or "").strip(),
+                    package_version=str(distribution.version or "").strip(),
+                )
+                manifests.append(manifest)
+        _distribution_manifest_cache = list(manifests)
+        return manifests
+
+    def load_manifest(self, manifest_path: Path) -> tuple[ExtensionManifest, ExtensionDiscoveryResult]:
+        result = resolve_extension_discovery_result(self.load_manifest_only(manifest_path))
+        return result.manifest, result
+
+    def load_manifest_only(self, manifest_path: Path) -> ExtensionManifest:
         try:
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
         except FileNotFoundError as exc:
@@ -59,7 +107,7 @@ class ExtensionManifestLoader:
         if not SEMVER_PATTERN.match(version):
             raise ExtensionManifestError(f"扩展清单 version 非法: {manifest_path}")
 
-        return ExtensionManifest(
+        manifest = ExtensionManifest(
             id=extension_id,
             name=name,
             version=version,
@@ -89,6 +137,46 @@ class ExtensionManifestLoader:
             source="filesystem",
             path=str(manifest_path.parent),
             extra=dict(payload.get("extra") or {}),
+        )
+        return manifest
+
+    def _with_distribution_source(
+        self,
+        manifest: ExtensionManifest,
+        *,
+        package_name: str,
+        package_version: str,
+    ) -> ExtensionManifest:
+        extra = {
+            **dict(manifest.extra or {}),
+            "python_distribution": {
+                "name": package_name,
+                "version": package_version,
+            },
+        }
+        return ExtensionManifest(
+            **{
+                **manifest.__dict__,
+                "source": "python-package",
+                "extra": extra,
+            }
+        )
+
+    def _deduplicate_manifests(self, manifests: list[ExtensionManifest]) -> list[ExtensionManifest]:
+        by_id: dict[str, ExtensionManifest] = {}
+        for manifest in manifests:
+            existing = by_id.get(manifest.id)
+            if existing is not None and existing.source == "filesystem":
+                continue
+            by_id[manifest.id] = manifest
+        return [by_id[key] for key in sorted(by_id.keys())]
+
+    def _is_distribution_manifest_file(self, filename: str) -> bool:
+        return (
+            filename == "bias_extension.json"
+            or filename.endswith("/bias_extension.json")
+            or filename == "bias_extension/extension.json"
+            or filename.endswith("/bias_extension/extension.json")
         )
 
     def _build_admin_action(self, payload: dict) -> ExtensionAdminActionDefinition:

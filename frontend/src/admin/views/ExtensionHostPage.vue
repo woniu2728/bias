@@ -37,6 +37,7 @@ import {
   resolveFallbackExtensionSettingsPage,
 } from '../extensions/fallbacks'
 import { findAdminRouteByPath } from '../registry'
+import { generatedAdminExtensionModules } from '../../generated/extensionImportMap'
 
 const route = useRoute()
 const loading = ref(true)
@@ -44,7 +45,10 @@ const errorMessage = ref('')
 const extension = ref(null)
 const resolvedComponent = ref(null)
 
-const adminEntryModules = import.meta.glob('../../../../extensions/*/frontend/admin/index.js')
+const adminEntryModules = {
+  ...import.meta.glob('../../../../extensions/*/frontend/admin/index.js'),
+  ...generatedAdminExtensionModules,
+}
 
 const hostKind = computed(() => {
   const matchedRoute = findAdminRouteByPath(route.path)

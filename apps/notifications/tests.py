@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from apps.discussions.models import DiscussionUser
 from apps.core.models import Setting
+from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.discussions.services import DiscussionService
 from apps.notifications.models import Notification
@@ -14,6 +15,7 @@ from apps.notifications.admin import NotificationAdmin
 from apps.notifications.services import NotificationService
 from apps.posts.services import PostService
 from apps.users.models import User
+from extensions.notifications.backend.ext import notification_resource_endpoints
 
 
 class NotificationServiceTests(TestCase):
@@ -597,6 +599,53 @@ class NotificationServiceTests(TestCase):
         payload = response.json()
         self.assertIn("from_user", payload)
         self.assertEqual(payload["from_user"]["username"], self.replier.username)
+
+    def test_notification_detail_static_route_uses_resource_endpoint_mutator(self):
+        notification = Notification.objects.create(
+            user=self.author,
+            from_user=self.replier,
+            type="postLiked",
+            subject_type="post",
+            subject_id=self.initial_reply.id,
+            data={"post_id": self.initial_reply.id},
+        )
+
+        def mutate_endpoint(endpoint):
+            def handler(context):
+                payload = endpoint.handler(context)
+                payload["mutated_by_resource_endpoint"] = True
+                return payload
+
+            return ResourceEndpointDefinition(
+                resource=endpoint.resource,
+                endpoint=endpoint.endpoint,
+                module_id="test",
+                handler=handler,
+                methods=endpoint.methods,
+            )
+
+        registry = ResourceRegistry()
+        for endpoint in notification_resource_endpoints():
+            registry.register_endpoint(endpoint)
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="notification",
+                endpoint="show",
+                module_id="test",
+                operation="mutate",
+                mutator=mutate_endpoint,
+            )
+        )
+
+        with patch("apps.notifications.api.get_runtime_resource_registry", return_value=registry):
+            with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
+                response = self.client.get(
+                    f"/api/notifications/{notification.id}",
+                    **self.auth_header(self.author),
+                )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["mutated_by_resource_endpoint"])
 
     def test_notification_list_avoids_n_plus_one_for_registered_from_user_summary(self):
         for index in range(3):

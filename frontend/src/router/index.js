@@ -78,24 +78,6 @@ const router = createRouter({
       }
     },
     {
-      path: '/tags',
-      name: 'tags',
-      component: () => import('@/views/TagsView.vue'),
-      meta: {
-        title: '全部标签',
-        description: '浏览论坛标签，按主题发现相关讨论。'
-      }
-    },
-    {
-      path: '/t/:slug',
-      name: 'tag-detail',
-      component: () => import('@/views/DiscussionListView.vue'),
-      meta: {
-        title: '标签讨论',
-        description: '查看该标签下的论坛讨论。'
-      }
-    },
-    {
       path: '/profile',
       name: 'profile',
       component: () => import('@/views/ProfileView.vue'),

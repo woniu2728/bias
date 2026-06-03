@@ -1,8 +1,13 @@
-import { registerComposerPreviewTransformer, registerComposerTool } from '@/forum/registry'
-import { renderTwemojiHtml, setTwemojiBaseUrl, setTwemojiEnabled } from '@/utils/twemoji'
+import {
+  registerComposerPreviewTransformer,
+  registerComposerTool,
+  renderTwemojiHtml,
+  setTwemojiBaseUrl,
+  setTwemojiEnabled,
+} from '@/forum/registry'
 
 function resolveEmojiSettings(context = {}) {
-  const settings = context.extension?.settings_values || {}
+  const settings = context.extension?.forum_settings || context.extension?.settings_values || {}
   return {
     cdnUrl: String(settings.cdn_url || '').trim(),
   }

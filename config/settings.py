@@ -55,6 +55,7 @@ MIDDLEWARE = [
     'apps.core.middleware.StartupStateMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.core.middleware.ExtensionRequestMiddleware',
     'apps.core.middleware.QueryLoggingMiddleware',
     'apps.core.middleware.MaintenanceModeMiddleware',
     'apps.core.middleware.SecurityHeadersMiddleware',
@@ -142,6 +143,7 @@ USE_TZ = True
 STATIC_URL = BOOTSTRAP.static_url or '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
+BIAS_EXTENSION_PACKAGE_DISCOVERY = True
 
 # Media files
 MEDIA_URL = BOOTSTRAP.media_url or '/media/'

@@ -5,17 +5,15 @@ from ninja import Router
 from ninja_jwt.controller import NinjaJWTDefaultController
 from ninja_jwt.exceptions import TokenError
 from ninja_jwt.tokens import RefreshToken
-from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.http import JsonResponse
 from django.db.models import Q
-from typing import List
 
-from apps.core.auth import get_optional_user
 from apps.core.api_errors import api_error
-from apps.core.forum_resources import serialize_user_payload
 from apps.core.resource_api import ResourceQueryOptions, apply_resource_preloads, parse_resource_query_options
-from apps.core.resource_registry import get_resource_registry
+from apps.core.extensions.runtime_access import get_runtime_resource_registry
+from apps.core.resource_dispatcher import dispatch_resource_endpoint
+from apps.core.resource_registry import ResourceEndpointDefinition
 from apps.core.human_verification import HumanVerificationError, verify_human_verification
 from apps.core.jwt_auth import (
     ACCESS_TOKEN_COOKIE_NAME,
@@ -48,7 +46,10 @@ from .schemas import (
 from .services import UserService
 
 router = Router()
-RESOURCE_REGISTRY = get_resource_registry()
+
+
+def _get_resource_registry():
+    return get_runtime_resource_registry()
 
 
 def _set_refresh_token_cookie(response: JsonResponse, refresh: RefreshToken) -> JsonResponse:
@@ -101,11 +102,12 @@ def _attach_current_user_context(user):
     return user
 
 
-def _serialize_user_detail_payload(user, include_forum_permissions: bool = False, resource_options=None):
+def _serialize_user_detail_payload(user, include_forum_permissions: bool = False, resource_options=None, actor=None):
     resource_options = resource_options or ResourceQueryOptions()
-    payload = RESOURCE_REGISTRY.serialize(
+    payload = _get_resource_registry().serialize(
         "user_detail",
         user,
+        {"user": actor} if actor is not None else {},
         only=resource_options.fields,
         include=resource_options.includes,
     ) or {}
@@ -162,6 +164,238 @@ def _serialize_user_out_payload(user):
     payload.setdefault("is_suspended", user.is_suspended)
     payload.setdefault("is_staff", user.is_staff)
     return payload
+
+
+def _register_user_core_resource_endpoints():
+    registry = _get_resource_registry()
+    registry.register_core_endpoint(
+        ResourceEndpointDefinition(
+            resource="user_detail",
+            endpoint="current",
+            module_id="core",
+            handler=_dispatch_current_user,
+            methods=("GET",),
+            auth_required=True,
+        )
+    )
+    registry.register_core_endpoint(
+        ResourceEndpointDefinition(
+            resource="user_detail",
+            endpoint="index",
+            module_id="core",
+            handler=_dispatch_user_index,
+            methods=("GET",),
+        )
+    )
+    registry.register_core_endpoint(
+        ResourceEndpointDefinition(
+            resource="user_detail",
+            endpoint="by-username",
+            module_id="core",
+            handler=_dispatch_user_by_username,
+            methods=("GET",),
+        )
+    )
+    registry.register_core_endpoint(
+        ResourceEndpointDefinition(
+            resource="user_detail",
+            endpoint="show",
+            module_id="core",
+            handler=_dispatch_user_show,
+            methods=("GET",),
+        )
+    )
+    registry.register_core_endpoint(
+        ResourceEndpointDefinition(
+            resource="user_detail",
+            endpoint="update",
+            module_id="core",
+            handler=_dispatch_user_update,
+            methods=("PATCH",),
+            auth_required=True,
+        )
+    )
+    registry.register_core_endpoint(
+        ResourceEndpointDefinition(
+            resource="user_detail",
+            endpoint="password",
+            module_id="core",
+            handler=_dispatch_user_change_password,
+            methods=("POST",),
+            auth_required=True,
+        )
+    )
+    registry.register_core_endpoint(
+        ResourceEndpointDefinition(
+            resource="user_detail",
+            endpoint="avatar.upload",
+            module_id="core",
+            handler=_dispatch_user_upload_avatar,
+            methods=("POST",),
+            auth_required=True,
+        )
+    )
+
+
+def _user_query_value(context, key: str, default=None):
+    return dict(context.get("query") or {}).get(key, default)
+
+
+def _user_payload(context) -> dict:
+    payload = context.get("payload")
+    return payload if isinstance(payload, dict) else {}
+
+
+def _user_object_id(context) -> int:
+    try:
+        return int(context.get("object_id") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _dispatch_current_user(context):
+    user = _attach_current_user_context(context["user"])
+    payload = _serialize_user_detail_payload(user, include_forum_permissions=True, actor=user)
+    payload["groups"] = _serialize_user_groups_for_schema(user)
+    return payload
+
+
+def _dispatch_user_index(context):
+    request = context["request"]
+    user = context.get("user")
+    if user:
+        user = _attach_current_user_context(user)
+    page, limit = PaginationService.normalize(
+        _user_query_value(context, "page", 1),
+        _user_query_value(context, "limit", 20),
+    )
+    q = _user_query_value(context, "q")
+
+    if q:
+        if not UserService.has_forum_permission(user, "searchUsers"):
+            return api_error("没有权限搜索用户", status=403)
+    elif not UserService.has_forum_permission(user, "viewUserList"):
+        return api_error("没有权限查看用户列表", status=403)
+
+    resource_options = parse_resource_query_options(request, "user_detail")
+    queryset = apply_resource_preloads(
+        _get_resource_registry(),
+        User.objects.all(),
+        "user_detail",
+        resource_options=resource_options,
+        default_includes=("groups",),
+    )
+
+    if q:
+        queryset = queryset.filter(Q(username__icontains=q) | Q(display_name__icontains=q))
+
+    start = (page - 1) * limit
+    end = start + limit
+    users = list(queryset[start:end])
+    return [_serialize_user_detail_payload(item, resource_options=resource_options, actor=user) for item in users]
+
+
+def _dispatch_user_by_username(context):
+    request = context["request"]
+    actor = context.get("user")
+    username = str(context.get("object_id") or "").strip()
+    resource_options = parse_resource_query_options(request, "user_detail")
+    user = apply_resource_preloads(
+        _get_resource_registry(),
+        User.objects.filter(username=username),
+        "user_detail",
+        resource_options=resource_options,
+        default_includes=("groups",),
+    ).first()
+    if not user:
+        return api_error("用户不存在", status=404)
+    return _serialize_user_detail_payload(user, resource_options=resource_options, actor=actor)
+
+
+def _dispatch_user_show(context):
+    request = context["request"]
+    actor = context.get("user")
+    resource_options = parse_resource_query_options(request, "user_detail")
+    user = apply_resource_preloads(
+        _get_resource_registry(),
+        User.objects.filter(id=_user_object_id(context)),
+        "user_detail",
+        resource_options=resource_options,
+        default_includes=("groups",),
+    ).first()
+    if not user:
+        return api_error("用户不存在", status=404)
+    return _serialize_user_detail_payload(user, resource_options=resource_options, actor=actor)
+
+
+def _dispatch_user_update(context):
+    user_id = _user_object_id(context)
+    user = User.objects.filter(id=user_id).first()
+    if not user:
+        return api_error("用户不存在", status=404)
+    actor = context["user"]
+
+    if actor.id != user.id and not actor.is_staff:
+        return api_error("无权限", status=403)
+
+    payload = UserUpdateSchema(**_user_payload(context))
+    try:
+        user = UserService.update_user(
+            user,
+            display_name=payload.display_name,
+            bio=payload.bio,
+            email=payload.email,
+        )
+        user = User.objects.prefetch_related("user_groups").get(id=user.id)
+        return _serialize_user_detail_payload(user, actor=actor)
+    except ValueError as e:
+        return api_error(str(e), status=400)
+
+
+def _dispatch_user_change_password(context):
+    user_id = _user_object_id(context)
+    user = User.objects.filter(id=user_id).first()
+    if not user:
+        return api_error("用户不存在", status=404)
+
+    if context["user"].id != user.id:
+        return api_error("无权限", status=403)
+
+    payload = PasswordChangeSchema(**_user_payload(context))
+    try:
+        UserService.change_password(user, payload.old_password, payload.new_password)
+        return {"message": "密码修改成功"}
+    except ValueError as e:
+        return api_error(str(e), status=400)
+
+
+def _dispatch_user_upload_avatar(context):
+    request = context["request"]
+    user_id = _user_object_id(context)
+    user = User.objects.filter(id=user_id).first()
+    if not user:
+        return api_error("用户不存在", status=404)
+
+    if context["user"].id != user.id:
+        return api_error("无权限", status=403)
+
+    avatar = request.FILES.get("avatar")
+    if not avatar:
+        return api_error("请选择要上传的头像", status=400)
+
+    try:
+        previous_avatar = user.avatar_url
+        avatar_url, _ = FileUploadService.upload_avatar(avatar, user.id)
+        user.avatar_url = avatar_url
+        user.save(update_fields=["avatar_url"])
+
+        if previous_avatar and previous_avatar != avatar_url:
+            FileUploadService.delete_file(previous_avatar)
+
+        user = User.objects.prefetch_related("user_groups").get(id=user.id)
+        return _serialize_user_detail_payload(user)
+    except ValueError as e:
+        return api_error(str(e), status=400)
 
 
 # ==================== 认证相关 ====================
@@ -288,10 +522,8 @@ def reset_password(request, payload: PasswordResetSchema):
 @router.get("/me", response=CurrentUserSchema, auth=AccessTokenAuth(), tags=["Users"])
 def get_current_user(request):
     """获取当前用户信息"""
-    user = _attach_current_user_context(request.auth)
-    payload = _serialize_user_detail_payload(user, include_forum_permissions=True)
-    payload["groups"] = _serialize_user_groups_for_schema(user)
-    return payload
+    _register_user_core_resource_endpoints()
+    return dispatch_resource_endpoint(request, resource="user_detail", endpoint="current")
 
 
 @router.get("/me/preferences", response=UserPreferencesSchema, auth=AccessTokenAuth(), tags=["Users"])
@@ -313,134 +545,65 @@ def update_preferences(request, payload: UserPreferencesUpdateSchema):
 @router.get("", tags=["Users"])
 def list_users(request, page: int = 1, limit: int = 20, q: str = None):
     """获取用户列表"""
-    user = get_optional_user(request)
-    if user:
-        user = _attach_current_user_context(user)
-    page, limit = PaginationService.normalize(page, limit)
-
-    if q:
-        if not UserService.has_forum_permission(user, "searchUsers"):
-            return api_error("没有权限搜索用户", status=403)
-    elif not UserService.has_forum_permission(user, "viewUserList"):
-        return api_error("没有权限查看用户列表", status=403)
-
-    resource_options = parse_resource_query_options(request, "user_detail")
-    queryset = apply_resource_preloads(
-        RESOURCE_REGISTRY,
-        User.objects.all(),
-        "user_detail",
-        resource_options=resource_options,
-        default_includes=("groups",),
-    )
-
-    # 搜索
-    if q:
-        queryset = queryset.filter(Q(username__icontains=q) | Q(display_name__icontains=q))
-
-    # 分页
-    start = (page - 1) * limit
-    end = start + limit
-
-    users = list(queryset[start:end])
-    return JsonResponse(
-        [_serialize_user_detail_payload(item, resource_options=resource_options) for item in users],
-        safe=False,
-    )
+    _register_user_core_resource_endpoints()
+    return dispatch_resource_endpoint(request, resource="user_detail", endpoint="index")
 
 
 @router.get("/by-username/{username}", tags=["Users"])
 def get_user_by_username(request, username: str):
     """按用户名获取用户详情，兼容旧版 @提及 链接"""
-    resource_options = parse_resource_query_options(request, "user_detail")
-    user = get_object_or_404(
-        apply_resource_preloads(
-            RESOURCE_REGISTRY,
-            User.objects.filter(username=username),
-            "user_detail",
-            resource_options=resource_options,
-            default_includes=("groups",),
-        )
+    _register_user_core_resource_endpoints()
+    return dispatch_resource_endpoint(
+        request,
+        resource="user_detail",
+        object_id=username,
+        endpoint="by-username",
     )
-    return JsonResponse(_serialize_user_detail_payload(user, resource_options=resource_options))
 
 
 @router.get("/{user_id}", tags=["Users"])
 def get_user(request, user_id: int):
     """获取用户详情"""
-    resource_options = parse_resource_query_options(request, "user_detail")
-    user = get_object_or_404(
-        apply_resource_preloads(
-            RESOURCE_REGISTRY,
-            User.objects.filter(id=user_id),
-            "user_detail",
-            resource_options=resource_options,
-            default_includes=("groups",),
-        )
+    _register_user_core_resource_endpoints()
+    return dispatch_resource_endpoint(
+        request,
+        resource="user_detail",
+        object_id=str(user_id),
+        endpoint="show",
     )
-    return JsonResponse(_serialize_user_detail_payload(user, resource_options=resource_options))
 
 
 @router.patch("/{user_id}", response=UserOutSchema, auth=AccessTokenAuth(), tags=["Users"])
 def update_user(request, user_id: int, payload: UserUpdateSchema):
     """更新用户信息"""
-    user = get_object_or_404(User, id=user_id)
-
-    # 检查权限：只能修改自己的信息
-    if request.auth.id != user.id and not request.auth.is_staff:
-        return api_error("无权限", status=403)
-
-    try:
-        user = UserService.update_user(
-            user,
-            display_name=payload.display_name,
-            bio=payload.bio,
-            email=payload.email,
-        )
-        user = User.objects.prefetch_related("user_groups").get(id=user.id)
-        return _serialize_user_detail_payload(user)
-    except ValueError as e:
-        return api_error(str(e), status=400)
+    _register_user_core_resource_endpoints()
+    return dispatch_resource_endpoint(
+        request,
+        resource="user_detail",
+        object_id=str(user_id),
+        endpoint="update",
+    )
 
 
 @router.post("/{user_id}/password", auth=AccessTokenAuth(), tags=["Users"])
 def change_password(request, user_id: int, payload: PasswordChangeSchema):
     """修改密码"""
-    user = get_object_or_404(User, id=user_id)
-
-    # 检查权限：只能修改自己的密码
-    if request.auth.id != user.id:
-        return api_error("无权限", status=403)
-
-    try:
-        UserService.change_password(user, payload.old_password, payload.new_password)
-        return {"message": "密码修改成功"}
-    except ValueError as e:
-        return api_error(str(e), status=400)
+    _register_user_core_resource_endpoints()
+    return dispatch_resource_endpoint(
+        request,
+        resource="user_detail",
+        object_id=str(user_id),
+        endpoint="password",
+    )
 
 
 @router.post("/{user_id}/avatar", response=UserOutSchema, auth=AccessTokenAuth(), tags=["Users"])
 def upload_avatar(request, user_id: int):
     """上传头像"""
-    user = get_object_or_404(User, id=user_id)
-
-    # 检查权限
-    if request.auth.id != user.id:
-        return api_error("无权限", status=403)
-
-    avatar = request.FILES.get("avatar")
-    if not avatar:
-        return api_error("请选择要上传的头像", status=400)
-
-    try:
-        previous_avatar = user.avatar_url
-        avatar_url, _ = FileUploadService.upload_avatar(avatar, user.id)
-        user.avatar_url = avatar_url
-        user.save(update_fields=["avatar_url"])
-
-        if previous_avatar and previous_avatar != avatar_url:
-            FileUploadService.delete_file(previous_avatar)
-
-        user = User.objects.prefetch_related("user_groups").get(id=user.id)
-        return _serialize_user_detail_payload(user)
-    except ValueError as e:
-        return api_error(str(e), status=400)
+    _register_user_core_resource_endpoints()
+    return dispatch_resource_endpoint(
+        request,
+        resource="user_detail",
+        object_id=str(user_id),
+        endpoint="avatar.upload",
+    )

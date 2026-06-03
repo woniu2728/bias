@@ -30,6 +30,42 @@ const pageStates = []
 const stateBlocks = []
 const uiCopies = []
 
+import { getCurrentExtensionId } from '../common/extensionRuntime.js'
+
+const registryTargets = [
+  forumNavItems,
+  discussionActionItems,
+  postActionItems,
+  headerItems,
+  forumNavSections,
+  composerTools,
+  composerNotices,
+  composerSubmitGuards,
+  composerSecondaryActions,
+  composerStatusItems,
+  composerDraftMetaItems,
+  composerSubmitSuccessHandlers,
+  composerMentionProviders,
+  composerPreviewTransformers,
+  profilePanels,
+  notificationRenderers,
+  searchSources,
+  userBadges,
+  discussionBadges,
+  discussionStateBadges,
+  postStateBadges,
+  heroMetaItems,
+  discussionReplyStates,
+  postReviewBanners,
+  discussionReviewBanners,
+  postFlagPanels,
+  approvalNotes,
+  emptyStates,
+  pageStates,
+  stateBlocks,
+  uiCopies,
+]
+
 function upsertByKey(target, key, value) {
   const existingIndex = target.findIndex(item => item.key === key)
   if (existingIndex >= 0) {
@@ -43,12 +79,29 @@ function upsertByKey(target, key, value) {
 
 function normalizeRegisteredItem(item, defaults = {}) {
   const moduleId = String(item?.moduleId || item?.module_id || '').trim()
+  const extensionId = String(item?.extensionId || item?.extension_id || getCurrentExtensionId() || '').trim()
   return {
     order: 100,
     surfaces: [],
     ...defaults,
     ...item,
     ...(moduleId ? { moduleId, module_id: moduleId } : {}),
+    ...(extensionId ? { extensionId, extension_id: extensionId } : {}),
+  }
+}
+
+export function clearForumRegistryExtensions(extensionId = '') {
+  const normalizedExtensionId = String(extensionId || '').trim()
+  for (const target of registryTargets) {
+    for (let index = target.length - 1; index >= 0; index -= 1) {
+      const itemExtensionId = String(target[index]?.extensionId || target[index]?.extension_id || '').trim()
+      if (!itemExtensionId) {
+        continue
+      }
+      if (!normalizedExtensionId || itemExtensionId === normalizedExtensionId) {
+        target.splice(index, 1)
+      }
+    }
   }
 }
 

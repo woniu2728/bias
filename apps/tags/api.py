@@ -5,24 +5,25 @@ from typing import Optional
 from ninja import Router
 from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch
-from django.http import JsonResponse
 
 from apps.tags.models import Tag
 from apps.tags.schemas import (
     TagCreateSchema,
     TagUpdateSchema,
-    TagFilterSchema,
     TagOutSchema,
-    TagListSchema,
 )
 from apps.tags.services import TagService
 from apps.core.api_errors import api_error
-from apps.core.auth import AuthBearer, get_optional_user
+from apps.core.auth import AuthBearer
 from apps.core.resource_api import ResourceQueryOptions, parse_resource_query_options
-from apps.core.resource_registry import get_resource_registry
+from apps.core.extensions.runtime_access import get_runtime_resource_registry
+from apps.core.resource_dispatcher import dispatch_resource_endpoint
 
 router = Router()
-RESOURCE_REGISTRY = get_resource_registry()
+
+
+def _get_resource_registry():
+    return get_runtime_resource_registry()
 
 
 def _build_tag_serialize_context(user=None, action="view"):
@@ -48,7 +49,7 @@ def _serialize_tag(
     context = context or _build_tag_serialize_context(user, action=action)
     forbidden_tag_ids = context["forbidden_tag_ids"]
     resource_options = resource_options or ResourceQueryOptions()
-    payload = RESOURCE_REGISTRY.serialize(
+    payload = _get_resource_registry().serialize(
         "tag",
         tag,
         {"user": user, "action": action},
@@ -76,7 +77,7 @@ def _serialize_tag(
 
 def _apply_tag_resource_preloads(queryset, user=None, action="view", resource_options=None):
     resource_options = resource_options or ResourceQueryOptions()
-    return RESOURCE_REGISTRY.apply_preload_plan(
+    return _get_resource_registry().apply_preload_plan(
         queryset,
         "tag",
         {"user": user, "action": action},
@@ -85,13 +86,55 @@ def _apply_tag_resource_preloads(queryset, user=None, action="view", resource_op
     )
 
 
-@router.post("/tags", response=TagOutSchema, auth=AuthBearer(), tags=["Tags"])
-def create_tag(request, payload: TagCreateSchema):
-    """
-    创建标签
+def _tag_query_value(context, key: str, default=None):
+    return dict(context.get("query") or {}).get(key, default)
 
-    需要管理员权限
-    """
+
+def _tag_payload(context) -> dict:
+    payload = context.get("payload")
+    return payload if isinstance(payload, dict) else {}
+
+
+def _tag_object_id(context) -> int:
+    try:
+        return int(context.get("object_id") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _tag_int_query_value(context, key: str):
+    value = _tag_query_value(context, key)
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _tag_bool_query_value(context, key: str, default=False):
+    value = _tag_query_value(context, key)
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def _tag_purpose_query_value(context):
+    purpose = str(_tag_query_value(context, "purpose", "view") or "view")
+    if purpose not in {"view", "start_discussion", "reply"}:
+        return "view"
+    return purpose
+
+
+def _dispatch_tag_create(context):
+    payload = TagCreateSchema(**_tag_payload(context))
     try:
         tag = TagService.create_tag(
             name=payload.name,
@@ -107,46 +150,24 @@ def create_tag(request, payload: TagCreateSchema):
             view_scope=payload.view_scope or Tag.ACCESS_PUBLIC,
             start_discussion_scope=payload.start_discussion_scope or Tag.ACCESS_MEMBERS,
             reply_scope=payload.reply_scope or Tag.ACCESS_MEMBERS,
-            user=request.auth,
+            user=context["user"],
         )
-
-        return _serialize_tag(tag, user=request.auth, include_children=True)
+        return _serialize_tag(tag, user=context["user"], include_children=True)
     except PermissionDenied as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=403
-        )
+        return api_error(str(e), status=403)
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400
-        )
+        return api_error(str(e), status=400)
 
 
-@router.get("/tags", tags=["Tags"])
-def list_tags(
-    request,
-    parent_id: Optional[int] = None,
-    include_hidden: bool = False,
-    include_children: bool = True,
-    purpose: str = "view",
-):
-    """
-    获取标签列表
-
-    参数:
-    - parent_id: 父标签ID（不传或传null表示顶级标签）
-    - include_hidden: 是否包含隐藏标签（需要管理员权限）
-    """
-    # 只有管理员可以查看隐藏标签
-    user = get_optional_user(request)
+def _dispatch_tag_index(context):
+    request = context["request"]
+    user = context.get("user")
     resource_options = parse_resource_query_options(request, "tag")
+    include_hidden = _tag_bool_query_value(context, "include_hidden", False)
+    include_children = _tag_bool_query_value(context, "include_children", True)
+    purpose = _tag_purpose_query_value(context)
     if include_hidden and (not user or not user.is_staff):
         include_hidden = False
-    if purpose not in {"view", "start_discussion", "reply"}:
-        purpose = "view"
 
     visible_child_queryset = (
         Tag.objects.select_related("last_posted_discussion")
@@ -166,6 +187,7 @@ def list_tags(
         resource_options=resource_options,
     )
 
+    parent_id = _tag_int_query_value(context, "parent_id")
     if parent_id is None:
         queryset = queryset.filter(parent__isnull=True)
     else:
@@ -177,33 +199,27 @@ def list_tags(
     queryset = TagService.filter_tags_for_user(queryset, user, action=purpose)
     tags = queryset.order_by('position', 'name')
 
-    context = _build_tag_serialize_context(user, action=purpose)
-    response_payload = {
+    serialize_context = _build_tag_serialize_context(user, action=purpose)
+    return {
         "data": [
             _serialize_tag(
                 tag,
                 user=user,
                 include_children=include_children,
                 action=purpose,
-                context=context,
+                context=serialize_context,
                 resource_options=resource_options,
             )
             for tag in tags
         ]
     }
-    return JsonResponse(response_payload)
 
 
-@router.get("/tags/popular", tags=["Tags"])
-def get_popular_tags(request, limit: int = 10):
-    """
-    获取热门标签
-
-    参数:
-    - limit: 返回数量（默认10）
-    """
-    user = get_optional_user(request)
+def _dispatch_tag_popular(context):
+    request = context["request"]
+    user = context.get("user")
     resource_options = parse_resource_query_options(request, "tag")
+    limit = _tag_int_query_value(context, "limit") or 10
     tags = TagService.filter_tags_for_user(
         Tag.objects.filter(is_hidden=False),
         user,
@@ -216,32 +232,18 @@ def get_popular_tags(request, limit: int = 10):
         resource_options=resource_options,
     ).order_by('-discussion_count', '-last_posted_at')[:limit]
 
-    context = _build_tag_serialize_context(user, action="view")
-    response_payload = {
+    serialize_context = _build_tag_serialize_context(user, action="view")
+    return {
         "data": [
-            _serialize_tag(tag, user=user, context=context, resource_options=resource_options)
+            _serialize_tag(tag, user=user, context=serialize_context, resource_options=resource_options)
             for tag in tags
         ]
     }
-    return JsonResponse(response_payload)
 
 
-@router.get("/tags/{tag_id}", tags=["Tags"])
-def get_tag(request, tag_id: int):
-    """
-    获取标签详情
-    """
-    tag = TagService.get_tag_by_id(tag_id)
-
+def _load_visible_tag(tag, user, resource_options):
     if not tag:
-        return router.create_response(
-            request,
-            {"error": "标签不存在"},
-            status=404
-        )
-
-    user = get_optional_user(request)
-    resource_options = parse_resource_query_options(request, "tag")
+        return None
     tag = _apply_tag_resource_preloads(
         Tag.objects.select_related('last_posted_discussion').prefetch_related('children').filter(id=tag.id),
         user=user,
@@ -250,51 +252,40 @@ def get_tag(request, tag_id: int):
     ).get()
     if not TagService.can_view_tag(tag, user):
         return api_error("没有权限查看此标签", status=403)
-    return JsonResponse(
-        _serialize_tag(tag, user=user, include_children=True, resource_options=resource_options),
-    )
+    return tag
 
 
-@router.get("/tags/slug/{slug}", tags=["Tags"])
-def get_tag_by_slug(request, slug: str):
-    """
-    通过slug获取标签
-    """
-    tag = TagService.get_tag_by_slug(slug)
-
-    if not tag:
-        return router.create_response(
-            request,
-            {"error": "标签不存在"},
-            status=404
-        )
-
-    user = get_optional_user(request)
+def _dispatch_tag_show(context):
+    request = context["request"]
+    user = context.get("user")
     resource_options = parse_resource_query_options(request, "tag")
-    tag = _apply_tag_resource_preloads(
-        Tag.objects.select_related('last_posted_discussion').prefetch_related('children').filter(id=tag.id),
-        user=user,
-        action="view",
-        resource_options=resource_options,
-    ).get()
-    if not TagService.can_view_tag(tag, user):
-        return api_error("没有权限查看此标签", status=403)
-    return JsonResponse(
-        _serialize_tag(tag, user=user, include_children=True, resource_options=resource_options),
-    )
+    tag = _load_visible_tag(TagService.get_tag_by_id(_tag_object_id(context)), user, resource_options)
+    if tag is None:
+        return api_error("标签不存在", status=404)
+    if hasattr(tag, "status_code"):
+        return tag
+    return _serialize_tag(tag, user=user, include_children=True, resource_options=resource_options)
 
 
-@router.patch("/tags/{tag_id}", response=TagOutSchema, auth=AuthBearer(), tags=["Tags"])
-def update_tag(request, tag_id: int, payload: TagUpdateSchema):
-    """
-    更新标签
+def _dispatch_tag_show_by_slug(context):
+    request = context["request"]
+    user = context.get("user")
+    resource_options = parse_resource_query_options(request, "tag")
+    slug = str(context.get("object_id") or "").strip()
+    tag = _load_visible_tag(TagService.get_tag_by_slug(slug), user, resource_options)
+    if tag is None:
+        return api_error("标签不存在", status=404)
+    if hasattr(tag, "status_code"):
+        return tag
+    return _serialize_tag(tag, user=user, include_children=True, resource_options=resource_options)
 
-    需要管理员权限
-    """
+
+def _dispatch_tag_update(context):
+    payload = TagUpdateSchema(**_tag_payload(context))
     try:
         tag = TagService.update_tag(
-            tag_id=tag_id,
-            user=request.auth,
+            tag_id=_tag_object_id(context),
+            user=context["user"],
             name=payload.name,
             slug=payload.slug,
             description=payload.description,
@@ -311,25 +302,105 @@ def update_tag(request, tag_id: int, payload: TagUpdateSchema):
         )
 
         tag = Tag.objects.select_related('last_posted_discussion').prefetch_related('children').get(id=tag.id)
-        return _serialize_tag(tag, user=request.auth, include_children=True)
+        return _serialize_tag(tag, user=context["user"], include_children=True)
     except Tag.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "标签不存在"},
-            status=404
-        )
+        return api_error("标签不存在", status=404)
     except PermissionDenied as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=403
-        )
+        return api_error(str(e), status=403)
     except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400
-        )
+        return api_error(str(e), status=400)
+
+
+def _dispatch_tag_delete(context):
+    try:
+        TagService.delete_tag(_tag_object_id(context), context["user"])
+        return {"message": "标签已删除"}
+    except Tag.DoesNotExist:
+        return api_error("标签不存在", status=404)
+    except PermissionDenied as e:
+        return api_error(str(e), status=403)
+    except ValueError as e:
+        return api_error(str(e), status=400)
+
+
+@router.post("/tags", response=TagOutSchema, auth=AuthBearer(), tags=["Tags"])
+def create_tag(request, payload: TagCreateSchema):
+    """
+    创建标签
+
+    需要管理员权限
+    """
+    return dispatch_resource_endpoint(request, resource="tag", endpoint="create")
+
+
+@router.get("/tags", tags=["Tags"])
+def list_tags(
+    request,
+    parent_id: Optional[int] = None,
+    include_hidden: bool = False,
+    include_children: bool = True,
+    purpose: str = "view",
+):
+    """
+    获取标签列表
+
+    参数:
+    - parent_id: 父标签ID（不传或传null表示顶级标签）
+    - include_hidden: 是否包含隐藏标签（需要管理员权限）
+    """
+    return dispatch_resource_endpoint(request, resource="tag", endpoint="index")
+
+
+@router.get("/tags/popular", tags=["Tags"])
+def get_popular_tags(request, limit: int = 10):
+    """
+    获取热门标签
+
+    参数:
+    - limit: 返回数量（默认10）
+    """
+    return dispatch_resource_endpoint(request, resource="tag", endpoint="popular")
+
+
+@router.get("/tags/{tag_id}", tags=["Tags"])
+def get_tag(request, tag_id: int):
+    """
+    获取标签详情
+    """
+    return dispatch_resource_endpoint(
+        request,
+        resource="tag",
+        object_id=str(tag_id),
+        endpoint="show",
+    )
+
+
+@router.get("/tags/slug/{slug}", tags=["Tags"])
+def get_tag_by_slug(request, slug: str):
+    """
+    通过slug获取标签
+    """
+    return dispatch_resource_endpoint(
+        request,
+        resource="tag",
+        object_id=slug,
+        endpoint="show-by-slug",
+    )
+
+
+@router.patch("/tags/{tag_id}", response=TagOutSchema, auth=AuthBearer(), tags=["Tags"])
+def update_tag(request, tag_id: int, payload: TagUpdateSchema):
+    """
+    更新标签
+
+    需要管理员权限
+    """
+    return dispatch_resource_endpoint(
+        request,
+        resource="tag",
+        object_id=str(tag_id),
+        endpoint="update",
+    )
 
 
 @router.delete("/tags/{tag_id}", auth=AuthBearer(), tags=["Tags"])
@@ -339,24 +410,9 @@ def delete_tag(request, tag_id: int):
 
     需要管理员权限
     """
-    try:
-        TagService.delete_tag(tag_id, request.auth)
-        return {"message": "标签已删除"}
-    except Tag.DoesNotExist:
-        return router.create_response(
-            request,
-            {"error": "标签不存在"},
-            status=404
-        )
-    except PermissionDenied as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=403
-        )
-    except ValueError as e:
-        return router.create_response(
-            request,
-            {"error": str(e)},
-            status=400
-        )
+    return dispatch_resource_endpoint(
+        request,
+        resource="tag",
+        object_id=str(tag_id),
+        endpoint="delete",
+    )

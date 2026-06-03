@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Q, F, Count, QuerySet
 from django.core.exceptions import PermissionDenied
 from django.utils.text import slugify
+from apps.core.extensions.runtime_access import generate_runtime_model_slug
 from apps.tags.models import Tag, DiscussionTag
 from apps.users.models import User
 from apps.discussions.models import Discussion
@@ -190,6 +191,16 @@ class TagService:
 
     @staticmethod
     def normalize_tag_slug(name: str, slug: Optional[str] = None, *, exclude_tag_id: Optional[int] = None) -> str:
+        runtime_slug = generate_runtime_model_slug(
+            Tag,
+            name,
+            explicit_slug=slug or "",
+            exclude_id=exclude_tag_id,
+            context={"source": "tags"},
+        )
+        if runtime_slug:
+            return runtime_slug
+
         normalized_slug = (slug or "").strip()
         if not normalized_slug:
             normalized_slug = slugify(name, allow_unicode=True)

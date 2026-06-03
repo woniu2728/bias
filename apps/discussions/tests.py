@@ -13,14 +13,44 @@ from datetime import timedelta
 from io import StringIO
 from ninja_jwt.tokens import RefreshToken
 
-from apps.core.forum_events import DiscussionTaggedEvent, TagStatsRefreshRequestedEvent
 from apps.core.models import AuditLog
-from apps.discussions.models import Discussion
+from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry, ResourceSortDefinition
+from apps.discussions.models import Discussion, DiscussionUser
+from apps.discussions.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
 from apps.discussions.services import DiscussionService
 from apps.posts.models import Post
 from apps.posts.services import PostService
 from apps.tags.models import Tag
+from extensions.tags.backend.events import DiscussionTaggedEvent, TagStatsRefreshRequestedEvent
 from apps.users.models import Group, Permission, User
+
+
+def discussion_tags_payload(tag_ids):
+    return {
+        "data": {
+            "relationships": {
+                "tags": {
+                    "data": [
+                        {"type": "tag", "id": str(tag_id)}
+                        for tag_id in tag_ids
+                    ],
+                },
+            },
+        },
+    }
+
+
+def discussion_resource_payload(*, title=None, content=None, tag_ids=None):
+    attributes = {}
+    if title is not None:
+        attributes["title"] = title
+    if content is not None:
+        attributes["content"] = content
+
+    payload = {"data": {"type": "discussion", "attributes": attributes}}
+    if tag_ids is not None:
+        payload["data"]["relationships"] = discussion_tags_payload(tag_ids)["data"]["relationships"]
+    return payload
 
 
 class DiscussionApiTests(TestCase):
@@ -43,6 +73,10 @@ class DiscussionApiTests(TestCase):
         token = RefreshToken.for_user(user).access_token
         return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
+    def test_discussion_core_schemas_do_not_expose_tag_ids(self):
+        self.assertNotIn("tag_ids", DiscussionCreateSchema.__fields__)
+        self.assertNotIn("tag_ids", DiscussionUpdateSchema.__fields__)
+
     def test_update_discussion_dispatches_tag_stats_refresh_request_event(self):
         tag_a = Tag.objects.create(name="标签A", slug="tag-a", color="#3498db")
         tag_b = Tag.objects.create(name="标签B", slug="tag-b", color="#2ecc71")
@@ -50,7 +84,7 @@ class DiscussionApiTests(TestCase):
             title="Tag stats event discussion",
             content="Initial post",
             user=self.author,
-            tag_ids=[tag_a.id],
+            extension_payload=discussion_tags_payload([tag_a.id]),
         )
 
         mocked_bus = Mock()
@@ -59,7 +93,7 @@ class DiscussionApiTests(TestCase):
                 DiscussionService.update_discussion(
                     discussion_id=discussion.id,
                     user=self.author,
-                    tag_ids=[tag_b.id],
+                    extension_payload=discussion_tags_payload([tag_b.id]),
                 )
 
         events = [call.args[0] for call in mocked_bus.dispatch.call_args_list]
@@ -82,6 +116,21 @@ class DiscussionApiTests(TestCase):
         event = mocked_bus.dispatch.call_args.args[0]
         self.assertEqual(event.discussion_id, discussion.id)
 
+    def test_create_discussion_auto_follows_through_subscriptions_extension(self):
+        self.author.preferences = {"follow_after_create": True}
+        self.author.save(update_fields=["preferences"])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            discussion = DiscussionService.create_discussion(
+                title="Auto follow started discussion",
+                content="Initial post",
+                user=self.author,
+            )
+
+        state = DiscussionUser.objects.get(discussion=discussion, user=self.author)
+        self.assertTrue(state.is_subscribed)
+        self.assertEqual(state.last_read_post_number, 1)
+
 
     def test_update_discussion_dispatches_discussion_tagged_event_with_all_affected_tag_ids(self):
         parent_tag = Tag.objects.create(name="父标签", slug="parent-tag", color="#3498db")
@@ -101,7 +150,7 @@ class DiscussionApiTests(TestCase):
             title="Discussion tagged event",
             content="Initial post",
             user=self.author,
-            tag_ids=[parent_tag.id, old_child_tag.id],
+            extension_payload=discussion_tags_payload([parent_tag.id, old_child_tag.id]),
         )
 
         mocked_bus = Mock()
@@ -110,7 +159,7 @@ class DiscussionApiTests(TestCase):
                 DiscussionService.update_discussion(
                     discussion_id=discussion.id,
                     user=self.author,
-                    tag_ids=[parent_tag.id, new_child_tag.id],
+                    extension_payload=discussion_tags_payload([parent_tag.id, new_child_tag.id]),
                 )
 
         events = [call.args[0] for call in mocked_bus.dispatch.call_args_list]
@@ -147,11 +196,11 @@ class DiscussionApiTests(TestCase):
     def test_create_discussion_accepts_bearer_token(self):
         response = self.client.post(
             "/api/discussions/",
-            data=json.dumps({
-                "title": "JWT backed discussion",
-                "content": "Created through the API.",
-                "tag_ids": [],
-            }),
+            data=json.dumps(discussion_resource_payload(
+                title="JWT backed discussion",
+                content="Created through the API.",
+                tag_ids=[],
+            )),
             content_type="application/json",
             **self.auth_header(self.author),
         )
@@ -374,6 +423,108 @@ class DiscussionApiTests(TestCase):
         self.assertTrue(any(item["code"] == "following" and item["route_path"] == "/following" for item in payload["available_filters"]))
         self.assertTrue(any(item["code"] == "my" and item["sidebar_visible"] is False for item in payload["available_filters"]))
 
+    def test_discussion_list_static_route_uses_resource_endpoint_mutator(self):
+        DiscussionService.create_discussion(
+            title="资源端点讨论",
+            content="测试静态路由进入资源端点",
+            user=self.author,
+        )
+
+        def mutate_endpoint(endpoint):
+            def handler(context):
+                payload = endpoint.handler(context)
+                payload["mutated_by_resource_endpoint"] = True
+                return payload
+
+            return ResourceEndpointDefinition(
+                resource=endpoint.resource,
+                endpoint=endpoint.endpoint,
+                module_id="test",
+                handler=handler,
+                methods=endpoint.methods,
+            )
+
+        registry = ResourceRegistry()
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="discussion",
+                endpoint="index",
+                module_id="test",
+                operation="mutate",
+                mutator=mutate_endpoint,
+            )
+        )
+
+        with patch("apps.discussions.api.get_runtime_resource_registry", return_value=registry):
+            with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
+                response = self.client.get("/api/discussions/")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["mutated_by_resource_endpoint"])
+
+    def test_discussion_list_sort_catalog_uses_resource_sort_definitions(self):
+        DiscussionService.create_discussion(
+            title="资源排序目录讨论",
+            content="测试排序目录进入资源定义",
+            user=self.author,
+        )
+
+        registry = ResourceRegistry()
+        registry.register_sort(
+            ResourceSortDefinition(
+                resource="discussion",
+                sort="newest",
+                module_id="test",
+                operation="remove",
+            )
+        )
+
+        with patch("apps.discussions.services.get_runtime_resource_registry", return_value=registry):
+            response = self.client.get("/api/discussions/")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        sort_codes = {item["code"] for item in response.json()["available_sorts"]}
+        self.assertNotIn("newest", sort_codes)
+
+    def test_discussion_detail_static_route_uses_resource_endpoint_mutator(self):
+        discussion = DiscussionService.create_discussion(
+            title="详情资源端点讨论",
+            content="测试详情静态路由进入资源端点",
+            user=self.author,
+        )
+
+        def mutate_endpoint(endpoint):
+            def handler(context):
+                payload = endpoint.handler(context)
+                payload["mutated_by_resource_endpoint"] = True
+                return payload
+
+            return ResourceEndpointDefinition(
+                resource=endpoint.resource,
+                endpoint=endpoint.endpoint,
+                module_id="test",
+                handler=handler,
+                methods=endpoint.methods,
+            )
+
+        registry = ResourceRegistry()
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="discussion",
+                endpoint="show",
+                module_id="test",
+                operation="mutate",
+                mutator=mutate_endpoint,
+            )
+        )
+
+        with patch("apps.discussions.api.get_runtime_resource_registry", return_value=registry):
+            with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
+                response = self.client.get(f"/api/discussions/{discussion.id}")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["mutated_by_resource_endpoint"])
+
     def test_discussion_detail_not_found_returns_structured_error_payload(self):
         response = self.client.get("/api/discussions/999999")
 
@@ -541,13 +692,13 @@ class DiscussionApiTests(TestCase):
             title="Life discussion",
             content="Only belongs to life.",
             user=self.author,
-            tag_ids=[life_tag.id],
+            extension_payload=discussion_tags_payload([life_tag.id]),
         )
         DiscussionService.create_discussion(
             title="Tech discussion",
             content="Only belongs to tech.",
             user=self.author,
-            tag_ids=[tech_tag.id],
+            extension_payload=discussion_tags_payload([tech_tag.id]),
         )
 
         response = self.client.get("/api/discussions/", {"tag": life_tag.slug})
@@ -566,11 +717,11 @@ class DiscussionApiTests(TestCase):
 
         response = self.client.post(
             "/api/discussions/",
-            data=json.dumps({
-                "title": "Should fail",
-                "content": "Blocked content",
-                "tag_ids": [],
-            }),
+            data=json.dumps(discussion_resource_payload(
+                title="Should fail",
+                content="Blocked content",
+                tag_ids=[],
+            )),
             content_type="application/json",
             **self.auth_header(self.author),
         )
@@ -585,11 +736,11 @@ class DiscussionApiTests(TestCase):
 
         response = self.client.post(
             "/api/discussions/",
-            data=json.dumps({
-                "title": "Should fail",
-                "content": "Blocked until email verification",
-                "tag_ids": [],
-            }),
+            data=json.dumps(discussion_resource_payload(
+                title="Should fail",
+                content="Blocked until email verification",
+                tag_ids=[],
+            )),
             content_type="application/json",
             **self.auth_header(self.author),
         )
@@ -603,11 +754,11 @@ class DiscussionApiTests(TestCase):
 
         response = self.client.post(
             "/api/discussions/",
-            data=json.dumps({
-                "title": "Should fail",
-                "content": "Blocked by forum permission",
-                "tag_ids": [],
-            }),
+            data=json.dumps(discussion_resource_payload(
+                title="Should fail",
+                content="Blocked by forum permission",
+                tag_ids=[],
+            )),
             content_type="application/json",
             **self.auth_header(self.author),
         )
@@ -621,11 +772,11 @@ class DiscussionApiTests(TestCase):
 
         response = self.client.post(
             "/api/discussions/",
-            data=json.dumps({
-                "title": "Pending discussion",
-                "content": "Needs approval",
-                "tag_ids": [],
-            }),
+            data=json.dumps(discussion_resource_payload(
+                title="Pending discussion",
+                content="Needs approval",
+                tag_ids=[],
+            )),
             content_type="application/json",
             **self.auth_header(self.author),
         )
@@ -699,11 +850,11 @@ class DiscussionApiTests(TestCase):
 
         response = self.client.patch(
             f"/api/discussions/{discussion.id}",
-            data=json.dumps({
-                "title": "Rejected discussion updated",
-                "content": "Updated context for approval",
-                "tag_ids": [],
-            }),
+            data=json.dumps(discussion_resource_payload(
+                title="Rejected discussion updated",
+                content="Updated context for approval",
+                tag_ids=[],
+            )),
             content_type="application/json",
             **self.auth_header(self.author),
         )
@@ -740,11 +891,11 @@ class DiscussionApiTests(TestCase):
 
         response = self.client.post(
             "/api/discussions/",
-            data=json.dumps({
-                "title": "Pending discussion to approve",
-                "content": "Needs approval first",
-                "tag_ids": [],
-            }),
+            data=json.dumps(discussion_resource_payload(
+                title="Pending discussion to approve",
+                content="Needs approval first",
+                tag_ids=[],
+            )),
             content_type="application/json",
             **self.auth_header(self.author),
         )
@@ -922,7 +1073,7 @@ class DiscussionApiTests(TestCase):
             title="仅管理员可见",
             content="内部讨论",
             user=admin,
-            tag_ids=[staff_tag.id],
+            extension_payload=discussion_tags_payload([staff_tag.id]),
         )
 
         guest_response = self.client.get("/api/discussions/")
@@ -949,11 +1100,11 @@ class DiscussionApiTests(TestCase):
 
         response = self.client.post(
             "/api/discussions/",
-            data=json.dumps({
-                "title": "Should fail",
-                "content": "Blocked by tag scope",
-                "tag_ids": [restricted_tag.id],
-            }),
+            data=json.dumps(discussion_resource_payload(
+                title="Should fail",
+                content="Blocked by tag scope",
+                tag_ids=[restricted_tag.id],
+            )),
             content_type="application/json",
             **self.auth_header(self.author),
         )
@@ -1245,15 +1396,13 @@ class DiscussionApiTests(TestCase):
             title="Retag me",
             content="Original content",
             user=self.author,
-            tag_ids=[original_tag.id],
+            extension_payload=discussion_tags_payload([original_tag.id]),
         )
 
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.patch(
                 f"/api/discussions/{discussion.id}",
-                data=json.dumps({
-                    "tag_ids": [new_tag.id],
-                }),
+                data=json.dumps(discussion_tags_payload([new_tag.id])),
                 content_type="application/json",
                 **self.auth_header(self.author),
             )
@@ -1363,6 +1512,31 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(audit_log.user_id, moderator.id)
         self.assertEqual(audit_log.target_type, "discussion")
         self.assertEqual(audit_log.data["title"], "Moderator deletes discussion")
+
+    def test_delete_discussion_dispatches_tag_refresh_through_extension_lifecycle(self):
+        admin = User.objects.create_superuser(
+            username="discussion-delete-tag-admin",
+            email="discussion-delete-tag-admin@example.com",
+            password="password123",
+        )
+        tag = Tag.objects.create(name="删除刷新标签", slug="delete-refresh-tag", color="#4d698e")
+        discussion = DiscussionService.create_discussion(
+            title="Delete tagged discussion",
+            content="Refresh tag stats after delete",
+            user=admin,
+            extension_payload=discussion_tags_payload([tag.id]),
+        )
+
+        mocked_bus = Mock()
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True):
+                DiscussionService.delete_discussion(discussion.id, admin)
+
+        events = [call.args[0] for call in mocked_bus.dispatch.call_args_list]
+        refresh_event = next(
+            event for event in events if isinstance(event, TagStatsRefreshRequestedEvent)
+        )
+        self.assertEqual(refresh_event.tag_ids, (tag.id,))
 
     def test_user_with_global_edit_permission_can_edit_others_discussion(self):
         editor_group = Group.objects.create(name="DiscussionEditor", color="#4d698e")
@@ -1481,11 +1655,11 @@ class DiscussionApiTests(TestCase):
 
         response = self.client.post(
             "/api/discussions/",
-            data=json.dumps({
-                "title": "Invalid child only",
-                "content": "Blocked by tag combination",
-                "tag_ids": [child_tag.id],
-            }),
+            data=json.dumps(discussion_resource_payload(
+                title="Invalid child only",
+                content="Blocked by tag combination",
+                tag_ids=[child_tag.id],
+            )),
             content_type="application/json",
             **self.auth_header(self.author),
         )
@@ -1499,11 +1673,11 @@ class DiscussionApiTests(TestCase):
 
         response = self.client.post(
             "/api/discussions/",
-            data=json.dumps({
-                "title": "Too many primary tags",
-                "content": "Blocked by primary count",
-                "tag_ids": [first_tag.id, second_tag.id],
-            }),
+            data=json.dumps(discussion_resource_payload(
+                title="Too many primary tags",
+                content="Blocked by primary count",
+                tag_ids=[first_tag.id, second_tag.id],
+            )),
             content_type="application/json",
             **self.auth_header(self.author),
         )
@@ -1518,11 +1692,11 @@ class DiscussionApiTests(TestCase):
 
         response = self.client.post(
             "/api/discussions/",
-            data=json.dumps({
-                "title": "Mismatched tags",
-                "content": "Blocked by parent child mismatch",
-                "tag_ids": [second_tag.id, child_tag.id],
-            }),
+            data=json.dumps(discussion_resource_payload(
+                title="Mismatched tags",
+                content="Blocked by parent child mismatch",
+                tag_ids=[second_tag.id, child_tag.id],
+            )),
             content_type="application/json",
             **self.auth_header(self.author),
         )

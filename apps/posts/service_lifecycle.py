@@ -4,18 +4,17 @@ from django.db.models import Count, F
 from django.utils import timezone
 
 from apps.core.domain_events import dispatch_forum_event_after_commit
+from apps.core.extensions.runtime_access import evaluate_runtime_model_policy
 from apps.core.forum_events import (
-    DiscussionTagStatsRefreshEvent,
     PostCreatedEvent,
+    PostDeletedEvent,
     PostHiddenEvent,
     PostResubmittedEvent,
 )
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.core.forum_events import UserMentionedEvent
-from apps.posts.models import Post, PostLike, PostMentionsUser
-from apps.tags.services import TagService
+from apps.posts.models import Post, PostFlag, PostLike, PostMentionsUser
 from apps.users.models import User
-from apps.users.preferences import get_user_preference_value
 from apps.users.services import UserService
 
 
@@ -72,13 +71,10 @@ def create_post(
             user.comment_count = F("comment_count") + 1
             user.save(update_fields=["comment_count"])
 
-            follow_after_reply = get_user_preference_value(user, "follow_after_reply", fallback=False)
             state_defaults = {
                 "last_read_at": timezone.now(),
                 "last_read_post_number": post.number,
             }
-            if follow_after_reply:
-                state_defaults["is_subscribed"] = True
             DiscussionUser.objects.update_or_create(
                 discussion=discussion,
                 user=user,
@@ -118,7 +114,14 @@ def validate_replyable_discussion(
     if discussion.is_locked and not user.is_staff:
         raise ValueError("讨论已锁定，无法回复")
 
-    TagService.ensure_can_reply_in_discussion(user, discussion)
+    if evaluate_runtime_model_policy(
+        "reply",
+        user=user,
+        model=discussion,
+        default=True,
+        discussion=discussion,
+    ) is False:
+        raise PermissionDenied("没有权限回复此讨论")
     return discussion
 
 
@@ -143,7 +146,6 @@ def get_post_list(
         queryset = preload(queryset)
     queryset = annotate_flag_state_cb(queryset, user)
     queryset = apply_visibility_filters_cb(queryset, user)
-    queryset = TagService.filter_posts_for_user(queryset, user)
     queryset = queryset.order_by("number")
 
     total = queryset.count()
@@ -262,6 +264,12 @@ def delete_post(
 
     with transaction.atomic():
         discussion = post.discussion
+        deleted_post_id = post.id
+        deleted_post_number = post.number
+        deleted_discussion_id = post.discussion_id
+        deleted_flag_ids = tuple(
+            PostFlag.objects.filter(post_id=post.id).values_list("id", flat=True)
+        )
         counted_post = (
             post.approval_status == Post.APPROVAL_APPROVED
             and post.type in discussion_counted_post_types
@@ -274,6 +282,16 @@ def delete_post(
             if post.user and post.type in user_counted_post_types:
                 post.user.comment_count = F("comment_count") - 1
                 post.user.save(update_fields=["comment_count"])
+
+        dispatch_forum_event_after_commit(
+            PostDeletedEvent(
+                post_id=deleted_post_id,
+                discussion_id=deleted_discussion_id,
+                actor_user_id=user.id,
+                post_number=deleted_post_number,
+                flag_ids=deleted_flag_ids,
+            )
+        )
 
     return True
 
@@ -362,9 +380,6 @@ def refresh_discussion_approved_stats(
         "last_posted_at",
         "last_posted_user",
     ])
-    dispatch_forum_event_after_commit(
-        DiscussionTagStatsRefreshEvent(discussion_id=discussion.id)
-    )
     return discussion
 
 

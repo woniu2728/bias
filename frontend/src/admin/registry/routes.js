@@ -1,5 +1,7 @@
 const adminRoutes = []
 
+import { getCurrentExtensionId } from '../../common/extensionRuntime.js'
+
 function upsertByPath(target, value) {
   const existingIndex = target.findIndex(item => item.path === value.path)
   if (existingIndex >= 0) {
@@ -28,6 +30,7 @@ function matchesRoutePath(routePath, currentPath) {
 }
 
 export function registerAdminRoute(route) {
+  const extensionId = String(route?.extensionId || route?.extension_id || getCurrentExtensionId() || '').trim()
   const normalizedRoute = {
     navSection: 'feature',
     navOrder: 100,
@@ -37,10 +40,24 @@ export function registerAdminRoute(route) {
     dashboardActionLabel: '',
     navDescription: '',
     navBadge: '',
-    ...route
+    ...route,
+    ...(extensionId ? { extensionId, extension_id: extensionId } : {}),
   }
 
   return upsertByPath(adminRoutes, normalizedRoute)
+}
+
+export function clearAdminRoutesForExtension(extensionId = '') {
+  const normalizedExtensionId = String(extensionId || '').trim()
+  for (let index = adminRoutes.length - 1; index >= 0; index -= 1) {
+    const routeExtensionId = String(adminRoutes[index]?.extensionId || adminRoutes[index]?.extension_id || '').trim()
+    if (!routeExtensionId) {
+      continue
+    }
+    if (!normalizedExtensionId || routeExtensionId === normalizedExtensionId) {
+      adminRoutes.splice(index, 1)
+    }
+  }
 }
 
 function sortAdminRoutes(routes) {

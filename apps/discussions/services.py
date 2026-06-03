@@ -1,5 +1,5 @@
 """讨论系统业务逻辑层。"""
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count
@@ -7,21 +7,35 @@ from django.utils import timezone
 
 from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
+from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
+from apps.core.extensions.runtime_access import (
+    apply_runtime_model_visibility,
+    evaluate_runtime_model_policy,
+    get_runtime_resource_registry,
+)
 from apps.core.forum_registry import get_forum_registry
 from apps.discussions import discussion_tracking, service_lifecycle
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post
 from apps.core.services import PaginationService, SearchService
-from apps.tags.models import Tag
-from apps.tags.services import TagService
 from apps.users.models import User
 from apps.users.services import UserService
 
 
-FORUM_REGISTRY = get_forum_registry()
-DEFAULT_POST_TYPE = FORUM_REGISTRY.get_default_post_type_code()
-DISCUSSION_COUNTED_POST_TYPES = FORUM_REGISTRY.get_discussion_counted_post_type_codes()
-USER_COUNTED_POST_TYPES = FORUM_REGISTRY.get_user_counted_post_type_codes()
+def _get_forum_registry():
+    return get_forum_registry()
+
+
+def _get_default_post_type() -> str:
+    return _get_forum_registry().get_default_post_type_code()
+
+
+def _get_discussion_counted_post_types() -> tuple[str, ...]:
+    return _get_forum_registry().get_discussion_counted_post_type_codes()
+
+
+def _get_user_counted_post_types() -> tuple[str, ...]:
+    return _get_forum_registry().get_user_counted_post_type_codes()
 
 
 class DiscussionService:
@@ -34,19 +48,22 @@ class DiscussionService:
 
     @staticmethod
     def normalize_discussion_sort(sort: str | None) -> str:
-        return FORUM_REGISTRY.get_discussion_sort(sort or "").code
+        return _get_forum_registry().get_discussion_sort(sort or "").code
 
     @staticmethod
     def get_discussion_sort_catalog():
-        return FORUM_REGISTRY.get_discussion_sorts()
+        return get_runtime_resource_registry().apply_sort_definitions(
+            "discussion",
+            _get_forum_registry().get_discussion_sorts(),
+        )
 
     @staticmethod
     def normalize_discussion_list_filter(filter_code: str | None) -> str:
-        return FORUM_REGISTRY.get_discussion_list_filter(filter_code or "").code
+        return _get_forum_registry().get_discussion_list_filter(filter_code or "").code
 
     @staticmethod
     def get_discussion_list_filter_catalog():
-        return FORUM_REGISTRY.get_discussion_list_filters()
+        return _get_forum_registry().get_discussion_list_filters()
 
     @staticmethod
     def _viewer_cache_identity(user: Optional[User]) -> str:
@@ -122,7 +139,12 @@ class DiscussionService:
 
     @staticmethod
     def apply_visibility_filters(queryset, user: Optional[User] = None):
-        return discussion_tracking.apply_visibility_filters(queryset, user)
+        queryset = discussion_tracking.apply_visibility_filters(queryset, user)
+        return apply_runtime_model_visibility(
+            Discussion,
+            queryset,
+            {"user": user, "ability": "view"},
+        )
 
     @staticmethod
     @sqlite_write_retry()
@@ -130,7 +152,7 @@ class DiscussionService:
         title: str,
         content: str,
         user: User,
-        tag_ids: Optional[List[int]] = None
+        extension_payload: Optional[dict[str, Any]] = None,
     ) -> Discussion:
         """
         创建讨论
@@ -139,7 +161,6 @@ class DiscussionService:
             title: 讨论标题
             content: 第一条帖子内容
             user: 创建者
-            tag_ids: 标签ID列表
 
         Returns:
             Discussion: 创建的讨论对象
@@ -148,8 +169,8 @@ class DiscussionService:
             title,
             content,
             user,
-            tag_ids=tag_ids,
-            default_post_type=DEFAULT_POST_TYPE,
+            extension_payload=extension_payload,
+            default_post_type=_get_default_post_type(),
             render_markdown_cb=DiscussionService._render_markdown,
         )
 
@@ -185,21 +206,20 @@ class DiscussionService:
             queryset = preload(queryset)
 
         queryset = DiscussionService.apply_visibility_filters(queryset, user)
-        queryset = TagService.filter_discussions_for_user(queryset, user)
 
         # 搜索
         if q:
             queryset = SearchService.apply_discussion_search(queryset, q, user=user)
 
-        # 按标签过滤
+        # 扩展过滤，例如 tags 扩展注册的 tag:<slug> 过滤器。
         if tag:
-            queryset = queryset.filter(discussion_tags__tag__slug=tag)
+            queryset = SearchService.apply_discussion_search(queryset, f"tag:{tag}", user=user)
 
         # 按作者过滤
         if author:
             queryset = queryset.filter(user__username=author)
 
-        filter_definition = FORUM_REGISTRY.get_discussion_list_filter(list_filter)
+        filter_definition = _get_forum_registry().get_discussion_list_filter(list_filter)
         queryset = filter_definition.applier(
             queryset,
             {
@@ -212,9 +232,22 @@ class DiscussionService:
         )
 
         # 排序
-        sort_definition = FORUM_REGISTRY.get_discussion_sort(sort)
+        sort_definition = _get_forum_registry().get_discussion_sort(sort)
         queryset = sort_definition.applier(
             queryset,
+            {
+                "user": user,
+                "sort": sort_definition.code,
+                "query": q,
+                "tag": tag,
+                "author": author,
+                "filter": filter_definition.code,
+            },
+        )
+        queryset = get_runtime_resource_registry().apply_named_sort(
+            "discussion",
+            queryset,
+            sort_definition.code,
             {
                 "user": user,
                 "sort": sort_definition.code,
@@ -317,7 +350,7 @@ class DiscussionService:
         user: User,
         title: Optional[str] = None,
         content: Optional[str] = None,
-        tag_ids: Optional[List[int]] = None,
+        extension_payload: Optional[dict[str, Any]] = None,
         is_locked: Optional[bool] = None,
         is_sticky: Optional[bool] = None,
         is_hidden: Optional[bool] = None,
@@ -344,7 +377,7 @@ class DiscussionService:
             user,
             title=title,
             content=content,
-            tag_ids=tag_ids,
+            extension_payload=extension_payload,
             is_locked=is_locked,
             is_sticky=is_sticky,
             is_hidden=is_hidden,
@@ -386,7 +419,7 @@ class DiscussionService:
     def _approved_reply_counts_by_author(discussion: Discussion) -> dict:
         return service_lifecycle.approved_reply_counts_by_author(
             discussion,
-            user_counted_post_types=USER_COUNTED_POST_TYPES,
+            user_counted_post_types=_get_user_counted_post_types(),
         )
 
     @staticmethod
@@ -426,11 +459,17 @@ class DiscussionService:
             return False
         if user.is_suspended:
             return False
+        allowed = False
         if UserService.has_forum_permission(user, "discussion.edit"):
-            return True
-        if discussion.user_id == user.id:
-            return UserService.has_forum_permission(user, "discussion.editOwn")
-        return False
+            allowed = True
+        elif discussion.user_id == user.id:
+            allowed = UserService.has_forum_permission(user, "discussion.editOwn")
+        return bool(evaluate_extension_policy(
+            "discussion.edit",
+            default=allowed,
+            user=user,
+            discussion=discussion,
+        ))
 
     @staticmethod
     def can_delete_discussion(discussion: Discussion, user: User) -> bool:
@@ -439,11 +478,17 @@ class DiscussionService:
             return False
         if user.is_suspended:
             return False
+        allowed = False
         if UserService.has_forum_permission(user, "discussion.delete"):
-            return True
-        if discussion.user_id == user.id:
-            return UserService.has_forum_permission(user, "discussion.deleteOwn")
-        return False
+            allowed = True
+        elif discussion.user_id == user.id:
+            allowed = UserService.has_forum_permission(user, "discussion.deleteOwn")
+        return bool(evaluate_extension_policy(
+            "discussion.delete",
+            default=allowed,
+            user=user,
+            discussion=discussion,
+        ))
 
     @staticmethod
     def can_reply_discussion(discussion: Discussion, user: User) -> bool:
@@ -458,9 +503,20 @@ class DiscussionService:
             return False
         if discussion.is_locked and not user.is_staff:
             return False
-        if not TagService.can_reply_in_discussion(discussion, user):
+        if evaluate_runtime_model_policy(
+            "reply",
+            user=user,
+            model=discussion,
+            default=True,
+            discussion=discussion,
+        ) is False:
             return False
-        return True
+        return bool(evaluate_extension_policy(
+            "discussion.reply",
+            default=True,
+            user=user,
+            discussion=discussion,
+        ))
 
     @staticmethod
     def _render_markdown(content: str) -> str:

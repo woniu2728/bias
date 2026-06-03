@@ -5,64 +5,15 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from ninja import NinjaAPI
 
-from apps.core.runtime_state import get_runtime_status
-from apps.core.runtime_checks import collect_runtime_readiness
-from apps.core.version import APP_VERSION
+from apps.core.api_runtime import build_api_application
+from apps.core.extensions.bootstrap import get_extension_host
 
-# 创建API实例
-api = NinjaAPI(
-    title="Bias API",
-    version=APP_VERSION,
-    description="Flarum 风格论坛的 Python RESTful API",
-    docs_url="/docs",
-    csrf=True,
-)
-
-# 导入路由
-from apps.users.api import router as users_router
-from apps.discussions.api import router as discussions_router
-from apps.posts.api import router as posts_router
-from apps.tags.api import router as tags_router
-from apps.notifications.api import router as notifications_router
-from apps.core.api import router as core_router
-from apps.core.admin_api import router as admin_router
-
-# 注册路由
-api.add_router("/users", users_router, tags=["Users"])
-api.add_router("/discussions", discussions_router, tags=["Discussions"])
-api.add_router("", posts_router, tags=["Posts"])
-api.add_router("", tags_router, tags=["Tags"])
-api.add_router("", notifications_router, tags=["Notifications"])
-api.add_router("", core_router, tags=["Search"])
-api.add_router("/admin", admin_router, tags=["Admin"])
-
-# 健康检查端点
-@api.get("/health", tags=["System"])
-def health_check(request):
-    """健康检查"""
-    runtime = get_runtime_status()
-    readiness = collect_runtime_readiness()
-    return {
-        "status": "ok" if runtime.state == "ready" else "degraded",
-        "message": "Bias API is running",
-        "state": runtime.state,
-        "current_version": runtime.current_version,
-        "installed_version": runtime.installed_version,
-        "readiness": {
-            "database_label": readiness["database_label"],
-            "cache_driver": readiness["cache_driver"],
-            "realtime_driver": readiness["realtime_driver"],
-            "queue_driver": readiness["queue_driver"],
-            "queue_enabled": readiness["queue_enabled"],
-            "queue_worker_status": readiness["queue_worker_status"],
-            "redis_enabled": readiness["redis_enabled"],
-            "auth_secret_status": readiness["auth_secret_status"],
-            "runtime_risks": readiness["runtime_risks"],
-            "runtime_dependency_checks": readiness["runtime_dependency_checks"],
-        },
-    }
+extension_host = get_extension_host()
+if extension_host is not None:
+    api = extension_host.make("api.application")
+else:
+    api = build_api_application(extension_host=None)
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -4,7 +4,6 @@ from collections import defaultdict
 from typing import Callable, DefaultDict, Generic, List, TypeVar
 from django.db import transaction
 
-
 class DomainEvent:
     """Base type for in-process domain events."""
 
@@ -21,6 +20,9 @@ class DomainEventBus:
         listeners = self._listeners[event_type]
         if handler not in listeners:
             listeners.append(handler)
+
+    def clear(self) -> None:
+        self._listeners.clear()
 
     def dispatch(self, event: DomainEvent) -> None:
         for event_type, handlers in self._listeners.items():

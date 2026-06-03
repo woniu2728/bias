@@ -8,9 +8,9 @@ from django.db import connection
 from apps.core.forum_registry import get_forum_registry
 
 
-FORUM_REGISTRY = get_forum_registry()
-SEARCHABLE_POST_TYPES = FORUM_REGISTRY.get_searchable_post_type_codes()
-SEARCHABLE_POST_TYPES_SQL = ", ".join(f"'{code}'" for code in SEARCHABLE_POST_TYPES) or "'comment'"
+def _get_searchable_post_types_sql() -> str:
+    searchable_post_types = get_forum_registry().get_searchable_post_type_codes()
+    return ", ".join(f"'{code}'" for code in searchable_post_types) or "'comment'"
 
 
 SEARCH_INDEX_DEFINITIONS = [
@@ -31,7 +31,7 @@ SEARCH_INDEX_DEFINITIONS = [
             ON posts
             USING GIN (to_tsvector('simple', coalesce(content, '')))
             WHERE type IN ({searchable_post_types})
-        """.format(searchable_post_types=SEARCHABLE_POST_TYPES_SQL),
+        """.format(searchable_post_types=_get_searchable_post_types_sql()),
     },
     {
         "name": "users_profile_fts_idx",

@@ -51,34 +51,21 @@
 
     <nav class="mobile-drawer-nav">
       <div class="mobile-drawer-nav-section">
-        <router-link
-          to="/"
+        <component
+          :is="item.to ? 'router-link' : item.href ? 'a' : 'button'"
+          v-for="item in mobilePrimaryNavItems"
+          :key="item.key"
+          v-bind="item.to ? { to: item.to } : item.href ? { href: item.href } : { type: 'button' }"
           class="mobile-drawer-link"
-          :class="{ active: isMobileNavActive('home') }"
+          :class="{ active: item.active }"
           @click="$emit('close')"
         >
-          <i class="far fa-comments"></i>
-          <span>{{ allDiscussionsText }}</span>
-        </router-link>
-        <router-link
-          v-if="authStore.isAuthenticated && authStore.user"
-          to="/following"
-          class="mobile-drawer-link"
-          :class="{ active: isMobileNavActive('following') }"
-          @click="$emit('close')"
-        >
-          <i class="fas fa-bell"></i>
-          <span>{{ followingText }}</span>
-        </router-link>
-        <router-link
-          to="/tags"
-          class="mobile-drawer-link"
-          :class="{ active: isMobileNavActive('tags') }"
-          @click="$emit('close')"
-        >
-          <i class="fas fa-tags"></i>
-          <span>{{ allTagsText }}</span>
-        </router-link>
+          <i v-if="item.icon" :class="item.icon"></i>
+          <span>{{ item.label }}</span>
+          <span v-if="item.badge" class="mobile-drawer-badge">
+            {{ item.badge }}
+          </span>
+        </component>
       </div>
 
       <div v-if="authStore.isAuthenticated && authStore.user" class="mobile-drawer-nav-section">
@@ -147,7 +134,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { getUiCopy } from '@/forum/registry'
+import { getForumNavItems, getUiCopy } from '@/forum/registry'
 
 const props = defineProps({
   showMobileDrawer: {
@@ -210,18 +197,18 @@ const searchLabelText = computed(() => getUiCopy({
 const startDiscussionText = computed(() => getUiCopy({
   surface: 'mobile-drawer-start-discussion',
 })?.text || '发起讨论')
-const allDiscussionsText = computed(() => getUiCopy({
-  surface: 'mobile-drawer-all-discussions',
-})?.text || '全部讨论')
-const followingText = computed(() => getUiCopy({
-  surface: 'mobile-drawer-following',
-})?.text || '关注中')
-const allTagsText = computed(() => getUiCopy({
-  surface: 'mobile-drawer-all-tags',
-})?.text || '全部标签')
 const profileSectionTitleText = computed(() => getUiCopy({
   surface: 'mobile-drawer-profile-section-title',
 })?.text || '个人')
+const mobilePrimaryNavItems = computed(() => getForumNavItems({
+  authStore: props.authStore,
+  forumStore: props.forumStore,
+  notificationStore: props.notificationStore,
+  surface: 'mobile-drawer',
+}).filter(item => (item.section || 'primary') === 'primary').map(item => ({
+  ...item,
+  active: Boolean(item.active || props.isMobileNavActive(item.key)),
+})))
 
 defineEmits([
   'close',

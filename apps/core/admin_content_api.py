@@ -1,9 +1,9 @@
 from ninja import Body, Router
-from django.shortcuts import get_object_or_404
 from pathlib import Path
 
-from apps.core.extensions import get_extension_registry
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
+from apps.core.extensions.bootstrap import get_extension_host
+from apps.core.extensions import get_extension_registry
 from apps.core.extensions.validation import (
     inspect_backend_entry,
     inspect_frontend_admin_entry,
@@ -20,6 +20,15 @@ from apps.core.extension_service import ExtensionService
 from apps.core.extension_settings_service import get_extension_settings, serialize_extension_settings_schema, save_extension_settings
 from apps.core.extensions.product import is_product_visible_extension
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
+from apps.core.extensions.recovery import (
+    advance_extension_bisect,
+    get_extension_bisect_state,
+    get_extension_safe_mode_extension_ids,
+    is_extension_safe_mode_enabled,
+    serialize_extension_recovery_state,
+    start_extension_bisect,
+    stop_extension_bisect,
+)
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.forum_registry import get_builtin_module_ids, get_forum_registry
 from apps.core.resource_registry import get_resource_registry
@@ -48,6 +57,45 @@ def list_admin_extensions(request):
         return denied
 
     return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+
+
+@router.get("/extensions/bisect", auth=AccessTokenAuth(), tags=["Admin"])
+def get_admin_extension_bisect(request):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+    return {"bisect": get_extension_bisect_state()}
+
+
+@router.post("/extensions/bisect/start", auth=AccessTokenAuth(), tags=["Admin"])
+def start_admin_extension_bisect(request, payload: dict = Body(default={})):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+    requested_ids = payload.get("extension_ids")
+    if requested_ids is None:
+        requested_ids = [
+            extension.id
+            for extension in get_extension_registry().get_enabled_extensions()
+            if extension.source != "builtin-module"
+        ]
+    return {"bisect": start_extension_bisect(requested_ids)}
+
+
+@router.post("/extensions/bisect/step", auth=AccessTokenAuth(), tags=["Admin"])
+def step_admin_extension_bisect(request, payload: dict = Body(...)):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+    return {"bisect": advance_extension_bisect(bool(payload.get("issue_present")))}
+
+
+@router.post("/extensions/bisect/stop", auth=AccessTokenAuth(), tags=["Admin"])
+def stop_admin_extension_bisect(request):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+    return {"bisect": stop_extension_bisect()}
 
 
 @router.get("/extensions/{extension_id}", auth=AccessTokenAuth(), tags=["Admin"])
@@ -238,23 +286,33 @@ def _serialize_admin_extensions_payload(extensions):
             "signed_extension_count": delivery_summary["signed_extension_count"],
             "product_visible_count": sum(1 for item in payload if item["product_visible"]),
         },
+        "runtime": {
+            **_serialize_extension_runtime_rebuild_state(),
+            "recovery": serialize_extension_recovery_state(),
+        },
         "extensions": payload,
     }
 
 
 def _serialize_admin_extension(extension, include_permission_details: bool = False):
+    runtime_view = _resolve_extension_runtime_record(extension)
     detail_page = f"/admin/extensions/{extension.id}"
-    settings_page = next(iter(extension.manifest.settings_pages), "")
-    permissions_page = next(iter(extension.manifest.permissions_pages), "")
-    operations_page = next(iter(extension.manifest.operations_pages), "")
-    admin_actions = _serialize_extension_admin_actions(extension)
+    settings_pages = _resolve_extension_settings_pages(extension, runtime_view)
+    permissions_pages = _resolve_extension_permissions_pages(extension, runtime_view)
+    operations_pages = _resolve_extension_operations_pages(extension, runtime_view)
+    frontend_admin_entry = _resolve_extension_frontend_admin_entry(extension, runtime_view)
+    frontend_forum_entry = _resolve_extension_frontend_forum_entry(extension, runtime_view)
+    settings_page = next(iter(settings_pages), "")
+    permissions_page = next(iter(permissions_pages), "")
+    operations_page = next(iter(operations_pages), "")
+    admin_actions = _serialize_extension_admin_actions(extension, runtime_record=runtime_view)
     permission_sections = _build_extension_permission_sections(extension) if include_permission_details else []
     permission_summary = _build_extension_permission_summary(permission_sections)
     permission_modules = _build_extension_permission_modules(permission_sections)
     admin_page_details = _build_extension_admin_page_details(extension)
     notification_types = _build_extension_notification_types(extension)
     user_preferences = _build_extension_user_preferences(extension)
-    event_listeners = _build_extension_event_listeners(extension)
+    event_listeners = _build_extension_event_listeners(extension, runtime_view)
     post_types = _build_extension_post_types(extension)
     search_filters = _build_extension_search_filters(extension)
     discussion_sorts = _build_extension_discussion_sorts(extension)
@@ -262,6 +320,11 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
     resource_definitions = _build_extension_resource_definitions(extension)
     resource_relationships = _build_extension_resource_relationships(extension)
     resource_fields = _build_extension_resource_fields(extension)
+    resource_endpoints = _build_extension_resource_endpoints(extension)
+    resource_sorts = _build_extension_resource_sorts(extension)
+    model_definitions = _build_extension_model_definitions(runtime_view)
+    model_visibility = _build_extension_model_visibility(runtime_view)
+    search_drivers = _build_extension_search_drivers(runtime_view)
     language_packs = _build_extension_language_packs(extension)
     delivery_assets = _build_extension_delivery_assets(extension)
     capability_summary = _build_extension_capability_summary(
@@ -275,6 +338,8 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         resource_definitions=resource_definitions,
         resource_relationships=resource_relationships,
         resource_fields=resource_fields,
+        resource_endpoints=resource_endpoints,
+        resource_sorts=resource_sorts,
         language_packs=language_packs,
     )
 
@@ -291,13 +356,13 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "conflicts": list(extension.manifest.conflicts),
         "provides": list(extension.manifest.provides),
         "backend_entry": extension.manifest.backend_entry,
-        "frontend_admin_entry": extension.manifest.frontend_admin_entry,
-        "frontend_forum_entry": extension.manifest.frontend_forum_entry,
-        "settings_pages": list(extension.manifest.settings_pages),
-        "permissions_pages": list(extension.manifest.permissions_pages),
-        "operations_pages": list(extension.manifest.operations_pages),
+        "frontend_admin_entry": frontend_admin_entry,
+        "frontend_forum_entry": frontend_forum_entry,
+        "settings_pages": list(settings_pages),
+        "permissions_pages": list(permissions_pages),
+        "operations_pages": list(operations_pages),
         "settings_schema": serialize_extension_settings_schema(extension.id),
-        "settings_values": get_extension_settings(extension.id) if extension.manifest.settings_schema else {},
+        "settings_values": get_extension_settings(extension.id) if serialize_extension_settings_schema(extension.id) else {},
         "compatibility": {
             "bias_version": extension.manifest.compatibility.bias_version,
             "api_version": extension.manifest.compatibility.api_version,
@@ -324,6 +389,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
             "key": extension.runtime.status_key,
             "label": extension.runtime.status_label,
         },
+        "recovery_status": _serialize_extension_recovery_status(extension),
         "migration_state": extension.runtime.migration_state,
         "migration_label": extension.runtime.migration_label,
         "migration_execution": _serialize_extension_migration_execution(extension),
@@ -381,6 +447,11 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "resource_definitions": resource_definitions,
         "resource_relationships": resource_relationships,
         "resource_fields": resource_fields,
+        "resource_endpoints": resource_endpoints,
+        "resource_sorts": resource_sorts,
+        "model_definitions": model_definitions,
+        "model_visibility": model_visibility,
+        "search_drivers": search_drivers,
         "language_packs": language_packs,
         "delivery_assets": delivery_assets,
         "capability_summary": capability_summary,
@@ -397,6 +468,10 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
             "readiness_probe": extension.lifecycle.readiness_probe,
             "supports_disable": extension.lifecycle.supports_disable,
             "supports_teardown": extension.lifecycle.supports_teardown,
+            "runtime_phases": list(getattr(runtime_view, "lifecycle_phase_keys", ()) or ()),
+            "runtime_extenders": list(getattr(runtime_view, "extender_keys", ()) or ()),
+            "runtime_lifecycle_extenders": list(getattr(runtime_view, "lifecycle_extender_keys", ()) or ()),
+            "runtime_rebuild": _serialize_extension_runtime_rebuild_state(),
             "phases": [
                 {
                     "key": phase.key,
@@ -411,6 +486,107 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
     }
     payload["diagnostics"] = classify_extension_diagnostics(payload)
     return payload
+
+
+def _resolve_extension_runtime_record(extension):
+    host = get_extension_host()
+    if host is None:
+        return None
+    return host.get_runtime_view(extension.id)
+
+
+def _serialize_extension_recovery_status(extension):
+    safe_mode = is_extension_safe_mode_enabled()
+    safe_mode_extensions = get_extension_safe_mode_extension_ids()
+    bisect = get_extension_bisect_state()
+    extension_id = str(extension.id or "").strip()
+    return {
+        "safe_mode": safe_mode,
+        "safe_mode_allowed": (not safe_mode)
+        or extension.source == "builtin-module"
+        or extension_id in safe_mode_extensions,
+        "bisect_active": bool(bisect.get("active")),
+        "bisect_current": extension_id in set(bisect.get("current") or []),
+        "bisect_candidate": extension_id in set(bisect.get("ids") or []),
+        "bisect_culprit": extension_id == str(bisect.get("culprit") or "").strip(),
+    }
+
+
+def _resolve_extension_frontend_admin_entry(extension, runtime_record=None) -> str:
+    host = get_extension_host()
+    if host is not None:
+        frontend = host.get_frontend_extension(extension.id)
+        if frontend is not None and str(frontend.admin_entry or "").strip():
+            return str(frontend.admin_entry or "").strip()
+    if runtime_record is not None and str(runtime_record.frontend_admin_entry or "").strip():
+        return str(runtime_record.frontend_admin_entry or "").strip()
+    return extension.frontend_admin_entry
+
+
+def _resolve_extension_frontend_forum_entry(extension, runtime_record=None) -> str:
+    host = get_extension_host()
+    if host is not None:
+        frontend = host.get_frontend_extension(extension.id)
+        if frontend is not None and str(frontend.forum_entry or "").strip():
+            return str(frontend.forum_entry or "").strip()
+    if runtime_record is not None and str(runtime_record.frontend_forum_entry or "").strip():
+        return str(runtime_record.frontend_forum_entry or "").strip()
+    return extension.frontend_forum_entry
+
+
+def _resolve_extension_settings_pages(extension, runtime_record=None) -> tuple[str, ...]:
+    host = get_extension_host()
+    if host is not None:
+        frontend = host.get_frontend_extension(extension.id)
+        if frontend is not None and frontend.settings_pages:
+            return tuple(frontend.settings_pages)
+    if runtime_record is not None and runtime_record.settings_pages:
+        return tuple(runtime_record.settings_pages)
+    return tuple(extension.settings_pages)
+
+
+def _resolve_extension_permissions_pages(extension, runtime_record=None) -> tuple[str, ...]:
+    host = get_extension_host()
+    if host is not None:
+        frontend = host.get_frontend_extension(extension.id)
+        if frontend is not None and frontend.permissions_pages:
+            return tuple(frontend.permissions_pages)
+    if runtime_record is not None and runtime_record.permissions_pages:
+        return tuple(runtime_record.permissions_pages)
+    return tuple(extension.permissions_pages)
+
+
+def _resolve_extension_operations_pages(extension, runtime_record=None) -> tuple[str, ...]:
+    host = get_extension_host()
+    if host is not None:
+        frontend = host.get_frontend_extension(extension.id)
+        if frontend is not None and frontend.operations_pages:
+            return tuple(frontend.operations_pages)
+    if runtime_record is not None and runtime_record.operations_pages:
+        return tuple(runtime_record.operations_pages)
+    return tuple(extension.operations_pages)
+
+
+def _build_runtime_surface_view(
+    extension,
+    runtime_record,
+    *,
+    frontend_admin_entry: str,
+    frontend_forum_entry: str,
+    settings_pages: tuple[str, ...],
+    permissions_pages: tuple[str, ...],
+    operations_pages: tuple[str, ...],
+):
+    return type("_RuntimeSurfaceView", (), {
+        "frontend_admin_entry": frontend_admin_entry,
+        "frontend_forum_entry": frontend_forum_entry,
+        "settings_pages": settings_pages,
+        "permissions_pages": permissions_pages,
+        "operations_pages": operations_pages,
+        "settings_schema": tuple(getattr(runtime_record, "settings_schema", ()) or extension.settings_schema),
+        "admin_actions": tuple(getattr(runtime_record, "admin_actions", ()) or extension.admin_actions),
+        "runtime_actions": tuple(getattr(runtime_record, "runtime_actions", ()) or extension.manifest_runtime_actions),
+    })()
 
 
 def _build_extension_admin_page_details(extension):
@@ -530,21 +706,45 @@ def _build_extension_user_preferences(extension):
     ]
 
 
-def _build_extension_event_listeners(extension):
+def _build_extension_event_listeners(extension, runtime_record=None):
     module_ids = set(extension.module_ids or ())
-    if not module_ids:
-        return []
+    listeners = []
+    seen = set()
 
-    return [
-        {
+    if runtime_record is not None:
+        for item in getattr(runtime_record, "event_listeners", ()) or ():
+            event_type = getattr(item, "event_type", None)
+            handler = getattr(item, "handler", None)
+            payload = {
+                "event": getattr(event_type, "__name__", str(event_type or "")),
+                "listener": getattr(handler, "__qualname__", getattr(handler, "__name__", str(handler or ""))),
+                "module_id": extension.id,
+                "description": getattr(item, "description", ""),
+                "source": "runtime",
+            }
+            key = (payload["event"], payload["listener"], payload["module_id"])
+            if key not in seen:
+                seen.add(key)
+                listeners.append(payload)
+
+    if not module_ids:
+        return listeners
+
+    for item in get_forum_registry().get_event_listeners():
+        if item.module_id not in module_ids:
+            continue
+        payload = {
             "event": item.event,
             "listener": item.listener,
             "module_id": item.module_id,
             "description": item.description,
+            "source": "registry",
         }
-        for item in get_forum_registry().get_event_listeners()
-        if item.module_id in module_ids
-    ]
+        key = (payload["event"], payload["listener"], payload["module_id"])
+        if key not in seen:
+            seen.add(key)
+            listeners.append(payload)
+    return listeners
 
 
 def _build_extension_post_types(extension):
@@ -664,7 +864,7 @@ def _build_extension_resource_relationships(extension):
     ]
 
 
-def _build_extension_resource_fields(extension):
+def _build_extension_resource_endpoints(extension):
     module_ids = set(extension.module_ids or ())
     if not module_ids:
         return []
@@ -672,13 +872,66 @@ def _build_extension_resource_fields(extension):
     return [
         {
             "resource": item.resource,
+            "endpoint": item.endpoint,
+            "module_id": item.module_id,
+            "operation": getattr(item, "operation", "mutate"),
+            "anchor": getattr(item, "anchor", ""),
+            "description": item.description,
+        }
+        for item in get_resource_registry().get_all_endpoints()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_resource_sorts(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "resource": item.resource,
+            "sort": item.sort,
+            "module_id": item.module_id,
+            "operation": getattr(item, "operation", "add"),
+            "anchor": getattr(item, "anchor", ""),
+            "description": item.description,
+        }
+        for item in get_resource_registry().get_all_sorts()
+        if item.module_id in module_ids
+    ]
+
+
+def _build_extension_resource_fields(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    fields = [
+        {
+            "resource": item.resource,
             "field": item.field,
             "module_id": item.module_id,
+            "operation": "add",
+            "anchor": "",
             "description": item.description,
         }
         for item in get_resource_registry().get_all_fields()
         if item.module_id in module_ids
     ]
+    fields.extend([
+        {
+            "resource": item.resource,
+            "field": item.field,
+            "module_id": item.module_id,
+            "operation": getattr(item, "operation", "mutate"),
+            "anchor": getattr(item, "anchor", ""),
+            "description": item.description,
+        }
+        for item in get_resource_registry().get_all_field_mutators()
+        if item.module_id in module_ids
+    ])
+    return fields
 
 
 def _build_extension_language_packs(extension):
@@ -700,7 +953,87 @@ def _build_extension_language_packs(extension):
     ]
 
 
+def _build_extension_model_definitions(runtime_view):
+    if runtime_view is None:
+        return []
+    definitions = [
+        {
+            "model": getattr(item.model, "__name__", str(item.model)),
+            "key": item.key,
+            "kind": item.kind,
+            "description": item.description,
+        }
+        for item in getattr(runtime_view, "model_definitions", ()) or ()
+    ]
+    definitions.extend([
+        {
+            "model": getattr(item.model, "__name__", str(item.model)),
+            "key": item.name,
+            "kind": f"relation:{item.relation_type}",
+            "description": item.description,
+        }
+        for item in getattr(runtime_view, "model_relations", ()) or ()
+    ])
+    definitions.extend([
+        {
+            "model": getattr(item.model, "__name__", str(item.model)),
+            "key": item.attribute,
+            "kind": "cast",
+            "description": item.description,
+        }
+        for item in getattr(runtime_view, "model_casts", ()) or ()
+    ])
+    definitions.extend([
+        {
+            "model": getattr(item.model, "__name__", str(item.model)),
+            "key": item.attribute,
+            "kind": "default",
+            "description": item.description,
+        }
+        for item in getattr(runtime_view, "model_defaults", ()) or ()
+    ])
+    definitions.extend([
+        {
+            "model": getattr(item.model, "__name__", str(item.model)),
+            "key": item.identifier,
+            "kind": "model-url:slug",
+            "description": item.description,
+        }
+        for item in getattr(runtime_view, "model_slug_drivers", ()) or ()
+    ])
+    return definitions
+
+
+def _build_extension_model_visibility(runtime_view):
+    if runtime_view is None:
+        return []
+    return [
+        {
+            "model": getattr(item.model, "__name__", str(item.model)),
+            "ability": item.ability,
+            "description": item.description,
+        }
+        for item in getattr(runtime_view, "model_visibility", ()) or ()
+    ]
+
+
+def _build_extension_search_drivers(runtime_view):
+    if runtime_view is None:
+        return []
+    return [
+        {
+            "target": item.target,
+            "driver": getattr(item.driver, "__name__", str(item.driver)),
+            "filter_count": len(item.filters),
+            "description": item.description,
+        }
+        for item in getattr(runtime_view, "search_drivers", ()) or ()
+    ]
+
+
 def _build_extension_delivery_assets(extension):
+    from apps.core.extensions.assets import inspect_published_extension_assets
+
     if extension.source == "builtin-module":
         return {
             "root_path": "",
@@ -788,6 +1121,21 @@ def _build_extension_delivery_assets(extension):
             "exists": exists,
         })
 
+    published_assets = inspect_published_extension_assets(extension)
+    assets.append({
+        "key": "published_assets",
+        "label": "已发布资产",
+        "status": "ready" if published_assets["published"] and published_assets["target_exists"] else "pending",
+        "status_label": "已发布" if published_assets["published"] and published_assets["target_exists"] else "未发布",
+        "path": published_assets["target"],
+        "kind": "published-assets",
+        "exists": bool(published_assets["published"] and published_assets["target_exists"]),
+        "files": published_assets["files"],
+        "cache_key": published_assets.get("cache_key", ""),
+        "frontend": published_assets.get("frontend", {}),
+        "published_at": published_assets["published_at"],
+    })
+
     return {
         "root_path": str(root_path or ""),
         "root_exists": bool(root_path and root_path.exists()),
@@ -808,6 +1156,8 @@ def _build_extension_capability_summary(
     resource_definitions,
     resource_relationships,
     resource_fields,
+    resource_endpoints,
+    resource_sorts,
     language_packs,
 ):
     return {
@@ -821,13 +1171,16 @@ def _build_extension_capability_summary(
         "resource_definition_count": len(resource_definitions),
         "resource_relationship_count": len(resource_relationships),
         "resource_field_count": len(resource_fields),
+        "resource_endpoint_count": len(resource_endpoints),
+        "resource_sort_count": len(resource_sorts),
         "language_pack_count": len(language_packs),
     }
 
 
-def _serialize_extension_admin_actions(extension):
+def _serialize_extension_admin_actions(extension, *, runtime_record=None):
+    declared_actions = tuple(getattr(runtime_record, "admin_actions", ()) or ()) or extension.admin_actions or tuple(_build_default_extension_admin_actions(extension, runtime_record=runtime_record))
     actions = []
-    for action in sorted(extension.manifest.admin_actions, key=lambda item: (item.order, item.key)):
+    for action in sorted(declared_actions, key=lambda item: (item.order, item.key)):
         if action.requires_enabled and not extension.runtime.enabled:
             continue
         actions.append({
@@ -843,6 +1196,81 @@ def _serialize_extension_admin_actions(extension):
             "order": action.order,
         })
     return actions
+
+
+def _build_default_extension_admin_actions(extension, *, runtime_record=None):
+    settings_pages = _resolve_extension_settings_pages(extension, runtime_record)
+    permissions_pages = _resolve_extension_permissions_pages(extension, runtime_record)
+    operations_pages = _resolve_extension_operations_pages(extension, runtime_record)
+    generated = [
+        {
+            "key": "details",
+            "label": "查看详情",
+            "kind": "route",
+            "target": f"/admin/extensions/{extension.id}",
+            "icon": "fas fa-arrow-right",
+            "tone": "primary",
+            "opens_in_new_tab": False,
+            "requires_enabled": False,
+            "description": "",
+            "order": 10,
+        },
+    ]
+
+    if settings_pages:
+        generated.append({
+            "key": "settings",
+            "label": "设置",
+            "kind": "route",
+            "target": next(iter(settings_pages), ""),
+            "icon": "fas fa-sliders-h",
+            "tone": "default",
+            "opens_in_new_tab": False,
+            "requires_enabled": True,
+            "description": "",
+            "order": 20,
+        })
+    if permissions_pages:
+        generated.append({
+            "key": "permissions",
+            "label": "权限",
+            "kind": "route",
+            "target": next(iter(permissions_pages), ""),
+            "icon": "fas fa-user-shield",
+            "tone": "default",
+            "opens_in_new_tab": False,
+            "requires_enabled": True,
+            "description": "",
+            "order": 30,
+        })
+    if operations_pages:
+        generated.append({
+            "key": "operations",
+            "label": "操作",
+            "kind": "route",
+            "target": next(iter(operations_pages), ""),
+            "icon": "fas fa-screwdriver-wrench",
+            "tone": "default",
+            "opens_in_new_tab": False,
+            "requires_enabled": True,
+            "description": "",
+            "order": 40,
+        })
+    if extension.manifest.documentation_url:
+        generated.append({
+            "key": "documentation",
+            "label": "文档",
+            "kind": "link",
+            "target": extension.manifest.documentation_url,
+            "icon": "fas fa-book",
+            "tone": "subtle",
+            "opens_in_new_tab": False,
+            "requires_enabled": False,
+            "description": "",
+            "order": 50,
+        })
+
+    return tuple(type("_GeneratedAdminAction", (), item)() for item in generated if item.get("target"))
 
 
 def _resolve_api_stability_label(extension):
@@ -871,23 +1299,39 @@ def _resolve_distribution_channel_label(extension):
 
 
 def _build_extension_debug_info(extension):
-    registry = get_extension_registry()
+    runtime_record = _resolve_extension_runtime_record(extension)
+    frontend_admin_entry = _resolve_extension_frontend_admin_entry(extension, runtime_record)
+    frontend_forum_entry = _resolve_extension_frontend_forum_entry(extension, runtime_record)
+    settings_pages = _resolve_extension_settings_pages(extension, runtime_record)
+    permissions_pages = _resolve_extension_permissions_pages(extension, runtime_record)
+    operations_pages = _resolve_extension_operations_pages(extension, runtime_record)
+    runtime_surface_view = _build_runtime_surface_view(
+        extension,
+        runtime_record,
+        frontend_admin_entry=frontend_admin_entry,
+        frontend_forum_entry=frontend_forum_entry,
+        settings_pages=settings_pages,
+        permissions_pages=permissions_pages,
+        operations_pages=operations_pages,
+    )
+    extension_root_path = Path(extension.manifest.path) if str(extension.manifest.path or "").strip() else None
+    extensions_base_path = extension_root_path.parent if extension_root_path is not None else None
     inspection = inspect_frontend_admin_entry(
-        extension.manifest,
-        extensions_base_path=registry.extensions_path,
+        runtime_surface_view,
+        extensions_base_path=extensions_base_path,
     )
     forum_inspection = inspect_frontend_forum_entry(
-        extension.manifest,
-        extensions_base_path=registry.extensions_path,
+        runtime_surface_view,
+        extensions_base_path=extensions_base_path,
     )
     backend_inspection = inspect_backend_entry(
         extension.manifest,
-        extensions_base_path=registry.extensions_path,
+        extensions_base_path=extensions_base_path,
     )
     validation_result = validate_extension_manifests_with_available_ids(
         [extension.manifest],
         available_extension_ids=set(get_builtin_module_ids()),
-        extensions_base_path=registry.extensions_path,
+        extensions_base_path=extensions_base_path,
         strict_runtime_hooks=True,
     )
 
@@ -899,22 +1343,22 @@ def _build_extension_debug_info(extension):
         {
             "key": "detail",
             "label": "详情页",
-            **resolve_admin_surface_implementation(extension.manifest, "detail", inspection["available_exports"]),
+            **resolve_admin_surface_implementation(runtime_surface_view, "detail", inspection["available_exports"]),
         },
         {
             "key": "settings",
             "label": "设置页",
-            **resolve_admin_surface_implementation(extension.manifest, "settings", inspection["available_exports"]),
+            **resolve_admin_surface_implementation(runtime_surface_view, "settings", inspection["available_exports"]),
         },
         {
             "key": "permissions",
             "label": "权限页",
-            **resolve_admin_surface_implementation(extension.manifest, "permissions", inspection["available_exports"]),
+            **resolve_admin_surface_implementation(runtime_surface_view, "permissions", inspection["available_exports"]),
         },
         {
             "key": "operations",
             "label": "操作页",
-            **resolve_admin_surface_implementation(extension.manifest, "operations", inspection["available_exports"]),
+            **resolve_admin_surface_implementation(runtime_surface_view, "operations", inspection["available_exports"]),
         },
     ]
 
@@ -952,30 +1396,30 @@ def _build_extension_debug_info(extension):
             {
                 "key": "settings",
                 "label": "设置页",
-                "declared": next(iter(extension.manifest.settings_pages), ""),
+                "declared": next(iter(settings_pages), ""),
                 "expected": expected_settings_path,
-                "matches_expected": next(iter(extension.manifest.settings_pages), "") == expected_settings_path if extension.manifest.settings_pages else False,
+                "matches_expected": next(iter(settings_pages), "") == expected_settings_path if settings_pages else False,
             },
             {
                 "key": "permissions",
                 "label": "权限页",
-                "declared": next(iter(extension.manifest.permissions_pages), ""),
+                "declared": next(iter(permissions_pages), ""),
                 "expected": expected_permissions_path,
-                "matches_expected": next(iter(extension.manifest.permissions_pages), "") == expected_permissions_path if extension.manifest.permissions_pages else False,
+                "matches_expected": next(iter(permissions_pages), "") == expected_permissions_path if permissions_pages else False,
             },
             {
                 "key": "operations",
                 "label": "操作页",
-                "declared": next(iter(extension.manifest.operations_pages), ""),
+                "declared": next(iter(operations_pages), ""),
                 "expected": expected_operations_path,
-                "matches_expected": next(iter(extension.manifest.operations_pages), "") == expected_operations_path if extension.manifest.operations_pages else False,
+                "matches_expected": next(iter(operations_pages), "") == expected_operations_path if operations_pages else False,
             },
             {
                 "key": "frontend_forum_entry",
                 "label": "前台入口",
-                "declared": extension.manifest.frontend_forum_entry,
+                "declared": frontend_forum_entry,
                 "expected": expected_forum_entry,
-                "matches_expected": str(extension.manifest.frontend_forum_entry or "").strip() == expected_forum_entry,
+                "matches_expected": str(frontend_forum_entry or "").strip() == expected_forum_entry,
             },
         ],
         "validation_issues": [
@@ -1005,6 +1449,43 @@ def _serialize_extension_backend_hooks(extension):
             "details": dict(payload.get("details") or {}),
         })
     return hooks
+
+
+def _serialize_extension_runtime_rebuild_state():
+    import json
+
+    from apps.core.models import Setting
+
+    setting = Setting.objects.filter(key="extensions_runtime_rebuild_required").first()
+    enabled_order = Setting.objects.filter(key="extensions_enabled_order").first()
+    raw_order = str(getattr(enabled_order, "value", "") or "")
+    if setting is None:
+        return {
+            "required": False,
+            "reason": "",
+            "extension_id": "",
+            "urlconf": "",
+            "stamp": f"{raw_order}:",
+            "frontend_assets": _serialize_extension_frontend_asset_state(),
+        }
+    try:
+        payload = json.loads(setting.value or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+    return {
+        "required": True,
+        "reason": str(payload.get("reason") or ""),
+        "extension_id": str(payload.get("extension_id") or ""),
+        "urlconf": str(payload.get("urlconf") or ""),
+        "stamp": f"{raw_order}:{setting.value or ''}",
+        "frontend_assets": _serialize_extension_frontend_asset_state(),
+    }
+
+
+def _serialize_extension_frontend_asset_state():
+    from apps.core.extensions.frontend_compiler import inspect_extension_frontend_output_manifest
+
+    return inspect_extension_frontend_output_manifest()
 
 
 def _serialize_extension_migration_execution(extension):
@@ -1237,207 +1718,6 @@ def list_admin_modules(request):
         "resource_fields": resource_fields,
         "permission_aliases": legacy.REGISTRY.get_permission_aliases(),
     }
-
-
-@router.get("/tags", auth=AccessTokenAuth(), tags=["Admin"])
-def list_admin_tags(request):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-
-    legacy = _legacy()
-    tags = legacy.Tag.objects.select_related("parent").all().order_by("position", "name")
-    return [legacy.serialize_admin_tag(tag) for tag in tags]
-
-
-@router.post("/tags", auth=AccessTokenAuth(), tags=["Admin"])
-def create_admin_tag(request, payload: dict = Body(...)):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-
-    legacy = _legacy()
-    try:
-        normalized = legacy.normalize_optional_tag_parent(payload)
-        name = (normalized.get("name") or "").strip()
-        if not name:
-            raise ValueError("标签名称不能为空")
-        parent_id = normalized.get("parent_id")
-        tag = legacy.TagService.create_tag(
-            name=name,
-            slug=(normalized.get("slug") or "").strip() or None,
-            description=normalized.get("description", ""),
-            color=normalized.get("color") or "#888",
-            icon=(normalized.get("icon") or "").strip(),
-            position=legacy.normalize_tag_position(normalized, parent_id=parent_id),
-            parent_id=parent_id,
-            is_hidden=bool(normalized.get("is_hidden", False)),
-            is_restricted=bool(normalized.get("is_restricted", False)),
-            view_scope=normalized.get("view_scope") or legacy.Tag.ACCESS_PUBLIC,
-            start_discussion_scope=normalized.get("start_discussion_scope") or legacy.Tag.ACCESS_MEMBERS,
-            reply_scope=normalized.get("reply_scope") or legacy.Tag.ACCESS_MEMBERS,
-            user=request.auth,
-        )
-        tag = legacy.Tag.objects.select_related("parent").get(id=tag.id)
-        legacy.log_admin_action(
-            request,
-            "admin.tag.create",
-            target_type="tag",
-            target_id=tag.id,
-            data={"name": tag.name, "slug": tag.slug, "parent_id": tag.parent_id},
-        )
-        return legacy.serialize_admin_tag(tag)
-    except ValueError as exc:
-        return legacy.admin_error(str(exc), status=400)
-    except Exception as exc:
-        return legacy.admin_error(str(exc), status=400)
-
-
-@router.put("/tags/{tag_id}", auth=AccessTokenAuth(), tags=["Admin"])
-def update_admin_tag(request, tag_id: int, payload: dict = Body(...)):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-
-    legacy = _legacy()
-    try:
-        tag = get_object_or_404(legacy.Tag, id=tag_id)
-        normalized = legacy.normalize_optional_tag_parent(payload)
-        next_view_scope = tag.view_scope
-        next_start_scope = tag.start_discussion_scope
-        next_reply_scope = tag.reply_scope
-
-        if "name" in normalized:
-            name = (normalized.get("name") or "").strip()
-            if not name:
-                raise ValueError("标签名称不能为空")
-            tag.name = name
-        if "slug" in normalized:
-            tag.slug = (normalized.get("slug") or "").strip()
-        if "description" in normalized:
-            tag.description = normalized.get("description") or ""
-        if "color" in normalized:
-            tag.color = normalized.get("color") or "#888"
-        if "icon" in normalized:
-            tag.icon = (normalized.get("icon") or "").strip()
-        if "position" in normalized and normalized.get("position") is not None:
-            tag.position = int(normalized["position"])
-        if "parent_id" in normalized:
-            parent_id = normalized.get("parent_id")
-            if parent_id is None:
-                tag.parent = None
-            else:
-                parent = get_object_or_404(legacy.Tag, id=parent_id)
-                legacy.TagService.validate_parent_assignment(tag, parent)
-                tag.parent = parent
-        if "is_hidden" in normalized:
-            tag.is_hidden = bool(normalized["is_hidden"])
-        if "is_restricted" in normalized:
-            tag.is_restricted = bool(normalized["is_restricted"])
-        if "view_scope" in normalized:
-            next_view_scope = normalized.get("view_scope")
-        if "start_discussion_scope" in normalized:
-            next_start_scope = normalized.get("start_discussion_scope")
-        if "reply_scope" in normalized:
-            next_reply_scope = normalized.get("reply_scope")
-        (
-            tag.view_scope,
-            tag.start_discussion_scope,
-            tag.reply_scope,
-        ) = legacy.TagService.validate_scope_configuration(
-            next_view_scope,
-            next_start_scope,
-            next_reply_scope,
-        )
-        tag.save()
-        tag.refresh_from_db()
-        legacy.log_admin_action(
-            request,
-            "admin.tag.update",
-            target_type="tag",
-            target_id=tag.id,
-            data={"name": tag.name, "slug": tag.slug, "changed_fields": sorted(normalized.keys())},
-        )
-        return legacy.serialize_admin_tag(tag)
-    except ValueError as exc:
-        return legacy.admin_error(str(exc), status=400)
-    except Exception as exc:
-        return legacy.admin_error(str(exc), status=400)
-
-
-@router.post("/tags/{tag_id}/move", auth=AccessTokenAuth(), tags=["Admin"])
-def move_admin_tag(request, tag_id: int, payload: dict = Body(...)):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-
-    legacy = _legacy()
-    try:
-        tag = get_object_or_404(legacy.Tag, id=tag_id)
-        moved = legacy.TagService.move_tag(
-            tag_id=tag_id,
-            direction=(payload.get("direction") or "").strip(),
-            user=request.auth,
-        )
-        tags = legacy.Tag.objects.select_related("parent").all().order_by("position", "name")
-        legacy.log_admin_action(
-            request,
-            "admin.tag.move",
-            target_type="tag",
-            target_id=tag.id,
-            data={"name": tag.name, "direction": (payload.get("direction") or "").strip(), "moved": bool(moved)},
-        )
-        return {
-            "moved": moved,
-            "data": [legacy.serialize_admin_tag(item) for item in tags],
-        }
-    except ValueError as exc:
-        return legacy.admin_error(str(exc), status=400)
-    except legacy.Tag.DoesNotExist:
-        return legacy.admin_error("标签不存在", status=404)
-
-
-@router.delete("/tags/{tag_id}", auth=AccessTokenAuth(), tags=["Admin"])
-def delete_admin_tag(request, tag_id: int):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-
-    legacy = _legacy()
-    try:
-        tag = get_object_or_404(legacy.Tag, id=tag_id)
-        tag_snapshot = {"name": tag.name, "slug": tag.slug, "parent_id": tag.parent_id}
-        legacy.TagService.delete_tag(tag_id, request.auth)
-        legacy.log_admin_action(
-            request,
-            "admin.tag.delete",
-            target_type="tag",
-            target_id=tag_id,
-            data=tag_snapshot,
-        )
-        return {"message": "标签删除成功"}
-    except ValueError as exc:
-        return legacy.admin_error(str(exc), status=400)
-
-
-@router.post("/tags/stats/refresh", auth=AccessTokenAuth(), tags=["Admin"])
-def refresh_admin_tag_stats(request):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-
-    legacy = _legacy()
-    result = legacy.TagService.dispatch_refresh_tag_stats()
-    legacy.log_admin_action(
-        request,
-        "admin.tag.refresh_stats",
-        target_type="tag",
-        data={
-            "mode": result.get("mode"),
-            "tag_ids": result.get("tag_ids"),
-        },
-    )
-    return result
 
 
 @router.get("/audit-logs", auth=AccessTokenAuth(), tags=["Admin"])

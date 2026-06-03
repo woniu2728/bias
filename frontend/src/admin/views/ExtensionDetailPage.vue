@@ -9,6 +9,10 @@
     <AdminStateBlock v-else-if="errorMessage" tone="danger">{{ errorMessage }}</AdminStateBlock>
 
     <div v-else-if="extension" class="ExtensionDetailPage-content">
+      <AdminStateBlock v-if="recoveryNotice" :tone="recoveryNotice.tone">
+        {{ recoveryNotice.text }}
+      </AdminStateBlock>
+
       <section class="ExtensionDetailPage-header">
         <div class="ExtensionDetailPage-headerTitleRow">
           <div class="ExtensionDetailPage-headerTopItems">
@@ -165,6 +169,7 @@ import { builtinAdminEntries } from '../extensions/builtinAdminEntries'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
 import { resolveFallbackExtensionPermissionsPage, resolveFallbackExtensionSettingsPage } from '../extensions/fallbacks'
 import { buildExtensionRouteTarget } from '../extensions/diagnostics'
+import { generatedAdminExtensionModules } from '../../generated/extensionImportMap'
 
 const route = useRoute()
 const adminRegistryStore = useAdminRegistryStore()
@@ -177,7 +182,10 @@ const detailComponent = ref(null)
 const settingsComponent = ref(null)
 const permissionsComponent = ref(null)
 
-const adminEntryModules = import.meta.glob('../../../../extensions/*/frontend/admin/index.js')
+const adminEntryModules = {
+  ...import.meta.glob('../../../../extensions/*/frontend/admin/index.js'),
+  ...generatedAdminExtensionModules,
+}
 
 const infoLinks = computed(() => {
   const actions = Array.isArray(extension.value?.admin_actions) ? extension.value.admin_actions : []
@@ -252,6 +260,28 @@ const runtimeStatusClass = computed(() => {
   if (key === 'active') return 'is-enabled'
   if (key === 'pending_install') return 'is-pending'
   return 'is-disabled'
+})
+
+const recoveryNotice = computed(() => {
+  const status = extension.value?.recovery_status || {}
+  if (status.bisect_culprit) {
+    return { tone: 'danger', text: '扩展二分排查已命中该扩展，请检查其运行时能力和最近变更。' }
+  }
+  if (status.bisect_active && status.bisect_candidate) {
+    return {
+      tone: 'warning',
+      text: status.bisect_current
+        ? '扩展二分排查进行中，该扩展当前被临时启用。'
+        : '扩展二分排查进行中，该扩展当前被临时停用。',
+    }
+  }
+  if (status.safe_mode && !status.safe_mode_allowed) {
+    return { tone: 'warning', text: '扩展恢复模式已启用，该扩展不在白名单中，当前不会进入运行时装配。' }
+  }
+  if (status.safe_mode) {
+    return { tone: 'warning', text: '扩展恢复模式已启用，该扩展在当前恢复集合内。' }
+  }
+  return null
 })
 
 onMounted(async () => {

@@ -34,10 +34,10 @@
         <div class="nav-separator"></div>
 
         <ul class="index-nav-tag-list">
-          <li>
+          <li v-if="tagsIndexPath">
             <DiscussionListSidebarNavLink
-              to="/tags"
-              icon="fas fa-th-large"
+              :to="tagsIndexPath"
+              :icon="tagsIndexIcon"
               :label="tagsLinkLabel"
               :active="isTagsPage"
             />
@@ -59,9 +59,9 @@
               :is-active="isSidebarTagActive(tag)"
             />
           </li>
-          <li v-if="showMoreTagsLink">
+          <li v-if="showMoreTagsLink && tagsIndexPath">
             <DiscussionListSidebarNavLink
-              to="/tags"
+              :to="tagsIndexPath"
               icon="fas fa-ellipsis-h"
               :label="moreTagsLinkLabel"
               class="nav-item--muted"
@@ -74,11 +74,12 @@
 </template>
 
 <script setup>
-import { toRef } from 'vue'
+import { computed, toRef } from 'vue'
 import DiscussionListSidebarNavLink from '@/components/discussion/DiscussionListSidebarNavLink.vue'
 import DiscussionListSidebarStartButton from '@/components/discussion/DiscussionListSidebarStartButton.vue'
 import DiscussionListSidebarTagLink from '@/components/discussion/DiscussionListSidebarTagLink.vue'
 import { useDiscussionListSidebarState } from '@/composables/useDiscussionListSidebarState'
+import { getForumNavItems } from '@/forum/registry'
 
 const props = defineProps({
   authStore: {
@@ -148,6 +149,12 @@ const {
 } = useDiscussionListSidebarState({
   authStore: toRef(props, 'authStore'),
 })
+const tagsNavItem = computed(() => getForumNavItems({
+  authStore: props.authStore,
+  surface: 'discussion-sidebar',
+}).find(item => item.key === 'tags') || null)
+const tagsIndexPath = computed(() => tagsNavItem.value?.to || '')
+const tagsIndexIcon = computed(() => tagsNavItem.value?.icon || 'fas fa-th-large')
 
 defineEmits(['start-discussion'])
 </script>

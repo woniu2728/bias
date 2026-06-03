@@ -9,6 +9,7 @@ from typing import Optional
 import re
 from apps.users.models import User
 from apps.core.mentions import MENTION_RE, extract_mentioned_usernames
+from apps.core.extensions.formatter_service import apply_extension_formatters
 
 
 class MarkdownService:
@@ -92,6 +93,9 @@ class MarkdownService:
 
         # 处理外部链接
         html = MarkdownService._process_external_links(html)
+
+        # 允许扩展对最终 HTML 再做一轮变换，例如 emoji/twemoji 渲染
+        html = apply_extension_formatters(html)
 
         # 清理HTML（防止XSS）
         if sanitize:

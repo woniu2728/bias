@@ -2,7 +2,7 @@ import {
   registerAdminTagsPageActionMeta,
   registerAdminTagsPageConfig,
   registerAdminTagsPageCopy,
-} from '../pages.js'
+} from '@/admin/registry'
 
 registerAdminTagsPageCopy({
   key: 'core-tags-page-copy',
@@ -21,7 +21,7 @@ registerAdminTagsPageCopy({
     previewFallbackName: '新标签',
     modalCreateTitle: '创建标签',
     modalEditTitle: '编辑标签',
-    modalSubtitle: '参考 Flarum 的标签编辑流程，并补齐父子层级、排序和显示状态配置。',
+    modalSubtitle: '配置父子层级、排序和显示状态。',
     tablePreviewHeader: '预览',
     tableNameHeader: '标签名称',
     tableSlugHeader: '别名',

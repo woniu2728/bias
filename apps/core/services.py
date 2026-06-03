@@ -11,8 +11,8 @@ from django.db.models import OuterRef, Q, Subquery
 
 from apps.discussions.models import Discussion
 from apps.posts.models import Post
+from apps.core.extensions.runtime_access import apply_runtime_model_visibility
 from apps.core.forum_registry import get_forum_registry
-from apps.tags.services import TagService
 from apps.users.models import User
 from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
 
@@ -26,8 +26,14 @@ CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 TOKEN_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+|[A-Za-z0-9_]+")
 ASCII_TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 POSTGRES_FULL_TEXT_CONFIG = "simple"
-FORUM_REGISTRY = get_forum_registry()
-SEARCHABLE_POST_TYPES = FORUM_REGISTRY.get_searchable_post_type_codes()
+
+
+def _get_forum_registry():
+    return get_forum_registry()
+
+
+def _get_searchable_post_type_codes() -> tuple[str, ...]:
+    return _get_forum_registry().get_searchable_post_type_codes()
 
 
 @dataclass
@@ -42,6 +48,38 @@ class SearchContext:
     @property
     def total(self) -> int:
         return self.discussion_total + self.post_total + self.user_total
+
+
+def _get_runtime_search_filters(targets: tuple[str, ...] | None = None):
+    try:
+        from apps.core.extensions.runtime_access import get_runtime_search_service
+
+        search_service = get_runtime_search_service()
+    except Exception:
+        return []
+    if search_service is None:
+        return []
+
+    allowed_targets = set(targets or ())
+    definitions = []
+    try:
+        drivers = search_service.get_drivers()
+    except Exception:
+        return []
+    for driver in drivers:
+        if allowed_targets and driver.target not in allowed_targets:
+            continue
+        definitions.extend(driver.filters)
+    return definitions
+
+
+def _get_available_search_filters(targets: tuple[str, ...] | None = None):
+    definitions = list(_get_forum_registry().get_search_filters())
+    definitions.extend(_get_runtime_search_filters(targets))
+    if targets is not None:
+        allowed = set(targets)
+        definitions = [item for item in definitions if item.target in allowed]
+    return definitions
 
 
 class PaginationService:
@@ -136,7 +174,7 @@ class SearchService:
 
         for raw_token in (query or "").split():
             matched = False
-            for definition in FORUM_REGISTRY.get_search_filters():
+            for definition in _get_available_search_filters(targets):
                 if allowed_targets and definition.target not in allowed_targets:
                     continue
                 parsed_value = definition.parser(raw_token)
@@ -153,10 +191,7 @@ class SearchService:
 
     @staticmethod
     def get_public_search_filters(targets: tuple[str, ...] | None = None):
-        definitions = FORUM_REGISTRY.get_search_filters()
-        if targets is not None:
-            allowed = set(targets)
-            definitions = [item for item in definitions if item.target in allowed]
+        definitions = _get_available_search_filters(targets)
         return sorted(definitions, key=lambda item: (item.target, item.module_id, item.code, item.syntax))
 
     @staticmethod
@@ -184,10 +219,11 @@ class SearchService:
             if SearchService.should_use_postgres_full_text(text_query):
                 queryset = SearchService._apply_postgres_discussion_search(queryset, text_query, user=user)
             else:
+                searchable_post_types = _get_searchable_post_type_codes()
                 title_match_q = SearchService.build_text_query(['title', 'slug'], text_query)
                 visible_post_match_q = (
                     SearchService.build_text_query(['posts__content'], text_query)
-                    & Q(posts__type__in=SEARCHABLE_POST_TYPES)
+                    & Q(posts__type__in=searchable_post_types)
                     & build_post_visibility_q(user, prefix="posts__")
                 )
                 queryset = queryset.filter(title_match_q | visible_post_match_q)
@@ -195,6 +231,11 @@ class SearchService:
         for definition, parsed_value in parsed_filters.get("discussion", []):
             queryset = definition.applier(queryset, parsed_value, {"user": user, "query": query, "text_query": text_query})
 
+        queryset = SearchService._apply_extension_search_mutators(
+            "discussion",
+            queryset,
+            {"user": user, "query": query, "text_query": text_query},
+        )
         return queryset
 
     @staticmethod
@@ -214,6 +255,11 @@ class SearchService:
         for definition, parsed_value in parsed_filters.get("post", []):
             queryset = definition.applier(queryset, parsed_value, {"user": user, "query": query, "text_query": text_query})
 
+        queryset = SearchService._apply_extension_search_mutators(
+            "post",
+            queryset,
+            {"user": user, "query": query, "text_query": text_query},
+        )
         return queryset
 
     @staticmethod
@@ -230,7 +276,24 @@ class SearchService:
                 search_rank=SearchRank(search_vector, search_query),
             ).filter(search_vector=search_query)
 
-        return queryset.filter(SearchService.build_text_query(['username', 'display_name', 'bio'], query))
+        queryset = queryset.filter(SearchService.build_text_query(['username', 'display_name', 'bio'], query))
+        return SearchService._apply_extension_search_mutators(
+            "user",
+            queryset,
+            {"query": query, "text_query": query},
+        )
+
+    @staticmethod
+    def _apply_extension_search_mutators(target: str, queryset, context: dict):
+        try:
+            from apps.core.extensions.runtime_access import get_runtime_search_service
+
+            search_service = get_runtime_search_service()
+            if search_service is None:
+                return queryset
+            return search_service.apply_mutators(target, queryset, context)
+        except Exception:
+            return queryset
 
     @staticmethod
     def build_search_context(query: str, user=None, include_users: bool = True) -> SearchContext:
@@ -568,12 +631,17 @@ class SearchService:
     def _discussion_queryset(query: str, user=None):
         queryset = SearchService.apply_discussion_search(Discussion.objects.all(), query, user=user).distinct()
         queryset = queryset.filter(build_discussion_visibility_q(user))
-        return TagService.filter_discussions_for_user(queryset, user)
+        return apply_runtime_model_visibility(
+            Discussion,
+            queryset,
+            {"user": user, "ability": "view"},
+        )
 
     @staticmethod
     def _post_queryset(query: str, user=None):
+        searchable_post_types = _get_searchable_post_type_codes()
         queryset = SearchService.apply_post_search(
-            Post.objects.filter(type__in=SEARCHABLE_POST_TYPES),
+            Post.objects.filter(type__in=searchable_post_types),
             query,
             user=user,
         )
@@ -581,7 +649,11 @@ class SearchService:
             build_post_visibility_q(user),
             build_discussion_visibility_q(user, prefix="discussion__"),
         )
-        return TagService.filter_posts_for_user(queryset, user)
+        return apply_runtime_model_visibility(
+            Post,
+            queryset,
+            {"user": user, "ability": "view"},
+        )
 
     @staticmethod
     def _user_queryset(query: str):
@@ -655,8 +727,9 @@ class SearchService:
             SearchVector('title', weight='A', config=POSTGRES_FULL_TEXT_CONFIG)
             + SearchVector('slug', weight='B', config=POSTGRES_FULL_TEXT_CONFIG)
         )
+        searchable_post_types = _get_searchable_post_type_codes()
         visible_post_discussion_ids = SearchService.apply_post_search(
-            Post.objects.filter(type__in=SEARCHABLE_POST_TYPES),
+            Post.objects.filter(type__in=searchable_post_types),
             query,
         ).filter(
             build_post_visibility_q(user),

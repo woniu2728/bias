@@ -166,7 +166,7 @@ def list_post_flags(request, page: int = 1, limit: int = 20, status: str = "open
 
     legacy = _legacy()
     page, limit = legacy.PaginationService.normalize(page, limit)
-    flags, total = legacy.PostService.get_flag_list(status=status, page=page, limit=limit)
+    flags, total = legacy.PostService.get_flag_list(status=status, page=page, limit=limit, user=request.auth)
     return {
         "total": total,
         "page": page,

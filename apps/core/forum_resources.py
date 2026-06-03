@@ -3,7 +3,6 @@ from __future__ import annotations
 from apps.core.resource_registry import (
     ResourceDefinition,
     ResourceFieldDefinition,
-    ResourceRelationshipDefinition,
     get_resource_registry,
 )
 from apps.core.forum_resources_post_events import register_forum_post_event_resource_fields
@@ -24,10 +23,16 @@ def bootstrap_forum_resource_fields() -> None:
     if _resources_bootstrapped:
         return
 
-    from apps.core.forum_resources_flags import register_forum_flag_resource_fields
-
     registry = get_resource_registry()
 
+    registry.register_resource(
+        ResourceDefinition(
+            resource="forum",
+            module_id="core",
+            resolver=_serialize_forum_base,
+            description="论坛公开运行时资源。",
+        )
+    )
     register_forum_user_resources(registry)
     registry.register_resource(
         ResourceDefinition(
@@ -47,14 +52,6 @@ def bootstrap_forum_resource_fields() -> None:
     )
     registry.register_resource(
         ResourceDefinition(
-            resource="tag",
-            module_id="tags",
-            resolver=_serialize_tag_base,
-            description="论坛标签主资源。",
-        )
-    )
-    registry.register_resource(
-        ResourceDefinition(
             resource="notification",
             module_id="notifications",
             resolver=_serialize_notification_base,
@@ -63,27 +60,6 @@ def bootstrap_forum_resource_fields() -> None:
     )
 
     register_forum_user_relationships(registry)
-    registry.register_relationship(
-        ResourceRelationshipDefinition(
-            resource="tag",
-            relationship="last_posted_discussion",
-            module_id="tags",
-            resolver=_resolve_tag_last_posted_discussion,
-            description="标签下最后活跃讨论摘要。",
-            select_related=("last_posted_discussion",),
-        )
-    )
-
-    registry.register_field(
-        ResourceFieldDefinition(
-            resource="discussion",
-            field="tags",
-            module_id="tags",
-            resolver=_resolve_discussion_tags,
-            description="讨论关联的标签列表。",
-            prefetch_related=("discussion_tags__tag",),
-        )
-    )
     registry.register_field(
         ResourceFieldDefinition(
             resource="discussion",
@@ -113,16 +89,6 @@ def bootstrap_forum_resource_fields() -> None:
     )
     registry.register_field(
         ResourceFieldDefinition(
-            resource="discussion",
-            field="is_subscribed",
-            module_id="subscriptions",
-            resolver=_resolve_discussion_subscription_state,
-            description="当前用户是否关注该讨论。",
-        )
-    )
-
-    registry.register_field(
-        ResourceFieldDefinition(
             resource="post",
             field="can_edit",
             module_id="discussions",
@@ -139,50 +105,15 @@ def bootstrap_forum_resource_fields() -> None:
             description="当前用户是否可以删除该回复。",
         )
     )
-    registry.register_field(
-        ResourceFieldDefinition(
-            resource="post",
-            field="can_like",
-            module_id="likes",
-            resolver=_resolve_post_can_like,
-            description="当前用户是否可以点赞该回复。",
-        )
-    )
-    register_forum_flag_resource_fields()
     register_forum_post_event_resource_fields(registry)
-
-    registry.register_field(
-        ResourceFieldDefinition(
-            resource="tag",
-            field="can_start_discussion",
-            module_id="tags",
-            resolver=_resolve_tag_can_start_discussion,
-            description="当前用户是否可以在该标签下发起讨论。",
-        )
-    )
-    registry.register_field(
-        ResourceFieldDefinition(
-            resource="tag",
-            field="can_reply",
-            module_id="tags",
-            resolver=_resolve_tag_can_reply,
-            description="当前用户是否可以在该标签下回复。",
-        )
-    )
-    registry.register_field(
-        ResourceFieldDefinition(
-            resource="tag",
-            field="last_posted_discussion",
-            module_id="tags",
-            resolver=_resolve_tag_last_posted_discussion,
-            description="标签下最后活跃讨论摘要。",
-            select_related=("last_posted_discussion",),
-        )
-    )
 
     register_forum_user_fields(registry)
 
     _resources_bootstrapped = True
+
+
+def _serialize_forum_base(forum, context: dict) -> dict:
+    return {}
 
 
 def _serialize_search_discussion_base(discussion, context: dict) -> dict:
@@ -212,29 +143,6 @@ def _serialize_search_post_base(post, context: dict) -> dict:
     }
 
 
-def _serialize_tag_base(tag, context: dict) -> dict:
-    return {
-        "id": tag.id,
-        "name": tag.name,
-        "slug": tag.slug,
-        "description": tag.description,
-        "color": tag.color,
-        "icon": tag.icon,
-        "background_url": tag.background_url,
-        "position": tag.position,
-        "parent_id": tag.parent_id,
-        "is_hidden": tag.is_hidden,
-        "is_restricted": tag.is_restricted,
-        "view_scope": tag.view_scope,
-        "start_discussion_scope": tag.start_discussion_scope,
-        "reply_scope": tag.reply_scope,
-        "discussion_count": tag.discussion_count,
-        "last_posted_at": tag.last_posted_at,
-        "created_at": tag.created_at,
-        "updated_at": tag.updated_at,
-    }
-
-
 def _serialize_notification_base(notification, context: dict) -> dict:
     return {
         "id": notification.id,
@@ -247,19 +155,6 @@ def _serialize_notification_base(notification, context: dict) -> dict:
         "read_at": notification.read_at,
         "created_at": notification.created_at,
     }
-
-
-def _resolve_discussion_tags(discussion, context: dict) -> list[dict]:
-    return [
-        {
-            "id": dt.tag.id,
-            "name": dt.tag.name,
-            "slug": dt.tag.slug,
-            "color": dt.tag.color,
-            "icon": dt.tag.icon,
-        }
-        for dt in discussion.discussion_tags.all()
-    ]
 
 
 def _resolve_discussion_can_edit(discussion, context: dict) -> bool:
@@ -310,30 +205,3 @@ def _resolve_post_can_like(post, context: dict) -> bool:
     user = context.get("user")
     return bool(user and PostService.can_like_post(post, user))
 
-
-def _resolve_tag_can_start_discussion(tag, context: dict) -> bool:
-    from apps.tags.services import TagService
-
-    user = context.get("user")
-    return TagService.can_start_discussion_in_tag(tag, user)
-
-
-def _resolve_tag_can_reply(tag, context: dict) -> bool:
-    from apps.tags.services import TagService
-
-    user = context.get("user")
-    return TagService.can_reply_in_tag(tag, user)
-
-
-def _resolve_tag_last_posted_discussion(tag, context: dict) -> dict | None:
-    discussion = getattr(tag, "last_posted_discussion", None)
-    if not discussion:
-        return None
-
-    return {
-        "id": discussion.id,
-        "title": discussion.title,
-        "slug": discussion.slug,
-        "last_post_number": discussion.last_post_number,
-        "last_posted_at": discussion.last_posted_at,
-    }

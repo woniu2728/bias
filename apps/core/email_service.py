@@ -17,7 +17,7 @@ from apps.core.mail_templates import (
     DEFAULT_VERIFICATION_SUBJECT,
     DEFAULT_VERIFICATION_TEXT,
 )
-from apps.core.mail_drivers import can_mail_driver_send, normalize_mail_driver
+from apps.core.mail_drivers import can_mail_driver_send, normalize_mail_driver, send_with_extension_mail_driver
 from apps.core.settings_service import BASIC_SETTINGS_DEFAULTS, get_mail_settings, get_setting_group
 
 logger = logging.getLogger(__name__)
@@ -363,6 +363,20 @@ class EmailService:
             if not can_mail_driver_send(mail_settings):
                 logger.warning("邮件发送被跳过，当前邮件驱动不可发送")
                 return False
+            extension_result = send_with_extension_mail_driver(
+                mail_settings.get("mail_driver"),
+                {
+                    "subject": subject,
+                    "text_content": text_content,
+                    "html_content": html_content,
+                    "to_email": to_email,
+                    "from_email": from_email,
+                    "settings": mail_settings,
+                },
+                {"source": "email_service"},
+            )
+            if extension_result is not None:
+                return bool(extension_result)
             connection = EmailService.build_connection()
             mail_format = EmailService.get_mail_format(mail_settings)
 
@@ -402,6 +416,20 @@ class EmailService:
         mail_settings = EmailService.get_runtime_mail_settings()
         if not can_mail_driver_send(mail_settings):
             raise ValueError("当前邮件配置不可发送，请先完成邮件设置")
+        extension_result = send_with_extension_mail_driver(
+            mail_settings.get("mail_driver"),
+            {
+                "subject": "Bias 测试邮件",
+                "text_content": "如果你收到这封邮件，说明 Bias 的邮件发送链路可用。",
+                "html_content": "<p>如果你收到这封邮件，说明 Bias 的邮件发送链路可用。</p>",
+                "to_email": to_email,
+                "from_email": None,
+                "settings": mail_settings,
+            },
+            {"source": "test_email"},
+        )
+        if extension_result is not None:
+            return int(bool(extension_result))
         from_email = EmailService.build_from_email(
             mail_settings.get("mail_from_address") or settings.DEFAULT_FROM_EMAIL,
             mail_settings.get("mail_from_name") or "",
