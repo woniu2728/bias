@@ -26,6 +26,8 @@ const DEFAULT_SETTINGS = {
   custom_head_html: '',
   custom_footer_html: '',
   maintenance_mode: false,
+  maintenance_mode_key: 'none',
+  maintenance_mode_label: '未启用',
   maintenance_message: '论坛正在维护中，请稍后再试...',
   realtime_typing_enabled: true,
   auth_human_verification_provider: 'off',

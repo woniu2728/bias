@@ -25,7 +25,7 @@ const adminEntryModules = {
   ...generatedAdminExtensionModules,
 }
 
-export async function bootstrapEnabledAdminExtensions({ extensions = [], router, runtime } = {}) {
+export async function bootstrapEnabledAdminExtensions({ app: application, extensions = [], router, runtime } = {}) {
   let addedRouteCount = 0
   resetLoadedAdminExtensionsWhenRuntimeChanges(runtime, { router })
   const initializedApps = []
@@ -45,6 +45,7 @@ export async function bootstrapEnabledAdminExtensions({ extensions = [], router,
     const module = await importer()
     if (typeof module?.bootAdminExtension === 'function') {
       const app = createAdminExtensionApp({
+        app: application,
         extension,
         loadedExtensionIds: loadedAdminExtensionIds,
         registry: adminRegistry,

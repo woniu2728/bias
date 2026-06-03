@@ -85,6 +85,7 @@ ADVANCED_SETTINGS_DEFAULTS = {
     "queue_enabled": False,
     "realtime_typing_enabled": True,
     "maintenance_mode": False,
+    "maintenance_mode_key": "none",
     "maintenance_message": "论坛正在维护中，请稍后再试...",
     "extension_safe_mode": False,
     "extension_safe_mode_extensions": [],
@@ -297,6 +298,12 @@ def get_advanced_settings() -> dict:
     )
     advanced_settings["storage_local_path"] = str(getattr(settings, "MEDIA_ROOT", ""))
     advanced_settings["debug_mode"] = settings.DEBUG
+    mode = normalize_maintenance_mode(
+        advanced_settings.get("maintenance_mode_key", advanced_settings.get("maintenance_mode"))
+    )
+    advanced_settings["maintenance_mode_key"] = mode
+    advanced_settings["maintenance_mode"] = mode != "none"
+    advanced_settings["maintenance_mode_label"] = get_maintenance_mode_label(mode)
     return advanced_settings
 
 
@@ -309,7 +316,46 @@ def get_cache_lifetime() -> int:
 
 
 def is_maintenance_mode_enabled() -> bool:
-    return bool(get_advanced_settings().get("maintenance_mode", False))
+    return get_maintenance_mode() != "none"
+
+
+def get_maintenance_mode() -> str:
+    return normalize_maintenance_mode(get_advanced_settings().get("maintenance_mode_key"))
+
+
+def is_low_maintenance_mode() -> bool:
+    return get_maintenance_mode() == "low"
+
+
+def is_high_maintenance_mode() -> bool:
+    return get_maintenance_mode() == "high"
+
+
+def is_safe_maintenance_mode() -> bool:
+    return get_maintenance_mode() == "safe"
+
+
+def normalize_maintenance_mode(value) -> str:
+    if isinstance(value, bool):
+        return "high" if value else "none"
+    text = str(value or "").strip().lower()
+    if text in {"1", "true", "yes", "on", "enabled"}:
+        return "high"
+    if text in {"0", "false", "no", "off", "disabled", ""}:
+        return "none"
+    if text in {"none", "low", "high", "safe"}:
+        return text
+    return "none"
+
+
+def get_maintenance_mode_label(mode: str | None = None) -> str:
+    labels = {
+        "none": "未启用",
+        "low": "低维护",
+        "high": "高维护",
+        "safe": "恢复模式",
+    }
+    return labels.get(normalize_maintenance_mode(mode), labels["none"])
 
 
 def get_maintenance_message() -> str:
@@ -323,15 +369,22 @@ def is_query_logging_enabled() -> bool:
 
 def save_setting_group(prefix: str, defaults: dict, payload: dict) -> dict:
     values = get_setting_group(prefix, defaults)
+    normalized_payload = dict(payload or {})
+    if prefix == "advanced":
+        mode = normalize_maintenance_mode(
+            normalized_payload.get("maintenance_mode_key", normalized_payload.get("maintenance_mode"))
+        )
+        normalized_payload["maintenance_mode_key"] = mode
+        normalized_payload["maintenance_mode"] = mode != "none"
 
     for key in defaults.keys():
-        if key not in payload:
+        if key not in normalized_payload:
             continue
 
-        values[key] = payload[key]
+        values[key] = normalized_payload[key]
         Setting.objects.update_or_create(
             key=f"{prefix}.{key}",
-            defaults={"value": json.dumps(payload[key], ensure_ascii=False)}
+            defaults={"value": json.dumps(normalized_payload[key], ensure_ascii=False)}
         )
 
     clear_runtime_setting_caches()
@@ -353,6 +406,8 @@ def get_public_forum_settings(user=None) -> dict:
     advanced_settings = get_advanced_settings()
     forum_settings.update({
         "maintenance_mode": bool(advanced_settings.get("maintenance_mode", False)),
+        "maintenance_mode_key": advanced_settings.get("maintenance_mode_key", "none"),
+        "maintenance_mode_label": advanced_settings.get("maintenance_mode_label", "未启用"),
         "maintenance_message": get_maintenance_message(),
         "realtime_typing_enabled": bool(advanced_settings.get("realtime_typing_enabled", True)),
         "auth_human_verification_provider": "off",

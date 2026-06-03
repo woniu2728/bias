@@ -120,6 +120,15 @@ class ExtensionMailDefinition:
 
 
 @dataclass(frozen=True)
+class ExtensionSystemHookDefinition:
+    key: str
+    callback: Callable[[Any, dict], Any] | Any
+    module_id: str = ""
+    description: str = ""
+    order: int = 100
+
+
+@dataclass(frozen=True)
 class ExtensionResourceDefinition:
     resource: str
     module_id: str

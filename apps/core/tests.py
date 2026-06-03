@@ -952,6 +952,35 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertEqual(result, True)
         self.assertEqual(sent, [("Digest", "test")])
 
+    def test_system_hook_extenders_register_runtime_hooks(self):
+        from apps.core.extensions import (
+            AuthExtender,
+            ConsoleExtender,
+            ErrorHandlingExtender,
+            FilesystemExtender,
+            SessionExtender,
+            ThemeExtender,
+        )
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+
+        ErrorHandlingExtender().hook("report", lambda payload, context: "error").extend(app, extension)
+        AuthExtender().hook("provider", lambda payload, context: "auth").extend(app, extension)
+        FilesystemExtender().hook("driver", lambda payload, context: "fs").extend(app, extension)
+        ConsoleExtender().hook("command", lambda payload, context: "console").extend(app, extension)
+        SessionExtender().hook("session", lambda payload, context: "session").extend(app, extension)
+        ThemeExtender().hook("theme", lambda payload, context: "theme").extend(app, extension)
+
+        self.assertEqual(app.make("error.handling").run("report")[0], "error")
+        self.assertEqual(app.make("auth").run("provider")[0], "auth")
+        self.assertEqual(app.make("filesystem").run("driver")[0], "fs")
+        self.assertEqual(app.make("console").run("command")[0], "console")
+        self.assertEqual(app.make("session").run("session")[0], "session")
+        self.assertEqual(app.make("theme").run("theme")[0], "theme")
+        runtime_view = app.get_runtime_view("alpha-tools")
+        self.assertEqual(runtime_view.error_handlers[0].module_id, "alpha-tools")
+
     def test_validator_extender_runs_during_resource_payload_application(self):
         from apps.core.resource_registry import ResourceRegistry
         from apps.core.resource_objects import Resource, ResourceField
@@ -3188,7 +3217,7 @@ class ExtensionRegistryTests(TestCase):
             enabled_ids = sorted(ExtensionInstallation.objects.filter(enabled=True).values_list("extension_id", flat=True))
             self.assertEqual(state["current"], ["alpha", "beta"])
             self.assertEqual(enabled_ids, ["alpha", "beta"])
-            self.assertEqual(Setting.objects.get(key="advanced.maintenance_mode").value, "true")
+            self.assertEqual(Setting.objects.get(key="advanced.maintenance_mode_key").value, '"low"')
 
             state = advance_extension_bisect(issue_present=True)
             enabled_ids = sorted(ExtensionInstallation.objects.filter(enabled=True).values_list("extension_id", flat=True))
@@ -3199,7 +3228,7 @@ class ExtensionRegistryTests(TestCase):
             enabled_ids = sorted(ExtensionInstallation.objects.filter(enabled=True).values_list("extension_id", flat=True))
             self.assertEqual(state["culprit"], "beta")
             self.assertEqual(enabled_ids, ["alpha", "beta", "delta", "gamma"])
-            self.assertEqual(Setting.objects.get(key="advanced.maintenance_mode").value, "false")
+            self.assertEqual(Setting.objects.get(key="advanced.maintenance_mode_key").value, '"none"')
         finally:
             stop_extension_bisect()
 
@@ -11135,8 +11164,8 @@ class AdminSettingsApiTests(TestCase):
     @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
     def test_maintenance_mode_blocks_public_api_but_keeps_admin_paths_available(self):
         Setting.objects.update_or_create(
-            key="advanced.maintenance_mode",
-            defaults={"value": json.dumps(True)},
+            key="advanced.maintenance_mode_key",
+            defaults={"value": json.dumps("high")},
         )
         Setting.objects.update_or_create(
             key="advanced.maintenance_message",
@@ -11147,6 +11176,7 @@ class AdminSettingsApiTests(TestCase):
         public_settings_response = self.client.get("/api/forum")
         self.assertEqual(public_settings_response.status_code, 200, public_settings_response.content)
         self.assertTrue(public_settings_response.json()["maintenance_mode"])
+        self.assertEqual(public_settings_response.json()["maintenance_mode_key"], "high")
         self.assertEqual(public_settings_response.json()["maintenance_message"], "站点维护中，请稍后回来。")
 
         blocked_response = self.client.get("/api/search", {"q": "维护"})
@@ -11160,6 +11190,21 @@ class AdminSettingsApiTests(TestCase):
         me_response = self.client.get("/api/users/me", **self.auth_header())
         self.assertEqual(me_response.status_code, 200, me_response.content)
         self.assertTrue(me_response.json()["is_staff"])
+
+    @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
+    def test_low_maintenance_mode_allows_reads_but_blocks_writes(self):
+        Setting.objects.update_or_create(
+            key="advanced.maintenance_mode_key",
+            defaults={"value": json.dumps("low")},
+        )
+        clear_runtime_setting_caches()
+
+        read_response = self.client.get("/api/search", {"q": "维护"})
+        self.assertNotEqual(read_response.status_code, 503, read_response.content)
+
+        write_response = self.client.post("/api/discussions", data={}, content_type="application/json")
+        self.assertEqual(write_response.status_code, 503, write_response.content)
+        self.assertEqual(write_response.json()["maintenance_mode_key"], "low")
 
     @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
     def test_log_queries_setting_logs_sql_statements(self):

@@ -6,6 +6,7 @@ import {
   resetLoadedExtensionsWhenRuntimeChanges,
 } from './extensionRuntimeState.js'
 import { createAdminExtensionApp } from './extensionApp.js'
+import { createRuntimeApplication } from '../common/application.js'
 import {
   clearAdminRoutesForExtension,
   getAdminRoutes,
@@ -35,6 +36,25 @@ test('createAdminExtensionApp exposes public admin extension APIs', () => {
   assert.equal(typeof app.alerts.warning, 'function')
   assert.equal(typeof app.translator.trans, 'function')
   assert.equal(typeof app.errors.list, 'function')
+})
+
+test('createAdminExtensionApp reuses runtime application services', () => {
+  const runtimeApp = createRuntimeApplication({
+    kind: 'admin',
+    api: { get() {} },
+    store: { name: 'store' },
+  })
+  const app = createAdminExtensionApp({
+    app: runtimeApp,
+    extension: { id: 'diagnostics' },
+    registry: { adminApi: {} },
+  })
+
+  app.cache.shared = true
+
+  assert.equal(app.application, runtimeApp)
+  assert.equal(runtimeApp.cache.shared, true)
+  assert.equal(app.store.name, 'store')
 })
 
 test('resetLoadedAdminExtensionsWhenRuntimeChanges clears admin boot state on stamp change', () => {

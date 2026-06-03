@@ -745,10 +745,21 @@
         <h3 class="Section-title">{{ advancedCopy?.maintenanceSectionTitle || '维护模式' }}</h3>
 
         <div class="Form-group">
+          <label for="advanced-maintenance-mode-key">{{ advancedCopy?.maintenanceModeKeyLabel || '维护级别' }}</label>
+          <AdminSelectMenu
+            input-id="advanced-maintenance-mode-key"
+            v-model="settings.maintenance_mode_key"
+            :options="maintenanceModeOptions"
+            :aria-label="advancedCopy?.maintenanceModeKeyLabel || '维护级别'"
+          />
+          <p class="Form-help">{{ advancedCopy?.maintenanceModeKeyHelpText || '低维护只阻断写操作，高维护阻断普通前台请求，恢复模式用于扩展排障。' }}</p>
+        </div>
+
+        <div class="Form-group">
           <label>
             <input
               id="advanced-maintenance-mode"
-              v-model="settings.maintenance_mode"
+              v-model="maintenanceEnabled"
               name="maintenance_mode"
               type="checkbox"
               class="FormControl-checkbox"
@@ -882,6 +893,12 @@ const queueDriverOptions = computed(() => advancedConfig.value?.queueDriverOptio
 const humanVerificationProviderOptions = computed(() => advancedConfig.value?.humanVerificationProviderOptions || [])
 const storageDriverOptions = computed(() => advancedConfig.value?.storageDriverOptions || [])
 const imagebedMethodOptions = computed(() => advancedConfig.value?.imagebedMethodOptions || [])
+const maintenanceModeOptions = computed(() => advancedConfig.value?.maintenanceModeOptions || [
+  { value: 'none', label: '关闭' },
+  { value: 'low', label: '低维护' },
+  { value: 'high', label: '高维护' },
+  { value: 'safe', label: '恢复模式' },
+])
 const runtimeDependencyChecks = computed(() => (
   Array.isArray(adminStats.value?.runtimeDependencyChecks)
     ? adminStats.value.runtimeDependencyChecks
@@ -916,6 +933,15 @@ const extensionSafeModeExtensionsText = computed({
       .filter(Boolean)
   },
 })
+const maintenanceEnabled = computed({
+  get() {
+    return String(settings.value.maintenance_mode_key || 'none') !== 'none'
+  },
+  set(value) {
+    settings.value.maintenance_mode_key = value ? 'high' : 'none'
+    settings.value.maintenance_mode = Boolean(value)
+  },
+})
 
 function defaultSettings() {
   return {
@@ -925,6 +951,7 @@ function defaultSettings() {
     queue_enabled: false,
     realtime_typing_enabled: true,
     maintenance_mode: false,
+    maintenance_mode_key: 'none',
     maintenance_message: '',
     extension_safe_mode: false,
     extension_safe_mode_extensions: [],
@@ -986,7 +1013,7 @@ onMounted(async () => {
 async function loadAdvancedSettings() {
   try {
     const data = await api.get('/admin/advanced')
-    settings.value = { ...settings.value, ...data }
+    settings.value = normalizeAdvancedSettings({ ...settings.value, ...data })
     loadedSettingsSnapshot.value = createSettingsSnapshot(settings.value)
   } catch (error) {
     console.error('加载高级设置失败:', error)
@@ -1041,9 +1068,9 @@ async function saveSettings() {
   resetSaveFeedback()
 
   try {
-    const response = await api.post('/admin/advanced', settings.value)
+    const response = await api.post('/admin/advanced', normalizeAdvancedSettings(settings.value))
     if (response?.settings) {
-      settings.value = { ...settings.value, ...response.settings }
+      settings.value = normalizeAdvancedSettings({ ...settings.value, ...response.settings })
     }
     loadedSettingsSnapshot.value = createSettingsSnapshot(settings.value)
     await loadAdminStats()
@@ -1122,8 +1149,10 @@ async function rebuildSearchIndexes() {
 }
 
 function createSettingsSnapshot(value) {
+  const normalized = normalizeAdvancedSettings(value)
   return {
-    maintenance_mode: Boolean(value.maintenance_mode),
+    maintenance_mode: normalized.maintenance_mode_key !== 'none',
+    maintenance_mode_key: normalized.maintenance_mode_key,
     extension_safe_mode: Boolean(value.extension_safe_mode),
     extension_safe_mode_extensions: Array.isArray(value.extension_safe_mode_extensions)
       ? value.extension_safe_mode_extensions.join(',')
@@ -1137,6 +1166,15 @@ function createSettingsSnapshot(value) {
     upload_attachment_max_size_mb: normalizeUploadSize(value.upload_attachment_max_size_mb),
     upload_site_asset_max_size_mb: normalizeUploadSize(value.upload_site_asset_max_size_mb),
   }
+}
+
+function normalizeAdvancedSettings(value) {
+  const payload = { ...(value || {}) }
+  const key = String(payload.maintenance_mode_key || '').trim().toLowerCase()
+  const fallback = payload.maintenance_mode ? 'high' : 'none'
+  payload.maintenance_mode_key = ['none', 'low', 'high', 'safe'].includes(key) ? key : fallback
+  payload.maintenance_mode = payload.maintenance_mode_key !== 'none'
+  return payload
 }
 
 function getSensitiveSettingChanges() {

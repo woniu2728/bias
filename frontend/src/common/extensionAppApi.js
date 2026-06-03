@@ -1,6 +1,7 @@
 import { getExtensionRuntimeErrors, handleExtensionRuntimeError } from './extensionRuntime.js'
 
 export function createExtensionAppApi({
+  application = null,
   api,
   extension,
   store = null,
@@ -12,13 +13,14 @@ export function createExtensionAppApi({
   const extensionId = String(extension?.id || '').trim()
 
   return {
-    api,
+    application,
+    api: api || application?.api,
     extension,
-    cache,
-    store,
-    session: session || createSessionApi(),
-    alerts: alerts || createAlertsApi(),
-    translator: translator || createTranslatorApi(),
+    cache: application?.cache || cache,
+    store: store || application?.store,
+    session: session || application?.session || createSessionApi(),
+    alerts: alerts || application?.alerts || createAlertsApi(),
+    translator: translator || application?.translator || createTranslatorApi(),
     errors: {
       list() {
         return getExtensionRuntimeErrors().filter(error => !extensionId || error.extensionId === extensionId)

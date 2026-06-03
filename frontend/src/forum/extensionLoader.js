@@ -131,6 +131,7 @@ export function validateCommonExtensionModule(module, extensionId = '') {
 
 export async function loadEnabledForumExtensions({
   forumStore,
+  app: application,
   importers = {},
   router,
   routeComponents,
@@ -169,6 +170,7 @@ export async function loadEnabledForumExtensions({
       const commonModule = await loadExtensionForumEntryModule(commonEntryPath, { importers })
       validateCommonExtensionModule(commonModule, extensionId)
       app = createForumExtensionApp({
+        app: application,
         forumStore,
         extension,
         loadedExtensionIds: loadedIds,
@@ -201,6 +203,7 @@ export async function loadEnabledForumExtensions({
     const module = await loadExtensionForumEntryModule(entryPath, { importers })
     validateForumExtensionModule(module, extensionId)
     app = createForumExtensionApp({
+      app: application,
       forumStore,
       extension,
       loadedExtensionIds: loadedIds,

@@ -2,6 +2,9 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import AdminApp from './AdminApp.vue'
 import router from './router'
+import api from '../api'
+import { createRuntimeApplication } from '../common/application'
+import { setRuntimeApplication } from '../common/applicationRegistry'
 import { primeCsrfProtection } from '../api'
 import { useForumStore } from '../stores/forum'
 import { useForumUiStore } from '../stores/forumUi'
@@ -15,7 +18,20 @@ app.use(pinia)
 app.use(router)
 
 primeCsrfProtection().catch(() => {})
-useForumStore(pinia).initialize()
+const forumStore = useForumStore(pinia)
 useForumUiStore(pinia)
+const runtimeApp = createRuntimeApplication({
+  kind: 'admin',
+  vueApp: app,
+  router,
+  pinia,
+  api,
+  store: forumStore,
+})
+setRuntimeApplication('admin', runtimeApp)
 
-app.mount('#app')
+runtimeApp.boot(async () => {
+  await forumStore.initialize()
+}).finally(() => {
+  app.mount('#app')
+})

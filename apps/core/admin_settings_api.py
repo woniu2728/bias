@@ -97,6 +97,8 @@ def get_stats(request):
         "authSecretMessage": auth_secret_status["message"],
         "debugMode": legacy.settings.DEBUG,
         "maintenanceMode": bool(advanced_settings.get("maintenance_mode", False)),
+        "maintenanceModeKey": advanced_settings.get("maintenance_mode_key", "none"),
+        "maintenanceModeLabel": advanced_settings.get("maintenance_mode_label", "未启用"),
         "totalUsers": legacy.User.objects.count(),
         "totalDiscussions": legacy.Discussion.objects.count(),
         "totalPosts": legacy.Post.objects.count(),
@@ -339,6 +341,10 @@ def save_advanced_settings(request, payload: dict = Body(...)):
     legacy = _legacy()
     runtime_payload = dict(payload)
     runtime_payload.pop("debug_mode", None)
+    if "maintenance_mode_key" in runtime_payload:
+        runtime_payload["maintenance_mode"] = str(
+            runtime_payload.get("maintenance_mode_key") or "none"
+        ).strip().lower() != "none"
     validation_errors = legacy.validate_advanced_runtime_settings(runtime_payload)
     if validation_errors:
         return legacy.admin_error(

@@ -13,6 +13,7 @@ SAFE_MODE_SETTING = "advanced.extension_safe_mode"
 SAFE_MODE_EXTENSIONS_SETTING = "advanced.extension_safe_mode_extensions"
 BISECT_STATE_SETTING = "extensions_bisect_state"
 LOW_MAINTENANCE_SETTING = "advanced.maintenance_mode"
+MAINTENANCE_MODE_KEY_SETTING = "advanced.maintenance_mode_key"
 
 
 def is_extension_safe_mode_enabled() -> bool:
@@ -241,6 +242,10 @@ def _restore_original_enabled_extensions(state: dict) -> None:
 
 
 def _set_low_maintenance_mode(enabled: bool) -> None:
+    Setting.objects.update_or_create(
+        key=MAINTENANCE_MODE_KEY_SETTING,
+        defaults={"value": json.dumps("low" if enabled else "none")},
+    )
     Setting.objects.update_or_create(
         key=LOW_MAINTENANCE_SETTING,
         defaults={"value": json.dumps(bool(enabled))},

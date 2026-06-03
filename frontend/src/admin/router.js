@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { findAdminRouteByPath, getAdminRoutes } from './registry'
 import { bootstrapEnabledAdminExtensions } from './extensionBootstrap'
+import { getRuntimeApplication } from '../common/applicationRegistry'
 import { useAdminRegistryStore } from '../stores/adminRegistry'
 
 normalizeLegacyAdminHash()
@@ -52,6 +53,7 @@ router.beforeEach(async (to) => {
   const adminRegistryStore = useAdminRegistryStore()
   await adminRegistryStore.fetchModules()
   const bootstrapResult = await bootstrapEnabledAdminExtensions({
+    app: getRuntimeApplication('admin'),
     extensions: adminRegistryStore.extensions,
     router,
     runtime: adminRegistryStore.extensionRuntime,

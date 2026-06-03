@@ -29,6 +29,7 @@ from apps.core.extensions.types import (
     ExtensionResourceSortDefinition,
     ExtensionRealtimeIncludedDefinition,
     ExtensionSearchDriverDefinition,
+    ExtensionSystemHookDefinition,
     ExtensionValidatorDefinition,
     ExtensionMailDefinition,
 )
@@ -1348,6 +1349,77 @@ class ServiceProviderExtender:
             return providers
 
         app.resolving("providers", apply)
+
+
+@dataclass(frozen=True)
+class SystemHookExtender:
+    service_key: str
+    definitions: tuple[ExtensionSystemHookDefinition, ...] = ()
+
+    def hook(
+        self,
+        key: str,
+        callback: Any,
+        *,
+        description: str = "",
+        order: int = 100,
+    ) -> "SystemHookExtender":
+        return SystemHookExtender(
+            service_key=self.service_key,
+            definitions=tuple([*self.definitions, ExtensionSystemHookDefinition(
+                key=str(key or "").strip(),
+                callback=callback,
+                description=str(description or "").strip(),
+                order=int(order),
+            )]),
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.definitions:
+            return
+        extension_id = extension.extension_id
+        service_key = str(self.service_key or "").strip()
+        if not service_key:
+            return
+
+        def apply(service, host: "ExtensionHost"):
+            for definition in self.definitions:
+                if not definition.key:
+                    continue
+                service.register(extension_id, replace(definition, module_id=definition.module_id or extension_id))
+            return service
+
+        app.resolving(service_key, apply)
+
+
+class ErrorHandlingExtender(SystemHookExtender):
+    def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
+        super().__init__("error.handling", definitions)
+
+
+class AuthExtender(SystemHookExtender):
+    def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
+        super().__init__("auth", definitions)
+
+
+class FilesystemExtender(SystemHookExtender):
+    def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
+        super().__init__("filesystem", definitions)
+
+
+class ConsoleExtender(SystemHookExtender):
+    def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
+        super().__init__("console", definitions)
+
+
+class SessionExtender(SystemHookExtender):
+    def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
+        super().__init__("session", definitions)
+
+
+class ThemeExtender(SystemHookExtender):
+    def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
+        super().__init__("theme", definitions)
 
 
 @dataclass(frozen=True)

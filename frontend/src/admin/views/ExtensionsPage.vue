@@ -105,6 +105,13 @@
                 >
                   {{ resolveRecoveryBadge(extension).label }}
                 </span>
+                <span
+                  v-if="resolveFrontendAssetBadge(extension)"
+                  class="ExtensionStatus"
+                  :class="resolveFrontendAssetBadge(extension).className"
+                >
+                  {{ resolveFrontendAssetBadge(extension).label }}
+                </span>
               </div>
 
               <p class="ExtensionCard-description">{{ extension.description || '暂无描述' }}</p>
@@ -473,6 +480,20 @@ function resolveRecoveryBadge(extension) {
     return { label: '恢复模式停用', className: 'is-warning' }
   }
   return null
+}
+
+function resolveFrontendAssetBadge(extension) {
+  const state = extension?.frontend_asset_state || {}
+  if (!state.has_frontend) {
+    return null
+  }
+  if (state.requires_rebuild) {
+    return { label: '前端待重建', className: 'is-warning' }
+  }
+  if (!state.manifest_exists || !state.compiled) {
+    return { label: '前端未生成', className: 'is-warning' }
+  }
+  return { label: '前端已生成', className: 'is-enabled' }
 }
 
 function resolveDiagnosticsItemClass(item) {

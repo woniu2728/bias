@@ -9,8 +9,8 @@ from apps.core.extensions.bootstrap import get_extension_application
 from apps.core.jwt_auth import resolve_authenticated_user
 from apps.core.runtime_state import get_runtime_status
 from apps.core.settings_service import (
+    get_maintenance_mode,
     get_maintenance_message,
-    is_maintenance_mode_enabled,
     is_query_logging_enabled,
 )
 
@@ -319,30 +319,35 @@ class MaintenanceModeMiddleware:
         if self._is_async:
             return self.__acall__(request)
 
-        if not is_maintenance_mode_enabled():
+        mode = get_maintenance_mode()
+        if mode == "none":
             return self.get_response(request)
 
-        if self._is_exempt(request):
+        if self._is_exempt(request, mode=mode):
             return self.get_response(request)
 
-        return self._maintenance_response(request)
+        return self._maintenance_response(request, mode=mode)
 
     async def __acall__(self, request):
-        if not await sync_to_async(is_maintenance_mode_enabled, thread_sensitive=True)():
+        mode = await sync_to_async(get_maintenance_mode, thread_sensitive=True)()
+        if mode == "none":
             return await self.get_response(request)
 
-        if await sync_to_async(self._is_exempt, thread_sensitive=True)(request):
+        if await sync_to_async(self._is_exempt, thread_sensitive=True)(request, mode=mode):
             return await self.get_response(request)
 
-        return await sync_to_async(self._maintenance_response, thread_sensitive=True)(request)
+        return await sync_to_async(self._maintenance_response, thread_sensitive=True)(request, mode=mode)
 
-    def _is_exempt(self, request) -> bool:
+    def _is_exempt(self, request, *, mode: str = "high") -> bool:
         path = request.path or "/"
 
         if path.startswith("/admin/") or path.startswith("/api/admin"):
             return True
 
         if path in self.allowed_public_paths:
+            return True
+
+        if mode == "low" and request.method in {"GET", "HEAD", "OPTIONS"}:
             return True
 
         static_url = getattr(settings, "STATIC_URL", None)
@@ -359,12 +364,12 @@ class MaintenanceModeMiddleware:
         auth_user = resolve_authenticated_user(request)
         return bool(getattr(auth_user, "is_staff", False))
 
-    def _maintenance_response(self, request):
+    def _maintenance_response(self, request, *, mode: str = "high"):
         message = get_maintenance_message()
 
         if request.path.startswith("/api/"):
             response = JsonResponse(
-                {"error": message, "maintenance": True},
+                {"error": message, "maintenance": True, "maintenance_mode_key": mode},
                 status=503,
             )
         else:

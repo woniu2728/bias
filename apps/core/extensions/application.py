@@ -27,6 +27,7 @@ from apps.core.extensions.types import (
     ExtensionResourceSortDefinition,
     ExtensionRealtimeIncludedDefinition,
     ExtensionSearchDriverDefinition,
+    ExtensionSystemHookDefinition,
     ExtensionValidatorDefinition,
     ExtensionMailDefinition,
 )
@@ -171,6 +172,39 @@ class ApplicationMailService:
         if definition is None or not callable(definition.callback):
             return None
         return definition.callback(message, dict(context or {}))
+
+
+class ApplicationSystemHookService:
+    def __init__(self, host: "ExtensionHost", view_field: str) -> None:
+        self._host = host
+        self._view_field = view_field
+        self._definitions_by_extension: dict[str, tuple[ExtensionSystemHookDefinition, ...]] = {}
+
+    def register(self, extension_id: str, definition: ExtensionSystemHookDefinition) -> None:
+        normalized = str(extension_id or "").strip()
+        if not normalized:
+            return
+        definitions = tuple([*self._definitions_by_extension.get(normalized, ()), definition])
+        self._definitions_by_extension[normalized] = definitions
+        setattr(self._host._get_or_create_runtime_view(normalized), self._view_field, definitions)
+
+    def get_definitions(self, *, extension_id: str | None = None) -> list[ExtensionSystemHookDefinition]:
+        if extension_id is not None:
+            definitions = list(self._definitions_by_extension.get(str(extension_id or "").strip(), ()))
+        else:
+            definitions = []
+            for items in self._definitions_by_extension.values():
+                definitions.extend(items)
+        return sorted(definitions, key=lambda item: (int(item.order or 100), item.module_id, item.key))
+
+    def run(self, key: str, payload: dict | None = None, context: dict | None = None) -> list[Any]:
+        normalized = str(key or "").strip()
+        results = []
+        for definition in self.get_definitions():
+            if definition.key != normalized or not callable(definition.callback):
+                continue
+            results.append(definition.callback(dict(payload or {}), dict(context or {})))
+        return results
 
 
 @dataclass
@@ -1621,6 +1655,12 @@ class ExtensionApplicationRecord:
     search_drivers: list[ExtensionSearchDriverDefinition] = field(default_factory=list)
     validators: list[ExtensionValidatorDefinition] = field(default_factory=list)
     mailers: list[ExtensionMailDefinition] = field(default_factory=list)
+    error_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
+    auth_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
+    filesystem_drivers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
+    console_commands: list[ExtensionSystemHookDefinition] = field(default_factory=list)
+    session_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
+    theme_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
     event_listeners: list[ExtensionEventListenerDefinition] = field(default_factory=list)
     realtime_included: list[ExtensionRealtimeIncludedDefinition] = field(default_factory=list)
     discussion_lifecycle: list[ExtensionDiscussionLifecycleDefinition] = field(default_factory=list)
@@ -1689,6 +1729,12 @@ class ExtensionRuntimeView:
     search_drivers: tuple[ExtensionSearchDriverDefinition, ...] = ()
     validators: tuple[ExtensionValidatorDefinition, ...] = ()
     mailers: tuple[ExtensionMailDefinition, ...] = ()
+    error_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
+    auth_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
+    filesystem_drivers: tuple[ExtensionSystemHookDefinition, ...] = ()
+    console_commands: tuple[ExtensionSystemHookDefinition, ...] = ()
+    session_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
+    theme_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
     event_listeners: tuple[ExtensionEventListenerDefinition, ...] = ()
     realtime_included: tuple[ExtensionRealtimeIncludedDefinition, ...] = ()
     discussion_lifecycle: tuple[ExtensionDiscussionLifecycleDefinition, ...] = ()
@@ -1758,6 +1804,12 @@ class ExtensionApplication:
         self.search = ApplicationSearchService(self)
         self.validators = ApplicationValidatorService(self)
         self.mail = ApplicationMailService(self)
+        self.error_handling = ApplicationSystemHookService(self, "error_handlers")
+        self.auth = ApplicationSystemHookService(self, "auth_handlers")
+        self.filesystem = ApplicationSystemHookService(self, "filesystem_drivers")
+        self.console = ApplicationSystemHookService(self, "console_commands")
+        self.sessions = ApplicationSystemHookService(self, "session_handlers")
+        self.theme = ApplicationSystemHookService(self, "theme_handlers")
         self.routes = ApplicationRouteService(self)
         self.frontend = ApplicationFrontendService(self)
         self.providers = ApplicationServiceProviderRegistry(self)
@@ -1793,6 +1845,18 @@ class ExtensionApplication:
         self.instance("extensions.validators", self.validators)
         self.instance("mail", self.mail)
         self.instance("extensions.mail", self.mail)
+        self.instance("error.handling", self.error_handling)
+        self.instance("extensions.error.handling", self.error_handling)
+        self.instance("auth", self.auth)
+        self.instance("extensions.auth", self.auth)
+        self.instance("filesystem", self.filesystem)
+        self.instance("extensions.filesystem", self.filesystem)
+        self.instance("console", self.console)
+        self.instance("extensions.console", self.console)
+        self.instance("session", self.sessions)
+        self.instance("extensions.session", self.sessions)
+        self.instance("theme", self.theme)
+        self.instance("extensions.theme", self.theme)
         self.instance("providers", self.providers)
         self.instance("extensions.providers", self.providers)
         self.instance("locales", self.locales)

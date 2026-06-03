@@ -126,6 +126,7 @@ registerAdminAdvancedPageConfig({
       queue_enabled: false,
       realtime_typing_enabled: true,
       maintenance_mode: false,
+      maintenance_mode_key: 'none',
       maintenance_message: '',
       extension_safe_mode: false,
       extension_safe_mode_extensions: [],
@@ -221,8 +222,15 @@ registerAdminAdvancedPageConfig({
       { value: 'PUT', label: 'PUT' },
       { value: 'PATCH', label: 'PATCH' },
     ],
+    maintenanceModeOptions: [
+      { value: 'none', label: '关闭' },
+      { value: 'low', label: '低维护' },
+      { value: 'high', label: '高维护' },
+      { value: 'safe', label: '恢复模式' },
+    ],
     sensitiveLabels: {
       maintenance_mode: '维护模式',
+      maintenance_mode_key: '维护级别',
       extension_safe_mode: '扩展恢复模式',
       extension_safe_mode_extensions: '恢复模式扩展白名单',
       queue_enabled: '队列启用状态',

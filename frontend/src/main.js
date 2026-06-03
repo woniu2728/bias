@@ -2,6 +2,9 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
+import api from './api'
+import { createRuntimeApplication } from './common/application'
+import { setRuntimeApplication } from './common/applicationRegistry'
 import { primeCsrfProtection } from './api'
 import { loadEnabledForumExtensions } from './forum/extensionLoader'
 import * as forumRegistry from './forum/registry'
@@ -24,19 +27,32 @@ const forumExtensionModules = {
   ...generatedForumExtensionModules,
 }
 useForumUiStore(pinia)
+const runtimeApp = createRuntimeApplication({
+  kind: 'forum',
+  vueApp: app,
+  router,
+  pinia,
+  api,
+  store: forumStore,
+})
+setRuntimeApplication('forum', runtimeApp)
 
 async function bootstrap() {
-  await forumStore.initialize()
-  try {
-    await loadEnabledForumExtensions({
-      forumStore,
-      importers: forumExtensionModules,
-      registry: forumRegistry,
-      router,
-    })
-  } catch (error) {
-    console.error('加载前台扩展入口失败:', error)
-  }
+  await runtimeApp.boot(async () => {
+    await forumStore.initialize()
+    try {
+      await loadEnabledForumExtensions({
+        app: runtimeApp,
+        forumStore,
+        importers: forumExtensionModules,
+        registry: forumRegistry,
+        router,
+      })
+    } catch (error) {
+      runtimeApp.handleError(error, 'forum-extension-bootstrap')
+      console.error('加载前台扩展入口失败:', error)
+    }
+  })
 
   app.mount('#app')
 }

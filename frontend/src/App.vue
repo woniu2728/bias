@@ -73,7 +73,10 @@ const forumRealtimeStatus = useForumRealtimeStatus({
 })
 const dismissedAnnouncementKey = ref('')
 const viewportWidth = ref(typeof window === 'undefined' ? 1280 : window.innerWidth)
-const showMaintenance = computed(() => forumStore.settings.maintenance_mode && !authStore.user?.is_staff)
+const showMaintenance = computed(() => (
+  String(forumStore.settings.maintenance_mode_key || (forumStore.settings.maintenance_mode ? 'high' : 'none')) !== 'none'
+  && !authStore.user?.is_staff
+))
 const announcementMessage = computed(() => String(forumStore.settings.announcement_message || '').trim())
 const announcementTone = computed(() => {
   const tone = String(forumStore.settings.announcement_tone || 'info')

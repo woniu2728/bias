@@ -14,6 +14,7 @@ const forumInitializers = createExtensionInitializers()
 const forumPatcher = createExtensionPatcher()
 
 export function createForumExtensionApp({
+  app: application,
   extension,
   forumStore,
   loadedExtensionIds,
@@ -22,6 +23,7 @@ export function createForumExtensionApp({
   router,
 } = {}) {
   const appApi = createExtensionAppApi({
+    application,
     api,
     extension,
     store: forumStore,

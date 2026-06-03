@@ -262,6 +262,7 @@ def inspect_extension_frontend_output_manifest() -> dict:
         "vite_manifest_path": str(payload.get("vite_manifest_path") or get_frontend_vite_manifest_path()),
         "vite_manifest_exists": bool(payload.get("vite_manifest_exists")),
         "extension_count": len(payload.get("extensions") or {}),
+        "extensions": dict(payload.get("extensions") or {}),
         "build": dict(payload.get("build") or {}),
     }
 

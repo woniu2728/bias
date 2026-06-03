@@ -454,6 +454,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "search_drivers": search_drivers,
         "language_packs": language_packs,
         "delivery_assets": delivery_assets,
+        "frontend_asset_state": _serialize_extension_frontend_asset_state_for_extension(extension),
         "capability_summary": capability_summary,
         "action_links": {
             "detail_page": detail_page,
@@ -1486,6 +1487,25 @@ def _serialize_extension_frontend_asset_state():
     from apps.core.extensions.frontend_compiler import inspect_extension_frontend_output_manifest
 
     return inspect_extension_frontend_output_manifest()
+
+
+def _serialize_extension_frontend_asset_state_for_extension(extension):
+    state = _serialize_extension_frontend_asset_state()
+    extensions = dict(state.get("extensions") or {})
+    entry = dict(extensions.get(extension.id) or {})
+    runtime = _serialize_extension_runtime_rebuild_state()
+    has_frontend = bool(
+        _resolve_extension_frontend_admin_entry(extension)
+        or _resolve_extension_frontend_forum_entry(extension)
+    )
+    return {
+        "manifest_exists": bool(state.get("exists")),
+        "has_frontend": has_frontend,
+        "compiled": bool(entry.get("outputs")) if has_frontend else True,
+        "requires_rebuild": bool(runtime.get("required")),
+        "outputs": dict(entry.get("outputs") or {}),
+        "generated_at": str(state.get("generated_at") or ""),
+    }
 
 
 def _serialize_extension_migration_execution(extension):

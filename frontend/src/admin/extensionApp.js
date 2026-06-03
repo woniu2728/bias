@@ -9,15 +9,17 @@ const adminInitializers = createExtensionInitializers()
 const adminPatcher = createExtensionPatcher()
 
 export function createAdminExtensionApp({
+  app: application,
   extension,
   loadedExtensionIds,
   registry = {},
   router,
 } = {}) {
   const appApi = createExtensionAppApi({
+    application,
     api: registry.adminApi,
     extension,
-    store: registry,
+    store: application?.store || registry,
   })
   return Object.freeze({
     ...appApi,
