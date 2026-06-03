@@ -5,8 +5,13 @@ import {
   resetLoadedExtensions,
   resetLoadedExtensionsWhenRuntimeChanges,
 } from './extensionRuntimeState.js'
+import {
+  bootstrapEnabledAdminExtensions,
+  resetLoadedAdminExtensions,
+} from './extensionBootstrap.js'
 import { createAdminExtensionApp } from './extensionApp.js'
 import { createRuntimeApplication } from '../common/application.js'
+import { createAdminRuntimeRegistry } from './runtimeRegistry.js'
 import {
   clearAdminRoutesForExtension,
   getAdminRoutes,
@@ -98,4 +103,79 @@ test('admin extension app runs scoped initializers and resets patches', async ()
   assert.deepEqual(target.value(), ['base', 'patched'])
   resetAdminExtensionAppRuntime('scoped')
   assert.deepEqual(target.value(), ['base'])
+})
+
+test('admin runtime registry scopes settings permissions pages and general index', () => {
+  const routes = []
+  const registry = createAdminRuntimeRegistry({
+    registerAdminRoute(route) {
+      routes.push(route)
+    },
+  })
+
+  registry.for('alpha')
+  registry.registerSetting({ key: 'alpha_setting', label: 'Alpha' }, 20)
+  registry.setSetting('alpha_setting', original => ({ ...original, label: 'Updated' }))
+  registry.setSettingPriority('alpha_setting', 10)
+  registry.registerPermission({ permission: 'alpha.use', label: 'Use alpha' }, 'moderate', 30)
+  registry.setPermissionPriority('alpha.use', 'moderate', 15)
+  registry.registerPage({ name: 'admin-alpha', path: '/admin/alpha' })
+  registry.generalIndex.for('alpha').add('settings', [{ key: 'alpha_setting' }])
+
+  assert.deepEqual(registry.getSettings('alpha'), [{
+    key: 'alpha_setting',
+    label: 'Updated',
+    priority: 10,
+    custom: false,
+  }])
+  assert.deepEqual(registry.getPermissions('alpha', 'moderate'), [{
+    permission: 'alpha.use',
+    label: 'Use alpha',
+    type: 'moderate',
+    priority: 15,
+  }])
+  assert.equal(registry.getPages('alpha')[0].path, '/admin/alpha')
+  assert.equal(routes[0].path, '/admin/alpha')
+  assert.deepEqual(registry.generalIndex.get('alpha', 'settings'), [{ key: 'alpha_setting' }])
+})
+
+test('bootstrapEnabledAdminExtensions runs runtime application initializers', async () => {
+  resetLoadedAdminExtensions()
+  const calls = []
+  const runtimeApp = createRuntimeApplication({ kind: 'admin' })
+  const router = {
+    addRoute() {},
+    hasRoute() {
+      return false
+    },
+    getRoutes() {
+      return []
+    },
+    removeRoute() {},
+  }
+
+  await bootstrapEnabledAdminExtensions({
+    app: runtimeApp,
+    router,
+    runtime: { stamp: 'runtime-initializer-test' },
+    registry: { adminApi: {} },
+    extensions: [{
+      id: 'runtime-admin',
+      enabled: true,
+      frontend_admin_entry: 'extensions/runtime-admin/frontend/admin/index.js',
+    }],
+    entryModules: {
+      '../../../extensions/runtime-admin/frontend/admin/index.js': async () => ({
+        bootAdminExtension: async ({ app }) => {
+          assert.equal(app.initializers, runtimeApp.initializers)
+          app.initializers.add('runtime-admin', extensionApp => {
+            calls.push(extensionApp.extension.id)
+          })
+        },
+      }),
+    },
+  })
+
+  assert.deepEqual(calls, ['runtime-admin'])
+  assert.equal(runtimeApp.initializers.list().length, 0)
 })

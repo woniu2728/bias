@@ -10,7 +10,8 @@ from unittest.mock import Mock, patch
 from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent
 from apps.core.models import AuditLog, Setting
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
-from apps.discussions.models import DiscussionUser
+from apps.core.visibility import build_post_visibility_q
+from apps.discussions.models import Discussion, DiscussionUser
 from apps.discussions.services import DiscussionService
 from apps.notifications.models import Notification
 from apps.posts.models import Post
@@ -138,6 +139,162 @@ class PostPaginationTests(TestCase):
 
         self.assertTrue(state["failed"])
         self.assertEqual(post.content, "Retry reply")
+
+    def test_create_post_applies_runtime_private_checkers(self):
+        discussion = DiscussionService.create_discussion(
+            title="Private reply discussion",
+            content="First post",
+            user=self.user,
+        )
+
+        class RuntimeModelService:
+            def is_private(self, model, instance, *, default=False):
+                return model is Post and getattr(instance, "number", 0) > 1
+
+        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=RuntimeModelService()):
+            reply = PostService.create_post(
+                discussion_id=discussion.id,
+                content="Private reply",
+                user=self.user,
+            )
+
+        self.assertTrue(reply.is_private)
+        self.assertFalse(Post.objects.filter(build_post_visibility_q(self.user), id=reply.id).exists())
+
+    def test_approve_post_refreshes_runtime_private_state(self):
+        discussion = DiscussionService.create_discussion(
+            title="Private approved reply discussion",
+            content="First post",
+            user=self.user,
+        )
+        admin = User.objects.create_user(
+            username="moderator",
+            email="moderator@example.com",
+            password="password123",
+            is_staff=True,
+            is_email_confirmed=True,
+        )
+        reply = PostService.create_post(
+            discussion_id=discussion.id,
+            content="Pending reply",
+            user=self.user,
+        )
+        reply.approval_status = Post.APPROVAL_PENDING
+        reply.is_private = False
+        reply.save(update_fields=["approval_status", "is_private"])
+
+        class RuntimeModelService:
+            def is_private(self, model, instance, *, default=False):
+                return model is Post and instance.id == reply.id
+
+        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=RuntimeModelService()):
+            approved = PostService.approve_post(reply, admin)
+
+        self.assertTrue(approved.is_private)
+
+    def test_view_private_scoper_allows_matching_private_post_visibility(self):
+        from apps.core.extensions.application import ExtensionApplication
+        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+
+        reader = User.objects.create_user(
+            username="post-private-reader",
+            email="post-private-reader@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        discussion = DiscussionService.create_discussion(
+            title="Scoped private posts",
+            content="First post",
+            user=self.user,
+        )
+        allowed = PostService.create_post(
+            discussion_id=discussion.id,
+            content="Scoped private allowed",
+            user=self.user,
+        )
+        denied = PostService.create_post(
+            discussion_id=discussion.id,
+            content="Scoped private denied",
+            user=self.user,
+        )
+        Post.objects.filter(id__in=[allowed.id, denied.id]).update(is_private=True)
+
+        app = ExtensionApplication()
+        app.models.register_visibility(
+            "private-runtime",
+            ExtensionModelVisibilityDefinition(
+                model=Post,
+                ability="viewPrivate",
+                scope=lambda queryset, context: queryset.filter(id=allowed.id),
+            ),
+        )
+
+        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+            visible_ids = set(
+                PostService.apply_visibility_filters(
+                    Post.objects.filter(id__in=[allowed.id, denied.id]),
+                    reader,
+                ).values_list("id", flat=True)
+            )
+
+        self.assertIn(allowed.id, visible_ids)
+        self.assertNotIn(denied.id, visible_ids)
+
+    def test_hide_posts_scoper_allows_matching_hidden_post_visibility(self):
+        from apps.core.extensions.application import ExtensionApplication
+        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+
+        reader = User.objects.create_user(
+            username="post-hidden-reader",
+            email="post-hidden-reader@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        allowed_discussion = DiscussionService.create_discussion(
+            title="Scoped hidden post allowed",
+            content="First post",
+            user=self.user,
+        )
+        denied_discussion = DiscussionService.create_discussion(
+            title="Scoped hidden post denied",
+            content="First post",
+            user=self.user,
+        )
+        allowed = PostService.create_post(
+            discussion_id=allowed_discussion.id,
+            content="Scoped hidden allowed",
+            user=self.user,
+        )
+        denied = PostService.create_post(
+            discussion_id=denied_discussion.id,
+            content="Scoped hidden denied",
+            user=self.user,
+        )
+        Post.objects.filter(id__in=[allowed.id, denied.id]).update(hidden_at=timezone.now())
+
+        app = ExtensionApplication()
+        app.models.register_visibility(
+            "hidden-runtime",
+            ExtensionModelVisibilityDefinition(
+                model=Discussion,
+                ability="hidePosts",
+                scope=lambda queryset, context: queryset.filter(id=allowed_discussion.id),
+            ),
+        )
+
+        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+            visible_ids = set(
+                PostService.apply_visibility_filters(
+                    Post.objects.filter(id__in=[allowed.id, denied.id]),
+                    reader,
+                ).values_list("id", flat=True)
+            )
+            allowed.refresh_from_db()
+            can_view_allowed = PostService._can_view_post(allowed, reader)
+
+        self.assertIn(allowed.id, visible_ids)
+        self.assertNotIn(denied.id, visible_ids)
+        self.assertTrue(can_view_allowed)
 
     def test_own_reply_advances_read_state_without_auto_follow(self):
         self.user.preferences = {"follow_after_reply": False}
@@ -475,6 +632,66 @@ class PostFlagApiTests(TestCase):
         )
         self.assertEqual(reporter_response.status_code, 200, reporter_response.content)
         self.assertEqual(reporter_response.json()["data"], [])
+
+    def test_flag_visibility_uses_post_view_private_scoper(self):
+        from apps.core.extensions.application import ExtensionApplication
+        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+        from apps.core.forum_resources_flags import scope_flag_visibility
+
+        allowed_flag = PostService.report_post(
+            self.post.id,
+            self.reporter,
+            reason="允许查看的私有帖举报",
+            message="允许查看",
+        )
+        denied_post = PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="另一个私有帖",
+            user=self.author,
+        )
+        second_reporter = User.objects.create_user(
+            username="private-flag-reporter",
+            email="private-flag-reporter@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        denied_flag = PostService.report_post(
+            denied_post.id,
+            second_reporter,
+            reason="不允许查看的私有帖举报",
+            message="不允许查看",
+        )
+        viewer = User.objects.create_user(
+            username="private-flag-viewer",
+            email="private-flag-viewer@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        flag_group = Group.objects.create(name="PrivateFlagViewer", color="#4d698e")
+        Permission.objects.create(group=flag_group, permission="admin.flag.view")
+        viewer.user_groups.add(flag_group)
+        Post.objects.filter(id__in=[self.post.id, denied_post.id]).update(is_private=True)
+
+        app = ExtensionApplication()
+        app.models.register_visibility(
+            "private-runtime",
+            ExtensionModelVisibilityDefinition(
+                model=Post,
+                ability="viewPrivate",
+                scope=lambda queryset, context: queryset.filter(id=self.post.id),
+            ),
+        )
+
+        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+            visible_flag_ids = set(
+                scope_flag_visibility(
+                    PostFlag.objects.filter(id__in=[allowed_flag.id, denied_flag.id]),
+                    {"user": viewer},
+                ).values_list("id", flat=True)
+            )
+
+        self.assertIn(allowed_flag.id, visible_flag_ids)
+        self.assertNotIn(denied_flag.id, visible_flag_ids)
 
     def test_flags_extension_adds_flags_to_post_default_includes_for_staff(self):
         flag = PostFlag.objects.create(

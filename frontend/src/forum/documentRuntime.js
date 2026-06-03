@@ -74,10 +74,14 @@ export function normalizeExtensionDocumentPayload(payload) {
   const headTags = Array.isArray(documentPayload.head_tags)
     ? documentPayload.head_tags.filter(Boolean)
     : []
+  const themeVariables = documentPayload.theme_variables && typeof documentPayload.theme_variables === 'object'
+    ? { ...documentPayload.theme_variables }
+    : {}
 
   return {
     preloads,
     documentAttributes,
+    themeVariables,
     titleDrivers,
     contentCallbacks,
     headTags,
@@ -93,6 +97,7 @@ export function applyExtensionDocumentPayload(payload, { documentRef = globalThi
 
   applyExtensionPreloads(normalized.preloads, documentRef, 'static')
   applyExtensionDocumentAttributes(normalized.documentAttributes, documentRef)
+  applyExtensionThemeVariables(normalized.themeVariables, documentRef)
   applyExtensionHeadTags(normalized.headTags, documentRef, 'static')
   return normalized
 }
@@ -102,6 +107,7 @@ export function resolveExtensionPageMeta(meta = {}, context = {}) {
     meta: { ...(meta || {}) },
     preloads: [],
     documentAttributes: {},
+    themeVariables: {},
     headTags: [],
   }
 
@@ -143,6 +149,7 @@ export function applyExtensionDocumentState(state, { documentRef = globalThis.do
   }
   applyExtensionPreloads(state.preloads || [], documentRef, 'dynamic')
   applyExtensionDocumentAttributes(state.documentAttributes || {}, documentRef)
+  applyExtensionThemeVariables(state.themeVariables || {}, documentRef, 'dynamic')
   applyExtensionHeadTags(state.headTags || [], documentRef, 'dynamic')
   return state
 }
@@ -179,6 +186,12 @@ function mergeDocumentMutation(state, mutation) {
   }
   if (Array.isArray(mutation.head_tags)) {
     state.headTags.push(...mutation.head_tags.filter(Boolean))
+  }
+  if (mutation.themeVariables && typeof mutation.themeVariables === 'object') {
+    state.themeVariables = { ...(state.themeVariables || {}), ...mutation.themeVariables }
+  }
+  if (mutation.theme_variables && typeof mutation.theme_variables === 'object') {
+    state.themeVariables = { ...(state.themeVariables || {}), ...mutation.theme_variables }
   }
 }
 
@@ -244,6 +257,26 @@ function applyExtensionDocumentClasses(target, value) {
   target.setAttribute('class', merged.join(' '))
 }
 
+function applyExtensionThemeVariables(variables, documentRef, scope = 'static') {
+  const entries = Object.entries(variables || {})
+    .map(([name, value]) => [normalizeCssVariableName(name), value])
+    .filter(([name, value]) => name && value !== undefined && value !== null && value !== false)
+  if (!entries.length) {
+    return
+  }
+
+  const head = documentRef.head
+  if (!head || typeof documentRef.createElement !== 'function') {
+    return
+  }
+  removeExistingExtensionNodes(head, `[data-bias-extension-theme-scope="${scope}"]`)
+  const style = documentRef.createElement('style')
+  style.setAttribute('data-bias-extension-theme', 'true')
+  style.setAttribute('data-bias-extension-theme-scope', scope)
+  style.textContent = `:root{${entries.map(([name, value]) => `${name}:${String(value)};`).join('')}}`
+  head.appendChild(style)
+}
+
 function applyExtensionHeadTags(headTags, documentRef, scope = 'static') {
   const head = documentRef.head
   if (!head || typeof documentRef.createElement !== 'function') {
@@ -305,6 +338,12 @@ function normalizeHeadTag(definition) {
 
 function normalizeAttributeName(name) {
   return String(name || '').trim().replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`)
+}
+
+function normalizeCssVariableName(name) {
+  const normalized = normalizeAttributeName(name)
+  if (!normalized) return ''
+  return normalized.startsWith('--') ? normalized : `--${normalized}`
 }
 
 function normalizeClassList(value) {

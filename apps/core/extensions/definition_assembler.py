@@ -55,6 +55,7 @@ def resolve_extension_discovery_result(manifest: ExtensionManifest) -> Extension
         admin_pages=tuple(record.admin_pages),
         notification_types=tuple(record.notification_types),
         user_preferences=tuple(record.user_preferences),
+        language_packs=tuple(record.language_packs),
         post_types=tuple(record.post_types),
         search_filters=tuple(record.search_filters),
         discussion_sorts=tuple(record.discussion_sorts),

@@ -639,6 +639,7 @@ class ExtensionManager:
             admin_pages=tuple(extension.admin_page_definitions),
             notification_types=tuple(extension.notification_types),
             user_preferences=tuple(extension.user_preferences),
+            language_packs=tuple(extension.language_packs),
             post_types=tuple(extension.post_types),
             search_filters=tuple(extension.search_filters),
             discussion_sorts=tuple(extension.discussion_sorts),

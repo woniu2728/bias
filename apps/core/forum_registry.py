@@ -100,6 +100,9 @@ class ForumRegistry:
     def register_user_preference(self, definition: UserPreferenceDefinition) -> None:
         self._user_preferences[definition.key] = definition
 
+    def register_language_pack(self, definition: LanguagePackDefinition) -> None:
+        self._language_packs[(definition.module_id, definition.code)] = definition
+
     def register_post_type(self, definition: PostTypeDefinition) -> None:
         self._post_types[definition.code] = definition
 

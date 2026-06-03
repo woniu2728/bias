@@ -191,6 +191,10 @@ class Extension:
         return tuple(self.discover().user_preferences)
 
     @property
+    def language_packs(self):
+        return tuple(self.discover().language_packs)
+
+    @property
     def post_types(self):
         return tuple(self.discover().post_types)
 

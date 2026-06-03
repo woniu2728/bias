@@ -4,12 +4,7 @@ from typing import List, Optional
 
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 
-from apps.core.extensions.runtime_access import (
-    apply_runtime_model_visibility,
-    evaluate_runtime_model_policy,
-)
-from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
-from apps.discussions.models import Discussion
+from apps.core.visibility import apply_post_visibility_scope, can_view_model_instance
 from apps.posts.models import Post, PostFlag, PostLike
 from apps.users.models import User
 
@@ -63,62 +58,11 @@ def annotate_flag_state(queryset, user: Optional[User] = None):
 
 
 def can_view_post(post: Post, user: Optional[User]) -> bool:
-    discussion = getattr(post, "discussion", None)
-    if discussion:
-        if discussion.hidden_at and not (user and user.is_staff):
-            can_view_rejected_own_discussion = bool(
-                user
-                and user.is_authenticated
-                and discussion.approval_status == Discussion.APPROVAL_REJECTED
-                and discussion.user_id == user.id
-            )
-            if not can_view_rejected_own_discussion:
-                return False
-        if discussion.approval_status != Discussion.APPROVAL_APPROVED and not (user and user.is_staff):
-            can_view_unapproved_own_discussion = bool(
-                user
-                and user.is_authenticated
-                and discussion.approval_status in {Discussion.APPROVAL_PENDING, Discussion.APPROVAL_REJECTED}
-                and discussion.user_id == user.id
-            )
-            if not can_view_unapproved_own_discussion:
-                return False
-
-    if post.hidden_at and not (user and user.is_staff):
-        can_view_rejected_own_post = bool(
-            user
-            and user.is_authenticated
-            and post.approval_status == Post.APPROVAL_REJECTED
-            and post.user_id == user.id
-        )
-        if not can_view_rejected_own_post:
-            return False
-    if evaluate_runtime_model_policy(
-        "view",
-        user=user,
-        model=post,
-        default=True,
-        post=post,
-        discussion=getattr(post, "discussion", None),
-    ) is False:
-        return False
-    if post.approval_status == Post.APPROVAL_APPROVED:
-        return True
-    if user and user.is_staff:
-        return True
-    return bool(
-        user
-        and user.is_authenticated
-        and post.approval_status in {Post.APPROVAL_PENDING, Post.APPROVAL_REJECTED}
-        and post.user_id == user.id
-    )
+    return can_view_model_instance(Post, post, user=user, ability="view")
 
 
 def apply_visibility_filters(queryset, user: Optional[User] = None):
-    return queryset.filter(
-        build_post_visibility_q(user),
-        build_discussion_visibility_q(user, prefix="discussion__"),
-    )
+    return apply_post_visibility_scope(queryset, user)
 
 
 def build_visible_post_queryset(
@@ -138,11 +82,6 @@ def build_visible_post_queryset(
         queryset = preload(queryset)
     queryset = annotate_flag_state(queryset, user)
     queryset = apply_visibility_filters(queryset, user)
-    queryset = apply_runtime_model_visibility(
-        Post,
-        queryset,
-        {"user": user, "ability": "view"},
-    )
     return queryset.order_by("number")
 
 
@@ -256,11 +195,6 @@ def get_page_for_near_post(
     )
 
     queryset = apply_visibility_filters(queryset, user)
-    queryset = apply_runtime_model_visibility(
-        Post,
-        queryset,
-        {"user": user, "ability": "view"},
-    )
 
     position = queryset.count()
     if position <= 0:

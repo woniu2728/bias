@@ -19,6 +19,7 @@ from apps.core.forum_events import (
 from apps.core.extensions.runtime_access import (
     get_runtime_discussion_lifecycle_service,
     get_runtime_resource_registry,
+    refresh_runtime_model_private,
 )
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.posts.models import Post
@@ -113,6 +114,12 @@ def _discussion_relationship_payload(payload: dict) -> dict:
     return {}
 
 
+def _refresh_discussion_private_state(discussion: Discussion, *, first_post: Post | None = None) -> None:
+    refresh_runtime_model_private(discussion)
+    if first_post is not None:
+        first_post.is_private = discussion.is_private or refresh_runtime_model_private(first_post)
+
+
 def create_discussion(
     title: str,
     content: str,
@@ -183,6 +190,9 @@ def create_discussion(
             creating=True,
             actor_user_id=user.id,
         )
+        _refresh_discussion_private_state(discussion, first_post=first_post)
+        discussion.save(update_fields=["is_private"])
+        first_post.save(update_fields=["is_private"])
 
         if not requires_approval:
             user.discussion_count = F("discussion_count") + 1
@@ -270,6 +280,11 @@ def update_discussion(
             creating=False,
             actor_user_id=user.id,
         )
+        if first_post is None and discussion.first_post_id:
+            first_post = Post.objects.get(id=discussion.first_post_id)
+        _refresh_discussion_private_state(discussion, first_post=first_post)
+        if first_post is not None:
+            first_post.save(update_fields=["is_private"])
 
         should_persist_discussion = True
 
@@ -315,6 +330,7 @@ def update_discussion(
                 "approval_note",
                 "hidden_at",
                 "hidden_user",
+                "is_private",
             ])
             dispatch_forum_event_after_commit(
                 DiscussionResubmittedEvent(
@@ -326,6 +342,8 @@ def update_discussion(
 
         if should_persist_discussion:
             discussion.save()
+        else:
+            discussion.save(update_fields=["is_private"])
 
         if title is not None and title != previous_title:
             dispatch_forum_event_after_commit(
@@ -361,9 +379,10 @@ def set_hidden_state(
 
     discussion.hidden_at = timezone.now() if is_hidden else None
     discussion.hidden_user = user if is_hidden else None
+    refresh_runtime_model_private(discussion)
 
     with transaction.atomic():
-        discussion.save(update_fields=["hidden_at", "hidden_user"])
+        discussion.save(update_fields=["hidden_at", "hidden_user", "is_private"])
         if should_adjust_counts:
             discussion_delta = -1 if is_hidden else 1
             reply_delta = -1 if is_hidden else 1
@@ -413,6 +432,7 @@ def approve_discussion(
         discussion.approval_note = note
         discussion.hidden_at = None
         discussion.hidden_user = None
+        refresh_runtime_model_private(discussion)
         discussion.save(update_fields=[
             "approval_status",
             "approved_at",
@@ -420,16 +440,36 @@ def approve_discussion(
             "approval_note",
             "hidden_at",
             "hidden_user",
+            "is_private",
         ])
 
-        Post.objects.filter(id=discussion.first_post_id).update(
-            approval_status=Post.APPROVAL_APPROVED,
-            approved_at=discussion.approved_at,
-            approved_by=admin_user,
-            approval_note=note,
-            hidden_at=None,
-            hidden_user=None,
-        )
+        first_post = Post.objects.filter(id=discussion.first_post_id).first()
+        if first_post is not None:
+            first_post.approval_status = Post.APPROVAL_APPROVED
+            first_post.approved_at = discussion.approved_at
+            first_post.approved_by = admin_user
+            first_post.approval_note = note
+            first_post.hidden_at = None
+            first_post.hidden_user = None
+            first_post.is_private = discussion.is_private or refresh_runtime_model_private(first_post)
+            first_post.save(update_fields=[
+                "approval_status",
+                "approved_at",
+                "approved_by",
+                "approval_note",
+                "hidden_at",
+                "hidden_user",
+                "is_private",
+            ])
+        else:
+            Post.objects.filter(id=discussion.first_post_id).update(
+                approval_status=Post.APPROVAL_APPROVED,
+                approved_at=discussion.approved_at,
+                approved_by=admin_user,
+                approval_note=note,
+                hidden_at=None,
+                hidden_user=None,
+            )
 
         if not was_counted:
             if discussion.user:
@@ -480,6 +520,7 @@ def reject_discussion(
         discussion.approval_note = note
         discussion.hidden_at = rejected_at
         discussion.hidden_user = admin_user
+        refresh_runtime_model_private(discussion)
         discussion.save(update_fields=[
             "approval_status",
             "approved_at",
@@ -487,16 +528,36 @@ def reject_discussion(
             "approval_note",
             "hidden_at",
             "hidden_user",
+            "is_private",
         ])
 
-        Post.objects.filter(id=discussion.first_post_id).update(
-            approval_status=Post.APPROVAL_REJECTED,
-            approved_at=rejected_at,
-            approved_by=admin_user,
-            approval_note=note,
-            hidden_at=rejected_at,
-            hidden_user=admin_user,
-        )
+        first_post = Post.objects.filter(id=discussion.first_post_id).first()
+        if first_post is not None:
+            first_post.approval_status = Post.APPROVAL_REJECTED
+            first_post.approved_at = rejected_at
+            first_post.approved_by = admin_user
+            first_post.approval_note = note
+            first_post.hidden_at = rejected_at
+            first_post.hidden_user = admin_user
+            first_post.is_private = discussion.is_private or refresh_runtime_model_private(first_post)
+            first_post.save(update_fields=[
+                "approval_status",
+                "approved_at",
+                "approved_by",
+                "approval_note",
+                "hidden_at",
+                "hidden_user",
+                "is_private",
+            ])
+        else:
+            Post.objects.filter(id=discussion.first_post_id).update(
+                approval_status=Post.APPROVAL_REJECTED,
+                approved_at=rejected_at,
+                approved_by=admin_user,
+                approval_note=note,
+                hidden_at=rejected_at,
+                hidden_user=admin_user,
+            )
 
         if was_counted:
             if discussion.user:

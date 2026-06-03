@@ -18,6 +18,109 @@ from apps.core.settings_service import (
 sql_logger = logging.getLogger("bias.sql")
 
 
+class ExtensionErrorHandlingMiddleware:
+    sync_capable = True
+    async_capable = True
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self._is_async = iscoroutinefunction(get_response)
+        if self._is_async:
+            markcoroutinefunction(self)
+
+    def __call__(self, request):
+        if self._is_async:
+            return self.__acall__(request)
+
+        try:
+            return self.get_response(request)
+        except Exception as exc:
+            response = self._handle(request, exc)
+            if response is not None:
+                return response
+            raise
+
+    async def __acall__(self, request):
+        try:
+            return await self.get_response(request)
+        except Exception as exc:
+            response = await sync_to_async(self._handle, thread_sensitive=True)(request, exc)
+            if response is not None:
+                return response
+            raise
+
+    def _handle(self, request, exc):
+        from apps.core.extensions.system_runtime import handle_runtime_error, report_runtime_error
+
+        report_runtime_error(exc, request=request, operation="request")
+        return handle_runtime_error(exc, request=request, operation="request")
+
+
+class ExtensionCsrfMiddleware:
+    sync_capable = True
+    async_capable = True
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self._is_async = iscoroutinefunction(get_response)
+        if self._is_async:
+            markcoroutinefunction(self)
+
+    def __call__(self, request):
+        if self._is_async:
+            return self.__acall__(request)
+        self._apply_exemption(request)
+        return self.get_response(request)
+
+    async def __acall__(self, request):
+        await sync_to_async(self._apply_exemption, thread_sensitive=True)(request)
+        return await self.get_response(request)
+
+    def _apply_exemption(self, request):
+        route_name = str(getattr(getattr(request, "resolver_match", None), "url_name", "") or "").strip()
+        if not route_name:
+            return
+        from apps.core.extensions.system_runtime import is_runtime_csrf_exempt_route
+
+        if is_runtime_csrf_exempt_route(route_name):
+            request._dont_enforce_csrf_checks = True
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        self._apply_exemption(request)
+        return None
+
+
+class ExtensionThrottleApiMiddleware:
+    sync_capable = True
+    async_capable = True
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self._is_async = iscoroutinefunction(get_response)
+        if self._is_async:
+            markcoroutinefunction(self)
+
+    def __call__(self, request):
+        if self._is_async:
+            return self.__acall__(request)
+        return self.get_response(request)
+
+    async def __acall__(self, request):
+        return await self.get_response(request)
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        return self._throttle_response(request)
+
+    def _throttle_response(self, request):
+        if not str(getattr(request, "path", "") or "").startswith("/api/"):
+            return None
+        from apps.core.extensions.system_runtime import should_throttle_runtime_api_request
+
+        if not should_throttle_runtime_api_request(request):
+            return None
+        return JsonResponse({"error": "请求过于频繁", "code": "rate_limit_exceeded"}, status=429)
+
+
 class StartupStateMiddleware:
     sync_capable = True
     async_capable = True

@@ -5,8 +5,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import F
 from django.utils import timezone
 
-from apps.core.extensions.runtime_access import evaluate_runtime_model_policy
-from apps.core.visibility import build_discussion_visibility_q
+from apps.core.visibility import apply_discussion_visibility_scope, can_view_model_instance
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.users.models import User
 
@@ -193,37 +192,11 @@ def flush_all_pending_view_counts(
 
 
 def can_view_discussion(discussion: Discussion, user: Optional[User]) -> bool:
-    if discussion.hidden_at and not (user and user.is_staff):
-        can_view_rejected_own_discussion = bool(
-            user
-            and user.is_authenticated
-            and discussion.approval_status == Discussion.APPROVAL_REJECTED
-            and discussion.user_id == user.id
-        )
-        if not can_view_rejected_own_discussion:
-            return False
-    if evaluate_runtime_model_policy(
-        "view",
-        user=user,
-        model=discussion,
-        default=True,
-        discussion=discussion,
-    ) is False:
-        return False
-    if discussion.approval_status == Discussion.APPROVAL_APPROVED:
-        return True
-    if user and user.is_staff:
-        return True
-    return bool(
-        user
-        and user.is_authenticated
-        and discussion.approval_status in {Discussion.APPROVAL_PENDING, Discussion.APPROVAL_REJECTED}
-        and discussion.user_id == user.id
-    )
+    return can_view_model_instance(Discussion, discussion, user=user, ability="view")
 
 
 def apply_visibility_filters(queryset, user: Optional[User] = None):
-    return queryset.filter(build_discussion_visibility_q(user))
+    return apply_discussion_visibility_scope(queryset, user)
 
 
 def attach_user_read_state(discussions: List[Discussion], user: Optional[User]) -> None:

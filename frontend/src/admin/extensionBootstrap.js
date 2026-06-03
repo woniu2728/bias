@@ -1,32 +1,39 @@
-import { generatedAdminExtensionModules } from '../generated/extensionImportMap'
-import * as adminRegistry from './registry'
+import { generatedAdminExtensionModules } from '../generated/extensionImportMap.js'
 import {
   clearAdminRoutesForExtension,
   getAdminRoutes,
-} from './registry/routes'
+} from './registry/routes.js'
 import {
   createAdminExtensionApp,
   getAdminExtensionInitializers,
   resetAdminExtensionAppRuntime,
-} from './extensionApp'
+} from './extensionApp.js'
 import {
   resetLoadedExtensions,
   resetLoadedExtensionsWhenRuntimeChanges,
-} from './extensionRuntimeState'
+} from './extensionRuntimeState.js'
 import {
   handleExtensionRuntimeError,
   runWithExtensionScope,
-} from '../common/extensionRuntime'
+} from '../common/extensionRuntime.js'
 
 const loadedAdminExtensionIds = new Set()
 
 const adminEntryModules = {
-  ...import.meta.glob('../../../extensions/*/frontend/admin/index.js'),
+  ...(typeof import.meta.glob === 'function' ? import.meta.glob('../../../extensions/*/frontend/admin/index.js') : {}),
   ...generatedAdminExtensionModules,
 }
 
-export async function bootstrapEnabledAdminExtensions({ app: application, extensions = [], router, runtime } = {}) {
+export async function bootstrapEnabledAdminExtensions({
+  app: application,
+  extensions = [],
+  router,
+  runtime,
+  entryModules = adminEntryModules,
+  registry = null,
+} = {}) {
   let addedRouteCount = 0
+  const resolvedRegistry = registry || await loadAdminRegistry()
   resetLoadedAdminExtensionsWhenRuntimeChanges(runtime, { router })
   const initializedApps = []
 
@@ -37,7 +44,7 @@ export async function bootstrapEnabledAdminExtensions({ app: application, extens
       continue
     }
 
-    const importer = adminEntryModules[entryPath] || adminEntryModules[extensionId]
+    const importer = entryModules[entryPath] || entryModules[extensionId]
     if (!importer) {
       continue
     }
@@ -48,7 +55,7 @@ export async function bootstrapEnabledAdminExtensions({ app: application, extens
         app: application,
         extension,
         loadedExtensionIds: loadedAdminExtensionIds,
-        registry: adminRegistry,
+        registry: resolvedRegistry,
         router,
       })
       await runWithExtensionScope(extensionId, () => module.bootAdminExtension({
@@ -87,6 +94,10 @@ export async function bootstrapEnabledAdminExtensions({ app: application, extens
   }
 
   return { addedRouteCount }
+}
+
+async function loadAdminRegistry() {
+  return import('./registry.js')
 }
 
 export function resetLoadedAdminExtensions() {
@@ -133,14 +144,20 @@ function removeAdminRuntimeRoutes(router, extensionId = '') {
 
 async function runAdminExtensionInitializers(items) {
   const appsByExtensionId = new Map(items.map(item => [item.extensionId, item.app]))
-  const initializers = getAdminExtensionInitializers()
-  await initializers.runWithAppResolver(extensionId => appsByExtensionId.get(extensionId), {
-    onError(error, failingExtensionId) {
-      handleExtensionRuntimeError(error, failingExtensionId, 'admin-initializer')
-    },
-  })
-  for (const item of items) {
-    initializers.clear(item.extensionId)
+  const initializerGroups = new Set(items.map(item => item.app?.initializers).filter(Boolean))
+  if (!initializerGroups.size) {
+    initializerGroups.add(getAdminExtensionInitializers())
+  }
+
+  for (const initializers of initializerGroups) {
+    await initializers.runWithAppResolver(extensionId => appsByExtensionId.get(extensionId), {
+      onError(error, failingExtensionId) {
+        handleExtensionRuntimeError(error, failingExtensionId, 'admin-initializer')
+      },
+    })
+    for (const item of items) {
+      initializers.clear(item.extensionId)
+    }
   }
 }
 

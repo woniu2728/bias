@@ -11,10 +11,9 @@ from django.db.models import OuterRef, Q, Subquery
 
 from apps.discussions.models import Discussion
 from apps.posts.models import Post
-from apps.core.extensions.runtime_access import apply_runtime_model_visibility
 from apps.core.forum_registry import get_forum_registry
 from apps.users.models import User
-from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
+from apps.core.visibility import apply_discussion_visibility_scope, apply_post_visibility_scope
 
 try:
     import jieba
@@ -221,12 +220,15 @@ class SearchService:
             else:
                 searchable_post_types = _get_searchable_post_type_codes()
                 title_match_q = SearchService.build_text_query(['title', 'slug'], text_query)
-                visible_post_match_q = (
-                    SearchService.build_text_query(['posts__content'], text_query)
-                    & Q(posts__type__in=searchable_post_types)
-                    & build_post_visibility_q(user, prefix="posts__")
+                visible_post_discussion_ids = apply_post_visibility_scope(
+                    Post.objects.filter(type__in=searchable_post_types).filter(
+                        SearchService.build_text_query(["content"], text_query),
+                    ),
+                    user=user,
+                ).values("discussion_id")
+                queryset = queryset.filter(
+                    title_match_q | Q(id__in=Subquery(visible_post_discussion_ids))
                 )
-                queryset = queryset.filter(title_match_q | visible_post_match_q)
 
         for definition, parsed_value in parsed_filters.get("discussion", []):
             queryset = definition.applier(queryset, parsed_value, {"user": user, "query": query, "text_query": text_query})
@@ -630,12 +632,7 @@ class SearchService:
     @staticmethod
     def _discussion_queryset(query: str, user=None):
         queryset = SearchService.apply_discussion_search(Discussion.objects.all(), query, user=user).distinct()
-        queryset = queryset.filter(build_discussion_visibility_q(user))
-        return apply_runtime_model_visibility(
-            Discussion,
-            queryset,
-            {"user": user, "ability": "view"},
-        )
+        return apply_discussion_visibility_scope(queryset, user)
 
     @staticmethod
     def _post_queryset(query: str, user=None):
@@ -645,15 +642,7 @@ class SearchService:
             query,
             user=user,
         )
-        queryset = queryset.filter(
-            build_post_visibility_q(user),
-            build_discussion_visibility_q(user, prefix="discussion__"),
-        )
-        return apply_runtime_model_visibility(
-            Post,
-            queryset,
-            {"user": user, "ability": "view"},
-        )
+        return apply_post_visibility_scope(queryset, user)
 
     @staticmethod
     def _user_queryset(query: str):
@@ -731,9 +720,11 @@ class SearchService:
         visible_post_discussion_ids = SearchService.apply_post_search(
             Post.objects.filter(type__in=searchable_post_types),
             query,
-        ).filter(
-            build_post_visibility_q(user),
-            build_discussion_visibility_q(user, prefix="discussion__"),
+            user=user,
+        )
+        visible_post_discussion_ids = apply_post_visibility_scope(
+            visible_post_discussion_ids,
+            user=user,
         ).values("discussion_id")
 
         return queryset.annotate(

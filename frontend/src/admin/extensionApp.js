@@ -21,11 +21,12 @@ export function createAdminExtensionApp({
     extension,
     store: application?.store || registry,
   })
+  const initializers = application?.initializers || adminInitializers
   return Object.freeze({
     ...appApi,
     api: registry.adminApi,
     extension,
-    initializers: adminInitializers,
+    initializers,
     extend: adminPatcher.extend,
     override: adminPatcher.override,
     resetPatches: adminPatcher.reset,
@@ -42,7 +43,10 @@ export function getAdminExtensionInitializers() {
   return adminInitializers
 }
 
-export function resetAdminExtensionAppRuntime(extensionId = '') {
+export function resetAdminExtensionAppRuntime(extensionId = '', { app } = {}) {
+  if (app?.initializers && app.initializers !== adminInitializers) {
+    app.initializers.clear(extensionId)
+  }
   adminInitializers.clear(extensionId)
   adminPatcher.reset(extensionId)
 }

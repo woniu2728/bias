@@ -6,7 +6,6 @@ from django.db import IntegrityError
 from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
 from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
-from apps.core.extensions.runtime_access import apply_runtime_model_visibility
 from apps.core.forum_registry import get_forum_registry
 from apps.discussions.models import Discussion
 from apps.posts import post_query_service, service_lifecycle, service_moderation
@@ -53,12 +52,7 @@ class PostService:
 
     @staticmethod
     def apply_visibility_filters(queryset, user: Optional[User] = None):
-        queryset = post_query_service.apply_visibility_filters(queryset, user)
-        return apply_runtime_model_visibility(
-            Post,
-            queryset,
-            {"user": user, "ability": "view"},
-        )
+        return post_query_service.apply_visibility_filters(queryset, user)
 
     @staticmethod
     @sqlite_write_retry()

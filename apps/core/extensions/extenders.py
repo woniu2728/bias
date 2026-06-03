@@ -37,6 +37,7 @@ from apps.core.forum_registry_types import (
     AdminPageDefinition,
     DiscussionListFilterDefinition,
     DiscussionSortDefinition,
+    LanguagePackDefinition,
     NotificationTypeDefinition,
     PermissionDefinition,
     PostTypeDefinition,
@@ -311,6 +312,47 @@ class LocalesExtender:
 
 
 @dataclass(frozen=True)
+class LanguagePackExtender:
+    code: str = ""
+    label: str = ""
+    native_label: str = ""
+    description: str = ""
+    path: str = "locale"
+    is_default: bool = False
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        code = str(self.code or "").strip()
+        label = str(self.label or "").strip()
+        path = str(self.path or "").strip()
+        if not code or not label:
+            return
+
+        extension_id = extension.extension_id
+        definition = LanguagePackDefinition(
+            code=code,
+            label=label,
+            native_label=str(self.native_label or label).strip(),
+            module_id=extension_id,
+            description=str(self.description or "").strip(),
+            is_default=bool(self.is_default),
+        )
+
+        def apply_forum(forum, host: "ExtensionHost"):
+            forum.register_external_module_id(extension_id)
+            forum.register_language_pack(definition, extension_id=extension_id)
+            return forum
+
+        def apply_locales(locales, host: "ExtensionHost"):
+            if path:
+                locales.register_path(extension_id, path)
+            return locales
+
+        app.resolving("forum", apply_forum)
+        if path:
+            app.resolving("locales", apply_locales)
+
+
+@dataclass(frozen=True)
 class FormatterExtender:
     transforms: tuple[ExtensionFormatterCallback, ...] = ()
 
@@ -323,6 +365,49 @@ class FormatterExtender:
         def apply(formatters, host: "ExtensionHost"):
             for transform in self.transforms:
                 formatters.register_transform(extension_id, transform)
+            return formatters
+
+        app.resolving("formatters", apply)
+
+
+@dataclass(frozen=True)
+class LinkExtender:
+    rel_callback: Any = None
+    target_callback: Any = None
+
+    def set_rel(self, callback: Any) -> "LinkExtender":
+        return LinkExtender(
+            rel_callback=callback,
+            target_callback=self.target_callback,
+        )
+
+    def set_target(self, callback: Any) -> "LinkExtender":
+        return LinkExtender(
+            rel_callback=self.rel_callback,
+            target_callback=callback,
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.rel_callback and not self.target_callback:
+            return
+
+        extension_id = extension.extension_id
+        rel_callback = wrap_callback(self.rel_callback, app) if self.rel_callback else None
+        target_callback = wrap_callback(self.target_callback, app) if self.target_callback else None
+
+        def transform(html: str) -> str:
+            from django.conf import settings
+            from apps.core.link_formatter import apply_link_attribute_callbacks
+
+            return apply_link_attribute_callbacks(
+                html,
+                site_url=getattr(settings, "FRONTEND_URL", ""),
+                set_rel=rel_callback,
+                set_target=target_callback,
+            )
+
+        def apply(formatters, host: "ExtensionHost"):
+            formatters.register_transform(extension_id, transform)
             return formatters
 
         app.resolving("formatters", apply)
@@ -817,6 +902,7 @@ class ModelExtender:
     relations: tuple[ExtensionModelRelationDefinition, ...] = ()
     casts: tuple[ExtensionModelCastDefinition, ...] = ()
     defaults: tuple[ExtensionModelDefaultDefinition, ...] = ()
+    model: Any = None
 
     def relationship(self, *definitions: ExtensionModelRelationDefinition) -> "ModelExtender":
         return ModelExtender(
@@ -825,6 +911,95 @@ class ModelExtender:
             relations=tuple([*self.relations, *definitions]),
             casts=self.casts,
             defaults=self.defaults,
+            model=self.model,
+        )
+
+    def belongs_to(
+        self,
+        name: str,
+        related_model: Any,
+        *,
+        model: Any = None,
+        foreign_key: str = "",
+        owner_key: str = "",
+        resolver: Callable[[Any], Any] | None = None,
+        description: str = "",
+    ) -> "ModelExtender":
+        return self._simple_relation(
+            "belongsTo",
+            name,
+            related_model,
+            model=model,
+            foreign_key=foreign_key,
+            owner_key=owner_key,
+            resolver=resolver,
+            description=description,
+        )
+
+    def belongs_to_many(
+        self,
+        name: str,
+        related_model: Any,
+        *,
+        model: Any = None,
+        foreign_key: str = "",
+        owner_key: str = "",
+        resolver: Callable[[Any], Any] | None = None,
+        description: str = "",
+    ) -> "ModelExtender":
+        return self._simple_relation(
+            "belongsToMany",
+            name,
+            related_model,
+            model=model,
+            foreign_key=foreign_key,
+            owner_key=owner_key,
+            resolver=resolver,
+            description=description,
+        )
+
+    def has_one(
+        self,
+        name: str,
+        related_model: Any,
+        *,
+        model: Any = None,
+        foreign_key: str = "",
+        local_key: str = "",
+        resolver: Callable[[Any], Any] | None = None,
+        description: str = "",
+    ) -> "ModelExtender":
+        return self._simple_relation(
+            "hasOne",
+            name,
+            related_model,
+            model=model,
+            foreign_key=foreign_key,
+            owner_key=local_key,
+            resolver=resolver,
+            description=description,
+        )
+
+    def has_many(
+        self,
+        name: str,
+        related_model: Any,
+        *,
+        model: Any = None,
+        foreign_key: str = "",
+        local_key: str = "",
+        resolver: Callable[[Any], Any] | None = None,
+        description: str = "",
+    ) -> "ModelExtender":
+        return self._simple_relation(
+            "hasMany",
+            name,
+            related_model,
+            model=model,
+            foreign_key=foreign_key,
+            owner_key=local_key,
+            resolver=resolver,
+            description=description,
         )
 
     def cast(self, *definitions: ExtensionModelCastDefinition) -> "ModelExtender":
@@ -834,6 +1009,7 @@ class ModelExtender:
             relations=self.relations,
             casts=tuple([*self.casts, *definitions]),
             defaults=self.defaults,
+            model=self.model,
         )
 
     def default(self, *definitions: ExtensionModelDefaultDefinition) -> "ModelExtender":
@@ -843,6 +1019,36 @@ class ModelExtender:
             relations=self.relations,
             casts=self.casts,
             defaults=tuple([*self.defaults, *definitions]),
+            model=self.model,
+        )
+
+    def _simple_relation(
+        self,
+        relation_type: str,
+        name: str,
+        related_model: Any,
+        *,
+        model: Any = None,
+        foreign_key: str = "",
+        owner_key: str = "",
+        resolver: Callable[[Any], Any] | None = None,
+        description: str = "",
+    ) -> "ModelExtender":
+        source_model = model or self.model
+        if source_model is None:
+            raise ValueError("ModelExtender simple relations require a source model")
+        relation_resolver = resolver or (lambda instance: getattr(instance, name, None))
+        return self.relationship(
+            ExtensionModelRelationDefinition(
+                model=source_model,
+                name=name,
+                resolver=relation_resolver,
+                relation_type=relation_type,
+                related_model=related_model,
+                foreign_key=foreign_key,
+                owner_key=owner_key,
+                description=description,
+            )
         )
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
@@ -873,6 +1079,38 @@ class ModelVisibilityExtender:
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
         ModelExtender(visibility=self.definitions).extend(app, extension)
+
+
+@dataclass(frozen=True)
+class ModelPrivateExtender:
+    model: Any
+    checkers: tuple[Any, ...] = ()
+
+    def checker(self, callback: Any) -> "ModelPrivateExtender":
+        if callback is None:
+            return self
+        return ModelPrivateExtender(
+            model=self.model,
+            checkers=tuple([*self.checkers, callback]),
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if self.model is None or not self.checkers:
+            return
+        extension_id = extension.extension_id
+
+        def apply(models, host: "ExtensionHost"):
+            for index, checker in enumerate(self.checkers):
+                models.register_private_checker(extension_id, ExtensionModelDefinition(
+                    model=self.model,
+                    key=f"private_checker:{index}",
+                    handler=wrap_callback(checker, host),
+                    kind="private_checker",
+                    description="Model privacy checker",
+                ))
+            return models
+
+        app.resolving("models", apply)
 
 
 @dataclass(frozen=True)
@@ -994,6 +1232,35 @@ class SearchDriverExtender:
         def apply(search, host: "ExtensionHost"):
             for definition in self.drivers:
                 search.register_driver(extension_id, definition)
+            return search
+
+        app.resolving("search", apply)
+
+
+@dataclass(frozen=True)
+class SearchIndexExtender:
+    indexers: tuple[tuple[Any, Any], ...] = ()
+
+    def indexer(self, model: Any, indexer: Any) -> "SearchIndexExtender":
+        if model is None or indexer is None:
+            return self
+        return SearchIndexExtender(indexers=tuple([*self.indexers, (model, indexer)]))
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.indexers:
+            return
+        extension_id = extension.extension_id
+
+        def apply(search, host: "ExtensionHost"):
+            view = host._get_or_create_runtime_view(extension_id)
+            for model, indexer in self.indexers:
+                search.register_indexer(model, indexer)
+                view.search_drivers = tuple([*view.search_drivers, ExtensionSearchDriverDefinition(
+                    target=str(getattr(model, "__name__", "") or "").strip(),
+                    driver="database",
+                    model=model,
+                    indexers=(indexer,),
+                )])
             return search
 
         app.resolving("search", apply)
@@ -1257,6 +1524,161 @@ class NotificationsExtender:
 
 
 @dataclass(frozen=True)
+class PostExtender:
+    post_types: tuple[PostTypeDefinition, ...] = ()
+
+    def type(
+        self,
+        post_type: Any,
+        *,
+        code: str = "",
+        label: str = "",
+        description: str = "",
+        icon: str = "far fa-comment",
+        is_default: bool = False,
+        is_stream_visible: bool = True,
+        counts_toward_discussion: bool = True,
+        counts_toward_user: bool = True,
+        searchable: bool = True,
+    ) -> "PostExtender":
+        definition = post_type if isinstance(post_type, PostTypeDefinition) else PostTypeDefinition(
+            code=code or self._post_type_code(post_type),
+            label=label or self._post_type_label(post_type),
+            module_id="",
+            description=description or str(getattr(post_type, "description", "") or ""),
+            icon=icon or str(getattr(post_type, "icon", "") or "far fa-comment"),
+            is_default=bool(is_default or getattr(post_type, "is_default", False)),
+            is_stream_visible=bool(is_stream_visible),
+            counts_toward_discussion=bool(counts_toward_discussion),
+            counts_toward_user=bool(counts_toward_user),
+            searchable=bool(searchable),
+        )
+        if not definition.code:
+            return self
+        return PostExtender(post_types=tuple([*self.post_types, definition]))
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.post_types:
+            return
+        extension_id = extension.extension_id
+
+        def apply(forum, host: "ExtensionHost"):
+            forum.register_external_module_id(extension_id)
+            for definition in self.post_types:
+                forum.register_post_type(replace(definition, module_id=definition.module_id or extension_id), extension_id=extension_id)
+            return forum
+
+        app.resolving("forum", apply)
+
+    @staticmethod
+    def _post_type_code(post_type: Any) -> str:
+        return str(
+            getattr(post_type, "code", "")
+            or getattr(post_type, "type", "")
+            or getattr(post_type, "post_type", "")
+            or getattr(post_type, "__name__", "")
+        ).strip()
+
+    @staticmethod
+    def _post_type_label(post_type: Any) -> str:
+        return str(
+            getattr(post_type, "label", "")
+            or getattr(post_type, "name", "")
+            or PostExtender._post_type_code(post_type)
+        ).strip()
+
+
+@dataclass(frozen=True)
+class UserExtender:
+    definitions: tuple[ExtensionSystemHookDefinition, ...] = ()
+    user_preferences: tuple[UserPreferenceDefinition, ...] = ()
+
+    def display_name_driver(self, identifier: str, driver: Any, *, description: str = "", order: int = 100) -> "UserExtender":
+        return self._with_definition("display_name_driver", {
+            "identifier": str(identifier or "").strip(),
+            "driver": driver,
+            "description": str(description or "").strip(),
+        }, order=order)
+
+    def avatar_driver(self, identifier: str, driver: Any, *, description: str = "", order: int = 100) -> "UserExtender":
+        return self._with_definition("avatar_driver", {
+            "identifier": str(identifier or "").strip(),
+            "driver": driver,
+            "description": str(description or "").strip(),
+        }, order=order)
+
+    def permission_groups(self, callback: Any, *, description: str = "", order: int = 100) -> "UserExtender":
+        return self._with_definition("permission_groups", {
+            "callback": callback,
+            "description": str(description or "").strip(),
+        }, order=order)
+
+    def register_preference(
+        self,
+        key: str,
+        transformer: Any = None,
+        default: Any = None,
+        *,
+        label: str = "",
+        description: str = "",
+        category: str = "notification",
+    ) -> "UserExtender":
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            return self
+        preference = UserPreferenceDefinition(
+            key=normalized_key,
+            label=str(label or normalized_key).strip(),
+            module_id="",
+            description=str(description or "").strip(),
+            category=str(category or "notification").strip() or "notification",
+            default_value=bool(default),
+        )
+        extender = UserExtender(
+            definitions=self.definitions,
+            user_preferences=tuple([*self.user_preferences, preference]),
+        )
+        if transformer is None:
+            return extender
+        return extender._with_definition("preference_transformer", {
+            "key": normalized_key,
+            "transformer": transformer,
+            "default": default,
+        })
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not (self.definitions or self.user_preferences):
+            return
+        extension_id = extension.extension_id
+
+        def apply_forum(forum, host: "ExtensionHost"):
+            forum.register_external_module_id(extension_id)
+            for definition in self.user_preferences:
+                forum.register_user_preference(replace(definition, module_id=definition.module_id or extension_id), extension_id=extension_id)
+            return forum
+
+        def apply_user(user, host: "ExtensionHost"):
+            for definition in self.definitions:
+                user.register(extension_id, replace(definition, module_id=definition.module_id or extension_id))
+            return user
+
+        if self.user_preferences:
+            app.resolving("forum", apply_forum)
+        if self.definitions:
+            app.resolving("user", apply_user)
+
+    def _with_definition(self, key: str, payload: Any, *, order: int = 100) -> "UserExtender":
+        return UserExtender(
+            definitions=tuple([*self.definitions, ExtensionSystemHookDefinition(
+                key=key,
+                callback=payload,
+                order=int(order),
+            )]),
+            user_preferences=self.user_preferences,
+        )
+
+
+@dataclass(frozen=True)
 class ForumCapabilitiesExtender:
     post_types: tuple[PostTypeDefinition, ...] = ()
     search_filters: tuple[SearchFilterDefinition, ...] = ()
@@ -1396,30 +1818,267 @@ class ErrorHandlingExtender(SystemHookExtender):
     def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
         super().__init__("error.handling", definitions)
 
+    def hook(self, key: str, callback: Any, *, description: str = "", order: int = 100) -> "ErrorHandlingExtender":
+        return ErrorHandlingExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=str(key or "").strip(),
+            callback=callback,
+            description=str(description or "").strip(),
+            order=int(order),
+        )]))
+
+    def status(self, error_type: str, http_status: int) -> "ErrorHandlingExtender":
+        return self._with_definition("status", {
+            "error_type": str(error_type or "").strip(),
+            "http_status": int(http_status),
+        })
+
+    def type(self, exception_class: Any, error_type: str) -> "ErrorHandlingExtender":
+        return self._with_definition("type", {
+            "exception_class": exception_class,
+            "error_type": str(error_type or "").strip(),
+        })
+
+    def handler(self, exception_class: Any, handler: Any) -> "ErrorHandlingExtender":
+        return self._with_definition("handler", {
+            "exception_class": exception_class,
+            "handler": handler,
+        })
+
+    def reporter(self, reporter: Any) -> "ErrorHandlingExtender":
+        return self._with_definition("reporter", {"reporter": reporter})
+
+    def _with_definition(self, key: str, payload: Any, *, order: int = 100) -> "ErrorHandlingExtender":
+        return ErrorHandlingExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=key,
+            callback=payload,
+            order=order,
+        )]))
+
 
 class AuthExtender(SystemHookExtender):
     def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
         super().__init__("auth", definitions)
+
+    def hook(self, key: str, callback: Any, *, description: str = "", order: int = 100) -> "AuthExtender":
+        return AuthExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=str(key or "").strip(),
+            callback=callback,
+            description=str(description or "").strip(),
+            order=int(order),
+        )]))
+
+    def add_password_checker(self, identifier: str, checker: Any, *, description: str = "", order: int = 100) -> "AuthExtender":
+        return self._with_definition("password_checker", {
+            "identifier": str(identifier or "").strip(),
+            "checker": checker,
+            "description": str(description or "").strip(),
+        }, order=order)
+
+    def remove_password_checker(self, identifier: str, *, order: int = 100) -> "AuthExtender":
+        return self._with_definition("remove_password_checker", {
+            "identifier": str(identifier or "").strip(),
+        }, order=order)
+
+    def _with_definition(self, key: str, payload: Any, *, order: int = 100) -> "AuthExtender":
+        return AuthExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=key,
+            callback=payload,
+            order=order,
+        )]))
 
 
 class FilesystemExtender(SystemHookExtender):
     def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
         super().__init__("filesystem", definitions)
 
+    def hook(self, key: str, callback: Any, *, description: str = "", order: int = 100) -> "FilesystemExtender":
+        return FilesystemExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=str(key or "").strip(),
+            callback=callback,
+            description=str(description or "").strip(),
+            order=int(order),
+        )]))
+
+    def driver(self, name: str, driver: Any, *, description: str = "") -> "FilesystemExtender":
+        return self._with_definition("driver", {
+            "name": str(name or "").strip().lower(),
+            "driver": driver,
+            "description": str(description or "").strip(),
+        })
+
+    def disk(self, name: str, config: Any, *, driver: str = "local", description: str = "") -> "FilesystemExtender":
+        return self._with_definition("disk", {
+            "name": str(name or "").strip().lower(),
+            "driver": str(driver or "local").strip().lower() or "local",
+            "config": config,
+            "description": str(description or "").strip(),
+        })
+
+    def _with_definition(self, key: str, payload: Any, *, order: int = 100) -> "FilesystemExtender":
+        return FilesystemExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=key,
+            callback=payload,
+            order=order,
+        )]))
+
 
 class ConsoleExtender(SystemHookExtender):
     def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
         super().__init__("console", definitions)
+
+    def hook(self, key: str, callback: Any, *, description: str = "", order: int = 100) -> "ConsoleExtender":
+        return ConsoleExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=str(key or "").strip(),
+            callback=callback,
+            description=str(description or "").strip(),
+            order=int(order),
+        )]))
+
+    def command(self, name: str, handler: Any, *, description: str = "", order: int = 100) -> "ConsoleExtender":
+        return self._with_definition("command", {
+            "name": str(name or "").strip(),
+            "description": str(description or "").strip(),
+            "handler": handler,
+        }, order=order)
+
+    def schedule(self, name: str, schedule: Any, *, args: Any = None, description: str = "", order: int = 100) -> "ConsoleExtender":
+        return self._with_definition("schedule", {
+            "name": str(name or "").strip(),
+            "description": str(description or "").strip(),
+            "schedule": schedule,
+            "args": args or {},
+        }, order=order)
+
+    def _with_definition(self, key: str, payload: Any, *, order: int = 100) -> "ConsoleExtender":
+        return ConsoleExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=key,
+            callback=payload,
+            order=order,
+        )]))
 
 
 class SessionExtender(SystemHookExtender):
     def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
         super().__init__("session", definitions)
 
+    def hook(self, key: str, callback: Any, *, description: str = "", order: int = 100) -> "SessionExtender":
+        return SessionExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=str(key or "").strip(),
+            callback=callback,
+            description=str(description or "").strip(),
+            order=int(order),
+        )]))
+
+    def driver(self, name: str, driver: Any, *, description: str = "", order: int = 100) -> "SessionExtender":
+        return self._with_definition("driver", {
+            "name": str(name or "").strip().lower(),
+            "driver": driver,
+            "description": str(description or "").strip(),
+        }, order=order)
+
+    def _with_definition(self, key: str, payload: Any, *, order: int = 100) -> "SessionExtender":
+        return SessionExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=key,
+            callback=payload,
+            order=order,
+        )]))
+
 
 class ThemeExtender(SystemHookExtender):
     def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
         super().__init__("theme", definitions)
+
+    def hook(self, key: str, callback: Any, *, description: str = "", order: int = 100) -> "ThemeExtender":
+        return ThemeExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=str(key or "").strip(),
+            callback=callback,
+            description=str(description or "").strip(),
+            order=int(order),
+        )]))
+
+    def variable(self, name: str, value: Any) -> "ThemeExtender":
+        return self.variables({name: value})
+
+    def variables(self, values: dict[str, Any]) -> "ThemeExtender":
+        return self._with_definition("variables", dict(values or {}))
+
+    def document_attributes(self, attributes: dict[str, Any]) -> "ThemeExtender":
+        return self._with_definition("document_attributes", dict(attributes or {}))
+
+    def document_classes(self, classes: Any) -> "ThemeExtender":
+        return self.document_attributes({"class": classes})
+
+    def head_tag(self, tag: str, attributes: dict[str, Any] | None = None, *, text: str = "") -> "ThemeExtender":
+        return self._with_definition("head_tag", {
+            "tag": str(tag or "").strip().lower(),
+            "attributes": dict(attributes or {}),
+            "text": str(text or ""),
+        })
+
+    def _with_definition(self, key: str, payload: Any, *, order: int = 100) -> "ThemeExtender":
+        return ThemeExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=key,
+            callback=payload,
+            order=order,
+        )]))
+
+
+class CsrfExtender(SystemHookExtender):
+    def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
+        super().__init__("csrf", definitions)
+
+    def hook(self, key: str, callback: Any, *, description: str = "", order: int = 100) -> "CsrfExtender":
+        return CsrfExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=str(key or "").strip(),
+            callback=callback,
+            description=str(description or "").strip(),
+            order=int(order),
+        )]))
+
+    def exempt_route(self, route_name: str, *, description: str = "", order: int = 100) -> "CsrfExtender":
+        return self._with_definition("exempt_route", {
+            "route_name": str(route_name or "").strip(),
+            "description": str(description or "").strip(),
+        }, order=order)
+
+    def _with_definition(self, key: str, payload: Any, *, order: int = 100) -> "CsrfExtender":
+        return CsrfExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=key,
+            callback=payload,
+            order=order,
+        )]))
+
+
+class ThrottleApiExtender(SystemHookExtender):
+    def __init__(self, definitions: tuple[ExtensionSystemHookDefinition, ...] = ()) -> None:
+        super().__init__("throttle.api", definitions)
+
+    def hook(self, key: str, callback: Any, *, description: str = "", order: int = 100) -> "ThrottleApiExtender":
+        return ThrottleApiExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=str(key or "").strip(),
+            callback=callback,
+            description=str(description or "").strip(),
+            order=int(order),
+        )]))
+
+    def set(self, name: str, throttler: Any, *, description: str = "", order: int = 100) -> "ThrottleApiExtender":
+        return self._with_definition("throttler", {
+            "name": str(name or "").strip(),
+            "throttler": throttler,
+            "description": str(description or "").strip(),
+        }, order=order)
+
+    def remove(self, name: str, *, order: int = 100) -> "ThrottleApiExtender":
+        return self._with_definition("remove_throttler", {
+            "name": str(name or "").strip(),
+        }, order=order)
+
+    def _with_definition(self, key: str, payload: Any, *, order: int = 100) -> "ThrottleApiExtender":
+        return ThrottleApiExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
+            key=key,
+            callback=payload,
+            order=order,
+        )]))
 
 
 @dataclass(frozen=True)
@@ -1546,12 +2205,14 @@ class PolicyExtender:
     mounts: tuple[tuple[str, Callable[..., bool]], ...] = ()
     global_policies: tuple[Callable[..., bool], ...] = ()
     model_policies: tuple[tuple[Any, Callable[..., bool]], ...] = ()
+    query_model_policies: tuple[tuple[Any, Callable[..., bool]], ...] = ()
 
     def global_policy(self, handler: Callable[..., bool]) -> "PolicyExtender":
         return PolicyExtender(
             mounts=self.mounts,
             global_policies=tuple([*self.global_policies, handler]),
             model_policies=self.model_policies,
+            query_model_policies=self.query_model_policies,
         )
 
     def model_policy(self, model: Any, handler: Callable[..., bool]) -> "PolicyExtender":
@@ -1559,10 +2220,19 @@ class PolicyExtender:
             mounts=self.mounts,
             global_policies=self.global_policies,
             model_policies=tuple([*self.model_policies, (model, handler)]),
+            query_model_policies=self.query_model_policies,
+        )
+
+    def query_model_policy(self, model: Any, handler: Callable[..., bool]) -> "PolicyExtender":
+        return PolicyExtender(
+            mounts=self.mounts,
+            global_policies=self.global_policies,
+            model_policies=self.model_policies,
+            query_model_policies=tuple([*self.query_model_policies, (model, handler)]),
         )
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
-        if not self.mounts and not self.global_policies and not self.model_policies:
+        if not self.mounts and not self.global_policies and not self.model_policies and not self.query_model_policies:
             return
 
         extension_id = extension.extension_id
@@ -1574,6 +2244,8 @@ class PolicyExtender:
                 policies.global_policy(extension_id, handler)
             for model, handler in self.model_policies:
                 policies.model_policy(extension_id, model, handler)
+            for model, handler in self.query_model_policies:
+                policies.query_model_policy(extension_id, model, handler)
             return policies
 
         app.resolving("policies", apply)

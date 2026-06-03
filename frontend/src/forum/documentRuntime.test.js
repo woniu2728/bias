@@ -132,3 +132,22 @@ test('document runtime merges document classes from attributes', () => {
 
   assert.deepEqual(documentRef.classes, ['has-alpha', 'has-beta'])
 })
+
+test('document runtime applies theme variables as css custom properties', () => {
+  const documentRef = createDocumentRef()
+
+  applyExtensionDocumentPayload({
+    extension_document: {
+      theme_variables: {
+        biasAlphaColor: '#123456',
+        '--bias-beta-color': '#654321',
+      },
+    },
+  }, { documentRef })
+
+  const style = documentRef.headTags[0]
+  assert.equal(style.tag, 'style')
+  assert.equal(style.attrs['data-bias-extension-theme'], 'true')
+  assert.match(style.textContent, /--bias-alpha-color:#123456;/)
+  assert.match(style.textContent, /--bias-beta-color:#654321;/)
+})

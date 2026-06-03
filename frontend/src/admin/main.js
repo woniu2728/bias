@@ -8,6 +8,7 @@ import { setRuntimeApplication } from '../common/applicationRegistry'
 import { primeCsrfProtection } from '../api'
 import { useForumStore } from '../stores/forum'
 import { useForumUiStore } from '../stores/forumUi'
+import { useResourceStore } from '../stores/resource'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import '../assets/main.css'
 
@@ -19,6 +20,7 @@ app.use(router)
 
 primeCsrfProtection().catch(() => {})
 const forumStore = useForumStore(pinia)
+const resourceStore = useResourceStore(pinia)
 useForumUiStore(pinia)
 const runtimeApp = createRuntimeApplication({
   kind: 'admin',
@@ -26,7 +28,8 @@ const runtimeApp = createRuntimeApplication({
   router,
   pinia,
   api,
-  store: forumStore,
+  resourceStore,
+  forumStore,
 })
 setRuntimeApplication('admin', runtimeApp)
 

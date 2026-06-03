@@ -83,6 +83,9 @@ import {
 } from '@/forum/frontendRegistry'
 import { highlightSearchText } from '@/utils/search'
 import { renderTwemojiHtml, setTwemojiBaseUrl, setTwemojiEnabled } from '@/utils/twemoji'
+export { registerNotificationType } from './notificationTypes'
+export { registerPostType } from './postTypes'
+export { registerSearchFilter } from './searchFilters'
 
 export {
   getForumNavItems,

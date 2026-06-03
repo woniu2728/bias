@@ -6,6 +6,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from apps.core.domain_events import dispatch_forum_event_after_commit
+from apps.core.extensions.runtime_access import refresh_runtime_model_private
 from apps.core.forum_events import (
     PostApprovedEvent,
     PostFlagCreatedEvent,
@@ -294,8 +295,9 @@ def approve_post(
         post.approval_note = note
         post.hidden_at = None
         post.hidden_user = None
+        refresh_runtime_model_private(post)
         post.save(update_fields=[
-            "approval_status", "approved_at", "approved_by", "approval_note", "hidden_at", "hidden_user"
+            "approval_status", "approved_at", "approved_by", "approval_note", "hidden_at", "hidden_user", "is_private"
         ])
 
         discussion = post.discussion
@@ -361,8 +363,9 @@ def reject_post(
         post.approval_note = note
         post.hidden_at = rejected_at
         post.hidden_user = admin_user
+        refresh_runtime_model_private(post)
         post.save(update_fields=[
-            "approval_status", "approved_at", "approved_by", "approval_note", "hidden_at", "hidden_user"
+            "approval_status", "approved_at", "approved_by", "approval_note", "hidden_at", "hidden_user", "is_private"
         ])
 
         if was_counted:

@@ -16,10 +16,11 @@ def get_default_user_preferences() -> dict[str, bool]:
 
 def normalize_user_preferences(values: dict | None) -> dict[str, bool]:
     merged = get_default_user_preferences()
+    transformers = _get_preference_transformers()
     for key, value in (values or {}).items():
         if key not in merged:
             continue
-        merged[key] = bool(value)
+        merged[key] = _normalize_preference_value(key, value, transformers)
     return merged
 
 
@@ -54,3 +55,22 @@ def serialize_user_preferences(user) -> dict:
         "ui_values": ui_values,
         "definitions": definitions,
     }
+
+
+def _get_preference_transformers() -> dict:
+    try:
+        from apps.core.extensions.system_runtime import get_runtime_user_preference_transformers
+
+        return get_runtime_user_preference_transformers()
+    except Exception:
+        return {}
+
+
+def _normalize_preference_value(key: str, value, transformers: dict) -> bool:
+    transformer = transformers.get(key, {}).get("transformer")
+    if callable(transformer):
+        try:
+            return bool(transformer(value))
+        except TypeError:
+            return bool(transformer(value, {"key": key}))
+    return bool(value)

@@ -2,12 +2,9 @@
 Markdown渲染服务
 """
 import markdown
-from markdown.extensions import Extension
-from markdown.treeprocessors import Treeprocessor
 import bleach
-from typing import Optional
-import re
 from apps.users.models import User
+from apps.core.link_formatter import apply_default_external_link_attributes
 from apps.core.mentions import MENTION_RE, extract_mentioned_usernames
 from apps.core.extensions.formatter_service import apply_extension_formatters
 
@@ -161,20 +158,7 @@ class MarkdownService:
         Returns:
             str: 处理后的HTML
         """
-        # 匹配<a>标签
-        pattern = r'<a\s+href="(https?://[^"]+)"([^>]*)>'
-
-        def replace_link(match):
-            url = match.group(1)
-            attrs = match.group(2)
-
-            # 检查是否已有target属性
-            if 'target=' not in attrs:
-                attrs += ' target="_blank" rel="noopener noreferrer"'
-
-            return f'<a href="{url}"{attrs}>'
-
-        return re.sub(pattern, replace_link, html)
+        return apply_default_external_link_attributes(html)
 
     @staticmethod
     def strip_html(html: str) -> str:

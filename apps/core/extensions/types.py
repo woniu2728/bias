@@ -8,6 +8,7 @@ from apps.core.forum_registry_types import (
     AdminPageDefinition,
     DiscussionListFilterDefinition,
     DiscussionSortDefinition,
+    LanguagePackDefinition,
     NotificationTypeDefinition,
     PermissionDefinition,
     PostTypeDefinition,
@@ -252,6 +253,7 @@ class ExtensionModelVisibilityDefinition:
     scope: Callable[[Any, dict], Any]
     ability: str = "view"
     description: str = ""
+    order: int = 100
 
 
 @dataclass(frozen=True)
@@ -498,6 +500,7 @@ class ExtensionDiscoveryResult:
     admin_pages: Tuple[AdminPageDefinition, ...] = ()
     notification_types: Tuple[NotificationTypeDefinition, ...] = ()
     user_preferences: Tuple[UserPreferenceDefinition, ...] = ()
+    language_packs: Tuple[LanguagePackDefinition, ...] = ()
     post_types: Tuple[PostTypeDefinition, ...] = ()
     search_filters: Tuple[SearchFilterDefinition, ...] = ()
     discussion_sorts: Tuple[DiscussionSortDefinition, ...] = ()
@@ -541,6 +544,7 @@ class ExtensionAssembly:
     admin_pages: Tuple[Any, ...]
     notification_types: Tuple[Any, ...]
     user_preferences: Tuple[Any, ...]
+    language_packs: Tuple[Any, ...]
     post_types: Tuple[Any, ...]
     search_filters: Tuple[Any, ...]
     discussion_sorts: Tuple[Any, ...]

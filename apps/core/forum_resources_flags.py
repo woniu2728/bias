@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
-from apps.posts.models import PostFlag
+from django.db.models import Subquery
+
+from apps.core.visibility import apply_related_model_visibility_subquery
+from apps.posts.models import Post, PostFlag
 from apps.users.services import UserService
 
 
@@ -122,7 +124,10 @@ def scope_flag_visibility(queryset, context: dict):
         or not UserService.has_forum_permission(user, "admin.flag.view")
     ):
         return queryset.none()
-    return queryset.filter(
-        build_post_visibility_q(user, prefix="post__"),
-        build_discussion_visibility_q(user, prefix="post__discussion__"),
+    visible_post_ids = apply_related_model_visibility_subquery(
+        Post,
+        user=user,
+        ability="view",
+        context={"skip_view_forum_gate": True},
     )
+    return queryset.filter(post_id__in=Subquery(visible_post_ids))

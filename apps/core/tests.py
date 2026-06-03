@@ -381,6 +381,43 @@ class ExtensionManifestLoaderTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_loader_merges_language_pack_extender_into_contract(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-lang"
+            backend_dir = manifest_dir / "backend"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            backend_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-lang",
+                "name": "Alpha Language",
+                "version": "1.0.0",
+                "backend_entry": "extensions.alpha_lang.backend.ext",
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "from apps.core.extensions import LanguagePackExtender\n"
+                "\n"
+                "def extend():\n"
+                "    return [\n"
+                "        LanguagePackExtender(\n"
+                "            code='en-US',\n"
+                "            label='English',\n"
+                "            native_label='English',\n"
+                "            path='extensions/alpha-lang/locale',\n"
+                "        ),\n"
+                "    ]\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            result = loader.discover()[0]
+
+            self.assertEqual(result.language_packs[0].code, "en-US")
+            self.assertEqual(result.language_packs[0].module_id, "alpha-lang")
+            self.assertEqual(result.locale_paths, ("extensions/alpha-lang/locale",))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_loader_merges_admin_surface_extender_into_contract(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -980,6 +1017,393 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertEqual(app.make("theme").run("theme")[0], "theme")
         runtime_view = app.get_runtime_view("alpha-tools")
         self.assertEqual(runtime_view.error_handlers[0].module_id, "alpha-tools")
+
+    def test_system_hook_runtime_services_drive_error_filesystem_and_console(self):
+        from apps.core.extensions import ConsoleExtender, ErrorHandlingExtender, FilesystemExtender
+        from apps.core.extensions.system_runtime import (
+            get_runtime_error_statuses,
+            list_runtime_console_commands,
+            list_runtime_console_schedules,
+            list_runtime_filesystem_disks,
+            report_runtime_error,
+            resolve_runtime_filesystem_driver,
+            run_runtime_console_command,
+        )
+        from apps.core.storage_service import get_storage_backend
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+        reports = []
+
+        class CustomStorage:
+            pass
+
+        def report(payload, context):
+            reports.append((payload["error_type"], payload["operation"]))
+            return True
+
+        def filesystem(payload, context):
+            if payload["driver"] == "custom":
+                return CustomStorage()
+            return None
+
+        def console(payload, context):
+            return {
+                "name": "alpha:refresh",
+                "description": "Refresh alpha",
+                "handler": lambda options: {"ok": True, "scope": options.get("scope")},
+            }
+
+        ErrorHandlingExtender().hook("report", report).status("alpha_error", 409).extend(app, extension)
+        FilesystemExtender().hook("driver", filesystem).disk("alpha", {"root": "/tmp/alpha"}).extend(app, extension)
+        ConsoleExtender().hook("command", console).schedule("alpha:refresh", "hourly").extend(app, extension)
+        app.make("error.handling")
+        app.make("filesystem")
+        app.make("console")
+
+        with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
+            report_runtime_error(ValueError("broken"), operation="unit-test")
+            storage = resolve_runtime_filesystem_driver("custom", {"storage_driver": "custom"})
+            storage_from_service = get_storage_backend({"storage_driver": "custom"})
+            commands = list_runtime_console_commands()
+            schedules = list_runtime_console_schedules()
+            disks = list_runtime_filesystem_disks()
+            statuses = get_runtime_error_statuses()
+            result = run_runtime_console_command("alpha:refresh", options={"scope": "all"})
+
+        self.assertEqual(reports, [("ValueError", "unit-test")])
+        self.assertIsInstance(storage, CustomStorage)
+        self.assertIsInstance(storage_from_service, CustomStorage)
+        self.assertEqual(commands[0]["name"], "alpha:refresh")
+        self.assertEqual(schedules[0]["name"], "alpha:refresh")
+        self.assertEqual(disks[0]["name"], "alpha")
+        self.assertEqual(statuses["alpha_error"], 409)
+        self.assertEqual(result, {"ok": True, "scope": "all"})
+
+    def test_auth_and_session_extenders_register_typed_runtime_services(self):
+        from apps.core.extensions import AuthExtender, SessionExtender
+        from apps.core.extensions.system_runtime import (
+            get_runtime_password_checkers,
+            list_runtime_session_drivers,
+            resolve_runtime_session_driver,
+            verify_runtime_user_password,
+        )
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+
+        class CustomSessionDriver:
+            def __init__(self, config):
+                self.config = config
+
+        user = SimpleNamespace(username="alpha", password="unused")
+
+        AuthExtender() \
+            .remove_password_checker("django") \
+            .add_password_checker("alpha", lambda current_user, raw_password: current_user.username == raw_password) \
+            .extend(app, extension)
+        SessionExtender().driver("alpha", CustomSessionDriver, description="Alpha session").extend(app, extension)
+        app.make("auth")
+        app.make("session")
+
+        with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
+            checkers = get_runtime_password_checkers(default_checker=lambda current_user, raw_password: False)
+            accepted = verify_runtime_user_password(user, "alpha", default_checker=lambda current_user, raw_password: False)
+            rejected = verify_runtime_user_password(user, "wrong", default_checker=lambda current_user, raw_password: True)
+            drivers = list_runtime_session_drivers()
+            resolved_driver = resolve_runtime_session_driver("alpha", {"ttl": 60})
+
+        self.assertEqual(list(checkers.keys()), ["alpha"])
+        self.assertTrue(accepted)
+        self.assertFalse(rejected)
+        self.assertEqual(drivers[0]["name"], "alpha")
+        self.assertEqual(drivers[0]["extension_id"], "alpha-tools")
+        self.assertIsInstance(resolved_driver, CustomSessionDriver)
+        self.assertEqual(resolved_driver.config["ttl"], 60)
+
+    def test_csrf_throttle_and_search_index_extenders_register_runtime_services(self):
+        from apps.core.extensions import CsrfExtender, SearchIndexExtender, ThrottleApiExtender
+        from apps.core.extensions.system_runtime import (
+            get_runtime_api_throttlers,
+            get_runtime_csrf_exempt_routes,
+            should_throttle_runtime_api_request,
+        )
+
+        class Item:
+            pass
+
+        class Indexer:
+            pass
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+        indexer = Indexer()
+        request = RequestFactory().get("/api/demo")
+
+        CsrfExtender().exempt_route("alpha-webhook").extend(app, extension)
+        ThrottleApiExtender().set("alpha", lambda current_request: current_request.path == "/api/demo").extend(app, extension)
+        SearchIndexExtender().indexer(Item, indexer).extend(app, extension)
+        app.make("csrf")
+        app.make("throttle.api")
+        app.make("search")
+
+        with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
+            routes = get_runtime_csrf_exempt_routes()
+            throttlers = get_runtime_api_throttlers()
+            throttled = should_throttle_runtime_api_request(request)
+
+        self.assertEqual(routes, {"alpha-webhook"})
+        self.assertEqual(list(throttlers.keys()), ["alpha"])
+        self.assertTrue(throttled)
+        self.assertEqual(app.search.indexers(Item), (indexer,))
+
+    @override_settings(FRONTEND_URL="https://bias.test")
+    def test_link_extender_registers_formatter_link_attribute_callbacks(self):
+        from apps.core.extensions import LinkExtender
+        from apps.core.extensions.formatter_service import apply_extension_formatters, clear_extension_formatter_cache
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+        seen = []
+
+        def rel(uri, site_url, attributes):
+            seen.append((uri.netloc, site_url, attributes.get("href", "")))
+            if uri.netloc == "external.test":
+                return "nofollow sponsored"
+            return ""
+
+        def target(uri, site_url, attributes):
+            if uri.netloc == "bias.test":
+                return "_self"
+            return "_blank"
+
+        LinkExtender().set_rel(rel).set_target(target).extend(app, extension)
+        app.make("formatters")
+
+        clear_extension_formatter_cache()
+        try:
+            with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
+                html = apply_extension_formatters(
+                    '<p><a href="https://external.test/page">外部</a> '
+                    '<a href="https://bias.test/d/1">内部</a></p>'
+                )
+        finally:
+            clear_extension_formatter_cache()
+
+        self.assertIn('href="https://external.test/page" rel="nofollow sponsored" target="_blank"', html)
+        self.assertIn('href="https://bias.test/d/1" target="_self"', html)
+        self.assertEqual(seen[0], ("external.test", "https://bias.test", "https://external.test/page"))
+
+    def test_language_pack_extender_registers_runtime_locale_metadata(self):
+        from apps.core.extensions import LanguagePackExtender
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-lang")
+
+        LanguagePackExtender(
+            code="en-US",
+            label="English",
+            native_label="English",
+            path="extensions/alpha-lang/locale",
+        ).extend(app, extension)
+        app.make("forum")
+        app.make("locales")
+
+        packs = app.forum_registry.get_language_packs(module_id="alpha-lang")
+
+        self.assertEqual(packs[0].code, "en-US")
+        self.assertEqual(packs[0].label, "English")
+        self.assertEqual(app.locales.get_paths(extension_id="alpha-lang"), ["extensions/alpha-lang/locale"])
+
+    def test_post_user_and_model_private_extenders_register_core_runtime(self):
+        from apps.core.extensions import ModelPrivateExtender, PostExtender, UserExtender
+        from apps.core.extensions.system_runtime import (
+            apply_runtime_user_group_processors,
+            get_runtime_user_avatar_drivers,
+            get_runtime_user_display_name_drivers,
+            get_runtime_user_preference_transformers,
+        )
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+
+        class DemoPost:
+            type = "alphaEvent"
+            label = "Alpha Event"
+
+        class DemoModel:
+            pass
+
+        def group_processor(user, group_ids):
+            return [*group_ids, user.extra_group_id]
+
+        def preference_transformer(value):
+            return value == "yes"
+
+        PostExtender().type(DemoPost, description="Alpha post event").extend(app, extension)
+        UserExtender() \
+            .display_name_driver("alpha", "alpha.display") \
+            .avatar_driver("alpha", "alpha.avatar") \
+            .permission_groups(group_processor) \
+            .register_preference("alpha_pref", preference_transformer, False, label="Alpha Pref") \
+            .extend(app, extension)
+        ModelPrivateExtender(DemoModel).checker(lambda instance: instance.is_private).extend(app, extension)
+
+        app.make("forum")
+        app.make("user")
+        app.make("models")
+
+        with patch("apps.core.extensions.system_runtime.get_runtime_system_service", side_effect=lambda key: app.make(key)):
+            self.assertEqual(get_runtime_user_display_name_drivers()["alpha"], "alpha.display")
+            self.assertEqual(get_runtime_user_avatar_drivers()["alpha"], "alpha.avatar")
+            self.assertEqual(apply_runtime_user_group_processors(SimpleNamespace(extra_group_id=9), [1, 2]), [1, 2, 9])
+            self.assertTrue(get_runtime_user_preference_transformers()["alpha_pref"]["transformer"]("yes"))
+
+        post_type = app.forum.get_post_type("alphaEvent")
+        runtime_view = app.get_runtime_view("alpha-tools")
+
+        self.assertEqual(post_type.label, "Alpha Event")
+        self.assertEqual(post_type.module_id, "alpha-tools")
+        self.assertEqual(runtime_view.user_preferences[0].key, "alpha_pref")
+        self.assertEqual(runtime_view.user_handlers[0].key, "display_name_driver")
+        self.assertEqual(runtime_view.model_definitions[-1].kind, "private_checker")
+        self.assertTrue(app.models.is_private(DemoModel, SimpleNamespace(is_private=True)))
+
+    def test_model_visibility_scoper_matches_subclasses(self):
+        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+
+        class BaseModel:
+            pass
+
+        class ChildModel(BaseModel):
+            pass
+
+        app = ExtensionApplication()
+        app.models.register_visibility(
+            "alpha-tools",
+            ExtensionModelVisibilityDefinition(
+                model=BaseModel,
+                ability="view",
+                scope=lambda queryset, context: (*queryset, context["ability"]),
+            ),
+        )
+
+        self.assertTrue(app.models.has_visibility(ChildModel, ability="view"))
+        self.assertEqual(
+            app.models.apply_visibility(ChildModel, ("base",), {"ability": "view"}),
+            ("base", "view"),
+        )
+
+    def test_model_visibility_scopers_follow_parent_wildcard_ability_order(self):
+        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+
+        class BaseModel:
+            pass
+
+        class ChildModel(BaseModel):
+            pass
+
+        def append(name):
+            return lambda queryset, context: (*queryset, name)
+
+        app = ExtensionApplication()
+        for name, model, ability in (
+            ("child-view", ChildModel, "view"),
+            ("base-view", BaseModel, "view"),
+            ("child-any", ChildModel, "*"),
+            ("base-any", BaseModel, "*"),
+        ):
+            app.models.register_visibility(
+                "alpha-tools",
+                ExtensionModelVisibilityDefinition(
+                    model=model,
+                    ability=ability,
+                    scope=append(name),
+                ),
+            )
+
+        self.assertEqual(
+            app.models.apply_visibility(ChildModel, (), {"ability": "view"}),
+            ("base-any", "base-view", "child-any", "child-view"),
+        )
+
+    def test_core_model_visibility_scopers_follow_parent_wildcard_ability_order(self):
+        from apps.core.visibility import get_core_model_visibility_scopers, register_core_model_visibility_scoper
+
+        class BaseModel:
+            pass
+
+        class ChildModel(BaseModel):
+            pass
+
+        calls = []
+        for name, model, ability in (
+            ("child-view", ChildModel, "view"),
+            ("base-view", BaseModel, "view"),
+            ("child-any", ChildModel, "*"),
+            ("base-any", BaseModel, "*"),
+        ):
+            register_core_model_visibility_scoper(
+                model,
+                lambda queryset, context, marker=name: calls.append(marker) or queryset,
+                ability=ability,
+            )
+
+        for scoper in get_core_model_visibility_scopers(ChildModel, ability="view"):
+            scoper([], {"ability": "view"})
+
+        self.assertEqual(calls, ["base-any", "base-view", "child-any", "child-view"])
+
+    def test_model_visibility_query_policy_deny_returns_empty_queryset(self):
+        from apps.core.visibility import apply_model_visibility_scope
+        from apps.discussions.models import Discussion
+
+        app = ExtensionApplication()
+        app.policies.query_model_policy(
+            "alpha-tools",
+            Discussion,
+            lambda **context: False if context["ability"] == "view" else None,
+        )
+
+        with patch("apps.core.extensions.policy_runtime_service.get_extension_application", return_value=app):
+            queryset = apply_model_visibility_scope(
+                Discussion,
+                Discussion.objects.all(),
+                user=AnonymousUser(),
+                ability="view",
+            )
+
+        self.assertFalse(queryset.exists())
+
+    def test_theme_extender_contributes_frontend_document_payload(self):
+        from apps.core.extensions import ThemeExtender
+        from apps.core.extensions.frontend_runtime_service import build_enabled_frontend_document_payload
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+        runtime_view = app.get_or_create_runtime_view("alpha-tools", name="Alpha Tools")
+
+        ThemeExtender() \
+            .variable("bias-alpha-color", "#123456") \
+            .document_classes(["theme-alpha"]) \
+            .head_tag("meta", {"name": "theme-alpha", "content": "1"}) \
+            .extend(app, extension)
+        app.make("theme")
+
+        from apps.core.extensions.frontend_runtime_service import _build_frontend_document_payload
+
+        with patch("apps.core.extensions.frontend_runtime_service.get_extension_host", return_value=app):
+            entry = {
+                "id": "alpha-tools",
+                "frontend_document": _build_frontend_document_payload(runtime_view),
+            }
+
+        with patch("apps.core.extensions.frontend_runtime_service.get_enabled_extension_runtime_entries", return_value=[entry]):
+            payload = build_enabled_frontend_document_payload()
+
+        self.assertEqual(payload["theme_variables"]["bias-alpha-color"], "#123456")
+        self.assertEqual(payload["document_attributes"]["class"], ["theme-alpha"])
+        self.assertEqual(payload["head_tags"][0]["attributes"]["name"], "theme-alpha")
 
     def test_validator_extender_runs_during_resource_payload_application(self):
         from apps.core.resource_registry import ResourceRegistry
@@ -1595,6 +2019,10 @@ class ExtensionManifestLoaderTests(TestCase):
                 "        ApiResourceExtender.from_resource(AlphaResource).field('title', mutate_alpha_field).endpoint('show', mutate_alpha_endpoint).sort('hot', mutate_alpha_sort),\n"
                 "        ModelExtender(definitions=(ExtensionModelDefinition(model=DemoModel, key='alpha', handler='belongsToMany'),)).relationship(\n"
                 "            ExtensionModelRelationDefinition(model=DemoModel, name='owner', resolver=lambda model: ('owner', model), relation_type='belongsTo')\n"
+                "        ).has_one(\n"
+                "            'owner_profile', DemoModel, model=DemoModel, foreign_key='owner_id', local_key='id'\n"
+                "        ).has_many(\n"
+                "            'children', DemoModel, model=DemoModel, foreign_key='parent_id', local_key='id'\n"
                 "        ).cast(\n"
                 "            ExtensionModelCastDefinition(model=DemoModel, attribute='meta', cast='json')\n"
                 "        ).default(\n"
@@ -1627,6 +2055,9 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(runtime_view.resource_sorts[0].sort, "newest")
             self.assertEqual(runtime_view.model_definitions[0].key, "alpha")
             self.assertEqual(runtime_view.model_relations[0].name, "owner")
+            self.assertEqual([item.relation_type for item in runtime_view.model_relations], ["belongsTo", "hasOne", "hasMany"])
+            self.assertEqual(runtime_view.model_relations[1].foreign_key, "owner_id")
+            self.assertEqual(runtime_view.model_relations[2].owner_key, "id")
             self.assertEqual(runtime_view.model_casts[0].attribute, "meta")
             self.assertEqual(runtime_view.model_defaults[0].attribute, "enabled")
             self.assertEqual(runtime_view.frontend_forum_entry, "forum.js")
@@ -2154,6 +2585,95 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
             self.assertEqual(json.loads(response.content), {"blocked": True, "target": "admin"})
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_extension_error_handling_middleware_reports_and_reraises(self):
+        from apps.core.middleware import ExtensionErrorHandlingMiddleware
+
+        request = RequestFactory().get("/api/fail")
+        reported = []
+
+        def get_response(_request):
+            raise ValueError("broken")
+
+        middleware = ExtensionErrorHandlingMiddleware(get_response)
+
+        with patch(
+            "apps.core.extensions.system_runtime.report_runtime_error",
+            side_effect=lambda exc, **kwargs: reported.append((exc, kwargs)),
+        ):
+            with self.assertRaises(ValueError):
+                middleware(request)
+
+        self.assertEqual(reported[0][0].args, ("broken",))
+        self.assertEqual(reported[0][1]["request"], request)
+        self.assertEqual(reported[0][1]["operation"], "request")
+
+    def test_extension_error_handling_middleware_uses_typed_handler_response(self):
+        from apps.core.extensions import ErrorHandlingExtender
+        from apps.core.middleware import ExtensionErrorHandlingMiddleware
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+
+        def handle_value_error(payload, context):
+            return JsonResponse({"handled": payload["message"], "status": payload["http_status"]}, status=409)
+
+        ErrorHandlingExtender() \
+            .type(ValueError, "alpha_value_error") \
+            .status("alpha_value_error", 409) \
+            .handler(ValueError, handle_value_error) \
+            .extend(app, extension)
+        app.make("error.handling")
+
+        request = RequestFactory().get("/api/fail")
+
+        def get_response(_request):
+            raise ValueError("broken")
+
+        middleware = ExtensionErrorHandlingMiddleware(get_response)
+
+        with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
+            response = middleware(request)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(json.loads(response.content), {"handled": "broken", "status": 409})
+
+    def test_extension_csrf_middleware_marks_exempt_runtime_route(self):
+        from apps.core.extensions import CsrfExtender
+        from apps.core.middleware import ExtensionCsrfMiddleware
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+        CsrfExtender().exempt_route("alpha-webhook").extend(app, extension)
+        app.make("csrf")
+
+        request = RequestFactory().post("/api/webhook")
+        request.resolver_match = SimpleNamespace(url_name="alpha-webhook")
+        middleware = ExtensionCsrfMiddleware(lambda current_request: HttpResponse("ok"))
+
+        with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
+            result = middleware.process_view(request, None, (), {})
+
+        self.assertIsNone(result)
+        self.assertTrue(request._dont_enforce_csrf_checks)
+
+    def test_extension_throttle_api_middleware_short_circuits_api_request(self):
+        from apps.core.extensions import ThrottleApiExtender
+        from apps.core.middleware import ExtensionThrottleApiMiddleware
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+        ThrottleApiExtender().set("alpha", lambda request: request.path == "/api/demo").extend(app, extension)
+        app.make("throttle.api")
+
+        request = RequestFactory().get("/api/demo")
+        middleware = ExtensionThrottleApiMiddleware(lambda current_request: HttpResponse("ok"))
+
+        with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
+            response = middleware.process_view(request, None, (), {})
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(json.loads(response.content), {"error": "请求过于频繁", "code": "rate_limit_exceeded"})
 
 
     def test_validate_extension_manifests_reports_missing_dependency_and_missing_admin_entry(self):
@@ -2701,12 +3221,58 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
 class ExtensionManagementCommandTests(TestCase):
     def test_extension_management_commands_skip_django_system_checks(self):
         from apps.core.management.commands.create_extension import Command as CreateExtensionCommand
+        from apps.core.management.commands.extension_console import Command as ExtensionConsoleCommand
         from apps.core.management.commands.inspect_extensions import Command as InspectExtensionsCommand
         from apps.core.management.commands.validate_extensions import Command as ValidateExtensionsCommand
 
         self.assertEqual(CreateExtensionCommand.requires_system_checks, [])
+        self.assertEqual(ExtensionConsoleCommand.requires_system_checks, [])
         self.assertEqual(InspectExtensionsCommand.requires_system_checks, [])
         self.assertEqual(ValidateExtensionsCommand.requires_system_checks, [])
+
+    def test_extension_console_command_lists_and_runs_runtime_commands(self):
+        commands = [{
+            "name": "alpha:refresh",
+            "description": "Refresh alpha",
+            "handler": lambda options: {"ok": True, "scope": options.get("scope")},
+        }]
+
+        with patch("apps.core.management.commands.extension_console.list_runtime_console_commands", return_value=commands):
+            stdout = StringIO()
+            call_command("extension_console", "--list", "--format", "json", stdout=stdout)
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(payload["commands"][0]["name"], "alpha:refresh")
+
+        with patch("apps.core.management.commands.extension_console.list_runtime_console_schedules", return_value=[{
+            "name": "alpha:refresh",
+            "description": "Refresh alpha",
+            "schedule": "hourly",
+            "args": {"scope": "all"},
+        }]):
+            stdout = StringIO()
+            call_command("extension_console", "--scheduled", "--format", "json", stdout=stdout)
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(payload["schedules"][0]["schedule"], "hourly")
+
+        with patch(
+            "apps.core.management.commands.extension_console.run_runtime_console_command",
+            return_value={"ok": True, "scope": "all"},
+        ):
+            stdout = StringIO()
+            call_command(
+                "extension_console",
+                "alpha:refresh",
+                "--payload",
+                '{"scope":"all"}',
+                "--format",
+                "json",
+                stdout=stdout,
+            )
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(payload["result"], {"ok": True, "scope": "all"})
 
     @patch("apps.core.management.commands.validate_extensions.get_builtin_module_ids", return_value=("core",))
     def test_validate_extensions_command_uses_builtin_module_snapshot(self, get_builtin_module_ids_mock):

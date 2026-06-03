@@ -103,6 +103,8 @@ def adapt_builtin_module_to_extension(module: ForumModuleDefinition) -> Extensio
             host.forum.register_notification_type(definition, extension_id=extension.id)
         for definition in module.user_preferences:
             host.forum.register_user_preference(definition, extension_id=extension.id)
+        for definition in module.language_packs:
+            host.forum.register_language_pack(definition, extension_id=extension.id)
         for definition in module.post_types:
             host.forum.register_post_type(definition, extension_id=extension.id)
         for definition in module.search_filters:

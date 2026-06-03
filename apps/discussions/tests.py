@@ -15,6 +15,7 @@ from ninja_jwt.tokens import RefreshToken
 
 from apps.core.models import AuditLog
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry, ResourceSortDefinition
+from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.discussions.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
 from apps.discussions.services import DiscussionService
@@ -130,6 +131,176 @@ class DiscussionApiTests(TestCase):
         state = DiscussionUser.objects.get(discussion=discussion, user=self.author)
         self.assertTrue(state.is_subscribed)
         self.assertEqual(state.last_read_post_number, 1)
+
+    def test_create_discussion_applies_runtime_private_checkers(self):
+        class RuntimeModelService:
+            def is_private(self, model, instance, *, default=False):
+                return model is Discussion
+
+        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=RuntimeModelService()):
+            discussion = DiscussionService.create_discussion(
+                title="Private runtime discussion",
+                content="Initial post",
+                user=self.author,
+            )
+
+        first_post = Post.objects.get(id=discussion.first_post_id)
+        self.assertTrue(discussion.is_private)
+        self.assertTrue(first_post.is_private)
+        self.assertFalse(Discussion.objects.filter(build_discussion_visibility_q(self.reader), id=discussion.id).exists())
+        self.assertFalse(Post.objects.filter(build_post_visibility_q(self.reader), id=first_post.id).exists())
+
+    def test_model_private_extender_refreshes_on_model_save(self):
+        from types import SimpleNamespace
+
+        from apps.core.extensions import ModelPrivateExtender
+        from apps.core.extensions.application import ExtensionApplication
+
+        app = ExtensionApplication()
+        ModelPrivateExtender(Discussion).checker(
+            lambda instance: "private" in instance.title.lower()
+        ).extend(app, SimpleNamespace(extension_id="private-runtime"))
+        app.make("models")
+
+        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+            discussion = Discussion.objects.create(
+                title="Private saved by signal",
+                user=self.author,
+                last_posted_user=self.author,
+            )
+            self.assertTrue(discussion.is_private)
+            discussion.title = "Public saved by signal"
+            discussion.save(update_fields=["title", "slug", "is_private"])
+
+        self.assertFalse(discussion.is_private)
+
+        discussion.refresh_from_db()
+        self.assertFalse(discussion.is_private)
+
+    def test_view_private_policy_allows_private_discussion_visibility(self):
+        from apps.core.extensions.application import ExtensionApplication
+
+        discussion = DiscussionService.create_discussion(
+            title="Private visible through policy",
+            content="Initial post",
+            user=self.author,
+        )
+        Discussion.objects.filter(id=discussion.id).update(is_private=True)
+
+        app = ExtensionApplication()
+        app.policies.model_policy(
+            "private-runtime",
+            Discussion,
+            lambda **context: True if context.get("ability") == "viewPrivate" else None,
+        )
+
+        with patch("apps.core.extensions.policy_runtime_service.get_extension_application", return_value=app):
+            self.assertTrue(Discussion.objects.filter(build_discussion_visibility_q(self.reader), id=discussion.id).exists())
+
+    def test_view_private_scoper_allows_matching_private_discussion_visibility(self):
+        from apps.core.extensions.application import ExtensionApplication
+        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+
+        allowed = DiscussionService.create_discussion(
+            title="Scoped private allowed",
+            content="Initial post",
+            user=self.author,
+        )
+        denied = DiscussionService.create_discussion(
+            title="Scoped private denied",
+            content="Initial post",
+            user=self.author,
+        )
+        Discussion.objects.filter(id__in=[allowed.id, denied.id]).update(is_private=True)
+
+        app = ExtensionApplication()
+        app.models.register_visibility(
+            "private-runtime",
+            ExtensionModelVisibilityDefinition(
+                model=Discussion,
+                ability="viewPrivate",
+                scope=lambda queryset, context: queryset.filter(id=allowed.id),
+            ),
+        )
+
+        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+            visible_ids = set(
+                DiscussionService.apply_visibility_filters(
+                    Discussion.objects.filter(id__in=[allowed.id, denied.id]),
+                    self.reader,
+                ).values_list("id", flat=True)
+            )
+            allowed.refresh_from_db()
+            can_view_allowed = DiscussionService._can_view_discussion(allowed, self.reader)
+
+        self.assertIn(allowed.id, visible_ids)
+        self.assertNotIn(denied.id, visible_ids)
+        self.assertTrue(can_view_allowed)
+
+    def test_view_forum_permission_scopes_discussion_visibility_for_authenticated_user(self):
+        blocked = User.objects.create_user(
+            username="blocked-view-forum",
+            email="blocked-view-forum@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        empty_group = Group.objects.create(name="NoForumView", color="#4d698e")
+        blocked.user_groups.add(empty_group)
+        discussion = DiscussionService.create_discussion(
+            title="View forum gated discussion",
+            content="Initial post",
+            user=self.author,
+        )
+
+        visible_ids = set(
+            DiscussionService.apply_visibility_filters(
+                Discussion.objects.filter(id=discussion.id),
+                blocked,
+            ).values_list("id", flat=True)
+        )
+
+        self.assertNotIn(discussion.id, visible_ids)
+        self.assertFalse(DiscussionService._can_view_discussion(discussion, blocked))
+
+    def test_hide_scoper_allows_matching_hidden_discussion_visibility(self):
+        from apps.core.extensions.application import ExtensionApplication
+        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+
+        allowed = DiscussionService.create_discussion(
+            title="Scoped hidden allowed",
+            content="Initial post",
+            user=self.author,
+        )
+        denied = DiscussionService.create_discussion(
+            title="Scoped hidden denied",
+            content="Initial post",
+            user=self.author,
+        )
+        Discussion.objects.filter(id__in=[allowed.id, denied.id]).update(hidden_at=timezone.now())
+
+        app = ExtensionApplication()
+        app.models.register_visibility(
+            "hidden-runtime",
+            ExtensionModelVisibilityDefinition(
+                model=Discussion,
+                ability="hide",
+                scope=lambda queryset, context: queryset.filter(id=allowed.id),
+            ),
+        )
+
+        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+            visible_ids = set(
+                DiscussionService.apply_visibility_filters(
+                    Discussion.objects.filter(id__in=[allowed.id, denied.id]),
+                    self.reader,
+                ).values_list("id", flat=True)
+            )
+            allowed.refresh_from_db()
+            can_view_allowed = DiscussionService._can_view_discussion(allowed, self.reader)
+
+        self.assertIn(allowed.id, visible_ids)
+        self.assertNotIn(denied.id, visible_ids)
+        self.assertTrue(can_view_allowed)
 
 
     def test_update_discussion_dispatches_discussion_tagged_event_with_all_affected_tag_ids(self):

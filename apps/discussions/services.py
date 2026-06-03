@@ -9,7 +9,6 @@ from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
 from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
 from apps.core.extensions.runtime_access import (
-    apply_runtime_model_visibility,
     evaluate_runtime_model_policy,
     get_runtime_resource_registry,
 )
@@ -139,12 +138,7 @@ class DiscussionService:
 
     @staticmethod
     def apply_visibility_filters(queryset, user: Optional[User] = None):
-        queryset = discussion_tracking.apply_visibility_filters(queryset, user)
-        return apply_runtime_model_visibility(
-            Discussion,
-            queryset,
-            {"user": user, "ability": "view"},
-        )
+        return discussion_tracking.apply_visibility_filters(queryset, user)
 
     @staticmethod
     @sqlite_write_retry()

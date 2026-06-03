@@ -10,6 +10,7 @@ import { loadEnabledForumExtensions } from './forum/extensionLoader'
 import * as forumRegistry from './forum/registry'
 import { useForumStore } from './stores/forum'
 import { useForumUiStore } from './stores/forumUi'
+import { useResourceStore } from './stores/resource'
 import { generatedForumExtensionModules } from './generated/extensionImportMap'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import './assets/main.css'
@@ -22,6 +23,7 @@ app.use(router)
 
 primeCsrfProtection().catch(() => {})
 const forumStore = useForumStore(pinia)
+const resourceStore = useResourceStore(pinia)
 const forumExtensionModules = {
   ...import.meta.glob('../../extensions/*/frontend/forum/index.js'),
   ...generatedForumExtensionModules,
@@ -33,7 +35,9 @@ const runtimeApp = createRuntimeApplication({
   router,
   pinia,
   api,
-  store: forumStore,
+  registry: forumRegistry,
+  resourceStore,
+  forumStore,
 })
 setRuntimeApplication('forum', runtimeApp)
 

@@ -36,6 +36,7 @@ from apps.core.forum_registry_types import (
     AdminPageDefinition,
     DiscussionListFilterDefinition,
     DiscussionSortDefinition,
+    LanguagePackDefinition,
     NotificationTypeDefinition,
     PermissionDefinition,
     PostTypeDefinition,
@@ -88,6 +89,7 @@ class ApplicationPolicyMount:
     handler: PolicyCallback
     model: Any = None
     global_policy: bool = False
+    query_policy: bool = False
 
 
 class ApplicationValidatorService:
@@ -206,6 +208,14 @@ class ApplicationSystemHookService:
             results.append(definition.callback(dict(payload or {}), dict(context or {})))
         return results
 
+    def get_payloads(self, key: str) -> list[Any]:
+        normalized = str(key or "").strip()
+        return [
+            definition.callback
+            for definition in self.get_definitions()
+            if definition.key == normalized and not callable(definition.callback)
+        ]
+
 
 @dataclass
 class ApplicationModelExtension:
@@ -221,6 +231,7 @@ class ApplicationModelService:
         self._relations_by_extension: dict[str, tuple[ExtensionModelRelationDefinition, ...]] = {}
         self._casts_by_extension: dict[str, tuple[ExtensionModelCastDefinition, ...]] = {}
         self._defaults_by_extension: dict[str, tuple[ExtensionModelDefaultDefinition, ...]] = {}
+        self._private_checkers_by_extension: dict[str, tuple[ExtensionModelDefinition, ...]] = {}
 
     def register(self, extension_id: str, definition: ExtensionModelDefinition) -> None:
         normalized = str(extension_id or "").strip()
@@ -266,18 +277,70 @@ class ApplicationModelService:
             definitions.extend(items)
         return definitions
 
+    def has_visibility(self, model: Any, *, ability: str | None = None) -> bool:
+        return any(
+            True
+            for _definition in self._get_visibility_for_model(model, ability=ability)
+        )
+
     def apply_visibility(self, model: Any, queryset, context: dict | None = None):
         output = queryset
         resolved_context = dict(context or {})
         requested_ability = str(resolved_context.get("ability") or "view")
-        for definition in self.get_visibility():
-            if definition.model != model:
+        for definition in self._get_visibility_for_model(model, ability=requested_ability):
+            output = definition.scope(output, resolved_context)
+        return output
+
+    def _get_visibility_for_model(self, model: Any, *, ability: str | None = None) -> list[ExtensionModelVisibilityDefinition]:
+        requested_ability = str(ability or "view")
+        definitions = []
+        for sequence, definition in enumerate(self.get_visibility()):
+            if not self._model_matches(definition.model, model):
                 continue
             definition_ability = str(definition.ability or "*")
             if definition_ability not in {"*", requested_ability}:
                 continue
-            output = definition.scope(output, resolved_context)
-        return output
+            definitions.append((self._visibility_sort_key(definition, model, requested_ability, sequence), definition))
+        return [definition for _key, definition in sorted(definitions, key=lambda item: item[0])]
+
+    @classmethod
+    def _visibility_sort_key(
+        cls,
+        definition: ExtensionModelVisibilityDefinition,
+        model: Any,
+        requested_ability: str,
+        sequence: int,
+    ) -> tuple[int, int, int, int]:
+        lineage = cls._model_lineage(model)
+        registered_class = cls._model_class(definition.model)
+        try:
+            lineage_index = lineage.index(registered_class) if registered_class in lineage else len(lineage)
+        except ValueError:
+            lineage_index = len(lineage)
+        ability = str(definition.ability or "*")
+        ability_index = 0 if ability == "*" else 1
+        return (lineage_index, ability_index, int(getattr(definition, "order", 100) or 100), sequence)
+
+    @staticmethod
+    def _model_matches(registered_model: Any, model: Any) -> bool:
+        registered_class = ApplicationModelService._model_class(registered_model)
+        model_class = ApplicationModelService._model_class(model)
+        if registered_class is None or model_class is None:
+            return registered_model == model
+        return issubclass(model_class, registered_class)
+
+    @staticmethod
+    def _model_class(model: Any) -> type | None:
+        if isinstance(model, type):
+            return model
+        return getattr(model, "__class__", None)
+
+    @classmethod
+    def _model_lineage(cls, model: Any) -> list[type]:
+        model_class = cls._model_class(model)
+        if model_class is None:
+            return []
+        return [item for item in reversed(model_class.__mro__) if item is not object]
 
     def register_relation(self, extension_id: str, definition: ExtensionModelRelationDefinition) -> None:
         normalized = str(extension_id or "").strip()
@@ -352,6 +415,62 @@ class ApplicationModelService:
             value = definition.value
             defaults[definition.attribute] = value() if callable(value) else value
         return defaults
+
+    def register_private_checker(self, extension_id: str, definition: ExtensionModelDefinition) -> None:
+        normalized = str(extension_id or "").strip()
+        if not normalized:
+            return
+        definitions = tuple([*self._private_checkers_by_extension.get(normalized, ()), definition])
+        self._private_checkers_by_extension[normalized] = definitions
+        view = self._host._get_or_create_runtime_view(normalized)
+        view.model_definitions = tuple([*view.model_definitions, definition])
+        self._ensure_private_save_hook(definition.model)
+
+    def get_private_checkers(self, model: Any | None = None, *, extension_id: str | None = None) -> list[ExtensionModelDefinition]:
+        if extension_id is not None:
+            definitions = list(self._private_checkers_by_extension.get(str(extension_id or "").strip(), ()))
+        else:
+            definitions = []
+            for items in self._private_checkers_by_extension.values():
+                definitions.extend(items)
+        if model is not None:
+            definitions = [definition for definition in definitions if definition.model == model]
+        return definitions
+
+    def is_private(self, model: Any, instance: Any, *, default: bool = False) -> bool:
+        result = bool(default)
+        for definition in self.get_private_checkers(model):
+            checker = definition.handler
+            if not callable(checker):
+                continue
+            checked = checker(instance)
+            if checked is True:
+                return True
+            if checked is False:
+                result = False
+        return result
+
+    @staticmethod
+    def _ensure_private_save_hook(model: Any) -> None:
+        if model is None or not hasattr(model, "_meta"):
+            return
+        from django.db.models.signals import pre_save
+
+        model_label = f"{getattr(model, '__module__', '')}.{getattr(model, '__qualname__', getattr(model, '__name__', ''))}"
+
+        def refresh_private_flag(sender, instance, **kwargs):
+            if instance is None or not hasattr(instance, "is_private"):
+                return
+            from apps.core.extensions.runtime_access import is_runtime_model_private
+
+            instance.is_private = is_runtime_model_private(instance, model=sender, default=False)
+
+        pre_save.connect(
+            refresh_private_flag,
+            sender=model,
+            weak=False,
+            dispatch_uid=f"bias.model_private.pre_save.{model_label}",
+        )
 
 
 class ApplicationModelUrlService:
@@ -695,6 +814,8 @@ class ApplicationFrontendExtension:
     preloads: tuple[Any, ...] = ()
     content_callbacks: tuple[Any, ...] = ()
     document_attributes: tuple[Any, ...] = ()
+    head_tags: tuple[Any, ...] = ()
+    theme_variables: tuple[Any, ...] = ()
     title_driver: Any = None
     routes: tuple[ExtensionFrontendRouteDefinition, ...] = ()
     settings_pages: tuple[str, ...] = ()
@@ -909,6 +1030,8 @@ class ApplicationFrontendService:
         preloads=(),
         content_callbacks=(),
         document_attributes=(),
+        head_tags=(),
+        theme_variables=(),
         title_driver=None,
         routes=(),
     ) -> ApplicationFrontendExtension:
@@ -924,6 +1047,8 @@ class ApplicationFrontendService:
         frontend.preloads = tuple([*frontend.preloads, *(preloads or ())])
         frontend.content_callbacks = tuple([*frontend.content_callbacks, *(content_callbacks or ())])
         frontend.document_attributes = tuple([*frontend.document_attributes, *(document_attributes or ())])
+        frontend.head_tags = tuple([*frontend.head_tags, *(head_tags or ())])
+        frontend.theme_variables = tuple([*frontend.theme_variables, *(theme_variables or ())])
         if title_driver is not None:
             frontend.title_driver = title_driver
         frontend.routes = self._merge_routes(frontend.routes, routes)
@@ -936,6 +1061,8 @@ class ApplicationFrontendService:
         view.frontend_preloads = frontend.preloads
         view.frontend_content_callbacks = frontend.content_callbacks
         view.frontend_document_attributes = frontend.document_attributes
+        view.frontend_head_tags = frontend.head_tags
+        view.frontend_theme_variables = frontend.theme_variables
         view.frontend_title_driver = frontend.title_driver
         view.frontend_routes = frontend.routes
         return frontend
@@ -979,6 +1106,8 @@ class ApplicationFrontendService:
         preloads=None,
         content_callbacks=None,
         document_attributes=None,
+        head_tags=None,
+        theme_variables=None,
         title_driver=UNSET,
         routes=None,
         settings_pages=None,
@@ -1002,6 +1131,10 @@ class ApplicationFrontendService:
             frontend.content_callbacks = tuple(content_callbacks or ())
         if document_attributes is not None:
             frontend.document_attributes = tuple(document_attributes or ())
+        if head_tags is not None:
+            frontend.head_tags = tuple(head_tags or ())
+        if theme_variables is not None:
+            frontend.theme_variables = tuple(theme_variables or ())
         if title_driver is not UNSET:
             frontend.title_driver = title_driver
         if routes is not None:
@@ -1022,6 +1155,8 @@ class ApplicationFrontendService:
         view.frontend_preloads = frontend.preloads
         view.frontend_content_callbacks = frontend.content_callbacks
         view.frontend_document_attributes = frontend.document_attributes
+        view.frontend_head_tags = frontend.head_tags
+        view.frontend_theme_variables = frontend.theme_variables
         view.frontend_title_driver = frontend.title_driver
         view.frontend_routes = frontend.routes
         view.settings_pages = frontend.settings_pages
@@ -1363,6 +1498,18 @@ class ApplicationPolicyService:
             model=model,
         )])
 
+    def query_model_policy(self, extension_id: str, model, handler) -> None:
+        normalized_extension_id = str(extension_id or "").strip()
+        if not normalized_extension_id or model is None or not callable(handler):
+            return
+        view = self._host._get_or_create_runtime_view(normalized_extension_id)
+        view.policy_mounts = tuple([*view.policy_mounts, ApplicationPolicyMount(
+            key="",
+            handler=handler,
+            model=model,
+            query_policy=True,
+        )])
+
     def get_mounts(self) -> list[ApplicationPolicyMount]:
         mounts: list[ApplicationPolicyMount] = []
         for view in self._host.get_runtime_views():
@@ -1539,6 +1686,10 @@ class ApplicationForumService:
         self._registry.register_user_preference(definition)
         self._append_extension_tuple(extension_id, "user_preferences", definition)
 
+    def register_language_pack(self, definition, *, extension_id: str = "") -> None:
+        self._registry.register_language_pack(definition)
+        self._append_extension_tuple(extension_id, "language_packs", definition)
+
     def register_post_type(self, definition, *, extension_id: str = "") -> None:
         self._registry.register_post_type(definition)
         self._append_extension_tuple(extension_id, "post_types", definition)
@@ -1623,6 +1774,8 @@ class ExtensionApplicationRecord:
     frontend_preloads: list[Any] = field(default_factory=list)
     frontend_content_callbacks: list[Any] = field(default_factory=list)
     frontend_document_attributes: list[Any] = field(default_factory=list)
+    frontend_head_tags: list[Any] = field(default_factory=list)
+    frontend_theme_variables: list[Any] = field(default_factory=list)
     frontend_title_driver: Any = None
     frontend_routes: list[ExtensionFrontendRouteDefinition] = field(default_factory=list)
     settings_pages: list[str] = field(default_factory=list)
@@ -1634,6 +1787,7 @@ class ExtensionApplicationRecord:
     admin_pages: list[AdminPageDefinition] = field(default_factory=list)
     notification_types: list[NotificationTypeDefinition] = field(default_factory=list)
     user_preferences: list[UserPreferenceDefinition] = field(default_factory=list)
+    language_packs: list[LanguagePackDefinition] = field(default_factory=list)
     post_types: list[PostTypeDefinition] = field(default_factory=list)
     search_filters: list[SearchFilterDefinition] = field(default_factory=list)
     discussion_sorts: list[DiscussionSortDefinition] = field(default_factory=list)
@@ -1657,10 +1811,13 @@ class ExtensionApplicationRecord:
     mailers: list[ExtensionMailDefinition] = field(default_factory=list)
     error_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
     auth_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
+    csrf_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
     filesystem_drivers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
     console_commands: list[ExtensionSystemHookDefinition] = field(default_factory=list)
     session_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
     theme_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
+    throttle_api_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
+    user_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
     event_listeners: list[ExtensionEventListenerDefinition] = field(default_factory=list)
     realtime_included: list[ExtensionRealtimeIncludedDefinition] = field(default_factory=list)
     discussion_lifecycle: list[ExtensionDiscussionLifecycleDefinition] = field(default_factory=list)
@@ -1697,6 +1854,8 @@ class ExtensionRuntimeView:
     frontend_preloads: tuple[Any, ...] = ()
     frontend_content_callbacks: tuple[Any, ...] = ()
     frontend_document_attributes: tuple[Any, ...] = ()
+    frontend_head_tags: tuple[Any, ...] = ()
+    frontend_theme_variables: tuple[Any, ...] = ()
     frontend_title_driver: Any = None
     frontend_routes: tuple[ExtensionFrontendRouteDefinition, ...] = ()
     settings_pages: tuple[str, ...] = ()
@@ -1708,6 +1867,7 @@ class ExtensionRuntimeView:
     admin_pages: tuple[AdminPageDefinition, ...] = ()
     notification_types: tuple[NotificationTypeDefinition, ...] = ()
     user_preferences: tuple[UserPreferenceDefinition, ...] = ()
+    language_packs: tuple[LanguagePackDefinition, ...] = ()
     post_types: tuple[PostTypeDefinition, ...] = ()
     search_filters: tuple[SearchFilterDefinition, ...] = ()
     discussion_sorts: tuple[DiscussionSortDefinition, ...] = ()
@@ -1731,10 +1891,13 @@ class ExtensionRuntimeView:
     mailers: tuple[ExtensionMailDefinition, ...] = ()
     error_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
     auth_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
+    csrf_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
     filesystem_drivers: tuple[ExtensionSystemHookDefinition, ...] = ()
     console_commands: tuple[ExtensionSystemHookDefinition, ...] = ()
     session_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
     theme_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
+    throttle_api_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
+    user_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
     event_listeners: tuple[ExtensionEventListenerDefinition, ...] = ()
     realtime_included: tuple[ExtensionRealtimeIncludedDefinition, ...] = ()
     discussion_lifecycle: tuple[ExtensionDiscussionLifecycleDefinition, ...] = ()
@@ -1806,10 +1969,13 @@ class ExtensionApplication:
         self.mail = ApplicationMailService(self)
         self.error_handling = ApplicationSystemHookService(self, "error_handlers")
         self.auth = ApplicationSystemHookService(self, "auth_handlers")
+        self.csrf = ApplicationSystemHookService(self, "csrf_handlers")
         self.filesystem = ApplicationSystemHookService(self, "filesystem_drivers")
         self.console = ApplicationSystemHookService(self, "console_commands")
         self.sessions = ApplicationSystemHookService(self, "session_handlers")
         self.theme = ApplicationSystemHookService(self, "theme_handlers")
+        self.throttle_api = ApplicationSystemHookService(self, "throttle_api_handlers")
+        self.user = ApplicationSystemHookService(self, "user_handlers")
         self.routes = ApplicationRouteService(self)
         self.frontend = ApplicationFrontendService(self)
         self.providers = ApplicationServiceProviderRegistry(self)
@@ -1849,6 +2015,8 @@ class ExtensionApplication:
         self.instance("extensions.error.handling", self.error_handling)
         self.instance("auth", self.auth)
         self.instance("extensions.auth", self.auth)
+        self.instance("csrf", self.csrf)
+        self.instance("extensions.csrf", self.csrf)
         self.instance("filesystem", self.filesystem)
         self.instance("extensions.filesystem", self.filesystem)
         self.instance("console", self.console)
@@ -1857,6 +2025,10 @@ class ExtensionApplication:
         self.instance("extensions.session", self.sessions)
         self.instance("theme", self.theme)
         self.instance("extensions.theme", self.theme)
+        self.instance("throttle.api", self.throttle_api)
+        self.instance("extensions.throttle.api", self.throttle_api)
+        self.instance("user", self.user)
+        self.instance("extensions.user", self.user)
         self.instance("providers", self.providers)
         self.instance("extensions.providers", self.providers)
         self.instance("locales", self.locales)
@@ -1924,6 +2096,14 @@ class ExtensionApplication:
         self.providers.boot()
         self.make("validators")
         self.make("mail")
+        self.make("error.handling")
+        self.make("auth")
+        self.make("csrf")
+        self.make("filesystem")
+        self.make("console")
+        self.make("session")
+        self.make("theme")
+        self.make("throttle.api")
         for extension in self.extensions_to_boot:
             self._mark_extension_lifecycle_phase(extension.id, "boot")
 
@@ -2296,6 +2476,11 @@ class ExtensionApplication:
         view.user_preferences = tuple([*view.user_preferences, definition])
         self.forum.register_user_preference(definition)
 
+    def register_language_pack(self, extension: ExtensionRuntimeView, definition) -> None:
+        view = self._get_or_create_runtime_view(extension.extension_id)
+        view.language_packs = tuple([*view.language_packs, definition])
+        self.forum.register_language_pack(definition)
+
     def register_post_type(self, extension: ExtensionRuntimeView, definition) -> None:
         view = self._get_or_create_runtime_view(extension.extension_id)
         view.post_types = tuple([*view.post_types, definition])
@@ -2533,6 +2718,8 @@ class ExtensionApplication:
             frontend_preloads=list(view.frontend_preloads),
             frontend_content_callbacks=list(view.frontend_content_callbacks),
             frontend_document_attributes=list(view.frontend_document_attributes),
+            frontend_head_tags=list(view.frontend_head_tags),
+            frontend_theme_variables=list(view.frontend_theme_variables),
             frontend_title_driver=view.frontend_title_driver,
             frontend_routes=list(view.frontend_routes),
             settings_pages=list(view.settings_pages),
@@ -2544,6 +2731,7 @@ class ExtensionApplication:
             admin_pages=list(view.admin_pages),
             notification_types=list(view.notification_types),
             user_preferences=list(view.user_preferences),
+            language_packs=list(view.language_packs),
             post_types=list(view.post_types),
             search_filters=list(view.search_filters),
             discussion_sorts=list(view.discussion_sorts),
@@ -2563,6 +2751,17 @@ class ExtensionApplication:
             model_defaults=list(view.model_defaults),
             model_slug_drivers=list(view.model_slug_drivers),
             search_drivers=list(view.search_drivers),
+            validators=list(view.validators),
+            mailers=list(view.mailers),
+            error_handlers=list(view.error_handlers),
+            auth_handlers=list(view.auth_handlers),
+            csrf_handlers=list(view.csrf_handlers),
+            filesystem_drivers=list(view.filesystem_drivers),
+            console_commands=list(view.console_commands),
+            session_handlers=list(view.session_handlers),
+            theme_handlers=list(view.theme_handlers),
+            throttle_api_handlers=list(view.throttle_api_handlers),
+            user_handlers=list(view.user_handlers),
             event_listeners=list(view.event_listeners),
             realtime_included=list(view.realtime_included),
             discussion_lifecycle=list(view.discussion_lifecycle),

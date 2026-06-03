@@ -247,14 +247,20 @@ export function getForumInitializers() {
 
 async function runForumExtensionInitializers(items) {
   const appsByExtensionId = new Map(items.map(item => [item.extensionId, item.app]))
-  const initializers = getForumExtensionInitializers()
-  await initializers.runWithAppResolver(extensionId => appsByExtensionId.get(extensionId), {
-    onError(error, failingExtensionId) {
-      handleExtensionRuntimeError(error, failingExtensionId, 'initializer')
-    },
-  })
-  for (const item of items) {
-    initializers.clear(item.extensionId)
+  const initializerGroups = new Set(items.map(item => item.app?.initializers).filter(Boolean))
+  if (!initializerGroups.size) {
+    initializerGroups.add(getForumExtensionInitializers())
+  }
+
+  for (const initializers of initializerGroups) {
+    await initializers.runWithAppResolver(extensionId => appsByExtensionId.get(extensionId), {
+      onError(error, failingExtensionId) {
+        handleExtensionRuntimeError(error, failingExtensionId, 'initializer')
+      },
+    })
+    for (const item of items) {
+      initializers.clear(item.extensionId)
+    }
   }
 }
 

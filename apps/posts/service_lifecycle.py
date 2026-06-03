@@ -4,7 +4,7 @@ from django.db.models import Count, F
 from django.utils import timezone
 
 from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.extensions.runtime_access import evaluate_runtime_model_policy
+from apps.core.extensions.runtime_access import evaluate_runtime_model_policy, refresh_runtime_model_private
 from apps.core.forum_events import (
     PostCreatedEvent,
     PostDeletedEvent,
@@ -59,6 +59,7 @@ def create_post(
             approved_at=None if requires_approval else timezone.now(),
             approved_by=None if requires_approval else user,
         )
+        refresh_runtime_model_private(post, save=True)
 
         if not requires_approval:
             discussion.comment_count = F("comment_count") + 1
@@ -227,6 +228,9 @@ def update_post(
                 "hidden_user",
             ])
 
+        refresh_runtime_model_private(post)
+        if "is_private" not in update_fields:
+            update_fields.append("is_private")
         post.save(update_fields=update_fields)
 
         PostMentionsUser.objects.filter(post=post).delete()
@@ -323,7 +327,8 @@ def set_hidden_state(
     with transaction.atomic():
         post.hidden_at = hidden_at
         post.hidden_user = admin_user if is_hidden else None
-        post.save(update_fields=["hidden_at", "hidden_user"])
+        refresh_runtime_model_private(post)
+        post.save(update_fields=["hidden_at", "hidden_user", "is_private"])
 
         if should_adjust_counts:
             refresh_discussion_approved_stats_cb(post.discussion)

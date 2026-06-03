@@ -26,13 +26,14 @@ export function createForumExtensionApp({
     application,
     api,
     extension,
-    store: forumStore,
+    store: application?.store || forumStore,
   })
+  const initializers = application?.initializers || forumInitializers
   return Object.freeze({
     ...appApi,
     api,
     extension,
-    initializers: forumInitializers,
+    initializers,
     extend: forumPatcher.extend,
     override: forumPatcher.override,
     resetPatches: forumPatcher.reset,
@@ -55,7 +56,10 @@ export function getForumExtensionInitializers() {
   return forumInitializers
 }
 
-export function resetForumExtensionAppRuntime(extensionId = '') {
+export function resetForumExtensionAppRuntime(extensionId = '', { app } = {}) {
+  if (app?.initializers && app.initializers !== forumInitializers) {
+    app.initializers.clear(extensionId)
+  }
   forumInitializers.clear(extensionId)
   forumPatcher.reset(extensionId)
 }

@@ -85,6 +85,40 @@ def evaluate_model_policy(ability: str, *, user=None, model=None, default=None, 
     return default
 
 
+def evaluate_query_model_policy(ability: str, *, user=None, model=None, default=None, **context):
+    normalized_ability = str(ability or "").strip()
+    if not normalized_ability:
+        return default
+
+    decisions: list[bool] = []
+    for mount in get_extension_policy_mounts():
+        if not bool(getattr(mount, "query_policy", False)):
+            continue
+        handler = getattr(mount, "handler", None)
+        if not callable(handler):
+            continue
+        mount_model = getattr(mount, "model", None)
+        if mount_model is not None and not _model_matches(mount_model, model):
+            continue
+        result = _invoke_policy_handler(
+            handler,
+            user=user,
+            ability=normalized_ability,
+            model=model,
+            is_query=True,
+            **context,
+        )
+        if result is None:
+            continue
+        decisions.append(bool(result))
+
+    if any(decision is False for decision in decisions):
+        return False
+    if any(decision is True for decision in decisions):
+        return True
+    return default
+
+
 def assert_model_policy(ability: str, *, user=None, model=None, **context) -> None:
     if evaluate_model_policy(ability, user=user, model=model, default=True, **context) is False:
         raise PermissionError("无权限")

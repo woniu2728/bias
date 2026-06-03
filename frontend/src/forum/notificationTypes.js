@@ -1,7 +1,7 @@
 import api from '@/api'
 import { useResourceStore } from '@/stores/resource'
 import { buildDiscussionPath } from '@/utils/forum'
-import { getNotificationRenderers, registerNotificationRenderer } from '@/forum/registry'
+import { getNotificationRenderers, registerNotificationRenderer } from '@/forum/frontendRegistry'
 
 const postPathCache = new Map()
 

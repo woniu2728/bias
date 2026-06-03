@@ -19,6 +19,7 @@ from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegi
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.users.models import Group
 from apps.users.models import EmailToken, PasswordToken, Permission, User
+from apps.users.services import UserService
 
 
 @override_settings(
@@ -325,6 +326,22 @@ class UserProfileApiTests(TestCase):
             set(response.json()["forum_permissions"]),
             {"startDiscussion", "discussion.reply"},
         )
+
+    def test_forum_permissions_include_runtime_processed_groups(self):
+        user = User.objects.create_user(
+            username="runtime-group-permission",
+            email="runtime-group-permission@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        group = Group.objects.create(name="RuntimeGroup", color="#27ae60", icon="fas fa-key")
+        Permission.objects.create(group=group, permission="runtime.group.permission")
+
+        with patch("apps.core.extensions.system_runtime.apply_runtime_user_group_processors", return_value=[group.id]):
+            self.assertEqual(
+                UserService.get_forum_permission_set(user),
+                {"runtime.group.permission"},
+            )
 
     def test_list_users_requires_view_user_list_permission(self):
         user = User.objects.create_user(

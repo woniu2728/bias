@@ -353,6 +353,13 @@ def get_storage_backend(config: Optional[dict] = None) -> BaseStorageBackend:
     runtime_config = config or get_runtime_storage_settings()
     driver = str(runtime_config.get("storage_driver") or "local").strip().lower()
 
+    if driver not in {"local", "s3", "r2", "oss", "imagebed"}:
+        from apps.core.extensions.system_runtime import resolve_runtime_filesystem_driver
+
+        backend = resolve_runtime_filesystem_driver(driver, runtime_config)
+        if backend is not None:
+            return backend
+
     if driver == "local":
         return LocalStorageBackend(runtime_config)
     if driver == "s3":

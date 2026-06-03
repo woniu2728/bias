@@ -130,6 +130,13 @@ class UserService:
         else:
             group_ids = list(user.user_groups.values_list("id", flat=True))
 
+        try:
+            from apps.core.extensions.system_runtime import apply_runtime_user_group_processors
+
+            group_ids = apply_runtime_user_group_processors(user, group_ids)
+        except Exception:
+            pass
+
         if not group_ids:
             return set()
 
@@ -248,7 +255,7 @@ class UserService:
             user = User.objects.filter(email=identification).first()
 
         # 验证密码
-        if user and check_password(password, user.password):
+        if user and UserService.check_user_password(user, password):
             # 检查是否被封禁
             if user.is_suspended:
                 raise ValueError(UserService.build_suspension_notice(user))
@@ -283,7 +290,7 @@ class UserService:
     @staticmethod
     def change_password(user: User, old_password: str, new_password: str) -> bool:
         """修改密码"""
-        if not check_password(old_password, user.password):
+        if not UserService.check_user_password(user, old_password):
             raise ValueError("原密码错误")
 
         user.password = make_password(new_password)
@@ -298,6 +305,16 @@ class UserService:
         )
 
         return True
+
+    @staticmethod
+    def check_user_password(user: User, password: str) -> bool:
+        from apps.core.extensions.system_runtime import verify_runtime_user_password
+
+        return verify_runtime_user_password(
+            user,
+            password,
+            default_checker=lambda current_user, raw_password: check_password(raw_password, current_user.password),
+        )
 
     @staticmethod
     def create_email_verification_token(user: User, email: str = None) -> EmailToken:

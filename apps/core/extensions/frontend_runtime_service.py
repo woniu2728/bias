@@ -205,6 +205,8 @@ def build_enabled_frontend_document_payload() -> dict[str, Any]:
     document_attributes = {}
     title_drivers = []
     content_callbacks = []
+    head_tags = []
+    theme_variables = {}
 
     for entry in entries:
         document = dict(entry.get("frontend_document") or {})
@@ -214,6 +216,12 @@ def build_enabled_frontend_document_payload() -> dict[str, Any]:
         for attributes in document.get("document_attributes") or []:
             if isinstance(attributes, dict):
                 document_attributes.update(attributes)
+        for tag in document.get("head_tags") or []:
+            if tag and tag not in head_tags:
+                head_tags.append(tag)
+        for variables in document.get("theme_variables") or []:
+            if isinstance(variables, dict):
+                theme_variables.update(variables)
         title_driver = document.get("title_driver")
         if title_driver:
             title_drivers.append({
@@ -233,18 +241,59 @@ def build_enabled_frontend_document_payload() -> dict[str, Any]:
     return {
         "preloads": preloads,
         "document_attributes": document_attributes,
+        "head_tags": head_tags,
+        "theme_variables": theme_variables,
         "title_drivers": title_drivers,
         "content_callbacks": content_callbacks,
     }
 
 
 def _build_frontend_document_payload(runtime_view) -> dict[str, Any]:
+    theme_document = _build_theme_document_payload(runtime_view)
     return {
         "preloads": _serialize_frontend_values(getattr(runtime_view, "frontend_preloads", ()) or ()),
-        "document_attributes": _serialize_frontend_values(getattr(runtime_view, "frontend_document_attributes", ()) or ()),
+        "document_attributes": _serialize_frontend_values([
+            *(getattr(runtime_view, "frontend_document_attributes", ()) or ()),
+            *theme_document["document_attributes"],
+        ]),
+        "head_tags": _serialize_frontend_values([
+            *(getattr(runtime_view, "frontend_head_tags", ()) or ()),
+            *theme_document["head_tags"],
+        ]),
+        "theme_variables": _serialize_frontend_values([
+            *(getattr(runtime_view, "frontend_theme_variables", ()) or ()),
+            *theme_document["theme_variables"],
+        ]),
         "title_driver": _serialize_frontend_value(getattr(runtime_view, "frontend_title_driver", None)),
         "content_callbacks": _serialize_frontend_values(getattr(runtime_view, "frontend_content_callbacks", ()) or ()),
     }
+
+
+def _build_theme_document_payload(runtime_view) -> dict[str, list[Any]]:
+    extension_id = str(getattr(runtime_view, "extension_id", "") or "").strip()
+    output = {
+        "document_attributes": [],
+        "head_tags": [],
+        "theme_variables": [],
+    }
+    if not extension_id:
+        return output
+    host = get_extension_host()
+    service = host.make("theme", None) if host is not None else None
+    if service is None:
+        return output
+    definitions = service.get_definitions(extension_id=extension_id)
+    for definition in definitions:
+        payload = definition.callback
+        if callable(payload):
+            payload = payload({}, {})
+        if definition.key == "variables" and isinstance(payload, dict):
+            output["theme_variables"].append(payload)
+        elif definition.key == "document_attributes" and isinstance(payload, dict):
+            output["document_attributes"].append(payload)
+        elif definition.key == "head_tag" and isinstance(payload, dict):
+            output["head_tags"].append(payload)
+    return output
 
 
 def _normalize_content_callback_payload(callback) -> dict[str, Any]:

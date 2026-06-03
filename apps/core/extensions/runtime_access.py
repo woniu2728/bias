@@ -43,10 +43,84 @@ def apply_runtime_model_visibility(model: Any, queryset, context: dict | None = 
     return model_service.apply_visibility(model, queryset, context or {})
 
 
+def has_runtime_model_visibility(model: Any, *, ability: str | None = None) -> bool:
+    model_service = get_runtime_model_service()
+    if model_service is None:
+        return False
+    if hasattr(model_service, "has_visibility"):
+        return bool(model_service.has_visibility(model, ability=ability))
+    try:
+        definitions = model_service.get_visibility()
+    except Exception:
+        return False
+    requested_ability = str(ability or "view")
+    return any(
+        _model_matches(definition.model, model)
+        and str(definition.ability or "*") in {"*", requested_ability}
+        for definition in definitions
+    )
+
+
+def is_runtime_model_private(instance: Any, *, model: Any | None = None, default: bool | None = None) -> bool:
+    model_service = get_runtime_model_service()
+    fallback = bool(False if default is None else default)
+    if model_service is None:
+        return fallback
+    model_class = model or instance.__class__
+    return bool(model_service.is_private(model_class, instance, default=fallback))
+
+
+def refresh_runtime_model_private(instance: Any, *, model: Any | None = None, save: bool = False) -> bool:
+    if instance is None or not hasattr(instance, "is_private"):
+        return bool(getattr(instance, "is_private", False))
+    resolved = is_runtime_model_private(instance, model=model)
+    if bool(getattr(instance, "is_private", False)) == resolved:
+        return resolved
+    instance.is_private = resolved
+    if save and getattr(instance, "pk", None):
+        instance.save(update_fields=["is_private"])
+    return resolved
+
+
+def can_view_runtime_model_private(model: Any, *, user=None, default: bool = False, **context) -> bool:
+    return bool(evaluate_runtime_model_policy(
+        "viewPrivate",
+        user=user,
+        model=model,
+        default=default,
+        **context,
+    ))
+
+
+def can_view_runtime_private_instance(instance: Any, *, user=None, model: Any | None = None, **context) -> bool:
+    if not getattr(instance, "is_private", False):
+        return True
+    if getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
+        return True
+    return can_view_runtime_model_private(
+        model or instance,
+        user=user,
+        instance=instance,
+        **context,
+    )
+
+
 def evaluate_runtime_model_policy(ability: str, *, user=None, model=None, default=None, **context):
     from apps.core.extensions.policy_runtime_service import evaluate_model_policy
 
     return evaluate_model_policy(
+        ability,
+        user=user,
+        model=model,
+        default=default,
+        **context,
+    )
+
+
+def evaluate_runtime_query_model_policy(ability: str, *, user=None, model=None, default=None, **context):
+    from apps.core.extensions.policy_runtime_service import evaluate_query_model_policy
+
+    return evaluate_query_model_policy(
         ability,
         user=user,
         model=model,
@@ -69,3 +143,11 @@ def get_runtime_formatter_service():
 
 def get_runtime_discussion_lifecycle_service():
     return get_extension_host_service("discussion.lifecycle")
+
+
+def _model_matches(registered_model: Any, model: Any) -> bool:
+    registered_class = registered_model if isinstance(registered_model, type) else getattr(registered_model, "__class__", None)
+    model_class = model if isinstance(model, type) else getattr(model, "__class__", None)
+    if registered_class is None or model_class is None:
+        return registered_model == model
+    return issubclass(model_class, registered_class)
