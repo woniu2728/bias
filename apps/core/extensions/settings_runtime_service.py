@@ -24,15 +24,24 @@ def get_enabled_extension_settings_definitions(*, include_disabled: bool = True)
             continue
 
         fields = tuple(sorted(runtime_view.settings_schema, key=lambda item: (item.order, item.key)))
+        defaults = {
+            field.key: field.default
+            for field in fields
+        }
+        defaults.update({
+            definition.key: definition.value
+            for definition in runtime_view.settings_defaults
+        })
         definitions[runtime_view.extension_id] = {
             "extension_id": runtime_view.extension_id,
             "extension_name": extension.name,
             "fields": fields,
             "field_map": {field.key: field for field in fields},
-            "defaults": {
-                field.key: field.default
-                for field in fields
-            },
+            "defaults": defaults,
+            "reset_rules": tuple(runtime_view.settings_reset_rules),
+            "frontend_cache_keys": tuple(runtime_view.settings_frontend_cache_keys),
+            "theme_variables": tuple(runtime_view.settings_theme_variables),
+            "forum_serializations": tuple(runtime_view.settings_forum_serializations),
             "forum_settings_keys": tuple(runtime_view.forum_settings_keys),
         }
         runtime_extension_ids.add(runtime_view.extension_id)
@@ -62,15 +71,24 @@ def _build_registry_settings_definitions(*, include_disabled: bool) -> dict[str,
         if not extension.settings_schema:
             continue
         fields = tuple(sorted(extension.settings_schema, key=lambda item: (item.order, item.key)))
+        defaults = {
+            field.key: field.default
+            for field in fields
+        }
+        defaults.update({
+            definition.key: definition.value
+            for definition in extension.settings_defaults
+        })
         definitions[extension.id] = {
             "extension_id": extension.id,
             "extension_name": extension.name,
             "fields": fields,
             "field_map": {field.key: field for field in fields},
-            "defaults": {
-                field.key: field.default
-                for field in fields
-            },
+            "defaults": defaults,
+            "reset_rules": tuple(extension.settings_reset_rules),
+            "frontend_cache_keys": tuple(extension.settings_frontend_cache_keys),
+            "theme_variables": tuple(extension.settings_theme_variables),
+            "forum_serializations": tuple(extension.settings_forum_serializations),
             "forum_settings_keys": tuple(extension.forum_settings_keys),
         }
     return definitions

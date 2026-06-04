@@ -11,7 +11,7 @@ function buildHelloLabel(context = {}) {
 export async function bootForumExtension(context = {}) {
   registerForumNavItem({
     key: 'sample-hello-nav',
-    moduleId: 'core',
+    moduleId: 'sample-hello',
     section: 'primary',
     order: 35,
     icon: 'fas fa-hand-sparkles',
@@ -23,7 +23,7 @@ export async function bootForumExtension(context = {}) {
   registerHeaderItem({
     key: 'sample-hello-header',
     placement: 'after-search',
-    moduleId: 'core',
+    moduleId: 'sample-hello',
     order: 35,
     icon: 'fas fa-plug',
     label: () => buildHelloLabel(context),

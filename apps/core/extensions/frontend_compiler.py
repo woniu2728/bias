@@ -213,8 +213,9 @@ def write_extension_frontend_import_map(manifest: dict) -> Path:
     admin_entries: dict[str, str] = {}
     forum_entries: dict[str, str] = {}
     for extension_id, payload in sorted((manifest.get("extensions") or {}).items()):
-        admin_entry = str(payload.get("admin_entry") or "").strip()
-        forum_entry = str(payload.get("forum_entry") or "").strip()
+        inputs = dict(payload.get("inputs") or {})
+        admin_entry = str(payload.get("admin_entry") or inputs.get("admin") or "").strip()
+        forum_entry = str(payload.get("forum_entry") or inputs.get("forum") or "").strip()
         if admin_entry:
             admin_entries[extension_id] = admin_entry
         if forum_entry:

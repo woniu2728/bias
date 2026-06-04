@@ -11,8 +11,13 @@ from apps.core.extensions.types import (
     ExtensionEventListenerDefinition,
     ExtensionFrontendRouteDefinition,
     ExtensionFormatterCallback,
+    ExtensionFormatterDefinition,
     ExtensionManifestRuntimeActionDefinition,
     ExtensionManifestSettingFieldDefinition,
+    ExtensionSettingDefaultDefinition,
+    ExtensionSettingForumSerializationDefinition,
+    ExtensionSettingResetDefinition,
+    ExtensionSettingThemeVariableDefinition,
     ExtensionModelDefinition,
     ExtensionModelCastDefinition,
     ExtensionModelDefaultDefinition,
@@ -1335,23 +1340,67 @@ class ApplicationFormatterService:
         self._host = host
 
     def register_transform(self, extension_id: str, callback) -> None:
+        self.register_render(extension_id, callback)
+
+    def register_configure(self, extension_id: str, callback, *, description: str = "") -> None:
+        self.register_phase(extension_id, "configure", callback, description=description)
+
+    def register_parse(self, extension_id: str, callback, *, description: str = "") -> None:
+        self.register_phase(extension_id, "parse", callback, description=description)
+
+    def register_render(self, extension_id: str, callback, *, description: str = "") -> None:
+        self.register_phase(extension_id, "render", callback, description=description)
+
+    def register_unparse(self, extension_id: str, callback, *, description: str = "") -> None:
+        self.register_phase(extension_id, "unparse", callback, description=description)
+
+    def register_phase(self, extension_id: str, phase: str, callback, *, description: str = "") -> None:
         normalized_extension_id = str(extension_id or "").strip()
+        normalized_phase = str(phase or "").strip().lower()
+        if normalized_phase == "transform":
+            normalized_phase = "render"
+        if normalized_phase not in {"configure", "parse", "render", "unparse"}:
+            return
         if not normalized_extension_id or not callable(callback):
             return
 
         view = self._host._get_or_create_runtime_view(normalized_extension_id)
-        view.formatter_pipeline = tuple([*view.formatter_pipeline, callback])
+        definition = ExtensionFormatterDefinition(
+            phase=normalized_phase,
+            callback=callback,
+            module_id=normalized_extension_id,
+            description=str(description or "").strip(),
+        )
+        view.formatter_callbacks = tuple([*view.formatter_callbacks, definition])
+        if normalized_phase == "render":
+            view.formatter_pipeline = tuple([*view.formatter_pipeline, callback])
 
-    def get_pipeline(self, *, extension_id: str | None = None) -> list[ExtensionFormatterCallback]:
+    def get_pipeline(self, *, extension_id: str | None = None, phase: str = "render") -> list[ExtensionFormatterCallback]:
+        normalized_phase = str(phase or "render").strip().lower() or "render"
+        if normalized_phase == "transform":
+            normalized_phase = "render"
         if extension_id is not None:
             view = self._host.get_runtime_view(extension_id)
             if view is None:
                 return []
-            return list(view.formatter_pipeline)
+            if normalized_phase == "render" and not view.formatter_callbacks:
+                return list(view.formatter_pipeline)
+            return [
+                definition.callback
+                for definition in view.formatter_callbacks
+                if definition.phase == normalized_phase
+            ]
 
         pipeline: list[ExtensionFormatterCallback] = []
         for view in self._host.get_runtime_views():
-            pipeline.extend(view.formatter_pipeline)
+            if normalized_phase == "render" and not view.formatter_callbacks:
+                pipeline.extend(view.formatter_pipeline)
+                continue
+            pipeline.extend(
+                definition.callback
+                for definition in view.formatter_callbacks
+                if definition.phase == normalized_phase
+            )
         return pipeline
 
 
@@ -1366,6 +1415,11 @@ class ApplicationSettingsService:
         *,
         expose_to_forum=(),
         generated_page: bool = True,
+        defaults=(),
+        reset_when=(),
+        reset_frontend_cache_for=(),
+        theme_variables=(),
+        forum_serializations=(),
     ) -> None:
         normalized_extension_id = str(extension_id or "").strip()
         if not normalized_extension_id:
@@ -1376,6 +1430,37 @@ class ApplicationSettingsService:
         for field in fields or ():
             fields_collection.append(field)
         view.settings_schema = tuple(fields_collection)
+
+        default_collection = list(view.settings_defaults)
+        for definition in defaults or ():
+            if getattr(definition, "key", ""):
+                default_collection.append(definition)
+        view.settings_defaults = tuple(default_collection)
+
+        reset_collection = list(view.settings_reset_rules)
+        for definition in reset_when or ():
+            if getattr(definition, "key", "") and callable(getattr(definition, "callback", None)):
+                reset_collection.append(definition)
+        view.settings_reset_rules = tuple(reset_collection)
+
+        cache_keys = list(view.settings_frontend_cache_keys)
+        for key in reset_frontend_cache_for or ():
+            normalized_key = str(key or "").strip()
+            if normalized_key and normalized_key not in cache_keys:
+                cache_keys.append(normalized_key)
+        view.settings_frontend_cache_keys = tuple(cache_keys)
+
+        theme_collection = list(view.settings_theme_variables)
+        for definition in theme_variables or ():
+            if getattr(definition, "name", "") and getattr(definition, "key", ""):
+                theme_collection.append(definition)
+        view.settings_theme_variables = tuple(theme_collection)
+
+        forum_serialization_collection = list(view.settings_forum_serializations)
+        for definition in forum_serializations or ():
+            if getattr(definition, "attribute", "") and getattr(definition, "key", ""):
+                forum_serialization_collection.append(definition)
+        view.settings_forum_serializations = tuple(forum_serialization_collection)
 
         forum_keys = list(view.forum_settings_keys)
         for key in expose_to_forum or ():
@@ -1747,6 +1832,9 @@ class ApplicationPostLifecycleService:
     def apply_approved(self, *, post, context: dict | None = None) -> dict:
         return self._apply_phase("apply_approved", post=post, context=context)
 
+    def apply_hidden(self, *, post, context: dict | None = None) -> dict:
+        return self._apply_phase("apply_hidden", post=post, context=context)
+
     def prepare_delete(self, *, post, context: dict | None = None) -> dict:
         return self._apply_phase("prepare_delete", post=post, context=context)
 
@@ -1894,6 +1982,11 @@ class ExtensionApplicationRecord:
     permissions_pages: list[str] = field(default_factory=list)
     operations_pages: list[str] = field(default_factory=list)
     settings_schema: list[ExtensionManifestSettingFieldDefinition] = field(default_factory=list)
+    settings_defaults: list[ExtensionSettingDefaultDefinition] = field(default_factory=list)
+    settings_reset_rules: list[ExtensionSettingResetDefinition] = field(default_factory=list)
+    settings_frontend_cache_keys: list[str] = field(default_factory=list)
+    settings_theme_variables: list[ExtensionSettingThemeVariableDefinition] = field(default_factory=list)
+    settings_forum_serializations: list[ExtensionSettingForumSerializationDefinition] = field(default_factory=list)
     forum_settings_keys: list[str] = field(default_factory=list)
     permissions: list[PermissionDefinition] = field(default_factory=list)
     admin_pages: list[AdminPageDefinition] = field(default_factory=list)
@@ -1906,6 +1999,7 @@ class ExtensionApplicationRecord:
     discussion_list_filters: list[DiscussionListFilterDefinition] = field(default_factory=list)
     locale_paths: list[str] = field(default_factory=list)
     formatter_pipeline: list[ExtensionFormatterCallback] = field(default_factory=list)
+    formatter_callbacks: list[ExtensionFormatterDefinition] = field(default_factory=list)
     resource_definitions: list[ExtensionResourceDefinition] = field(default_factory=list)
     resource_fields: list[ExtensionResourceFieldDefinition] = field(default_factory=list)
     resource_field_mutators: list[ExtensionResourceFieldMutatorDefinition] = field(default_factory=list)
@@ -1975,6 +2069,11 @@ class ExtensionRuntimeView:
     permissions_pages: tuple[str, ...] = ()
     operations_pages: tuple[str, ...] = ()
     settings_schema: tuple[ExtensionManifestSettingFieldDefinition, ...] = ()
+    settings_defaults: tuple[ExtensionSettingDefaultDefinition, ...] = ()
+    settings_reset_rules: tuple[ExtensionSettingResetDefinition, ...] = ()
+    settings_frontend_cache_keys: tuple[str, ...] = ()
+    settings_theme_variables: tuple[ExtensionSettingThemeVariableDefinition, ...] = ()
+    settings_forum_serializations: tuple[ExtensionSettingForumSerializationDefinition, ...] = ()
     forum_settings_keys: tuple[str, ...] = ()
     permissions: tuple[PermissionDefinition, ...] = ()
     admin_pages: tuple[AdminPageDefinition, ...] = ()
@@ -1987,6 +2086,7 @@ class ExtensionRuntimeView:
     discussion_list_filters: tuple[DiscussionListFilterDefinition, ...] = ()
     locale_paths: tuple[str, ...] = ()
     formatter_pipeline: tuple[ExtensionFormatterCallback, ...] = ()
+    formatter_callbacks: tuple[ExtensionFormatterDefinition, ...] = ()
     resource_definitions: tuple[ExtensionResourceDefinition, ...] = ()
     resource_fields: tuple[ExtensionResourceFieldDefinition, ...] = ()
     resource_field_mutators: tuple[ExtensionResourceFieldMutatorDefinition, ...] = ()
@@ -2495,9 +2595,7 @@ class ExtensionApplication:
             view.locale_paths = tuple([*view.locale_paths, normalized])
 
     def register_formatter(self, extension: ExtensionRuntimeView, callback) -> None:
-        view = self._get_or_create_runtime_view(extension.extension_id)
-        if callable(callback):
-            view.formatter_pipeline = tuple([*view.formatter_pipeline, callback])
+        self.formatters.register_render(extension.extension_id, callback)
 
     def register_settings_fields(
         self,
@@ -2506,12 +2604,30 @@ class ExtensionApplication:
         *,
         expose_to_forum=(),
         generated_page: bool = True,
+        defaults=(),
+        reset_when=(),
+        reset_frontend_cache_for=(),
+        theme_variables=(),
+        forum_serializations=(),
     ) -> None:
         view = self._get_or_create_runtime_view(extension.extension_id)
         fields_collection = list(view.settings_schema)
         for field in fields or ():
             fields_collection.append(field)
         view.settings_schema = tuple(fields_collection)
+        view.settings_defaults = tuple([*view.settings_defaults, *(defaults or ())])
+        view.settings_reset_rules = tuple([*view.settings_reset_rules, *(reset_when or ())])
+        cache_keys = list(view.settings_frontend_cache_keys)
+        for key in reset_frontend_cache_for or ():
+            normalized = str(key or "").strip()
+            if normalized and normalized not in cache_keys:
+                cache_keys.append(normalized)
+        view.settings_frontend_cache_keys = tuple(cache_keys)
+        view.settings_theme_variables = tuple([*view.settings_theme_variables, *(theme_variables or ())])
+        view.settings_forum_serializations = tuple([
+            *view.settings_forum_serializations,
+            *(forum_serializations or ()),
+        ])
         forum_keys = list(view.forum_settings_keys)
         for key in expose_to_forum or ():
             normalized = str(key or "").strip()
@@ -2846,6 +2962,11 @@ class ExtensionApplication:
             permissions_pages=list(view.permissions_pages),
             operations_pages=list(view.operations_pages),
             settings_schema=list(view.settings_schema),
+            settings_defaults=list(view.settings_defaults),
+            settings_reset_rules=list(view.settings_reset_rules),
+            settings_frontend_cache_keys=list(view.settings_frontend_cache_keys),
+            settings_theme_variables=list(view.settings_theme_variables),
+            settings_forum_serializations=list(view.settings_forum_serializations),
             forum_settings_keys=list(view.forum_settings_keys),
             permissions=list(view.permissions),
             admin_pages=list(view.admin_pages),
@@ -2858,6 +2979,7 @@ class ExtensionApplication:
             discussion_list_filters=list(view.discussion_list_filters),
             locale_paths=list(view.locale_paths),
             formatter_pipeline=list(view.formatter_pipeline),
+            formatter_callbacks=list(view.formatter_callbacks),
             resource_definitions=list(view.resource_definitions),
             resource_fields=list(view.resource_fields),
             resource_field_mutators=list(view.resource_field_mutators),

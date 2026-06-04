@@ -97,6 +97,46 @@ class ExtensionManifestSettingFieldDefinition:
 
 
 ExtensionFormatterCallback = Callable[[str], str]
+
+
+@dataclass(frozen=True)
+class ExtensionFormatterDefinition:
+    phase: str
+    callback: Callable[..., Any]
+    module_id: str = ""
+    description: str = ""
+
+
+@dataclass(frozen=True)
+class ExtensionSettingDefaultDefinition:
+    key: str
+    value: Any
+    module_id: str = ""
+
+
+@dataclass(frozen=True)
+class ExtensionSettingResetDefinition:
+    key: str
+    callback: Callable[[Any], bool]
+    module_id: str = ""
+
+
+@dataclass(frozen=True)
+class ExtensionSettingThemeVariableDefinition:
+    name: str
+    key: str
+    callback: Callable[[Any], Any] | None = None
+    module_id: str = ""
+
+
+@dataclass(frozen=True)
+class ExtensionSettingForumSerializationDefinition:
+    attribute: str
+    key: str
+    callback: Callable[[Any], Any] | None = None
+    module_id: str = ""
+
+
 ExtensionResourceBaseResolver = Callable[[Any, dict], dict]
 ExtensionResourceFieldResolver = Callable[[Any, dict], Any]
 ExtensionResourceRelationshipResolver = Callable[[Any, dict], Any]
@@ -347,6 +387,7 @@ class ExtensionPostLifecycleDefinition:
     apply_created: Any = None
     apply_updated: Any = None
     apply_approved: Any = None
+    apply_hidden: Any = None
     prepare_delete: Any = None
     apply_deleted: Any = None
     description: str = ""
@@ -506,6 +547,11 @@ class ExtensionDiscoveryResult:
     permissions_pages: Tuple[str, ...] = ()
     operations_pages: Tuple[str, ...] = ()
     settings_schema: Tuple[ExtensionManifestSettingFieldDefinition, ...] = ()
+    settings_defaults: Tuple[ExtensionSettingDefaultDefinition, ...] = ()
+    settings_reset_rules: Tuple[ExtensionSettingResetDefinition, ...] = ()
+    settings_frontend_cache_keys: Tuple[str, ...] = ()
+    settings_theme_variables: Tuple[ExtensionSettingThemeVariableDefinition, ...] = ()
+    settings_forum_serializations: Tuple[ExtensionSettingForumSerializationDefinition, ...] = ()
     forum_settings_keys: Tuple[str, ...] = ()
     permissions: Tuple[PermissionDefinition, ...] = ()
     admin_pages: Tuple[AdminPageDefinition, ...] = ()
@@ -518,6 +564,7 @@ class ExtensionDiscoveryResult:
     discussion_list_filters: Tuple[DiscussionListFilterDefinition, ...] = ()
     locale_paths: Tuple[str, ...] = ()
     formatter_pipeline: Tuple[ExtensionFormatterCallback, ...] = ()
+    formatter_callbacks: Tuple[ExtensionFormatterDefinition, ...] = ()
     resource_definitions: Tuple[ExtensionResourceDefinition, ...] = ()
     resource_fields: Tuple[ExtensionResourceFieldDefinition, ...] = ()
     resource_field_mutators: Tuple[ExtensionResourceFieldMutatorDefinition, ...] = ()
@@ -551,6 +598,11 @@ class ExtensionAssembly:
     frontend_common_entry: str
     frontend_routes: Tuple[Any, ...]
     settings_schema: Tuple[Any, ...]
+    settings_defaults: Tuple[Any, ...]
+    settings_reset_rules: Tuple[Any, ...]
+    settings_frontend_cache_keys: Tuple[str, ...]
+    settings_theme_variables: Tuple[Any, ...]
+    settings_forum_serializations: Tuple[Any, ...]
     forum_settings_keys: Tuple[str, ...]
     permissions: Tuple[Any, ...]
     admin_pages: Tuple[Any, ...]
@@ -563,6 +615,7 @@ class ExtensionAssembly:
     discussion_list_filters: Tuple[Any, ...]
     locale_paths: Tuple[str, ...]
     formatter_pipeline: Tuple[Any, ...]
+    formatter_callbacks: Tuple[Any, ...]
     resource_definitions: Tuple[Any, ...]
     resource_fields: Tuple[Any, ...]
     resource_field_mutators: Tuple[Any, ...]

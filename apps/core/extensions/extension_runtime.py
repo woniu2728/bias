@@ -171,6 +171,26 @@ class Extension:
         return tuple(self.discover().settings_schema)
 
     @property
+    def settings_defaults(self):
+        return tuple(self.discover().settings_defaults)
+
+    @property
+    def settings_reset_rules(self):
+        return tuple(self.discover().settings_reset_rules)
+
+    @property
+    def settings_frontend_cache_keys(self) -> tuple[str, ...]:
+        return tuple(self.discover().settings_frontend_cache_keys)
+
+    @property
+    def settings_theme_variables(self):
+        return tuple(self.discover().settings_theme_variables)
+
+    @property
+    def settings_forum_serializations(self):
+        return tuple(self.discover().settings_forum_serializations)
+
+    @property
     def forum_settings_keys(self) -> tuple[str, ...]:
         return tuple(self.discover().forum_settings_keys)
 
@@ -217,6 +237,10 @@ class Extension:
     @property
     def formatter_pipeline(self):
         return tuple(self.discover().formatter_pipeline)
+
+    @property
+    def formatter_callbacks(self):
+        return tuple(self.discover().formatter_callbacks)
 
     @property
     def resource_definitions(self):

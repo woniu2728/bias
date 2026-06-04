@@ -14,7 +14,7 @@ from .models import User, Group, Permission, EmailToken, PasswordToken
 from apps.core.models import AuditLog
 from apps.core.email_service import EmailService
 from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
-from apps.core.forum_registry import get_registry_permission_codes_by_prefix
+from apps.core.forum_registry import get_registry_staff_managed_admin_permission_codes
 
 
 class UserService:
@@ -51,11 +51,6 @@ class UserService:
         "user.edit",
         "user.suspend",
     }
-
-    STAFF_GROUP_MANAGED_FORUM_PERMISSION_PREFIXES = (
-        "admin.approval.",
-        "admin.flag.",
-    )
 
     @staticmethod
     def build_suspension_notice(user: User, action_label: str = "") -> str:
@@ -153,10 +148,7 @@ class UserService:
 
     @staticmethod
     def get_staff_group_managed_forum_permissions():
-        permissions = set()
-        for prefix in UserService.STAFF_GROUP_MANAGED_FORUM_PERMISSION_PREFIXES:
-            permissions.update(get_registry_permission_codes_by_prefix(prefix))
-        return permissions
+        return set(get_registry_staff_managed_admin_permission_codes())
 
     @staticmethod
     def get_serialized_forum_permissions(user: User):

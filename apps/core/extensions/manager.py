@@ -585,6 +585,11 @@ class ExtensionManager:
             frontend_common_entry="",
             frontend_routes=tuple(extension.discover().frontend_routes),
             settings_schema=tuple(extension.settings_schema),
+            settings_defaults=tuple(extension.settings_defaults),
+            settings_reset_rules=tuple(extension.settings_reset_rules),
+            settings_frontend_cache_keys=tuple(extension.settings_frontend_cache_keys),
+            settings_theme_variables=tuple(extension.settings_theme_variables),
+            settings_forum_serializations=tuple(extension.settings_forum_serializations),
             forum_settings_keys=tuple(
                 key for key in extension.forum_settings_keys
                 if str(key or "").strip()
@@ -603,6 +608,7 @@ class ExtensionManager:
                 if str(path or "").strip()
             ),
             formatter_pipeline=tuple(extension.formatter_pipeline),
+            formatter_callbacks=tuple(extension.formatter_callbacks),
             resource_definitions=tuple(extension.resource_definitions),
             resource_fields=tuple(extension.resource_fields),
             resource_field_mutators=tuple(extension.resource_field_mutators),
@@ -985,7 +991,6 @@ def resolve_extension_order(extensions: list[Extension], *, satisfied_dependency
             in_degree[dependent_id] -= 1
             if in_degree[dependent_id] == 0:
                 pending.append(dependent_id)
-                pending.sort()
 
     circular_dependencies = sorted([
         extension_id

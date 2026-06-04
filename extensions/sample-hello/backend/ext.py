@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from apps.core.extensions import (
     AdminNavigationExtender,
+    ApiResourceExtender,
     FrontendExtender,
     LifecycleExtender,
     RuntimeActionsExtender,
     SettingsExtender,
 )
 from apps.core.extensions.backend import _build_runtime_action_definition, _build_setting_field_definition
+from apps.core.resource_registry import ResourceFieldDefinition
 
 EXTENSION_ID = "sample-hello"
 EXTENSION_NAME = "Sample Hello"
@@ -51,6 +53,7 @@ def extend():
                 "order": 30,
             }),
         )),
+        ApiResourceExtender("forum").fields(forum_resource_field_definitions),
         RuntimeActionsExtender(actions=(
             _build_runtime_action_definition({
                 "key": "rebuild-cache",
@@ -69,6 +72,26 @@ def extend():
             uninstall=uninstall,
         ),
     ]
+
+
+def forum_resource_field_definitions():
+    return (
+        ResourceFieldDefinition(
+            resource="forum",
+            field="sample_hello_status",
+            module_id=EXTENSION_ID,
+            resolver=resolve_forum_sample_hello_status,
+            description="示例扩展字段，用于验证 ApiResourceExtender 已接入。",
+        ),
+    )
+
+
+def resolve_forum_sample_hello_status(forum, context):
+    return {
+        "extension_id": EXTENSION_ID,
+        "extension_name": EXTENSION_NAME,
+        "ready": True,
+    }
 
 
 def install(context):

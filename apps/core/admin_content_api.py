@@ -756,7 +756,7 @@ def _build_extension_post_lifecycle(extension, runtime_record=None):
     for item in getattr(runtime_record, "post_lifecycle", ()) or ():
         phases = [
             phase
-            for phase in ("apply_created", "apply_updated", "apply_approved", "prepare_delete", "apply_deleted")
+            for phase in ("apply_created", "apply_updated", "apply_approved", "apply_hidden", "prepare_delete", "apply_deleted")
             if callable(getattr(item, phase, None))
         ]
         handlers.append({
@@ -1056,6 +1056,14 @@ def _build_extension_search_drivers(runtime_view):
 def _build_extension_delivery_assets(extension):
     from apps.core.extensions.assets import inspect_published_extension_assets
 
+    if extension.source != "filesystem":
+        return {
+            "root_path": "",
+            "root_exists": False,
+            "asset_count": 0,
+            "assets": [],
+        }
+
     root_path = Path(extension.manifest.path) if extension.manifest.path else None
     asset_specs = [
         {
@@ -1334,12 +1342,23 @@ def _build_extension_debug_info(extension):
         extension.manifest,
         extensions_base_path=extensions_base_path,
     )
-    validation_result = validate_extension_manifests_with_available_ids(
-        [extension.manifest],
-        available_extension_ids=_resolve_available_extension_ids_for_validation(),
-        extensions_base_path=extensions_base_path,
-        strict_runtime_hooks=True,
-    )
+    validation_issues = []
+    if extension.source == "filesystem":
+        validation_result = validate_extension_manifests_with_available_ids(
+            [extension.manifest],
+            available_extension_ids=_resolve_available_extension_ids_for_validation(),
+            extensions_base_path=extensions_base_path,
+            strict_runtime_hooks=True,
+        )
+        validation_issues = [
+            {
+                "level": issue.level,
+                "code": issue.code,
+                "field": issue.field,
+                "message": issue.message,
+            }
+            for issue in validation_result.issues
+        ]
 
     expected_settings_path = f"/admin/extensions/{extension.id}/settings"
     expected_permissions_path = f"/admin/extensions/{extension.id}/permissions"
@@ -1428,15 +1447,7 @@ def _build_extension_debug_info(extension):
                 "matches_expected": str(frontend_forum_entry or "").strip() == expected_forum_entry,
             },
         ],
-        "validation_issues": [
-            {
-                "level": issue.level,
-                "code": issue.code,
-                "field": issue.field,
-                "message": issue.message,
-            }
-            for issue in validation_result.issues
-        ],
+        "validation_issues": validation_issues,
     }
 
 

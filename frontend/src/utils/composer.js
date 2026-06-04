@@ -14,8 +14,7 @@ export const BASE_COMPOSER_TOOLS = [
   { key: 'link', title: '链接', icon: 'fas fa-link', order: 90 },
   { key: 'image', title: '图片', icon: 'fas fa-image', order: 100 },
   { key: 'bullets', title: '无序列表', icon: 'fas fa-list-ul', order: 110 },
-  { key: 'ordered', title: '有序列表', icon: 'fas fa-list-ol', order: 120 },
-  { key: 'mention', title: '@ 提及', icon: 'fas fa-at', before: '@', after: '', order: 130 }
+  { key: 'ordered', title: '有序列表', icon: 'fas fa-list-ol', order: 120 }
 ]
 
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg']

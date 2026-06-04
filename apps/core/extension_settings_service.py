@@ -47,6 +47,7 @@ def save_extension_settings(extension_id: str, payload: dict[str, Any]) -> dict[
     schema_map = dict(definition["field_map"])
     normalized = get_extension_settings(extension_id)
     prefix = _build_extension_settings_prefix(extension_id)
+    changed_keys: set[str] = set()
 
     for key, raw_value in dict(payload or {}).items():
         field = schema_map.get(key)
@@ -57,11 +58,22 @@ def save_extension_settings(extension_id: str, payload: dict[str, Any]) -> dict[
                 details={"extension_id": extension_id, "key": key},
             )
         normalized_value = _normalize_extension_setting_value(field, raw_value)
+        previous_value = normalized.get(key)
         normalized[key] = normalized_value
-        Setting.objects.update_or_create(
-            key=f"{prefix}{key}",
-            defaults={"value": json.dumps(normalized_value, ensure_ascii=False)},
-        )
+        storage_key = f"{prefix}{key}"
+        if _should_reset_extension_setting(definition, key, normalized_value):
+            Setting.objects.filter(key=storage_key).delete()
+            normalized[key] = definition["defaults"].get(key)
+        else:
+            Setting.objects.update_or_create(
+                key=storage_key,
+                defaults={"value": json.dumps(normalized_value, ensure_ascii=False)},
+            )
+        if normalized.get(key) != previous_value:
+            changed_keys.add(key)
+
+    if changed_keys:
+        _handle_extension_settings_changed(extension_id, definition, changed_keys)
 
     return normalized
 
@@ -96,6 +108,44 @@ def serialize_extension_settings_schema(extension_id: str) -> list[dict[str, Any
 
 def _build_extension_settings_prefix(extension_id: str) -> str:
     return f"extensions.{extension_id}."
+
+
+def _should_reset_extension_setting(definition: dict[str, Any], key: str, value: Any) -> bool:
+    for rule in definition.get("reset_rules") or ():
+        if getattr(rule, "key", "") != key:
+            continue
+        callback = getattr(rule, "callback", None)
+        if not callable(callback):
+            continue
+        try:
+            if bool(callback(value)):
+                return True
+        except TypeError:
+            if bool(callback()):
+                return True
+    return False
+
+
+def _handle_extension_settings_changed(
+    extension_id: str,
+    definition: dict[str, Any],
+    changed_keys: set[str],
+) -> None:
+    from apps.core.settings_service import clear_runtime_setting_caches
+
+    clear_runtime_setting_caches()
+    frontend_cache_keys = set(definition.get("frontend_cache_keys") or ())
+    if not frontend_cache_keys.intersection(changed_keys):
+        return
+
+    from apps.core.extensions.frontend_runtime_service import clear_extension_frontend_runtime_cache
+    from apps.core.extensions.lifecycle import invalidate_extension_frontend_assets
+
+    clear_extension_frontend_runtime_cache()
+    invalidate_extension_frontend_assets(
+        "extension_settings_changed",
+        extension_id=extension_id,
+    )
 
 
 def _normalize_extension_setting_value(field, value: Any) -> Any:

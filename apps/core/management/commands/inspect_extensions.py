@@ -15,8 +15,10 @@ from apps.core.extension_serialization import (
     serialize_admin_extension,
     serialize_admin_extensions_payload,
 )
+from apps.core.admin_module_helpers import resolve_module_extension_definition
 from apps.core.extensions import get_extension_registry
 from apps.core.extensions.exceptions import ExtensionNotFoundError
+from apps.core.forum_registry import get_forum_registry
 
 
 class Command(BaseCommand):
@@ -63,9 +65,12 @@ class Command(BaseCommand):
             try:
                 extensions = [registry.get_extension(extension_id)]
             except ExtensionNotFoundError as exc:
-                raise CommandError(str(exc)) from exc
+                module_extension = _resolve_core_module_extension(extension_id)
+                if module_extension is None:
+                    raise CommandError(str(exc)) from exc
+                extensions = [module_extension]
         else:
-            extensions = registry.get_extensions()
+            extensions = _resolve_inspection_extensions(registry.get_extensions())
 
         payload = serialize_admin_extensions_payload(extensions)
         serialized_extensions = payload["extensions"]
@@ -134,3 +139,34 @@ class Command(BaseCommand):
             "include_permissions": include_permissions,
         }
         self.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def _resolve_inspection_extensions(filesystem_extensions):
+    extensions = list(filesystem_extensions)
+    existing_ids = {extension.id for extension in extensions}
+    core_module_extensions = [
+        resolve_module_extension_definition(module)
+        for module in get_forum_registry().get_modules()
+        if module.module_id not in existing_ids
+    ]
+    return sorted(
+        [*extensions, *core_module_extensions],
+        key=lambda item: (
+            0 if item.id == "core" else 1,
+            0 if item.source == "core-module" else 1,
+            item.id,
+        ),
+    )
+
+
+def _resolve_core_module_extension(extension_id: str):
+    normalized = str(extension_id or "").strip()
+    if not normalized:
+        return None
+    module = next(
+        (item for item in get_forum_registry().get_modules() if item.module_id == normalized),
+        None,
+    )
+    if module is None:
+        return None
+    return resolve_module_extension_definition(module)

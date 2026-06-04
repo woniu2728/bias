@@ -5,7 +5,7 @@ import {
 } from '@/admin/registry'
 
 registerAdminTagsPageCopy({
-  key: 'core-tags-page-copy',
+  key: 'tags-page-copy',
   order: 10,
   resolve: () => ({
     pageTitle: '标签管理',
@@ -94,7 +94,7 @@ registerAdminTagsPageCopy({
 })
 
 registerAdminTagsPageConfig({
-  key: 'core-tags-page-config',
+  key: 'tags-page-config',
   order: 10,
   resolve: () => ({
     colorPresets: [
@@ -158,7 +158,7 @@ registerAdminTagsPageConfig({
 })
 
 registerAdminTagsPageActionMeta({
-  key: 'core-tags-page-actions-meta',
+  key: 'tags-page-actions-meta',
   order: 10,
   resolve: () => ({
     loadErrorText: '加载标签失败，请稍后重试',

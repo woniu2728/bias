@@ -524,3 +524,12 @@ def get_registry_permission_codes_by_prefix(prefix: str) -> Tuple[str, ...]:
         code for code in registry.get_valid_permission_codes()
         if code.startswith(normalized_prefix)
     ))
+
+
+def get_registry_staff_managed_admin_permission_codes() -> Tuple[str, ...]:
+    registry = get_forum_registry()
+    return tuple(sorted(
+        definition.code
+        for definition in registry.get_all_permissions()
+        if definition.code.startswith("admin.")
+    ))

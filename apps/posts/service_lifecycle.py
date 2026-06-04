@@ -348,6 +348,15 @@ def set_hidden_state(
         refresh_runtime_model_private(post)
         post.save(update_fields=["hidden_at", "hidden_user", "is_private"])
 
+        _apply_post_hidden_extensions(
+            post,
+            context={
+                "actor": admin_user,
+                "is_hidden": is_hidden,
+                "was_hidden": was_hidden,
+            },
+        )
+
         if should_adjust_counts:
             refresh_discussion_approved_stats_cb(post.discussion)
             if post.user and post.type in user_counted_post_types:
@@ -418,6 +427,13 @@ def _apply_post_updated_extensions(post: Post, *, context: dict) -> dict:
     if post_lifecycle is None:
         return {}
     return post_lifecycle.apply_updated(post=post, context=context)
+
+
+def _apply_post_hidden_extensions(post: Post, *, context: dict) -> dict:
+    post_lifecycle = get_runtime_post_lifecycle_service()
+    if post_lifecycle is None:
+        return {}
+    return post_lifecycle.apply_hidden(post=post, context=context)
 
 
 def _prepare_post_delete_extensions(post: Post, *, context: dict) -> dict:

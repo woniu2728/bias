@@ -76,7 +76,7 @@ class Command(BaseCommand):
         )
         self._write_text(
             frontend_forum_dir / "index.js",
-            self._build_forum_index_source(name),
+            self._build_forum_index_source(extension_id, name),
         )
         self._write_text(
             backend_dir / "__init__.py",
@@ -220,13 +220,13 @@ class Command(BaseCommand):
             "</style>\n"
         )
 
-    def _build_forum_index_source(self, name: str) -> str:
+    def _build_forum_index_source(self, extension_id: str, name: str) -> str:
         return (
             "import { registerForumNavItem } from '@/forum/registry'\n\n"
             "export async function bootForumExtension() {\n"
             "  registerForumNavItem({\n"
-            f"    key: '{name.lower().replace(' ', '-')}-entry',\n"
-            "    moduleId: 'core',\n"
+            f"    key: '{extension_id}-entry',\n"
+            f"    moduleId: '{extension_id}',\n"
             "    section: 'primary',\n"
             "    order: 90,\n"
             "    icon: 'fas fa-puzzle-piece',\n"
@@ -357,8 +357,9 @@ class Command(BaseCommand):
     def _build_backend_entry_source(self, extension_id: str, name: str) -> str:
         return (
             "from __future__ import annotations\n\n"
-            "from apps.core.extensions import AdminNavigationExtender, FrontendExtender, LifecycleExtender, RuntimeActionsExtender, SettingsExtender\n"
+            "from apps.core.extensions import AdminNavigationExtender, ApiResourceExtender, FrontendExtender, LifecycleExtender, RuntimeActionsExtender, SettingsExtender\n"
             "from apps.core.extensions.backend import _build_runtime_action_definition, _build_setting_field_definition\n\n"
+            "from apps.core.resource_registry import ResourceFieldDefinition\n\n"
             f"EXTENSION_ID = '{extension_id}'\n"
             f"EXTENSION_NAME = '{name}'\n\n"
             "\n"
@@ -387,6 +388,7 @@ class Command(BaseCommand):
             "                'order': 20,\n"
             "            }),\n"
             "        )),\n"
+            "        ApiResourceExtender('forum').fields(forum_resource_field_definitions),\n"
             "        RuntimeActionsExtender(actions=(\n"
             "            _build_runtime_action_definition({\n"
             "                'key': 'rebuild-cache',\n"
@@ -410,6 +412,24 @@ class Command(BaseCommand):
             "            uninstall=uninstall,\n"
             "        ),\n"
             "    ]\n\n"
+            "\n"
+            "def forum_resource_field_definitions():\n"
+            "    return (\n"
+            "        ResourceFieldDefinition(\n"
+            "            resource='forum',\n"
+            "            field='scaffold_status',\n"
+            "            module_id=EXTENSION_ID,\n"
+            "            resolver=resolve_forum_scaffold_status,\n"
+            "            description='脚手架示例字段，用于验证 ApiResourceExtender 已接入。',\n"
+            "        ),\n"
+            "    )\n\n"
+            "\n"
+            "def resolve_forum_scaffold_status(forum, context):\n"
+            "    return {\n"
+            "        'extension_id': EXTENSION_ID,\n"
+            "        'extension_name': EXTENSION_NAME,\n"
+            "        'ready': True,\n"
+            "    }\n\n"
             "\n"
             "def install(context):\n"
             "    return {\n"
@@ -476,6 +496,7 @@ class Command(BaseCommand):
             f"- 扩展 ID: `{extension_id}`\n"
             "- 用途：通过脚手架生成的 Bias 扩展样板。\n"
             "- 迁移目录：`backend/migrations`\n"
+            "- API 资源：默认通过 `ApiResourceExtender(\"forum\")` 注册 `scaffold_status` 示例字段。\n"
             "- 后续可在 `frontend/admin`、`backend`、`locale` 中继续扩展能力。\n"
         )
 

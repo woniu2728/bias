@@ -16,6 +16,10 @@ from apps.core.extensions.types import (
     ExtensionModelDefaultDefinition,
     ExtensionManifestRuntimeActionDefinition,
     ExtensionManifestSettingFieldDefinition,
+    ExtensionSettingDefaultDefinition,
+    ExtensionSettingForumSerializationDefinition,
+    ExtensionSettingResetDefinition,
+    ExtensionSettingThemeVariableDefinition,
     ExtensionModelDefinition,
     ExtensionModelRelationDefinition,
     ExtensionModelSlugDriverDefinition,
@@ -356,19 +360,77 @@ class LanguagePackExtender:
 @dataclass(frozen=True)
 class FormatterExtender:
     transforms: tuple[ExtensionFormatterCallback, ...] = ()
+    configure_callbacks: tuple[Any, ...] = ()
+    parse_callbacks: tuple[Any, ...] = ()
+    render_callbacks: tuple[Any, ...] = ()
+    unparse_callbacks: tuple[Any, ...] = ()
+
+    def configure(self, callback: Any) -> "FormatterExtender":
+        return FormatterExtender(
+            transforms=self.transforms,
+            configure_callbacks=tuple([*self.configure_callbacks, callback]),
+            parse_callbacks=self.parse_callbacks,
+            render_callbacks=self.render_callbacks,
+            unparse_callbacks=self.unparse_callbacks,
+        )
+
+    def parse(self, callback: Any) -> "FormatterExtender":
+        return FormatterExtender(
+            transforms=self.transforms,
+            configure_callbacks=self.configure_callbacks,
+            parse_callbacks=tuple([*self.parse_callbacks, callback]),
+            render_callbacks=self.render_callbacks,
+            unparse_callbacks=self.unparse_callbacks,
+        )
+
+    def render(self, callback: Any) -> "FormatterExtender":
+        return FormatterExtender(
+            transforms=self.transforms,
+            configure_callbacks=self.configure_callbacks,
+            parse_callbacks=self.parse_callbacks,
+            render_callbacks=tuple([*self.render_callbacks, callback]),
+            unparse_callbacks=self.unparse_callbacks,
+        )
+
+    def unparse(self, callback: Any) -> "FormatterExtender":
+        return FormatterExtender(
+            transforms=self.transforms,
+            configure_callbacks=self.configure_callbacks,
+            parse_callbacks=self.parse_callbacks,
+            render_callbacks=self.render_callbacks,
+            unparse_callbacks=tuple([*self.unparse_callbacks, callback]),
+        )
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
-        if not self.transforms:
+        if not (
+            self.transforms
+            or self.configure_callbacks
+            or self.parse_callbacks
+            or self.render_callbacks
+            or self.unparse_callbacks
+        ):
             return
 
         extension_id = extension.extension_id
 
         def apply(formatters, host: "ExtensionHost"):
-            for transform in self.transforms:
-                formatters.register_transform(extension_id, transform)
+            for callback in self.configure_callbacks:
+                formatters.register_configure(extension_id, self._resolve_callback(callback, host))
+            for callback in self.parse_callbacks:
+                formatters.register_parse(extension_id, self._resolve_callback(callback, host))
+            for callback in (*self.transforms, *self.render_callbacks):
+                formatters.register_render(extension_id, self._resolve_callback(callback, host))
+            for callback in self.unparse_callbacks:
+                formatters.register_unparse(extension_id, self._resolve_callback(callback, host))
             return formatters
 
         app.resolving("formatters", apply)
+
+    @staticmethod
+    def _resolve_callback(callback: Any, host: "ExtensionHost") -> Any:
+        if isinstance(callback, str) or isinstance(callback, type):
+            return wrap_callback(callback, host)
+        return callback
 
 
 @dataclass(frozen=True)
@@ -1541,6 +1603,7 @@ class PostLifecycleExtender:
         apply_created: Any = None,
         apply_updated: Any = None,
         apply_approved: Any = None,
+        apply_hidden: Any = None,
         prepare_delete: Any = None,
         apply_deleted: Any = None,
         description: str = "",
@@ -1553,6 +1616,7 @@ class PostLifecycleExtender:
                     apply_created=apply_created,
                     apply_updated=apply_updated,
                     apply_approved=apply_approved,
+                    apply_hidden=apply_hidden,
                     prepare_delete=prepare_delete,
                     apply_deleted=apply_deleted,
                     description=str(description or "").strip(),
@@ -1573,6 +1637,7 @@ class PostLifecycleExtender:
                     "apply_created",
                     "apply_updated",
                     "apply_approved",
+                    "apply_hidden",
                     "prepare_delete",
                     "apply_deleted",
                 ):
@@ -1592,16 +1657,141 @@ class SettingsExtender:
     fields: tuple[ExtensionManifestSettingFieldDefinition, ...] = ()
     expose_to_forum: tuple[str, ...] = ()
     generated_page: bool = True
+    defaults: tuple[ExtensionSettingDefaultDefinition, ...] = ()
+    reset_rules: tuple[ExtensionSettingResetDefinition, ...] = ()
+    frontend_cache_keys: tuple[str, ...] = ()
+    theme_variables: tuple[ExtensionSettingThemeVariableDefinition, ...] = ()
+    forum_serializations: tuple[ExtensionSettingForumSerializationDefinition, ...] = ()
+
+    def default(self, key: str, value: Any) -> "SettingsExtender":
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            return self
+        return SettingsExtender(
+            fields=self.fields,
+            expose_to_forum=self.expose_to_forum,
+            generated_page=self.generated_page,
+            defaults=tuple([*self.defaults, ExtensionSettingDefaultDefinition(normalized_key, value)]),
+            reset_rules=self.reset_rules,
+            frontend_cache_keys=self.frontend_cache_keys,
+            theme_variables=self.theme_variables,
+            forum_serializations=self.forum_serializations,
+        )
+
+    def reset_when(self, key: str, callback: Any) -> "SettingsExtender":
+        normalized_key = str(key or "").strip()
+        if not normalized_key:
+            return self
+        return SettingsExtender(
+            fields=self.fields,
+            expose_to_forum=self.expose_to_forum,
+            generated_page=self.generated_page,
+            defaults=self.defaults,
+            reset_rules=tuple([*self.reset_rules, ExtensionSettingResetDefinition(normalized_key, callback)]),
+            frontend_cache_keys=self.frontend_cache_keys,
+            theme_variables=self.theme_variables,
+            forum_serializations=self.forum_serializations,
+        )
+
+    def reset_frontend_cache_for(self, *keys: str) -> "SettingsExtender":
+        normalized_keys = tuple(
+            key
+            for key in (str(item or "").strip() for item in keys)
+            if key
+        )
+        return SettingsExtender(
+            fields=self.fields,
+            expose_to_forum=self.expose_to_forum,
+            generated_page=self.generated_page,
+            defaults=self.defaults,
+            reset_rules=self.reset_rules,
+            frontend_cache_keys=tuple(dict.fromkeys([*self.frontend_cache_keys, *normalized_keys])),
+            theme_variables=self.theme_variables,
+            forum_serializations=self.forum_serializations,
+        )
+
+    def theme_variable(self, name: str, key: str, callback: Any = None) -> "SettingsExtender":
+        normalized_name = str(name or "").strip()
+        normalized_key = str(key or "").strip()
+        if not normalized_name or not normalized_key:
+            return self
+        return SettingsExtender(
+            fields=self.fields,
+            expose_to_forum=self.expose_to_forum,
+            generated_page=self.generated_page,
+            defaults=self.defaults,
+            reset_rules=self.reset_rules,
+            frontend_cache_keys=self.frontend_cache_keys,
+            theme_variables=tuple([
+                *self.theme_variables,
+                ExtensionSettingThemeVariableDefinition(normalized_name, normalized_key, callback),
+            ]),
+            forum_serializations=self.forum_serializations,
+        )
+
+    def serialize_to_forum(self, attribute: str, key: str, callback: Any = None) -> "SettingsExtender":
+        normalized_attribute = str(attribute or "").strip()
+        normalized_key = str(key or "").strip()
+        if not normalized_attribute or not normalized_key:
+            return self
+        return SettingsExtender(
+            fields=self.fields,
+            expose_to_forum=self.expose_to_forum,
+            generated_page=self.generated_page,
+            defaults=self.defaults,
+            reset_rules=self.reset_rules,
+            frontend_cache_keys=self.frontend_cache_keys,
+            theme_variables=self.theme_variables,
+            forum_serializations=tuple([
+                *self.forum_serializations,
+                ExtensionSettingForumSerializationDefinition(normalized_attribute, normalized_key, callback),
+            ]),
+        )
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
         extension_id = extension.extension_id
 
         def apply(settings, host: "ExtensionHost"):
+            reset_rules = tuple(
+                replace(definition, callback=wrap_callback(definition.callback, host))
+                if isinstance(definition.callback, (str, type))
+                else definition
+                for definition in self.reset_rules
+            )
+            theme_variables = tuple(
+                replace(definition, callback=wrap_callback(definition.callback, host))
+                if isinstance(definition.callback, (str, type))
+                else definition
+                for definition in self.theme_variables
+            )
+            forum_serializations = tuple(
+                replace(definition, callback=wrap_callback(definition.callback, host))
+                if isinstance(definition.callback, (str, type))
+                else definition
+                for definition in self.forum_serializations
+            )
             settings.register_fields(
                 extension_id,
                 self.fields,
                 expose_to_forum=self.expose_to_forum,
                 generated_page=self.generated_page,
+                defaults=tuple(
+                    replace(definition, module_id=definition.module_id or extension_id)
+                    for definition in self.defaults
+                ),
+                reset_when=tuple(
+                    replace(definition, module_id=definition.module_id or extension_id)
+                    for definition in reset_rules
+                ),
+                reset_frontend_cache_for=self.frontend_cache_keys,
+                theme_variables=tuple(
+                    replace(definition, module_id=definition.module_id or extension_id)
+                    for definition in theme_variables
+                ),
+                forum_serializations=tuple(
+                    replace(definition, module_id=definition.module_id or extension_id)
+                    for definition in forum_serializations
+                ),
             )
             return settings
 
@@ -1970,6 +2160,24 @@ class PostEventExtender:
                 order=int(order),
             ),
         ]))
+
+    def types(
+        self,
+        post_types: tuple[str, ...] | list[str] | set[str],
+        resolver: Any,
+        *,
+        description: str = "",
+        order: int = 100,
+    ) -> "PostEventExtender":
+        extender = self
+        for post_type in post_types:
+            extender = extender.type(
+                post_type,
+                resolver,
+                description=description,
+                order=order,
+            )
+        return extender
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
         if not self.event_data_resolvers:

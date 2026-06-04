@@ -4,7 +4,11 @@ Markdown渲染服务
 import markdown
 import bleach
 from apps.core.link_formatter import apply_default_external_link_attributes
-from apps.core.extensions.formatter_service import apply_extension_formatters
+from apps.core.extensions.formatter_service import (
+    apply_extension_formatter_config,
+    apply_extension_formatter_parse,
+    apply_extension_formatter_render,
+)
 
 
 class MarkdownService:
@@ -52,8 +56,11 @@ class MarkdownService:
         if not content:
             return ''
 
+        content = apply_extension_formatter_parse(content)
+
         # 配置Markdown扩展
-        extensions = [
+        formatter_config = apply_extension_formatter_config({
+            "extensions": [
             'markdown.extensions.extra',  # 表格、代码块等
             'markdown.extensions.codehilite',  # 代码高亮
             'markdown.extensions.nl2br',  # 换行转<br>
@@ -61,18 +68,20 @@ class MarkdownService:
             'markdown.extensions.toc',  # 目录
             'markdown.extensions.fenced_code',  # 围栏代码块
             'markdown.extensions.tables',  # 表格
-        ]
-
-        # 扩展配置
-        extension_configs = {
-            'markdown.extensions.codehilite': {
-                'css_class': 'highlight',
-                'linenums': False,
+            ],
+            "extension_configs": {
+                'markdown.extensions.codehilite': {
+                    'css_class': 'highlight',
+                    'linenums': False,
+                },
+                'markdown.extensions.toc': {
+                    'permalink': True,
+                }
             },
-            'markdown.extensions.toc': {
-                'permalink': True,
-            }
-        }
+        })
+
+        extensions = formatter_config.get("extensions") or []
+        extension_configs = formatter_config.get("extension_configs") or {}
 
         # 渲染Markdown
         md = markdown.Markdown(
@@ -87,7 +96,7 @@ class MarkdownService:
         html = MarkdownService._process_external_links(html)
 
         # 允许扩展对最终 HTML 再做一轮变换，例如 emoji/twemoji 渲染
-        html = apply_extension_formatters(html)
+        html = apply_extension_formatter_render(html)
 
         # 清理HTML（防止XSS）
         if sanitize:

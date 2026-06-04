@@ -5,6 +5,7 @@ from apps.core.extensions import (
     ForumCapabilitiesExtender,
     LifecycleExtender,
     NotificationsExtender,
+    PostEventExtender,
 )
 from apps.core.extensions.types import ExtensionEventListenerDefinition
 from apps.core.forum_events import (
@@ -31,6 +32,7 @@ from extensions.approval.backend.listeners import (
     handle_post_rejected,
     handle_post_resubmitted,
 )
+from extensions.approval.backend.resources import APPROVAL_POST_EVENT_TYPES, resolve_approval_event_data
 
 
 EXTENSION_ID = "approval"
@@ -49,6 +51,11 @@ def extend():
         ),
         ForumCapabilitiesExtender(
             post_types=post_type_definitions(),
+        ),
+        PostEventExtender().types(
+            APPROVAL_POST_EVENT_TYPES,
+            resolve_approval_event_data,
+            description="审核系统事件帖的结构化 payload。",
         ),
         NotificationsExtender(
             notification_types=notification_type_definitions(),

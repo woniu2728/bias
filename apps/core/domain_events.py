@@ -25,7 +25,7 @@ class DomainEventBus:
         self._listeners.clear()
 
     def dispatch(self, event: DomainEvent) -> None:
-        for event_type, handlers in self._listeners.items():
+        for event_type, handlers in list(self._listeners.items()):
             if isinstance(event, event_type):
                 for handler in list(handlers):
                     handler(event)

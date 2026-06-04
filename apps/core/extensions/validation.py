@@ -17,6 +17,26 @@ VERSION_RANGE_PATTERN = re.compile(r"^(?:\^|~|>=|<=|>|<)?\d+\.\d+\.\d+$")
 API_VERSION_PATTERN = re.compile(r"^\d+\.\d+$")
 MIGRATION_FILE_PATTERN = re.compile(r"^\d{4}_[a-z0-9_]+\.py$")
 MIGRATION_FUNCTION_PATTERN = re.compile(r"^(?:async\s+)?def\s+(apply|run|upgrade)\s*\(", re.MULTILINE)
+EXTENSION_SOURCE_SUFFIXES = {".json", ".js", ".jsx", ".ts", ".tsx", ".vue", ".py", ".md", ".css", ".scss", ".less"}
+SKIPPED_SOURCE_DIRS = {"__pycache__", ".pytest_cache", "node_modules", "dist", "build", ".venv", "venv"}
+EXTERNAL_PROJECT_NAME_PATTERN = re.compile(r"\b" + "fla" + "rum" + r"\b", re.IGNORECASE)
+FORBIDDEN_EXTENSION_SOURCE_PATTERNS = (
+    (
+        "forbidden_low_level_resource_extender",
+        re.compile(r"\bResourceExtender\b"),
+        "扩展源码不能直接使用 ResourceExtender；请使用 ApiResourceExtender 注册资源、字段、关系、端点和排序。",
+    ),
+    (
+        "forbidden_external_project_name",
+        EXTERNAL_PROJECT_NAME_PATTERN,
+        "扩展源码不能包含外部项目命名残留；产品命名必须使用 Bias/bias。",
+    ),
+    (
+        "forbidden_core_module_frontend_contribution",
+        re.compile(r"\bmoduleId\s*:\s*['\"]core['\"]"),
+        "扩展前端贡献不能声明为 core 模块；请使用当前扩展 ID 作为 moduleId，或省略 moduleId 由扩展运行域归属。",
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -453,6 +473,7 @@ def _validate_single_manifest(
                 )
 
     if base_path is not None:
+        _validate_extension_source_contracts(collector, manifest, base_path)
         _validate_frontend_admin_entry(collector, manifest, base_path)
         _validate_frontend_forum_entry(collector, manifest, base_path)
         _validate_backend_entry(
@@ -466,6 +487,43 @@ def _validate_single_manifest(
             manifest,
             base_path,
         )
+
+
+def _validate_extension_source_contracts(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+    base_path: Path,
+) -> None:
+    extension_dir = Path(base_path) / manifest.id
+    if not extension_dir.exists():
+        return
+
+    for file_path in _iter_extension_source_files(extension_dir):
+        try:
+            source = file_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+
+        relative_path = file_path.relative_to(base_path.parent).as_posix()
+        for code, pattern, message in FORBIDDEN_EXTENSION_SOURCE_PATTERNS:
+            if pattern.search(source):
+                collector.add_error(
+                    code,
+                    f"{message} 文件: {relative_path}",
+                    extension_id=manifest.id,
+                    field=relative_path,
+                )
+
+
+def _iter_extension_source_files(extension_dir: Path):
+    for file_path in extension_dir.rglob("*"):
+        if not file_path.is_file():
+            continue
+        if any(part in SKIPPED_SOURCE_DIRS for part in file_path.parts):
+            continue
+        if file_path.suffix.lower() not in EXTENSION_SOURCE_SUFFIXES:
+            continue
+        yield file_path
 
 
 def _validate_admin_actions(

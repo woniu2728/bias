@@ -1,5 +1,4 @@
 import { defineAsyncComponent } from 'vue'
-import api from '@/api'
 import {
   buildDiscussionPath,
   buildUserPath,
@@ -862,26 +861,6 @@ registerStateBlock({
   }),
 })
 
-registerStateBlock({
-  key: 'composer-mention-loading',
-  order: 100,
-  surfaces: ['composer-mention-loading'],
-  isVisible: ({ loading }) => Boolean(loading),
-  resolve: () => ({
-    text: '搜索中...',
-  }),
-})
-
-registerStateBlock({
-  key: 'composer-mention-empty',
-  order: 110,
-  surfaces: ['composer-mention-empty'],
-  isVisible: ({ loading, itemCount }) => !loading && Number(itemCount || 0) === 0,
-  resolve: () => ({
-    text: '没有匹配的用户',
-  }),
-})
-
 registerUiCopy({
   key: 'discussion-create-title',
   order: 10,
@@ -945,15 +924,6 @@ registerUiCopy({
   isVisible: ({ previewLoading, hasContent }) => !previewLoading && Boolean(hasContent),
   resolve: () => ({
     text: '按论坛最终渲染效果预览',
-  }),
-})
-
-registerUiCopy({
-  key: 'emoji-picker-empty',
-  order: 80,
-  surfaces: ['composer-emoji-picker-empty'],
-  resolve: () => ({
-    text: '没有匹配的表情',
   }),
 })
 
@@ -2948,35 +2918,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'composer-emoji-picker-dialog-label',
-  order: 550,
-  surfaces: ['composer-emoji-picker-dialog-label'],
-  resolve: () => ({
-    text: '选择表情',
-  }),
-})
-
-registerUiCopy({
-  key: 'composer-emoji-picker-search-placeholder',
-  order: 560,
-  surfaces: ['composer-emoji-picker-search-placeholder'],
-  resolve: () => ({
-    text: '搜索表情，例如：开心 / heart / fire',
-  }),
-})
-
-registerUiCopy({
-  key: 'composer-emoji-picker-summary',
-  order: 570,
-  surfaces: ['composer-emoji-picker-summary'],
-  resolve: ({ query, itemCount, activeGroupLabel }) => ({
-    text: query
-      ? `搜索结果 ${Number(itemCount || 0)} 项`
-      : `${activeGroupLabel || '表情'} ${Number(itemCount || 0)} 项`,
-  }),
-})
-
-registerUiCopy({
   key: 'discussion-composer-title-placeholder',
   order: 580,
   surfaces: ['discussion-composer-title-placeholder'],
@@ -3804,24 +3745,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'composer-mention-picker-label',
-  order: 1080,
-  surfaces: ['composer-mention-picker-label'],
-  resolve: () => ({
-    text: '提及用户',
-  }),
-})
-
-registerUiCopy({
-  key: 'composer-emoji-autocomplete-label',
-  order: 1090,
-  surfaces: ['composer-emoji-autocomplete-label'],
-  resolve: () => ({
-    text: '表情建议',
-  }),
-})
-
-registerUiCopy({
   key: 'composer-formatting-toolbar-label',
   order: 1100,
   surfaces: ['composer-formatting-toolbar-label'],
@@ -4477,20 +4400,6 @@ registerComposerTool({
       })
     },
   }),
-})
-
-registerComposerMentionProvider({
-  key: 'default-users',
-  order: 10,
-  async search({ mentionQuery = '', limit = 5 }) {
-    const users = await api.get('/users', {
-      params: {
-        q: mentionQuery,
-        limit,
-      },
-    })
-    return Array.isArray(users) ? users.slice(0, limit) : []
-  },
 })
 
 registerComposerSubmitGuard({

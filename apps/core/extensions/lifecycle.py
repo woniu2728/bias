@@ -24,9 +24,38 @@ def invalidate_extension_frontend_assets(
     extension_id: str = "",
     include_published: bool = False,
 ) -> dict:
-    from apps.core.extensions.frontend_compiler import flush_extension_frontend_assets
+    from apps.core.extensions.frontend_compiler import recompile_extension_frontend_assets
+    from apps.core.extensions.manager import get_extension_manager
 
-    result = flush_extension_frontend_assets(include_published=include_published)
+    manager = get_extension_manager()
+    manager.load(force=True)
+    extensions = [
+        extension
+        for extension in manager.get_extensions()
+        if extension.runtime.installed and extension.runtime.enabled
+    ]
+    result = recompile_extension_frontend_assets(
+        extensions,
+        run_build=False,
+        clear_marker=False,
+        publish_dist=False,
+    ).to_dict()
+    if include_published:
+        import shutil
+
+        from apps.core.extensions.frontend_compiler import get_published_frontend_root
+
+        published_root = get_published_frontend_root()
+        removed = False
+        if published_root.exists():
+            shutil.rmtree(published_root)
+            removed = True
+        result["published"] = {
+            "status": "ok",
+            "status_label": "已清理" if removed else "无需清理",
+            "removed": removed,
+            "target": str(published_root),
+        }
     mark_extension_runtime_requires_rebuild(reason, extension_id=extension_id)
     return result
 
@@ -47,7 +76,9 @@ def reset_extension_runtime_state() -> None:
     from apps.core.domain_events import get_forum_event_bus
     from apps.core.extensions.bootstrap import clear_bootstrapped_extension_application
     from apps.core.extensions.bootstrap_state import reset_extension_application_bootstrap_state
+    from apps.core.extensions.formatter_service import clear_extension_formatter_cache
     from apps.core.extensions import frontend_runtime_service
+    from apps.core.extensions.locale_service import clear_extension_locale_cache
     from apps.core.extensions.manager import get_extension_manager
     from apps.core.extensions.runtime_event_listeners import (
         bootstrap_extension_runtime_event_listeners,
@@ -61,6 +92,8 @@ def reset_extension_runtime_state() -> None:
 
     frontend_runtime_service._frontend_runtime_catalog = {}
     frontend_runtime_service._frontend_runtime_bootstrapped = False
+    clear_extension_formatter_cache()
+    clear_extension_locale_cache()
 
     clear_bootstrapped_extension_application()
     reset_extension_application_bootstrap_state()

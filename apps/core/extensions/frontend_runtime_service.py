@@ -128,6 +128,7 @@ def _build_runtime_entry(
     frontend_routes = tuple((frontend.routes if frontend else runtime_view.frontend_routes) or ())
     settings_definition = {
         "forum_settings_keys": tuple(runtime_view.forum_settings_keys),
+        "forum_serializations": tuple(runtime_view.settings_forum_serializations),
     } if runtime_view.settings_schema else None
     settings_values = get_extension_settings(runtime_view.extension_id) if settings_definition else {}
     forum_settings = _build_extension_forum_settings(settings_definition, settings_values)
@@ -141,7 +142,7 @@ def _build_runtime_entry(
         "frontend_forum_entry": forum_entry,
         "frontend_common_entry": common_entry,
         "frontend_routes": _serialize_frontend_routes(frontend_routes),
-        "frontend_document": _build_frontend_document_payload(runtime_view),
+        "frontend_document": _build_frontend_document_payload(runtime_view, settings_values=settings_values),
         "settings_pages": list((frontend.settings_pages if frontend else runtime_view.settings_pages) or ()),
         "permissions_pages": list((frontend.permissions_pages if frontend else runtime_view.permissions_pages) or ()),
         "operations_pages": list((frontend.operations_pages if frontend else runtime_view.operations_pages) or ()),
@@ -248,7 +249,7 @@ def build_enabled_frontend_document_payload() -> dict[str, Any]:
     }
 
 
-def _build_frontend_document_payload(runtime_view) -> dict[str, Any]:
+def _build_frontend_document_payload(runtime_view, *, settings_values: dict[str, Any] | None = None) -> dict[str, Any]:
     theme_document = _build_theme_document_payload(runtime_view)
     return {
         "preloads": _serialize_frontend_values(getattr(runtime_view, "frontend_preloads", ()) or ()),
@@ -262,11 +263,34 @@ def _build_frontend_document_payload(runtime_view) -> dict[str, Any]:
         ]),
         "theme_variables": _serialize_frontend_values([
             *(getattr(runtime_view, "frontend_theme_variables", ()) or ()),
+            _build_settings_theme_variables(runtime_view, settings_values or {}),
             *theme_document["theme_variables"],
         ]),
         "title_driver": _serialize_frontend_value(getattr(runtime_view, "frontend_title_driver", None)),
         "content_callbacks": _serialize_frontend_values(getattr(runtime_view, "frontend_content_callbacks", ()) or ()),
     }
+
+
+def _build_settings_theme_variables(runtime_view, settings_values: dict[str, Any]) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    for definition in getattr(runtime_view, "settings_theme_variables", ()) or ():
+        name = str(getattr(definition, "name", "") or "").strip()
+        key = str(getattr(definition, "key", "") or "").strip()
+        if not name or not key:
+            continue
+        value = settings_values.get(key)
+        callback = getattr(definition, "callback", None)
+        if callable(callback):
+            try:
+                value = callback(value)
+            except TypeError:
+                try:
+                    value = callback(value, settings_values)
+                except TypeError:
+                    value = callback()
+        if value is not None:
+            output[name] = value
+    return output
 
 
 def _build_theme_document_payload(runtime_view) -> dict[str, list[Any]]:
@@ -332,10 +356,24 @@ def _build_extension_forum_settings(
     settings_values: dict[str, Any],
 ) -> dict[str, Any]:
     keys = tuple((settings_definition or {}).get("forum_settings_keys") or ())
-    if not keys:
-        return {}
-
-    return {
+    output = {
         key: settings_values.get(key)
         for key in keys
     }
+    for definition in (settings_definition or {}).get("forum_serializations") or ():
+        attribute = str(getattr(definition, "attribute", "") or "").strip()
+        key = str(getattr(definition, "key", "") or "").strip()
+        if not attribute or not key:
+            continue
+        value = settings_values.get(key)
+        callback = getattr(definition, "callback", None)
+        if callable(callback):
+            try:
+                value = callback(value)
+            except TypeError:
+                try:
+                    value = callback(value, settings_values)
+                except TypeError:
+                    value = callback()
+        output[attribute] = value
+    return output

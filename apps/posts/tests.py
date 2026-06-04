@@ -15,7 +15,7 @@ from apps.discussions.models import Discussion, DiscussionUser
 from apps.discussions.services import DiscussionService
 from apps.notifications.models import Notification
 from apps.posts.models import Post
-from apps.posts.models import PostFlag
+from apps.posts.models import PostFlag, PostMentionsUser
 from apps.posts.services import PostService
 from apps.tags.models import Tag
 from apps.users.models import Group, Permission, User
@@ -479,6 +479,29 @@ class PostFlagApiTests(TestCase):
         payload = response.json()
         self.assertIn("edited_user", payload)
 
+    def test_post_detail_exposes_mentions_users_when_included(self):
+        mentioned = User.objects.create_user(
+            username="mentioned-resource-user",
+            email="mentioned-resource-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        reply = PostService.create_post(
+            discussion_id=self.discussion.id,
+            content=f"hello @{mentioned.username}",
+            user=self.author,
+        )
+
+        response = self.client.get(
+            f"/api/posts/{reply.id}",
+            {"include": "mentions_users"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["mentions_users"][0]["id"], mentioned.id)
+        self.assertEqual(payload["mentions_users"][0]["username"], mentioned.username)
+
     def test_post_detail_static_route_uses_resource_endpoint_mutator(self):
         def mutate_endpoint(endpoint):
             def handler(context):
@@ -795,6 +818,26 @@ class PostFlagApiTests(TestCase):
         )
         self.assertEqual(set(flags_deleted_event.flag_ids), {first.id, second.id})
         self.assertEqual(flags_deleted_event.post_id, self.post.id)
+
+    def test_hiding_and_restoring_post_updates_mentions_through_post_lifecycle(self):
+        mentioned = User.objects.create_user(
+            username="hidden-mentioned-user",
+            email="hidden-mentioned-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        self.post.content = f"hello @{mentioned.username}"
+        self.post.content_html = PostService._render_markdown(self.post.content)
+        self.post.save(update_fields=["content", "content_html"])
+        PostMentionsUser.objects.create(post=self.post, mentions_user=mentioned)
+
+        PostService.set_hidden_state(self.post, self.admin, True)
+
+        self.assertFalse(PostMentionsUser.objects.filter(post=self.post).exists())
+
+        PostService.set_hidden_state(self.post, self.admin, False)
+
+        self.assertTrue(PostMentionsUser.objects.filter(post=self.post, mentions_user=mentioned).exists())
 
     def test_non_staff_cannot_delete_post_flags_through_flags_extension_endpoint(self):
         PostFlag.objects.create(

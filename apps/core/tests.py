@@ -57,6 +57,7 @@ from apps.core.extensions.frontend_compiler import (
     get_extension_frontend_output_manifest_path,
     get_frontend_vite_manifest_path,
     get_published_frontend_root,
+    write_extension_frontend_import_map,
 )
 from apps.core.extensions.lifecycle import reset_extension_runtime_state
 from apps.core.extensions.settings_runtime_service import (
@@ -92,7 +93,12 @@ from apps.core.forum_events import (
 )
 from apps.core.forum_resources_post_events import resolve_post_event_data
 from apps.core.forum_resources_users import serialize_user_payload, serialize_user_summary
-from apps.core.forum_registry import ForumRegistry, get_forum_registry, get_registry_permission_codes_by_prefix
+from apps.core.forum_registry import (
+    ForumRegistry,
+    get_forum_registry,
+    get_registry_permission_codes_by_prefix,
+    get_registry_staff_managed_admin_permission_codes,
+)
 from apps.core.forum_registry_types import (
     AdminPageDefinition,
     DiscussionListFilterDefinition,
@@ -150,10 +156,11 @@ from apps.core.websocket_auth import (
 from apps.discussions.models import Discussion
 from apps.discussions.services import DiscussionService
 from apps.notifications.models import Notification
-from apps.posts.models import Post, PostFlag
+from apps.posts.models import Post, PostFlag, PostMentionsUser
 from apps.posts.services import PostService
 from apps.tags.models import Tag
 from extensions.likes.backend.services import can_like_post
+from extensions.approval.backend.resources import resolve_approval_event_data
 from extensions.tags.backend.events import DiscussionTagStatsRefreshEvent, TagStatsRefreshRequestedEvent
 from apps.users.models import Group, Permission, User
 from apps.users.services import UserService
@@ -1032,6 +1039,10 @@ class ExtensionManifestLoaderTests(TestCase):
             "alphaEvent",
             resolve_alpha_event,
             description="Alpha event data.",
+        ).types(
+            ("betaEvent",),
+            resolve_alpha_event,
+            description="Beta event data.",
         ).extend(app, extension)
 
         with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
@@ -1042,6 +1053,7 @@ class ExtensionManifestLoaderTests(TestCase):
 
         self.assertEqual(event_data, {"kind": "alphaEvent", "actor": "tester"})
         self.assertEqual(app.make("post.events").get_definitions(post_type="alphaEvent")[0].module_id, "alpha-tools")
+        self.assertEqual(app.make("post.events").get_definitions(post_type="betaEvent")[0].module_id, "alpha-tools")
 
     def test_conditional_extender_supports_disabled_setting_and_class_callbacks(self):
         app = ExtensionApplication()
@@ -1255,6 +1267,66 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertIn('href="https://bias.test/d/1" target="_self"', html)
         self.assertEqual(seen[0], ("external.test", "https://bias.test", "https://external.test/page"))
 
+    def test_formatter_extender_registers_formatter_phases(self):
+        from apps.core.extensions import FormatterExtender
+        from apps.core.extensions.formatter_service import (
+            apply_extension_formatter_config,
+            apply_extension_formatter_parse,
+            apply_extension_formatter_render,
+            apply_extension_formatter_unparse,
+            clear_extension_formatter_cache,
+        )
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+
+        FormatterExtender() \
+            .configure(lambda config: {**config, "alpha": True}) \
+            .parse(lambda text, context: text.replace(":alpha:", "alpha")) \
+            .render(lambda html, context: html.replace("alpha", "<strong>alpha</strong>")) \
+            .unparse(lambda text: text.replace("alpha", ":alpha:")) \
+            .extend(app, extension)
+        app.make("formatters")
+
+        clear_extension_formatter_cache()
+        try:
+            with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
+                self.assertTrue(apply_extension_formatter_config({})["alpha"])
+                parsed = apply_extension_formatter_parse("hello :alpha:")
+                rendered = apply_extension_formatter_render(parsed)
+                unparsed = apply_extension_formatter_unparse("hello alpha")
+        finally:
+            clear_extension_formatter_cache()
+
+        self.assertEqual(parsed, "hello alpha")
+        self.assertEqual(rendered, "hello <strong>alpha</strong>")
+        self.assertEqual(unparsed, "hello :alpha:")
+
+    def test_mentions_extension_conditionally_renders_tag_mentions_when_tags_enabled(self):
+        from apps.core.extensions import ConditionalExtender
+        from apps.core.extensions.formatter_service import apply_extension_formatter_render, clear_extension_formatter_cache
+        from apps.tags.models import Tag
+        from extensions.mentions.backend.ext import tag_mentions_extenders
+
+        Tag.objects.create(name="产品发布", slug="release")
+        tags_extension = SimpleNamespace(
+            id="tags",
+            runtime=SimpleNamespace(installed=True, enabled=True),
+        )
+        app = ExtensionApplication(extensions_to_boot=(tags_extension,))
+        extension = SimpleNamespace(extension_id="mentions")
+        ConditionalExtender().when_extension_enabled("tags", tag_mentions_extenders).extend(app, extension)
+        app.make("formatters")
+
+        clear_extension_formatter_cache()
+        try:
+            with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
+                html = apply_extension_formatter_render("<p>查看 #release</p>")
+        finally:
+            clear_extension_formatter_cache()
+
+        self.assertIn('<a href="/t/release" class="mention mention--tag">#产品发布</a>', html)
+
     def test_language_pack_extender_registers_runtime_locale_metadata(self):
         from apps.core.extensions import LanguagePackExtender
 
@@ -1437,7 +1509,8 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertFalse(queryset.exists())
 
     def test_theme_extender_contributes_frontend_document_payload(self):
-        from apps.core.extensions import ThemeExtender
+        from apps.core.extensions import SettingsExtender, ThemeExtender
+        from apps.core.extensions.backend import _build_setting_field_definition
         from apps.core.extensions.frontend_runtime_service import build_enabled_frontend_document_payload
 
         app = ExtensionApplication()
@@ -1449,22 +1522,69 @@ class ExtensionManifestLoaderTests(TestCase):
             .document_classes(["theme-alpha"]) \
             .head_tag("meta", {"name": "theme-alpha", "content": "1"}) \
             .extend(app, extension)
+        SettingsExtender(fields=(
+            _build_setting_field_definition({
+                "key": "accent_color",
+                "label": "Accent",
+                "type": "text",
+                "default": "#224466",
+            }),
+        )) \
+            .theme_variable("bias-alpha-accent", "accent_color") \
+            .extend(app, extension)
         app.make("theme")
+        app.make("settings")
 
         from apps.core.extensions.frontend_runtime_service import _build_frontend_document_payload
 
         with patch("apps.core.extensions.frontend_runtime_service.get_extension_host", return_value=app):
             entry = {
                 "id": "alpha-tools",
-                "frontend_document": _build_frontend_document_payload(runtime_view),
+                "frontend_document": _build_frontend_document_payload(
+                    runtime_view,
+                    settings_values={"accent_color": "#335577"},
+                ),
             }
 
         with patch("apps.core.extensions.frontend_runtime_service.get_enabled_extension_runtime_entries", return_value=[entry]):
             payload = build_enabled_frontend_document_payload()
 
         self.assertEqual(payload["theme_variables"]["bias-alpha-color"], "#123456")
+        self.assertEqual(payload["theme_variables"]["bias-alpha-accent"], "#335577")
         self.assertEqual(payload["document_attributes"]["class"], ["theme-alpha"])
         self.assertEqual(payload["head_tags"][0]["attributes"]["name"], "theme-alpha")
+
+    def test_settings_extender_serializes_forum_settings_with_alias_and_transform(self):
+        from apps.core.extensions import SettingsExtender
+        from apps.core.extensions.backend import _build_setting_field_definition
+        from apps.core.extensions.frontend_runtime_service import _build_extension_forum_settings
+
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+
+        SettingsExtender(fields=(
+            _build_setting_field_definition({
+                "key": "allow_username_format",
+                "label": "Allow username format",
+                "type": "boolean",
+                "default": False,
+            }),
+        ), expose_to_forum=("allow_username_format",)) \
+            .serialize_to_forum("allowUsernameMentionFormat", "allow_username_format", bool) \
+            .extend(app, extension)
+        app.make("settings")
+
+        runtime_view = app.get_runtime_view("alpha-tools")
+        payload = _build_extension_forum_settings(
+            {
+                "forum_settings_keys": tuple(runtime_view.forum_settings_keys),
+                "forum_serializations": tuple(runtime_view.settings_forum_serializations),
+            },
+            {"allow_username_format": "1"},
+        )
+
+        self.assertEqual(payload["allow_username_format"], "1")
+        self.assertTrue(payload["allowUsernameMentionFormat"])
 
     def test_validator_extender_runs_during_resource_payload_application(self):
         from apps.core.resource_registry import ResourceRegistry
@@ -1625,8 +1745,10 @@ class ExtensionManifestLoaderTests(TestCase):
 
                 rebuild_marker = Setting.objects.get(key="extensions_runtime_rebuild_required")
                 self.assertIn("extension_enabled", rebuild_marker.value)
-                self.assertFalse(output_manifest.exists())
-                self.assertFalse(build_manifest.exists())
+                self.assertTrue(output_manifest.exists())
+                self.assertTrue(build_manifest.exists())
+                self.assertNotIn("stale", output_manifest.read_text(encoding="utf-8"))
+                self.assertNotIn("stale", build_manifest.read_text(encoding="utf-8"))
                 self.assertTrue(import_map.exists())
                 import_map_source = import_map.read_text(encoding="utf-8")
                 self.assertIn("generatedAdminExtensionModules", import_map_source)
@@ -1713,6 +1835,29 @@ class ExtensionManifestLoaderTests(TestCase):
                 self.assertEqual(forum_output["css"], ["assets/alpha-forum.css"])
                 self.assertEqual(forum_output["imports"], ["assets/vendor.js"])
                 self.assertEqual(forum_output["dynamic_imports"], ["assets/chunk.js"])
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_extension_frontend_import_map_uses_inputs_fallback(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                path = write_extension_frontend_import_map({
+                    "extensions": {
+                        "alpha-tools": {
+                            "extension_id": "alpha-tools",
+                            "inputs": {
+                                "admin": "extensions/alpha-tools/frontend/admin/index.js",
+                                "forum": "extensions/alpha-tools/frontend/forum/index.js",
+                            },
+                        }
+                    }
+                })
+
+                source = path.read_text(encoding="utf-8")
+                self.assertIn("../../../extensions/alpha-tools/frontend/admin/index.js", source)
+                self.assertIn("../../../extensions/alpha-tools/frontend/forum/index.js", source)
+                self.assertIn('"alpha-tools": () => import', source)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -1970,9 +2115,12 @@ class ExtensionManifestLoaderTests(TestCase):
                 "def apply_created(**kwargs):\n"
                 "    return {'post_id': kwargs['post'].id, 'value': kwargs['context']['alpha']}\n"
                 "\n"
+                "def apply_hidden(**kwargs):\n"
+                "    return {'post_id': kwargs['post'].id, 'hidden': kwargs['context']['is_hidden']}\n"
+                "\n"
                 "def extend():\n"
                 "    return [\n"
-                "        PostLifecycleExtender().handler('alpha', apply_created=apply_created, description='Alpha post lifecycle'),\n"
+                "        PostLifecycleExtender().handler('alpha', apply_created=apply_created, apply_hidden=apply_hidden, description='Alpha post lifecycle'),\n"
                 "    ]\n",
                 encoding="utf-8",
             )
@@ -1999,6 +2147,12 @@ class ExtensionManifestLoaderTests(TestCase):
             )
             self.assertEqual(results["alpha"]["post_id"], 7)
             self.assertEqual(results["alpha"]["value"], "ok")
+            hidden_results = application.post_lifecycle.apply_hidden(
+                post=SimpleNamespace(id=8),
+                context={"is_hidden": True},
+            )
+            self.assertEqual(hidden_results["alpha"]["post_id"], 8)
+            self.assertTrue(hidden_results["alpha"]["hidden"])
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -2869,6 +3023,39 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_validate_extension_manifests_rejects_core_owned_frontend_contributions(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            forum_dir = manifest_dir / "frontend" / "forum"
+            forum_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "frontend_forum_entry": "extensions/alpha-tools/frontend/forum/index.js",
+            }, ensure_ascii=False), encoding="utf-8")
+            (forum_dir / "index.js").write_text(
+                "import { registerForumNavItem } from '@/forum/registry'\n"
+                "export function bootForumExtension() {\n"
+                "  registerForumNavItem({ key: 'alpha', moduleId: 'core' })\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = [item.manifest for item in loader.discover()]
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(
+                item.code == "forbidden_core_module_frontend_contribution"
+                and item.field == "extensions/alpha-tools/frontend/forum/index.js"
+                for item in result.issues
+            ))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_validate_extension_manifests_allows_generated_settings_surface(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -3448,6 +3635,9 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertIn("def extend():", backend_source)
                 self.assertIn("FrontendExtender(", backend_source)
                 self.assertIn("SettingsExtender(fields=(", backend_source)
+                self.assertIn("ApiResourceExtender('forum').fields(forum_resource_field_definitions)", backend_source)
+                self.assertIn("ResourceFieldDefinition(", backend_source)
+                self.assertIn("def resolve_forum_scaffold_status(forum, context):", backend_source)
                 self.assertIn("RuntimeActionsExtender(actions=(", backend_source)
                 self.assertIn("AdminNavigationExtender(generated_permissions_page=True)", backend_source)
                 self.assertIn("LifecycleExtender(", backend_source)
@@ -3456,6 +3646,8 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertIn("def uninstall(context):", backend_source)
                 migration_source = (extension_dir / "backend" / "migrations" / "0001_initial.py").read_text(encoding="utf-8")
                 self.assertIn("def apply():", migration_source)
+                readme_source = (extension_dir / "docs" / "README.md").read_text(encoding="utf-8")
+                self.assertIn('ApiResourceExtender("forum")', readme_source)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -3516,6 +3708,49 @@ class ExtensionManagementCommandTests(TestCase):
                     str(Path(temp_dir) / "extensions"),
                     "--strict",
                 )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_rejects_low_level_resource_extender_in_extension_source(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command("create_extension", "alpha-tools")
+                backend_path = Path(temp_dir) / "extensions" / "alpha-tools" / "backend" / "ext.py"
+                backend_path.write_text(
+                    backend_path.read_text(encoding="utf-8")
+                    + "\nfrom apps.core.extensions import ResourceExtender\n",
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
+                    call_command(
+                        "validate_extensions",
+                        "--extensions-path",
+                        str(Path(temp_dir) / "extensions"),
+                    )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_rejects_external_project_name_residue_in_extension_source(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command("create_extension", "alpha-tools")
+                backend_path = Path(temp_dir) / "extensions" / "alpha-tools" / "backend" / "ext.py"
+                external_project_name = "fla" + "rum"
+                backend_path.write_text(
+                    backend_path.read_text(encoding="utf-8")
+                    + f"\n# {external_project_name} naming residue must not enter Bias extensions\n",
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
+                    call_command(
+                        "validate_extensions",
+                        "--extensions-path",
+                        str(Path(temp_dir) / "extensions"),
+                    )
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -3969,7 +4204,7 @@ class ExtensionRegistryTests(TestCase):
                 frontend_runtime_service._frontend_runtime_catalog = {"stale": {}}
                 frontend_runtime_service._frontend_runtime_bootstrapped = True
                 locale_service._extension_locale_cache = [{"stale": True}]
-                formatter_service._extension_formatter_pipeline_cache = [lambda value: value]
+                formatter_service._extension_formatter_pipeline_cache = {"render": [lambda value: value]}
 
                 bootstrap_extension_frontend_event_listeners()
                 get_extension_event_bus().dispatch(ExtensionEnabledEvent(extension_id="alpha-tools"))
@@ -3977,14 +4212,16 @@ class ExtensionRegistryTests(TestCase):
                 marker = Setting.objects.get(key="extensions_runtime_rebuild_required")
                 self.assertIn("extension_enabled", marker.value)
                 self.assertIn("alpha-tools", marker.value)
-                self.assertFalse(output_manifest.exists())
-                self.assertFalse(build_manifest.exists())
+                self.assertTrue(output_manifest.exists())
+                self.assertTrue(build_manifest.exists())
+                self.assertNotIn("stale", output_manifest.read_text(encoding="utf-8"))
+                self.assertNotIn("stale", build_manifest.read_text(encoding="utf-8"))
                 self.assertTrue(import_map.exists())
                 self.assertIn("generatedForumExtensionModules", import_map.read_text(encoding="utf-8"))
                 self.assertEqual(frontend_runtime_service._frontend_runtime_catalog, {})
                 self.assertFalse(frontend_runtime_service._frontend_runtime_bootstrapped)
                 self.assertIsNone(locale_service._extension_locale_cache)
-                self.assertIsNone(formatter_service._extension_formatter_pipeline_cache)
+                self.assertEqual(formatter_service._extension_formatter_pipeline_cache, {})
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -4238,7 +4475,7 @@ class ExtensionRegistryTests(TestCase):
         emoji = next(item for item in entries if item["id"] == "emoji")
         self.assertEqual(emoji["frontend_forum_entry"], "extensions/emoji/frontend/forum/index.js")
         self.assertEqual(emoji["module_ids"], ["emoji"])
-        self.assertEqual(emoji["forum_settings"], {"cdn_url": ""})
+        self.assertEqual(emoji["forum_settings"], {"cdn_url": "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/"})
         self.assertIn("extensions/emoji/locale", emoji["locale_paths"])
         self.assertFalse(any(item["id"] == "sample-hello" for item in entries))
 
@@ -4252,7 +4489,7 @@ class ExtensionRegistryTests(TestCase):
         entries = frontend_runtime_service.get_enabled_extension_runtime_entries(product_visible_only=True)
         emoji = next(item for item in entries if item["id"] == "emoji")
         self.assertEqual(emoji["frontend_forum_entry"], "extensions/emoji/frontend/forum/index.js")
-        self.assertEqual(emoji["forum_settings"], {"cdn_url": ""})
+        self.assertEqual(emoji["forum_settings"], {"cdn_url": "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/"})
 
     def test_frontend_runtime_bootstrap_registers_static_catalog_without_settings_query(self):
         from apps.core.extensions import frontend_runtime_service
@@ -4342,9 +4579,48 @@ class ExtensionRegistryTests(TestCase):
         emoji = get_extension_settings_definition("emoji")
 
         self.assertIn("emoji", definitions)
-        self.assertEqual(emoji["defaults"]["cdn_url"], "")
+        self.assertEqual(emoji["defaults"]["cdn_url"], "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/")
         self.assertEqual(emoji["forum_settings_keys"], ("cdn_url",))
         self.assertEqual(emoji["fields"][0].key, "cdn_url")
+
+    @patch("apps.core.extensions.lifecycle.invalidate_extension_frontend_assets")
+    @patch("apps.core.extensions.frontend_runtime_service.clear_extension_frontend_runtime_cache")
+    def test_extension_settings_default_reset_and_frontend_cache_invalidation(
+        self,
+        clear_frontend_runtime_cache,
+        invalidate_frontend_assets,
+    ):
+        from apps.core.extension_settings_service import get_extension_settings, save_extension_settings
+
+        default_cdn = "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/"
+
+        self.assertEqual(get_extension_settings("emoji")["cdn_url"], default_cdn)
+
+        saved = save_extension_settings("emoji", {"cdn_url": "https://cdn.example.com/twemoji/"})
+
+        self.assertEqual(saved["cdn_url"], "https://cdn.example.com/twemoji/")
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="extensions.emoji.cdn_url").value),
+            "https://cdn.example.com/twemoji/",
+        )
+        clear_frontend_runtime_cache.assert_called()
+        invalidate_frontend_assets.assert_called_with(
+            "extension_settings_changed",
+            extension_id="emoji",
+        )
+
+        clear_frontend_runtime_cache.reset_mock()
+        invalidate_frontend_assets.reset_mock()
+
+        reset = save_extension_settings("emoji", {"cdn_url": ""})
+
+        self.assertEqual(reset["cdn_url"], default_cdn)
+        self.assertFalse(Setting.objects.filter(key="extensions.emoji.cdn_url").exists())
+        clear_frontend_runtime_cache.assert_called()
+        invalidate_frontend_assets.assert_called_with(
+            "extension_settings_changed",
+            extension_id="emoji",
+        )
 
     @patch("apps.core.extensions.runtime_probe.resolve_bias_version_compatibility")
     def test_registry_marks_extension_unhealthy_when_bias_version_incompatible(self, resolve_bias_version_compatibility_mock):
@@ -4934,7 +5210,17 @@ class AdminExtensionsApiTests(TestCase):
                 and "apply_created" in item["phases"]
                 and "apply_updated" in item["phases"]
                 and "apply_approved" in item["phases"]
+                and "apply_hidden" in item["phases"]
+                and "prepare_delete" in item["phases"]
                 for item in payload["post_lifecycle"]
+            )
+        )
+        self.assertTrue(
+            any(
+                item["module_id"] == "mentions"
+                and item["resource"] == "post"
+                and item["relationship"] == "mentions_users"
+                for item in payload["resource_relationships"]
             )
         )
 
@@ -5592,8 +5878,8 @@ class ResourceRegistryTests(TestCase):
             },
         )
 
-    def test_resolve_post_event_data_parses_approval_payload(self):
-        payload = resolve_post_event_data(
+    def test_approval_extension_resolves_post_event_data_payload(self):
+        payload = resolve_approval_event_data(
             SimpleNamespace(
                 type="postApproved",
                 content="note:已通过\nprevious_status:pending\ntarget_post_id:9\ntarget_post_number:3",
@@ -11728,6 +12014,10 @@ class AdminSettingsApiTests(TestCase):
                 for item in payload["user_preferences"]
             )
         )
+        mentions_extension = next(item for item in payload["enabled_extensions"] if item["id"] == "mentions")
+        self.assertFalse(mentions_extension["settings_values"]["allow_username_format"])
+        self.assertFalse(mentions_extension["forum_settings"]["allow_username_format"])
+        self.assertFalse(mentions_extension["forum_settings"]["allowUsernameMentionFormat"])
         self.assertTrue(
             any(
                 item["key"] == "follow_after_reply"
@@ -11754,8 +12044,8 @@ class AdminSettingsApiTests(TestCase):
             any(
                 item["id"] == "emoji"
                 and item["frontend_forum_entry"] == "extensions/emoji/frontend/forum/index.js"
-                and item["settings_values"]["cdn_url"] == ""
-                and item["forum_settings"]["cdn_url"] == ""
+                and item["settings_values"]["cdn_url"] == "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/"
+                and item["forum_settings"]["cdn_url"] == "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/"
                 for item in payload["enabled_extensions"]
             )
         )
@@ -13519,12 +13809,9 @@ class EnsureAdminCommandTests(TestCase):
             Permission.objects.filter(group=admin_group).values_list("permission", flat=True)
         )
 
-        self.assertTrue(
-            set(get_registry_permission_codes_by_prefix("admin.approval.")).issubset(permissions)
-        )
-        self.assertTrue(
-            set(get_registry_permission_codes_by_prefix("admin.flag.")).issubset(permissions)
-        )
+        self.assertTrue(set(get_registry_staff_managed_admin_permission_codes()).issubset(permissions))
+        self.assertIn("admin.approval.view", permissions)
+        self.assertIn("admin.flag.view", permissions)
 
 
 class UpgradeForumCommandTests(TestCase):
@@ -14602,6 +14889,17 @@ class AdminPermissionsApiTests(TestCase):
                 "admin.flag.view",
                 "admin.flag.resolve",
             },
+        )
+
+    def test_registry_staff_managed_admin_permission_helper_uses_registered_admin_permissions(self):
+        self.assertTrue(
+            {
+                "admin.approval.view",
+                "admin.approval.approve",
+                "admin.approval.reject",
+                "admin.flag.view",
+                "admin.flag.resolve",
+            }.issubset(set(get_registry_staff_managed_admin_permission_codes()))
         )
 
     def test_search_index_definition_limits_post_index_to_registered_searchable_types(self):

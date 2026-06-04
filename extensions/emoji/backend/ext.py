@@ -25,10 +25,12 @@ def extend():
                 "help_text": "用于覆盖表情图片资源地址。",
                 "order": 10,
             }),
-        ), expose_to_forum=("cdn_url",)),
-        FormatterExtender(transforms=(
-            render_emoji_html,
-        )),
+        ), expose_to_forum=("cdn_url",))
+        .default("cdn_url", "https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/")
+        .reset_when("cdn_url", lambda value: not str(value or "").strip())
+        .reset_frontend_cache_for("cdn_url")
+        .theme_variable("bias-emoji-cdn", "cdn_url"),
+        FormatterExtender().parse(parse_emoticons),
         LifecycleExtender(
             install=install,
             enable=enable,
@@ -52,8 +54,8 @@ EMOJI_MAP = {
 }
 
 
-def render_emoji_html(html: str) -> str:
-    return EMOJI_PATTERN.sub(lambda match: EMOJI_MAP.get(match.group(1), match.group(1)), html or "")
+def parse_emoticons(text: str) -> str:
+    return EMOJI_PATTERN.sub(lambda match: EMOJI_MAP.get(match.group(1), match.group(1)), text or "")
 
 
 def install(context):
