@@ -9,7 +9,7 @@ from apps.core.extensions.policy_runtime_service import evaluate_extension_polic
 from apps.core.forum_registry import get_forum_registry
 from apps.discussions.models import Discussion
 from apps.posts import post_query_service, service_lifecycle, service_moderation
-from apps.posts.models import Post, PostFlag
+from apps.posts.models import Post
 from apps.users.models import User
 from apps.users.services import UserService
 
@@ -41,10 +41,6 @@ class PostService:
     """帖子服务"""
 
     POST_NUMBER_CONFLICT_RETRY_ATTEMPTS = 3
-
-    @staticmethod
-    def annotate_flag_state(queryset, user: Optional[User] = None):
-        return post_query_service.annotate_flag_state(queryset, user)
 
     @staticmethod
     def _can_view_post(post: Post, user: Optional[User]) -> bool:
@@ -84,7 +80,6 @@ class PostService:
             default_post_type=_get_default_post_type(),
             can_reply_in_discussion=PostService._validate_replyable_discussion,
             render_markdown_cb=PostService._render_markdown,
-            process_mentions_cb=PostService._process_mentions,
             lock_discussion_for_post_number_cb=PostService._lock_discussion_for_post_number,
             create_post_with_sequential_number_cb=PostService._create_post_with_sequential_number,
         )
@@ -116,7 +111,6 @@ class PostService:
             user=user,
             preload=preload,
             stream_post_types=_get_stream_post_types(),
-            annotate_flag_state_cb=PostService.annotate_flag_state,
             apply_visibility_filters_cb=PostService.apply_visibility_filters,
         )
 
@@ -193,7 +187,6 @@ class PostService:
             user=user,
             preload=preload,
             can_view_post_cb=PostService._can_view_post,
-            annotate_flag_state_cb=PostService.annotate_flag_state,
         )
 
     @staticmethod
@@ -222,7 +215,6 @@ class PostService:
             content,
             can_edit_post_cb=PostService.can_edit_post,
             render_markdown_cb=PostService._render_markdown,
-            process_mentions_cb=PostService._process_mentions,
         )
 
     @staticmethod
@@ -307,54 +299,6 @@ class PostService:
         )
 
     @staticmethod
-    def like_post(post_id: int, user: User) -> bool:
-        return service_moderation.like_post(
-            post_id,
-            user,
-            can_view_post=PostService._can_view_post,
-        )
-
-    @staticmethod
-    def report_post(post_id: int, user: User, reason: str, message: str = "") -> PostFlag:
-        return service_moderation.report_post(
-            post_id,
-            user,
-            reason,
-            message,
-            can_view_post=PostService._can_view_post,
-        )
-
-    @staticmethod
-    def get_flag_list(status: Optional[str] = None, page: int = 1, limit: int = 20, *, user: User | None = None):
-        return service_moderation.get_flag_list(status=status, page=page, limit=limit, user=user)
-
-    @staticmethod
-    def resolve_flag(flag_id: int, admin_user: User, status: str, resolution_note: str = "") -> PostFlag:
-        return service_moderation.resolve_flag(
-            flag_id,
-            admin_user,
-            status,
-            resolution_note=resolution_note,
-        )
-
-    @staticmethod
-    def resolve_post_flags(post_id: int, admin_user: User, status: str, resolution_note: str = "") -> int:
-        return service_moderation.resolve_post_flags(
-            post_id,
-            admin_user,
-            status,
-            resolution_note=resolution_note,
-        )
-
-    @staticmethod
-    def delete_post_flags(post_id: int, user: User) -> int:
-        return service_moderation.delete_post_flags(
-            post_id,
-            user,
-            can_view_post=PostService._can_view_post,
-        )
-
-    @staticmethod
     def approve_post(post: Post, admin_user: User, note: str = "") -> Post:
         return service_moderation.approve_post(
             post,
@@ -362,7 +306,6 @@ class PostService:
             note=note,
             discussion_counted_post_types=_get_discussion_counted_post_types(),
             user_counted_post_types=_get_user_counted_post_types(),
-            process_mentions_cb=PostService._process_mentions,
             refresh_discussion_approved_stats_cb=PostService._refresh_discussion_approved_stats,
         )
 
@@ -375,14 +318,6 @@ class PostService:
             discussion_counted_post_types=_get_discussion_counted_post_types(),
             user_counted_post_types=_get_user_counted_post_types(),
             refresh_discussion_approved_stats_cb=PostService._refresh_discussion_approved_stats,
-        )
-
-    @staticmethod
-    def unlike_post(post_id: int, user: User) -> bool:
-        return service_moderation.unlike_post(
-            post_id,
-            user,
-            can_view_post=PostService._can_view_post,
         )
 
     @staticmethod
@@ -422,32 +357,6 @@ class PostService:
             user=user,
             post=post,
         ))
-
-    @staticmethod
-    def can_like_post(post: Post, user: User) -> bool:
-        """检查用户是否可以点赞帖子"""
-        if not user or not user.is_authenticated:
-            return False
-        if user.is_suspended:
-            return False
-        if post.user_id == user.id:
-            return False
-        return bool(evaluate_extension_policy(
-            "post.like",
-            default=True,
-            user=user,
-            post=post,
-        ))
-
-    @staticmethod
-    def _process_mentions(post: Post, content: str):
-        from apps.core.mentions import extract_mentioned_usernames
-
-        return service_lifecycle.process_mentions(
-            post,
-            content,
-            extract_mentions_cb=extract_mentioned_usernames,
-        )
 
     @staticmethod
     def _render_markdown(content: str) -> str:

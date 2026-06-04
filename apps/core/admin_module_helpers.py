@@ -1,6 +1,5 @@
 from typing import Any, Dict, List
-
-from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extension
+from types import SimpleNamespace
 
 
 def resolve_module_category_label(category: str) -> str:
@@ -128,7 +127,61 @@ def resolve_module_extension_definition(module):
             return extension
     except Exception:
         pass
-    return adapt_builtin_module_to_extension(module)
+    return _build_core_module_view(module)
+
+
+def _build_core_module_view(module):
+    settings_pages = tuple(
+        item
+        for item in (
+            _settings_group_entry_path(group_name)
+            for group_name in module.settings_groups
+        )
+        if item
+    )
+    runtime = SimpleNamespace(
+        installed=True,
+        enabled=bool(module.enabled),
+        booted=bool(module.enabled),
+        healthy=True,
+        migration_state="core",
+        migration_label="核心底座" if module.is_core else "核心模块",
+        dependency_state="healthy",
+        dependency_state_label="依赖正常",
+        runtime_issues=(),
+    )
+    manifest = SimpleNamespace(
+        icon=next((page.icon for page in module.admin_pages if page.icon), "fas fa-cube"),
+        category=module.category,
+        dependencies=tuple(module.dependencies),
+        provides=tuple(module.capabilities),
+        documentation_url=resolve_module_documentation_url(module),
+    )
+    return SimpleNamespace(
+        id=module.module_id,
+        name=module.name,
+        version=module.version,
+        description=module.description,
+        manifest=manifest,
+        source="core-module",
+        module_ids=(module.module_id,),
+        settings_groups=tuple(module.settings_groups),
+        admin_pages=tuple(page.path for page in module.admin_pages),
+        admin_actions=(),
+        settings_pages=settings_pages,
+        permissions_pages=(),
+        operations_pages=(),
+        runtime=runtime,
+    )
+
+
+def _settings_group_entry_path(group_name: str) -> str:
+    return {
+        "basic": "/admin/basics",
+        "appearance": "/admin/appearance",
+        "mail": "/admin/mail",
+        "advanced": "/admin/advanced",
+    }.get(str(group_name or "").strip(), "")
 
 
 def build_module_runtime_state(module) -> Dict[str, Any]:
@@ -148,8 +201,8 @@ def build_module_runtime_state(module) -> Dict[str, Any]:
         for phase in getattr(lifecycle, "phases", ())
     ]
 
-    migration_state = "built-in"
-    migration_label = "内置模块"
+    migration_state = "core"
+    migration_label = "核心模块"
     if module.module_id == "core":
         migration_label = "核心底座"
 

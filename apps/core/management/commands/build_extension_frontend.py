@@ -71,8 +71,7 @@ class Command(BaseCommand):
         extensions = [
             extension
             for extension in manager.get_extensions()
-            if extension.source != "builtin-module"
-            and extension.runtime.installed
+            if extension.runtime.installed
             and (include_disabled or extension.runtime.enabled)
         ]
         result = recompile_extension_frontend_assets(

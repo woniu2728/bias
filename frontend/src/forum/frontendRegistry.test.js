@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   getDiscussionActions,
+  getDiscussionActionHandler,
   getComposerDraftMeta,
   getApprovalNote,
   getDiscussionReplyState,
@@ -14,6 +15,7 @@ import {
   getPageState,
   getProfilePanels,
   getPostActions,
+  getPostActionHandler,
   getSearchSources,
   getStateBlock,
   getUiCopy,
@@ -26,6 +28,7 @@ import {
   registerComposerSubmitSuccess,
   registerApprovalNote,
   registerDiscussionAction,
+  registerDiscussionActionHandler,
   registerForumNavItem,
   registerHeaderItem,
   registerDiscussionReplyState,
@@ -38,6 +41,7 @@ import {
   registerStateBlock,
   registerUiCopy,
   registerPostAction,
+  registerPostActionHandler,
   registerPostFlagPanel,
   registerPostReviewBanner,
   registerPostStateBadge,
@@ -2171,6 +2175,55 @@ test('discussion action runtime confirms then dispatches to handler map', async 
   assert.equal(confirmedPayload.tone, 'danger')
 })
 
+test('discussion action runtime dispatches registered extension handlers', async () => {
+  const handlerKey = uniqueKey('discussion-runtime-extension-handler')
+  const calls = []
+
+  registerDiscussionActionHandler({
+    key: handlerKey,
+    moduleId: 'subscriptions',
+    async handle(context) {
+      calls.push({
+        action: context.action,
+        discussionId: context.discussion?.id,
+        itemKey: context.item?.key,
+      })
+    },
+  })
+
+  const hiddenWhenDisabled = getDiscussionActionHandler(handlerKey, {
+    forumStore: {
+      isModuleEnabled: moduleId => moduleId !== 'subscriptions',
+    },
+  })
+  const visibleWhenEnabled = getDiscussionActionHandler(handlerKey, {
+    forumStore: {
+      isModuleEnabled: moduleId => moduleId === 'subscriptions',
+    },
+  })
+  const completed = await runDiscussionAction(
+    { key: handlerKey },
+    {
+      action: handlerKey,
+      discussion: { id: 88 },
+      forumStore: {
+        isModuleEnabled: moduleId => moduleId === 'subscriptions',
+      },
+    }
+  )
+
+  assert.equal(hiddenWhenDisabled, null)
+  assert.equal(visibleWhenEnabled.key, handlerKey)
+  assert.equal(completed, true)
+  assert.deepEqual(calls, [
+    {
+      action: handlerKey,
+      discussionId: 88,
+      itemKey: handlerKey,
+    },
+  ])
+})
+
 test('post action runtime prefers explicit action key and respects cancellation', async () => {
   let handlerCalls = 0
   const postActionKey = uniqueKey('post-runtime-delete')
@@ -2217,4 +2270,53 @@ test('post action runtime prefers explicit action key and respects cancellation'
   assert.equal(cancelled, false)
   assert.equal(completed, true)
   assert.equal(handlerCalls, 1)
+})
+
+test('post action runtime dispatches registered extension handlers', async () => {
+  const handlerKey = uniqueKey('post-runtime-extension-handler')
+  const calls = []
+
+  registerPostActionHandler({
+    key: handlerKey,
+    moduleId: 'flags',
+    async handle(context) {
+      calls.push({
+        action: context.action,
+        postId: context.post?.id,
+        itemKey: context.item?.key,
+      })
+    },
+  })
+
+  const hiddenWhenDisabled = getPostActionHandler(handlerKey, {
+    forumStore: {
+      isModuleEnabled: moduleId => moduleId !== 'flags',
+    },
+  })
+  const visibleWhenEnabled = getPostActionHandler(handlerKey, {
+    forumStore: {
+      isModuleEnabled: moduleId => moduleId === 'flags',
+    },
+  })
+  const completed = await runPostAction(
+    { key: handlerKey },
+    {
+      action: handlerKey,
+      forumStore: {
+        isModuleEnabled: moduleId => moduleId === 'flags',
+      },
+      post: { id: 77 },
+    }
+  )
+
+  assert.equal(hiddenWhenDisabled, null)
+  assert.equal(visibleWhenEnabled.key, handlerKey)
+  assert.equal(completed, true)
+  assert.deepEqual(calls, [
+    {
+      action: handlerKey,
+      postId: 77,
+      itemKey: handlerKey,
+    },
+  ])
 })

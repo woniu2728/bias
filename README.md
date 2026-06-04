@@ -1,6 +1,6 @@
 # Bias
 
-Bias 是一个使用 Django + Vue 3 构建的论坛项目，目标是对齐 Flarum 2.x 的核心论坛体验和后台管理能力，同时采用更适合 Python 项目的实现方式。
+Bias 是一个使用 Django + Vue 3 构建的论坛项目，目标是提供扩展优先的现代论坛体验和后台管理能力，同时采用更适合 Python 项目的实现方式。
 
 ## 技术栈
 
@@ -11,7 +11,7 @@ Bias 是一个使用 Django + Vue 3 构建的论坛项目，目标是对齐 Flar
 
 ## 当前安装/升级设计
 
-当前流程参考 Flarum：
+当前安装与升级流程：
 
 - 论坛运行时配置只写入 `instance/site.json`
 - 首次安装使用 `install_forum`

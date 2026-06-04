@@ -24,7 +24,7 @@ function upsertSearchFilter(item) {
 export function registerSearchFilter(item) {
   return upsertSearchFilter({
     order: 100,
-    category: 'builtin',
+    category: 'core',
     ...item,
   })
 }

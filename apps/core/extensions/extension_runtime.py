@@ -283,6 +283,10 @@ class Extension:
         return tuple(self.discover().discussion_lifecycle)
 
     @property
+    def post_lifecycle(self):
+        return tuple(self.discover().post_lifecycle)
+
+    @property
     def manifest_runtime_actions(self):
         runtime_view = self.discover()
         if runtime_view.runtime_actions:

@@ -29,7 +29,6 @@ import { useRoute } from 'vue-router'
 import api from '../../api'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
-import { builtinAdminEntries } from '../extensions/builtinAdminEntries'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
 import {
   resolveFallbackExtensionOperationsPage,
@@ -109,7 +108,6 @@ async function loadExtensionHost() {
 async function resolveExtensionComponent(currentExtension, currentHostKind) {
   return resolveExtensionAdminComponent(currentExtension, currentHostKind, {
     importers: adminEntryModules,
-    builtins: builtinAdminEntries,
     fallbacks: [
       resolveFallbackExtensionSettingsPage,
       resolveFallbackExtensionPermissionsPage,

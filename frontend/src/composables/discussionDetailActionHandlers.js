@@ -7,7 +7,6 @@ export function createDiscussionActionHandlers({
   toggleHide,
   toggleLock,
   togglePin,
-  toggleSubscription,
 }) {
   return {
     delete: async () => {
@@ -34,16 +33,12 @@ export function createDiscussionActionHandlers({
     'toggle-pin': async () => {
       await togglePin()
     },
-    'toggle-subscription': async () => {
-      await toggleSubscription()
-    },
   }
 }
 
 export function createPostActionHandlers({
   deletePost,
   editPost,
-  openReportModal,
   togglePostHidden,
 }) {
   return {
@@ -52,9 +47,6 @@ export function createPostActionHandlers({
     },
     'edit-post': async (_, context = {}) => {
       editPost(context.post)
-    },
-    'open-report-modal': async (_, context = {}) => {
-      await openReportModal(context.post)
     },
     'toggle-hide-post': async (_, context = {}) => {
       await togglePostHidden(context.post)

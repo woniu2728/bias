@@ -3,7 +3,7 @@ from django.db import models
 
 class Setting(models.Model):
     """
-    系统设置模型 - 对标Flarum的Setting模型
+    Bias 系统设置模型
     """
     key = models.CharField(max_length=100, unique=True, db_index=True)
     value = models.TextField(blank=True)

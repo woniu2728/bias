@@ -5,7 +5,7 @@ from django.utils import timezone
 
 class User(AbstractUser):
     """
-    自定义用户模型 - 对标Flarum的User模型
+    Bias 用户模型
     """
     # 覆盖username字段，添加唯一约束
     username = models.CharField(max_length=100, unique=True, db_index=True)
@@ -99,7 +99,7 @@ class User(AbstractUser):
 
 class Group(models.Model):
     """
-    用户组模型 - 对标Flarum的Group模型
+    Bias 用户组模型
     """
     name = models.CharField(max_length=100, unique=True)
     name_singular = models.CharField(max_length=100, blank=True)
@@ -124,7 +124,7 @@ class Group(models.Model):
 
 class Permission(models.Model):
     """
-    权限模型 - 对标Flarum的Permission模型
+    Bias 权限模型
     """
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='permissions')
     permission = models.CharField(max_length=100)
@@ -144,7 +144,7 @@ class Permission(models.Model):
 
 class AccessToken(models.Model):
     """
-    访问令牌模型 - 对标Flarum的AccessToken模型
+    Bias 访问令牌模型
     """
     token = models.CharField(max_length=255, unique=True, db_index=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='access_tokens')
@@ -168,7 +168,7 @@ class AccessToken(models.Model):
 
 class EmailToken(models.Model):
     """
-    邮箱验证令牌模型 - 对标Flarum的EmailToken模型
+    Bias 邮箱验证令牌模型
     """
     token = models.CharField(max_length=255, unique=True, db_index=True)
     email = models.EmailField()
@@ -189,7 +189,7 @@ class EmailToken(models.Model):
 
 class PasswordToken(models.Model):
     """
-    密码重置令牌模型 - 对标Flarum的PasswordToken模型
+    Bias 密码重置令牌模型
     """
     token = models.CharField(max_length=255, unique=True, db_index=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_tokens')

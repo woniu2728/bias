@@ -18,6 +18,7 @@ from apps.core.forum_events import (
 )
 from apps.core.extensions.runtime_access import (
     get_runtime_discussion_lifecycle_service,
+    get_runtime_post_lifecycle_service,
     get_runtime_resource_registry,
     refresh_runtime_model_private,
 )
@@ -79,6 +80,34 @@ def _apply_discussion_rejected_extensions(discussion_lifecycle, *, discussion, c
     if discussion_lifecycle is None:
         return {}
     return discussion_lifecycle.apply_rejected(discussion=discussion, context=context)
+
+
+def _apply_post_created_extensions(post: Post, *, context: dict) -> dict:
+    post_lifecycle = get_runtime_post_lifecycle_service()
+    if post_lifecycle is None:
+        return {}
+    return post_lifecycle.apply_created(post=post, context=context)
+
+
+def _apply_post_updated_extensions(post: Post, *, context: dict) -> dict:
+    post_lifecycle = get_runtime_post_lifecycle_service()
+    if post_lifecycle is None:
+        return {}
+    return post_lifecycle.apply_updated(post=post, context=context)
+
+
+def _apply_post_approved_extensions(post: Post, *, context: dict) -> dict:
+    post_lifecycle = get_runtime_post_lifecycle_service()
+    if post_lifecycle is None:
+        return {}
+    return post_lifecycle.apply_approved(post=post, context=context)
+
+
+def _apply_post_deleted_extensions(*, context: dict) -> dict:
+    post_lifecycle = get_runtime_post_lifecycle_service()
+    if post_lifecycle is None:
+        return {}
+    return post_lifecycle.apply_deleted(context=context)
 
 
 def _apply_discussion_resource_relationships(
@@ -195,6 +224,16 @@ def create_discussion(
         first_post.save(update_fields=["is_private"])
 
         if not requires_approval:
+            _apply_post_created_extensions(
+                first_post,
+                context={
+                    "content": content,
+                    "actor": user,
+                    "discussion": discussion,
+                    "is_first_post": True,
+                    "is_approved": True,
+                },
+            )
             user.discussion_count = F("discussion_count") + 1
             user.save(update_fields=["discussion_count"])
 
@@ -285,6 +324,16 @@ def update_discussion(
         _refresh_discussion_private_state(discussion, first_post=first_post)
         if first_post is not None:
             first_post.save(update_fields=["is_private"])
+            if content is not None:
+                _apply_post_updated_extensions(
+                    first_post,
+                    context={
+                        "content": content,
+                        "actor": user,
+                        "discussion": discussion,
+                        "is_first_post": True,
+                    },
+                )
 
         should_persist_discussion = True
 
@@ -420,6 +469,7 @@ def approve_discussion(
     *,
     approved_reply_counts_by_author_cb,
 ) -> Discussion:
+    previous_status = discussion.approval_status
     was_counted = discussion.approval_status == Discussion.APPROVAL_APPROVED
     approved_reply_counts = {}
     if not was_counted:
@@ -476,6 +526,17 @@ def approve_discussion(
                 User.objects.filter(id=discussion.user_id).update(discussion_count=F("discussion_count") + 1)
             for user_id, total in approved_reply_counts.items():
                 User.objects.filter(id=user_id).update(comment_count=F("comment_count") + total)
+            if first_post is not None:
+                _apply_post_approved_extensions(
+                    first_post,
+                    context={
+                        "content": first_post.content,
+                        "actor": admin_user,
+                        "discussion": discussion,
+                        "is_first_post": True,
+                        "previous_status": previous_status,
+                    },
+                )
 
         if not was_counted:
             dispatch_forum_event_after_commit(
@@ -632,7 +693,24 @@ def delete_discussion(
         if counted_discussion:
             approved_reply_counts = approved_reply_counts_by_author_cb(discussion)
 
+        deleted_posts = tuple(
+            Post.objects.filter(discussion=discussion)
+            .order_by("number")
+            .values("id", "number", "approval_status", "hidden_at")
+        )
         Post.objects.filter(discussion=discussion).delete()
+        for deleted_post in deleted_posts:
+            _apply_post_deleted_extensions(
+                context={
+                    "post_id": deleted_post["id"],
+                    "discussion_id": discussion.id,
+                    "actor": user,
+                    "post_number": deleted_post["number"],
+                    "is_first_post": deleted_post["number"] == 1,
+                    "approval_status": deleted_post["approval_status"],
+                    "was_hidden": deleted_post["hidden_at"] is not None,
+                },
+            )
         discussion.delete()
 
         _apply_discussion_delete_extensions(

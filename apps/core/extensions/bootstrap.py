@@ -75,7 +75,7 @@ def build_extension_host(
 
     resolved_manager = manager or get_extension_manager()
     resolved_manager.load(force=force)
-    extensions_to_boot = tuple(resolved_manager.get_enabled_extensions(include_builtin=True))
+    extensions_to_boot = tuple(resolved_manager.get_enabled_extensions())
     return ExtensionApplication(
         extensions_to_boot=extensions_to_boot,
         forum_registry=forum_registry or get_forum_registry(),

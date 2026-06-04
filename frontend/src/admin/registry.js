@@ -13,7 +13,9 @@ export { createAdminRuntimeRegistry } from './runtimeRegistry.js'
 export const adminRuntimeRegistry = createAdminRuntimeRegistry({
   registerAdminRoute: registerAdminRouteEntry,
 })
+export { default as AdminActionNoteModal } from './components/AdminActionNoteModal.vue'
 export { default as AdminColorField } from './components/AdminColorField.vue'
+export { default as AdminFilterTabs } from './components/AdminFilterTabs.vue'
 export { default as AdminInlineMessage } from './components/AdminInlineMessage.vue'
 export { default as AdminPage } from './components/AdminPage.vue'
 export { default as AdminSelectMenu } from './components/AdminSelectMenu.vue'
@@ -21,6 +23,10 @@ export { default as AdminStateBlock } from './components/AdminStateBlock.vue'
 export { default as AdminSummaryGrid } from './components/AdminSummaryGrid.vue'
 export { default as AdminToolbar } from './components/AdminToolbar.vue'
 export { useAdminSaveFeedback } from './composables/useAdminSaveFeedback.js'
+export {
+  resolveApprovalSelectionState,
+  resolveApprovalTemplateOptions,
+} from './composables/approvalQueueTemplates.js'
 export { useModalStore } from '../stores/modal.js'
 export { default as adminApi } from '../api/index.js'
 export {
@@ -122,8 +128,6 @@ import './registry/bootstrap/appearancePage.js'
 import './registry/bootstrap/mailPage.js'
 import './registry/bootstrap/advancedPage.js'
 import './registry/bootstrap/auditLogsPage.js'
-import './registry/bootstrap/approvalQueuePage.js'
-import './registry/bootstrap/flagsPage.js'
 import './registry/bootstrap/permissionsPage.js'
 import './registry/bootstrap/usersPage.js'
 

@@ -5,7 +5,7 @@ from apps.discussions.models import Discussion
 
 class Post(models.Model):
     """
-    帖子模型 - 对标Flarum的Post模型
+    Bias 帖子模型
     """
     APPROVAL_APPROVED = "approved"
     APPROVAL_PENDING = "pending"
@@ -103,7 +103,7 @@ class Post(models.Model):
 
 class PostLike(models.Model):
     """
-    帖子点赞模型 - 对标Flarum的post_likes表
+    Bias 帖子点赞模型
     """
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='likes')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='post_likes')
@@ -123,7 +123,7 @@ class PostLike(models.Model):
 
 class PostMentionsUser(models.Model):
     """
-    帖子提及用户模型 - 对标Flarum的post_mentions_user表
+    Bias 帖子提及用户模型
     """
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='mentions')
     mentions_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='mentioned_in_posts')
@@ -143,7 +143,7 @@ class PostMentionsUser(models.Model):
 
 class PostFlag(models.Model):
     """
-    帖子举报模型 - 对标 Flarum Flags 扩展的基础能力
+    Bias 帖子举报模型
     """
 
     STATUS_OPEN = "open"

@@ -120,17 +120,6 @@ def register_forum_user_relationships(registry) -> None:
     )
     registry.register_relationship(
         ResourceRelationshipDefinition(
-            resource="notification",
-            relationship="from_user",
-            module_id="notifications",
-            resolver=_resolve_notification_from_user,
-            description="通知来源用户摘要。",
-            select_related=("from_user",),
-            prefetch_related=("from_user__user_groups",),
-        )
-    )
-    registry.register_relationship(
-        ResourceRelationshipDefinition(
             resource="user_detail",
             relationship="groups",
             module_id="users",
@@ -167,17 +156,6 @@ def register_forum_user_fields(registry) -> None:
             module_id="users",
             resolver=_resolve_user_primary_group,
             description="用户摘要中的主用户组徽章。",
-        )
-    )
-    registry.register_field(
-        ResourceFieldDefinition(
-            resource="notification",
-            field="from_user",
-            module_id="notifications",
-            resolver=_resolve_notification_from_user,
-            description="通知来源用户摘要。",
-            select_related=("from_user",),
-            prefetch_related=("from_user__user_groups",),
         )
     )
     registry.register_field(
@@ -304,7 +282,3 @@ def _resolve_user_groups(user, context: dict) -> list[dict]:
         }
         for group in user.user_groups.all()
     ]
-
-
-def _resolve_notification_from_user(notification, context: dict) -> dict | None:
-    return serialize_user_summary(getattr(notification, "from_user", None))

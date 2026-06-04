@@ -19,10 +19,24 @@ export function useDiscussionDetailMenus({
   togglingSubscription,
   discussionActionHandlers,
   postActionHandlers,
-  modalStore
+  modalStore,
+  patchDiscussion,
+  setTogglingSubscription,
+  showActionError,
+  showSuspensionAlert,
+  uiText,
+  upsertPost,
 }) {
+  function findDiscussionActionItem(action) {
+    return [
+      ...discussionMenuItems.value,
+      ...discussionSidebarActionItems.value,
+      ...discussionMobileActionItems.value,
+    ].find(entry => entry.key === action)
+  }
+
   async function handleDiscussionMenuSelection(action) {
-    const item = discussionMenuItems.value.find(entry => entry.key === action)
+    const item = findDiscussionActionItem(action)
     if (!item || item.disabled) return
 
     const ran = await runDiscussionAction(item, {
@@ -31,6 +45,9 @@ export function useDiscussionDetailMenus({
       discussion: discussion.value || {},
       discussionActionHandlers,
       modalStore,
+      patchDiscussion,
+      setTogglingSubscription,
+      showActionError,
     })
     if (ran) {
       showDiscussionMenu.value = false
@@ -61,6 +78,18 @@ export function useDiscussionDetailMenus({
     togglingSubscription: togglingSubscription.value
   }))
 
+  const discussionMobileActionItems = computed(() => getDiscussionMenuItems({
+    authStore,
+    canEditDiscussion: canEditDiscussion.value,
+    canModerateDiscussionSettings: canModerateDiscussionSettings.value,
+    canReplyFromMenu: canReplyFromMenu.value,
+    discussion: discussion.value || {},
+    hasActiveComposer: hasActiveComposer.value,
+    isSuspended: isSuspended.value,
+    surface: 'discussion-mobile-primary',
+    togglingSubscription: togglingSubscription.value
+  }))
+
   function hasPostControls(post) {
     return getPostMenuOptions(post).length > 0
   }
@@ -75,17 +104,33 @@ export function useDiscussionDetailMenus({
     })
   }
 
-  async function handlePostMenuSelection(post, action) {
-    const item = getPostMenuOptions(post).find(entry => entry.key === action)
+  async function handlePostMenuSelection(post, action, extraContext = {}) {
+    const item = getPostMenuOptions(post).find(entry => entry.key === action) || { key: action, action }
     if (!item || item.disabled) return
+    const patchPost = (postId, patch) => {
+      if (typeof upsertPost !== 'function') return null
+      const targetPost = String(post?.id) === String(postId) ? post : { id: postId }
+      return upsertPost({
+        ...targetPost,
+        ...(patch || {}),
+        id: postId,
+      })
+    }
 
     const ran = await runPostAction(item, {
       action: item.key,
       authStore,
       discussion: discussion.value || {},
+      isSuspended: isSuspended.value,
       modalStore,
+      patchPost,
       post,
       postActionHandlers,
+      showActionError,
+      showSuspensionAlert,
+      uiText,
+      upsertPost,
+      ...extraContext,
     })
     if (ran) {
       activePostMenuId.value = null
@@ -94,6 +139,7 @@ export function useDiscussionDetailMenus({
 
   return {
     discussionMenuItems,
+    discussionMobileActionItems,
     discussionSidebarActionItems,
     getPostMenuOptions,
     handleDiscussionMenuSelection,

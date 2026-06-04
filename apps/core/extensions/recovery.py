@@ -44,8 +44,6 @@ def is_extension_allowed_in_safe_mode(extension) -> bool:
     extension_id = str(getattr(extension, "id", "") or "").strip()
     if not extension_id:
         return False
-    if str(getattr(extension, "source", "") or "") == "builtin-module":
-        return True
     allowed_ids = get_extension_safe_mode_extension_ids()
     return extension_id in allowed_ids
 
@@ -211,7 +209,6 @@ def _get_enabled_extension_ids() -> list[str]:
             installed=True,
             enabled=True,
         )
-        .exclude(source="builtin-module")
         .values_list("extension_id", flat=True)
     ))
 

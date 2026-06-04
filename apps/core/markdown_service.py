@@ -3,9 +3,7 @@ Markdown渲染服务
 """
 import markdown
 import bleach
-from apps.users.models import User
 from apps.core.link_formatter import apply_default_external_link_attributes
-from apps.core.mentions import MENTION_RE, extract_mentioned_usernames
 from apps.core.extensions.formatter_service import apply_extension_formatters
 
 
@@ -85,9 +83,6 @@ class MarkdownService:
 
         html = md.convert(content)
 
-        # 处理@提及
-        html = MarkdownService._process_mentions(html)
-
         # 处理外部链接
         html = MarkdownService._process_external_links(html)
 
@@ -105,47 +100,6 @@ class MarkdownService:
             )
 
         return html
-
-    @staticmethod
-    def _process_mentions(html: str) -> str:
-        """
-        处理@提及，转换为链接
-
-        Args:
-            html: HTML内容
-
-        Returns:
-            str: 处理后的HTML
-        """
-        mention_names = set(extract_mentioned_usernames(html))
-        mention_map = {
-            item["username"]: item["id"]
-            for item in User.objects.filter(username__in=mention_names).values("id", "username")
-        }
-
-        def replace_mention(match):
-            username = match.group(1)
-            user_id = mention_map.get(username)
-            target = user_id if user_id else username
-            return f'<a href="/u/{target}" class="mention">@{username}</a>'
-
-        # 先处理，然后避免重复处理已经是链接的部分
-        result = html
-        # 只处理不在<a>标签内的@mentions
-        parts = result.split('<a')
-        processed_parts = [MENTION_RE.sub(replace_mention, parts[0])]
-
-        for part in parts[1:]:
-            # 找到</a>的位置
-            end_tag = part.find('</a>')
-            if end_tag != -1:
-                # 保留<a>标签内的内容不变，处理后面的内容
-                processed_parts.append('<a' + part[:end_tag+4])
-                processed_parts.append(MENTION_RE.sub(replace_mention, part[end_tag+4:]))
-            else:
-                processed_parts.append('<a' + part)
-
-        return ''.join(processed_parts)
 
     @staticmethod
     def _process_external_links(html: str) -> str:

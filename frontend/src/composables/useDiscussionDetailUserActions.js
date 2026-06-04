@@ -3,7 +3,6 @@ import api from '@/api'
 import { getUiCopy } from '@/forum/registry'
 import { useResourceStore } from '@/stores/resource'
 import { buildDiscussionPath, formatRelativeTime } from '@/utils/forum'
-import PostReportModal from '@/components/modals/PostReportModal.vue'
 
 export function useDiscussionDetailUserActions({
   authStore,
@@ -241,39 +240,6 @@ export function useDiscussionDetailUserActions({
     }
   }
 
-  async function openReportModal(post) {
-    if (isSuspended.value) {
-      await showSuspensionAlert()
-      return
-    }
-
-    try {
-      const result = await modalStore.show(
-        PostReportModal,
-        {
-          post,
-          submitReport: payload => api.post(`/posts/${post.id}/report`, payload)
-        },
-        {
-          size: 'small'
-        }
-      )
-
-      if (result?.reported) {
-        resourceStore.patch('posts', post.id, {
-          viewer_has_open_flag: true,
-        })
-        await modalStore.alert({
-          title: uiText('discussion-detail-report-success-title', '举报已提交'),
-          message: uiText('discussion-detail-report-success-message', '版主会尽快查看并处理。')
-        })
-      }
-    } catch (error) {
-      console.error('举报失败:', error)
-      await showActionError('举报', error)
-    }
-  }
-
   function formatDate(dateString) {
     return formatRelativeTime(dateString)
   }
@@ -295,7 +261,6 @@ export function useDiscussionDetailUserActions({
     goToLoginForReply,
     likePendingPostIds,
     openComposer,
-    openReportModal,
     replyToPost,
     shareDiscussion,
     showActionError,

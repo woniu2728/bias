@@ -1,31 +1,18 @@
-from dataclasses import replace
-
 from apps.core.extensions import (
     AdminSurfaceExtender,
+    ApiResourceExtender,
     ApiRoutesExtender,
     EventListenersExtender,
+    FrontendExtender,
     LifecycleExtender,
     ModelVisibilityExtender,
-    ResourceExtender,
+    PostLifecycleExtender,
     SettingsExtender,
 )
 from apps.core.extensions.backend import _build_setting_field_definition
 from apps.core.extensions.types import ExtensionEventListenerDefinition, ExtensionModelVisibilityDefinition
-from apps.core.forum_events import PostDeletedEvent, PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
+from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
 from apps.core.forum_registry_types import AdminPageDefinition, PermissionDefinition
-from apps.core.forum_resources_flags import (
-    _resolve_post_can_flag,
-    _resolve_post_can_moderate_flags,
-    _resolve_post_flag_identifiers,
-    _resolve_post_flags,
-    _resolve_post_open_flag_count,
-    _resolve_post_open_flags,
-    _resolve_post_viewer_has_open_flag,
-    _resolve_forum_can_view_flags,
-    _resolve_forum_flag_count,
-    _resolve_user_new_flag_count,
-    scope_flag_visibility,
-)
 from apps.posts.models import PostFlag
 from apps.core.resource_registry import (
     ResourceEndpointDefinition,
@@ -37,14 +24,29 @@ from extensions.flags.backend.handlers import (
     dispatch_post_report,
     dispatch_post_resolve_flags,
 )
+from extensions.flags.backend.admin_api import router as flags_admin_router
 from extensions.flags.backend.listeners import (
-    handle_post_deleted_flags,
     handle_post_flag_created,
     handle_post_flags_deleted,
     handle_post_flags_resolved,
 )
+from extensions.flags.backend.lifecycle import prepare_post_delete_flags
 from extensions.flags.backend.resource import FlagResource
-from extensions.flags.backend.routes import router as flags_router
+from extensions.flags.backend.resources import (
+    resolve_admin_open_flags,
+    resolve_forum_can_view_flags,
+    resolve_forum_flag_count,
+    post_flag_preload_resolver,
+    resolve_post_can_flag,
+    resolve_post_can_moderate_flags,
+    resolve_post_flag_identifiers,
+    resolve_post_flags,
+    resolve_post_open_flag_count,
+    resolve_post_open_flags,
+    resolve_post_viewer_has_open_flag,
+    resolve_user_new_flag_count,
+    scope_flag_visibility,
+)
 
 
 EXTENSION_ID = "flags"
@@ -52,6 +54,10 @@ EXTENSION_ID = "flags"
 
 def extend():
     return [
+        FrontendExtender(
+            admin_entry="extensions/flags/frontend/admin/index.js",
+            forum_entry="extensions/flags/frontend/forum/index.js",
+        ),
         SettingsExtender(
             fields=setting_definitions(),
             expose_to_forum=("guidelines_url",),
@@ -61,21 +67,29 @@ def extend():
             admin_pages=admin_page_definitions(),
             generated_permissions_page=True,
         ),
-        ResourceExtender(
-            resources=flag_resource_definitions(),
-            fields=post_resource_field_definitions(),
-            relationships=post_resource_relationship_definitions(),
-            endpoints=post_resource_endpoint_definitions(),
-        ),
         ApiRoutesExtender(
-            mounts=(("", flags_router),),
-            tags=("Posts",),
+            mounts=(("/admin", flags_admin_router),),
+            tags=("Admin",),
         ),
+        ApiResourceExtender(FlagResource),
+        ApiResourceExtender("forum").fields(forum_resource_field_definitions),
+        ApiResourceExtender("admin_stats").fields(admin_stats_resource_field_definitions),
+        ApiResourceExtender("post")
+        .fields(post_resource_field_definitions)
+        .relationships(post_resource_relationship_definitions)
+        .endpoints(post_resource_endpoint_definitions)
+        .add_default_include(("index", "show"), ("flags",)),
+        ApiResourceExtender("user_detail").fields(user_detail_resource_field_definitions),
         ModelVisibilityExtender(
             definitions=flag_model_visibility_definitions(),
         ),
         EventListenersExtender(
             listeners=flag_event_listener_definitions(),
+        ),
+        PostLifecycleExtender().handler(
+            "flags",
+            prepare_delete=prepare_post_delete_flags,
+            description="帖子删除前清理关联举报并派发举报删除事件。",
         ),
         LifecycleExtender(
             install=install,
@@ -151,71 +165,97 @@ def flag_resource_definitions():
     )
 
 
-def post_resource_field_definitions():
+def forum_resource_field_definitions():
     return (
         ResourceFieldDefinition(
             resource="forum",
             field="can_view_flags",
             module_id=EXTENSION_ID,
-            resolver=_resolve_forum_can_view_flags,
+            resolver=resolve_forum_can_view_flags,
             description="当前用户是否可以查看举报队列。",
         ),
         ResourceFieldDefinition(
             resource="forum",
             field="flag_count",
             module_id=EXTENSION_ID,
-            resolver=_resolve_forum_flag_count,
+            resolver=resolve_forum_flag_count,
             description="当前用户可见的待处理举报帖子数量。",
             visible=_visible_to_forum_flag_moderators,
         ),
+    )
+
+
+def admin_stats_resource_field_definitions():
+    return (
+        ResourceFieldDefinition(
+            resource="admin_stats",
+            field="openFlags",
+            module_id=EXTENSION_ID,
+            resolver=resolve_admin_open_flags,
+            description="后台统计中的待处理举报数量。",
+        ),
+    )
+
+
+def post_resource_field_definitions():
+    return (
         ResourceFieldDefinition(
             resource="post",
             field="can_flag",
             module_id=EXTENSION_ID,
-            resolver=_resolve_post_can_flag,
+            resolver=resolve_post_can_flag,
             description="当前用户是否可以举报该回复。",
         ),
         ResourceFieldDefinition(
             resource="post",
             field="viewer_has_open_flag",
             module_id=EXTENSION_ID,
-            resolver=_resolve_post_viewer_has_open_flag,
+            resolver=resolve_post_viewer_has_open_flag,
             description="当前用户是否已对该回复提交待处理举报。",
+            preload_resolver=post_flag_preload_resolver,
         ),
         ResourceFieldDefinition(
             resource="post",
             field="open_flag_count",
             module_id=EXTENSION_ID,
-            resolver=_resolve_post_open_flag_count,
+            resolver=resolve_post_open_flag_count,
             description="当前回复的待处理举报数量。",
+            preload_resolver=post_flag_preload_resolver,
         ),
         ResourceFieldDefinition(
             resource="post",
             field="open_flags",
             module_id=EXTENSION_ID,
-            resolver=_resolve_post_open_flags,
+            resolver=resolve_post_open_flags,
             description="当前回复的待处理举报明细。",
+            preload_resolver=post_flag_preload_resolver,
         ),
         ResourceFieldDefinition(
             resource="post",
             field="flags",
             module_id=EXTENSION_ID,
-            resolver=_resolve_post_flags,
+            resolver=resolve_post_flags,
             description="当前回复可见的待处理举报明细。",
             visible=_visible_to_flag_moderators,
+            preload_resolver=post_flag_preload_resolver,
         ),
         ResourceFieldDefinition(
             resource="post",
             field="can_moderate_flags",
             module_id=EXTENSION_ID,
-            resolver=_resolve_post_can_moderate_flags,
+            resolver=resolve_post_can_moderate_flags,
             description="当前用户是否可在前台处理举报。",
         ),
+    )
+
+
+def user_detail_resource_field_definitions():
+    return (
         ResourceFieldDefinition(
             resource="user_detail",
             field="new_flag_count",
             module_id=EXTENSION_ID,
-            resolver=_resolve_user_new_flag_count,
+            resolver=resolve_user_new_flag_count,
             description="当前用户可见的待处理举报帖子数量。",
             visible=_visible_to_self,
         ),
@@ -228,11 +268,12 @@ def post_resource_relationship_definitions():
             resource="post",
             relationship="flags",
             module_id=EXTENSION_ID,
-            resolver=_resolve_post_flag_identifiers,
+            resolver=resolve_post_flag_identifiers,
             description="当前回复可见的待处理举报关系。",
             visible=_visible_to_flag_moderators,
             resource_type="flag",
             many=True,
+            preload_resolver=post_flag_preload_resolver,
         ),
     )
 
@@ -241,24 +282,12 @@ def post_resource_endpoint_definitions():
     return (
         ResourceEndpointDefinition(
             resource="post",
-            endpoint="index",
-            module_id=EXTENSION_ID,
-            operation="mutate",
-            mutator=_add_post_flags_default_include,
-        ),
-        ResourceEndpointDefinition(
-            resource="post",
-            endpoint="show",
-            module_id=EXTENSION_ID,
-            operation="mutate",
-            mutator=_add_post_flags_default_include,
-        ),
-        ResourceEndpointDefinition(
-            resource="post",
             endpoint="report",
             module_id=EXTENSION_ID,
             handler=dispatch_post_report,
             methods=("POST",),
+            path="posts/{object_id}/report",
+            absolute_path=True,
             auth_required=True,
         ),
         ResourceEndpointDefinition(
@@ -267,6 +296,8 @@ def post_resource_endpoint_definitions():
             module_id=EXTENSION_ID,
             handler=dispatch_post_resolve_flags,
             methods=("POST",),
+            path="posts/{object_id}/flags/resolve",
+            absolute_path=True,
             auth_required=True,
         ),
         ResourceEndpointDefinition(
@@ -275,6 +306,8 @@ def post_resource_endpoint_definitions():
             module_id=EXTENSION_ID,
             handler=dispatch_post_delete_flags,
             methods=("DELETE",),
+            path="posts/{object_id}/flags",
+            absolute_path=True,
             auth_required=True,
         ),
     )
@@ -297,11 +330,6 @@ def flag_event_listener_definitions():
             handler=handle_post_flags_deleted,
             description="帖子举报被删除后向讨论实时流广播举报状态变更。",
         ),
-        ExtensionEventListenerDefinition(
-            event_type=PostDeletedEvent,
-            handler=handle_post_deleted_flags,
-            description="帖子被删除后向讨论实时流广播举报状态变更。",
-        ),
     )
 
 
@@ -317,23 +345,16 @@ def flag_model_visibility_definitions():
 
 
 def _visible_to_flag_moderators(post, context: dict) -> bool:
-    return _resolve_forum_can_view_flags(None, context)
+    return resolve_forum_can_view_flags(None, context)
 
 
 def _visible_to_forum_flag_moderators(forum, context: dict) -> bool:
-    return _resolve_forum_can_view_flags(forum, context)
+    return resolve_forum_can_view_flags(forum, context)
 
 
 def _visible_to_self(user, context: dict) -> bool:
     actor = context.get("user")
     return bool(actor and actor.is_authenticated and user and actor.id == user.id)
-
-
-def _add_post_flags_default_include(endpoint: ResourceEndpointDefinition) -> ResourceEndpointDefinition:
-    includes = list(endpoint.default_include or ())
-    if "flags" not in includes:
-        includes.append("flags")
-    return replace(endpoint, default_include=tuple(includes))
 
 
 def install(context):

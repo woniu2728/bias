@@ -1,6 +1,6 @@
 from celery import shared_task
 
-from apps.tags.services import TagService
+from extensions.tags.backend.services import TagService
 
 
 @shared_task(ignore_result=True)

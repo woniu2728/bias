@@ -75,34 +75,6 @@ registerDiscussionAction({
 })
 
 registerDiscussionAction({
-  key: 'toggle-subscription',
-  moduleId: 'subscriptions',
-  order: 20,
-  surfaces: ['discussion-sidebar', 'discussion-menu'],
-  isVisible: ({ authStore, isSuspended }) => Boolean(authStore?.isAuthenticated) && !isSuspended,
-  resolve: ({ togglingSubscription, discussion }) => ({
-    key: 'toggle-subscription',
-    label: getUiCopy({
-      surface: 'discussion-action-toggle-subscription-label',
-      togglingSubscription,
-      isSubscribed: discussion.is_subscribed,
-    })?.text || (togglingSubscription ? '提交中...' : (discussion.is_subscribed ? '取消关注' : '关注讨论')),
-    icon: discussion.is_subscribed ? 'fas fa-bell-slash' : 'far fa-star',
-    description: getUiCopy({
-      surface: 'discussion-action-toggle-subscription-description',
-      isSubscribed: discussion.is_subscribed,
-    })?.text || (discussion.is_subscribed ? '停止接收这条讨论后续回复通知。' : '接收这条讨论后续回复通知。'),
-    disabled: togglingSubscription,
-    disabledReason: togglingSubscription
-      ? (getUiCopy({
-          surface: 'discussion-action-toggle-subscription-disabled',
-        })?.text || '正在提交关注状态，请稍候。')
-      : '',
-    order: 20
-  })
-})
-
-registerDiscussionAction({
   key: 'edit',
   moduleId: 'discussions',
   order: 30,
@@ -355,23 +327,5 @@ registerPostAction({
       tone: post.is_hidden ? 'primary' : 'warning',
     },
     order: 25
-  })
-})
-
-registerPostAction({
-  key: 'open-report-modal',
-  moduleId: 'flags',
-  order: 30,
-  isVisible: ({ post, canReportPost }) => Boolean(canReportPost(post)),
-  resolve: () => ({
-    key: 'open-report-modal',
-    label: getUiCopy({
-      surface: 'post-action-report-label',
-    })?.text || '举报',
-    icon: 'fas fa-flag',
-    description: getUiCopy({
-      surface: 'post-action-report-description',
-    })?.text || '向版主提交这条回复的问题反馈。',
-    order: 30
   })
 })

@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from apps.tags.services import TagService
+from extensions.tags.backend.services import TagService
 
 
 class Command(BaseCommand):

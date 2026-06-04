@@ -300,8 +300,8 @@ def _build_import_map_source(admin_entries: dict[str, str], forum_entries: dict[
     for extension_id, entry in admin_entries.items():
         import_path = _frontend_import_path(entry)
         loader_key = _admin_loader_key(entry)
-        lines.append(f"  {json.dumps(loader_key)}: () => import({json.dumps(import_path)}),")
-        lines.append(f"  {json.dumps(import_path)}: () => import({json.dumps(import_path)}),")
+        for key in _frontend_loader_keys(loader_key, import_path):
+            lines.append(f"  {json.dumps(key)}: () => import({json.dumps(import_path)}),")
         lines.append(f"  {json.dumps(extension_id)}: () => import({json.dumps(import_path)}),")
     lines.extend([
         "}",
@@ -311,8 +311,8 @@ def _build_import_map_source(admin_entries: dict[str, str], forum_entries: dict[
     for extension_id, entry in forum_entries.items():
         import_path = _frontend_import_path(entry)
         loader_key = _forum_loader_key(entry)
-        lines.append(f"  {json.dumps(loader_key)}: () => import({json.dumps(import_path)}),")
-        lines.append(f"  {json.dumps(import_path)}: () => import({json.dumps(import_path)}),")
+        for key in _frontend_loader_keys(loader_key, import_path):
+            lines.append(f"  {json.dumps(key)}: () => import({json.dumps(import_path)}),")
         lines.append(f"  {json.dumps(extension_id)}: () => import({json.dumps(import_path)}),")
     lines.extend([
         "}",
@@ -321,17 +321,29 @@ def _build_import_map_source(admin_entries: dict[str, str], forum_entries: dict[
     return "\n".join(lines)
 
 
+def _frontend_loader_keys(*keys: str) -> list[str]:
+    seen = set()
+    normalized_keys = []
+    for key in keys:
+        normalized = str(key or "").strip().replace("\\", "/")
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        normalized_keys.append(normalized)
+    return normalized_keys
+
+
 def _frontend_import_path(entry: str) -> str:
     normalized = str(entry or "").strip().replace("\\", "/")
     if normalized.startswith("extensions/"):
-        return f"../../{normalized}"
+        return f"../../../{normalized}"
     return normalized
 
 
 def _admin_loader_key(entry: str) -> str:
     normalized = str(entry or "").strip().replace("\\", "/")
     if normalized.startswith("extensions/"):
-        return f"../../../../{normalized}"
+        return f"../../../{normalized}"
     return normalized
 
 

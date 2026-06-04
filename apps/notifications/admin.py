@@ -41,7 +41,7 @@ class NotificationAdmin(admin.ModelAdmin):
     def mark_as_read(self, request, queryset):
         """批量标记为已读"""
         from django.utils import timezone
-        from apps.notifications.services import NotificationService
+        from extensions.notifications.backend.services import NotificationService
 
         user_ids = list(queryset.values_list('user_id', flat=True).distinct())
         count = queryset.update(is_read=True, read_at=timezone.now())
@@ -51,7 +51,7 @@ class NotificationAdmin(admin.ModelAdmin):
 
     def mark_as_unread(self, request, queryset):
         """批量标记为未读"""
-        from apps.notifications.services import NotificationService
+        from extensions.notifications.backend.services import NotificationService
 
         user_ids = list(queryset.values_list('user_id', flat=True).distinct())
         count = queryset.update(is_read=False, read_at=None)

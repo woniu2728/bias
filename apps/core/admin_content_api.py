@@ -30,7 +30,7 @@ from apps.core.extensions.recovery import (
     stop_extension_bisect,
 )
 from apps.core.jwt_auth import AccessTokenAuth
-from apps.core.forum_registry import get_builtin_module_ids, get_forum_registry
+from apps.core.forum_registry import get_core_module_ids, get_forum_registry
 from apps.core.resource_registry import get_resource_registry
 
 
@@ -77,7 +77,6 @@ def start_admin_extension_bisect(request, payload: dict = Body(default={})):
         requested_ids = [
             extension.id
             for extension in get_extension_registry().get_enabled_extensions()
-            if extension.source != "builtin-module"
         ]
     return {"bisect": start_extension_bisect(requested_ids)}
 
@@ -274,7 +273,6 @@ def _serialize_admin_extensions_payload(extensions):
             "extension_count": len(payload),
             "enabled_count": sum(1 for item in payload if item["enabled"]),
             "healthy_count": sum(1 for item in payload if item["healthy"]),
-            "builtin_count": sum(1 for item in payload if item["source"] == "builtin-module"),
             "filesystem_count": sum(1 for item in payload if item["source"] == "filesystem"),
             "blocking_count": diagnostics_summary["blocking_count"],
             "warning_count": diagnostics_summary["warning_count"],
@@ -313,6 +311,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
     notification_types = _build_extension_notification_types(extension)
     user_preferences = _build_extension_user_preferences(extension)
     event_listeners = _build_extension_event_listeners(extension, runtime_view)
+    post_lifecycle = _build_extension_post_lifecycle(extension, runtime_view)
     post_types = _build_extension_post_types(extension)
     search_filters = _build_extension_search_filters(extension)
     discussion_sorts = _build_extension_discussion_sorts(extension)
@@ -331,6 +330,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         notification_types=notification_types,
         user_preferences=user_preferences,
         event_listeners=event_listeners,
+        post_lifecycle=post_lifecycle,
         post_types=post_types,
         search_filters=search_filters,
         discussion_sorts=discussion_sorts,
@@ -440,6 +440,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "notification_types": notification_types,
         "user_preferences": user_preferences,
         "event_listeners": event_listeners,
+        "post_lifecycle": post_lifecycle,
         "post_types": post_types,
         "search_filters": search_filters,
         "discussion_sorts": discussion_sorts,
@@ -504,7 +505,6 @@ def _serialize_extension_recovery_status(extension):
     return {
         "safe_mode": safe_mode,
         "safe_mode_allowed": (not safe_mode)
-        or extension.source == "builtin-module"
         or extension_id in safe_mode_extensions,
         "bisect_active": bool(bisect.get("active")),
         "bisect_current": extension_id in set(bisect.get("current") or []),
@@ -746,6 +746,27 @@ def _build_extension_event_listeners(extension, runtime_record=None):
             seen.add(key)
             listeners.append(payload)
     return listeners
+
+
+def _build_extension_post_lifecycle(extension, runtime_record=None):
+    if runtime_record is None:
+        return []
+
+    handlers = []
+    for item in getattr(runtime_record, "post_lifecycle", ()) or ():
+        phases = [
+            phase
+            for phase in ("apply_created", "apply_updated", "apply_approved", "prepare_delete", "apply_deleted")
+            if callable(getattr(item, phase, None))
+        ]
+        handlers.append({
+            "key": getattr(item, "key", ""),
+            "module_id": extension.id,
+            "phases": phases,
+            "description": getattr(item, "description", ""),
+            "source": "runtime",
+        })
+    return handlers
 
 
 def _build_extension_post_types(extension):
@@ -1035,24 +1056,6 @@ def _build_extension_search_drivers(runtime_view):
 def _build_extension_delivery_assets(extension):
     from apps.core.extensions.assets import inspect_published_extension_assets
 
-    if extension.source == "builtin-module":
-        return {
-            "root_path": "",
-            "root_exists": False,
-            "asset_count": 1,
-            "assets": [
-                {
-                    "key": "builtin-bundle",
-                    "label": "内置交付",
-                    "status": "ready",
-                    "status_label": "已就绪",
-                    "path": "builtin://core-bundle",
-                    "kind": "builtin",
-                    "exists": True,
-                }
-            ],
-        }
-
     root_path = Path(extension.manifest.path) if extension.manifest.path else None
     asset_specs = [
         {
@@ -1150,6 +1153,7 @@ def _build_extension_capability_summary(
     notification_types,
     user_preferences,
     event_listeners,
+    post_lifecycle,
     post_types,
     search_filters,
     discussion_sorts,
@@ -1165,6 +1169,7 @@ def _build_extension_capability_summary(
         "notification_type_count": len(notification_types),
         "user_preference_count": len(user_preferences),
         "event_listener_count": len(event_listeners),
+        "post_lifecycle_count": len(post_lifecycle),
         "post_type_count": len(post_types),
         "search_filter_count": len(search_filters),
         "discussion_sort_count": len(discussion_sorts),
@@ -1331,7 +1336,7 @@ def _build_extension_debug_info(extension):
     )
     validation_result = validate_extension_manifests_with_available_ids(
         [extension.manifest],
-        available_extension_ids=set(get_builtin_module_ids()),
+        available_extension_ids=_resolve_available_extension_ids_for_validation(),
         extensions_base_path=extensions_base_path,
         strict_runtime_hooks=True,
     )
@@ -1433,6 +1438,16 @@ def _build_extension_debug_info(extension):
             for issue in validation_result.issues
         ],
     }
+
+
+def _resolve_available_extension_ids_for_validation() -> set[str]:
+    extension_ids = set(get_core_module_ids())
+    try:
+        extension_ids.update(item.id for item in get_extension_registry().get_extensions())
+    except Exception:
+        pass
+    return extension_ids
+
 
 def _serialize_extension_backend_hooks(extension):
     hooks = []

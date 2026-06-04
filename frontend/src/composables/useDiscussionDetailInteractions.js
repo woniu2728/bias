@@ -43,18 +43,15 @@ export function useDiscussionDetailInteractions({
   })
 
   const moderationActions = useDiscussionDetailModerationActions({
-    authStore,
     canModeratePendingDiscussion,
     canModeratePendingPost,
     canModeratePostVisibility,
     discussion,
-    isSuspended,
     modalStore,
     patchDiscussion,
     refreshDiscussion,
     router,
     showActionError: userActions.showActionError,
-    showSuspensionAlert: userActions.showSuspensionAlert,
     uiText: userActions.uiText,
     upsertPost,
   })
@@ -67,12 +64,10 @@ export function useDiscussionDetailInteractions({
     toggleHide: moderationActions.toggleHide,
     toggleLock: moderationActions.toggleLock,
     togglePin: moderationActions.togglePin,
-    toggleSubscription: moderationActions.toggleSubscription,
   })
   const postActionHandlers = createPostActionHandlers({
     deletePost: userActions.deletePost,
     editPost: userActions.editPost,
-    openReportModal: userActions.openReportModal,
     togglePostHidden: moderationActions.togglePostHidden,
   })
 
@@ -84,7 +79,6 @@ export function useDiscussionDetailInteractions({
     isSuspended,
     likePendingPostIds: userActions.likePendingPostIds,
     openComposer: userActions.openComposer,
-    openReportModal: userActions.openReportModal,
     postActionHandlers,
     replyToPost: userActions.replyToPost,
     shareDiscussion: userActions.shareDiscussion,

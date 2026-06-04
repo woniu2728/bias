@@ -12,9 +12,10 @@ from apps.core.settings_service import clear_runtime_setting_caches
 from apps.discussions.services import DiscussionService
 from apps.notifications.models import Notification
 from apps.notifications.admin import NotificationAdmin
-from apps.notifications.services import NotificationService
+from extensions.notifications.backend.services import NotificationService
 from apps.posts.services import PostService
 from apps.users.models import User
+from extensions.likes.backend.services import like_post
 from extensions.notifications.backend.ext import notification_resource_endpoints
 
 
@@ -82,7 +83,7 @@ class NotificationServiceTests(TestCase):
 
     def test_like_notification_contains_post_number(self):
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.like_post(self.initial_reply.id, self.replier)
+            like_post(self.initial_reply.id, self.replier)
 
         notification = Notification.objects.get(
             user=self.participant,
@@ -136,7 +137,7 @@ class NotificationServiceTests(TestCase):
         self.participant.save(update_fields=["preferences"])
 
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.like_post(self.initial_reply.id, self.replier)
+            like_post(self.initial_reply.id, self.replier)
 
         self.assertFalse(
             Notification.objects.filter(
@@ -207,7 +208,7 @@ class NotificationServiceTests(TestCase):
             )
 
         with patch("apps.notifications.tasks.dispatch_notification_batch.delay") as delay:
-            with patch("apps.notifications.services.NotificationService._send_websocket_notification") as websocket_send:
+            with patch("extensions.notifications.backend.services.NotificationService._send_websocket_notification") as websocket_send:
                 with self.captureOnCommitCallbacks(execute=True):
                     NotificationService.notify_discussion_reply(
                         discussion_id=self.discussion.id,
@@ -304,7 +305,7 @@ class NotificationServiceTests(TestCase):
         )
 
         with patch("apps.notifications.tasks.dispatch_notification_batch.delay", side_effect=RuntimeError("queue down")):
-            with patch("apps.notifications.services.NotificationService._send_websocket_notification") as websocket_send:
+            with patch("extensions.notifications.backend.services.NotificationService._send_websocket_notification") as websocket_send:
                 with self.captureOnCommitCallbacks(execute=True):
                     created = NotificationService.create_notifications_bulk([first, second])
 
@@ -637,7 +638,7 @@ class NotificationServiceTests(TestCase):
             )
         )
 
-        with patch("apps.notifications.api.get_runtime_resource_registry", return_value=registry):
+        with patch("extensions.notifications.backend.handlers.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
                 response = self.client.get(
                     f"/api/notifications/{notification.id}",

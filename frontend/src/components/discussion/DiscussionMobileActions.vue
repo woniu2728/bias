@@ -13,16 +13,16 @@
       </button>
 
       <button
-        v-if="subscriptionAction"
+        v-if="secondaryAction"
         type="button"
         class="discussion-mobile-action"
-        :class="{ 'is-active': discussion.is_subscribed }"
-        :disabled="subscriptionAction.disabled"
-        :title="subscriptionAction.title"
-        @click="$emit('toggle-subscription')"
+        :class="{ 'is-active': secondaryAction.active }"
+        :disabled="secondaryAction.disabled"
+        :title="secondaryAction.disabledReason || secondaryAction.description || ''"
+        @click="$emit('secondary-action', secondaryAction.key)"
       >
-        <i :class="subscriptionAction.icon"></i>
-        <span>{{ subscriptionAction.label }}</span>
+        <i :class="secondaryAction.icon"></i>
+        <span>{{ secondaryAction.label }}</span>
       </button>
 
       <button
@@ -129,10 +129,6 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
-  togglingSubscription: {
-    type: Boolean,
-    default: false
-  },
   canEditDiscussion: {
     type: Boolean,
     default: false
@@ -164,6 +160,10 @@ const props = defineProps({
   menuItems: {
     type: Array,
     default: () => []
+  },
+  secondaryAction: {
+    type: Object,
+    default: null
   }
 })
 
@@ -172,9 +172,9 @@ const emit = defineEmits([
   'jump-to-post',
   'open-composer',
   'open-login-for-reply',
+  'secondary-action',
   'share-discussion',
   'toggle-menu',
-  'toggle-subscription'
 ])
 
 const rootEl = ref(null)
@@ -205,21 +205,8 @@ const replyAction = computed(() => {
   }
 })
 
-const subscriptionAction = computed(() => {
-  if (!props.authStore?.isAuthenticated || props.isSuspended) return null
-
-  return {
-    icon: props.discussion?.is_subscribed ? 'fas fa-bell-slash' : 'far fa-star',
-    label: props.togglingSubscription
-      ? getUiCopy({ surface: 'discussion-mobile-action-subscription-pending' })?.text || '提交中...'
-      : props.discussion?.is_subscribed
-        ? getUiCopy({ surface: 'discussion-mobile-action-unfollow' })?.text || '取消关注'
-        : getUiCopy({ surface: 'discussion-mobile-action-follow' })?.text || '关注',
-    title: props.discussion?.is_subscribed
-      ? getUiCopy({ surface: 'discussion-mobile-action-unfollow-description' })?.text || '停止接收这条讨论的后续通知。'
-      : getUiCopy({ surface: 'discussion-mobile-action-follow-description' })?.text || '接收这条讨论的后续回复通知。',
-    disabled: props.togglingSubscription
-  }
+const secondaryAction = computed(() => {
+  return props.secondaryAction || null
 })
 
 const shareLabel = computed(() => getUiCopy({

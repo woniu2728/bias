@@ -109,7 +109,6 @@ class CurrentUserSchema(UserDetailSchema):
     suspend_reason: str = ""
     suspend_message: str = ""
     forum_permissions: List[str] = []
-    new_flag_count: int = 0
 
 
 class UserPreferenceItemSchema(Schema):

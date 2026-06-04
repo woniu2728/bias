@@ -86,7 +86,6 @@ class Command(BaseCommand):
                     "extension_count": len(serialized_extensions),
                     "enabled_count": sum(1 for item in serialized_extensions if item["enabled"]),
                     "healthy_count": sum(1 for item in serialized_extensions if item["healthy"]),
-                    "builtin_count": sum(1 for item in serialized_extensions if item["source"] == "builtin-module"),
                     "filesystem_count": sum(1 for item in serialized_extensions if item["source"] == "filesystem"),
                 },
             }
@@ -121,7 +120,6 @@ class Command(BaseCommand):
                 "extension_count": len(serialized_extensions),
                 "enabled_count": sum(1 for item in serialized_extensions if item["enabled"]),
                 "healthy_count": sum(1 for item in serialized_extensions if item["healthy"]),
-                "builtin_count": sum(1 for item in serialized_extensions if item["source"] == "builtin-module"),
                 "filesystem_count": sum(1 for item in serialized_extensions if item["source"] == "filesystem"),
                 **diagnostics_summary,
                 **delivery_summary,

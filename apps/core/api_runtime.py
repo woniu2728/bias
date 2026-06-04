@@ -11,7 +11,7 @@ def build_api_application(*, extension_host=None, urls_namespace: str | None = N
     api = NinjaAPI(
         title="Bias API",
         version=APP_VERSION,
-        description="Flarum 风格论坛的 Python RESTful API",
+        description="Bias forum RESTful API",
         docs_url="/docs",
         csrf=True,
         urls_namespace=urls_namespace,
@@ -27,15 +27,9 @@ def _register_core_routes(api: NinjaAPI) -> None:
     from apps.core.admin_api import router as admin_router
     from apps.core.api import router as core_router
     from apps.core.resource_runtime_api import router as resource_runtime_router
-    from apps.discussions.api import router as discussions_router
-    from apps.notifications.api import router as notifications_router
-    from apps.posts.api import router as posts_router
     from apps.users.api import router as users_router
 
     _add_router_once(api, "/users", users_router, tags=["Users"])
-    _add_router_once(api, "/discussions", discussions_router, tags=["Discussions"])
-    _add_router_once(api, "", posts_router, tags=["Posts"])
-    _add_router_once(api, "", notifications_router, tags=["Notifications"])
     _add_router_once(api, "", core_router, tags=["Search"])
     _add_router_once(api, "", resource_runtime_router, tags=["Resources"])
     _add_router_once(api, "/admin", admin_router, tags=["Admin"])
@@ -48,10 +42,18 @@ def _register_extension_routes(api: NinjaAPI, *, extension_host=None) -> None:
 
         host = get_extension_host()
     if host is None:
-        return
+        from apps.core.resource_registry import get_resource_registry
+
+        registry = get_resource_registry()
+    else:
+        registry = host.resources
+    from apps.core.core_resource_endpoints import bootstrap_core_resource_endpoints
     from apps.core.resource_routes import build_resource_endpoint_router
 
-    _add_router_once(api, "", build_resource_endpoint_router(host.resources), tags=["Resources"])
+    bootstrap_core_resource_endpoints(registry)
+    _add_router_once(api, "", build_resource_endpoint_router(registry), tags=["Resources"])
+    if host is None:
+        return
     routes = host.make("routes")
     for mount in routes.get_mounts():
         _add_router_once(api, mount.prefix, mount.router, tags=list(mount.tags))

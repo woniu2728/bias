@@ -51,7 +51,7 @@ def _iter_discussion_tags(discussion):
 
 
 def _merge_tag_payload(target: dict, tag, *, fallback_discussion=None) -> None:
-    from apps.tags.api import _serialize_tag
+    from extensions.tags.backend.handlers import _serialize_tag
 
     payload = _serialize_tag(tag, user=None, include_children=False)
     if not payload or payload.get("id") is None:
@@ -68,13 +68,13 @@ def _merge_tag_payload(target: dict, tag, *, fallback_discussion=None) -> None:
 
 
 def handle_discussion_approved_tag_stats(event: DiscussionApprovedEvent) -> None:
-    from apps.tags.services import TagService
+    from extensions.tags.backend.services import TagService
 
     TagService.refresh_discussion_tag_stats(event.discussion_id)
 
 
 def handle_discussion_tagged(event: DiscussionTaggedEvent) -> None:
-    from apps.tags.services import TagService
+    from extensions.tags.backend.services import TagService
 
     if event.tag_ids:
         TagService.refresh_tag_stats(list(event.tag_ids))
@@ -96,37 +96,37 @@ def handle_post_created_tag_stats(event: PostCreatedEvent) -> None:
     if not event.is_approved:
         return
 
-    from apps.tags.services import TagService
+    from extensions.tags.backend.services import TagService
 
     TagService.refresh_discussion_tag_stats(event.discussion_id)
 
 
 def handle_post_approved_tag_stats(event: PostApprovedEvent) -> None:
-    from apps.tags.services import TagService
+    from extensions.tags.backend.services import TagService
 
     TagService.refresh_discussion_tag_stats(event.discussion_id)
 
 
 def handle_post_deleted_tag_stats(event: PostDeletedEvent) -> None:
-    from apps.tags.services import TagService
+    from extensions.tags.backend.services import TagService
 
     TagService.refresh_discussion_tag_stats(event.discussion_id)
 
 
 def handle_post_hidden_tag_stats(event: PostHiddenEvent) -> None:
-    from apps.tags.services import TagService
+    from extensions.tags.backend.services import TagService
 
     TagService.refresh_discussion_tag_stats(event.discussion_id)
 
 
 def handle_post_rejected_tag_stats(event: PostRejectedEvent) -> None:
-    from apps.tags.services import TagService
+    from extensions.tags.backend.services import TagService
 
     TagService.refresh_discussion_tag_stats(event.discussion_id)
 
 
 def handle_discussion_tag_stats_refresh(event: DiscussionTagStatsRefreshEvent) -> None:
-    from apps.tags.services import TagService
+    from extensions.tags.backend.services import TagService
 
     TagService.refresh_discussion_tag_stats(event.discussion_id)
 
@@ -135,6 +135,6 @@ def handle_tag_stats_refresh_requested(event: TagStatsRefreshRequestedEvent) -> 
     if not event.tag_ids:
         return
 
-    from apps.tags.services import TagService
+    from extensions.tags.backend.services import TagService
 
     TagService.dispatch_refresh_tag_stats(list(event.tag_ids))

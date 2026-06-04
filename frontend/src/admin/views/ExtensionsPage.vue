@@ -258,8 +258,8 @@ const recoveryNotice = computed(() => {
     return {
       tone: 'warning',
       text: allowed
-        ? `扩展恢复模式已启用，只启动内置扩展和白名单：${allowed}`
-        : '扩展恢复模式已启用，当前只启动内置扩展。',
+        ? `扩展恢复模式已启用，只启动核心能力和白名单扩展：${allowed}`
+        : '扩展恢复模式已启用，当前只启动核心能力。',
     }
   }
   return null
@@ -267,7 +267,6 @@ const recoveryNotice = computed(() => {
 
 const sourceOptions = [
   { value: 'all', label: '全部来源', icon: 'fas fa-layer-group' },
-  { value: 'builtin-module', label: '内置模块', icon: 'fas fa-shield-alt' },
   { value: 'filesystem', label: '目录扩展', icon: 'fas fa-folder-open' },
 ]
 

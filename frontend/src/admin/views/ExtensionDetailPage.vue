@@ -165,7 +165,6 @@ import { useAdminRegistryStore } from '../../stores/adminRegistry'
 import { useModalStore } from '../../stores/modal'
 import AdminPage from '../components/AdminPage.vue'
 import AdminStateBlock from '../components/AdminStateBlock.vue'
-import { builtinAdminEntries } from '../extensions/builtinAdminEntries'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
 import { resolveFallbackExtensionPermissionsPage, resolveFallbackExtensionSettingsPage } from '../extensions/fallbacks'
 import { buildExtensionRouteTarget } from '../extensions/diagnostics'
@@ -308,19 +307,16 @@ async function loadExtension() {
     extension.value = data.extension || null
     detailComponent.value = await resolveExtensionAdminComponent(extension.value, 'detail', {
       importers: adminEntryModules,
-      builtins: builtinAdminEntries,
     })
     settingsComponent.value = inlineSettings.value
       ? await resolveExtensionAdminComponent(extension.value, 'settings', {
         importers: adminEntryModules,
-        builtins: builtinAdminEntries,
         fallbacks: [resolveFallbackExtensionSettingsPage],
       })
       : null
     permissionsComponent.value = inlinePermissions.value
       ? await resolveExtensionAdminComponent(extension.value, 'permissions', {
         importers: adminEntryModules,
-        builtins: builtinAdminEntries,
         fallbacks: [resolveFallbackExtensionPermissionsPage],
       })
       : null

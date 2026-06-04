@@ -10,7 +10,11 @@ from django.core.management.base import CommandParser
 from apps.core.extensions.exceptions import ExtensionManifestError
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.validation import validate_extension_manifests_with_available_ids
-from apps.core.forum_registry import get_builtin_module_ids
+from apps.core.forum_registry import get_core_module_ids
+
+
+def resolve_available_extension_ids(manifests) -> set[str]:
+    return set(get_core_module_ids()) | {manifest.id for manifest in manifests}
 
 
 class Command(BaseCommand):
@@ -45,10 +49,9 @@ class Command(BaseCommand):
         except ExtensionManifestError as exc:
             raise CommandError(str(exc)) from exc
 
-        builtin_extension_ids = set(get_builtin_module_ids())
         result = validate_extension_manifests_with_available_ids(
             manifests,
-            available_extension_ids=builtin_extension_ids,
+            available_extension_ids=resolve_available_extension_ids(manifests),
             extensions_base_path=extensions_path,
             strict_runtime_hooks=strict,
         )

@@ -30,12 +30,11 @@ from ninja_jwt.tokens import RefreshToken
 from unittest.mock import Mock, patch
 
 from apps.core.domain_events import DomainEventBus, get_forum_event_bus
-from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extension
 from apps.core.extensions.backend import run_extension_backend_hook
 from apps.core.extensions.exceptions import ExtensionStateError
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.registry import ExtensionRegistry
-from apps.core.extensions import ApiResourceExtender, ResourceExtender, SearchDriverExtender, get_extension_registry
+from apps.core.extensions import ApiResourceExtender, ConditionalExtender, PostEventExtender, ResourceExtender, SearchDriverExtender, get_extension_registry
 from apps.core.extensions.extenders import ValidatorExtender, MailExtender
 from apps.core.extensions.bootstrap import (
     bootstrap_extension_application,
@@ -154,6 +153,7 @@ from apps.notifications.models import Notification
 from apps.posts.models import Post, PostFlag
 from apps.posts.services import PostService
 from apps.tags.models import Tag
+from extensions.likes.backend.services import can_like_post
 from extensions.tags.backend.events import DiscussionTagStatsRefreshEvent, TagStatsRefreshRequestedEvent
 from apps.users.models import Group, Permission, User
 from apps.users.services import UserService
@@ -1017,6 +1017,67 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertEqual(app.make("theme").run("theme")[0], "theme")
         runtime_view = app.get_runtime_view("alpha-tools")
         self.assertEqual(runtime_view.error_handlers[0].module_id, "alpha-tools")
+
+    def test_post_event_extender_registers_event_data_resolver(self):
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+
+        def resolve_alpha_event(post, context):
+            return {
+                "kind": post.type,
+                "actor": context["user"],
+            }
+
+        PostEventExtender().type(
+            "alphaEvent",
+            resolve_alpha_event,
+            description="Alpha event data.",
+        ).extend(app, extension)
+
+        with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
+            event_data = resolve_post_event_data(
+                SimpleNamespace(type="alphaEvent", content=""),
+                {"user": "tester"},
+            )
+
+        self.assertEqual(event_data, {"kind": "alphaEvent", "actor": "tester"})
+        self.assertEqual(app.make("post.events").get_definitions(post_type="alphaEvent")[0].module_id, "alpha-tools")
+
+    def test_conditional_extender_supports_disabled_setting_and_class_callbacks(self):
+        app = ExtensionApplication()
+        app._booted_extensions["beta-tools"] = SimpleNamespace(runtime=SimpleNamespace(enabled=False))
+        extension = SimpleNamespace(extension_id="alpha-tools")
+        Setting.objects.create(key="alpha.enabled", value="1")
+
+        class ConditionalFields:
+            def __call__(self):
+                return ResourceExtender(fields=(
+                    ResourceFieldDefinition(
+                        resource="forum",
+                        field="class_conditional",
+                        module_id="",
+                        resolver=lambda model, context: True,
+                    ),
+                ))
+
+        ConditionalExtender() \
+            .when_extension_disabled("beta-tools", lambda: ResourceExtender(fields=(
+                ResourceFieldDefinition(
+                    resource="forum",
+                    field="disabled_conditional",
+                    module_id="",
+                    resolver=lambda model, context: True,
+                ),
+            ))) \
+            .when_setting("alpha.enabled", "1", ConditionalFields) \
+            .extend(app, extension)
+
+        fields = {item.field: item for item in app.make("resources").get_fields("forum")}
+
+        self.assertIn("disabled_conditional", fields)
+        self.assertIn("class_conditional", fields)
+        self.assertEqual(fields["disabled_conditional"].module_id, "alpha-tools")
+        self.assertEqual(fields["class_conditional"].module_id, "alpha-tools")
 
     def test_system_hook_runtime_services_drive_error_filesystem_and_console(self):
         from apps.core.extensions import ConsoleExtender, ErrorHandlingExtender, FilesystemExtender
@@ -1889,6 +1950,58 @@ class ExtensionManifestLoaderTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_application_bootstrap_collects_extension_post_lifecycle_handlers(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            extensions_dir = Path(temp_dir) / "extensions"
+            manifest_dir = extensions_dir / "alpha-tools"
+            backend_dir = manifest_dir / "backend"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            backend_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "from apps.core.extensions import PostLifecycleExtender\n"
+                "\n"
+                "def apply_created(**kwargs):\n"
+                "    return {'post_id': kwargs['post'].id, 'value': kwargs['context']['alpha']}\n"
+                "\n"
+                "def extend():\n"
+                "    return [\n"
+                "        PostLifecycleExtender().handler('alpha', apply_created=apply_created, description='Alpha post lifecycle'),\n"
+                "    ]\n",
+                encoding="utf-8",
+            )
+
+            ExtensionInstallation.objects.create(
+                extension_id="alpha-tools",
+                version="1.0.0",
+                source="filesystem",
+                enabled=True,
+                installed=True,
+                booted=True,
+            )
+
+            registry = ExtensionRegistry(extensions_path=extensions_dir)
+            application = build_extension_application(manager=registry, force=True)
+            runtime_view = application.get_runtime_view("alpha-tools")
+
+            self.assertIsNotNone(runtime_view)
+            self.assertEqual(len(runtime_view.post_lifecycle), 1)
+            self.assertEqual(runtime_view.post_lifecycle[0].key, "alpha")
+            results = application.post_lifecycle.apply_created(
+                post=SimpleNamespace(id=7),
+                context={"alpha": "ok"},
+            )
+            self.assertEqual(results["alpha"]["post_id"], 7)
+            self.assertEqual(results["alpha"]["value"], "ok")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_api_application_is_built_from_extension_host_routes(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -2184,7 +2297,7 @@ class ExtensionManifestLoaderTests(TestCase):
             name="Likes",
             version="1.0.0",
             dependencies=("notifications",),
-            source="builtin-module",
+            source="filesystem",
         ))
         ordered = manager.sort_extensions_for_boot([likes, tags, notifications, core])
         self.assertEqual([item.id for item in ordered], ["core", "notifications", "tags", "likes"])
@@ -2327,7 +2440,7 @@ class ExtensionValidationTests(TestCase):
 
         self.assertEqual(payload["entry_type"], "filesystem")
         self.assertTrue(payload["exists"])
-        self.assertIn("run_install", payload["available_hooks"])
+        self.assertIn("install", payload["available_hooks"])
         self.assertIn("run_migrations", payload["available_hooks"])
 
     def test_inspect_frontend_forum_entry_reports_available_exports(self):
@@ -2486,10 +2599,10 @@ class ExtensionPolicyIntegrationTests(TestCase):
                 user=author,
             )
 
-            self.assertTrue(PostService.can_like_post(post, liker))
+            self.assertTrue(can_like_post(post, liker))
 
             with patch("apps.core.extensions.policy_runtime_service.get_extension_application", return_value=build_extension_application(manager=registry, force=True)):
-                self.assertFalse(PostService.can_like_post(post, liker))
+                self.assertFalse(can_like_post(post, liker))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -3274,12 +3387,17 @@ class ExtensionManagementCommandTests(TestCase):
 
         self.assertEqual(payload["result"], {"ok": True, "scope": "all"})
 
-    @patch("apps.core.management.commands.validate_extensions.get_builtin_module_ids", return_value=("core",))
-    def test_validate_extensions_command_uses_builtin_module_snapshot(self, get_builtin_module_ids_mock):
+    @patch("apps.core.management.commands.validate_extensions.get_core_module_ids", return_value=("core",))
+    def test_validate_extensions_command_uses_core_and_filesystem_extension_ids(self, get_core_module_ids_mock):
         temp_dir = make_workspace_temp_dir()
         try:
             with override_settings(BASE_DIR=Path(temp_dir)):
                 call_command("create_extension", "alpha-tools")
+                call_command("create_extension", "beta-tools")
+                beta_manifest_path = Path(temp_dir) / "extensions" / "beta-tools" / "extension.json"
+                beta_manifest = json.loads(beta_manifest_path.read_text(encoding="utf-8"))
+                beta_manifest["dependencies"] = ["alpha-tools"]
+                beta_manifest_path.write_text(json.dumps(beta_manifest, ensure_ascii=False), encoding="utf-8")
                 call_command(
                     "validate_extensions",
                     "--extensions-path",
@@ -3289,7 +3407,7 @@ class ExtensionManagementCommandTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        get_builtin_module_ids_mock.assert_called_once_with()
+        get_core_module_ids_mock.assert_called_once_with()
 
     def test_create_extension_command_scaffolds_manifest_and_admin_entry(self):
         temp_dir = make_workspace_temp_dir()
@@ -4025,25 +4143,15 @@ class ExtensionRegistryTests(TestCase):
                     path.unlink()
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    def test_registry_exposes_builtin_modules_as_extensions(self):
+    def test_registry_exposes_filesystem_extensions_only(self):
         registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
         extensions = registry.get_extensions()
 
         extension_ids = {item.id for item in extensions}
-        self.assertIn("core", extension_ids)
-        self.assertIn("posts", extension_ids)
+        self.assertNotIn("core", extension_ids)
+        self.assertNotIn("posts", extension_ids)
         self.assertIn("sample-hello", extension_ids)
-        self.assertTrue(any(item.source == "builtin-module" for item in extensions))
-        self.assertTrue(any(item.source == "filesystem" for item in extensions))
-
-        core_extension = next(item for item in extensions if item.id == "core")
-        self.assertEqual(core_extension.manifest.category, "core")
-        self.assertEqual(core_extension.manifest.frontend_admin_entry, "builtin:core")
-        self.assertEqual(core_extension.manifest.settings_pages, ("/admin/extensions/core/settings",))
-        self.assertEqual(core_extension.manifest.operations_pages, ("/admin/extensions/core/operations",))
-        self.assertIn("/admin", core_extension.admin_pages)
-        self.assertIn("basic", core_extension.settings_groups)
-        self.assertEqual(core_extension.lifecycle.registration_mode, "static")
+        self.assertTrue(all(item.source == "filesystem" for item in extensions))
 
         sample_extension = next(item for item in extensions if item.id == "sample-hello")
         self.assertEqual(sample_extension.source, "filesystem")
@@ -4063,73 +4171,15 @@ class ExtensionRegistryTests(TestCase):
         self.assertTrue(emoji_extension.runtime.enabled)
         self.assertEqual(emoji_extension.runtime.status_key, "active")
 
-    def test_builtin_adapter_preserves_module_metadata(self):
-        module = get_forum_registry().get_module("users")
-        extension = adapt_builtin_module_to_extension(module)
+    def test_filesystem_tags_extension_declares_extension_settings_page(self):
+        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
+        extension = registry.get_extension("tags")
 
-        self.assertEqual(extension.id, "users")
-        self.assertEqual(extension.name, module.name)
-        self.assertEqual(extension.manifest.dependencies, module.dependencies)
-        self.assertEqual(extension.runtime.enabled, module.enabled)
-        self.assertEqual(extension.manifest.frontend_admin_entry, "builtin:users")
-        self.assertEqual(extension.manifest.permissions_pages, ("/admin/extensions/users/permissions",))
-        self.assertEqual(extension.manifest.operations_pages, ("/admin/extensions/users/operations",))
-        self.assertEqual(extension.frontend_admin_entry, "builtin:users")
-        self.assertEqual(extension.permissions_pages, ("/admin/extensions/users/permissions",))
-        self.assertEqual(extension.operations_pages, ("/admin/extensions/users/operations",))
-        self.assertGreaterEqual(len(extension.permissions), 1)
-        self.assertGreaterEqual(len(extension.admin_page_definitions), 1)
-
-    def test_builtin_adapter_can_map_tags_to_extension_settings_page(self):
-        module = get_forum_registry().get_module("tags")
-        extension = adapt_builtin_module_to_extension(module)
-
-        self.assertEqual(extension.manifest.frontend_admin_entry, "builtin:tags")
+        self.assertEqual(extension.source, "filesystem")
+        self.assertEqual(extension.manifest.frontend_admin_entry, "")
+        self.assertEqual(extension.frontend_admin_entry, "extensions/tags/frontend/admin/index.js")
         self.assertEqual(extension.manifest.settings_pages, ("/admin/extensions/tags/settings",))
-        self.assertEqual(extension.manifest.operations_pages, ())
         self.assertEqual(extension.settings_pages, ("/admin/extensions/tags/settings",))
-
-    def test_builtin_adapter_can_map_builtin_operations_pages_to_extension_host(self):
-        discussions_module = get_forum_registry().get_module("discussions")
-        discussions_extension = adapt_builtin_module_to_extension(discussions_module)
-        self.assertEqual(discussions_extension.manifest.frontend_admin_entry, "builtin:discussions")
-        self.assertEqual(discussions_extension.manifest.operations_pages, ("/admin/extensions/discussions/operations",))
-        self.assertEqual(discussions_extension.manifest.permissions_pages, ("/admin/extensions/discussions/permissions",))
-
-        posts_module = get_forum_registry().get_module("posts")
-        posts_extension = adapt_builtin_module_to_extension(posts_module)
-        self.assertEqual(posts_extension.manifest.frontend_admin_entry, "builtin:posts")
-        self.assertEqual(posts_extension.manifest.operations_pages, ("/admin/extensions/posts/operations",))
-
-        users_module = get_forum_registry().get_module("users")
-        users_extension = adapt_builtin_module_to_extension(users_module)
-        self.assertEqual(users_extension.manifest.frontend_admin_entry, "builtin:users")
-        self.assertEqual(users_extension.manifest.operations_pages, ("/admin/extensions/users/operations",))
-        self.assertEqual(users_extension.manifest.permissions_pages, ("/admin/extensions/users/permissions",))
-
-        notifications_module = get_forum_registry().get_module("notifications")
-        notifications_extension = adapt_builtin_module_to_extension(notifications_module)
-        self.assertEqual(notifications_extension.manifest.frontend_admin_entry, "builtin:notifications")
-        self.assertEqual(notifications_extension.manifest.operations_pages, ("/admin/extensions/notifications/operations",))
-
-        realtime_module = get_forum_registry().get_module("realtime")
-        realtime_extension = adapt_builtin_module_to_extension(realtime_module)
-        self.assertEqual(realtime_extension.manifest.frontend_admin_entry, "builtin:realtime")
-        self.assertEqual(realtime_extension.manifest.operations_pages, ("/admin/extensions/realtime/operations",))
-
-
-    def test_builtin_adapter_can_map_core_pages_to_extension_host(self):
-        module = get_forum_registry().get_module("core")
-        extension = adapt_builtin_module_to_extension(module)
-
-        self.assertEqual(extension.manifest.frontend_admin_entry, "builtin:core")
-        self.assertEqual(extension.manifest.settings_pages, ("/admin/extensions/core/settings",))
-        self.assertEqual(extension.manifest.permissions_pages, ("/admin/extensions/core/permissions",))
-        self.assertEqual(extension.manifest.operations_pages, ("/admin/extensions/core/operations",))
-        self.assertEqual(extension.frontend_admin_entry, "builtin:core")
-        self.assertEqual(extension.settings_pages, ("/admin/extensions/core/settings",))
-        self.assertEqual(extension.permissions_pages, ("/admin/extensions/core/permissions",))
-        self.assertEqual(extension.operations_pages, ("/admin/extensions/core/operations",))
 
     def test_runtime_probe_prefers_contract_frontend_entries(self):
         manifest = ExtensionManifest(
@@ -4345,6 +4395,84 @@ class ExtensionRegistryTests(TestCase):
         resource_registry = get_resource_registry()
 
         self.assertFalse(any(item.module_id == "flags" for item in resource_registry.get_fields("post")))
+        self.assertFalse(any(item.module_id == "flags" for item in resource_registry.get_fields("admin_stats")))
+        self.assertFalse(any(item.module_id == "flags" for item in resource_registry.get_fields("user_detail")))
+        self.assertIsNone(resource_registry.get_dispatch_endpoint("post", "report", "POST", {}))
+        self.assertIsNone(resource_registry.get_dispatch_endpoint("post", "flags/resolve", "POST", {}))
+
+    def test_registry_filters_tag_capabilities_when_extension_disabled(self):
+        ExtensionInstallation.objects.create(
+            extension_id="tags",
+            version="1.0.0",
+            source="filesystem",
+            enabled=False,
+            installed=True,
+            booted=False,
+        )
+
+        resource_registry = get_resource_registry()
+        forum_registry = get_forum_registry()
+
+        self.assertFalse(any(item.module_id == "tags" for item in resource_registry.get_fields("discussion")))
+        self.assertFalse(any(item.module_id == "tags" for item in resource_registry.get_relationships("discussion")))
+        self.assertIsNone(resource_registry.get_dispatch_endpoint("tag", "index", "GET", {}))
+        self.assertFalse(any(item.module_id == "tags" for item in forum_registry.get_search_filters()))
+
+    def test_registry_filters_notification_capabilities_when_extension_disabled(self):
+        ExtensionInstallation.objects.create(
+            extension_id="notifications",
+            version="1.0.0",
+            source="filesystem",
+            enabled=False,
+            installed=True,
+            booted=False,
+        )
+
+        resource_registry = get_resource_registry()
+        forum_registry = get_forum_registry()
+
+        self.assertIsNone(resource_registry.get_dispatch_endpoint("notification", "read", "POST", {}))
+        self.assertIsNone(resource_registry.get_dispatch_endpoint("notification", "index", "GET", {}))
+        self.assertFalse(any(item.module_id == "notifications" for item in forum_registry.get_notification_types()))
+
+    def test_registry_filters_likes_and_mentions_when_extensions_disabled(self):
+        for extension_id in ("likes", "mentions"):
+            ExtensionInstallation.objects.create(
+                extension_id=extension_id,
+                version="1.0.0",
+                source="filesystem",
+                enabled=False,
+                installed=True,
+                booted=False,
+            )
+
+        resource_registry = get_resource_registry()
+        forum_registry = get_forum_registry()
+
+        self.assertFalse(any(item.module_id == "likes" for item in resource_registry.get_fields("post")))
+        self.assertIsNone(resource_registry.get_dispatch_endpoint("post", "like", "POST", {}))
+        self.assertFalse(any(item.module_id == "mentions" for item in forum_registry.get_search_filters()))
+        self.assertFalse(any(item.module_id == "mentions" for item in forum_registry.get_notification_types()))
+
+    def test_runtime_omits_event_listeners_and_post_lifecycle_when_flags_disabled(self):
+        ExtensionInstallation.objects.create(
+            extension_id="flags",
+            version="1.0.0",
+            source="filesystem",
+            enabled=False,
+            installed=True,
+            booted=False,
+        )
+
+        from apps.core.extensions.bootstrap import bootstrap_extension_host
+
+        try:
+            application = bootstrap_extension_host(force=True)
+
+            self.assertEqual(application.post_lifecycle.get_definitions(extension_id="flags"), [])
+            self.assertEqual(application.events.get_listeners(extension_id="flags"), [])
+        finally:
+            reset_extension_application_bootstrap_state()
 
 
 @override_settings(BIAS_EXTENSION_PACKAGE_DISCOVERY=False)
@@ -4360,7 +4488,7 @@ class AdminExtensionsApiTests(TestCase):
         token = RefreshToken.for_user(self.admin).access_token
         return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
-    def test_extensions_api_returns_builtin_extension_snapshot(self):
+    def test_extensions_api_returns_filesystem_extension_snapshot(self):
         response = self.client.get(
             "/api/admin/extensions",
             **self.auth_header(),
@@ -4371,7 +4499,6 @@ class AdminExtensionsApiTests(TestCase):
         self.assertIn("summary", payload)
         self.assertIn("extensions", payload)
         self.assertGreaterEqual(payload["summary"]["extension_count"], 1)
-        self.assertGreaterEqual(payload["summary"]["builtin_count"], 1)
         self.assertGreaterEqual(payload["summary"]["filesystem_count"], 1)
         self.assertGreaterEqual(payload["summary"]["product_visible_count"], 1)
         self.assertIn("blocking_count", payload["summary"])
@@ -4381,36 +4508,13 @@ class AdminExtensionsApiTests(TestCase):
         self.assertIn("migration_bundle_count", payload["summary"])
 
         extension_ids = {item["id"] for item in payload["extensions"]}
-        self.assertIn("core", extension_ids)
+        self.assertNotIn("core", extension_ids)
+        self.assertNotIn("discussions", extension_ids)
+        self.assertNotIn("posts", extension_ids)
+        self.assertNotIn("users", extension_ids)
+        self.assertNotIn("realtime", extension_ids)
         self.assertIn("tags", extension_ids)
         self.assertIn("sample-hello", extension_ids)
-
-        core_extension = next(item for item in payload["extensions"] if item["id"] == "core")
-        self.assertEqual(core_extension["source"], "builtin-module")
-        self.assertEqual(core_extension["category"], "core")
-        self.assertEqual(core_extension["frontend_admin_entry"], "builtin:core")
-        self.assertTrue(core_extension["installed"])
-        self.assertTrue(core_extension["enabled"])
-        self.assertIn("diagnostics", core_extension)
-        self.assertIn("blocking", core_extension["diagnostics"])
-        self.assertIn("warning", core_extension["diagnostics"])
-        self.assertIn("blocking_reasons", core_extension["diagnostics"])
-        self.assertIn("warning_reasons", core_extension["diagnostics"])
-        self.assertIn("/admin", core_extension["admin_pages"])
-        self.assertTrue(any(page["path"] == "/admin/basics" for page in core_extension["admin_page_details"]))
-        self.assertTrue(any(page["path"] == "/admin/appearance" for page in core_extension["admin_page_details"]))
-        self.assertTrue(any(page["path"] == "/admin/mail" for page in core_extension["admin_page_details"]))
-        self.assertTrue(any(page["path"] == "/admin/advanced" for page in core_extension["admin_page_details"]))
-        self.assertTrue(any(page["path"] == "/admin/audit-logs" for page in core_extension["admin_page_details"]))
-        self.assertTrue(any(page["path"] == "/admin/docs" for page in core_extension["admin_page_details"]))
-        self.assertIn("basic", core_extension["settings_groups"])
-        self.assertIn("phases", core_extension["lifecycle"])
-        self.assertTrue(any(phase["key"] == "register" for phase in core_extension["lifecycle"]["phases"]))
-        self.assertEqual(core_extension["action_links"]["detail_page"], "/admin/extensions/core")
-        self.assertEqual(core_extension["action_links"]["settings_page"], "/admin/extensions/core/settings")
-        self.assertEqual(core_extension["action_links"]["permissions_page"], "/admin/extensions/core/permissions")
-        self.assertEqual(core_extension["action_links"]["operations_page"], "/admin/extensions/core/operations")
-        self.assertTrue(any(action["key"] == "details" for action in core_extension["admin_actions"]))
 
         sample_extension = next(item for item in payload["extensions"] if item["id"] == "sample-hello")
         self.assertEqual(sample_extension["source"], "filesystem")
@@ -4440,58 +4544,41 @@ class AdminExtensionsApiTests(TestCase):
 
         tags_extension = next(item for item in payload["extensions"] if item["id"] == "tags")
         self.assertEqual(tags_extension["source"], "filesystem")
-        self.assertEqual(tags_extension["frontend_admin_entry"], "")
+        self.assertEqual(tags_extension["frontend_admin_entry"], "extensions/tags/frontend/admin/index.js")
         self.assertEqual(tags_extension["action_links"]["settings_page"], "/admin/extensions/tags/settings")
-
-        discussions_extension = next(item for item in payload["extensions"] if item["id"] == "discussions")
-        self.assertEqual(discussions_extension["frontend_admin_entry"], "builtin:discussions")
-        self.assertEqual(discussions_extension["action_links"]["permissions_page"], "/admin/extensions/discussions/permissions")
-        self.assertEqual(discussions_extension["action_links"]["operations_page"], "/admin/extensions/discussions/operations")
-
-        posts_extension = next(item for item in payload["extensions"] if item["id"] == "posts")
-        self.assertEqual(posts_extension["frontend_admin_entry"], "builtin:posts")
-        self.assertEqual(posts_extension["action_links"]["operations_page"], "/admin/extensions/posts/operations")
 
         approval_extension = next(item for item in payload["extensions"] if item["id"] == "approval")
         self.assertEqual(approval_extension["source"], "filesystem")
-        self.assertEqual(approval_extension["frontend_admin_entry"], "")
+        self.assertEqual(approval_extension["frontend_admin_entry"], "extensions/approval/frontend/admin/index.js")
         self.assertEqual(approval_extension["action_links"]["permissions_page"], "/admin/extensions/approval/permissions")
         self.assertEqual(approval_extension["action_links"]["operations_page"], "/admin/extensions/approval/operations")
 
-        users_extension = next(item for item in payload["extensions"] if item["id"] == "users")
-        self.assertEqual(users_extension["frontend_admin_entry"], "builtin:users")
-        self.assertEqual(users_extension["action_links"]["permissions_page"], "/admin/extensions/users/permissions")
-        self.assertEqual(users_extension["action_links"]["operations_page"], "/admin/extensions/users/operations")
-
         flags_extension = next(item for item in payload["extensions"] if item["id"] == "flags")
         self.assertEqual(flags_extension["source"], "filesystem")
-        self.assertEqual(flags_extension["frontend_admin_entry"], "")
+        self.assertEqual(flags_extension["frontend_admin_entry"], "extensions/flags/frontend/admin/index.js")
+        self.assertEqual(flags_extension["frontend_forum_entry"], "extensions/flags/frontend/forum/index.js")
         self.assertEqual(flags_extension["action_links"]["permissions_page"], "/admin/extensions/flags/permissions")
         self.assertEqual(flags_extension["action_links"]["operations_page"], "/admin/extensions/flags/operations")
 
         notifications_extension = next(item for item in payload["extensions"] if item["id"] == "notifications")
         self.assertEqual(notifications_extension["source"], "filesystem")
         self.assertEqual(notifications_extension["frontend_admin_entry"], "")
-        self.assertEqual(notifications_extension["action_links"]["operations_page"], "/admin/extensions/notifications/operations")
+        self.assertEqual(notifications_extension["action_links"]["operations_page"], "")
 
         mentions_extension = next(item for item in payload["extensions"] if item["id"] == "mentions")
         self.assertEqual(mentions_extension["source"], "filesystem")
         self.assertEqual(mentions_extension["frontend_admin_entry"], "")
-        self.assertEqual(mentions_extension["action_links"]["operations_page"], "/admin/extensions/mentions/operations")
+        self.assertEqual(mentions_extension["action_links"]["operations_page"], "")
 
         subscriptions_extension = next(item for item in payload["extensions"] if item["id"] == "subscriptions")
         self.assertEqual(subscriptions_extension["source"], "filesystem")
         self.assertEqual(subscriptions_extension["frontend_admin_entry"], "")
-        self.assertEqual(subscriptions_extension["action_links"]["operations_page"], "/admin/extensions/subscriptions/operations")
-
-        realtime_extension = next(item for item in payload["extensions"] if item["id"] == "realtime")
-        self.assertEqual(realtime_extension["frontend_admin_entry"], "builtin:realtime")
-        self.assertEqual(realtime_extension["action_links"]["operations_page"], "/admin/extensions/realtime/operations")
+        self.assertEqual(subscriptions_extension["action_links"]["operations_page"], "")
 
         likes_extension = next(item for item in payload["extensions"] if item["id"] == "likes")
         self.assertEqual(likes_extension["source"], "filesystem")
         self.assertEqual(likes_extension["frontend_admin_entry"], "")
-        self.assertEqual(likes_extension["action_links"]["operations_page"], "/admin/extensions/likes/operations")
+        self.assertEqual(likes_extension["action_links"]["operations_page"], "")
 
 
     def test_extension_detail_api_returns_extension_actions(self):
@@ -4712,9 +4799,14 @@ class AdminExtensionsApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()["extension"]
-        self.assertTrue(
-            any(item["module_id"] == "likes" and item["field"] == "can_like" for item in payload["resource_fields"])
-        )
+        like_fields = {
+            item["field"]
+            for item in payload["resource_fields"]
+            if item["module_id"] == "likes"
+        }
+        self.assertIn("like_count", like_fields)
+        self.assertIn("is_liked", like_fields)
+        self.assertIn("can_like", like_fields)
         self.assertTrue(
             any(item["module_id"] == "likes" and item["endpoint"] == "like" for item in payload["resource_endpoints"])
         )
@@ -4809,9 +4901,10 @@ class AdminExtensionsApiTests(TestCase):
         self.assertTrue(
             any(
                 item["module_id"] == "flags"
-                and item["event"] == "PostDeletedEvent"
+                and item["key"] == "flags"
+                and "prepare_delete" in item["phases"]
                 and item.get("source") == "runtime"
-                for item in payload["event_listeners"]
+                for item in payload["post_lifecycle"]
             )
         )
 
@@ -4834,6 +4927,16 @@ class AdminExtensionsApiTests(TestCase):
                 for item in payload["event_listeners"]
             )
         )
+        self.assertTrue(
+            any(
+                item["key"] == "mentions"
+                and item["module_id"] == "mentions"
+                and "apply_created" in item["phases"]
+                and "apply_updated" in item["phases"]
+                and "apply_approved" in item["phases"]
+                for item in payload["post_lifecycle"]
+            )
+        )
 
     def test_extension_detail_api_surfaces_registered_capabilities_for_subscriptions_extension(self):
         response = self.client.get(
@@ -4850,6 +4953,9 @@ class AdminExtensionsApiTests(TestCase):
         self.assertTrue(any(item["key"] == "notify_new_post" for item in payload["user_preferences"]))
         self.assertTrue(
             any(item["module_id"] == "subscriptions" and item["field"] == "is_subscribed" for item in payload["resource_fields"])
+        )
+        self.assertTrue(
+            any(item["module_id"] == "subscriptions" and item["endpoint"] == "subscribe" for item in payload["resource_endpoints"])
         )
         self.assertTrue(
             any(
@@ -5005,7 +5111,7 @@ class AdminExtensionsApiTests(TestCase):
         self.assertFalse(installation.enabled)
         self.assertFalse(installation.booted)
 
-    def test_extensions_api_blocks_enable_when_dependency_disabled(self):
+    def test_extensions_api_ignores_stale_core_installation_dependency_record(self):
         self.client.post(
             "/api/admin/extensions/sample-hello/install",
             **self.auth_header(),
@@ -5018,7 +5124,7 @@ class AdminExtensionsApiTests(TestCase):
         ExtensionInstallation.objects.create(
             extension_id="core",
             version="1.0.0",
-            source="builtin-module",
+            source="core-module",
             enabled=False,
             installed=True,
             booted=False,
@@ -5029,11 +5135,10 @@ class AdminExtensionsApiTests(TestCase):
             **self.auth_header(),
         )
 
-        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
-        self.assertEqual(payload["code"], "extension_enable_blocked")
-        self.assertIn("disabled_dependencies", payload["field_errors"])
-        self.assertIn("core", payload["field_errors"]["disabled_dependencies"])
+        sample_extension = next(item for item in payload["extensions"] if item["id"] == "sample-hello")
+        self.assertTrue(sample_extension["enabled"])
 
     def test_extensions_api_blocks_enable_when_extension_not_installed(self):
         response = self.client.post(
@@ -5136,15 +5241,6 @@ class ExtensionServiceTests(TestCase):
         self.assertEqual(uninstalled.runtime.backend_hooks["run_disable"]["status"], "ok")
         self.assertEqual(uninstalled.runtime.backend_hooks["run_uninstall"]["status"], "ok")
 
-    def test_run_extension_backend_hook_skips_builtin_extension(self):
-        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
-        definition = registry.get_extension("core")
-
-        result = run_extension_backend_hook(definition, "run_install")
-
-        self.assertEqual(result["status"], "skipped")
-        self.assertEqual(result["hook"], "run_install")
-
     def test_run_extension_backend_hook_skips_when_hook_missing(self):
         registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
         definition = registry.get_extension("sample-hello")
@@ -5189,24 +5285,22 @@ class ExtensionServiceTests(TestCase):
 
         self.assertEqual(context.exception.code, "extension_runtime_hook_not_declared")
 
-    def test_enable_raises_when_required_dependency_missing_or_disabled(self):
+    def test_enable_ignores_stale_core_installation_dependency_record(self):
         ExtensionService.install_extension("sample-hello")
         ExtensionInstallation.objects.update_or_create(
             extension_id="core",
             defaults={
                 "version": "1.0.0",
-                "source": "builtin-module",
+                "source": "core-module",
                 "enabled": False,
                 "installed": True,
                 "booted": False,
             },
         )
 
-        with self.assertRaises(ExtensionStateError) as context:
-            ExtensionService.set_extension_enabled("sample-hello", True)
+        enabled = ExtensionService.set_extension_enabled("sample-hello", True)
 
-        self.assertEqual(context.exception.code, "extension_enable_blocked")
-        self.assertIn("core", context.exception.details["disabled_dependencies"])
+        self.assertTrue(enabled.runtime.enabled)
 
     def test_disable_raises_when_enabled_dependents_exist(self):
         with self.assertRaises(ExtensionStateError) as context:
@@ -5843,6 +5937,127 @@ class ResourceRegistryTests(TestCase):
         self.assertTrue(endpoint.paginate)
         self.assertEqual(plan.select_related, ("owner",))
         self.assertEqual(plan.prefetch_related, ("comments",))
+
+    def test_resource_registry_ignores_non_filesystem_installation_state_overrides(self):
+        registry = ResourceRegistry()
+
+        registry.register_field(ResourceFieldDefinition(
+            resource="discussion",
+            field="legacy_core_field",
+            module_id="core",
+            resolver=lambda instance, context: True,
+        ))
+        ExtensionInstallation.objects.create(
+            extension_id="core",
+            version="1.0.0",
+            source="core-module",
+            enabled=False,
+            installed=True,
+            booted=False,
+        )
+
+        fields = registry.get_fields("discussion")
+
+        self.assertTrue(any(item.field == "legacy_core_field" for item in fields))
+
+    def test_resource_extender_resolves_endpoint_pipeline_callbacks(self):
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+
+        class BeforeHook:
+            def __call__(self, context):
+                context["seen_before"] = True
+
+        class ResponseCallback:
+            def __call__(self, context, response):
+                return {
+                    "response": response,
+                    "seen_before": context.get("seen_before"),
+                }
+
+        endpoint = ResourceEndpointDefinition(
+            resource="demo",
+            endpoint="custom",
+            module_id="",
+            handler=lambda context: {"ok": True},
+            before_hook=BeforeHook,
+            response_callback=ResponseCallback,
+        )
+
+        ResourceExtender(endpoints=(endpoint,)).extend(app, extension)
+        resources = app.make("resources")
+        definition = resources.get_dispatch_endpoint("demo", "custom", "GET")
+
+        self.assertEqual(definition.module_id, "alpha-tools")
+        self.assertIsNot(definition.before_hook, BeforeHook)
+        self.assertIsNot(definition.response_callback, ResponseCallback)
+        context = {}
+        definition.before_hook(context)
+        self.assertEqual(definition.response_callback(context, {"ok": True}), {
+            "response": {"ok": True},
+            "seen_before": True,
+        })
+
+    def test_api_resource_extender_supports_string_resource_endpoint_helpers(self):
+        app = ExtensionApplication()
+        extension = SimpleNamespace(extension_id="alpha-tools")
+
+        ApiResourceExtender("post").add_default_include(("index", "show"), ("flags",)).extend(app, extension)
+        resources = app.make("resources")
+        endpoint = ResourceEndpointDefinition(
+            resource="post",
+            endpoint="index",
+            module_id="core",
+            kind="index",
+        )
+
+        mutated = resources.apply_endpoint_mutators("post", "index", endpoint)
+
+        self.assertEqual(mutated.default_include, ("flags",))
+
+    def test_resource_endpoint_runner_applies_hooks_to_custom_handlers(self):
+        from apps.core.resource_endpoint_runner import ResourceEndpointRunner
+
+        registry = ResourceRegistry()
+        events = []
+
+        definition = ResourceEndpointDefinition(
+            resource="demo",
+            endpoint="custom",
+            module_id="alpha-tools",
+            handler=lambda context: {
+                "data": {"ok": context["prepared"]},
+                "queried": context["queried"],
+                "included": context["include"],
+                "sort": context["sort"],
+                "filters": context["filters"],
+            },
+            default_include=("owner",),
+            default_sort="-created_at",
+            query_callback=lambda context: context.with_value("queried", True),
+            action_callback=lambda context: {**context["result"], "action": True},
+            before_serialization_callback=lambda context, result: {**result, "serialized": True},
+            before_hook=lambda context: (events.append("before"), context.update({"prepared": True})),
+            after_hook=lambda context, result: {**result, "meta": {"after": True}},
+            response_callback=lambda context, response: {**response, "links": {"self": "/demo/custom"}},
+        )
+
+        response = ResourceEndpointRunner(registry).run(definition, {
+            "query": {
+                "filter[state]": "open",
+            },
+        })
+
+        self.assertEqual(events, ["before"])
+        self.assertEqual(response["data"], {"ok": True})
+        self.assertTrue(response["queried"])
+        self.assertTrue(response["action"])
+        self.assertTrue(response["serialized"])
+        self.assertEqual(response["included"], ("owner",))
+        self.assertEqual(response["sort"], "-created_at")
+        self.assertEqual(response["filters"], {"state": "open"})
+        self.assertEqual(response["meta"], {"after": True})
+        self.assertEqual(response["links"], {"self": "/demo/custom"})
 
     def test_resource_endpoint_eager_loads_when_included_and_where_callbacks(self):
         registry = ResourceRegistry()
@@ -9441,6 +9656,27 @@ class ResourceRegistryTests(TestCase):
         self.assertEqual(routes[("feature", ("POST",))], "/demo_items/feature")
         self.assertEqual(routes[("named", ("GET",))], "/demo_items/{object_id}/named")
 
+    def test_resource_route_definitions_include_extension_endpoint_only_resources(self):
+        registry = ResourceRegistry()
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="post",
+                endpoint="like",
+                module_id="likes",
+                handler=lambda context: {"ok": True},
+                methods=("POST", "DELETE"),
+                path="posts/{object_id}/like",
+                absolute_path=True,
+            )
+        )
+
+        routes = {
+            (route.resource, route.endpoint, route.methods): route.path
+            for route in build_resource_route_definitions(registry)
+        }
+
+        self.assertEqual(routes[("post", "like", ("DELETE", "POST"))], "/posts/{object_id}/like")
+
     def test_resource_endpoint_routes_are_registered_on_api_application(self):
         registry = ResourceRegistry()
 
@@ -9508,7 +9744,7 @@ class ResourceRegistryTests(TestCase):
         )
 
 class ForumRegistryTests(TestCase):
-    def test_builtin_registry_exposes_default_comment_post_type(self):
+    def test_core_registry_exposes_default_comment_post_type(self):
         registry = get_forum_registry()
 
         self.assertEqual(registry.get_default_post_type_code(), "comment")
@@ -9517,7 +9753,7 @@ class ForumRegistryTests(TestCase):
         self.assertIn("comment", registry.get_discussion_counted_post_type_codes())
         self.assertIn("comment", registry.get_user_counted_post_type_codes())
 
-    def test_builtin_registry_exposes_discussion_sort_catalog(self):
+    def test_core_registry_exposes_discussion_sort_catalog(self):
         registry = get_forum_registry()
 
         sorts = registry.get_discussion_sorts()
@@ -9534,7 +9770,7 @@ class ForumRegistryTests(TestCase):
         self.assertFalse(unanswered_sort.toolbar_visible)
         self.assertFalse(oldest_sort.toolbar_visible)
 
-    def test_builtin_registry_exposes_discussion_list_filter_catalog(self):
+    def test_core_registry_exposes_discussion_list_filter_catalog(self):
         registry = get_forum_registry()
 
         filters = registry.get_discussion_list_filters()
@@ -10337,6 +10573,30 @@ class SearchApiTests(ChineseSearchTests):
         payload = response.json()
         self.assertEqual(payload["post_total"], 1)
         self.assertEqual([item["id"] for item in payload["posts"]], [matched_post.id])
+
+    def test_search_api_supports_registered_mentioned_me_filter_for_first_post(self):
+        mentioned_user = User.objects.create_user(
+            username="mentioned-first-post-user",
+            email="mentioned-first-post-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        discussion = DiscussionService.create_discussion(
+            title="首帖提及过滤讨论",
+            content=f"Hello @{mentioned_user.username} 首帖提及过滤关键字",
+            user=self.user,
+        )
+
+        response = self.client.get(
+            "/api/search",
+            {"q": "首帖提及过滤关键字 mentioned:me", "type": "posts"},
+            **self.auth_header(mentioned_user),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["post_total"], 1)
+        self.assertEqual([item["id"] for item in payload["posts"]], [discussion.first_post_id])
 
     def test_search_filters_api_returns_registered_filter_catalog(self):
         response = self.client.get("/api/search/filters")
@@ -11509,6 +11769,8 @@ class AdminSettingsApiTests(TestCase):
                 for route in tags_extension["frontend_routes"]
             )
         )
+        flags_extension = next(item for item in payload["enabled_extensions"] if item["id"] == "flags")
+        self.assertEqual(flags_extension["frontend_forum_entry"], "extensions/flags/frontend/forum/index.js")
         self.assertFalse(any(item["id"] == "sample-hello" for item in payload["enabled_extensions"]))
         self.assertNotIn("auth_turnstile_secret_key", payload)
 
@@ -14141,7 +14403,7 @@ class AdminPermissionsApiTests(TestCase):
         self.assertTrue(any(module["id"] == "core" for module in payload["modules"]))
 
     @patch("apps.core.admin_api.build_runtime_dependency_summary")
-    def test_modules_api_returns_builtin_registry_snapshot(self, build_runtime_dependency_summary):
+    def test_modules_api_returns_core_registry_snapshot(self, build_runtime_dependency_summary):
         build_runtime_dependency_summary.return_value = {
             "status": "healthy",
             "label": "健康",
@@ -14207,11 +14469,11 @@ class AdminPermissionsApiTests(TestCase):
             "/admin.html#/admin/docs?guide=module-development&module=core",
         )
         self.assertEqual(core_module["extension"]["id"], "core")
-        self.assertEqual(core_module["extension"]["source"], "builtin-module")
+        self.assertEqual(core_module["extension"]["source"], "core-module")
         self.assertTrue(core_module["extension"]["runtime"]["installed"])
         self.assertEqual(core_module["extension"]["action_links"]["detail_page"], "/admin/extensions/core")
-        self.assertEqual(core_module["extension"]["action_links"]["settings_page"], "/admin/extensions/core/settings")
-        self.assertTrue(any(action["key"] == "details" for action in core_module["extension"]["admin_actions"]))
+        self.assertEqual(core_module["extension"]["action_links"]["settings_page"], "/admin/basics")
+        self.assertEqual(core_module["extension"]["admin_actions"], [])
         self.assertIn("debug_items", core_module["runtime"])
         self.assertIn("lifecycle_phases", core_module["runtime"])
         self.assertIn("detail_entry_path", core_module["runtime"])

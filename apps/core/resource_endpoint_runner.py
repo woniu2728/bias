@@ -22,7 +22,47 @@ class ResourceEndpointRunner:
     def run(self, definition: Any, context: dict):
         resolved_context = ensure_resource_context(context).with_resource(definition.resource)
         if definition.handler is not None:
-            return definition.handler(resolved_context)
+            include = self.registry._resolve_endpoint_include(definition, resolved_context)
+            resolved_context = (
+                resolved_context
+                .with_value("default_include", tuple(getattr(definition, "default_include", ()) or ()))
+                .with_value("include", include)
+                .with_value("sort", self.registry._resolve_endpoint_sort(definition, resolved_context))
+                .with_value("filters", self.registry._resolve_endpoint_filters(resolved_context))
+            )
+            if getattr(definition, "paginate", False):
+                resolved_context = resolved_context.with_value(
+                    "pagination",
+                    self.registry._resolve_endpoint_pagination(definition, resolved_context),
+                )
+            if callable(getattr(definition, "query_callback", None)):
+                updated_context = definition.query_callback(resolved_context)
+                if updated_context is not None:
+                    resolved_context = ensure_resource_context(updated_context)
+            self.registry._call_endpoint_before(definition, resolved_context)
+            result = definition.handler(resolved_context)
+            resolved_context = resolved_context.with_result(result)
+            if callable(getattr(definition, "action_callback", None)):
+                updated_result = definition.action_callback(resolved_context)
+                if updated_result is not None:
+                    result = updated_result
+                    resolved_context = resolved_context.with_result(result)
+            if callable(getattr(definition, "before_serialization_callback", None)):
+                updated = definition.before_serialization_callback(resolved_context, result)
+                if updated is not None:
+                    result = updated
+                    resolved_context = resolved_context.with_result(result)
+            result = self.registry._call_endpoint_after(definition, resolved_context, result)
+            resolved_context = resolved_context.with_result(result)
+            response = result
+            if isinstance(response, dict):
+                self.registry._merge_endpoint_document_meta_links(response, definition, resolved_context, result)
+                resolved_context = resolved_context.with_document(response)
+            if callable(getattr(definition, "response_callback", None)):
+                updated_response = definition.response_callback(resolved_context, response)
+                if updated_response is not None:
+                    response = updated_response
+            return response
 
         resource_object = self.registry.get_resource_object(definition.resource)
         if resource_object is None:

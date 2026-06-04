@@ -3,7 +3,7 @@
     class-name="ModulesPage"
     icon="fas fa-cubes"
     :title="modulesCopy?.pageTitle || '模块中心'"
-    :description="modulesCopy?.pageDescription || '从扩展兼容视角查看内置模块的承载状态、主要入口和运行风险。'"
+    :description="modulesCopy?.pageDescription || '查看核心模块的承载状态、主要入口和运行风险。'"
   >
     <AdminStateBlock v-if="loading" tone="subtle">{{ modulesCopy?.loadingText || '加载模块信息中...' }}</AdminStateBlock>
     <AdminStateBlock v-else-if="errorMessage" tone="danger">{{ errorMessage }}</AdminStateBlock>

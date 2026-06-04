@@ -2,7 +2,7 @@ from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from apps.notifications.models import Notification
-from apps.notifications.services import NotificationService
+from extensions.notifications.backend.services import NotificationService
 
 
 @receiver(post_save, sender=Notification)

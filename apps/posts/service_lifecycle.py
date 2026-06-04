@@ -1,10 +1,14 @@
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F
+from django.db.models import F
 from django.utils import timezone
 
 from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.extensions.runtime_access import evaluate_runtime_model_policy, refresh_runtime_model_private
+from apps.core.extensions.runtime_access import (
+    evaluate_runtime_model_policy,
+    get_runtime_post_lifecycle_service,
+    refresh_runtime_model_private,
+)
 from apps.core.forum_events import (
     PostCreatedEvent,
     PostDeletedEvent,
@@ -12,8 +16,7 @@ from apps.core.forum_events import (
     PostResubmittedEvent,
 )
 from apps.discussions.models import Discussion, DiscussionUser
-from apps.core.forum_events import UserMentionedEvent
-from apps.posts.models import Post, PostFlag, PostLike, PostMentionsUser
+from apps.posts.models import Post
 from apps.users.models import User
 from apps.users.services import UserService
 
@@ -27,7 +30,6 @@ def create_post(
     default_post_type,
     can_reply_in_discussion,
     render_markdown_cb,
-    process_mentions_cb,
     lock_discussion_for_post_number_cb,
     create_post_with_sequential_number_cb,
 ) -> Post:
@@ -82,7 +84,15 @@ def create_post(
                 defaults=state_defaults,
             )
 
-            process_mentions_cb(post, content)
+            _apply_post_created_extensions(
+                post,
+                context={
+                    "content": content,
+                    "actor": user,
+                    "reply_target": reply_target,
+                    "is_approved": True,
+                },
+            )
 
             dispatch_forum_event_after_commit(
                 PostCreatedEvent(
@@ -134,18 +144,14 @@ def get_post_list(
     user=None,
     preload=None,
     stream_post_types,
-    annotate_flag_state_cb,
     apply_visibility_filters_cb,
 ):
     queryset = Post.objects.filter(
         discussion_id=discussion_id,
         type__in=stream_post_types,
-    ).annotate(
-        like_count=Count("likes", distinct=True)
     )
     if preload is not None:
         queryset = preload(queryset)
-    queryset = annotate_flag_state_cb(queryset, user)
     queryset = apply_visibility_filters_cb(queryset, user)
     queryset = queryset.order_by("number")
 
@@ -153,7 +159,6 @@ def get_post_list(
     offset = (page - 1) * limit
     posts = list(queryset[offset:offset + limit])
 
-    _annotate_like_state(posts, user)
     return posts, total
 
 
@@ -163,22 +168,14 @@ def get_post_by_id(
     user=None,
     preload=None,
     can_view_post_cb,
-    annotate_flag_state_cb,
 ):
     try:
-        post = Post.objects.select_related("discussion").annotate(
-            like_count=Count("likes", distinct=True)
-        )
+        post = Post.objects.select_related("discussion")
         if preload is not None:
             post = preload(post)
-        post = annotate_flag_state_cb(post, user).get(id=post_id)
+        post = post.get(id=post_id)
         if not can_view_post_cb(post, user):
             return None
-
-        if user and user.is_authenticated:
-            post.is_liked = PostLike.objects.filter(post=post, user=user).exists()
-        else:
-            post.is_liked = False
         return post
     except Post.DoesNotExist:
         return None
@@ -191,7 +188,6 @@ def update_post(
     *,
     can_edit_post_cb,
     render_markdown_cb,
-    process_mentions_cb,
 ) -> Post:
     UserService.ensure_not_suspended(user, "编辑帖子")
     post = Post.objects.get(id=post_id)
@@ -233,8 +229,13 @@ def update_post(
             update_fields.append("is_private")
         post.save(update_fields=update_fields)
 
-        PostMentionsUser.objects.filter(post=post).delete()
-        process_mentions_cb(post, content)
+        _apply_post_updated_extensions(
+            post,
+            context={
+                "content": content,
+                "actor": user,
+            },
+        )
 
         if previous_approval_status:
             dispatch_forum_event_after_commit(
@@ -271,15 +272,33 @@ def delete_post(
         deleted_post_id = post.id
         deleted_post_number = post.number
         deleted_discussion_id = post.discussion_id
-        deleted_flag_ids = tuple(
-            PostFlag.objects.filter(post_id=post.id).values_list("id", flat=True)
-        )
         counted_post = (
             post.approval_status == Post.APPROVAL_APPROVED
             and post.type in discussion_counted_post_types
         )
+        prepared_extensions = _prepare_post_delete_extensions(
+            post,
+            context={
+                "post_id": deleted_post_id,
+                "discussion_id": deleted_discussion_id,
+                "actor": user,
+                "post_number": deleted_post_number,
+                "was_counted": counted_post,
+            },
+        )
 
         post.delete()
+
+        _apply_post_deleted_extensions(
+            context={
+                "post_id": deleted_post_id,
+                "discussion_id": deleted_discussion_id,
+                "actor": user,
+                "post_number": deleted_post_number,
+                "was_counted": counted_post,
+                "prepared": prepared_extensions,
+            },
+        )
 
         if counted_post:
             refresh_discussion_approved_stats_cb(discussion)
@@ -293,7 +312,6 @@ def delete_post(
                 discussion_id=deleted_discussion_id,
                 actor_user_id=user.id,
                 post_number=deleted_post_number,
-                flag_ids=deleted_flag_ids,
             )
         )
 
@@ -388,44 +406,32 @@ def refresh_discussion_approved_stats(
     return discussion
 
 
-def _annotate_like_state(posts, user) -> None:
-    if user and user.is_authenticated:
-        post_ids = [post.id for post in posts]
-        liked_post_ids = set(
-            PostLike.objects.filter(
-                post_id__in=post_ids,
-                user=user,
-            ).values_list("post_id", flat=True)
-        )
-        for post in posts:
-            post.is_liked = post.id in liked_post_ids
-        return
-
-    for post in posts:
-        post.is_liked = False
+def _apply_post_created_extensions(post: Post, *, context: dict) -> dict:
+    post_lifecycle = get_runtime_post_lifecycle_service()
+    if post_lifecycle is None:
+        return {}
+    return post_lifecycle.apply_created(post=post, context=context)
 
 
-def process_mentions(post: Post, content: str, *, extract_mentions_cb) -> None:
-    mentions = extract_mentions_cb(content)
-    if not mentions:
-        return
+def _apply_post_updated_extensions(post: Post, *, context: dict) -> dict:
+    post_lifecycle = get_runtime_post_lifecycle_service()
+    if post_lifecycle is None:
+        return {}
+    return post_lifecycle.apply_updated(post=post, context=context)
 
-    mentioned_users = User.objects.filter(username__in=mentions)
-    for mentioned_user in mentioned_users:
-        PostMentionsUser.objects.get_or_create(
-            post=post,
-            mentions_user=mentioned_user,
-        )
 
-        dispatch_forum_event_after_commit(
-            UserMentionedEvent(
-                post_id=post.id,
-                discussion_id=post.discussion_id,
-                actor_user_id=post.user_id,
-                mentioned_user_id=mentioned_user.id,
-                post_number=post.number,
-            )
-        )
+def _prepare_post_delete_extensions(post: Post, *, context: dict) -> dict:
+    post_lifecycle = get_runtime_post_lifecycle_service()
+    if post_lifecycle is None:
+        return {}
+    return post_lifecycle.prepare_delete(post=post, context=context)
+
+
+def _apply_post_deleted_extensions(*, context: dict) -> dict:
+    post_lifecycle = get_runtime_post_lifecycle_service()
+    if post_lifecycle is None:
+        return {}
+    return post_lifecycle.apply_deleted(context=context)
 
 
 def is_post_number_conflict(exc: IntegrityError) -> bool:

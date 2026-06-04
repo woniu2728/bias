@@ -5,7 +5,7 @@ from apps.users.models import User
 
 class Discussion(models.Model):
     """
-    讨论模型 - 对标Flarum的Discussion模型
+    Bias 讨论模型
     """
     APPROVAL_APPROVED = "approved"
     APPROVAL_PENDING = "pending"
@@ -130,7 +130,7 @@ class Discussion(models.Model):
 
 class DiscussionUser(models.Model):
     """
-    讨论-用户状态表 - 对标Flarum的discussion_user表
+    Bias 讨论-用户状态表
     """
     discussion = models.ForeignKey(Discussion, on_delete=models.CASCADE, related_name='user_states')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='discussion_states')

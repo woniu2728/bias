@@ -21,7 +21,7 @@ from apps.core.forum_timeline import (
 
 def handle_discussion_approved(event: DiscussionApprovedEvent) -> None:
     from apps.discussions.models import Discussion
-    from apps.notifications.services import NotificationService
+    from extensions.notifications.backend.services import NotificationService
     from apps.users.models import User
 
     try:
@@ -52,7 +52,7 @@ def handle_discussion_approved(event: DiscussionApprovedEvent) -> None:
 
 def handle_discussion_rejected(event: DiscussionRejectedEvent) -> None:
     from apps.discussions.models import Discussion
-    from apps.notifications.services import NotificationService
+    from extensions.notifications.backend.services import NotificationService
     from apps.users.models import User
 
     try:
@@ -87,7 +87,7 @@ def handle_discussion_resubmitted(event: DiscussionResubmittedEvent) -> None:
 
 
 def handle_post_approved(event: PostApprovedEvent) -> None:
-    from apps.notifications.services import NotificationService
+    from extensions.notifications.backend.services import NotificationService
     from apps.posts.models import Post
     from apps.users.models import User
 
@@ -109,7 +109,7 @@ def handle_post_approved(event: PostApprovedEvent) -> None:
 
 
 def handle_post_rejected(event: PostRejectedEvent) -> None:
-    from apps.notifications.services import NotificationService
+    from extensions.notifications.backend.services import NotificationService
     from apps.posts.models import Post
     from apps.users.models import User
 

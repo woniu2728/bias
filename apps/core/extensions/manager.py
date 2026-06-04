@@ -8,7 +8,6 @@ from django.db import transaction
 
 from apps.core.extensions.backend import run_extension_backend_hook
 from apps.core.extensions.assets import publish_extension_assets, unpublish_extension_assets
-from apps.core.extensions.builtin_adapter import adapt_builtin_module_to_extension
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
 from apps.core.extensions.extension_runtime import Extension
 from apps.core.extensions.event_bus import get_extension_event_bus
@@ -59,27 +58,6 @@ class ExtensionManager:
             extension = Extension.from_manifest(manifest)
             self._extensions[extension.id] = self._apply_installation_state(extension)
 
-        from apps.core.forum_registry import ForumRegistry
-        from apps.core.forum_registry_builtin import _register_builtin_modules
-
-        builtin_registry = ForumRegistry()
-        _register_builtin_modules(builtin_registry)
-        builtin_modules = sorted(
-            builtin_registry._modules.values(),
-            key=lambda item: (
-                int(not item.is_core),
-                item.category,
-                item.name.lower(),
-                item.module_id,
-            ),
-        )
-        for module in builtin_modules:
-            extension = adapt_builtin_module_to_extension(module)
-            self._extensions.setdefault(
-                module.module_id,
-                self._apply_installation_state(extension),
-            )
-
         self._loaded = True
 
     def get_extensions(self) -> list[Extension]:
@@ -112,12 +90,6 @@ class ExtensionManager:
         self.load(force=True)
         extension = self.get_extension(extension_id)
 
-        if extension.source == "builtin-module":
-            raise ExtensionStateError(
-                f"内置扩展 {extension.id} 无需安装",
-                code="extension_install_builtin_blocked",
-                details={"extension_id": extension.id},
-            )
         if extension.runtime.installed:
             raise ExtensionStateError(
                 f"扩展 {extension.id} 已安装",
@@ -170,12 +142,6 @@ class ExtensionManager:
         extension = self.get_extension(extension_id)
         extensions = self.get_extensions()
 
-        if extension.source == "builtin-module":
-            raise ExtensionStateError(
-                f"内置扩展 {extension.id} 不支持卸载",
-                code="extension_uninstall_builtin_blocked",
-                details={"extension_id": extension.id},
-            )
         if not extension.runtime.installed:
             raise ExtensionStateError(
                 f"扩展 {extension.id} 尚未安装",
@@ -334,12 +300,6 @@ class ExtensionManager:
         self.load(force=True)
         extension = self.get_extension(extension_id)
 
-        if extension.source == "builtin-module":
-            raise ExtensionStateError(
-                f"内置扩展 {extension.id} 无需执行独立迁移",
-                code="extension_migrations_builtin_blocked",
-                details={"extension_id": extension.id},
-            )
         if not extension.runtime.installed:
             raise ExtensionStateError(
                 f"扩展 {extension.id} 尚未安装，无法执行迁移",
@@ -384,14 +344,12 @@ class ExtensionManager:
         self,
         *,
         force: bool = False,
-        include_builtin: bool = False,
     ) -> list[ExtensionAssembly]:
         self.load(force=force)
         extensions = [
             extension
             for extension in self.get_extensions()
             if extension.runtime.installed and extension.runtime.enabled
-            and (include_builtin or extension.source != "builtin-module")
             and is_extension_allowed_in_safe_mode(extension)
         ]
         return [
@@ -403,25 +361,22 @@ class ExtensionManager:
         self,
         *,
         force: bool = False,
-        include_builtin: bool = False,
     ) -> list[Extension]:
         self.load(force=force)
         extensions = [
             extension
             for extension in self.get_extensions()
             if extension.runtime.installed and extension.runtime.enabled
-            and (include_builtin or extension.source != "builtin-module")
             and is_extension_allowed_in_safe_mode(extension)
         ]
         return self.sort_extensions_for_boot(extensions)
 
     def get_extension_boot_plan(self, *, force: bool = False) -> ExtensionBootPlan:
         forum_extensions = tuple(self.get_enabled_extension_assemblies(force=force))
-        runtime_extensions = tuple(self.get_enabled_extension_assemblies(force=force, include_builtin=True))
         return ExtensionBootPlan(
             forum_extensions=forum_extensions,
-            event_extensions=runtime_extensions,
-            resource_extensions=runtime_extensions,
+            event_extensions=forum_extensions,
+            resource_extensions=forum_extensions,
             frontend_extensions=forum_extensions,
             locale_extensions=forum_extensions,
             formatter_extensions=forum_extensions,
@@ -433,11 +388,10 @@ class ExtensionManager:
         discovered = {
             extension.id: extension
             for extension in self.get_extensions()
-            if extension.source != "builtin-module"
         }
         installations = {
             installation.extension_id: installation
-            for installation in ExtensionInstallation.objects.exclude(source="builtin-module")
+            for installation in ExtensionInstallation.objects.all()
         }
         updated = []
         pruned = []
@@ -485,7 +439,10 @@ class ExtensionManager:
         }
 
     def sort_extensions_for_boot(self, extensions: list[Extension]) -> list[Extension]:
-        resolved = _resolve_extension_boot_order(extensions)
+        resolved = resolve_extension_order(
+            extensions,
+            satisfied_dependency_ids=_get_core_satisfied_dependency_ids(),
+        )
         if resolved["circular_dependencies"]:
             circular = ", ".join(resolved["circular_dependencies"])
             raise ExtensionStateError(
@@ -533,9 +490,6 @@ class ExtensionManager:
         return self._with_runtime_actions(extension)
 
     def _build_uninstalled_extension(self, extension: Extension) -> Extension:
-        if extension.source == "builtin-module":
-            return extension
-
         auto_installed = is_extension_auto_installed(extension)
         auto_enabled = is_extension_auto_enabled(extension)
         if auto_installed:
@@ -665,6 +619,7 @@ class ExtensionManager:
             event_listeners=tuple(extension.event_listeners),
             realtime_included=tuple(extension.realtime_included),
             discussion_lifecycle=tuple(extension.discussion_lifecycle),
+            post_lifecycle=tuple(extension.post_lifecycle),
             runtime_actions=tuple(extension.manifest_runtime_actions),
             admin_actions=tuple(extension.admin_actions),
             settings_pages=tuple(extension.settings_pages),
@@ -683,11 +638,14 @@ class ExtensionManager:
         self._validate_bias_compatibility(extension, action="enable")
 
         extension_map = {item.id: item for item in extensions}
+        satisfied_dependency_ids = _get_core_satisfied_dependency_ids()
         missing_dependencies = []
         disabled_dependencies = []
         active_conflicts = []
 
         for dependency_id in extension.manifest.dependencies:
+            if dependency_id in satisfied_dependency_ids:
+                continue
             dependency = extension_map.get(dependency_id)
             if dependency is None:
                 missing_dependencies.append(dependency_id)
@@ -982,82 +940,13 @@ def json_dumps(value) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def _resolve_extension_boot_order(extensions: list[Extension]) -> dict:
-    builtin_original_order = {
-        extension.id: index
-        for index, extension in enumerate(extensions)
-        if extension.source == "builtin-module"
-    }
-    extension_map = {extension.id: extension for extension in extensions}
-    sorted_extensions = sorted(
-        extensions,
-        key=lambda item: (
-            0 if item.source != "builtin-module" else 1,
-            builtin_original_order.get(item.id, 0),
-            item.id,
-        ),
-    )
-    graph: dict[str, list[str]] = {extension.id: [] for extension in sorted_extensions}
-    in_degree: dict[str, int] = {extension.id: 0 for extension in sorted_extensions}
-    missing_dependencies: dict[str, list[str]] = {}
+def _get_core_satisfied_dependency_ids() -> set[str]:
+    try:
+        from apps.core.forum_registry import get_core_module_ids
 
-    for extension in sorted_extensions:
-        dependencies = list(extension.manifest.dependencies)
-        optional_dependencies = [
-            dependency_id
-            for dependency_id in extension.manifest.optional_dependencies
-            if dependency_id in extension_map
-        ]
-        for dependency_id in [*dependencies, *optional_dependencies]:
-            dependency = extension_map.get(dependency_id)
-            if dependency is None:
-                if dependency_id in dependencies:
-                    missing_dependencies.setdefault(extension.id, []).append(dependency_id)
-                continue
-            if extension.source == "builtin-module" and dependency.source == "builtin-module":
-                continue
-            graph.setdefault(dependency_id, [])
-            graph[dependency_id].append(extension.id)
-            in_degree[extension.id] = in_degree.get(extension.id, 0) + 1
-
-    pending = sorted(
-        [extension_id for extension_id, count in in_degree.items() if count == 0],
-        key=lambda extension_id: _extension_boot_sort_key(extension_map[extension_id], builtin_original_order),
-    )
-    output: list[str] = []
-    while pending:
-        active = pending.pop(0)
-        output.append(active)
-        for dependent_id in sorted(
-            graph.get(active, []),
-            key=lambda extension_id: _extension_boot_sort_key(extension_map[extension_id], builtin_original_order),
-        ):
-            in_degree[dependent_id] -= 1
-            if in_degree[dependent_id] == 0:
-                pending.append(dependent_id)
-                pending.sort(key=lambda extension_id: _extension_boot_sort_key(extension_map[extension_id], builtin_original_order))
-
-    circular_dependencies = sorted([
-        extension_id
-        for extension_id, count in in_degree.items()
-        if count > 0
-    ])
-    valid_ids = [
-        extension_id
-        for extension_id in output
-        if extension_id not in missing_dependencies
-    ]
-    return {
-        "valid": [extension_map[extension_id] for extension_id in valid_ids],
-        "missing_dependencies": missing_dependencies,
-        "circular_dependencies": circular_dependencies,
-    }
-
-
-def _extension_boot_sort_key(extension: Extension, builtin_original_order: dict[str, int]) -> tuple:
-    if extension.source == "builtin-module":
-        return (1, builtin_original_order.get(extension.id, 0), extension.id)
-    return (0, extension.id)
+        return set(get_core_module_ids())
+    except Exception:
+        return {"core"}
 
 
 def resolve_extension_order(extensions: list[Extension], *, satisfied_dependency_ids: set[str] | None = None) -> dict:
@@ -1075,7 +964,7 @@ def resolve_extension_order(extensions: list[Extension], *, satisfied_dependency
             for dependency_id in extension.manifest.optional_dependencies
             if dependency_id in extension_map
         ]
-        graph[extension.id] = []
+        graph.setdefault(extension.id, [])
         for dependency_id in [*dependencies, *optional_dependencies]:
             if dependency_id in satisfied_dependency_ids:
                 continue
@@ -1152,37 +1041,6 @@ def _build_runtime_actions(extension: Extension) -> tuple[ExtensionRuntimeAction
     if migration_action is not None:
         action_prefix.append(migration_action)
     action_prefix.extend(list(manifest_actions))
-
-    if extension.source == "builtin-module":
-        if extension.runtime.enabled:
-            return tuple(action_prefix + [
-                ExtensionRuntimeActionDefinition(
-                    key="disable",
-                    label="停用扩展",
-                    action="disable",
-                    tone="danger",
-                    confirm_title="停用扩展",
-                    confirm_message=f"确定停用 {extension.name} 吗？相关后台入口和运行能力会立即隐藏。",
-                    confirm_text="停用",
-                    success_message="扩展已停用。",
-                    requires_installed=True,
-                    order=20,
-                ),
-            ])
-        return tuple(action_prefix + [
-            ExtensionRuntimeActionDefinition(
-                key="enable",
-                label="启用扩展",
-                action="enable",
-                tone="primary",
-                confirm_title="启用扩展",
-                confirm_message=f"确定启用 {extension.name} 吗？依赖校验通过后会立即恢复能力。",
-                confirm_text="启用",
-                success_message="扩展已启用。",
-                requires_installed=True,
-                order=10,
-            ),
-        ])
 
     if not extension.runtime.installed:
         return tuple(action_prefix + [
@@ -1266,8 +1124,6 @@ def _build_manifest_runtime_actions(extension: Extension) -> tuple[ExtensionRunt
 
 
 def _build_migration_runtime_action(extension: Extension) -> ExtensionRuntimeActionDefinition | None:
-    if extension.source == "builtin-module":
-        return None
     if not extension.runtime.installed:
         return None
     if not str(extension.manifest.migration_namespace or "").strip():

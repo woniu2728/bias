@@ -325,20 +325,6 @@ class DiscussionService:
         return discussion_tracking.update_read_state(discussion_id, user, last_read_post_number)
 
     @staticmethod
-    def get_subscription_state(discussion: Discussion, user: Optional[User]) -> bool:
-        return discussion_tracking.get_subscription_state(discussion, user)
-
-    @staticmethod
-    def subscribe_discussion(discussion_id: int, user: User) -> bool:
-        UserService.ensure_not_suspended(user, "关注讨论")
-        return discussion_tracking.set_subscription_state(discussion_id, user, True)
-
-    @staticmethod
-    def unsubscribe_discussion(discussion_id: int, user: User) -> bool:
-        UserService.ensure_not_suspended(user, "关注讨论")
-        return discussion_tracking.set_subscription_state(discussion_id, user, False)
-
-    @staticmethod
     def update_discussion(
         discussion_id: int,
         user: User,

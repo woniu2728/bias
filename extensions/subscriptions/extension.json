@@ -18,9 +18,7 @@
     "following-feed"
   ],
   "backend_entry": "extensions.subscriptions.backend.ext",
-  "operations_pages": [
-    "/admin/extensions/subscriptions/operations"
-  ],
+  "frontend_forum_entry": "extensions/subscriptions/frontend/forum/index.js",
   "compatibility": {
     "bias_version": "^1.0.0",
     "api_version": "1.0",

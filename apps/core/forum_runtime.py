@@ -83,32 +83,28 @@ def broadcast_discussion_event(
 
 def load_discussion_for_realtime(discussion_id: int):
     from apps.discussions.models import Discussion
-    from apps.discussions.api import _apply_discussion_resource_preloads
+    from apps.discussions.handlers import apply_discussion_resource_preloads
 
     return (
-        _apply_discussion_resource_preloads(Discussion.objects.all(), user=None)
+        apply_discussion_resource_preloads(Discussion.objects.all(), user=None)
         .filter(id=discussion_id)
         .first()
     )
 
 
 def serialize_discussion_for_realtime(discussion):
-    from apps.discussions.api import _serialize_discussion_payload
+    from apps.discussions.handlers import serialize_discussion_payload
 
-    return _serialize_discussion_payload(discussion, user=None)
+    return serialize_discussion_payload(discussion, user=None)
 
 
 def serialize_post_for_realtime(post_id: int):
-    from django.db.models import Count
-
-    from apps.posts.api import _apply_post_resource_preloads, _serialize_post
+    from apps.posts.handlers import apply_post_resource_preloads, serialize_post
     from apps.posts.models import Post
 
     post = (
-        _apply_post_resource_preloads(
-            Post.objects.select_related("discussion").annotate(
-                like_count=Count("likes", distinct=True)
-            ),
+        apply_post_resource_preloads(
+            Post.objects.select_related("discussion"),
             user=None,
         )
         .filter(id=post_id)
@@ -116,8 +112,7 @@ def serialize_post_for_realtime(post_id: int):
     )
     if post is None:
         return None
-    post.is_liked = False
-    return _serialize_post(post, user=None)
+    return serialize_post(post, user=None)
 
 
 def build_realtime_included_payload(

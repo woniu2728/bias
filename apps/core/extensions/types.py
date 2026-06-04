@@ -342,6 +342,17 @@ class ExtensionDiscussionLifecycleDefinition:
 
 
 @dataclass(frozen=True)
+class ExtensionPostLifecycleDefinition:
+    key: str
+    apply_created: Any = None
+    apply_updated: Any = None
+    apply_approved: Any = None
+    prepare_delete: Any = None
+    apply_deleted: Any = None
+    description: str = ""
+
+
+@dataclass(frozen=True)
 class ExtensionDeliveryCheckDefinition:
     key: str
     label: str
@@ -471,8 +482,8 @@ class ExtensionRuntimeState:
     healthy: bool = True
     status_key: str = "active"
     status_label: str = "已启用"
-    migration_state: str = "builtin"
-    migration_label: str = "内置扩展"
+    migration_state: str = "pending"
+    migration_label: str = "未声明迁移"
     dependency_state: str = "healthy"
     dependency_state_label: str = "依赖正常"
     runtime_issues: Tuple[str, ...] = ()
@@ -523,6 +534,7 @@ class ExtensionDiscoveryResult:
     event_listeners: Tuple[ExtensionEventListenerDefinition, ...] = ()
     realtime_included: Tuple[ExtensionRealtimeIncludedDefinition, ...] = ()
     discussion_lifecycle: Tuple[ExtensionDiscussionLifecycleDefinition, ...] = ()
+    post_lifecycle: Tuple[ExtensionPostLifecycleDefinition, ...] = ()
     runtime_actions: Tuple[ExtensionManifestRuntimeActionDefinition, ...] = ()
     admin_actions: Tuple[ExtensionAdminActionDefinition, ...] = ()
 
@@ -567,6 +579,7 @@ class ExtensionAssembly:
     event_listeners: Tuple[Any, ...]
     realtime_included: Tuple[Any, ...]
     discussion_lifecycle: Tuple[Any, ...]
+    post_lifecycle: Tuple[Any, ...]
     runtime_actions: Tuple[Any, ...]
     admin_actions: Tuple[Any, ...]
     settings_pages: Tuple[str, ...]

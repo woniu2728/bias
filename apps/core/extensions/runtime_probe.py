@@ -10,26 +10,6 @@ from apps.core.extensions.validation import resolve_bias_version_compatibility
 
 
 def inspect_extension_runtime(extension: Extension) -> dict:
-    if extension.source == "builtin-module":
-        return {
-            "healthy": True,
-            "migration_state": extension.runtime.migration_state,
-            "migration_label": extension.runtime.migration_label,
-            "runtime_issues": (),
-            "delivery_checks": (
-                ExtensionDeliveryCheckDefinition(
-                    key="builtin-bundle",
-                    label="内置交付",
-                    status="ready",
-                    status_label="已就绪",
-                    message="该扩展随核心应用一起交付，不依赖独立扩展目录。",
-                ),
-            ),
-            "uninstall_warnings": (
-                "内置扩展不支持卸载，只能通过启停协议控制可见性。",
-            ),
-        }
-
     root_path = Path(extension.manifest.path) if extension.manifest.path else None
     checks: list[ExtensionDeliveryCheckDefinition] = []
     runtime_issues: list[str] = []

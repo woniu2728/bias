@@ -118,7 +118,7 @@ test('admin routes preserve compatibility redirects for legacy paths', () => {
   assert.equal(route?.redirect, redirectTarget)
 })
 
-test('admin routes preserve compatibility redirects for builtin operations pages', () => {
+test('admin routes preserve compatibility redirects for core operations pages', () => {
   const usersLegacyPath = uniquePath('users')
   const approvalLegacyPath = uniquePath('approval')
   const flagsLegacyPath = uniquePath('flags')

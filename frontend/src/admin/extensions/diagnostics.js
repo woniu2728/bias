@@ -1,5 +1,4 @@
 export function resolveExtensionEntryTypeLabel(entryType) {
-  if (entryType === 'builtin') return '内置入口'
   if (entryType === 'filesystem') return '文件系统扩展'
   if (entryType === 'external') return '外部路径'
   return '未声明'

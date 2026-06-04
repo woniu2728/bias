@@ -7,6 +7,7 @@ from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
 from apps.posts.models import Post
 from apps.posts.services import PostService
+from extensions.flags.backend.services import delete_post_flags, report_post, resolve_post_flags
 
 
 class PostReportSchema(BaseModel):
@@ -78,7 +79,7 @@ def dispatch_post_report(context):
     post_id = _post_object_id(context)
     payload = PostReportSchema(**_post_payload(context))
     try:
-        flag = PostService.report_post(
+        flag = report_post(
             post_id=post_id,
             user=context["user"],
             reason=payload.reason,
@@ -98,7 +99,7 @@ def dispatch_post_resolve_flags(context):
     post_id = _post_object_id(context)
     payload = PostFlagResolveSchema(**_post_payload(context))
     try:
-        resolved_count = PostService.resolve_post_flags(
+        resolved_count = resolve_post_flags(
             post_id=post_id,
             admin_user=context["user"],
             status=payload.status,
@@ -118,12 +119,12 @@ def dispatch_post_resolve_flags(context):
         post = PostService.get_post_by_id(post_id, context["user"])
         if not post:
             return api_error("帖子不存在", status=404)
-        from apps.posts.api import _serialize_post
+        from apps.posts.handlers import serialize_post
 
         return {
             "message": "举报已处理",
             "resolved_count": resolved_count,
-            "post": _serialize_post(post, context["user"]),
+            "post": serialize_post(post, context["user"]),
         }
     except Post.DoesNotExist:
         return api_error("帖子不存在", status=404)
@@ -137,7 +138,7 @@ def dispatch_post_delete_flags(context):
     request = context["request"]
     post_id = _post_object_id(context)
     try:
-        deleted_count = PostService.delete_post_flags(post_id, context["user"])
+        deleted_count = delete_post_flags(post_id, context["user"])
         log_admin_action(
             request,
             "admin.flag.delete",

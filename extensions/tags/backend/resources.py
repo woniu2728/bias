@@ -37,15 +37,31 @@ def resolve_discussion_tags(discussion, context: dict) -> list[dict]:
     ]
 
 
+def resolve_discussion_tagged_event_data(post, context: dict) -> dict | None:
+    added = []
+    removed = []
+    for line in _normalized_lines(getattr(post, "content", "")):
+        if line.startswith("added:"):
+            added = [item for item in line.removeprefix("added:").split("|") if item]
+        elif line.startswith("removed:"):
+            removed = [item for item in line.removeprefix("removed:").split("|") if item]
+
+    return {
+        "kind": "discussionTagged",
+        "added_tags": added,
+        "removed_tags": removed,
+    }
+
+
 def resolve_tag_can_start_discussion(tag, context: dict) -> bool:
-    from apps.tags.services import TagService
+    from extensions.tags.backend.services import TagService
 
     user = context.get("user")
     return TagService.can_start_discussion_in_tag(tag, user)
 
 
 def resolve_tag_can_reply(tag, context: dict) -> bool:
-    from apps.tags.services import TagService
+    from extensions.tags.backend.services import TagService
 
     user = context.get("user")
     return TagService.can_reply_in_tag(tag, user)
@@ -63,3 +79,11 @@ def resolve_tag_last_posted_discussion(tag, context: dict) -> dict | None:
         "last_post_number": discussion.last_post_number,
         "last_posted_at": discussion.last_posted_at,
     }
+
+
+def _normalized_lines(content: str | None) -> list[str]:
+    return [
+        line.strip()
+        for line in (content or "").splitlines()
+        if line.strip()
+    ]

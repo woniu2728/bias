@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 
 from django.db import OperationalError, ProgrammingError
 
-from apps.core.forum_registry_builtin import _register_builtin_modules
+from apps.core.forum_registry_core import _register_core_modules
 from apps.core.forum_registry_types import (
     AdminPageDefinition,
     DiscussionListFilterDefinition,
@@ -58,10 +58,10 @@ class ForumRegistry:
             self.register_user_preference(preference)
 
         for language_pack in module.language_packs:
-            self._language_packs[(language_pack.module_id, language_pack.code)] = language_pack
+            self.register_language_pack(language_pack)
 
         for event_listener in module.event_listeners:
-            self._event_listeners.append(event_listener)
+            self.register_event_listener(event_listener)
 
         for post_type in module.post_types:
             self.register_post_type(post_type)
@@ -77,6 +77,7 @@ class ForumRegistry:
         return module
 
     def register_permission(self, definition: PermissionDefinition) -> None:
+        self._append_to_module(definition.module_id, "permissions", definition, key=lambda item: item.code)
         self._permissions[definition.code] = definition
         for alias in definition.aliases:
             self._permission_aliases[alias] = definition.code
@@ -86,7 +87,22 @@ class ForumRegistry:
         if normalized:
             self._external_enabled_module_ids.add(normalized)
 
+    def register_extension_module(self, extension) -> ForumModuleDefinition:
+        return self.register_module(ForumModuleDefinition(
+            module_id=extension.id,
+            name=extension.name,
+            version=extension.version,
+            description=extension.description,
+            category=extension.manifest.category,
+            is_core=False,
+            enabled=bool(extension.runtime.enabled),
+            dependencies=tuple(extension.manifest.dependencies),
+            capabilities=tuple(extension.manifest.provides or extension.capabilities),
+            documentation_url=extension.manifest.documentation_url,
+        ))
+
     def register_admin_page(self, definition: AdminPageDefinition) -> None:
+        self._append_to_module(definition.module_id, "admin_pages", definition, key=lambda item: item.path)
         self._admin_pages = [
             item for item in self._admin_pages
             if not (item.path == definition.path and item.module_id == definition.module_id)
@@ -95,18 +111,35 @@ class ForumRegistry:
         self._admin_pages.sort(key=lambda item: (item.nav_section, item.label, item.path))
 
     def register_notification_type(self, definition: NotificationTypeDefinition) -> None:
+        self._append_to_module(definition.module_id, "notification_types", definition, key=lambda item: item.code)
         self._notification_types[definition.code] = definition
 
     def register_user_preference(self, definition: UserPreferenceDefinition) -> None:
+        self._append_to_module(definition.module_id, "user_preferences", definition, key=lambda item: item.key)
         self._user_preferences[definition.key] = definition
 
     def register_language_pack(self, definition: LanguagePackDefinition) -> None:
+        self._append_to_module(definition.module_id, "language_packs", definition, key=lambda item: item.code)
         self._language_packs[(definition.module_id, definition.code)] = definition
 
+    def register_event_listener(self, definition: EventListenerDefinition) -> None:
+        self._append_to_module(definition.module_id, "event_listeners", definition, key=lambda item: (item.event, item.listener))
+        self._event_listeners = [
+            item for item in self._event_listeners
+            if not (
+                item.event == definition.event
+                and item.listener == definition.listener
+                and item.module_id == definition.module_id
+            )
+        ]
+        self._event_listeners.append(definition)
+
     def register_post_type(self, definition: PostTypeDefinition) -> None:
+        self._append_to_module(definition.module_id, "post_types", definition, key=lambda item: item.code)
         self._post_types[definition.code] = definition
 
     def register_search_filter(self, definition: SearchFilterDefinition) -> None:
+        self._append_to_module(definition.module_id, "search_filters", definition, key=lambda item: (item.target, item.code))
         self._search_filters = [
             item for item in self._search_filters
             if not (
@@ -119,16 +152,29 @@ class ForumRegistry:
         self._search_filters.sort(key=lambda item: (item.target, item.module_id, item.code))
 
     def register_discussion_sort(self, definition: DiscussionSortDefinition) -> None:
+        self._append_to_module(definition.module_id, "discussion_sorts", definition, key=lambda item: item.code)
         self._discussion_sorts[definition.code] = definition
 
     def register_discussion_list_filter(self, definition: DiscussionListFilterDefinition) -> None:
+        self._append_to_module(definition.module_id, "discussion_list_filters", definition, key=lambda item: item.code)
         self._discussion_list_filters[definition.code] = definition
+
+    def _append_to_module(self, module_id: str, field_name: str, definition, *, key) -> None:
+        module = self._modules.get(str(module_id or "").strip())
+        if module is None:
+            return
+        definition_key = key(definition)
+        current = tuple(getattr(module, field_name, ()) or ())
+        updated = tuple(item for item in current if key(item) != definition_key)
+        self._modules[module.module_id] = replace(module, **{
+            field_name: tuple([*updated, definition]),
+        })
 
     def _get_extension_state_overrides(self) -> Dict[str, bool]:
         try:
             return {
                 item["extension_id"]: bool(item["enabled"])
-                for item in ExtensionInstallation.objects.values("extension_id", "enabled")
+                for item in ExtensionInstallation.objects.filter(source="filesystem").values("extension_id", "enabled")
             }
         except (OperationalError, ProgrammingError, RuntimeError):
             return {}
@@ -458,13 +504,13 @@ def get_forum_registry() -> ForumRegistry:
             pass
     if _registry is None:
         _registry = ForumRegistry()
-        _register_builtin_modules(_registry)
+        _register_core_modules(_registry)
     return _registry
 
 
-def get_builtin_module_ids() -> Tuple[str, ...]:
+def get_core_module_ids() -> Tuple[str, ...]:
     registry = ForumRegistry()
-    _register_builtin_modules(registry)
+    _register_core_modules(registry)
     return tuple(sorted(registry._modules.keys()))
 
 

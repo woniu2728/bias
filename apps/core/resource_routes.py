@@ -37,8 +37,8 @@ def build_resource_endpoint_router(registry: ResourceRegistry | None = None) -> 
 def build_resource_route_definitions(registry: ResourceRegistry) -> list[ResourceRouteDefinition]:
     routes: list[ResourceRouteDefinition] = []
     seen: set[tuple[str, tuple[str, ...]]] = set()
-    for resource in registry.get_resources():
-        for endpoint in registry.get_dispatch_endpoints(resource.resource):
+    for resource_name in _iter_dispatch_resource_names(registry):
+        for endpoint in registry.get_dispatch_endpoints(resource_name):
             route = route_definition_for_endpoint(endpoint)
             key = (route.path, tuple(sorted(route.methods)))
             if key in seen:
@@ -46,6 +46,12 @@ def build_resource_route_definitions(registry: ResourceRegistry) -> list[Resourc
             seen.add(key)
             routes.append(route)
     return routes
+
+
+def _iter_dispatch_resource_names(registry: ResourceRegistry) -> tuple[str, ...]:
+    names = {resource.resource for resource in registry.get_resources()}
+    names.update(endpoint.resource for endpoint in registry.get_all_endpoints())
+    return tuple(sorted(name for name in names if name))
 
 
 def route_definition_for_endpoint(definition: ResourceEndpointDefinition) -> ResourceRouteDefinition:
@@ -85,7 +91,7 @@ def _endpoint_route_path(definition: ResourceEndpointDefinition) -> str:
     raw_path = str(definition.path or "").strip()
     if raw_path:
         if bool(getattr(definition, "absolute_path", False)):
-            return "/" + raw_path.strip().strip("/")
+            return _normalize_absolute_route_path(raw_path)
         return _normalize_route_path(definition.resource, raw_path)
 
     kind = str(definition.kind or definition.endpoint or "").strip().lower()
@@ -104,6 +110,13 @@ def _normalize_route_path(resource: str, path: str) -> str:
     if normalized.startswith(f"/{resource}/") or normalized == f"/{resource}":
         return normalized
     return f"/{resource}{normalized}"
+
+
+def _normalize_absolute_route_path(path: str) -> str:
+    normalized = "/" + str(path or "").strip().lstrip("/")
+    if len(normalized) > 1:
+        normalized = normalized.replace("//", "/")
+    return normalized
 
 
 def _normalize_endpoint_path(value: str) -> str:

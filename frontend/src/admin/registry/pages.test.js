@@ -2,6 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  getAdminDashboardStats,
+  registerAdminDashboardStat,
+} from './dashboard.js'
+import {
   getAdminAdvancedPageActionMeta,
   getAdminApprovalQueuePageConfig,
   getAdminModulesPageCopy,
@@ -10,6 +14,8 @@ import {
   registerAdminApprovalQueuePageConfig,
   registerAdminModulesPageCopy,
 } from './pages.js'
+import { runWithExtensionScope } from '../../common/extensionRuntime.js'
+import { clearAdminRegistryExtensions } from './shared.js'
 
 
 function uniqueKey(prefix) {
@@ -121,4 +127,32 @@ test('modules page copy registry preserves lifecycle labels for module center re
   assert.equal(copy.supportsDisableLabel, '可停用')
   assert.equal(copy.supportsTeardownLabel, '可回收')
   assert.equal(copy.lifecycleTitle, '生命周期')
+})
+
+test('admin registry scopes extension items and filters by module state', () => {
+  const statKey = uniqueKey('extension-dashboard-stat')
+
+  runWithExtensionScope('scoped-admin', () => {
+    registerAdminDashboardStat({
+      key: statKey,
+      moduleId: 'approval',
+      resolve: () => ({
+        label: 'Scoped stat',
+        value: 1,
+      }),
+    })
+  })
+
+  const visibleStats = getAdminDashboardStats({
+    isModuleEnabled: moduleId => moduleId === 'approval',
+  })
+  assert.equal(visibleStats.some(item => item.key === statKey && item.extensionId === 'scoped-admin'), true)
+
+  const hiddenStats = getAdminDashboardStats({
+    isModuleEnabled: moduleId => moduleId !== 'approval',
+  })
+  assert.equal(hiddenStats.some(item => item.key === statKey), false)
+
+  clearAdminRegistryExtensions('scoped-admin')
+  assert.equal(getAdminDashboardStats().some(item => item.key === statKey), false)
 })

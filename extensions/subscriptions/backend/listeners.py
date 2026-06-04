@@ -74,7 +74,7 @@ def handle_post_deleted_discussion_reply_notifications(event: PostDeletedEvent) 
 
 
 def _notify_discussion_reply(*, discussion_id: int, post_id: int, actor_user_id: int) -> None:
-    from apps.notifications.services import NotificationService
+    from extensions.notifications.backend.services import NotificationService
     from apps.users.models import User
 
     try:
@@ -123,7 +123,7 @@ def _follow_discussion_if_enabled(
 
 def _delete_discussion_reply_notifications_for_post(post_id: int) -> None:
     from apps.notifications.models import Notification
-    from apps.notifications.services import NotificationService
+    from extensions.notifications.backend.services import NotificationService
 
     Notification.objects.filter(
         type=NotificationService.TYPE_DISCUSSION_REPLY,

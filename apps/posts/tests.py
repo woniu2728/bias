@@ -19,6 +19,8 @@ from apps.posts.models import PostFlag
 from apps.posts.services import PostService
 from apps.tags.models import Tag
 from apps.users.models import Group, Permission, User
+from extensions.flags.backend.services import report_post
+from extensions.likes.backend.services import like_post
 
 
 def discussion_tags_payload(tag_ids):
@@ -503,7 +505,7 @@ class PostFlagApiTests(TestCase):
             )
         )
 
-        with patch("apps.posts.api.get_runtime_resource_registry", return_value=registry):
+        with patch("apps.posts.handlers.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
                 response = self.client.get(f"/api/posts/{self.post.id}")
 
@@ -593,7 +595,7 @@ class PostFlagApiTests(TestCase):
         self.assertEqual(data["relationships"]["user"]["data"], {"type": "user_summary", "id": str(self.reporter.id)})
 
     def test_flag_resource_index_lists_latest_visible_open_flags_for_staff(self):
-        PostService.report_post(
+        report_post(
             self.post.id,
             self.reporter,
             reason="第一次举报",
@@ -605,7 +607,7 @@ class PostFlagApiTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        latest_flag = PostService.report_post(
+        latest_flag = report_post(
             self.post.id,
             second_reporter,
             reason="第二次举报",
@@ -636,9 +638,9 @@ class PostFlagApiTests(TestCase):
     def test_flag_visibility_uses_post_view_private_scoper(self):
         from apps.core.extensions.application import ExtensionApplication
         from apps.core.extensions.types import ExtensionModelVisibilityDefinition
-        from apps.core.forum_resources_flags import scope_flag_visibility
+        from extensions.flags.backend.resources import scope_flag_visibility
 
-        allowed_flag = PostService.report_post(
+        allowed_flag = report_post(
             self.post.id,
             self.reporter,
             reason="允许查看的私有帖举报",
@@ -655,7 +657,7 @@ class PostFlagApiTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        denied_flag = PostService.report_post(
+        denied_flag = report_post(
             denied_post.id,
             second_reporter,
             reason="不允许查看的私有帖举报",
@@ -698,7 +700,7 @@ class PostFlagApiTests(TestCase):
             post=self.post,
             user=self.reporter,
             reason="默认 include",
-            message="Flarum flags style include",
+            message="Bias flags include",
         )
 
         detail_response = self.client.get(
@@ -759,6 +761,40 @@ class PostFlagApiTests(TestCase):
         self.assertIsInstance(event, PostFlagsDeletedEvent)
         self.assertEqual(set(event.flag_ids), {first.id, second.id})
         self.assertEqual(event.post_id, self.post.id)
+
+    def test_deleting_post_cleans_flags_through_flags_post_lifecycle(self):
+        first = PostFlag.objects.create(
+            post=self.post,
+            user=self.reporter,
+            reason="第一条",
+            message="随帖子删除",
+        )
+        second_reporter = User.objects.create_user(
+            username="delete-post-flag-reporter",
+            email="delete-post-flag-reporter@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        second = PostFlag.objects.create(
+            post=self.post,
+            user=second_reporter,
+            reason="第二条",
+            message="随帖子删除",
+        )
+
+        mocked_bus = Mock()
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True):
+                deleted = PostService.delete_post(self.post.id, self.admin)
+
+        self.assertTrue(deleted)
+        self.assertFalse(PostFlag.objects.filter(post_id=self.post.id).exists())
+        dispatched_events = [call.args[0] for call in mocked_bus.dispatch.call_args_list]
+        flags_deleted_event = next(
+            event for event in dispatched_events if isinstance(event, PostFlagsDeletedEvent)
+        )
+        self.assertEqual(set(flags_deleted_event.flag_ids), {first.id, second.id})
+        self.assertEqual(flags_deleted_event.post_id, self.post.id)
 
     def test_non_staff_cannot_delete_post_flags_through_flags_extension_endpoint(self):
         PostFlag.objects.create(
@@ -1587,10 +1623,10 @@ class PostLikeTests(TestCase):
 
     def test_duplicate_like_raises_value_error_not_integrity_error(self):
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.like_post(self.post.id, self.liker)
+            like_post(self.post.id, self.liker)
 
         with self.assertRaisesMessage(ValueError, "已经点赞过了"):
-            PostService.like_post(self.post.id, self.liker)
+            like_post(self.post.id, self.liker)
 
     def test_like_own_post_returns_bad_request_in_api(self):
         token = RefreshToken.for_user(self.author).access_token
@@ -1605,9 +1641,9 @@ class PostLikeTests(TestCase):
         self.assertEqual(response.json()["error"], "不能给自己的帖子点赞")
 
     def test_like_post_dispatches_domain_event_instead_of_direct_notification_call(self):
-        with patch("apps.notifications.services.NotificationService.notify_post_liked") as notify_mock:
+        with patch("extensions.notifications.backend.services.NotificationService.notify_post_liked") as notify_mock:
             with self.captureOnCommitCallbacks(execute=True):
-                PostService.like_post(self.post.id, self.liker)
+                like_post(self.post.id, self.liker)
 
         notify_mock.assert_called_once_with(post_id=self.post.id, from_user=self.liker)
 
@@ -1617,7 +1653,7 @@ class PostLikeTests(TestCase):
             get_bus_mock.return_value = bus_mock
 
             with self.captureOnCommitCallbacks() as callbacks:
-                PostService.like_post(self.post.id, self.liker)
+                like_post(self.post.id, self.liker)
 
             self.assertEqual(len(callbacks), 1)
             bus_mock.dispatch.assert_not_called()

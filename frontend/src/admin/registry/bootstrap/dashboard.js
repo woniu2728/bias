@@ -44,30 +44,6 @@ registerAdminDashboardStat({
   }),
 })
 
-registerAdminDashboardStat({
-  key: 'pending-approvals',
-  order: 40,
-  icon: 'fas fa-user-check',
-  iconClass: 'StatsWidget-icon--info',
-  moduleId: 'approval',
-  resolve: ({ stats, copy }) => ({
-    label: copy?.pendingApprovalsStatLabel || '待审核内容',
-    value: stats?.pendingApprovals || 0,
-  }),
-})
-
-registerAdminDashboardStat({
-  key: 'open-flags',
-  order: 50,
-  icon: 'fas fa-flag',
-  iconClass: 'StatsWidget-icon--warning',
-  moduleId: 'flags',
-  resolve: ({ stats, copy }) => ({
-    label: copy?.openFlagsStatLabel || '待处理举报',
-    value: stats?.openFlags || 0,
-  }),
-})
-
 registerAdminDashboardStatusSummary({
   key: 'runtime',
   order: 10,

@@ -1,6 +1,8 @@
 const forumNavItems = []
 const discussionActionItems = []
+const discussionActionHandlers = []
 const postActionItems = []
+const postActionHandlers = []
 const headerItems = []
 const forumNavSections = []
 const composerTools = []
@@ -35,7 +37,9 @@ import { getCurrentExtensionId } from '../common/extensionRuntime.js'
 const registryTargets = [
   forumNavItems,
   discussionActionItems,
+  discussionActionHandlers,
   postActionItems,
+  postActionHandlers,
   headerItems,
   forumNavSections,
   composerTools,
@@ -235,6 +239,24 @@ export function registerDiscussionAction(item) {
   return upsertByKey(discussionActionItems, normalizedItem.key, normalizedItem)
 }
 
+export function registerDiscussionActionHandler(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(discussionActionHandlers, normalizedItem.key, normalizedItem)
+}
+
+export function getDiscussionActionHandler(actionKey, context = {}) {
+  const normalizedActionKey = String(actionKey || '').trim()
+  if (!normalizedActionKey) {
+    return null
+  }
+
+  return [...discussionActionHandlers]
+    .filter(item => String(item.key || '') === normalizedActionKey)
+    .sort((left, right) => (left.order || 100) - (right.order || 100))
+    .map(item => resolveRegisteredItem(item, context))
+    .find(item => typeof item?.handle === 'function') || null
+}
+
 export function getDiscussionActions(context = {}) {
   return [...discussionActionItems]
     .sort((left, right) => (left.order || 100) - (right.order || 100))
@@ -245,6 +267,24 @@ export function getDiscussionActions(context = {}) {
 export function registerPostAction(item) {
   const normalizedItem = normalizeRegisteredItem(item)
   return upsertByKey(postActionItems, normalizedItem.key, normalizedItem)
+}
+
+export function registerPostActionHandler(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(postActionHandlers, normalizedItem.key, normalizedItem)
+}
+
+export function getPostActionHandler(actionKey, context = {}) {
+  const normalizedActionKey = String(actionKey || '').trim()
+  if (!normalizedActionKey) {
+    return null
+  }
+
+  return [...postActionHandlers]
+    .filter(item => String(item.key || '') === normalizedActionKey)
+    .sort((left, right) => (left.order || 100) - (right.order || 100))
+    .map(item => resolveRegisteredItem(item, context))
+    .find(item => typeof item?.handle === 'function') || null
 }
 
 export function getPostActions(context = {}) {

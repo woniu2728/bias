@@ -110,9 +110,22 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def mark_notification_read(self, notification_id: int):
         """标记通知为已读"""
-        from apps.notifications.services import NotificationService
+        from apps.core.extensions.runtime_access import get_runtime_resource_registry
 
-        NotificationService.mark_as_read(notification_id, self.user)
+        registry = get_runtime_resource_registry()
+        context = {
+            "request": None,
+            "resource": "notification",
+            "endpoint": "read",
+            "method": "POST",
+            "user": self.user,
+            "object_id": str(notification_id),
+            "payload": {},
+            "query": {},
+        }
+        definition = registry.get_dispatch_endpoint("notification", "read", "POST", context)
+        if definition is not None:
+            registry.dispatch_resource_endpoint(definition, context)
 
 
 class OnlineUsersConsumer(AsyncWebsocketConsumer):

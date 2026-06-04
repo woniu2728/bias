@@ -1,4 +1,4 @@
-from apps.core.extensions import EventListenersExtender, LifecycleExtender, NotificationsExtender, ResourceExtender
+from apps.core.extensions import ApiResourceExtender, EventListenersExtender, LifecycleExtender, NotificationsExtender
 from apps.core.extensions.types import ExtensionEventListenerDefinition
 from apps.core.forum_events import (
     PostCreatedEvent,
@@ -8,22 +8,27 @@ from apps.core.forum_events import (
 )
 from apps.core.forum_registry_types import NotificationTypeDefinition, UserPreferenceDefinition
 from apps.core.resource_registry import ResourceEndpointDefinition
-from apps.notifications.api import (
-    _dispatch_notification_delete,
-    _dispatch_notification_delete_all_read,
-    _dispatch_notification_delete_filtered_read,
-    _dispatch_notification_index,
-    _dispatch_notification_mark_all_read,
-    _dispatch_notification_mark_filtered_read,
-    _dispatch_notification_mark_read,
-    _dispatch_notification_show,
-    _dispatch_notification_stats,
+from extensions.notifications.backend.handlers import (
+    dispatch_notification_delete,
+    dispatch_notification_delete_all_read,
+    dispatch_notification_delete_filtered_read,
+    dispatch_notification_index,
+    dispatch_notification_mark_all_read,
+    dispatch_notification_mark_filtered_read,
+    dispatch_notification_mark_read,
+    dispatch_notification_show,
+    dispatch_notification_stats,
 )
 from extensions.notifications.backend.listeners import (
     handle_post_created_direct_reply_notification,
     handle_post_liked_notification,
     handle_user_suspended_notification,
     handle_user_unsuspended_notification,
+)
+from extensions.notifications.backend.resources import (
+    notification_resource_definition,
+    notification_resource_field_definitions,
+    notification_resource_relationship_definitions,
 )
 
 
@@ -36,9 +41,10 @@ def extend():
             notification_types=notification_type_definitions(),
             user_preferences=user_preference_definitions(),
         ),
-        ResourceExtender(
-            endpoints=notification_resource_endpoints(),
-        ),
+        ApiResourceExtender(notification_resource_definition())
+        .fields(notification_resource_field_definitions)
+        .relationships(notification_resource_relationship_definitions)
+        .endpoints(notification_resource_endpoints),
         EventListenersExtender(
             listeners=notification_event_listener_definitions(),
         ),
@@ -116,72 +122,90 @@ def notification_resource_endpoints():
             resource="notification",
             endpoint="index",
             module_id=EXTENSION_ID,
-            handler=_dispatch_notification_index,
+            handler=dispatch_notification_index,
             methods=("GET",),
+            path="notifications",
+            absolute_path=True,
             auth_required=True,
         ),
         ResourceEndpointDefinition(
             resource="notification",
             endpoint="stats",
             module_id=EXTENSION_ID,
-            handler=_dispatch_notification_stats,
+            handler=dispatch_notification_stats,
             methods=("GET",),
+            path="notifications/stats",
+            absolute_path=True,
             auth_required=True,
         ),
         ResourceEndpointDefinition(
             resource="notification",
             endpoint="clear-read",
             module_id=EXTENSION_ID,
-            handler=_dispatch_notification_delete_all_read,
+            handler=dispatch_notification_delete_all_read,
             methods=("DELETE",),
+            path="notifications/read/clear",
+            absolute_path=True,
             auth_required=True,
         ),
         ResourceEndpointDefinition(
             resource="notification",
             endpoint="clear-filtered-read",
             module_id=EXTENSION_ID,
-            handler=_dispatch_notification_delete_filtered_read,
+            handler=dispatch_notification_delete_filtered_read,
             methods=("DELETE",),
+            path="notifications/read/clear-filtered",
+            absolute_path=True,
             auth_required=True,
         ),
         ResourceEndpointDefinition(
             resource="notification",
             endpoint="read",
             module_id=EXTENSION_ID,
-            handler=_dispatch_notification_mark_read,
+            handler=dispatch_notification_mark_read,
             methods=("POST",),
+            path="notifications/{object_id}/read",
+            absolute_path=True,
             auth_required=True,
         ),
         ResourceEndpointDefinition(
             resource="notification",
             endpoint="read-all",
             module_id=EXTENSION_ID,
-            handler=_dispatch_notification_mark_all_read,
+            handler=dispatch_notification_mark_all_read,
             methods=("POST",),
+            path="notifications/read-all",
+            absolute_path=True,
             auth_required=True,
         ),
         ResourceEndpointDefinition(
             resource="notification",
             endpoint="read-filtered",
             module_id=EXTENSION_ID,
-            handler=_dispatch_notification_mark_filtered_read,
+            handler=dispatch_notification_mark_filtered_read,
             methods=("POST",),
+            path="notifications/read-filtered",
+            absolute_path=True,
             auth_required=True,
         ),
         ResourceEndpointDefinition(
             resource="notification",
             endpoint="show",
             module_id=EXTENSION_ID,
-            handler=_dispatch_notification_show,
+            handler=dispatch_notification_show,
             methods=("GET",),
+            path="notifications/{object_id}",
+            absolute_path=True,
             auth_required=True,
         ),
         ResourceEndpointDefinition(
             resource="notification",
             endpoint="delete",
             module_id=EXTENSION_ID,
-            handler=_dispatch_notification_delete,
+            handler=dispatch_notification_delete,
             methods=("DELETE",),
+            path="notifications/{object_id}",
+            absolute_path=True,
             auth_required=True,
         ),
     )

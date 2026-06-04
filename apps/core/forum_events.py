@@ -115,7 +115,6 @@ class PostDeletedEvent(DomainEvent):
     discussion_id: int
     actor_user_id: int
     post_number: int | None
-    flag_ids: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -170,4 +169,3 @@ class UserSuspendedEvent(DomainEvent):
 class UserUnsuspendedEvent(DomainEvent):
     user_id: int
     actor_user_id: int | None
-

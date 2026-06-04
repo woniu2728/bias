@@ -6,7 +6,7 @@ from apps.core.admin_api import admin_error
 from apps.core.audit import log_admin_action
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.tags.models import Tag
-from apps.tags.services import TagService
+from extensions.tags.backend.services import TagService
 
 
 router = Router()

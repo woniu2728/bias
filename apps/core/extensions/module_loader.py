@@ -11,7 +11,7 @@ BACKEND_FUNCTION_PATTERN = re.compile(r"^(?:async\s+)?def\s+([A-Za-z0-9_]+)\s*\(
 
 
 def resolve_extension_backend_file(definition) -> Path | None:
-    if definition.source in ("builtin-module", "python-package"):
+    if definition.source == "python-package":
         return None
 
     backend_entry = str(definition.manifest.backend_entry or "").strip()
@@ -49,12 +49,6 @@ def inspect_extension_backend_module(definition) -> dict:
         "available_hooks": (),
     }
 
-    if definition.source == "builtin-module":
-        payload.update({
-            "entry_type": "builtin",
-            "exists": True,
-        })
-        return payload
     if definition.source == "python-package":
         payload.update({
             "entry_type": "python-package",
@@ -91,9 +85,6 @@ def inspect_extension_backend_module(definition) -> dict:
 
 
 def load_extension_backend_module(definition) -> ModuleType | None:
-    if definition.source == "builtin-module":
-        return None
-
     backend_entry = str(definition.manifest.backend_entry or "").strip()
     if definition.source == "python-package":
         if not backend_entry:

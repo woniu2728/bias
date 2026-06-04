@@ -53,7 +53,6 @@ export async function resolveExtensionAdminComponent(
   surface,
   {
     importers = {},
-    builtins = {},
     fallbacks = [],
   } = {},
 ) {
@@ -64,7 +63,6 @@ export async function resolveExtensionAdminComponent(
 
   const module = await loadExtensionAdminEntryModule(entryPath, {
     importers,
-    builtins,
   })
   const factory = resolveAdminEntryFactory(module, surface)
   const component = typeof factory === 'function'
@@ -83,19 +81,10 @@ export async function loadExtensionAdminEntryModule(
   entryPath,
   {
     importers = {},
-    builtins = {},
   } = {},
 ) {
   if (!entryPath) {
     return null
-  }
-
-  if (entryPath.startsWith('builtin:')) {
-    const builtinEntry = builtins[entryPath]
-    if (!builtinEntry) {
-      throw new Error(`找不到内置扩展后台入口: ${entryPath}`)
-    }
-    return builtinEntry
   }
 
   const importer = importers[entryPath]

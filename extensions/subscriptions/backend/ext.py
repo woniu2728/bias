@@ -1,9 +1,9 @@
 from apps.core.extensions import (
+    ApiResourceExtender,
     EventListenersExtender,
     ForumCapabilitiesExtender,
     LifecycleExtender,
     NotificationsExtender,
-    ResourceExtender,
 )
 from apps.core.extensions.types import ExtensionEventListenerDefinition
 from apps.core.forum_events import (
@@ -13,19 +13,17 @@ from apps.core.forum_events import (
     PostDeletedEvent,
     PostHiddenEvent,
 )
-from apps.core.forum_registry_search import (
-    _apply_discussion_following_search_filter,
-    _apply_following_discussion_list_filter,
-    _parse_following_search_filter,
-)
 from apps.core.forum_registry_types import (
     DiscussionListFilterDefinition,
     NotificationTypeDefinition,
     SearchFilterDefinition,
     UserPreferenceDefinition,
 )
-from apps.core.forum_resources import _resolve_discussion_subscription_state
-from apps.core.resource_registry import ResourceFieldDefinition
+from apps.core.resource_registry import ResourceEndpointDefinition, ResourceFieldDefinition
+from extensions.subscriptions.backend.handlers import (
+    dispatch_discussion_subscribe,
+    dispatch_discussion_unsubscribe,
+)
 from extensions.subscriptions.backend.listeners import (
     handle_discussion_created_follow_after_create,
     handle_post_approved_discussion_reply_notification,
@@ -34,6 +32,12 @@ from extensions.subscriptions.backend.listeners import (
     handle_post_created_follow_after_reply,
     handle_post_deleted_discussion_reply_notifications,
     handle_post_hidden_discussion_reply_notifications,
+)
+from extensions.subscriptions.backend.resources import resolve_discussion_subscription_state
+from extensions.subscriptions.backend.search import (
+    apply_discussion_following_search_filter,
+    apply_following_discussion_list_filter,
+    parse_following_search_filter,
 )
 
 
@@ -50,9 +54,9 @@ def extend():
             notification_types=notification_type_definitions(),
             user_preferences=user_preference_definitions(),
         ),
-        ResourceExtender(
-            fields=discussion_resource_field_definitions(),
-        ),
+        ApiResourceExtender("discussion")
+        .fields(discussion_resource_field_definitions)
+        .endpoints(discussion_resource_endpoint_definitions),
         EventListenersExtender(
             listeners=subscription_event_listener_definitions(),
         ),
@@ -71,7 +75,7 @@ def discussion_list_filter_definitions():
             code="following",
             label="关注中",
             module_id=EXTENSION_ID,
-            applier=_apply_following_discussion_list_filter,
+            applier=apply_following_discussion_list_filter,
             description="仅显示当前用户已关注的讨论。",
             icon="fas fa-bell",
             requires_authenticated_user=True,
@@ -88,8 +92,8 @@ def search_filter_definitions():
             label="仅关注讨论",
             module_id=EXTENSION_ID,
             target="discussion",
-            parser=_parse_following_search_filter,
-            applier=_apply_discussion_following_search_filter,
+            parser=parse_following_search_filter,
+            applier=apply_discussion_following_search_filter,
             syntax="is:following",
             description="仅返回当前用户已关注的讨论。",
         ),
@@ -147,8 +151,33 @@ def discussion_resource_field_definitions():
             resource="discussion",
             field="is_subscribed",
             module_id=EXTENSION_ID,
-            resolver=_resolve_discussion_subscription_state,
+            resolver=resolve_discussion_subscription_state,
             description="当前用户是否关注该讨论。",
+        ),
+    )
+
+
+def discussion_resource_endpoint_definitions():
+    return (
+        ResourceEndpointDefinition(
+            resource="discussion",
+            endpoint="subscribe",
+            module_id=EXTENSION_ID,
+            handler=dispatch_discussion_subscribe,
+            methods=("POST",),
+            path="discussions/{object_id}/subscribe",
+            absolute_path=True,
+            auth_required=True,
+        ),
+        ResourceEndpointDefinition(
+            resource="discussion",
+            endpoint="subscribe",
+            module_id=EXTENSION_ID,
+            handler=dispatch_discussion_unsubscribe,
+            methods=("DELETE",),
+            path="discussions/{object_id}/subscribe",
+            absolute_path=True,
+            auth_required=True,
         ),
     )
 

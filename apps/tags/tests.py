@@ -8,7 +8,7 @@ from apps.discussions.services import DiscussionService
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.tags.models import DiscussionTag, Tag
-from apps.tags.services import TagService
+from extensions.tags.backend.services import TagService
 from apps.users.models import User
 from apps.users.models import Group, Permission
 from extensions.tags.backend.ext import tag_resource_endpoints
@@ -101,7 +101,7 @@ class TagStatsTests(TestCase):
         clear_runtime_setting_caches()
         with patch("apps.core.queue_service.QueueService.get_runtime_config", return_value={"enabled": True, "driver": "redis"}):
             with patch.object(refresh_tag_stats_task, "delay") as delay:
-                with patch("apps.tags.services.TagService.refresh_tag_stats") as refresh_tag_stats:
+                with patch("extensions.tags.backend.services.TagService.refresh_tag_stats") as refresh_tag_stats:
                     with self.captureOnCommitCallbacks(execute=True):
                         result = TagService.dispatch_refresh_tag_stats([self.tag.id])
 
@@ -311,7 +311,7 @@ class TagAccessApiTests(TestCase):
             )
         )
 
-        with patch("apps.tags.api.get_runtime_resource_registry", return_value=registry):
+        with patch("extensions.tags.backend.handlers.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
                 response = self.client.get(
                     f"/api/tags/{self.members_tag.id}",
@@ -328,7 +328,7 @@ class TagAccessApiTests(TestCase):
         self.assertIn("没有权限", response.json()["error"])
 
     def test_tag_read_endpoints_do_not_refresh_stats(self):
-        with patch("apps.tags.api.TagService.refresh_tag_stats") as refresh_stats:
+        with patch("extensions.tags.backend.handlers.TagService.refresh_tag_stats") as refresh_stats:
             list_response = self.client.get("/api/tags")
             popular_response = self.client.get("/api/tags/popular")
 
@@ -352,7 +352,7 @@ class TagAccessApiTests(TestCase):
         )
 
         with patch(
-            "apps.tags.api.TagService.get_forbidden_tag_ids",
+            "extensions.tags.backend.handlers.TagService.get_forbidden_tag_ids",
             wraps=TagService.get_forbidden_tag_ids,
         ) as get_forbidden_tag_ids:
             response = self.client.get("/api/tags", {"include_children": True})

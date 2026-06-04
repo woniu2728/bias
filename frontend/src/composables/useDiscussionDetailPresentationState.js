@@ -75,10 +75,16 @@ export function useDiscussionDetailPresentationState({
     hasActiveComposer,
     isSuspended: permissionState.isSuspended,
     modalStore,
+    patchDiscussion,
+    setTogglingSubscription: interactions.setTogglingSubscription,
     showDiscussionMenu: pageState.showDiscussionMenu,
     discussionActionHandlers: interactions.discussionActionHandlers,
     postActionHandlers: interactions.postActionHandlers,
+    showActionError: interactions.showActionError,
+    showSuspensionAlert: interactions.showSuspensionAlert,
     togglingSubscription: interactions.togglingSubscription,
+    uiText: interactions.uiText,
+    upsertPost,
   })
 
   function resolvePostComponent(post) {

@@ -59,22 +59,16 @@ from apps.core.runtime_checks import (
     is_redis_enabled as runtime_is_redis_enabled,
 )
 from apps.users.models import User, Group, Permission
-from apps.discussions.models import Discussion
-from apps.discussions.services import DiscussionService
-from apps.posts.models import Post, PostFlag
-from apps.posts.services import PostService
 from apps.users.group_utils import get_primary_group, serialize_group_badge
 from apps.users.services import UserService
 from apps.core.services import PaginationService
 from apps.core.api_errors import api_error
 from apps.core.admin_content_api import router as content_router
-from apps.core.admin_moderation_api import router as moderation_router
 from apps.core.admin_settings_api import router as settings_router
 from apps.core.admin_users_api import router as users_router
 
 router = Router()
 router.add_router("", content_router)
-router.add_router("", moderation_router)
 router.add_router("", settings_router)
 router.add_router("", users_router)
 

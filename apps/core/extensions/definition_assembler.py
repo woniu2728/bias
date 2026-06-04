@@ -78,6 +78,7 @@ def resolve_extension_discovery_result(manifest: ExtensionManifest) -> Extension
         event_listeners=tuple(record.event_listeners),
         realtime_included=tuple(record.realtime_included),
         discussion_lifecycle=tuple(record.discussion_lifecycle),
+        post_lifecycle=tuple(record.post_lifecycle),
         runtime_actions=tuple(record.runtime_actions),
         admin_actions=tuple(record.admin_actions),
     )

@@ -1,11 +1,6 @@
 import { ref } from 'vue'
 import api from '@/api'
 import ModerationActionModal from '@/components/modals/ModerationActionModal.vue'
-import {
-  addPendingPostAction,
-  hasPendingPostAction,
-  removePendingPostAction,
-} from '@/composables/discussionDetailPendingMap'
 
 export function useDiscussionDetailPostModerationActions({
   canModeratePendingPost,
@@ -14,9 +9,7 @@ export function useDiscussionDetailPostModerationActions({
   refreshDiscussion,
   showActionError,
   uiText,
-  upsertPost,
 }) {
-  const flagPendingPostIds = ref([])
 
   async function moderatePost(post, action) {
     if (!post || !canModeratePendingPost(post)) return
@@ -84,68 +77,8 @@ export function useDiscussionDetailPostModerationActions({
     }
   }
 
-  async function resolvePostFlags(post, status) {
-    if (!post?.can_moderate_flags) return
-    if (hasPendingPostAction(flagPendingPostIds.value, post.id)) return
-
-    flagPendingPostIds.value = addPendingPostAction(flagPendingPostIds.value, post.id)
-
-    const isIgnoring = status === 'ignored'
-    try {
-      const confirmed = await modalStore.confirm({
-        title: uiText(
-          'discussion-detail-flag-resolve-confirm-title',
-          isIgnoring ? '忽略举报' : '处理举报',
-          { isIgnoring, openFlagCount: Number(post.open_flag_count || 0) }
-        ),
-        message: uiText(
-          'discussion-detail-flag-resolve-confirm-message',
-          isIgnoring
-            ? `确定忽略这条回复的 ${post.open_flag_count} 条举报吗？`
-            : `确定将这条回复的 ${post.open_flag_count} 条举报标记为已处理吗？`,
-          { isIgnoring, openFlagCount: Number(post.open_flag_count || 0) }
-        ),
-        confirmText: uiText(
-          'discussion-detail-flag-resolve-confirm-confirm',
-          isIgnoring ? '忽略' : '已处理',
-          { isIgnoring, openFlagCount: Number(post.open_flag_count || 0) }
-        ),
-        cancelText: uiText('discussion-action-confirm-cancel', '取消'),
-        tone: isIgnoring ? 'warning' : 'primary'
-      })
-      if (!confirmed) return
-
-      const response = await api.post(`/posts/${post.id}/flags/resolve`, {
-        status,
-        resolution_note: ''
-      })
-      if (response?.post) {
-        upsertPost(response.post)
-      }
-      await modalStore.alert({
-        title: uiText(
-          'discussion-detail-flag-resolve-success-title',
-          isIgnoring ? '举报已忽略' : '举报已处理',
-          { isIgnoring }
-        ),
-        message: uiText(
-          'discussion-detail-flag-resolve-success-message',
-          isIgnoring ? '这条回复的待处理举报已关闭。' : '这条回复的待处理举报已标记为已处理。',
-          { isIgnoring }
-        )
-      })
-    } catch (error) {
-      console.error('处理举报失败:', error)
-      await showActionError('处理举报', error)
-    } finally {
-      flagPendingPostIds.value = removePendingPostAction(flagPendingPostIds.value, post.id)
-    }
-  }
-
   return {
-    flagPendingPostIds,
     moderatePost,
-    resolvePostFlags,
     togglePostHidden,
   }
 }

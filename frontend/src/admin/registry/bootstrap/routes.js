@@ -7,8 +7,6 @@ import AppearancePage from '../../views/AppearancePage.vue'
 import MailPage from '../../views/MailPage.vue'
 import AdvancedPage from '../../views/AdvancedPage.vue'
 import DeveloperDocsPage from '../../views/DeveloperDocsPage.vue'
-import ApprovalQueuePage from '../../views/ApprovalQueuePage.vue'
-import FlagsPage from '../../views/FlagsPage.vue'
 import UsersPage from '../../views/UsersPage.vue'
 import ExtensionDetailPage from '../../views/ExtensionDetailPage.vue'
 import ExtensionHostPage from '../../views/ExtensionHostPage.vue'
@@ -87,7 +85,7 @@ registerAdminRoute({
   component: ModulesPage,
   icon: 'fas fa-cubes',
   label: '模块中心',
-  navDescription: '查看内置模块、扩展能力和注册快照。',
+  navDescription: '查看核心模块、扩展能力和注册快照。',
   navSection: 'core',
   navOrder: 25,
   showInNavigation: false,
@@ -149,36 +147,6 @@ registerAdminRoute({
   showInDashboardActions: true,
   dashboardActionLabel: '管理用户',
   moduleId: 'users'
-})
-
-registerAdminRoute({
-  path: '/admin/approval',
-  name: 'admin-approval',
-  component: ApprovalQueuePage,
-  icon: 'fas fa-user-check',
-  label: '审核队列',
-  navDescription: '审核待放行的讨论和回复内容。',
-  navSection: 'core',
-  navOrder: 110,
-  showInNavigation: true,
-  showInDashboardActions: true,
-  dashboardActionLabel: '处理审核',
-  moduleId: 'approval'
-})
-
-registerAdminRoute({
-  path: '/admin/flags',
-  name: 'admin-flags',
-  component: FlagsPage,
-  icon: 'fas fa-flag',
-  label: '举报管理',
-  navDescription: '处理用户提交的举报与内容风险。',
-  navSection: 'core',
-  navOrder: 100,
-  showInNavigation: true,
-  showInDashboardActions: true,
-  dashboardActionLabel: '处理举报',
-  moduleId: 'flags'
 })
 
 registerAdminRoute({

@@ -40,18 +40,6 @@ class DiscussionReadStateSchema(BaseModel):
     last_read_post_number: int = Field(..., ge=1, description="最后已读楼层")
 
 
-class DiscussionFilterSchema(BaseModel):
-    """讨论列表过滤"""
-    q: Optional[str] = Field(None, description="搜索关键词")
-    tag: Optional[str] = Field(None, description="标签slug")
-    author: Optional[str] = Field(None, description="作者用户名")
-    filter: Optional[str] = Field('all', description="列表过滤: all, following, my, unread")
-    subscription: Optional[str] = Field(None, description="兼容旧参数: following")
-    sort: Optional[str] = Field('latest', description="排序方式: latest, top, oldest, newest")
-    page: int = Field(1, ge=1, description="页码")
-    limit: int = Field(20, ge=1, le=100, description="每页数量")
-
-
 class UserSimpleSchema(BaseModel):
     """简化的用户信息"""
     class GroupBadgeSchema(BaseModel):
@@ -72,7 +60,6 @@ class UserSimpleSchema(BaseModel):
 
     class Config:
         from_attributes = True
-
 
 class DiscussionOutSchema(BaseModel):
     """讨论输出"""
@@ -100,29 +87,6 @@ class DiscussionOutSchema(BaseModel):
     last_read_post_number: int = 0
     hidden_at: Optional[datetime] = None
     tags: List[dict] = []
-
-    class Config:
-        from_attributes = True
-
-
-class DiscussionListSchema(BaseModel):
-    """讨论列表输出"""
-    total: int
-    page: int
-    limit: int
-    filter: str = "all"
-    available_filters: List[dict] = []
-    sort: str = "latest"
-    available_sorts: List[dict] = []
-    data: List[DiscussionOutSchema]
-
-
-class DiscussionDetailSchema(DiscussionOutSchema):
-    """讨论详情输出（包含第一条帖子）"""
-    first_post: Optional[dict] = None
-    can_edit: bool = False
-    can_delete: bool = False
-    can_reply: bool = False
 
     class Config:
         from_attributes = True

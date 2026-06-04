@@ -19,9 +19,8 @@
     "post-approval"
   ],
   "backend_entry": "extensions.approval.backend.ext",
-  "permissions_pages": [
-    "/admin/extensions/approval/permissions"
-  ],
+  "frontend_admin_entry": "extensions/approval/frontend/admin/index.js",
+  "frontend_forum_entry": "extensions/approval/frontend/forum/index.js",
   "operations_pages": [
     "/admin/extensions/approval/operations"
   ],

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from apps.core.domain_events import dispatch_forum_event_after_commit
 from apps.tags.models import DiscussionTag
-from apps.tags.services import TagService
 from extensions.tags.backend.events import DiscussionTaggedEvent, TagStatsRefreshRequestedEvent
+from extensions.tags.backend.services import TagService
 
 
 def set_discussion_tags_relationship(discussion, value, context: dict | None = None) -> None:

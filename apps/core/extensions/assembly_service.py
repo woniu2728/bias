@@ -16,11 +16,9 @@ def get_extension_assembly_catalog(
 def get_enabled_extension_assemblies(
     *,
     force: bool = False,
-    include_builtin: bool = False,
     registry=None,
 ) -> list[ExtensionAssembly]:
     manager = registry if registry is not None else get_extension_manager()
     return manager.get_enabled_extension_assemblies(
         force=force,
-        include_builtin=include_builtin,
     )

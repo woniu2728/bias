@@ -28,9 +28,6 @@ def get_extension_asset_url(extension_id: str, file_path: str) -> str:
 
 
 def publish_extension_assets(extension) -> dict:
-    if extension.source == "builtin-module":
-        return _result(extension.id, "skipped", "已跳过", "内置扩展不需要发布独立资产。")
-
     root_path = Path(extension.manifest.path) if extension.manifest.path else None
     source = root_path / "assets" if root_path else None
     if source is None or not source.exists() or not source.is_dir():
@@ -103,8 +100,6 @@ def build_extension_frontend_manifest(extensions) -> dict:
         "extensions": {},
     }
     for extension in extensions:
-        if extension.source == "builtin-module":
-            continue
         admin_entry = str(extension.frontend_admin_entry or "").strip()
         forum_entry = str(extension.frontend_forum_entry or "").strip()
         if not admin_entry and not forum_entry:

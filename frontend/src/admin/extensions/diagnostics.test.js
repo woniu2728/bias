@@ -26,7 +26,6 @@ import {
 } from './diagnostics.js'
 
 test('resolveExtensionEntryTypeLabel maps entry kinds to readable labels', () => {
-  assert.equal(resolveExtensionEntryTypeLabel('builtin'), '内置入口')
   assert.equal(resolveExtensionEntryTypeLabel('filesystem'), '文件系统扩展')
   assert.equal(resolveExtensionEntryTypeLabel('external'), '外部路径')
   assert.equal(resolveExtensionEntryTypeLabel('unknown'), '未声明')
@@ -305,7 +304,7 @@ test('resolveExtensionPrimaryAdminAction prefers hosted settings and operations 
   })?.key, 'settings')
 })
 
-test('resolveExtensionOperationsProfile exposes dedicated copy for second-batch builtin modules', () => {
+test('resolveExtensionOperationsProfile exposes dedicated copy for extension modules', () => {
   const notificationsProfile = resolveExtensionOperationsProfile({ id: 'notifications' })
   const realtimeProfile = resolveExtensionOperationsProfile({ id: 'realtime' })
   const likesProfile = resolveExtensionOperationsProfile({ id: 'likes' })

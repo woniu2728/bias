@@ -4,18 +4,15 @@ import ModerationActionModal from '@/components/modals/ModerationActionModal.vue
 import { useDiscussionDetailPostModerationActions } from '@/composables/useDiscussionDetailPostModerationActions'
 
 export function useDiscussionDetailModerationActions({
-  authStore,
   canModeratePendingDiscussion,
   canModeratePendingPost,
   canModeratePostVisibility,
   discussion,
-  isSuspended,
   modalStore,
   patchDiscussion,
   refreshDiscussion,
   router,
   showActionError,
-  showSuspensionAlert,
   uiText,
   upsertPost,
 }) {
@@ -27,7 +24,6 @@ export function useDiscussionDetailModerationActions({
     refreshDiscussion,
     showActionError,
     uiText,
-    upsertPost,
   })
 
   async function moderateDiscussion(action) {
@@ -130,31 +126,8 @@ export function useDiscussionDetailModerationActions({
     }
   }
 
-  async function toggleSubscription() {
-    if (!authStore.isAuthenticated || !discussion.value) {
-      router.push('/login')
-      return
-    }
-    if (isSuspended.value) {
-      await showSuspensionAlert()
-      return
-    }
-
-    togglingSubscription.value = true
-    try {
-      if (discussion.value.is_subscribed) {
-        await api.delete(`/discussions/${discussion.value.id}/subscribe`)
-        patchDiscussion({ is_subscribed: false })
-      } else {
-        await api.post(`/discussions/${discussion.value.id}/subscribe`)
-        patchDiscussion({ is_subscribed: true })
-      }
-    } catch (error) {
-      console.error('更新关注状态失败:', error)
-      await showActionError('更新关注', error)
-    } finally {
-      togglingSubscription.value = false
-    }
+  function setTogglingSubscription(value) {
+    togglingSubscription.value = Boolean(value)
   }
 
   return {
@@ -163,7 +136,7 @@ export function useDiscussionDetailModerationActions({
     toggleHide,
     toggleLock,
     togglePin,
-    toggleSubscription,
+    setTogglingSubscription,
     togglingSubscription,
     ...postModerationActions,
   }

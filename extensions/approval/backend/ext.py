@@ -1,4 +1,11 @@
-from apps.core.extensions import AdminSurfaceExtender, EventListenersExtender, ForumCapabilitiesExtender, LifecycleExtender, NotificationsExtender
+from apps.core.extensions import (
+    AdminSurfaceExtender,
+    ApiRoutesExtender,
+    EventListenersExtender,
+    ForumCapabilitiesExtender,
+    LifecycleExtender,
+    NotificationsExtender,
+)
 from apps.core.extensions.types import ExtensionEventListenerDefinition
 from apps.core.forum_events import (
     DiscussionApprovedEvent,
@@ -15,6 +22,7 @@ from apps.core.forum_registry_types import (
     PostTypeDefinition,
     UserPreferenceDefinition,
 )
+from extensions.approval.backend.admin_api import router as approval_admin_router
 from extensions.approval.backend.listeners import (
     handle_discussion_approved,
     handle_discussion_rejected,
@@ -34,6 +42,10 @@ def extend():
             permissions=permission_definitions(),
             admin_pages=admin_page_definitions(),
             generated_permissions_page=True,
+        ),
+        ApiRoutesExtender(
+            mounts=(("/admin", approval_admin_router),),
+            tags=("Admin",),
         ),
         ForumCapabilitiesExtender(
             post_types=post_type_definitions(),

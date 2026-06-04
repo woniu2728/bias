@@ -145,6 +145,14 @@ def get_runtime_discussion_lifecycle_service():
     return get_extension_host_service("discussion.lifecycle")
 
 
+def get_runtime_post_lifecycle_service():
+    return get_extension_host_service("post.lifecycle")
+
+
+def get_runtime_post_event_data_service():
+    return get_extension_host_service("post.events")
+
+
 def _model_matches(registered_model: Any, model: Any) -> bool:
     registered_class = registered_model if isinstance(registered_model, type) else getattr(registered_model, "__class__", None)
     model_class = model if isinstance(model, type) else getattr(model, "__class__", None)

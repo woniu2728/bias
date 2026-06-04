@@ -20,6 +20,7 @@ from apps.core.extensions.types import (
     ExtensionModelRelationDefinition,
     ExtensionModelSlugDriverDefinition,
     ExtensionModelVisibilityDefinition,
+    ExtensionPostLifecycleDefinition,
     ExtensionResourceDefinition,
     ExtensionResourceEndpointDefinition,
     ExtensionResourceFieldMutatorDefinition,
@@ -474,7 +475,22 @@ class ResourceExtender:
     @staticmethod
     def _resolve_definition_callbacks(definition, host):
         replacements = {}
-        for attr in ("resolver", "handler", "mutator", "setter", "validator", "condition"):
+        for attr in (
+            "resolver",
+            "handler",
+            "mutator",
+            "setter",
+            "validator",
+            "condition",
+            "before_hook",
+            "after_hook",
+            "meta_resolver",
+            "links_resolver",
+            "query_callback",
+            "action_callback",
+            "before_serialization_callback",
+            "response_callback",
+        ):
             if hasattr(definition, attr):
                 value = getattr(definition, attr)
                 if isinstance(value, str) or isinstance(value, type):
@@ -510,6 +526,8 @@ class ApiResourceExtender:
     @property
     def resource_name(self) -> str:
         if self.resource is not None:
+            if isinstance(self.resource, str):
+                return self.resource.strip()
             if isinstance(self.resource, ExtensionResourceObjectDefinition):
                 return self._resource_object_name(self.resource.resource)
             return getattr(self.resource, "resource", "") or self._resource_object_name(self.resource)
@@ -654,6 +672,63 @@ class ApiResourceExtender:
             endpoints=tuple([*self._endpoints, *definitions]),
             sorts=self._sorts,
         )
+
+    def add_default_include(self, endpoints, includes) -> "ApiResourceExtender":
+        normalized_includes = tuple(self._normalize_names(includes))
+
+        def mutate(endpoint):
+            current = list(getattr(endpoint, "default_include", ()) or ())
+            seen = set(current)
+            for include in normalized_includes:
+                if include and include not in seen:
+                    seen.add(include)
+                    current.append(include)
+            return replace(endpoint, default_include=tuple(current))
+
+        return self.endpoint(endpoints, mutate)
+
+    def eager_load(self, endpoints, *items: Any) -> "ApiResourceExtender":
+        def mutate(endpoint):
+            return replace(endpoint, eager_load=tuple([
+                *(getattr(endpoint, "eager_load", ()) or ()),
+                *items,
+            ]))
+
+        return self.endpoint(endpoints, mutate)
+
+    def eager_load_when_included(self, endpoints, include: str, *items: Any) -> "ApiResourceExtender":
+        normalized_include = str(include or "").strip()
+        if not normalized_include:
+            return self
+
+        def mutate(endpoint):
+            return replace(endpoint, eager_load_when_included_rules=tuple([
+                *(getattr(endpoint, "eager_load_when_included_rules", ()) or ()),
+                (normalized_include, tuple(items or ())),
+            ]))
+
+        return self.endpoint(endpoints, mutate)
+
+    def eager_load_where(self, endpoints, relation: str, callback: Callable[[Any, dict], Any]) -> "ApiResourceExtender":
+        normalized_relation = str(relation or "").strip()
+        if not normalized_relation or not callable(callback):
+            return self
+
+        def mutate(endpoint):
+            return replace(endpoint, eager_load_where_rules=tuple([
+                *(getattr(endpoint, "eager_load_where_rules", ()) or ()),
+                (normalized_relation, callback),
+            ]))
+
+        return self.endpoint(endpoints, mutate)
+
+    def default_sort(self, endpoints, sort: str) -> "ApiResourceExtender":
+        normalized_sort = str(sort or "").strip()
+
+        def mutate(endpoint):
+            return replace(endpoint, default_sort=normalized_sort)
+
+        return self.endpoint(endpoints, mutate)
 
     def sorts(self, sorts: Any = None, *definitions: ExtensionResourceSortDefinition) -> "ApiResourceExtender":
         if sorts is None:
@@ -817,7 +892,7 @@ class ApiResourceExtender:
         return tuple(names)
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
-        resources = (self.resource,) if self.resource is not None else ()
+        resources = () if isinstance(self.resource, str) else ((self.resource,) if self.resource is not None else ())
         fields = self._normalize_resource_fields(self._resolve_definition_groups(self._fields, app))
         relationships = self._normalize_resource_relationships(self._resolve_definition_groups(self._relationships, app))
         endpoints = self._normalize_resource_endpoints(self._resolve_definition_groups(self._endpoints, app))
@@ -1456,6 +1531,63 @@ class DiscussionLifecycleExtender:
 
 
 @dataclass(frozen=True)
+class PostLifecycleExtender:
+    definitions: tuple[ExtensionPostLifecycleDefinition, ...] = ()
+
+    def handler(
+        self,
+        key: str,
+        *,
+        apply_created: Any = None,
+        apply_updated: Any = None,
+        apply_approved: Any = None,
+        prepare_delete: Any = None,
+        apply_deleted: Any = None,
+        description: str = "",
+    ) -> "PostLifecycleExtender":
+        return PostLifecycleExtender(
+            definitions=tuple([
+                *self.definitions,
+                ExtensionPostLifecycleDefinition(
+                    key=str(key or "").strip(),
+                    apply_created=apply_created,
+                    apply_updated=apply_updated,
+                    apply_approved=apply_approved,
+                    prepare_delete=prepare_delete,
+                    apply_deleted=apply_deleted,
+                    description=str(description or "").strip(),
+                ),
+            ]),
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.definitions:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(post_lifecycle, host: "ExtensionHost"):
+            for definition in self.definitions:
+                replacements = {}
+                for attr in (
+                    "apply_created",
+                    "apply_updated",
+                    "apply_approved",
+                    "prepare_delete",
+                    "apply_deleted",
+                ):
+                    value = getattr(definition, attr)
+                    if isinstance(value, str) or isinstance(value, type):
+                        replacements[attr] = wrap_callback(value, host)
+                if replacements:
+                    definition = replace(definition, **replacements)
+                post_lifecycle.register(extension_id, definition)
+            return post_lifecycle
+
+        app.resolving("post.lifecycle", apply)
+
+
+@dataclass(frozen=True)
 class SettingsExtender:
     fields: tuple[ExtensionManifestSettingFieldDefinition, ...] = ()
     expose_to_forum: tuple[str, ...] = ()
@@ -1812,6 +1944,54 @@ class SystemHookExtender:
             return service
 
         app.resolving(service_key, apply)
+
+
+@dataclass(frozen=True)
+class PostEventExtender:
+    event_data_resolvers: tuple[ExtensionSystemHookDefinition, ...] = ()
+
+    def type(
+        self,
+        post_type: str,
+        resolver: Any,
+        *,
+        description: str = "",
+        order: int = 100,
+    ) -> "PostEventExtender":
+        normalized = str(post_type or "").strip()
+        if not normalized:
+            return self
+        return PostEventExtender(tuple([
+            *self.event_data_resolvers,
+            ExtensionSystemHookDefinition(
+                key=normalized,
+                callback=resolver,
+                description=str(description or "").strip(),
+                order=int(order),
+            ),
+        ]))
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.event_data_resolvers:
+            return
+        extension_id = extension.extension_id
+
+        def apply(service, host: "ExtensionHost"):
+            for definition in self.event_data_resolvers:
+                resolver = definition.callback
+                if isinstance(resolver, str) or isinstance(resolver, type):
+                    resolver = wrap_callback(resolver, host)
+                service.register(
+                    extension_id,
+                    replace(
+                        definition,
+                        callback=resolver,
+                        module_id=definition.module_id or extension_id,
+                    ),
+                )
+            return service
+
+        app.resolving("post.events", apply)
 
 
 class ErrorHandlingExtender(SystemHookExtender):
@@ -2255,15 +2435,15 @@ class PolicyExtender:
 class ConditionalExtender:
     callbacks: tuple[Callable[["ExtensionHost"], Any], ...] = ()
 
-    def when(self, condition: Callable[["ExtensionHost"], bool], callback: Callable[[], Any]) -> "ConditionalExtender":
+    def when(self, condition: Callable[["ExtensionHost"], bool] | bool, callback: Callable[[], Any] | str | type) -> "ConditionalExtender":
         def resolver(host: "ExtensionHost"):
-            if not condition(host):
+            if not self._evaluate_condition(condition, host):
                 return []
-            return callback()
+            return self._resolve_extenders(callback, host)
 
         return ConditionalExtender(callbacks=tuple([*self.callbacks, resolver]))
 
-    def when_extension_enabled(self, extension_id: str, callback: Callable[[], Any]) -> "ConditionalExtender":
+    def when_extension_enabled(self, extension_id: str, callback: Callable[[], Any] | str | type) -> "ConditionalExtender":
         normalized = str(extension_id or "").strip()
 
         def condition(host: "ExtensionHost") -> bool:
@@ -2271,6 +2451,61 @@ class ConditionalExtender:
             return bool(extension and extension.runtime.enabled)
 
         return self.when(condition, callback)
+
+    def when_extension_disabled(self, extension_id: str, callback: Callable[[], Any] | str | type) -> "ConditionalExtender":
+        normalized = str(extension_id or "").strip()
+
+        def condition(host: "ExtensionHost") -> bool:
+            extension = host.get_runtime_extension(normalized)
+            return not bool(extension and extension.runtime.enabled)
+
+        return self.when(condition, callback)
+
+    def when_setting(
+        self,
+        key: str,
+        expected: Any,
+        callback: Callable[[], Any] | str | type,
+        *,
+        strict: bool = False,
+    ) -> "ConditionalExtender":
+        normalized_key = str(key or "").strip()
+
+        def condition(host: "ExtensionHost") -> bool:
+            try:
+                from apps.core.models import Setting
+
+                record = Setting.objects.filter(key=normalized_key).first()
+                value = record.value if record is not None else None
+            except Exception:
+                value = None
+            if strict:
+                return value == expected and type(value) is type(expected)
+            return value == expected
+
+        return self.when(condition, callback)
+
+    @staticmethod
+    def _evaluate_condition(condition: Callable[["ExtensionHost"], bool] | bool | str | type, host: "ExtensionHost") -> bool:
+        if isinstance(condition, bool):
+            return condition
+        resolved = wrap_callback(condition, host) if isinstance(condition, (str, type)) else condition
+        if not callable(resolved):
+            return bool(resolved)
+        try:
+            return bool(resolved(host))
+        except TypeError:
+            return bool(resolved())
+
+    @staticmethod
+    def _resolve_extenders(callback: Callable[[], Any] | str | type, host: "ExtensionHost"):
+        resolved = wrap_callback(callback, host) if isinstance(callback, (str, type)) else callback
+        if not callable(resolved):
+            return resolved
+        try:
+            return resolved()
+        except TypeError:
+            return resolved(host)
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
         for resolver in self.callbacks:

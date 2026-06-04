@@ -184,6 +184,7 @@ const dashboardActions = computed(() => getAdminDashboardActions({
 const dashboardStats = computed(() => getAdminDashboardStats({
   stats: stats.value,
   copy: dashboardCopy.value,
+  isModuleEnabled: moduleId => adminRegistryStore.isModuleEnabled(moduleId),
 }))
 const dashboardQueueMetrics = computed(() => getAdminDashboardQueueMetrics({
   stats: stats.value,

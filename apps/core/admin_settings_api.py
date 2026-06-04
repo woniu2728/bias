@@ -2,7 +2,11 @@ import json
 
 from ninja import Body, Router
 
+from apps.core.extensions.runtime_access import get_runtime_resource_registry
 from apps.core.jwt_auth import AccessTokenAuth
+from apps.discussions.models import Discussion
+from apps.posts.models import Post
+from apps.users.models import User
 
 
 router = Router()
@@ -61,7 +65,7 @@ def get_stats(request):
         queue_worker_status=queue_worker_status,
     )
 
-    return {
+    stats = {
         "runtimeName": "Python",
         "pythonVersion": legacy.sys.version.split()[0],
         "djangoVersion": legacy.django.get_version(),
@@ -99,19 +103,23 @@ def get_stats(request):
         "maintenanceMode": bool(advanced_settings.get("maintenance_mode", False)),
         "maintenanceModeKey": advanced_settings.get("maintenance_mode_key", "none"),
         "maintenanceModeLabel": advanced_settings.get("maintenance_mode_label", "未启用"),
-        "totalUsers": legacy.User.objects.count(),
-        "totalDiscussions": legacy.Discussion.objects.count(),
-        "totalPosts": legacy.Post.objects.count(),
-        "openFlags": legacy.PostFlag.objects.filter(status=legacy.PostFlag.STATUS_OPEN).count(),
+        "totalUsers": User.objects.count(),
+        "totalDiscussions": Discussion.objects.count(),
+        "totalPosts": Post.objects.count(),
         "pendingApprovals": (
-            legacy.Discussion.objects.filter(approval_status=legacy.Discussion.APPROVAL_PENDING).count()
-            + legacy.Post.objects.filter(approval_status=legacy.Post.APPROVAL_PENDING).exclude(
-                id__in=legacy.Discussion.objects.filter(
-                    approval_status=legacy.Discussion.APPROVAL_PENDING
+            Discussion.objects.filter(approval_status=Discussion.APPROVAL_PENDING).count()
+            + Post.objects.filter(approval_status=Post.APPROVAL_PENDING).exclude(
+                id__in=Discussion.objects.filter(
+                    approval_status=Discussion.APPROVAL_PENDING
                 ).values_list("first_post_id", flat=True)
             ).count()
         ),
     }
+    return get_runtime_resource_registry().serialize(
+        "admin_stats",
+        stats,
+        {"user": request.auth, "request": request},
+    )
 
 
 @router.post("/queue/metrics/reset", auth=AccessTokenAuth(), tags=["Admin"])

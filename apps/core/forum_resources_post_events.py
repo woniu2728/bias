@@ -46,6 +46,10 @@ def resolve_post_type_definition(post, context: dict) -> dict | None:
 
 
 def resolve_post_event_data(post, context: dict) -> dict | None:
+    registered_event_data = _resolve_registered_post_event_data(post, context)
+    if registered_event_data is not None:
+        return registered_event_data
+
     post_type = getattr(post, "type", "")
     if post_type == "discussionRenamed":
         lines = _normalized_lines(getattr(post, "content", ""))
@@ -108,21 +112,6 @@ def resolve_post_event_data(post, context: dict) -> dict | None:
             event_data["target_post_number"] = parsed["target_post_number"]
         return event_data
 
-    if post_type == "discussionTagged":
-        added = []
-        removed = []
-        for line in _normalized_lines(getattr(post, "content", "")):
-            if line.startswith("added:"):
-                added = [item for item in line.removeprefix("added:").split("|") if item]
-            elif line.startswith("removed:"):
-                removed = [item for item in line.removeprefix("removed:").split("|") if item]
-
-        return {
-            "kind": "discussionTagged",
-            "added_tags": added,
-            "removed_tags": removed,
-        }
-
     if post_type in {
         "discussionApproved",
         "discussionRejected",
@@ -145,6 +134,15 @@ def resolve_post_event_data(post, context: dict) -> dict | None:
         return event_data
 
     return None
+
+
+def _resolve_registered_post_event_data(post, context: dict) -> dict | None:
+    from apps.core.extensions.runtime_access import get_runtime_post_event_data_service
+
+    service = get_runtime_post_event_data_service()
+    if service is None or not hasattr(service, "resolve"):
+        return None
+    return service.resolve(post, context)
 
 
 def _normalized_lines(content: str | None) -> list[str]:

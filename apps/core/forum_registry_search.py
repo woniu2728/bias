@@ -41,19 +41,6 @@ def _apply_discussion_locked_search_filter(queryset, enabled: bool, context: dic
     return queryset.filter(is_locked=enabled)
 
 
-def _parse_following_search_filter(token: str) -> bool | None:
-    return _parse_is_search_filter(token, expected="following")
-
-
-def _apply_discussion_following_search_filter(queryset, enabled: bool, context: dict):
-    user = context.get("user")
-    if not enabled:
-        return queryset
-    if not user or not getattr(user, "is_authenticated", False):
-        return queryset.none()
-    return queryset.filter(user_states__user=user, user_states__is_subscribed=True)
-
-
 def _parse_unread_search_filter(token: str) -> bool | None:
     return _parse_is_search_filter(token, expected="unread")
 
@@ -69,26 +56,6 @@ def _apply_discussion_unread_search_filter(queryset, enabled: bool, context: dic
         models.Q(user_states__user=user, last_post_number__gt=models.F("user_states__last_read_post_number"))
         | models.Q(user_states__user__isnull=True)
     )
-
-
-def _parse_mentioned_me_search_filter(token: str) -> bool | None:
-    if not token or ":" not in token:
-        return None
-
-    prefix, value = token.split(":", 1)
-    if prefix.lower() != "mentioned":
-        return None
-
-    return True if value.strip().lower() == "me" else None
-
-
-def _apply_post_mentioned_me_search_filter(queryset, enabled: bool, context: dict):
-    user = context.get("user")
-    if not enabled:
-        return queryset
-    if not user or not getattr(user, "is_authenticated", False):
-        return queryset.none()
-    return queryset.filter(mentions__mentions_user=user)
 
 
 def _parse_created_month_search_filter(token: str) -> tuple[int, int] | None:
@@ -140,13 +107,6 @@ def _apply_discussion_unanswered_sort(queryset, context: dict):
 
 def _apply_all_discussion_list_filter(queryset, context: dict):
     return queryset
-
-
-def _apply_following_discussion_list_filter(queryset, context: dict):
-    user = context.get("user")
-    if not user or not getattr(user, "is_authenticated", False):
-        return queryset.none()
-    return queryset.filter(user_states__user=user, user_states__is_subscribed=True)
 
 
 def _apply_my_discussions_list_filter(queryset, context: dict):

@@ -2,7 +2,7 @@
 帖子系统的Pydantic Schema定义
 """
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
 from pydantic import BaseModel, Field, validator
 
 
@@ -29,14 +29,6 @@ class PostUpdateSchema(BaseModel):
         return v.strip()
 
 
-class PostFilterSchema(BaseModel):
-    """帖子列表过滤"""
-    author: Optional[str] = Field(None, description="作者用户名")
-    user_id: Optional[int] = Field(None, description="作者用户ID")
-    page: int = Field(1, ge=1, description="页码")
-    limit: int = Field(20, ge=1, le=100, description="每页数量")
-
-
 class UserSimpleSchema(BaseModel):
     """简化的用户信息"""
     class GroupBadgeSchema(BaseModel):
@@ -58,7 +50,6 @@ class UserSimpleSchema(BaseModel):
     class Config:
         from_attributes = True
 
-
 class PostOutSchema(BaseModel):
     """帖子输出"""
     id: int
@@ -76,31 +67,10 @@ class PostOutSchema(BaseModel):
     is_hidden: bool
     approval_status: str = "approved"
     approval_note: str = ""
-    like_count: int = 0
-    is_liked: bool = False
     can_edit: bool = False
     can_delete: bool = False
-    can_like: bool = False
-    can_flag: bool = False
     post_type: Optional[dict] = None
     event_data: Optional[dict] = None
-    viewer_has_open_flag: bool = False
-    open_flag_count: int = 0
-    open_flags: List[dict] = []
-    flags: List[dict] = []
-    can_moderate_flags: bool = False
 
     class Config:
         from_attributes = True
-
-
-class PostListSchema(BaseModel):
-    """帖子列表输出"""
-    total: int
-    page: int
-    limit: int
-    current_start: int = 1
-    current_end: int = 1
-    has_previous: bool = False
-    has_more: bool = False
-    data: List[PostOutSchema]

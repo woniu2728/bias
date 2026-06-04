@@ -9,7 +9,7 @@ registerAdminModulesPageCopy({
   order: 10,
   resolve: () => ({
     pageTitle: '模块中心',
-    pageDescription: '从扩展兼容视角查看内置模块的承载状态、主要入口和运行风险。',
+    pageDescription: '查看核心模块的承载状态、主要入口和运行风险。',
     loadingText: '加载模块信息中...',
     dependencyAttentionTitle: '依赖关注项',
     dependencyAttentionDescription: '模块依赖状态会直接影响后续扩展启停与宿主页可用性，这里优先暴露需要处理的项。',

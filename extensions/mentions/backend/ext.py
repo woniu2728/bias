@@ -1,9 +1,25 @@
-from apps.core.extensions import EventListenersExtender, ForumCapabilitiesExtender, LifecycleExtender, NotificationsExtender
+from apps.core.extensions import (
+    EventListenersExtender,
+    FormatterExtender,
+    ForumCapabilitiesExtender,
+    LifecycleExtender,
+    NotificationsExtender,
+    PostLifecycleExtender,
+)
 from apps.core.extensions.types import ExtensionEventListenerDefinition
 from apps.core.forum_events import UserMentionedEvent
-from apps.core.forum_registry_search import _apply_post_mentioned_me_search_filter, _parse_mentioned_me_search_filter
 from apps.core.forum_registry_types import NotificationTypeDefinition, SearchFilterDefinition, UserPreferenceDefinition
+from extensions.mentions.backend.formatter import render_mentions_html
+from extensions.mentions.backend.lifecycle import (
+    apply_post_approved_mentions,
+    apply_post_created_mentions,
+    apply_post_updated_mentions,
+)
 from extensions.mentions.backend.listeners import handle_user_mentioned_notification
+from extensions.mentions.backend.search import (
+    apply_post_mentioned_me_search_filter,
+    parse_mentioned_me_search_filter,
+)
 
 
 EXTENSION_ID = "mentions"
@@ -21,6 +37,16 @@ def extend():
         EventListenersExtender(
             listeners=mention_event_listener_definitions(),
         ),
+        FormatterExtender(transforms=(
+            render_mentions_html,
+        )),
+        PostLifecycleExtender().handler(
+            "mentions",
+            apply_created=apply_post_created_mentions,
+            apply_updated=apply_post_updated_mentions,
+            apply_approved=apply_post_approved_mentions,
+            description="帖子创建、编辑、审核通过时维护提及关系并派发提及事件。",
+        ),
         LifecycleExtender(
             install=install,
             enable=enable,
@@ -37,8 +63,8 @@ def search_filter_definitions():
             label="提及我的回复",
             module_id=EXTENSION_ID,
             target="post",
-            parser=_parse_mentioned_me_search_filter,
-            applier=_apply_post_mentioned_me_search_filter,
+            parser=parse_mentioned_me_search_filter,
+            applier=apply_post_mentioned_me_search_filter,
             syntax="mentioned:me",
             description="仅返回提及当前用户的回复。",
         ),

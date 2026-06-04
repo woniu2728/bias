@@ -158,13 +158,6 @@ def inspect_frontend_admin_entry(
     if not entry:
         return payload
 
-    if entry.startswith("builtin:"):
-        payload.update({
-            "entry_type": "builtin",
-            "exists": True,
-        })
-        return payload
-
     if not entry.startswith("extensions/"):
         payload.update({
             "entry_type": "external",
@@ -897,8 +890,6 @@ def _validate_frontend_admin_entry(
     debug_payload = inspect_frontend_admin_entry(manifest, extensions_base_path=base_path)
     entry = str(debug_payload["entry"] or "").strip()
     if not entry:
-        return
-    if debug_payload["entry_type"] == "builtin":
         return
     if debug_payload["entry_type"] == "external":
         collector.add_warning(

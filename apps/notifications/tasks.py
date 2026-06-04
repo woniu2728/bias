@@ -1,6 +1,6 @@
 from celery import shared_task
 
-from apps.notifications.services import NotificationService
+from extensions.notifications.backend.services import NotificationService
 
 
 @shared_task(ignore_result=True)

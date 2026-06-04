@@ -19,6 +19,7 @@ from apps.core.extensions.types import (
     ExtensionModelRelationDefinition,
     ExtensionModelSlugDriverDefinition,
     ExtensionModelVisibilityDefinition,
+    ExtensionPostLifecycleDefinition,
     ExtensionResourceDefinition,
     ExtensionResourceEndpointDefinition,
     ExtensionResourceFieldMutatorDefinition,
@@ -36,6 +37,7 @@ from apps.core.forum_registry_types import (
     AdminPageDefinition,
     DiscussionListFilterDefinition,
     DiscussionSortDefinition,
+    EventListenerDefinition,
     LanguagePackDefinition,
     NotificationTypeDefinition,
     PermissionDefinition,
@@ -215,6 +217,43 @@ class ApplicationSystemHookService:
             for definition in self.get_definitions()
             if definition.key == normalized and not callable(definition.callback)
         ]
+
+
+class ApplicationPostEventDataService:
+    def __init__(self, host: "ExtensionHost") -> None:
+        self._host = host
+        self._definitions_by_extension: dict[str, tuple[ExtensionSystemHookDefinition, ...]] = {}
+
+    def register(self, extension_id: str, definition: ExtensionSystemHookDefinition) -> None:
+        normalized = str(extension_id or "").strip()
+        post_type = str(definition.key or "").strip()
+        if not normalized or not post_type or not callable(definition.callback):
+            return
+        definitions = tuple([*self._definitions_by_extension.get(normalized, ()), definition])
+        self._definitions_by_extension[normalized] = definitions
+
+    def get_definitions(self, *, extension_id: str | None = None, post_type: str = "") -> list[ExtensionSystemHookDefinition]:
+        if extension_id is not None:
+            definitions = list(self._definitions_by_extension.get(str(extension_id or "").strip(), ()))
+        else:
+            definitions = []
+            for items in self._definitions_by_extension.values():
+                definitions.extend(items)
+        normalized_post_type = str(post_type or "").strip()
+        if normalized_post_type:
+            definitions = [definition for definition in definitions if definition.key == normalized_post_type]
+        return sorted(definitions, key=lambda item: (int(item.order or 100), item.module_id, item.key))
+
+    def resolve(self, post, context: dict | None = None) -> dict | None:
+        post_type = str(getattr(post, "type", "") or "").strip()
+        if not post_type:
+            return None
+        resolved_context = dict(context or {})
+        for definition in self.get_definitions(post_type=post_type):
+            result = definition.callback(post, resolved_context)
+            if result is not None:
+                return result
+        return None
 
 
 @dataclass
@@ -1529,7 +1568,21 @@ class ApplicationEventService:
 
         view = self._host._get_or_create_runtime_view(normalized_extension_id)
         view.event_listeners = tuple([*view.event_listeners, definition])
+        self._host.forum.register_event_listener(self._build_forum_event_listener_definition(normalized_extension_id, definition))
         self._event_bus.register(definition.event_type, definition.handler)
+
+    @staticmethod
+    def _build_forum_event_listener_definition(extension_id: str, definition) -> EventListenerDefinition:
+        event_type = getattr(definition, "event_type", None)
+        handler = getattr(definition, "handler", None)
+        event_name = str(getattr(event_type, "__name__", "") or event_type or "").strip()
+        handler_name = str(getattr(handler, "__name__", "") or handler or "").strip()
+        return EventListenerDefinition(
+            event=event_name,
+            listener=handler_name,
+            module_id=extension_id,
+            description=str(getattr(definition, "description", "") or "").strip(),
+        )
 
     def get_listeners(self, *, extension_id: str | None = None) -> list[ExtensionEventListenerDefinition]:
         if extension_id is not None:
@@ -1660,6 +1713,65 @@ class ApplicationDiscussionLifecycleService:
                 continue
             state = states.get(definition.key)
             result = handler(state=state, **kwargs)
+            if isinstance(result, dict):
+                results[definition.key] = result
+        return results
+
+
+class ApplicationPostLifecycleService:
+    def __init__(self, host: "ExtensionHost") -> None:
+        self._host = host
+
+    def register(self, extension_id: str, definition: ExtensionPostLifecycleDefinition) -> None:
+        normalized_extension_id = str(extension_id or "").strip()
+        normalized_key = str(getattr(definition, "key", "") or "").strip()
+        if not normalized_extension_id or not normalized_key:
+            return
+
+        view = self._host._get_or_create_runtime_view(normalized_extension_id)
+        view.post_lifecycle = tuple([
+            *(
+                item
+                for item in view.post_lifecycle
+                if str(getattr(item, "key", "") or "").strip() != normalized_key
+            ),
+            definition,
+        ])
+
+    def apply_created(self, *, post, context: dict | None = None) -> dict:
+        return self._apply_phase("apply_created", post=post, context=context)
+
+    def apply_updated(self, *, post, context: dict | None = None) -> dict:
+        return self._apply_phase("apply_updated", post=post, context=context)
+
+    def apply_approved(self, *, post, context: dict | None = None) -> dict:
+        return self._apply_phase("apply_approved", post=post, context=context)
+
+    def prepare_delete(self, *, post, context: dict | None = None) -> dict:
+        return self._apply_phase("prepare_delete", post=post, context=context)
+
+    def apply_deleted(self, *, context: dict | None = None) -> dict:
+        return self._apply_phase("apply_deleted", context=context)
+
+    def get_definitions(self, *, extension_id: str | None = None) -> list[ExtensionPostLifecycleDefinition]:
+        if extension_id is not None:
+            view = self._host.get_runtime_view(extension_id)
+            if view is None:
+                return []
+            return list(view.post_lifecycle)
+
+        definitions: list[ExtensionPostLifecycleDefinition] = []
+        for view in self._host.get_runtime_views():
+            definitions.extend(view.post_lifecycle)
+        return definitions
+
+    def _apply_phase(self, phase: str, **kwargs) -> dict:
+        results = {}
+        for definition in self.get_definitions():
+            handler = getattr(definition, phase, None)
+            if not callable(handler):
+                continue
+            result = handler(**kwargs)
             if isinstance(result, dict):
                 results[definition.key] = result
         return results
@@ -1821,6 +1933,7 @@ class ExtensionApplicationRecord:
     event_listeners: list[ExtensionEventListenerDefinition] = field(default_factory=list)
     realtime_included: list[ExtensionRealtimeIncludedDefinition] = field(default_factory=list)
     discussion_lifecycle: list[ExtensionDiscussionLifecycleDefinition] = field(default_factory=list)
+    post_lifecycle: list[ExtensionPostLifecycleDefinition] = field(default_factory=list)
     runtime_actions: list[ExtensionManifestRuntimeActionDefinition] = field(default_factory=list)
     admin_actions: list[ExtensionAdminActionDefinition] = field(default_factory=list)
     route_mounts: list[ApplicationRouteMount] = field(default_factory=list)
@@ -1901,6 +2014,7 @@ class ExtensionRuntimeView:
     event_listeners: tuple[ExtensionEventListenerDefinition, ...] = ()
     realtime_included: tuple[ExtensionRealtimeIncludedDefinition, ...] = ()
     discussion_lifecycle: tuple[ExtensionDiscussionLifecycleDefinition, ...] = ()
+    post_lifecycle: tuple[ExtensionPostLifecycleDefinition, ...] = ()
     runtime_actions: tuple[ExtensionManifestRuntimeActionDefinition, ...] = ()
     admin_actions: tuple[ExtensionAdminActionDefinition, ...] = ()
     route_mounts: tuple[ApplicationRouteMount, ...] = ()
@@ -1988,6 +2102,8 @@ class ExtensionApplication:
         self.events = ApplicationEventService(self, self.event_bus)
         self.realtime = ApplicationRealtimeService(self)
         self.discussion_lifecycle = ApplicationDiscussionLifecycleService(self)
+        self.post_lifecycle = ApplicationPostLifecycleService(self)
+        self.post_events = ApplicationPostEventDataService(self)
 
         self.instance("app", self)
         self.instance("host", self)
@@ -2049,6 +2165,10 @@ class ExtensionApplication:
         self.instance("extensions.realtime", self.realtime)
         self.instance("discussion.lifecycle", self.discussion_lifecycle)
         self.instance("extensions.discussion.lifecycle", self.discussion_lifecycle)
+        self.instance("post.lifecycle", self.post_lifecycle)
+        self.instance("extensions.post.lifecycle", self.post_lifecycle)
+        self.instance("post.events", self.post_events)
+        self.instance("extensions.post.events", self.post_events)
         self.instance("forum.registry", self.forum_registry)
         self.instance("resource.registry", self.resource_registry)
         self.instance("event.bus", self.event_bus)
@@ -2087,8 +2207,8 @@ class ExtensionApplication:
 
     def _register_extensions(self) -> None:
         for extension in self.extensions_to_boot:
-            if extension.source != "builtin-module":
-                self.forum.register_external_module_id(extension.id)
+            self.forum.register_external_module_id(extension.id)
+            self.forum.register_extension_module(extension)
             self._mark_extension_lifecycle_phase(extension.id, "register")
             extension.register(self)
 
@@ -2765,6 +2885,7 @@ class ExtensionApplication:
             event_listeners=list(view.event_listeners),
             realtime_included=list(view.realtime_included),
             discussion_lifecycle=list(view.discussion_lifecycle),
+            post_lifecycle=list(view.post_lifecycle),
             runtime_actions=list(view.runtime_actions),
             admin_actions=list(view.admin_actions),
             route_mounts=list(view.route_mounts),

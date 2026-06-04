@@ -10,8 +10,7 @@ import {
 } from './entryResolver.js'
 
 
-test('normalizeExtensionAdminEntry keeps builtin entries and rewrites extension paths', () => {
-  assert.equal(normalizeExtensionAdminEntry('builtin:tags'), 'builtin:tags')
+test('normalizeExtensionAdminEntry rewrites extension paths', () => {
   assert.equal(
     normalizeExtensionAdminEntry('extensions/sample-hello/frontend/admin/index.js'),
     '../../../../extensions/sample-hello/frontend/admin/index.js',
@@ -32,60 +31,13 @@ test('resolveAdminEntryFactory maps detail and host surfaces to the matching exp
   assert.equal(resolveAdminEntryFactory(module, 'operations'), 'operations')
 })
 
-test('loadExtensionAdminEntryModule prefers builtin registry for builtin entries', async () => {
-  const builtinModule = { resolveDetailPage: () => null }
-  const loaded = await loadExtensionAdminEntryModule('builtin:sample', {
-    builtins: {
-      'builtin:sample': builtinModule,
-    },
-  })
-
-  assert.equal(loaded, builtinModule)
-})
-
-test('loadExtensionAdminEntryModule accepts builtin operation hosts without custom exports', async () => {
-  const builtinModule = {}
-  const loaded = await loadExtensionAdminEntryModule('builtin:notifications', {
-    builtins: {
-      'builtin:notifications': builtinModule,
-    },
-  })
-
-  assert.equal(loaded, builtinModule)
-})
-
-test('loadExtensionAdminEntryModule accepts additional builtin operation hosts', async () => {
-  const builtinModule = {}
-  const loaded = await loadExtensionAdminEntryModule('builtin:likes', {
-    builtins: {
-      'builtin:likes': builtinModule,
-    },
-  })
-
-  assert.equal(loaded, builtinModule)
-})
-
-test('loadExtensionAdminEntryModule accepts builtin discussion operation hosts', async () => {
-  const builtinModule = {}
-  const loaded = await loadExtensionAdminEntryModule('builtin:discussions', {
-    builtins: {
-      'builtin:discussions': builtinModule,
-    },
-  })
-
-  assert.equal(loaded, builtinModule)
-})
-
-test('resolveAdminEntryFactory can expose builtin discussion and post host components', () => {
+test('resolveAdminEntryFactory exposes extension host surface exports', () => {
   const discussionModule = {
     resolvePermissionsPage: 'discussion-permissions',
     resolveOperationsPage: 'discussion-operations',
   }
   const postModule = {
     resolveOperationsPage: 'post-operations',
-  }
-  const notificationModule = {
-    resolveOperationsPage: 'notification-operations',
   }
   const realtimeModule = {
     resolveOperationsPage: 'realtime-operations',
@@ -94,7 +46,6 @@ test('resolveAdminEntryFactory can expose builtin discussion and post host compo
   assert.equal(resolveAdminEntryFactory(discussionModule, 'permissions'), 'discussion-permissions')
   assert.equal(resolveAdminEntryFactory(discussionModule, 'operations'), 'discussion-operations')
   assert.equal(resolveAdminEntryFactory(postModule, 'operations'), 'post-operations')
-  assert.equal(resolveAdminEntryFactory(notificationModule, 'operations'), 'notification-operations')
   assert.equal(resolveAdminEntryFactory(realtimeModule, 'operations'), 'realtime-operations')
 })
 

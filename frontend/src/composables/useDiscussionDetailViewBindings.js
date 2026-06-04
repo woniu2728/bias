@@ -20,11 +20,11 @@ export function createDiscussionDetailViewBindings({
   discussionBadges,
   discussionHeaderStyle,
   discussionMenuItems,
+  discussionMobileActionItems = { value: [] },
   discussionMobileNavRef,
   discussionSidebarActionItems,
   discussionSidebarRef,
   editDiscussion,
-  flagPendingPostIds,
   formatAbsoluteDate,
   formatDate,
   formatLikeSummary,
@@ -70,7 +70,6 @@ export function createDiscussionDetailViewBindings({
   previousTrigger,
   replyToPost,
   resolvePostComponent,
-  resolvePostFlags,
   scrubberAfterPercent,
   scrubberBeforePercent,
   scrubberDescription,
@@ -82,7 +81,6 @@ export function createDiscussionDetailViewBindings({
   showUnreadDivider,
   suspensionNotice,
   toggleDiscussionMenu,
-  toggleSubscription,
   toggleLike,
   togglePostMenu,
   togglingSubscription,
@@ -120,7 +118,6 @@ export function createDiscussionDetailViewBindings({
     showDiscussionMenu: showDiscussionMenu.value,
     canReplyFromMenu: canReplyFromMenu.value,
     hasActiveComposer: hasActiveComposer.value,
-    togglingSubscription: togglingSubscription.value,
     canEditDiscussion: canEditDiscussion.value,
     canModerateDiscussionSettings: canModerateDiscussionSettings.value,
     scrubberPositionText: scrubberPositionText.value,
@@ -129,14 +126,15 @@ export function createDiscussionDetailViewBindings({
     unreadStartPostNumber: unreadCount.value ? Math.max(1, maxPostNumber.value - unreadCount.value + 1) : null,
     maxPostNumber: maxPostNumber.value,
     menuItems: discussionMenuItems.value,
+    secondaryAction: discussionMobileActionItems.value[0] || null,
   }))
 
   const mobileEvents = {
     openComposer,
     openLoginForReply: handleDiscussionMenuSelection.bind(null, 'login'),
+    secondaryAction: handleDiscussionMenuSelection,
     shareDiscussion,
     toggleDiscussionMenu,
-    toggleSubscription,
     menuAction: handleDiscussionMenuSelection,
     jumpToPost,
   }
@@ -191,7 +189,7 @@ export function createDiscussionDetailViewBindings({
       return likePendingPostIds.value.includes(post.id)
     },
     isFlagPending(post) {
-      return flagPendingPostIds.value.includes(post.id)
+      return Boolean(post?.is_flag_pending)
     },
   }))
 
@@ -221,7 +219,7 @@ export function createDiscussionDetailViewBindings({
       return moderatePost(post, action)
     },
     resolvePostFlags({ post, status }) {
-      return resolvePostFlags(post, status)
+      return handlePostMenuSelection(post, 'resolve-post-flags', { status })
     },
   }
 

@@ -792,7 +792,7 @@
             />
             {{ advancedCopy?.extensionSafeModeLabel || '启用扩展恢复模式' }}
           </label>
-          <p class="Form-help">{{ advancedCopy?.extensionSafeModeHelpText || '启用后只启动内置扩展和白名单扩展，用于排查扩展导致的启动或运行异常。' }}</p>
+          <p class="Form-help">{{ advancedCopy?.extensionSafeModeHelpText || '启用后只启动核心能力和白名单扩展，用于排查扩展导致的启动或运行异常。' }}</p>
         </div>
 
         <div class="Form-group">
@@ -805,7 +805,7 @@
             class="FormControl"
             :placeholder="advancedConfig?.placeholders?.extensionSafeModeExtensions || 'tags, notifications'"
           />
-          <p class="Form-help">{{ advancedCopy?.extensionSafeModeExtensionsHelpText || '填写扩展 ID，多个扩展用英文逗号分隔。留空时只启动内置扩展。' }}</p>
+          <p class="Form-help">{{ advancedCopy?.extensionSafeModeExtensionsHelpText || '填写扩展 ID，多个扩展用英文逗号分隔。留空时只启动核心能力。' }}</p>
         </div>
       </div>
 
@@ -911,8 +911,8 @@ const extensionRecoveryNotice = computed(() => {
   if (settings.value.extension_safe_mode) {
     const allowed = extensionSafeModeExtensionsText.value
     return allowed
-      ? `扩展恢复模式已启用，只启动内置扩展和白名单：${allowed}`
-      : '扩展恢复模式已启用，当前只启动内置扩展。'
+      ? `扩展恢复模式已启用，只启动核心能力和白名单扩展：${allowed}`
+      : '扩展恢复模式已启用，当前只启动核心能力。'
   }
   return ''
 })

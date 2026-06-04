@@ -5,8 +5,9 @@ from django.db.models import Max
 
 from apps.core.resource_errors import JsonApiForbidden, JsonApiValidationError
 from apps.core.resource_objects import DatabaseResource, ResourceEndpoint, ResourceField, ResourceRelationship, ResourceSort
+from apps.posts import post_query_service
 from apps.posts.models import Post, PostFlag
-from apps.posts.services import PostService
+from extensions.flags.backend.services import report_post
 
 
 class FlagResource(DatabaseResource):
@@ -36,7 +37,7 @@ class FlagResource(DatabaseResource):
         return queryset
 
     def scope(self, queryset, context):
-        from apps.core.forum_resources_flags import scope_flag_visibility
+        from extensions.flags.backend.resources import scope_flag_visibility
 
         return scope_flag_visibility(queryset, context)
 
@@ -122,7 +123,7 @@ class FlagResource(DatabaseResource):
         if post is None:
             raise JsonApiValidationError("缺少举报帖子", pointer="/data/relationships/post")
         try:
-            return PostService.report_post(
+            return report_post(
                 post.id,
                 user,
                 reason=instance.reason,
@@ -142,7 +143,7 @@ def _set_flag_post(instance, value, context):
     if post is None:
         raise JsonApiValidationError("帖子不存在", pointer="/data/relationships/post")
     user = context.get("user")
-    if not PostService._can_view_post(post, user):
+    if not post_query_service.can_view_post(post, user):
         raise JsonApiForbidden("没有权限查看此帖子", pointer="/data/relationships/post")
     instance.post = post
 

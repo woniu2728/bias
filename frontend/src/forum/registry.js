@@ -29,7 +29,9 @@ import {
   getForumNavItems,
   getForumNavSections,
   getDiscussionActions,
+  getDiscussionActionHandler,
   getPostActions,
+  getPostActionHandler,
   getNotificationRenderers,
   getProfilePanels,
   getSearchSources,
@@ -48,6 +50,7 @@ import {
   getPostReviewBanner,
   getUserBadges,
   registerDiscussionAction,
+  registerDiscussionActionHandler,
   registerDiscussionBadge,
   registerDiscussionReplyState,
   registerDiscussionReviewBanner,
@@ -76,6 +79,7 @@ import {
   registerNotificationRenderer,
   registerProfilePanel,
   registerPostAction,
+  registerPostActionHandler,
   registerSearchSource,
   registerUserBadge,
   runComposerSubmitGuards,
@@ -86,6 +90,8 @@ import { renderTwemojiHtml, setTwemojiBaseUrl, setTwemojiEnabled } from '@/utils
 export { registerNotificationType } from './notificationTypes'
 export { registerPostType } from './postTypes'
 export { registerSearchFilter } from './searchFilters'
+export { default as PostReportModal } from '@/components/modals/PostReportModal.vue'
+export { api as forumApi }
 
 export {
   getForumNavItems,
@@ -100,7 +106,9 @@ export {
   resolveDiscussionAction,
   resolvePostAction,
   getDiscussionActions,
+  getDiscussionActionHandler,
   getPostActions,
+  getPostActionHandler,
   getNotificationRenderers,
   getDiscussionBadges,
   getDiscussionStateBadges,
@@ -116,6 +124,7 @@ export {
   getPostStateBadges,
   getPostReviewBanner,
   registerDiscussionAction,
+  registerDiscussionActionHandler,
   registerDiscussionBadge,
   registerDiscussionReplyState,
   registerDiscussionReviewBanner,
@@ -144,6 +153,7 @@ export {
   registerNotificationRenderer,
   registerProfilePanel,
   registerPostAction,
+  registerPostActionHandler,
   registerSearchSource,
   registerUserBadge,
   runDiscussionAction,
@@ -180,35 +190,6 @@ registerForumNavItem({
   section: 'primary',
   order: 10,
   surfaces: ['primary-nav', 'discussion-sidebar', 'mobile-drawer']
-})
-
-registerForumNavItem({
-  key: 'following',
-  moduleId: 'subscriptions',
-  to: '/following',
-  icon: 'fas fa-bell',
-  label: '关注中',
-  description: '查看你关注讨论的更新。',
-  section: 'primary',
-  order: 20,
-  surfaces: ['discussion-sidebar', 'mobile-drawer'],
-  isVisible: ({ authStore }) => Boolean(authStore?.user)
-})
-
-registerForumNavItem({
-  key: 'notifications',
-  moduleId: 'notifications',
-  to: '/notifications',
-  icon: 'fas fa-inbox',
-  label: '通知',
-  description: '查看回复、提及和审核通知。',
-  section: 'personal',
-  order: 40,
-  badge: ({ notificationStore }) => {
-    const count = Number(notificationStore?.unreadCount || 0)
-    return count > 0 ? count : ''
-  },
-  isVisible: ({ showNotifications }) => Boolean(showNotifications)
 })
 
 registerForumNavItem({
@@ -262,22 +243,6 @@ registerHeaderItem({
 })
 
 registerHeaderItem({
-  key: 'user-notifications-menu',
-  moduleId: 'notifications',
-  placement: 'user-menu',
-  order: 20,
-  icon: 'fas fa-bell',
-  label: '通知',
-  to: '/notifications',
-  badge: ({ notificationStore }) => {
-    const count = Number(notificationStore?.unreadCount || 0)
-    return count > 0 ? count : ''
-  },
-  isVisible: ({ authStore }) => Boolean(authStore?.user),
-  isActive: ({ route }) => route?.name === 'notifications',
-})
-
-registerHeaderItem({
   key: 'user-admin-menu',
   placement: 'user-menu',
   order: 30,
@@ -297,22 +262,6 @@ registerHeaderItem({
   separated: true,
   isVisible: ({ authStore }) => Boolean(authStore?.user),
   onClick: ({ handleLogout }) => handleLogout?.(),
-})
-
-registerHeaderItem({
-  key: 'mobile-notifications',
-  moduleId: 'notifications',
-  placement: 'mobile-drawer-personal',
-  order: 10,
-  icon: 'fas fa-inbox',
-  label: '通知',
-  to: '/notifications',
-  badge: ({ notificationStore }) => {
-    const count = Number(notificationStore?.unreadCount || 0)
-    return count > 0 ? count : ''
-  },
-  isVisible: ({ authStore }) => Boolean(authStore?.user),
-  isActive: ({ route }) => route?.name === 'notifications',
 })
 
 registerHeaderItem({
@@ -377,154 +326,6 @@ function registerDefaultNotificationRenderer(definition) {
 function buildSearchTextHtml(value, query, limit) {
   return renderTwemojiHtml(highlightSearchText(value, query, limit))
 }
-
-registerDefaultNotificationRenderer({
-  type: 'discussionReply',
-  moduleId: 'notifications',
-  label: '讨论新回复',
-  icon: 'fas fa-reply',
-  navigationScope: 'post',
-  groupLabel: '讨论互动',
-  order: 10,
-  getText(notification) {
-    const fromUser = notification?.from_user?.display_name || notification?.from_user?.username || '有人'
-    const discussionTitle = notification?.data?.discussion_title || ''
-    return `${fromUser} 回复了你的讨论 "${discussionTitle}"`
-  },
-})
-
-registerDefaultNotificationRenderer({
-  type: 'postLiked',
-  moduleId: 'likes',
-  label: '回复被点赞',
-  icon: 'fas fa-thumbs-up',
-  navigationScope: 'post',
-  groupLabel: '互动反馈',
-  order: 20,
-  getText(notification) {
-    const fromUser = notification?.from_user?.display_name || notification?.from_user?.username || '有人'
-    return `${fromUser} 点赞了你的回复`
-  },
-})
-
-registerDefaultNotificationRenderer({
-  type: 'userMentioned',
-  moduleId: 'mentions',
-  label: '@提及通知',
-  icon: 'fas fa-at',
-  navigationScope: 'post',
-  groupLabel: '互动反馈',
-  order: 30,
-  getText(notification) {
-    const fromUser = notification?.from_user?.display_name || notification?.from_user?.username || '有人'
-    return `${fromUser} 在回复中提到了你`
-  },
-})
-
-registerDefaultNotificationRenderer({
-  type: 'postReply',
-  moduleId: 'notifications',
-  label: '回复被回应',
-  icon: 'fas fa-comment-dots',
-  navigationScope: 'post',
-  groupLabel: '互动反馈',
-  order: 40,
-  getText(notification) {
-    const fromUser = notification?.from_user?.display_name || notification?.from_user?.username || '有人'
-    return `${fromUser} 回复了你的帖子`
-  },
-})
-
-registerDefaultNotificationRenderer({
-  type: 'discussionApproved',
-  moduleId: 'approval',
-  label: '讨论审核通过',
-  icon: 'fas fa-circle-check',
-  navigationScope: 'discussion',
-  groupLabel: '审核结果',
-  order: 50,
-  getText(notification) {
-    const fromUser = notification?.from_user?.display_name || notification?.from_user?.username || '有人'
-    const discussionTitle = notification?.data?.discussion_title || ''
-    return `${fromUser} 通过了你的讨论 "${discussionTitle}"`
-  },
-})
-
-registerDefaultNotificationRenderer({
-  type: 'discussionRejected',
-  moduleId: 'approval',
-  label: '讨论审核拒绝',
-  icon: 'fas fa-circle-xmark',
-  navigationScope: 'discussion',
-  groupLabel: '审核结果',
-  order: 60,
-  getText(notification) {
-    const fromUser = notification?.from_user?.display_name || notification?.from_user?.username || '有人'
-    const discussionTitle = notification?.data?.discussion_title || ''
-    const note = notification?.data?.approval_note ? `：${notification.data.approval_note}` : ''
-    return `${fromUser} 拒绝了你的讨论 "${discussionTitle}"${note}`
-  },
-})
-
-registerDefaultNotificationRenderer({
-  type: 'postApproved',
-  moduleId: 'approval',
-  label: '回复审核通过',
-  icon: 'fas fa-check',
-  navigationScope: 'post',
-  groupLabel: '审核结果',
-  order: 70,
-  getText(notification) {
-    const fromUser = notification?.from_user?.display_name || notification?.from_user?.username || '有人'
-    const discussionTitle = notification?.data?.discussion_title || ''
-    return `${fromUser} 通过了你在 "${discussionTitle}" 中的回复`
-  },
-})
-
-registerDefaultNotificationRenderer({
-  type: 'postRejected',
-  moduleId: 'approval',
-  label: '回复审核拒绝',
-  icon: 'fas fa-xmark',
-  navigationScope: 'post',
-  groupLabel: '审核结果',
-  order: 80,
-  getText(notification) {
-    const fromUser = notification?.from_user?.display_name || notification?.from_user?.username || '有人'
-    const discussionTitle = notification?.data?.discussion_title || ''
-    const note = notification?.data?.approval_note ? `：${notification.data.approval_note}` : ''
-    return `${fromUser} 拒绝了你在 "${discussionTitle}" 中的回复${note}`
-  },
-})
-
-registerDefaultNotificationRenderer({
-  type: 'userSuspended',
-  moduleId: 'notifications',
-  label: '账号封禁通知',
-  icon: 'fas fa-user-lock',
-  navigationScope: 'profile',
-  groupLabel: '账号状态',
-  order: 90,
-  getText(notification) {
-    const fromUser = notification?.from_user?.display_name || notification?.from_user?.username || '有人'
-    const message = notification?.data?.suspend_message ? `：${notification.data.suspend_message}` : ''
-    return `${fromUser} 已封禁你的账号${message}`
-  },
-})
-
-registerDefaultNotificationRenderer({
-  type: 'userUnsuspended',
-  moduleId: 'notifications',
-  label: '账号解除封禁',
-  icon: 'fas fa-user-check',
-  navigationScope: 'profile',
-  groupLabel: '账号状态',
-  order: 100,
-  getText(notification) {
-    const fromUser = notification?.from_user?.display_name || notification?.from_user?.username || '有人'
-    return `${fromUser} 已解除你的账号封禁`
-  },
-})
 
 registerDefaultNotificationRenderer({
   type: 'discussionCreated',
@@ -738,18 +539,6 @@ registerDiscussionBadge({
   }),
 })
 
-registerDiscussionBadge({
-  key: 'pending',
-  moduleId: 'approval',
-  order: 40,
-  surfaces: ['hero'],
-  isVisible: ({ discussion }) => discussion?.approval_status === 'pending',
-  resolve: () => ({
-    className: 'badge-pending',
-    label: '待审核',
-  }),
-})
-
 registerHeroMeta({
   key: 'discussion-author',
   moduleId: 'discussions',
@@ -802,28 +591,6 @@ registerHeroMeta({
 })
 
 registerDiscussionStateBadge({
-  key: 'pending',
-  order: 10,
-  surfaces: ['discussion-list-item', 'profile-discussion'],
-  isVisible: ({ discussion }) => discussion?.approval_status === 'pending',
-  resolve: () => ({
-    label: '待审核',
-    tone: 'warning',
-  }),
-})
-
-registerDiscussionStateBadge({
-  key: 'rejected',
-  order: 20,
-  surfaces: ['discussion-list-item', 'profile-discussion'],
-  isVisible: ({ discussion }) => discussion?.approval_status === 'rejected',
-  resolve: () => ({
-    label: '已拒绝',
-    tone: 'danger',
-  }),
-})
-
-registerDiscussionStateBadge({
   key: 'unread',
   order: 30,
   surfaces: ['discussion-list-item'],
@@ -831,61 +598,6 @@ registerDiscussionStateBadge({
   resolve: ({ discussion }) => ({
     label: `${discussion.unread_count} 条未读`,
     tone: 'primary',
-  }),
-})
-
-registerDiscussionStateBadge({
-  key: 'subscribed',
-  order: 40,
-  surfaces: ['discussion-list-item'],
-  isVisible: ({ discussion }) => Boolean(discussion?.is_subscribed),
-  resolve: () => ({
-    label: '已关注',
-    tone: 'soft-primary',
-  }),
-})
-
-registerPostStateBadge({
-  key: 'pending',
-  order: 10,
-  surfaces: ['profile-post', 'discussion-post'],
-  isVisible: ({ post }) => post?.approval_status === 'pending',
-  resolve: () => ({
-    label: '待审核',
-    tone: 'warning',
-  }),
-})
-
-registerPostStateBadge({
-  key: 'rejected',
-  order: 20,
-  surfaces: ['profile-post', 'discussion-post'],
-  isVisible: ({ post }) => post?.approval_status === 'rejected',
-  resolve: () => ({
-    label: '已拒绝',
-    tone: 'danger',
-  }),
-})
-
-registerPostStateBadge({
-  key: 'viewer-open-flag',
-  order: 30,
-  surfaces: ['discussion-post'],
-  isVisible: ({ post }) => Boolean(post?.viewer_has_open_flag && !post?.can_moderate_flags),
-  resolve: () => ({
-    label: '已举报',
-    tone: 'info',
-  }),
-})
-
-registerPostStateBadge({
-  key: 'open-flags',
-  order: 40,
-  surfaces: ['discussion-post'],
-  isVisible: ({ post }) => Boolean(Number(post?.open_flag_count || 0) > 0 && post?.can_moderate_flags),
-  resolve: ({ post }) => ({
-    label: `${post.open_flag_count} 条举报待处理`,
-    tone: 'soft-warning',
   }),
 })
 
@@ -926,30 +638,6 @@ registerDiscussionReplyState({
 })
 
 registerDiscussionReplyState({
-  key: 'pending',
-  order: 40,
-  surfaces: ['discussion-reply'],
-  isVisible: ({ discussion }) => discussion?.approval_status === 'pending',
-  resolve: () => ({
-    kind: 'notice',
-    tone: 'warning',
-    message: '讨论正在审核中，暂时无法继续回复',
-  }),
-})
-
-registerDiscussionReplyState({
-  key: 'rejected',
-  order: 50,
-  surfaces: ['discussion-reply'],
-  isVisible: ({ discussion }) => discussion?.approval_status === 'rejected',
-  resolve: () => ({
-    kind: 'notice',
-    tone: 'warning',
-    message: '讨论未通过审核，需调整后重新发布',
-  }),
-})
-
-registerDiscussionReplyState({
   key: 'no-permission',
   order: 60,
   surfaces: ['discussion-reply'],
@@ -974,102 +662,6 @@ registerDiscussionReplyState({
   }),
 })
 
-registerDiscussionReviewBanner({
-  key: 'pending',
-  moduleId: 'approval',
-  order: 10,
-  surfaces: ['discussion-hero'],
-  isVisible: ({ discussion }) => discussion?.approval_status === 'pending',
-  resolve: ({ canModeratePendingDiscussion }) => ({
-    title: '讨论正在审核中',
-    tone: 'warning',
-    message: '这条讨论当前仅你和管理员可见，审核通过后才会出现在论坛列表中。',
-    actions: canModeratePendingDiscussion
-      ? [
-          { key: 'approve', label: '审核通过', tone: 'approve', action: 'approve' },
-          { key: 'reject', label: '拒绝讨论', tone: 'reject', action: 'reject' },
-        ]
-      : [],
-  }),
-})
-
-registerDiscussionReviewBanner({
-  key: 'rejected',
-  moduleId: 'approval',
-  order: 20,
-  surfaces: ['discussion-hero'],
-  isVisible: ({ discussion }) => discussion?.approval_status === 'rejected',
-  resolve: ({ discussion, canModeratePendingDiscussion, canEditDiscussion }) => ({
-    title: '讨论审核未通过',
-    tone: 'danger',
-    message: discussion.approval_note || '管理员拒绝了这条讨论，请根据反馈调整后重新发布。',
-    actions: canModeratePendingDiscussion
-      ? [
-          { key: 'approve', label: '审核通过', tone: 'approve', action: 'approve' },
-          { key: 'reject', label: '拒绝讨论', tone: 'reject', action: 'reject' },
-        ]
-      : (canEditDiscussion
-          ? [{ key: 'edit', label: '修改后重新提交', tone: 'approve', action: 'edit' }]
-          : []),
-  }),
-})
-
-registerPostFlagPanel({
-  key: 'moderation-flags',
-  moduleId: 'flags',
-  order: 10,
-  surfaces: ['discussion-post'],
-  isVisible: ({ post }) => Boolean(post?.can_moderate_flags && Number(post?.open_flag_count || 0) > 0),
-  resolve: ({ post, flagPending }) => ({
-    title: '前台举报处理',
-    description: '版主可直接在这里查看原因并关闭举报。',
-    items: (post.open_flags || []).map(flag => ({
-      key: flag.id,
-      reason: flag.reason,
-      userLabel: flag.user?.display_name || flag.user?.username || '匿名用户',
-      message: flag.message || '举报人未填写补充说明。',
-    })),
-    actions: [
-      {
-        key: 'resolved',
-        label: flagPending ? '处理中...' : '标记已处理',
-        tone: 'primary',
-        status: 'resolved',
-        disabled: Boolean(flagPending),
-      },
-      {
-        key: 'ignored',
-        label: '忽略举报',
-        tone: 'secondary',
-        status: 'ignored',
-        disabled: Boolean(flagPending),
-      },
-    ],
-  }),
-})
-
-registerApprovalNote({
-  key: 'rejected-discussion-list',
-  moduleId: 'approval',
-  order: 10,
-  surfaces: ['discussion-list-item', 'profile-discussion'],
-  isVisible: ({ discussion }) => Boolean(discussion?.approval_status === 'rejected' && discussion?.approval_note),
-  resolve: ({ discussion }) => ({
-    text: `审核反馈：${discussion.approval_note}`,
-  }),
-})
-
-registerApprovalNote({
-  key: 'rejected-profile-post',
-  moduleId: 'approval',
-  order: 20,
-  surfaces: ['profile-post'],
-  isVisible: ({ post }) => Boolean(post?.approval_status === 'rejected' && post?.approval_note),
-  resolve: ({ post }) => ({
-    text: `审核反馈：${post.approval_note}`,
-  }),
-})
-
 registerEmptyState({
   key: 'profile-discussions-empty',
   order: 10,
@@ -1087,16 +679,6 @@ registerEmptyState({
   isVisible: ({ posts }) => Array.isArray(posts) && posts.length === 0,
   resolve: ({ isOwnProfile }) => ({
     text: isOwnProfile ? '你还没有发表过回复' : '该用户还没有发表过回复',
-  }),
-})
-
-registerEmptyState({
-  key: 'discussion-list-following-empty',
-  order: 10,
-  surfaces: ['discussion-list-empty'],
-  isVisible: ({ isFollowingPage }) => Boolean(isFollowingPage),
-  resolve: () => ({
-    text: '你还没有关注任何讨论。',
   }),
 })
 
@@ -1137,66 +719,6 @@ registerEmptyState({
   isVisible: () => true,
   resolve: () => ({
     text: '暂无讨论。',
-  }),
-})
-
-registerEmptyState({
-  key: 'notifications-page-unread-empty',
-  order: 10,
-  surfaces: ['notifications-page-empty'],
-  isVisible: ({ notifications, unreadOnly }) => Array.isArray(notifications) && notifications.length === 0 && Boolean(unreadOnly),
-  resolve: () => ({
-    text: '当前没有未读通知',
-  }),
-})
-
-registerEmptyState({
-  key: 'notifications-page-filter-empty',
-  order: 20,
-  surfaces: ['notifications-page-empty'],
-  isVisible: ({ notifications, activeType }) => Array.isArray(notifications) && notifications.length === 0 && Boolean(activeType),
-  resolve: () => ({
-    text: '当前筛选下暂无通知',
-  }),
-})
-
-registerEmptyState({
-  key: 'notifications-page-default-empty',
-  order: 30,
-  surfaces: ['notifications-page-empty'],
-  isVisible: ({ notifications }) => Array.isArray(notifications) && notifications.length === 0,
-  resolve: () => ({
-    text: '暂无通知',
-  }),
-})
-
-registerEmptyState({
-  key: 'notifications-menu-empty',
-  order: 40,
-  surfaces: ['notifications-menu-empty'],
-  isVisible: ({ notifications }) => Array.isArray(notifications) && notifications.length === 0,
-  resolve: () => ({
-    text: '暂无通知',
-  }),
-})
-
-registerEmptyState({
-  key: 'tags-page-empty',
-  order: 50,
-  surfaces: ['tags-page-empty'],
-  isVisible: ({ tags }) => Array.isArray(tags) && tags.length === 0,
-  resolve: () => ({
-    text: '暂无标签',
-  }),
-})
-
-registerEmptyState({
-  key: 'tag-last-discussion-empty',
-  order: 60,
-  surfaces: ['tag-last-discussion-empty'],
-  isVisible: ({ tag }) => !tag?.last_posted_discussion,
-  resolve: () => ({
-    text: '暂无讨论',
   }),
 })
 
@@ -1287,36 +809,6 @@ registerStateBlock({
   isVisible: ({ loading }) => Boolean(loading),
   resolve: () => ({
     text: '正在加载讨论...',
-  }),
-})
-
-registerStateBlock({
-  key: 'notifications-page-loading',
-  order: 20,
-  surfaces: ['notifications-page-loading'],
-  isVisible: ({ loading }) => Boolean(loading),
-  resolve: () => ({
-    text: '正在加载通知...',
-  }),
-})
-
-registerStateBlock({
-  key: 'notifications-menu-loading',
-  order: 30,
-  surfaces: ['notifications-menu-loading'],
-  isVisible: ({ loading }) => Boolean(loading),
-  resolve: () => ({
-    text: '加载中...',
-  }),
-})
-
-registerStateBlock({
-  key: 'tags-page-loading',
-  order: 40,
-  surfaces: ['tags-page-loading'],
-  isVisible: ({ loading }) => Boolean(loading),
-  resolve: () => ({
-    text: '加载中...',
   }),
 })
 
@@ -2145,24 +1637,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'search-modal-popular-tags-title',
-  order: 476,
-  surfaces: ['search-modal-popular-tags-title'],
-  resolve: () => ({
-    text: '热门标签',
-  }),
-})
-
-registerUiCopy({
-  key: 'search-modal-tag-subtitle',
-  order: 476,
-  surfaces: ['search-modal-tag-subtitle'],
-  resolve: ({ count }) => ({
-    text: `${Number(count || 0)} 条讨论`,
-  }),
-})
-
-registerUiCopy({
   key: 'search-modal-syntax-title',
   order: 476,
   surfaces: ['search-modal-syntax-title'],
@@ -2357,26 +1831,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'tags-page-hero-title',
-  order: 479,
-  surfaces: ['tags-page-hero-title'],
-  resolve: () => ({
-    text: '全部标签',
-  }),
-})
-
-registerUiCopy({
-  key: 'tags-page-hero-description',
-  order: 479,
-  surfaces: ['tags-page-hero-description'],
-  resolve: ({ tagCount }) => ({
-    text: Number(tagCount || 0) > 0
-      ? `浏览 ${tagCount} 个论坛标签，按主题发现相关讨论。`
-      : '浏览论坛标签，按主题发现相关讨论。',
-  }),
-})
-
-registerUiCopy({
   key: 'start-discussion-button',
   order: 479,
   surfaces: ['start-discussion-button'],
@@ -2449,273 +1903,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'notification-filter-all-label',
-  order: 479,
-  surfaces: ['notification-filter-all-label'],
-  resolve: () => ({
-    text: '全部通知',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-view-mode-timeline',
-  order: 479,
-  surfaces: ['notification-view-mode-timeline'],
-  resolve: () => ({
-    text: '时间流',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-view-mode-grouped',
-  order: 479,
-  surfaces: ['notification-view-mode-grouped'],
-  resolve: () => ({
-    text: '按讨论分组',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-cancel',
-  order: 479,
-  surfaces: ['notification-confirm-cancel'],
-  resolve: () => ({
-    text: '取消',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-mark-all-title',
-  order: 479,
-  surfaces: ['notification-confirm-mark-all-title'],
-  resolve: ({ hasActiveFilter }) => ({
-    text: hasActiveFilter ? '标记当前筛选结果为已读' : '全部标记为已读',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-mark-all-message',
-  order: 479,
-  surfaces: ['notification-confirm-mark-all-message'],
-  resolve: ({ hasActiveFilter, unreadCount }) => ({
-    text: hasActiveFilter
-      ? `确定将当前筛选结果中的 ${unreadCount} 条未读通知标记为已读吗？`
-      : `确定将当前 ${unreadCount} 条未读通知标记为已读吗？`,
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-mark-all-confirm',
-  order: 479,
-  surfaces: ['notification-confirm-mark-all-confirm'],
-  resolve: () => ({
-    text: '标记已读',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-alert-mark-all-success-title',
-  order: 479,
-  surfaces: ['notification-alert-mark-all-success-title'],
-  resolve: () => ({
-    text: '已全部标记为已读',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-alert-mark-all-success-message',
-  order: 479,
-  surfaces: ['notification-alert-mark-all-success-message'],
-  resolve: ({ hasActiveFilter }) => ({
-    text: hasActiveFilter ? '当前筛选范围内的未读通知已更新为已读。' : '当前页面的未读通知已更新为已读。',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-alert-action-failed-title',
-  order: 479,
-  surfaces: ['notification-alert-action-failed-title'],
-  resolve: () => ({
-    text: '操作失败',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-clear-read-title',
-  order: 479,
-  surfaces: ['notification-confirm-clear-read-title'],
-  resolve: ({ hasActiveFilter }) => ({
-    text: hasActiveFilter ? '清除当前筛选中的已读通知' : '清除当前页已读通知',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-clear-read-message',
-  order: 479,
-  surfaces: ['notification-confirm-clear-read-message'],
-  resolve: ({ hasActiveFilter, readCount }) => ({
-    text: hasActiveFilter
-      ? `确定清除当前筛选结果中的 ${readCount} 条已读通知吗？`
-      : `确定清除当前页中的 ${readCount} 条已读通知吗？`,
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-clear-read-confirm',
-  order: 479,
-  surfaces: ['notification-confirm-clear-read-confirm'],
-  resolve: () => ({
-    text: '清除已读',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-alert-clear-read-success-title',
-  order: 479,
-  surfaces: ['notification-alert-clear-read-success-title'],
-  resolve: () => ({
-    text: '已清除已读通知',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-alert-clear-read-success-message',
-  order: 479,
-  surfaces: ['notification-alert-clear-read-success-message'],
-  resolve: () => ({
-    text: '当前范围内的已读通知已清除。',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-mark-group-title',
-  order: 479,
-  surfaces: ['notification-confirm-mark-group-title'],
-  resolve: () => ({
-    text: '标记该讨论通知为已读',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-mark-group-message',
-  order: 479,
-  surfaces: ['notification-confirm-mark-group-message'],
-  resolve: ({ groupTitle, unreadCount }) => ({
-    text: `确定将“${groupTitle}”下的 ${unreadCount} 条未读通知标记为已读吗？`,
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-clear-group-title',
-  order: 479,
-  surfaces: ['notification-confirm-clear-group-title'],
-  resolve: () => ({
-    text: '清除该讨论中的已读通知',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-clear-group-message',
-  order: 479,
-  surfaces: ['notification-confirm-clear-group-message'],
-  resolve: ({ groupTitle, readCount }) => ({
-    text: `确定清除“${groupTitle}”下的 ${readCount} 条已读通知吗？`,
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-delete-title',
-  order: 479,
-  surfaces: ['notification-confirm-delete-title'],
-  resolve: () => ({
-    text: '删除通知',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-delete-message',
-  order: 479,
-  surfaces: ['notification-confirm-delete-message'],
-  resolve: () => ({
-    text: '确定要删除这条通知吗？',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-confirm-delete-confirm',
-  order: 479,
-  surfaces: ['notification-confirm-delete-confirm'],
-  resolve: () => ({
-    text: '删除',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-alert-delete-failed-title',
-  order: 479,
-  surfaces: ['notification-alert-delete-failed-title'],
-  resolve: () => ({
-    text: '删除失败',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-error-retry-message',
-  order: 479,
-  surfaces: ['notification-error-retry-message'],
-  resolve: () => ({
-    text: '请稍后重试',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-load-error',
-  order: 479,
-  surfaces: ['notification-load-error'],
-  resolve: () => ({
-    text: '加载通知失败，请稍后重试',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-summary-count',
-  order: 479,
-  surfaces: ['notification-summary-count'],
-  resolve: ({ unreadOnly, count }) => ({
-    text: unreadOnly ? `${Number(count || 0)} 未读` : String(Number(count || 0)),
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-type-count',
-  order: 479,
-  surfaces: ['notification-type-count'],
-  resolve: ({ total, unread }) => ({
-    text: Number(unread || 0) > 0
-      ? `${Number(total || 0)} / ${Number(unread || 0)} 未读`
-      : String(Number(total || 0)),
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-action-failed-title',
-  order: 479,
-  surfaces: ['notifications-menu-action-failed-title'],
-  resolve: () => ({
-    text: '操作失败',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-action-retry-message',
-  order: 479,
-  surfaces: ['notifications-menu-action-retry-message'],
-  resolve: () => ({
-    text: '请稍后重试',
-  }),
-})
-
-registerUiCopy({
   key: 'discussion-action-confirm-cancel',
   order: 479,
   surfaces: ['discussion-action-confirm-cancel'],
@@ -2766,33 +1953,6 @@ registerUiCopy({
   surfaces: ['discussion-action-login-description'],
   resolve: () => ({
     text: '登录后才可以参与当前讨论。',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-action-toggle-subscription-label',
-  order: 479,
-  surfaces: ['discussion-action-toggle-subscription-label'],
-  resolve: ({ togglingSubscription, isSubscribed }) => ({
-    text: togglingSubscription ? '提交中...' : (isSubscribed ? '取消关注' : '关注讨论'),
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-action-toggle-subscription-description',
-  order: 479,
-  surfaces: ['discussion-action-toggle-subscription-description'],
-  resolve: ({ isSubscribed }) => ({
-    text: isSubscribed ? '停止接收这条讨论后续回复通知。' : '接收这条讨论后续回复通知。',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-action-toggle-subscription-disabled',
-  order: 479,
-  surfaces: ['discussion-action-toggle-subscription-disabled'],
-  resolve: () => ({
-    text: '正在提交关注状态，请稍候。',
   }),
 })
 
@@ -3103,38 +2263,11 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'post-action-report-label',
-  order: 479,
-  surfaces: ['post-action-report-label'],
-  resolve: () => ({
-    text: '举报',
-  }),
-})
-
-registerUiCopy({
-  key: 'post-action-report-description',
-  order: 479,
-  surfaces: ['post-action-report-description'],
-  resolve: () => ({
-    text: '向版主提交这条回复的问题反馈。',
-  }),
-})
-
-registerUiCopy({
   key: 'discussion-sidebar-active-draft',
   order: 479,
   surfaces: ['discussion-sidebar-active-draft'],
   resolve: () => ({
     text: '当前讨论已有未发布回复草稿。',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-sidebar-subscribed',
-  order: 479,
-  surfaces: ['discussion-sidebar-subscribed'],
-  resolve: () => ({
-    text: '你会收到这条讨论后续回复的通知。',
   }),
 })
 
@@ -3333,71 +2466,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'discussion-detail-report-success-title',
-  order: 479,
-  surfaces: ['discussion-detail-report-success-title'],
-  resolve: () => ({
-    text: '举报已提交',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-detail-report-success-message',
-  order: 479,
-  surfaces: ['discussion-detail-report-success-message'],
-  resolve: () => ({
-    text: '版主会尽快查看并处理。',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-detail-flag-resolve-confirm-title',
-  order: 479,
-  surfaces: ['discussion-detail-flag-resolve-confirm-title'],
-  resolve: ({ isIgnoring }) => ({
-    text: isIgnoring ? '忽略举报' : '处理举报',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-detail-flag-resolve-confirm-message',
-  order: 479,
-  surfaces: ['discussion-detail-flag-resolve-confirm-message'],
-  resolve: ({ isIgnoring, openFlagCount }) => ({
-    text: isIgnoring
-      ? `确定忽略这条回复的 ${openFlagCount} 条举报吗？`
-      : `确定将这条回复的 ${openFlagCount} 条举报标记为已处理吗？`,
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-detail-flag-resolve-confirm-confirm',
-  order: 479,
-  surfaces: ['discussion-detail-flag-resolve-confirm-confirm'],
-  resolve: ({ isIgnoring }) => ({
-    text: isIgnoring ? '忽略' : '已处理',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-detail-flag-resolve-success-title',
-  order: 479,
-  surfaces: ['discussion-detail-flag-resolve-success-title'],
-  resolve: ({ isIgnoring }) => ({
-    text: isIgnoring ? '举报已忽略' : '举报已处理',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-detail-flag-resolve-success-message',
-  order: 479,
-  surfaces: ['discussion-detail-flag-resolve-success-message'],
-  resolve: ({ isIgnoring }) => ({
-    text: isIgnoring ? '这条回复的待处理举报已关闭。' : '这条回复的待处理举报已标记为已处理。',
-  }),
-})
-
-registerUiCopy({
   key: 'discussion-detail-like-summary',
   order: 479,
   surfaces: ['discussion-detail-like-summary'],
@@ -3479,24 +2547,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'discussion-list-sidebar-tags-link',
-  order: 479,
-  surfaces: ['discussion-list-sidebar-tags-link'],
-  resolve: () => ({
-    text: '标签',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-list-sidebar-more-tags-link',
-  order: 479,
-  surfaces: ['discussion-list-sidebar-more-tags-link'],
-  resolve: () => ({
-    text: '更多标签',
-  }),
-})
-
-registerUiCopy({
   key: 'header-mobile-right-action-label',
   order: 479,
   surfaces: ['header-mobile-right-action-label'],
@@ -3539,33 +2589,6 @@ registerUiCopy({
   surfaces: ['discussion-list-action-retry-message'],
   resolve: () => ({
     text: '请稍后重试',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-list-following-hero-pill',
-  order: 479,
-  surfaces: ['discussion-list-following-hero-pill'],
-  resolve: () => ({
-    text: '关注中',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-list-following-hero-title',
-  order: 479,
-  surfaces: ['discussion-list-following-hero-title'],
-  resolve: () => ({
-    text: '关注的讨论',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-list-following-hero-description',
-  order: 479,
-  surfaces: ['discussion-list-following-hero-description'],
-  resolve: () => ({
-    text: '这里会显示你已关注、并在后续收到新回复通知的讨论。',
   }),
 })
 
@@ -3912,24 +2935,6 @@ registerUiCopy({
   surfaces: ['mobile-drawer-all-discussions'],
   resolve: () => ({
     text: '全部讨论',
-  }),
-})
-
-registerUiCopy({
-  key: 'mobile-drawer-following',
-  order: 520,
-  surfaces: ['mobile-drawer-following'],
-  resolve: () => ({
-    text: '关注中',
-  }),
-})
-
-registerUiCopy({
-  key: 'mobile-drawer-all-tags',
-  order: 530,
-  surfaces: ['mobile-drawer-all-tags'],
-  resolve: () => ({
-    text: '全部标签',
   }),
 })
 
@@ -4754,69 +3759,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'post-report-title',
-  order: 840,
-  surfaces: ['post-report-title'],
-  resolve: () => ({
-    text: '举报帖子',
-  }),
-})
-
-registerUiCopy({
-  key: 'post-report-description',
-  order: 850,
-  surfaces: ['post-report-description'],
-  resolve: ({ postNumber }) => ({
-    text: `帖子 #${postNumber || '?'} 会进入举报队列，版主可以直接在讨论页或后台查看并处理。`,
-  }),
-})
-
-registerUiCopy({
-  key: 'post-report-reason-label',
-  order: 860,
-  surfaces: ['post-report-reason-label'],
-  resolve: () => ({
-    text: '举报原因',
-  }),
-})
-
-registerUiCopy({
-  key: 'post-report-message-label',
-  order: 870,
-  surfaces: ['post-report-message-label'],
-  resolve: () => ({
-    text: '补充说明',
-  }),
-})
-
-registerUiCopy({
-  key: 'post-report-message-help',
-  order: 880,
-  surfaces: ['post-report-message-help'],
-  resolve: ({ reason }) => ({
-    text: reason === '其他' ? '请尽量写清楚问题背景，方便版主快速判断。' : '可补充上下文、受影响内容或希望的处理方式。',
-  }),
-})
-
-registerUiCopy({
-  key: 'post-report-message-placeholder',
-  order: 890,
-  surfaces: ['post-report-message-placeholder'],
-  resolve: () => ({
-    text: '告诉管理员这条帖子为什么需要处理',
-  }),
-})
-
-registerUiCopy({
-  key: 'post-report-submit-button',
-  order: 900,
-  surfaces: ['post-report-submit-button'],
-  resolve: ({ submitting }) => ({
-    text: submitting ? '提交中...' : '提交举报',
-  }),
-})
-
-registerUiCopy({
   key: 'moderation-action-note-label',
   order: 910,
   surfaces: ['moderation-action-note-label'],
@@ -4840,123 +3782,6 @@ registerUiCopy({
   surfaces: ['moderation-action-submit-button'],
   resolve: ({ submitting, confirmText }) => ({
     text: submitting ? '提交中...' : (confirmText || '提交'),
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-hero-title',
-  order: 940,
-  surfaces: ['notification-page-hero-title'],
-  resolve: () => ({
-    text: '通知',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-hero-pill',
-  order: 950,
-  surfaces: ['notification-page-hero-pill'],
-  resolve: () => ({
-    text: '消息中心',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-hero-description',
-  order: 960,
-  surfaces: ['notification-page-hero-description'],
-  resolve: () => ({
-    text: '这里会显示回复、提及、点赞、审核和账号状态相关通知。',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-mark-all',
-  order: 970,
-  surfaces: ['notification-page-mark-all'],
-  resolve: ({ marking, hasActiveFilter }) => ({
-    text: marking ? '处理中...' : (hasActiveFilter ? '当前筛选标记已读' : '全部标记为已读'),
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-clear-read',
-  order: 980,
-  surfaces: ['notification-page-clear-read'],
-  resolve: ({ marking, hasActiveFilter }) => ({
-    text: marking ? '处理中...' : (hasActiveFilter ? '当前筛选清除已读' : '当前页清除已读'),
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-unread-toggle',
-  order: 990,
-  surfaces: ['notification-page-unread-toggle'],
-  resolve: ({ unreadOnly }) => ({
-    text: unreadOnly ? '查看全部通知' : '仅看未读',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-preferences-link',
-  order: 1000,
-  surfaces: ['notification-page-preferences-link'],
-  resolve: () => ({
-    text: '通知偏好前往个人设置',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-filter-description',
-  order: 1010,
-  surfaces: ['notification-page-filter-description'],
-  resolve: () => ({
-    text: '按通知类型筛选消息流，方便集中处理提及、点赞、审核和账号状态通知。',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-open-discussion',
-  order: 1020,
-  surfaces: ['notification-page-open-discussion'],
-  resolve: () => ({
-    text: '打开讨论',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-mark-group-read',
-  order: 1030,
-  surfaces: ['notification-page-mark-group-read'],
-  resolve: () => ({
-    text: '整组标记已读',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-clear-group-read',
-  order: 1040,
-  surfaces: ['notification-page-clear-group-read'],
-  resolve: () => ({
-    text: '整组清理已读',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-group-count',
-  order: 1050,
-  surfaces: ['notification-page-group-count'],
-  resolve: ({ count }) => ({
-    text: `${Number(count || 0)} 条通知`,
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-page-active-filter-label',
-  order: 1055,
-  surfaces: ['notification-page-active-filter-label'],
-  resolve: ({ label }) => ({
-    text: label || '全部通知',
   }),
 })
 
@@ -5155,132 +3980,6 @@ registerUiCopy({
   surfaces: ['discussion-list-loading-more'],
   resolve: () => ({
     text: '正在加载讨论...',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-title',
-  order: 1210,
-  surfaces: ['notifications-menu-title'],
-  resolve: () => ({
-    text: '通知',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-mark-all',
-  order: 1220,
-  surfaces: ['notifications-menu-mark-all'],
-  resolve: ({ markingAllRead }) => ({
-    text: markingAllRead ? '正在标记已读...' : '全部标记为已读',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-clear-read',
-  order: 1230,
-  surfaces: ['notifications-menu-clear-read'],
-  resolve: ({ clearingRead }) => ({
-    text: clearingRead ? '正在清除已读...' : '清除已读通知',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-open-page',
-  order: 1240,
-  surfaces: ['notifications-menu-open-page'],
-  resolve: () => ({
-    text: '查看全部通知',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-mark-all-success',
-  order: 1245,
-  surfaces: ['notifications-menu-mark-all-success'],
-  resolve: () => ({
-    text: '已全部标记为已读',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-mark-all-error',
-  order: 1246,
-  surfaces: ['notifications-menu-mark-all-error'],
-  resolve: () => ({
-    text: '全部标记已读失败',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-clear-read-confirm-title',
-  order: 1247,
-  surfaces: ['notifications-menu-clear-read-confirm-title'],
-  resolve: () => ({
-    text: '清除已读通知',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-clear-read-confirm-message',
-  order: 1248,
-  surfaces: ['notifications-menu-clear-read-confirm-message'],
-  resolve: () => ({
-    text: '确定要清除所有已读通知吗？未读通知会保留。',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-clear-read-confirm-confirm',
-  order: 1249,
-  surfaces: ['notifications-menu-clear-read-confirm-confirm'],
-  resolve: () => ({
-    text: '清除',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-clear-read-success',
-  order: 1249,
-  surfaces: ['notifications-menu-clear-read-success'],
-  resolve: () => ({
-    text: '已清除已读通知',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-clear-read-error',
-  order: 1249,
-  surfaces: ['notifications-menu-clear-read-error'],
-  resolve: () => ({
-    text: '清除已读通知失败',
-  }),
-})
-
-registerUiCopy({
-  key: 'notifications-menu-summary-count',
-  order: 1249,
-  surfaces: ['notifications-menu-summary-count'],
-  resolve: ({ unread, total }) => ({
-    text: Number(unread || 0) > 0 ? `${Number(unread || 0)} 未读` : String(Number(total || 0)),
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-card-mark-read',
-  order: 1250,
-  surfaces: ['notification-card-mark-read'],
-  resolve: () => ({
-    text: '标记为已读',
-  }),
-})
-
-registerUiCopy({
-  key: 'notification-card-delete',
-  order: 1260,
-  surfaces: ['notification-card-delete'],
-  resolve: () => ({
-    text: '删除通知',
   }),
 })
 
@@ -5589,44 +4288,6 @@ registerUiCopy({
   }),
 })
 
-registerPostReviewBanner({
-  key: 'pending',
-  moduleId: 'approval',
-  order: 10,
-  surfaces: ['discussion-post'],
-  isVisible: ({ post }) => post?.approval_status === 'pending',
-  resolve: ({ post, canModeratePendingPost }) => ({
-    tone: 'warning',
-    message: '这条回复正在审核中，目前仅你和管理员可见。',
-    actions: canModeratePendingPost(post)
-      ? [
-          { key: 'approve', label: '审核通过', tone: 'approve', action: 'approve' },
-          { key: 'reject', label: '拒绝回复', tone: 'reject', action: 'reject' },
-        ]
-      : [],
-  }),
-})
-
-registerPostReviewBanner({
-  key: 'rejected',
-  moduleId: 'approval',
-  order: 20,
-  surfaces: ['discussion-post'],
-  isVisible: ({ post }) => post?.approval_status === 'rejected',
-  resolve: ({ post, canModeratePendingPost, canEditPost }) => ({
-    tone: 'danger',
-    message: post.approval_note || '这条回复未通过审核，请根据管理员反馈调整内容。',
-    actions: canModeratePendingPost(post)
-      ? [
-          { key: 'approve', label: '审核通过', tone: 'approve', action: 'approve' },
-          { key: 'reject', label: '拒绝回复', tone: 'reject', action: 'reject' },
-        ]
-      : (canEditPost(post)
-          ? [{ key: 'edit', label: '修改后重新提交', tone: 'approve', action: 'edit' }]
-          : []),
-  }),
-})
-
 const ProfileDiscussionSection = defineAsyncComponent(() => import('@/components/profile/ProfileDiscussionSection.vue'))
 const ProfilePostSection = defineAsyncComponent(() => import('@/components/profile/ProfilePostSection.vue'))
 const ProfileSettingsSection = defineAsyncComponent(() => import('@/components/profile/ProfileSettingsSection.vue'))
@@ -5755,23 +4416,6 @@ registerComposerNotice({
       authStore.user,
       type === 'discussion' ? '暂时无法发布讨论。' : '暂时无法回复、编辑或上传附件。'
     ),
-  }),
-})
-
-registerComposerNotice({
-  key: 'approval-feedback',
-  order: 20,
-  isVisible: ({ isEditing, composerStore }) => {
-    return Boolean(
-      isEditing
-      && composerStore?.current?.approvalStatus === 'rejected'
-      && composerStore?.current?.approvalNote
-    )
-  },
-  resolve: ({ type, composerStore }) => ({
-    label: type === 'discussion' ? '讨论审核反馈' : '回复审核反馈',
-    tone: 'warning',
-    message: composerStore.current.approvalNote,
   }),
 })
 

@@ -1,5 +1,6 @@
 from apps.core.extensions import (
     AdminSurfaceExtender,
+    ApiResourceExtender,
     ApiRoutesExtender,
     DiscussionLifecycleExtender,
     EventListenersExtender,
@@ -10,8 +11,8 @@ from apps.core.extensions import (
     ModelUrlExtender,
     ModelVisibilityExtender,
     PolicyExtender,
+    PostEventExtender,
     RealtimeExtender,
-    ResourceExtender,
     SearchDriverExtender,
     SettingsExtender,
 )
@@ -36,15 +37,14 @@ from apps.core.resource_registry import ResourceDefinition, ResourceEndpointDefi
 from apps.discussions.models import Discussion
 from apps.posts.models import Post
 from apps.tags.models import DiscussionTag, Tag
-from apps.tags.services import TagService
-from apps.tags.api import (
-    _dispatch_tag_create,
-    _dispatch_tag_delete,
-    _dispatch_tag_index,
-    _dispatch_tag_popular,
-    _dispatch_tag_show,
-    _dispatch_tag_show_by_slug,
-    _dispatch_tag_update,
+from extensions.tags.backend.handlers import (
+    dispatch_tag_create,
+    dispatch_tag_delete,
+    dispatch_tag_index,
+    dispatch_tag_popular,
+    dispatch_tag_show,
+    dispatch_tag_show_by_slug,
+    dispatch_tag_update,
 )
 from extensions.tags.backend.listeners import (
     enrich_realtime_tags_included_payload,
@@ -74,12 +74,14 @@ from extensions.tags.backend.discussion_lifecycle import (
 from extensions.tags.backend.discussion_relationships import set_discussion_tags_relationship
 from extensions.tags.backend.resources import (
     resolve_discussion_tags,
+    resolve_discussion_tagged_event_data,
     resolve_tag_can_reply,
     resolve_tag_can_start_discussion,
     resolve_tag_last_posted_discussion,
     serialize_tag_base,
 )
 from extensions.tags.backend.search import apply_discussion_tag_search_filter, parse_tag_search_filter
+from extensions.tags.backend.services import TagService
 from extensions.tags.backend.slug import TagSlugDriver
 
 
@@ -128,6 +130,11 @@ def extend():
             post_types=post_type_definitions(),
             search_filters=search_filter_definitions(),
         ),
+        PostEventExtender().type(
+            "discussionTagged",
+            resolve_discussion_tagged_event_data,
+            description="标签变更事件帖的结构化 payload。",
+        ),
         ModelExtender(
             definitions=model_definitions(),
             relations=model_relation_definitions(),
@@ -150,12 +157,14 @@ def extend():
         .model_policy(Discussion, discussion_policy)
         .model_policy(Post, post_policy)
         .model_policy(Tag, tag_policy),
-        ResourceExtender(
-            resources=tag_resource_definitions(),
-            fields=tag_resource_field_definitions(),
-            relationships=tag_resource_relationship_definitions(),
-            endpoints=tag_resource_endpoints(),
-        ),
+        ApiResourceExtender("discussion")
+        .fields(discussion_resource_field_definitions)
+        .relationships(discussion_resource_relationship_definitions)
+        .add_default_include(("index", "show", "create"), ("tags",)),
+        ApiResourceExtender(tag_resource_definition())
+        .fields(tag_resource_field_definitions)
+        .relationships(tag_resource_relationship_definitions)
+        .endpoints(tag_resource_endpoints),
         EventListenersExtender(
             listeners=tag_event_listener_definitions(),
         ),
@@ -359,13 +368,46 @@ def search_driver_definitions():
     )
 
 
+def tag_resource_definition():
+    return ResourceDefinition(
+        resource="tag",
+        module_id=EXTENSION_ID,
+        resolver=serialize_tag_base,
+        description="论坛标签主资源。",
+    )
+
+
 def tag_resource_definitions():
+    return (tag_resource_definition(),)
+
+
+def discussion_resource_field_definitions():
     return (
-        ResourceDefinition(
-            resource="tag",
+        ResourceFieldDefinition(
+            resource="discussion",
+            field="tags",
             module_id=EXTENSION_ID,
-            resolver=serialize_tag_base,
-            description="论坛标签主资源。",
+            resolver=resolve_discussion_tags,
+            description="讨论关联的标签列表。",
+            prefetch_related=("discussion_tags__tag",),
+        ),
+    )
+
+
+def discussion_resource_relationship_definitions():
+    return (
+        ResourceRelationshipDefinition(
+            resource="discussion",
+            relationship="tags",
+            module_id=EXTENSION_ID,
+            resolver=resolve_discussion_tags,
+            description="讨论关联标签关系。",
+            prefetch_related=("discussion_tags__tag",),
+            resource_type="tag",
+            many=True,
+            writable=True,
+            value_type="array",
+            setter=set_discussion_tags_relationship,
         ),
     )
 
@@ -400,14 +442,6 @@ def tag_policy(*, user=None, ability="", model=None, **context):
 def tag_resource_field_definitions():
     return (
         ResourceFieldDefinition(
-            resource="discussion",
-            field="tags",
-            module_id=EXTENSION_ID,
-            resolver=resolve_discussion_tags,
-            description="讨论关联的标签列表。",
-            prefetch_related=("discussion_tags__tag",),
-        ),
-        ResourceFieldDefinition(
             resource="tag",
             field="can_start_discussion",
             module_id=EXTENSION_ID,
@@ -435,19 +469,6 @@ def tag_resource_field_definitions():
 def tag_resource_relationship_definitions():
     return (
         ResourceRelationshipDefinition(
-            resource="discussion",
-            relationship="tags",
-            module_id=EXTENSION_ID,
-            resolver=resolve_discussion_tags,
-            description="讨论关联标签关系。",
-            prefetch_related=("discussion_tags__tag",),
-            resource_type="tag",
-            many=True,
-            writable=True,
-            value_type="array",
-            setter=set_discussion_tags_relationship,
-        ),
-        ResourceRelationshipDefinition(
             resource="tag",
             relationship="last_posted_discussion",
             module_id=EXTENSION_ID,
@@ -464,7 +485,7 @@ def tag_resource_endpoints():
             resource="tag",
             endpoint="create",
             module_id=EXTENSION_ID,
-            handler=_dispatch_tag_create,
+            handler=dispatch_tag_create,
             methods=("POST",),
             path="/tags",
             absolute_path=True,
@@ -474,7 +495,7 @@ def tag_resource_endpoints():
             resource="tag",
             endpoint="index",
             module_id=EXTENSION_ID,
-            handler=_dispatch_tag_index,
+            handler=dispatch_tag_index,
             methods=("GET",),
             path="/tags",
             absolute_path=True,
@@ -483,7 +504,7 @@ def tag_resource_endpoints():
             resource="tag",
             endpoint="popular",
             module_id=EXTENSION_ID,
-            handler=_dispatch_tag_popular,
+            handler=dispatch_tag_popular,
             methods=("GET",),
             path="/tags/popular",
             absolute_path=True,
@@ -492,7 +513,7 @@ def tag_resource_endpoints():
             resource="tag",
             endpoint="show",
             module_id=EXTENSION_ID,
-            handler=_dispatch_tag_show,
+            handler=dispatch_tag_show,
             methods=("GET",),
             path="/tags/{object_id}",
             absolute_path=True,
@@ -501,7 +522,7 @@ def tag_resource_endpoints():
             resource="tag",
             endpoint="show-by-slug",
             module_id=EXTENSION_ID,
-            handler=_dispatch_tag_show_by_slug,
+            handler=dispatch_tag_show_by_slug,
             methods=("GET",),
             path="/tags/slug/{object_id}",
             absolute_path=True,
@@ -510,7 +531,7 @@ def tag_resource_endpoints():
             resource="tag",
             endpoint="update",
             module_id=EXTENSION_ID,
-            handler=_dispatch_tag_update,
+            handler=dispatch_tag_update,
             methods=("PATCH",),
             path="/tags/{object_id}",
             absolute_path=True,
@@ -520,7 +541,7 @@ def tag_resource_endpoints():
             resource="tag",
             endpoint="delete",
             module_id=EXTENSION_ID,
-            handler=_dispatch_tag_delete,
+            handler=dispatch_tag_delete,
             methods=("DELETE",),
             path="/tags/{object_id}",
             absolute_path=True,

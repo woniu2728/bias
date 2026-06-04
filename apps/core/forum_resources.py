@@ -33,6 +33,14 @@ def bootstrap_forum_resource_fields() -> None:
             description="论坛公开运行时资源。",
         )
     )
+    registry.register_resource(
+        ResourceDefinition(
+            resource="admin_stats",
+            module_id="core",
+            resolver=_serialize_admin_stats_base,
+            description="后台运行状态与统计资源。",
+        )
+    )
     register_forum_user_resources(registry)
     registry.register_resource(
         ResourceDefinition(
@@ -48,14 +56,6 @@ def bootstrap_forum_resource_fields() -> None:
             module_id="posts",
             resolver=_serialize_search_post_base,
             description="搜索帖子结果资源。",
-        )
-    )
-    registry.register_resource(
-        ResourceDefinition(
-            resource="notification",
-            module_id="notifications",
-            resolver=_serialize_notification_base,
-            description="论坛通知主资源。",
         )
     )
 
@@ -116,6 +116,10 @@ def _serialize_forum_base(forum, context: dict) -> dict:
     return {}
 
 
+def _serialize_admin_stats_base(stats, context: dict) -> dict:
+    return dict(stats or {})
+
+
 def _serialize_search_discussion_base(discussion, context: dict) -> dict:
     return {
         "id": discussion.id,
@@ -143,20 +147,6 @@ def _serialize_search_post_base(post, context: dict) -> dict:
     }
 
 
-def _serialize_notification_base(notification, context: dict) -> dict:
-    return {
-        "id": notification.id,
-        "user_id": notification.user_id,
-        "type": notification.type,
-        "subject_type": notification.subject_type,
-        "subject_id": notification.subject_id,
-        "data": notification.data,
-        "is_read": notification.is_read,
-        "read_at": notification.read_at,
-        "created_at": notification.created_at,
-    }
-
-
 def _resolve_discussion_can_edit(discussion, context: dict) -> bool:
     from apps.discussions.services import DiscussionService
 
@@ -178,13 +168,6 @@ def _resolve_discussion_can_reply(discussion, context: dict) -> bool:
     return bool(user and DiscussionService.can_reply_discussion(discussion, user))
 
 
-def _resolve_discussion_subscription_state(discussion, context: dict) -> bool:
-    from apps.discussions.services import DiscussionService
-
-    user = context.get("user")
-    return DiscussionService.get_subscription_state(discussion, user)
-
-
 def _resolve_post_can_edit(post, context: dict) -> bool:
     from apps.posts.services import PostService
 
@@ -197,11 +180,3 @@ def _resolve_post_can_delete(post, context: dict) -> bool:
 
     user = context.get("user")
     return bool(user and PostService.can_delete_post(post, user))
-
-
-def _resolve_post_can_like(post, context: dict) -> bool:
-    from apps.posts.services import PostService
-
-    user = context.get("user")
-    return bool(user and PostService.can_like_post(post, user))
-

@@ -3,6 +3,7 @@ import {
   clearAdminRoutesForExtension,
   getAdminRoutes,
 } from './registry/routes.js'
+import { clearAdminRegistryExtensions } from './registry/shared.js'
 import {
   createAdminExtensionApp,
   getAdminExtensionInitializers,
@@ -123,6 +124,7 @@ export function getAdminInitializers() {
 export function resetAdminExtensionRuntimeContributions(extensionId = '', { router } = {}) {
   removeAdminRuntimeRoutes(router, extensionId)
   clearAdminRoutesForExtension(extensionId)
+  clearAdminRegistryExtensions(extensionId)
   resetAdminExtensionAppRuntime(extensionId)
 }
 

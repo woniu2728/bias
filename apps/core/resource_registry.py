@@ -214,7 +214,7 @@ class ResourceRegistry:
         try:
             overrides = {
                 item["extension_id"]: bool(item["enabled"])
-                for item in ExtensionInstallation.objects.values("extension_id", "enabled")
+                for item in ExtensionInstallation.objects.filter(source="filesystem").values("extension_id", "enabled")
             }
         except (OperationalError, ProgrammingError, RuntimeError):
             return None

@@ -1,5 +1,7 @@
 import {
+  getDiscussionActionHandler,
   getDiscussionActions,
+  getPostActionHandler,
   getPostActions,
   getUiCopy,
 } from './frontendRegistry.js'
@@ -40,6 +42,28 @@ async function runRegisteredAction(item, context = {}, handlerKey = '') {
   if (actionKey && typeof handlers[actionKey] === 'function') {
     await handlers[actionKey](item, context)
     return true
+  }
+
+  if (handlerKey === 'discussionActionHandlers') {
+    const registeredHandler = getDiscussionActionHandler(actionKey, context)
+    if (typeof registeredHandler?.handle === 'function') {
+      await registeredHandler.handle({
+        ...context,
+        item,
+      })
+      return true
+    }
+  }
+
+  if (handlerKey === 'postActionHandlers') {
+    const registeredHandler = getPostActionHandler(actionKey, context)
+    if (typeof registeredHandler?.handle === 'function') {
+      await registeredHandler.handle({
+        ...context,
+        item,
+      })
+      return true
+    }
   }
 
   return false

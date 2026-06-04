@@ -25,11 +25,11 @@ function createBindings(overrides = {}) {
     discussionBadges: ref([{ key: 'sticky' }]),
     discussionHeaderStyle: ref({ color: '#fff' }),
     discussionMenuItems: ref([{ key: 'reply' }]),
+    discussionMobileActionItems: ref([{ key: 'toggle-subscription' }]),
     discussionMobileNavRef: ref(null),
     discussionSidebarActionItems: ref([{ key: 'bookmark' }]),
     discussionSidebarRef: ref(null),
     editDiscussion() {},
-    flagPendingPostIds: ref([9]),
     formatAbsoluteDate: value => value,
     formatDate: value => value,
     formatLikeSummary: value => value,
@@ -71,11 +71,10 @@ function createBindings(overrides = {}) {
     openComposer() {},
     pendingNewReplyCount: ref(3),
     shareDiscussion() {},
-    posts: ref([{ id: 8, number: 3 }, { id: 9, number: 4 }]),
+    posts: ref([{ id: 8, number: 3 }, { id: 9, number: 4, is_flag_pending: true }]),
     previousTrigger: ref(null),
     replyToPost() {},
     resolvePostComponent: () => 'PostItem',
-    resolvePostFlags() {},
     scrubberAfterPercent: ref(60),
     scrubberBeforePercent: ref(40),
     scrubberDescription: ref('现在在 3 / 20'),
@@ -87,7 +86,6 @@ function createBindings(overrides = {}) {
     showUnreadDivider: post => post.number === 4,
     suspensionNotice: ref('账号已停用'),
     toggleDiscussionMenu() {},
-    toggleSubscription() {},
     toggleLike() {},
     togglePostMenu() {},
     togglingSubscription: ref(false),
@@ -105,11 +103,12 @@ test('discussion detail view bindings expose grouped bindings', () => {
   assert.equal(bindings.stateBindings.value.discussion.title, '讨论')
   assert.equal(bindings.heroBindings.value.discussionBadges[0].key, 'sticky')
   assert.equal(bindings.mobileBindings.value.menuItems[0].key, 'reply')
+  assert.equal(bindings.mobileBindings.value.secondaryAction.key, 'toggle-subscription')
   assert.equal(bindings.mobileBindings.value.scrubberPositionText, '3 / 20')
   assert.equal(bindings.mobileBindings.value.unreadStartPostNumber, 19)
   assert.equal(bindings.postStreamBindings.value.isTargetPost({ number: 3 }), true)
   assert.equal(bindings.postStreamBindings.value.isLikePending({ id: 8 }), true)
-  assert.equal(bindings.postStreamBindings.value.isFlagPending({ id: 9 }), true)
+  assert.equal(bindings.postStreamBindings.value.isFlagPending({ id: 9, is_flag_pending: true }), true)
   assert.equal(bindings.postStreamBindings.value.hasPendingNewReplies, true)
   assert.equal(bindings.postStreamBindings.value.pendingNewReplyCount, 3)
   assert.equal(bindings.sidebarBindings.value.maxPostNumber, 20)
@@ -127,8 +126,8 @@ test('discussion detail view bindings expose stable event handlers', () => {
     handleDiscussionMenuSelection(action) {
       calls.push(['discussion-menu', action])
     },
-    handlePostMenuSelection(post, action) {
-      calls.push(['post-menu', post.id, action])
+    handlePostMenuSelection(post, action, context = {}) {
+      calls.push(['post-menu', post.id, action, context.status])
     },
     handleScrubberMouseDown(event) {
       calls.push(['scrubber-down', event])
@@ -163,14 +162,8 @@ test('discussion detail view bindings expose stable event handlers', () => {
     replyToPost(post) {
       calls.push(['reply', post.id])
     },
-    resolvePostFlags(post, status) {
-      calls.push(['resolve-flags', post.id, status])
-    },
     toggleDiscussionMenu() {
       calls.push('toggle-menu')
-    },
-    toggleSubscription() {
-      calls.push('toggle-subscription')
     },
     toggleLike(post) {
       calls.push(['like', post.id])
@@ -185,7 +178,7 @@ test('discussion detail view bindings expose stable event handlers', () => {
   bindings.mobileEvents.openComposer()
   bindings.mobileEvents.openLoginForReply()
   bindings.mobileEvents.shareDiscussion()
-  bindings.mobileEvents.toggleSubscription()
+  bindings.mobileEvents.secondaryAction('toggle-subscription')
   bindings.mobileEvents.toggleDiscussionMenu()
   bindings.mobileEvents.menuAction('reply')
   bindings.mobileEvents.jumpToPost(18)
@@ -217,7 +210,7 @@ test('discussion detail view bindings expose stable event handlers', () => {
     'open-composer',
     ['discussion-menu', 'login'],
     'share-discussion',
-    'toggle-subscription',
+    ['discussion-menu', 'toggle-subscription'],
     'toggle-menu',
     ['discussion-menu', 'reply'],
     ['jump', 18],
@@ -226,12 +219,12 @@ test('discussion detail view bindings expose stable event handlers', () => {
     ['like', 3],
     ['reply', 4],
     ['toggle-post-menu', 5],
-    ['post-menu', 6, 'edit-post'],
-    ['post-menu', 7, 'delete-post'],
-    ['post-menu', 8, 'toggle-hide-post'],
-    ['post-menu', 9, 'open-report-modal'],
+    ['post-menu', 6, 'edit-post', undefined],
+    ['post-menu', 7, 'delete-post', undefined],
+    ['post-menu', 8, 'toggle-hide-post', undefined],
+    ['post-menu', 9, 'open-report-modal', undefined],
     ['moderate-post', 10, 'approve'],
-    ['resolve-flags', 11, 'resolved'],
+    ['post-menu', 11, 'resolve-post-flags', 'resolved'],
     'close-post-menu',
     'load-pending',
     'load-more',

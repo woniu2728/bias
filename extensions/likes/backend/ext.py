@@ -1,7 +1,13 @@
-from apps.core.extensions import LifecycleExtender, NotificationsExtender, ResourceExtender
+from apps.core.extensions import ApiResourceExtender, LifecycleExtender, NotificationsExtender
 from apps.core.forum_registry_types import NotificationTypeDefinition, UserPreferenceDefinition
-from apps.core.forum_resources import _resolve_post_can_like
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceFieldDefinition
+from extensions.likes.backend.handlers import dispatch_post_like_mutation
+from extensions.likes.backend.resources import (
+    post_like_preload_resolver,
+    resolve_post_is_liked,
+    resolve_post_like_count,
+)
+from extensions.likes.backend.services import resolve_post_can_like
 
 
 EXTENSION_ID = "likes"
@@ -13,10 +19,9 @@ def extend():
             notification_types=notification_type_definitions(),
             user_preferences=user_preference_definitions(),
         ),
-        ResourceExtender(
-            fields=post_resource_field_definitions(),
-            endpoints=post_resource_endpoints(),
-        ),
+        ApiResourceExtender("post")
+        .fields(post_resource_field_definitions)
+        .endpoints(post_resource_endpoints),
         LifecycleExtender(
             install=install,
             enable=enable,
@@ -59,9 +64,25 @@ def post_resource_field_definitions():
     return (
         ResourceFieldDefinition(
             resource="post",
+            field="like_count",
+            module_id=EXTENSION_ID,
+            resolver=resolve_post_like_count,
+            description="当前回复的点赞数量。",
+            preload_resolver=post_like_preload_resolver,
+        ),
+        ResourceFieldDefinition(
+            resource="post",
+            field="is_liked",
+            module_id=EXTENSION_ID,
+            resolver=resolve_post_is_liked,
+            description="当前用户是否已点赞该回复。",
+            preload_resolver=post_like_preload_resolver,
+        ),
+        ResourceFieldDefinition(
+            resource="post",
             field="can_like",
             module_id=EXTENSION_ID,
-            resolver=_resolve_post_can_like,
+            resolver=resolve_post_can_like,
             description="当前用户是否可以点赞该回复。",
         ),
     )
@@ -73,20 +94,13 @@ def post_resource_endpoints():
             resource="post",
             endpoint="like",
             module_id=EXTENSION_ID,
-            handler=_dispatch_post_like_mutation,
+            handler=dispatch_post_like_mutation,
             methods=("POST", "DELETE"),
+            path="posts/{object_id}/like",
+            absolute_path=True,
             auth_required=True,
         ),
     )
-
-
-def _dispatch_post_like_mutation(context):
-    from apps.posts.api import _dispatch_post_like, _dispatch_post_unlike
-
-    method = str(context.get("method") or "GET").upper()
-    if method == "DELETE":
-        return _dispatch_post_unlike(context)
-    return _dispatch_post_like(context)
 
 
 def install(context):

@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from unittest.mock import Mock, patch
 
 from django.core.cache import cache
@@ -14,7 +15,12 @@ from io import StringIO
 from ninja_jwt.tokens import RefreshToken
 
 from apps.core.models import AuditLog
-from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry, ResourceSortDefinition
+from apps.core.resource_registry import (
+    ResourceEndpointDefinition,
+    ResourceRelationshipDefinition,
+    ResourceRegistry,
+    ResourceSortDefinition,
+)
 from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.discussions.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
@@ -626,12 +632,47 @@ class DiscussionApiTests(TestCase):
             )
         )
 
-        with patch("apps.discussions.api.get_runtime_resource_registry", return_value=registry):
+        with patch("apps.discussions.handlers.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
                 response = self.client.get("/api/discussions/")
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertTrue(response.json()["mutated_by_resource_endpoint"])
+
+    def test_discussion_list_static_route_honors_endpoint_default_include(self):
+        discussion = DiscussionService.create_discussion(
+            title="默认 include 讨论",
+            content="测试静态路由读取资源端点默认 include",
+            user=self.author,
+        )
+
+        registry = ResourceRegistry()
+        registry.register_relationship(
+            ResourceRelationshipDefinition(
+                resource="discussion",
+                relationship="extension_marker",
+                module_id="test",
+                resolver=lambda item, context: f"included:{item.id}",
+            )
+        )
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="discussion",
+                endpoint="index",
+                module_id="test",
+                operation="mutate",
+                mutator=lambda endpoint: replace(endpoint, default_include=("extension_marker",)),
+            )
+        )
+
+        with patch("apps.discussions.handlers.get_runtime_resource_registry", return_value=registry):
+            with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
+                response = self.client.get("/api/discussions/")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        item = next(item for item in payload["data"] if item["id"] == discussion.id)
+        self.assertEqual(item["extension_marker"], f"included:{discussion.id}")
 
     def test_discussion_list_sort_catalog_uses_resource_sort_definitions(self):
         DiscussionService.create_discussion(
@@ -689,12 +730,45 @@ class DiscussionApiTests(TestCase):
             )
         )
 
-        with patch("apps.discussions.api.get_runtime_resource_registry", return_value=registry):
+        with patch("apps.discussions.handlers.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
                 response = self.client.get(f"/api/discussions/{discussion.id}")
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertTrue(response.json()["mutated_by_resource_endpoint"])
+
+    def test_discussion_detail_static_route_honors_endpoint_default_include(self):
+        discussion = DiscussionService.create_discussion(
+            title="详情默认 include 讨论",
+            content="测试详情静态路由读取资源端点默认 include",
+            user=self.author,
+        )
+
+        registry = ResourceRegistry()
+        registry.register_relationship(
+            ResourceRelationshipDefinition(
+                resource="discussion",
+                relationship="extension_marker",
+                module_id="test",
+                resolver=lambda item, context: f"included:{item.id}",
+            )
+        )
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="discussion",
+                endpoint="show",
+                module_id="test",
+                operation="mutate",
+                mutator=lambda endpoint: replace(endpoint, default_include=("extension_marker",)),
+            )
+        )
+
+        with patch("apps.discussions.handlers.get_runtime_resource_registry", return_value=registry):
+            with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
+                response = self.client.get(f"/api/discussions/{discussion.id}")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["extension_marker"], f"included:{discussion.id}")
 
     def test_discussion_detail_not_found_returns_structured_error_payload(self):
         response = self.client.get("/api/discussions/999999")
