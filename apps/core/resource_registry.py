@@ -788,16 +788,16 @@ class ResourceRegistry:
                 continue
             operation = self._endpoint_operation(definition)
             if operation == "add":
-                if definition.handler is not None or definition.kind:
+                if definition.handler is not None or getattr(definition, "kind", ""):
                     output.append(definition)
             elif operation == "before_all":
-                if definition.handler is not None or definition.kind:
+                if definition.handler is not None or getattr(definition, "kind", ""):
                     output.insert(0, definition)
             elif operation == "before":
-                if definition.handler is not None or definition.kind:
+                if definition.handler is not None or getattr(definition, "kind", ""):
                     self._insert_before(output, definition.anchor, definition)
             elif operation == "after":
-                if definition.handler is not None or definition.kind:
+                if definition.handler is not None or getattr(definition, "kind", ""):
                     self._insert_after(output, definition.anchor, definition)
             elif operation == "remove":
                 output = [
