@@ -109,14 +109,15 @@ import {
   AdminPage,
   AdminStateBlock,
   adminApi,
-  getAdminApprovalQueuePageActionMeta,
-  getAdminApprovalQueuePageConfig,
-  getAdminApprovalQueuePageCopy,
+  getAdminPageActionMeta,
+  getAdminPageConfig,
+  getAdminPageCopy,
   resolveApprovalSelectionState,
   resolveApprovalTemplateOptions,
   useModalStore,
 } from '@/admin/registry'
 
+const PAGE_KEY = 'approval.queue'
 const loading = ref(true)
 const saving = ref(false)
 const loadError = ref('')
@@ -128,9 +129,9 @@ const selectedKeys = ref(new Set())
 const pendingAction = ref('approve')
 const actionNote = ref('')
 const modalStore = useModalStore()
-const approvalCopy = computed(() => getAdminApprovalQueuePageCopy())
-const approvalConfig = computed(() => getAdminApprovalQueuePageConfig())
-const approvalActionMeta = computed(() => getAdminApprovalQueuePageActionMeta())
+const approvalCopy = computed(() => getAdminPageCopy(PAGE_KEY))
+const approvalConfig = computed(() => getAdminPageConfig(PAGE_KEY))
+const approvalActionMeta = computed(() => getAdminPageActionMeta(PAGE_KEY))
 const approvalFilters = computed(() => approvalConfig.value?.filters || [])
 const selectionState = computed(() => resolveApprovalSelectionState(items.value, selectedKeys.value))
 const selectedItemTypes = computed(() => {

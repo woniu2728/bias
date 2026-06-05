@@ -41,8 +41,11 @@ def handle_extension_runtime_invalidation(event) -> None:
     from apps.core.extensions.formatter_service import clear_extension_formatter_cache
     from apps.core.extensions.frontend_runtime_service import clear_extension_frontend_runtime_cache
     from apps.core.extensions.locale_service import clear_extension_locale_cache
-    from apps.core.extensions.lifecycle import reset_extension_runtime_state
-    from django.urls import clear_url_caches
+    from apps.core.extensions.lifecycle import (
+        mark_extension_runtime_version_seen,
+        rebuild_runtime_urlconf,
+        reset_extension_runtime_state,
+    )
 
     clear_extension_frontend_runtime_cache()
     clear_extension_locale_cache()
@@ -52,4 +55,5 @@ def handle_extension_runtime_invalidation(event) -> None:
         extension_id=str(getattr(event, "extension_id", "") or ""),
     )
     reset_extension_runtime_state()
-    clear_url_caches()
+    rebuild_runtime_urlconf()
+    mark_extension_runtime_version_seen()

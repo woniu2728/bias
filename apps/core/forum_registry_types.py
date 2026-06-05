@@ -15,7 +15,6 @@ class PermissionDefinition:
     module_id: str
     icon: str = "fas fa-key"
     description: str = ""
-    aliases: Tuple[str, ...] = ()
     required_permissions: Tuple[str, ...] = ()
 
 

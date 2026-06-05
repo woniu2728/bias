@@ -46,7 +46,7 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 6. 真实示例扩展目录
    `extensions/sample-hello/extension.json`
 
-当前已经进入“扩展中心和模块中心并行存在”的兼容阶段。
+当前已经收敛到扩展中心作为后台主入口，旧模块管理页面和接口已移除。
 
 ### 已完成：阶段 2 的真实启停基础
 
@@ -206,7 +206,7 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 1. `sample-hello` 已通过 `frontend_admin_entry` 加载独立设置页 / 操作页组件
 2. `tags` 已作为第一条内置模块迁移样板，通过扩展宿主页承载原有 `TagsPage`
 3. `approval`、`flags`、`users` 已通过内置扩展宿主页承载原有操作页组件
-4. `tags`、`approval`、`flags`、`users` 旧公共后台路由已改为兼容跳转到扩展宿主页，其他旧入口后续再逐步下线
+4. `tags`、`approval`、`flags`、`users` 后台入口以扩展宿主页为准
 5. 扩展宿主页现在支持设置页自动回退：
    - 若扩展未导出自定义 `resolveSettingsPage`
    - 但已声明 `settings_schema`
@@ -333,10 +333,10 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 6. Bias 兼容版本范围已进入运行时主链路：
    - 扩展详情页与清单健康摘要会直接暴露兼容性异常
    - 安装 / 启用操作会拦截与当前 Bias 版本不兼容的扩展
-7. 模块中心已进一步降级为扩展兼容视图：
+7. 扩展中心已承接扩展状态、主要入口、运行风险和开发快照：
    - 主视图优先展示扩展承载状态、主要入口和运行风险
-   - 大部分注册表快照已下沉到默认收起的开发快照区
-   - 模块中心与扩展中心/扩展详情页的重复信息继续收口
+   - 注册表快照下沉到扩展详情页的诊断区域
+   - 旧模块管理入口已移除
 
 ## 当前状态
 
@@ -349,10 +349,10 @@ Bias 当前已经具备扩展平台的早期基础：
    `apps/core/forum_registry_types.py`
 2. 内置模块定义
    `apps/core/forum_registry_builtin.py`
-3. 模块中心元数据与健康摘要
+3. 扩展中心元数据与健康摘要
    `apps/core/admin_content_api.py`
-   `apps/core/admin_module_helpers.py`
-   `frontend/src/admin/views/ModulesPage.vue`
+   `frontend/src/admin/views/ExtensionsPage.vue`
+   `frontend/src/admin/views/ExtensionDetailPage.vue`
 4. 领域事件、资源字段、前端注入点等平台协议
    `apps/core/domain_events.py`
    `apps/core/resource_registry.py`
@@ -562,34 +562,34 @@ extensions/
    替代纯 `ForumModuleDefinition` 的外层语义
 3. 建立 `ExtensionRegistry`
    负责加载 manifest 和依赖图
-4. 模块中心改造成“扩展中心”
+4. 扩展中心作为后台主入口
    UI 使用扩展维度而不是模块快照维度
-5. 允许现有内置模块先通过“兼容适配层”暴露成扩展
+5. 允许现有内置模块先通过扩展定义装配层暴露成扩展
 
-### 兼容策略
+### 演进策略
 
-第一步不能直接删除 `ForumRegistry`。
+第一步不能直接删除 `ForumRegistry`，但新能力必须从扩展视角进入主链路。
 
-需要新增适配层：
+需要新增装配层：
 
 1. `BuiltinModuleExtensionAdapter`
    把现有 `ForumModuleDefinition` 包装成扩展对象
 2. 后台优先显示扩展视角
-3. 能力注册仍可暂时复用旧 registry
+3. 能力注册逐步收敛到扩展 registry，`ForumRegistry` 仅保留论坛运行期聚合职责
 
 ### 涉及代码
 
 - `apps/core/forum_registry.py`
 - `apps/core/forum_registry_builtin.py`
 - `apps/core/admin_content_api.py`
-- `apps/core/admin_module_helpers.py`
-- `frontend/src/admin/views/ModulesPage.vue`
+- `frontend/src/admin/views/ExtensionsPage.vue`
+- `frontend/src/admin/views/ExtensionDetailPage.vue`
 
 ### 验收标准
 
 1. 后台有独立的“扩展中心”数据模型
-2. 扩展列表来自 manifest + 兼容适配，不再仅靠内置模块硬编码
-3. 旧模块中心接口可以保留一段时间，但新接口优先服务扩展中心
+2. 扩展列表来自 manifest + 扩展定义装配，不再仅靠内置模块硬编码
+3. 扩展中心接口服务扩展列表、详情、启停、诊断和运行操作
 
 ## 阶段 2：扩展状态持久化与启停
 
@@ -631,7 +631,8 @@ extensions/
 - `apps/core/admin_api.py`
 - `apps/core/admin_content_api.py`
 - `apps/core/audit.py`
-- `frontend/src/admin/views/ModulesPage.vue`
+- `frontend/src/admin/views/ExtensionsPage.vue`
+- `frontend/src/admin/views/ExtensionDetailPage.vue`
 
 ### 验收标准
 
@@ -710,7 +711,7 @@ extensions/
    - 打开权限
    - 查看文档
    - 查看扩展详情
-5. 把现在的 `basic/appearance/mail/advanced` 兼容映射逐步下线
+5. 把 `basic/appearance/mail/advanced` 收敛为扩展声明的设置入口
 
 ### 前端目标
 
@@ -724,8 +725,8 @@ extensions/
 
 - `frontend/src/admin/router`
 - `frontend/src/admin/registry/bootstrap/routes.js`
-- `frontend/src/admin/views/ModulesPage.vue`
-- `apps/core/admin_module_helpers.py`
+- `frontend/src/admin/views/ExtensionsPage.vue`
+- `frontend/src/admin/views/ExtensionDetailPage.vue`
 - `apps/core/admin_content_api.py`
 
 ### 验收标准
@@ -906,8 +907,8 @@ extensions/
 
 1. 新功能优先考虑未来是否要成为独立扩展
 2. 新增平台协议时，优先挂到扩展层而不是模块快照层
-3. 模块中心后续演进目标明确改名为“扩展中心”
-4. 阶段 1 和阶段 2 完成前，不再继续放大旧模块中心的复杂度
+3. 扩展中心是后台扩展管理的唯一主入口
+4. 不再新增旧模块管理接口或页面
 
 ## 下一步
 
@@ -917,6 +918,6 @@ extensions/
 2. 冻结 manifest 和 runtime state 类型
 3. 建立 `ExtensionRegistry`
 4. 让当前内置模块先通过适配器显示为扩展
-5. 把后台“模块中心”接口平滑演进为“扩展中心”接口
+5. 以后新增能力直接接入扩展中心接口和扩展详情页
 
 这一步做完，Bias 才真正从“模块化论坛”进入“可扩展论坛平台”阶段。

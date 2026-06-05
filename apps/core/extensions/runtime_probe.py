@@ -130,14 +130,14 @@ def _build_frontend_admin_check(root_path: Path | None, extension: Extension) ->
             message="后台入口文件存在。",
             path=str(admin_file),
         )
-        return ExtensionDeliveryCheckDefinition(
-            key="frontend-admin-entry",
-            label="后台入口",
-            status="attention",
-            status_label="缺失",
-            message="contract 已声明 frontend_admin_entry，但 frontend/admin/index.js 不存在。",
-            path=str(admin_file or ""),
-        )
+    return ExtensionDeliveryCheckDefinition(
+        key="frontend-admin-entry",
+        label="后台入口",
+        status="attention",
+        status_label="缺失",
+        message="contract 已声明 frontend_admin_entry，但 frontend/admin/index.js 不存在。",
+        path=str(admin_file or ""),
+    )
 
 
 def _build_migration_check(root_path: Path | None, extension: Extension) -> ExtensionDeliveryCheckDefinition:

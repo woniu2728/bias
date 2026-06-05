@@ -15,7 +15,9 @@ import {
 import { clearForumRegistryExtensions } from './frontendRegistry.js'
 import {
   handleExtensionRuntimeError,
+  registerLoadedExtensionModule,
   runWithExtensionScope,
+  unregisterLoadedExtensionModule,
 } from '../common/extensionRuntime.js'
 
 export {
@@ -28,6 +30,7 @@ export {
 
 const forumRouteComponents = {
   DiscussionListView: () => import('../views/DiscussionListView.vue'),
+  NotificationView: () => import('../views/NotificationView.vue'),
   TagsView: () => import('../views/TagsView.vue'),
 }
 
@@ -152,7 +155,7 @@ export async function loadEnabledForumExtensions({
   const loadedIds = loadedExtensionIds || new Set()
   resetLoadedExtensionsWhenRuntimeChanges(loadedIds, payload?.extension_runtime, {
     onReset() {
-      resetForumExtensionRuntimeContributions()
+      resetForumExtensionRuntimeContributions('', { app: application })
     },
   })
 
@@ -177,6 +180,12 @@ export async function loadEnabledForumExtensions({
         registry,
         router,
         registeredRoutes,
+      })
+      registerLoadedExtensionModule(extensionId, commonModule, {
+        app: application,
+        extension,
+        frontend: 'common',
+        entryPath: commonEntryPath,
       })
       await runWithExtensionScope(extensionId, () => commonModule.bootCommonExtension({
         app,
@@ -210,6 +219,12 @@ export async function loadEnabledForumExtensions({
       registry,
       router,
       registeredRoutes,
+    })
+    registerLoadedExtensionModule(extensionId, module, {
+      app: application,
+      extension,
+      frontend: 'forum',
+      entryPath,
     })
     await runWithExtensionScope(extensionId, () => module.bootForumExtension({
       app,
@@ -283,12 +298,13 @@ export function resetLoadedExtensionsWhenRuntimeChanges(loadedIds, runtime, { on
   return previousStamp !== stamp
 }
 
-export function resetForumExtensionRuntimeContributions(extensionId = '') {
+export function resetForumExtensionRuntimeContributions(extensionId = '', { app } = {}) {
   clearForumRegistryExtensions(extensionId)
   if (extensionId) {
     clearExtensionDocumentRuntimeForExtension(extensionId)
   } else {
     clearExtensionDocumentRuntime()
   }
+  unregisterLoadedExtensionModule(extensionId, { app })
   resetForumExtensionAppRuntime(extensionId)
 }

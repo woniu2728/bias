@@ -2,7 +2,7 @@
 帖子系统Django Admin配置
 """
 from django.contrib import admin
-from apps.posts.models import Post, PostLike, PostMentionsUser
+from apps.posts.models import Post
 
 
 @admin.register(Post)
@@ -38,22 +38,3 @@ class PostAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
     ordering = ['-created_at']
 
-
-@admin.register(PostLike)
-class PostLikeAdmin(admin.ModelAdmin):
-    """帖子点赞管理"""
-    list_display = ['id', 'post', 'user', 'created_at']
-    list_filter = ['created_at']
-    search_fields = ['post__content', 'user__username']
-    readonly_fields = ['created_at']
-    ordering = ['-created_at']
-
-
-@admin.register(PostMentionsUser)
-class PostMentionsUserAdmin(admin.ModelAdmin):
-    """帖子提及管理"""
-    list_display = ['id', 'post', 'mentions_user', 'created_at']
-    list_filter = ['created_at']
-    search_fields = ['post__content', 'mentions_user__username']
-    readonly_fields = ['created_at']
-    ordering = ['-created_at']

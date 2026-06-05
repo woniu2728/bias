@@ -8,7 +8,7 @@ import {
 
 export function registerDiscussionMenuItem(factory) {
   return registerDiscussionAction({
-    key: `legacy-discussion-action-${Date.now()}-${Math.random()}`,
+    key: `external-discussion-action-${Date.now()}-${Math.random()}`,
     isVisible: context => Boolean(factory(context)),
     resolve: factory,
   })
@@ -16,7 +16,7 @@ export function registerDiscussionMenuItem(factory) {
 
 export function registerPostMenuItem(factory) {
   return registerPostAction({
-    key: `legacy-post-action-${Date.now()}-${Math.random()}`,
+    key: `external-post-action-${Date.now()}-${Math.random()}`,
     isVisible: context => Boolean(factory(context)),
     resolve: factory,
   })

@@ -18,6 +18,7 @@
     "user-mentions"
   ],
   "backend_entry": "extensions.mentions.backend.ext",
+  "frontend_admin_entry": "extensions/mentions/frontend/admin/index.js",
   "frontend_forum_entry": "extensions/mentions/frontend/forum/index.js",
   "compatibility": {
     "bias_version": "^1.0.0",

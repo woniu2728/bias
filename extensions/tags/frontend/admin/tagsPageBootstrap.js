@@ -1,10 +1,12 @@
 import {
-  registerAdminTagsPageActionMeta,
-  registerAdminTagsPageConfig,
-  registerAdminTagsPageCopy,
+  registerAdminPageActionMeta,
+  registerAdminPageConfig,
+  registerAdminPageCopy,
 } from '@/admin/registry'
 
-registerAdminTagsPageCopy({
+const PAGE_KEY = 'tags.index'
+
+registerAdminPageCopy(PAGE_KEY, {
   key: 'tags-page-copy',
   order: 10,
   resolve: () => ({
@@ -93,7 +95,7 @@ registerAdminTagsPageCopy({
   }),
 })
 
-registerAdminTagsPageConfig({
+registerAdminPageConfig(PAGE_KEY, {
   key: 'tags-page-config',
   order: 10,
   resolve: () => ({
@@ -157,7 +159,7 @@ registerAdminTagsPageConfig({
   }),
 })
 
-registerAdminTagsPageActionMeta({
+registerAdminPageActionMeta(PAGE_KEY, {
   key: 'tags-page-actions-meta',
   order: 10,
   resolve: () => ({

@@ -1,6 +1,7 @@
-from apps.core.extensions import ApiResourceExtender, LifecycleExtender, NotificationsExtender
+from apps.core.extensions import ApiResourceExtender, FrontendExtender, LifecycleExtender, ModelExtender, NotificationsExtender
 from apps.core.forum_registry_types import NotificationTypeDefinition, UserPreferenceDefinition
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceFieldDefinition
+from apps.posts.models import PostLike
 from extensions.likes.backend.handlers import dispatch_post_like_mutation
 from extensions.likes.backend.resources import (
     post_like_preload_resolver,
@@ -15,9 +16,16 @@ EXTENSION_ID = "likes"
 
 def extend():
     return [
+        FrontendExtender(
+            forum_entry="extensions/likes/frontend/forum/index.js",
+        ),
         NotificationsExtender(
             notification_types=notification_type_definitions(),
             user_preferences=user_preference_definitions(),
+        ),
+        ModelExtender().owns(
+            PostLike,
+            description="帖子点赞记录由 likes 扩展拥有。",
         ),
         ApiResourceExtender("post")
         .fields(post_resource_field_definitions)

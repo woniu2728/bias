@@ -15,6 +15,7 @@ DomainEventHandler = Callable[[EventT], None]
 class DomainEventBus:
     def __init__(self):
         self._listeners: DefaultDict[type[DomainEvent], List[DomainEventHandler]] = defaultdict(list)
+        self._bootstrapping_extensions = False
 
     def register(self, event_type: type[EventT], handler: DomainEventHandler[EventT]) -> None:
         listeners = self._listeners[event_type]
@@ -25,10 +26,22 @@ class DomainEventBus:
         self._listeners.clear()
 
     def dispatch(self, event: DomainEvent) -> None:
+        self._ensure_extension_listeners_bootstrapped()
         for event_type, handlers in list(self._listeners.items()):
             if isinstance(event, event_type):
                 for handler in list(handlers):
                     handler(event)
+
+    def _ensure_extension_listeners_bootstrapped(self) -> None:
+        if self._bootstrapping_extensions:
+            return
+        self._bootstrapping_extensions = True
+        try:
+            from apps.core.extensions.bootstrap import get_extension_host
+
+            get_extension_host()
+        finally:
+            self._bootstrapping_extensions = False
 
 
 _forum_event_bus: DomainEventBus | None = None

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from apps.core.extensions.application import ExtensionApplication, ExtensionHost, ExtensionRuntimeView
+from apps.core.extensions.extender_values import flatten_extenders
 from apps.core.extensions.module_loader import load_extension_backend_module
 from apps.core.extensions.types import (
     ExtensionLifecycleDefinition,
@@ -122,10 +123,8 @@ class Extension:
         extenders: Any = []
         if callable(extenders_factory):
             extenders = extenders_factory() or []
-        if not isinstance(extenders, (list, tuple)):
-            extenders = [extenders]
 
-        self._extenders = tuple(extenders)
+        self._extenders = flatten_extenders(extenders)
         return self._extenders
 
     def get_runtime_view(self, host: ExtensionHost | None = None) -> ExtensionRuntimeView:
@@ -233,6 +232,10 @@ class Extension:
     @property
     def locale_paths(self) -> tuple[str, ...]:
         return tuple(self.discover().locale_paths)
+
+    @property
+    def view_namespaces(self):
+        return tuple(self.discover().view_namespaces)
 
     @property
     def formatter_pipeline(self):

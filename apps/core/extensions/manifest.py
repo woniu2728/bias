@@ -128,6 +128,7 @@ class ExtensionManifestLoader:
             permissions_pages=tuple(str(item).strip() for item in payload.get("permissions_pages", []) if str(item).strip()),
             operations_pages=tuple(str(item).strip() for item in payload.get("operations_pages", []) if str(item).strip()),
             admin_actions=tuple(self._build_admin_action(item) for item in payload.get("admin_actions", []) if isinstance(item, dict)),
+            operations_profile=dict(payload.get("operations_profile") or {}) if isinstance(payload.get("operations_profile"), dict) else {},
             compatibility=self._build_compatibility(payload.get("compatibility")),
             security=self._build_security(payload.get("security")),
             distribution=self._build_distribution(payload.get("distribution")),

@@ -1,22 +1,33 @@
 from ninja import Body, Router
+from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
+from apps.core.api_errors import api_error
+from apps.core.audit import log_admin_action
+from apps.core.domain_events import dispatch_forum_event_after_commit
+from apps.core.forum_events import UserSuspendedEvent, UserUnsuspendedEvent
+from apps.core.forum_registry import get_forum_registry
+from apps.core.admin_user_helpers import (
+    is_builtin_group,
+    normalize_permission_code,
+    parse_optional_datetime,
+    serialize_admin_user,
+    serialize_group,
+    validate_group_payload,
+)
 from apps.core.jwt_auth import AccessTokenAuth
+from apps.core.services import PaginationService
+from apps.users.models import Group, Permission, User
+from apps.users.services import UserService
 
 
 router = Router()
 
 
-def _legacy():
-    from apps.core import admin_api as legacy
-
-    return legacy
-
-
 def _require_staff(request):
-    legacy = _legacy()
     if not request.auth or not request.auth.is_staff:
-        return legacy.admin_error("需要管理员权限", status=403)
+        return api_error("需要管理员权限", status=403)
     return None
 
 
@@ -26,9 +37,8 @@ def list_groups(request):
     if denied:
         return denied
 
-    legacy = _legacy()
-    groups = legacy.Group.objects.all().order_by("id", "name")
-    return [legacy.serialize_group(group) for group in groups]
+    groups = Group.objects.all().order_by("id", "name")
+    return [serialize_group(group) for group in groups]
 
 
 @router.post("/groups", auth=AccessTokenAuth(), tags=["Admin"])
@@ -37,20 +47,19 @@ def create_group(request, payload: dict = Body(...)):
     if denied:
         return denied
 
-    legacy = _legacy()
     try:
-        validated = legacy.validate_group_payload(payload)
-        group = legacy.Group.objects.create(**validated)
-        legacy.log_admin_action(
+        validated = validate_group_payload(payload)
+        group = Group.objects.create(**validated)
+        log_admin_action(
             request,
             "admin.group.create",
             target_type="group",
             target_id=group.id,
             data={"name": group.name, "is_hidden": group.is_hidden},
         )
-        return legacy.serialize_group(group)
+        return serialize_group(group)
     except ValueError as exc:
-        return legacy.admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
 
 
 @router.put("/groups/{group_id}", auth=AccessTokenAuth(), tags=["Admin"])
@@ -59,26 +68,25 @@ def update_group(request, group_id: int, payload: dict = Body(...)):
     if denied:
         return denied
 
-    legacy = _legacy()
-    group = get_object_or_404(legacy.Group, id=group_id)
+    group = get_object_or_404(Group, id=group_id)
 
     try:
-        validated = legacy.validate_group_payload(payload, group=group)
+        validated = validate_group_payload(payload, group=group)
     except ValueError as exc:
-        return legacy.admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
 
     for field, value in validated.items():
         setattr(group, field, value)
     group.save()
 
-    legacy.log_admin_action(
+    log_admin_action(
         request,
         "admin.group.update",
         target_type="group",
         target_id=group.id,
         data={"name": group.name, "changed_fields": sorted(validated.keys())},
     )
-    return legacy.serialize_group(group)
+    return serialize_group(group)
 
 
 @router.delete("/groups/{group_id}", auth=AccessTokenAuth(), tags=["Admin"])
@@ -87,15 +95,14 @@ def delete_group(request, group_id: int):
     if denied:
         return denied
 
-    legacy = _legacy()
-    group = get_object_or_404(legacy.Group, id=group_id)
+    group = get_object_or_404(Group, id=group_id)
 
-    if legacy.is_builtin_group(group):
-        return legacy.admin_error("系统默认用户组不允许删除", status=400)
+    if is_builtin_group(group):
+        return api_error("系统默认用户组不允许删除", status=400)
 
     group_snapshot = {"name": group.name, "permission_count": group.permissions.count()}
     group.delete()
-    legacy.log_admin_action(
+    log_admin_action(
         request,
         "admin.group.delete",
         target_type="group",
@@ -111,10 +118,9 @@ def get_permissions_meta(request):
     if denied:
         return denied
 
-    legacy = _legacy()
+    registry = get_forum_registry()
     return {
-        "sections": legacy.REGISTRY.get_permission_sections(),
-        "aliases": legacy.REGISTRY.get_permission_aliases(),
+        "sections": registry.get_permission_sections(),
         "modules": [
             {
                 "id": module.module_id,
@@ -122,7 +128,7 @@ def get_permissions_meta(request):
                 "category": module.category,
                 "enabled": module.enabled,
             }
-            for module in legacy.REGISTRY.get_modules()
+            for module in registry.get_modules()
         ],
     }
 
@@ -133,22 +139,21 @@ def get_permissions(request):
     if denied:
         return denied
 
-    legacy = _legacy()
-    permissions = legacy.Permission.objects.select_related("group").all()
+    permissions = Permission.objects.select_related("group").all()
     result = {}
     for perm in permissions:
         group_id = perm.group.id
         if group_id not in result:
             result[group_id] = []
-        normalized = legacy.normalize_permission_code(perm.permission)
+        normalized = normalize_permission_code(perm.permission)
         if normalized and normalized not in result[group_id]:
             result[group_id].append(normalized)
 
-    admin_group = legacy.Group.objects.filter(id=1, name="Admin").first()
+    admin_group = Group.objects.filter(id=1, name="Admin").first()
     if admin_group is not None:
         admin_runtime_permissions = sorted(
-            set(legacy.UserService.STAFF_BASE_FORUM_PERMISSIONS)
-            | legacy.UserService.get_staff_group_managed_forum_permissions()
+            set(UserService.STAFF_BASE_FORUM_PERMISSIONS)
+            | UserService.get_staff_group_managed_forum_permissions()
         )
         if admin_group.id not in result:
             result[admin_group.id] = []
@@ -165,52 +170,52 @@ def save_permissions(request, payload: dict = Body(...)):
     if denied:
         return denied
 
-    legacy = _legacy()
     normalized_payload = {}
+    registry = get_forum_registry()
 
     for raw_group_id, permission_names in payload.items():
         try:
             group_id = int(raw_group_id)
         except (TypeError, ValueError):
-            return legacy.admin_error("用户组参数无效", status=400)
+            return api_error("用户组参数无效", status=400)
 
         try:
-            group = legacy.Group.objects.get(id=group_id)
-        except legacy.Group.DoesNotExist:
-            return legacy.admin_error(f"用户组不存在: {group_id}", status=400)
+            group = Group.objects.get(id=group_id)
+        except Group.DoesNotExist:
+            return api_error(f"用户组不存在: {group_id}", status=400)
 
         normalized_permissions = []
         for permission_name in permission_names or []:
-            normalized_permission = legacy.normalize_permission_code(permission_name)
+            normalized_permission = normalize_permission_code(permission_name)
             if not normalized_permission:
-                return legacy.admin_error(f"未知权限: {permission_name}", status=400)
+                return api_error(f"未知权限: {permission_name}", status=400)
             if normalized_permission not in normalized_permissions:
                 normalized_permissions.append(normalized_permission)
 
-        if legacy.is_builtin_group(group) and group.id == 1:
+        if is_builtin_group(group) and group.id == 1:
             normalized_permissions = sorted(
                 set(normalized_permissions)
-                | set(legacy.UserService.STAFF_BASE_FORUM_PERMISSIONS)
-                | legacy.UserService.get_staff_group_managed_forum_permissions()
+                | set(UserService.STAFF_BASE_FORUM_PERMISSIONS)
+                | UserService.get_staff_group_managed_forum_permissions()
             )
 
-        normalized_permissions = legacy.REGISTRY.expand_permissions(normalized_permissions)
+        normalized_permissions = registry.expand_permissions(normalized_permissions)
         normalized_payload[group.id] = {
             "group": group,
             "permissions": normalized_permissions,
         }
 
-    with legacy.transaction.atomic():
-        legacy.Permission.objects.all().delete()
+    with transaction.atomic():
+        Permission.objects.all().delete()
 
         for entry in normalized_payload.values():
             for permission in entry["permissions"]:
-                legacy.Permission.objects.create(
+                Permission.objects.create(
                     group=entry["group"],
                     permission=permission,
                 )
 
-    legacy.log_admin_action(
+    log_admin_action(
         request,
         "admin.permissions.update",
         target_type="permissions",
@@ -228,15 +233,14 @@ def list_admin_users(request, page: int = 1, limit: int = 20, q: str = None):
     if denied:
         return denied
 
-    legacy = _legacy()
-    page, limit = legacy.PaginationService.normalize(page, limit)
-    queryset = legacy.User.objects.prefetch_related("user_groups").all().order_by("-joined_at")
+    page, limit = PaginationService.normalize(page, limit)
+    queryset = User.objects.prefetch_related("user_groups").all().order_by("-joined_at")
 
     if q:
         queryset = queryset.filter(
-            legacy.Q(username__icontains=q)
-            | legacy.Q(email__icontains=q)
-            | legacy.Q(display_name__icontains=q)
+            Q(username__icontains=q)
+            | Q(email__icontains=q)
+            | Q(display_name__icontains=q)
         )
 
     total = queryset.count()
@@ -247,7 +251,7 @@ def list_admin_users(request, page: int = 1, limit: int = 20, q: str = None):
         "total": total,
         "page": page,
         "limit": limit,
-        "data": [legacy.serialize_admin_user(user) for user in users],
+        "data": [serialize_admin_user(user) for user in users],
     }
 
 
@@ -257,9 +261,8 @@ def get_admin_user(request, user_id: int):
     if denied:
         return denied
 
-    legacy = _legacy()
-    user = get_object_or_404(legacy.User.objects.prefetch_related("user_groups"), id=user_id)
-    return legacy.serialize_admin_user(user, include_details=True)
+    user = get_object_or_404(User.objects.prefetch_related("user_groups"), id=user_id)
+    return serialize_admin_user(user, include_details=True)
 
 
 @router.put("/users/{user_id}", auth=AccessTokenAuth(), tags=["Admin"])
@@ -268,24 +271,23 @@ def update_admin_user(request, user_id: int, payload: dict = Body(...)):
     if denied:
         return denied
 
-    legacy = _legacy()
-    user = get_object_or_404(legacy.User.objects.prefetch_related("user_groups"), id=user_id)
+    user = get_object_or_404(User.objects.prefetch_related("user_groups"), id=user_id)
     was_suspended = user.is_suspended
     previous_group_ids = set(user.user_groups.values_list("id", flat=True))
 
     if user.id == request.auth.id and "is_staff" in payload and not payload.get("is_staff"):
-        return legacy.admin_error("不能取消自己的管理员权限", status=400)
+        return api_error("不能取消自己的管理员权限", status=400)
 
     username = payload.get("username")
     if username and username != user.username:
-        if legacy.User.objects.filter(username=username).exclude(id=user.id).exists():
-            return legacy.admin_error("用户名已存在", status=400)
+        if User.objects.filter(username=username).exclude(id=user.id).exists():
+            return api_error("用户名已存在", status=400)
         user.username = username
 
     email = payload.get("email")
     if email is not None and email != user.email:
-        if legacy.User.objects.filter(email=email).exclude(id=user.id).exists():
-            return legacy.admin_error("邮箱已被使用", status=400)
+        if User.objects.filter(email=email).exclude(id=user.id).exists():
+            return api_error("邮箱已被使用", status=400)
         user.email = email
 
     if "display_name" in payload:
@@ -299,9 +301,9 @@ def update_admin_user(request, user_id: int, payload: dict = Body(...)):
 
     try:
         if "suspended_until" in payload:
-            user.suspended_until = legacy.parse_optional_datetime(payload.get("suspended_until"))
+            user.suspended_until = parse_optional_datetime(payload.get("suspended_until"))
     except ValueError as exc:
-        return legacy.admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
 
     if "suspend_reason" in payload:
         user.suspend_reason = payload.get("suspend_reason") or ""
@@ -313,11 +315,11 @@ def update_admin_user(request, user_id: int, payload: dict = Body(...)):
         try:
             normalized_group_ids = [int(group_id) for group_id in group_ids]
         except (TypeError, ValueError):
-            return legacy.admin_error("用户组参数无效", status=400)
+            return api_error("用户组参数无效", status=400)
 
-        groups = list(legacy.Group.objects.filter(id__in=normalized_group_ids))
+        groups = list(Group.objects.filter(id__in=normalized_group_ids))
         if len(groups) != len(set(normalized_group_ids)):
-            return legacy.admin_error("包含无效的用户组", status=400)
+            return api_error("包含无效的用户组", status=400)
     else:
         groups = None
 
@@ -329,15 +331,15 @@ def update_admin_user(request, user_id: int, payload: dict = Body(...)):
     )
     if touched_suspension_fields:
         if is_suspended:
-            legacy.dispatch_forum_event_after_commit(
-                legacy.UserSuspendedEvent(
+            dispatch_forum_event_after_commit(
+                UserSuspendedEvent(
                     user_id=user.id,
                     actor_user_id=getattr(request.auth, "id", None),
                 )
             )
         elif was_suspended:
-            legacy.dispatch_forum_event_after_commit(
-                legacy.UserUnsuspendedEvent(
+            dispatch_forum_event_after_commit(
+                UserUnsuspendedEvent(
                     user_id=user.id,
                     actor_user_id=getattr(request.auth, "id", None),
                 )
@@ -348,7 +350,7 @@ def update_admin_user(request, user_id: int, payload: dict = Body(...)):
 
     user.refresh_from_db()
     next_group_ids = set(user.user_groups.values_list("id", flat=True))
-    legacy.log_admin_action(
+    log_admin_action(
         request,
         "admin.user.update",
         target_type="user",
@@ -360,7 +362,7 @@ def update_admin_user(request, user_id: int, payload: dict = Body(...)):
             "groups_changed": groups is not None and previous_group_ids != next_group_ids,
         },
     )
-    return legacy.serialize_admin_user(user, include_details=True)
+    return serialize_admin_user(user, include_details=True)
 
 
 @router.delete("/users/{user_id}", auth=AccessTokenAuth(), tags=["Admin"])
@@ -369,14 +371,13 @@ def delete_admin_user(request, user_id: int):
     if denied:
         return denied
 
-    legacy = _legacy()
-    user = get_object_or_404(legacy.User, id=user_id)
+    user = get_object_or_404(User, id=user_id)
 
     if user.id == request.auth.id:
-        return legacy.admin_error("不能删除当前登录的管理员账号", status=400)
+        return api_error("不能删除当前登录的管理员账号", status=400)
 
-    if user.is_staff and legacy.User.objects.filter(is_staff=True).exclude(id=user.id).count() == 0:
-        return legacy.admin_error("至少需要保留一个管理员账号", status=400)
+    if user.is_staff and User.objects.filter(is_staff=True).exclude(id=user.id).count() == 0:
+        return api_error("至少需要保留一个管理员账号", status=400)
 
     user_snapshot = {
         "username": user.username,
@@ -384,7 +385,7 @@ def delete_admin_user(request, user_id: int):
         "is_staff": user.is_staff,
     }
     user.delete()
-    legacy.log_admin_action(
+    log_admin_action(
         request,
         "admin.user.delete",
         target_type="user",

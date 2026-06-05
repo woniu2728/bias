@@ -36,6 +36,11 @@ FORBIDDEN_EXTENSION_SOURCE_PATTERNS = (
         re.compile(r"\bmoduleId\s*:\s*['\"]core['\"]"),
         "扩展前端贡献不能声明为 core 模块；请使用当前扩展 ID 作为 moduleId，或省略 moduleId 由扩展运行域归属。",
     ),
+    (
+        "forbidden_django_app_entry_import",
+        re.compile(r"^\s*(?:from|import)\s+apps\.[A-Za-z0-9_]+(?:\.(?:admin|views|tasks|signals)\b|\s+import\s+(?:admin|views|tasks|signals)\b)", re.MULTILINE),
+        "扩展后端不能直接导入 Django app 的 admin/views/tasks/signals 入口；请把运行入口声明到扩展 backend 下。",
+    ),
 )
 
 

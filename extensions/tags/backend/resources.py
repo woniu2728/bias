@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from apps.tags.models import Tag
+
 
 def serialize_tag_base(tag, context: dict) -> dict:
     return {
@@ -37,6 +39,33 @@ def resolve_discussion_tags(discussion, context: dict) -> list[dict]:
     ]
 
 
+def resolve_forum_tags(forum, context: dict) -> list[dict]:
+    from django.db.models import Prefetch
+
+    from extensions.tags.backend.services import TagService
+
+    user = context.get("user")
+    child_queryset = TagService.filter_tags_for_user(
+        Tag.objects.filter(is_hidden=False).order_by("position", "name"),
+        user,
+        action="view",
+    )
+    queryset = TagService.filter_tags_for_user(
+        Tag.objects.filter(parent__isnull=True, is_hidden=False)
+        .select_related("last_posted_discussion")
+        .prefetch_related(Prefetch("children", queryset=child_queryset, to_attr="visible_children"))
+        .order_by("position", "name"),
+        user,
+        action="view",
+    )
+    return [_serialize_forum_tag(tag, context) for tag in queryset]
+
+
+def resolve_forum_can_bypass_tag_counts(forum, context: dict) -> bool:
+    user = context.get("user")
+    return bool(user and user.is_authenticated and (user.is_staff or user.is_superuser))
+
+
 def resolve_discussion_tagged_event_data(post, context: dict) -> dict | None:
     added = []
     removed = []
@@ -51,6 +80,24 @@ def resolve_discussion_tagged_event_data(post, context: dict) -> dict | None:
         "added_tags": added,
         "removed_tags": removed,
     }
+
+
+def resolve_post_event_mentions_tags(post, context: dict | None = None) -> list[Tag]:
+    if getattr(post, "type", "") != "discussionTagged":
+        return []
+    event_data = resolve_discussion_tagged_event_data(post, context or {}) or {}
+    slugs = []
+    for slug in [*event_data.get("added_tags", []), *event_data.get("removed_tags", [])]:
+        if slug and slug not in slugs:
+            slugs.append(slug)
+    if not slugs:
+        return []
+
+    tags_by_slug = {
+        tag.slug: tag
+        for tag in Tag.objects.filter(slug__in=slugs).select_related("last_posted_discussion")
+    }
+    return [tags_by_slug[slug] for slug in slugs if slug in tags_by_slug]
 
 
 def resolve_tag_can_start_discussion(tag, context: dict) -> bool:
@@ -87,3 +134,15 @@ def _normalized_lines(content: str | None) -> list[str]:
         for line in (content or "").splitlines()
         if line.strip()
     ]
+
+
+def _serialize_forum_tag(tag, context: dict) -> dict:
+    payload = serialize_tag_base(tag, context)
+    payload["can_start_discussion"] = resolve_tag_can_start_discussion(tag, context)
+    payload["can_reply"] = resolve_tag_can_reply(tag, context)
+    payload["last_posted_discussion"] = resolve_tag_last_posted_discussion(tag, context)
+    payload["children"] = [
+        _serialize_forum_tag(child, context)
+        for child in getattr(tag, "visible_children", [])
+    ]
+    return payload

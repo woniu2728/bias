@@ -1,10 +1,12 @@
 import {
-  registerAdminFlagsPageActionMeta,
-  registerAdminFlagsPageConfig,
-  registerAdminFlagsPageCopy,
+  registerAdminPageActionMeta,
+  registerAdminPageConfig,
+  registerAdminPageCopy,
 } from '@/admin/registry'
 
-registerAdminFlagsPageCopy({
+const PAGE_KEY = 'flags.index'
+
+registerAdminPageCopy(PAGE_KEY, {
   key: 'flags-page-copy',
   order: 10,
   resolve: () => ({
@@ -37,7 +39,7 @@ registerAdminFlagsPageCopy({
   }),
 })
 
-registerAdminFlagsPageConfig({
+registerAdminPageConfig(PAGE_KEY, {
   key: 'flags-page-config',
   order: 10,
   resolve: () => ({
@@ -49,7 +51,7 @@ registerAdminFlagsPageConfig({
   }),
 })
 
-registerAdminFlagsPageActionMeta({
+registerAdminPageActionMeta(PAGE_KEY, {
   key: 'flags-page-actions-meta',
   order: 10,
   resolve: () => ({

@@ -190,25 +190,19 @@ test('extension navigation helpers preserve source and fallback targets', () => 
     path: '/admin/extensions/core',
     query: { from: 'extensions' },
   })
-  assert.deepEqual(buildExtensionRouteTarget('/admin/modules', {
+  assert.deepEqual(buildExtensionRouteTarget('/admin/extensions/approval', {
     query: {
       from: 'extensions',
       module: 'approval',
     },
   }), {
-    path: '/admin/modules',
+    path: '/admin/extensions/approval',
     query: {
       from: 'extensions',
       module: 'approval',
     },
   })
-  assert.deepEqual(resolveExtensionBackTarget({ query: { from: 'modules', module: 'approval' } }, '/admin'), {
-    path: '/admin/modules',
-    query: {
-      from: 'modules',
-      module: 'approval',
-    },
-  })
+  assert.equal(resolveExtensionBackTarget({ query: { from: 'unknown', module: 'approval' } }, '/admin'), '/admin')
   assert.equal(resolveExtensionBackTarget({ query: { from: 'extensions' } }, '/admin'), '/admin')
   assert.equal(resolveExtensionBackTarget({ query: {} }, '/admin'), '/admin')
 })
@@ -304,18 +298,44 @@ test('resolveExtensionPrimaryAdminAction prefers hosted settings and operations 
   })?.key, 'settings')
 })
 
-test('resolveExtensionOperationsProfile exposes dedicated copy for extension modules', () => {
-  const notificationsProfile = resolveExtensionOperationsProfile({ id: 'notifications' })
-  const realtimeProfile = resolveExtensionOperationsProfile({ id: 'realtime' })
-  const likesProfile = resolveExtensionOperationsProfile({ id: 'likes' })
-  const discussionsProfile = resolveExtensionOperationsProfile({ id: 'discussions' })
+test('resolveExtensionOperationsProfile derives default copy from capabilities', () => {
+  const profile = resolveExtensionOperationsProfile({
+    id: 'runtime-demo',
+    name: '运行演示',
+    notification_types: [{ module_id: 'runtime-demo', code: 'demo', label: '演示通知' }],
+    event_listeners: [{ module_id: 'runtime-demo', event: 'DemoEvent', listener: 'handle_demo' }],
+  })
 
-  assert.equal(notificationsProfile.kicker, 'Notification Hub')
-  assert.equal(realtimeProfile.title, '实时连接与广播')
-  assert.equal(likesProfile.title, '点赞互动与提醒')
-  assert.equal(discussionsProfile.title, '讨论流与内容治理')
-  assert.ok(notificationsProfile.highlights.includes('通知类型'))
-  assert.ok(realtimeProfile.highlights.includes('事件监听'))
+  assert.equal(profile.kicker, 'Extension Operations')
+  assert.equal(profile.title, '运行演示 操作宿主')
+  assert.ok(profile.description.includes('通知类型、事件监听'))
+  assert.deepEqual(profile.highlights, ['通知类型', '事件监听'])
+  assert.deepEqual(profile.focusPanels.map(item => item.key), ['notification_types', 'event_listeners'])
+})
+
+test('resolveExtensionOperationsProfile accepts explicit extension profile overrides', () => {
+  const profile = resolveExtensionOperationsProfile({
+    id: 'custom-profile',
+    name: '自定义扩展',
+    notification_types: [{ module_id: 'custom-profile', code: 'demo', label: '演示通知' }],
+    operations_profile: {
+      kicker: 'Custom Runtime',
+      title: '自定义操作页',
+      highlights: ['自定义摘要'],
+      focus_panels: [
+        { key: 'notification_types', title: '自定义通知', description: '扩展自己声明的说明。' },
+      ],
+      recommended_action_keys: ['settings'],
+      next_steps: ['补齐自定义页面。'],
+    },
+  })
+
+  assert.equal(profile.kicker, 'Custom Runtime')
+  assert.equal(profile.title, '自定义操作页')
+  assert.deepEqual(profile.highlights, ['自定义摘要'])
+  assert.equal(profile.focusPanels[0].title, '自定义通知')
+  assert.deepEqual(profile.recommendedActionKeys, ['settings'])
+  assert.deepEqual(profile.nextSteps, ['补齐自定义页面。'])
 })
 
 test('resolveExtensionOperationsFocusSections maps profile focus panels to capability groups', () => {
@@ -350,11 +370,11 @@ test('resolveExtensionOperationsFocusSections maps profile focus panels to capab
 
   assert.deepEqual(sections.map(item => item.key), [
     'user_preferences',
-    'discussion_list_filters',
     'event_listeners',
+    'discussion_list_filters',
   ])
-  assert.equal(sections[0].title, '关注偏好')
-  assert.equal(sections[1].items[0].label, '关注中')
+  assert.equal(sections[0].title, '用户偏好')
+  assert.equal(sections[2].items[0].label, '关注中')
 })
 
 test('resolveExtensionOperationsActionGroups promotes primary actions and keeps runtime actions separate', () => {
@@ -377,7 +397,7 @@ test('resolveExtensionOperationsActionGroups promotes primary actions and keeps 
 
 test('resolveExtensionOperationsNextSteps warns when extension still uses generated operations host', () => {
   const nextSteps = resolveExtensionOperationsNextSteps({
-    id: 'tag-stats',
+    id: 'generated-demo',
     debug_info: {
       admin_surface_statuses: [
         { key: 'operations', mode: 'generated' },
@@ -404,7 +424,7 @@ test('resolveExtensionOperationsSections returns a normalized operations payload
     ],
   })
 
-  assert.equal(sections.profile.title, '提及规则与提醒')
+  assert.equal(sections.profile.title, 'mentions 操作宿主')
   assert.equal(sections.capabilitySummaryItems[0].key, 'notification_type_count')
   assert.equal(sections.actionGroups[0].key, 'recommended')
 })
@@ -433,8 +453,8 @@ test('resolveExtensionOperationsSections can summarize core discussion capabilit
     'discussion_list_filter_count',
   ])
   assert.deepEqual(sections.focusSections.map(item => item.key), [
+    'search_filters',
     'discussion_sorts',
     'discussion_list_filters',
-    'search_filters',
   ])
 })

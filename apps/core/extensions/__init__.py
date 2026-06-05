@@ -36,11 +36,13 @@ from apps.core.extensions.extenders import (
     SearchIndexExtender,
     SessionExtender,
     ServiceProviderExtender,
+    SignalExtender,
     ThemeExtender,
     ThrottleApiExtender,
     UserExtender,
     RuntimeActionsExtender,
     SettingsExtender,
+    ViewExtender,
 )
 
 __all__ = [
@@ -81,11 +83,13 @@ __all__ = [
     "SearchIndexExtender",
     "SessionExtender",
     "ServiceProviderExtender",
+    "SignalExtender",
     "ThemeExtender",
     "ThrottleApiExtender",
     "UserExtender",
     "RuntimeActionsExtender",
     "SettingsExtender",
+    "ViewExtender",
     "get_extension_registry",
 ]
 

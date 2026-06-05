@@ -170,6 +170,60 @@ export function registerLazyExtensionModule(key, module) {
   return true
 }
 
+export function registerLoadedExtensionModule(extensionId, module, {
+  app = null,
+  extension = null,
+  frontend = '',
+  entryPath = '',
+} = {}) {
+  const normalizedExtensionId = String(extensionId || extension?.id || '').trim()
+  if (!normalizedExtensionId || !module) {
+    return null
+  }
+
+  const namespace = ensureBiasNamespace()
+  const globalRecord = namespace.extensions[normalizedExtensionId] || createLoadedExtensionRecord(normalizedExtensionId)
+  const targetRecord = app?.extensions
+    ? (app.extensions[normalizedExtensionId] || globalRecord)
+    : globalRecord
+  const record = mergeLoadedExtensionRecord(targetRecord, {
+    extensionId: normalizedExtensionId,
+    module,
+    extension,
+    frontend,
+    entryPath,
+  })
+
+  namespace.extensions[normalizedExtensionId] = record
+  if (app?.extensions) {
+    app.extensions[normalizedExtensionId] = record
+  }
+  if (typeof globalThis.dispatchEvent === 'function' && typeof globalThis.CustomEvent === 'function') {
+    globalThis.dispatchEvent(new CustomEvent('bias:extension-module-registered', { detail: record }))
+  }
+  return record
+}
+
+export function unregisterLoadedExtensionModule(extensionId = '', { app = null } = {}) {
+  const normalizedExtensionId = String(extensionId || '').trim()
+  const namespace = ensureBiasNamespace()
+  if (!normalizedExtensionId) {
+    for (const key of Object.keys(namespace.extensions)) {
+      delete namespace.extensions[key]
+    }
+    if (app?.extensions) {
+      for (const key of Object.keys(app.extensions)) {
+        delete app.extensions[key]
+      }
+    }
+    return
+  }
+  delete namespace.extensions[normalizedExtensionId]
+  if (app?.extensions) {
+    delete app.extensions[normalizedExtensionId]
+  }
+}
+
 export function onLazyModuleLoad(key, callback) {
   const normalizedKey = String(key || '').trim()
   if (!normalizedKey || typeof callback !== 'function') {
@@ -234,6 +288,48 @@ export function handleExtensionRuntimeError(error, extensionId = '', operation =
 
 function resolveLazyModuleTarget(module) {
   return module?.default?.prototype || module?.prototype || module?.default || module
+}
+
+function ensureBiasNamespace() {
+  if (!globalThis.bias || typeof globalThis.bias !== 'object') {
+    globalThis.bias = {}
+  }
+  if (!globalThis.bias.extensions || typeof globalThis.bias.extensions !== 'object') {
+    globalThis.bias.extensions = Object.create(null)
+  }
+  return globalThis.bias
+}
+
+function createLoadedExtensionRecord(extensionId) {
+  return {
+    id: extensionId,
+    extension: null,
+    module: null,
+    exports: null,
+    modules: Object.create(null),
+    entryPaths: Object.create(null),
+    registeredAt: '',
+  }
+}
+
+function mergeLoadedExtensionRecord(record, {
+  extensionId,
+  module,
+  extension,
+  frontend,
+  entryPath,
+}) {
+  const normalizedFrontend = String(frontend || 'default').trim() || 'default'
+  record.id = extensionId
+  record.extension = extension || record.extension || null
+  record.module = module
+  record.exports = module
+  record.modules[normalizedFrontend] = module
+  if (entryPath) {
+    record.entryPaths[normalizedFrontend] = String(entryPath)
+  }
+  record.registeredAt = new Date().toISOString()
+  return record
 }
 
 function normalizeMethods(methods) {

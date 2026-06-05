@@ -42,6 +42,17 @@ function extractImports(source) {
   return imports
 }
 
+function readExtensionForumSource(extensionId) {
+  return readFileSync(resolve(extensionRoot, `${extensionId}/frontend/forum/index.js`), 'utf8')
+}
+
+function assertCoreRegistryDoesNotOwn(keys) {
+  const forumRegistrySource = readFileSync(resolve(repoRoot, 'frontend/src/forum/registry.js'), 'utf8')
+  for (const key of keys) {
+    assert.equal(forumRegistrySource.includes(key), false, key)
+  }
+}
+
 test('extension frontend imports only public app APIs', () => {
   const offenders = []
   for (const path of listFrontendFiles(extensionRoot)) {
@@ -61,14 +72,15 @@ test('extension frontend imports only public app APIs', () => {
 })
 
 test('mentions extension owns composer mention provider and toolbar tool registration', () => {
-  const forumRegistrySource = readFileSync(resolve(repoRoot, 'frontend/src/forum/registry.js'), 'utf8')
   const composerSource = readFileSync(resolve(repoRoot, 'frontend/src/utils/composer.js'), 'utf8')
-  const mentionsForumSource = readFileSync(resolve(extensionRoot, 'mentions/frontend/forum/index.js'), 'utf8')
+  const mentionsForumSource = readExtensionForumSource('mentions')
 
-  assert.equal(forumRegistrySource.includes("key: 'default-users'"), false)
-  assert.equal(forumRegistrySource.includes("composer-mention-loading"), false)
-  assert.equal(forumRegistrySource.includes("composer-mention-empty"), false)
-  assert.equal(forumRegistrySource.includes("composer-mention-picker-label"), false)
+  assertCoreRegistryDoesNotOwn([
+    "key: 'default-users'",
+    'composer-mention-loading',
+    'composer-mention-empty',
+    'composer-mention-picker-label',
+  ])
   assert.equal(composerSource.includes("key: 'mention'"), false)
   assert.equal(mentionsForumSource.includes('registerComposerMentionProvider'), true)
   assert.equal(mentionsForumSource.includes('registerComposerTool'), true)
@@ -79,19 +91,66 @@ test('mentions extension owns composer mention provider and toolbar tool registr
 })
 
 test('emoji extension owns composer emoji tool and picker copy registration', () => {
-  const forumRegistrySource = readFileSync(resolve(repoRoot, 'frontend/src/forum/registry.js'), 'utf8')
-  const emojiForumSource = readFileSync(resolve(extensionRoot, 'emoji/frontend/forum/index.js'), 'utf8')
+  const emojiForumSource = readExtensionForumSource('emoji')
 
-  assert.equal(forumRegistrySource.includes("key: 'emoji'"), false)
-  assert.equal(forumRegistrySource.includes('composer-emoji-picker-empty'), false)
-  assert.equal(forumRegistrySource.includes('composer-emoji-picker-dialog-label'), false)
-  assert.equal(forumRegistrySource.includes('composer-emoji-picker-search-placeholder'), false)
-  assert.equal(forumRegistrySource.includes('composer-emoji-picker-summary'), false)
-  assert.equal(forumRegistrySource.includes('composer-emoji-autocomplete-label'), false)
+  assertCoreRegistryDoesNotOwn([
+    "key: 'emoji'",
+    'composer-emoji-picker-empty',
+    'composer-emoji-picker-dialog-label',
+    'composer-emoji-picker-search-placeholder',
+    'composer-emoji-picker-summary',
+    'composer-emoji-autocomplete-label',
+  ])
   assert.equal(emojiForumSource.includes('registerComposerTool'), true)
   assert.equal(emojiForumSource.includes('registerUiCopy'), true)
   assert.equal(emojiForumSource.includes("key: 'emoji'"), true)
   assert.equal(emojiForumSource.includes("moduleId: 'emoji'"), true)
+})
+
+test('tags and notifications extensions own navigational forum contributions', () => {
+  const tagsForumSource = readExtensionForumSource('tags')
+  const notificationsForumSource = readExtensionForumSource('notifications')
+
+  assertCoreRegistryDoesNotOwn([
+    "key: 'tags'",
+    'tags-page-empty',
+    'tags-page-hero-title',
+    "key: 'notifications'",
+    'notifications-page-empty',
+    'notifications-menu-empty',
+  ])
+  assert.equal(tagsForumSource.includes('registerForumNavItem'), true)
+  assert.equal(tagsForumSource.includes('registerEmptyState'), true)
+  assert.equal(tagsForumSource.includes("moduleId: 'tags'"), true)
+  assert.equal(notificationsForumSource.includes('registerForumNavItem'), true)
+  assert.equal(notificationsForumSource.includes('registerHeaderItem'), true)
+  assert.equal(notificationsForumSource.includes('registerNotificationRenderer'), true)
+  assert.equal(notificationsForumSource.includes("moduleId: 'notifications'"), true)
+})
+
+test('approval flags subscriptions and likes own interaction contributions', () => {
+  const approvalForumSource = readExtensionForumSource('approval')
+  const flagsForumSource = readExtensionForumSource('flags')
+  const subscriptionsForumSource = readExtensionForumSource('subscriptions')
+  const likesForumSource = readExtensionForumSource('likes')
+
+  assertCoreRegistryDoesNotOwn([
+    'discussionApproved',
+    'open-report-modal',
+    'toggle-subscription',
+    'postLiked',
+  ])
+  assert.equal(approvalForumSource.includes('registerApprovalNote'), true)
+  assert.equal(approvalForumSource.includes('registerDiscussionReviewBanner'), true)
+  assert.equal(approvalForumSource.includes("moduleId: 'approval'"), true)
+  assert.equal(flagsForumSource.includes('registerPostActionHandler'), true)
+  assert.equal(flagsForumSource.includes('registerPostFlagPanel'), true)
+  assert.equal(flagsForumSource.includes("moduleId: 'flags'"), true)
+  assert.equal(subscriptionsForumSource.includes('registerDiscussionActionHandler'), true)
+  assert.equal(subscriptionsForumSource.includes('registerNotificationRenderer'), true)
+  assert.equal(subscriptionsForumSource.includes("moduleId: 'subscriptions'"), true)
+  assert.equal(likesForumSource.includes('registerNotificationRenderer'), true)
+  assert.equal(likesForumSource.includes("moduleId: 'likes'"), true)
 })
 
 test('extension frontend contributions do not claim core module ownership', () => {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from apps.core.domain_events import DomainEventBus
@@ -36,6 +37,8 @@ from apps.core.extensions.types import (
     ExtensionSystemHookDefinition,
     ExtensionValidatorDefinition,
     ExtensionMailDefinition,
+    ExtensionViewNamespaceDefinition,
+    ExtensionSignalDefinition,
 )
 from apps.core.extensions.exceptions import ExtensionBootError
 from apps.core.forum_registry_types import (
@@ -183,6 +186,109 @@ class ApplicationMailService:
         return definition.callback(message, dict(context or {}))
 
 
+class ApplicationViewService:
+    def __init__(self, host: "ExtensionHost") -> None:
+        self._host = host
+        self._definitions_by_extension: dict[str, tuple[ExtensionViewNamespaceDefinition, ...]] = {}
+
+    def namespace(self, extension_id: str, definition: ExtensionViewNamespaceDefinition) -> None:
+        normalized = str(extension_id or "").strip()
+        namespace = str(definition.namespace or "").strip()
+        hints = tuple(str(item or "").strip() for item in definition.hints if str(item or "").strip())
+        if not normalized or not namespace or not hints:
+            return
+        definition = replace(
+            definition,
+            namespace=namespace,
+            hints=tuple(self._normalize_hint(item, extension_id=normalized) for item in hints),
+            module_id=definition.module_id or normalized,
+        )
+        current = tuple(
+            item for item in self._definitions_by_extension.get(normalized, ())
+            if not (
+                item.namespace == definition.namespace
+                and item.module_id == definition.module_id
+                and bool(getattr(item, "prepend", False)) == bool(getattr(definition, "prepend", False))
+            )
+        )
+        definitions = tuple([*current, definition])
+        self._definitions_by_extension[normalized] = definitions
+        self._host._get_or_create_runtime_view(normalized).view_namespaces = tuple(
+            self.get_namespaces(extension_id=normalized)
+        )
+
+    def get_namespaces(self, *, extension_id: str | None = None) -> list[ExtensionViewNamespaceDefinition]:
+        if extension_id is not None:
+            definitions = list(self._definitions_by_extension.get(str(extension_id or "").strip(), ()))
+        else:
+            definitions = []
+            for items in self._definitions_by_extension.values():
+                definitions.extend(items)
+        return sorted(
+            definitions,
+            key=lambda item: (
+                not bool(getattr(item, "prepend", False)),
+                int(item.order or 100),
+                item.module_id,
+                item.namespace,
+            ),
+        )
+
+    def get_namespace_hints(self, namespace: str) -> list[str]:
+        normalized = str(namespace or "").strip()
+        if not normalized:
+            return []
+        hints: list[str] = []
+        for definition in self.get_namespaces():
+            if definition.namespace == normalized:
+                hints.extend(definition.hints)
+        return list(dict.fromkeys(hints))
+
+    def resolve_template_path(self, template_name: str) -> Path:
+        namespace, name = self._split_template_name(template_name)
+        for hint in self.get_namespace_hints(namespace):
+            candidate = (Path(hint) / name).resolve()
+            if candidate.is_file():
+                return candidate
+        raise FileNotFoundError(f"扩展模板不存在: {template_name}")
+
+    def get_template(self, template_name: str):
+        from django.template import engines
+
+        path = self.resolve_template_path(template_name)
+        return engines["django"].from_string(path.read_text(encoding="utf-8"))
+
+    def render(self, template_name: str, context: dict | None = None, *, request: Any = None) -> str:
+        return self.get_template(template_name).render(context=dict(context or {}), request=request)
+
+    def _normalize_hint(self, hint: str, *, extension_id: str) -> str:
+        path = Path(str(hint or "").strip())
+        if path.is_absolute():
+            return str(path)
+
+        extension_view = self._host.get_runtime_view(extension_id)
+        extension_path = str(getattr(extension_view, "path", "") or "").strip()
+        if extension_path:
+            candidate = Path(extension_path) / path
+            if candidate.exists():
+                return str(candidate.resolve())
+
+        from django.conf import settings
+
+        return str((Path(settings.BASE_DIR) / path).resolve())
+
+    def _split_template_name(self, template_name: str) -> tuple[str, str]:
+        raw = str(template_name or "").strip()
+        if "::" not in raw:
+            raise ValueError("扩展模板名必须使用 namespace::template 格式")
+        namespace, name = raw.split("::", 1)
+        namespace = namespace.strip()
+        name = name.strip().lstrip("/\\")
+        if not namespace or not name or ".." in Path(name).parts:
+            raise ValueError("扩展模板名非法")
+        return namespace, name
+
+
 class ApplicationSystemHookService:
     def __init__(self, host: "ExtensionHost", view_field: str) -> None:
         self._host = host
@@ -222,6 +328,35 @@ class ApplicationSystemHookService:
             for definition in self.get_definitions()
             if definition.key == normalized and not callable(definition.callback)
         ]
+
+
+class ApplicationSignalService:
+    def __init__(self, host: "ExtensionHost") -> None:
+        self._host = host
+        self._definitions_by_extension: dict[str, tuple[ExtensionSignalDefinition, ...]] = {}
+
+    def register(self, extension_id: str, definition: ExtensionSignalDefinition) -> None:
+        normalized = str(extension_id or "").strip()
+        if not normalized or definition.signal is None or not callable(definition.receiver):
+            return
+
+        from apps.core.extensions.signal_runtime import connect_runtime_signal
+
+        registered_uid = connect_runtime_signal(normalized, definition)
+        if registered_uid:
+            definition = replace(definition, dispatch_uid=registered_uid)
+
+        definitions = tuple([*self._definitions_by_extension.get(normalized, ()), definition])
+        self._definitions_by_extension[normalized] = definitions
+        self._host._get_or_create_runtime_view(normalized).signal_handlers = definitions
+
+    def get_definitions(self, *, extension_id: str | None = None) -> list[ExtensionSignalDefinition]:
+        if extension_id is not None:
+            return list(self._definitions_by_extension.get(str(extension_id or "").strip(), ()))
+        definitions: list[ExtensionSignalDefinition] = []
+        for items in self._definitions_by_extension.values():
+            definitions.extend(items)
+        return sorted(definitions, key=lambda item: (int(item.order or 100), item.module_id, item.dispatch_uid))
 
 
 class ApplicationPostEventDataService:
@@ -267,6 +402,16 @@ class ApplicationModelExtension:
     definition: ExtensionModelDefinition
 
 
+class ApplicationModelRelationDescriptor:
+    def __init__(self, definition: ExtensionModelRelationDefinition) -> None:
+        self.definition = definition
+
+    def __get__(self, instance: Any, owner: type | None = None):
+        if instance is None:
+            return self
+        return self.definition.resolver(instance)
+
+
 class ApplicationModelService:
     def __init__(self, host: "ExtensionHost") -> None:
         self._host = host
@@ -298,11 +443,27 @@ class ApplicationModelService:
         definitions = [
             definition
             for definition in self.get_definitions()
-            if definition.model == model
+            if self._model_matches(definition.model, model)
         ]
         if kind is not None:
             definitions = [definition for definition in definitions if definition.kind == kind]
         return definitions
+
+    def get_owned_models(self, *, extension_id: str | None = None) -> list[ExtensionModelDefinition]:
+        return [
+            definition
+            for definition in self.get_definitions(extension_id=extension_id)
+            if definition.kind == "owner"
+        ]
+
+    def get_model_owner(self, model: Any) -> str:
+        owners = [
+            extension_id
+            for extension_id, definitions in self._definitions_by_extension.items()
+            for definition in definitions
+            if definition.kind == "owner" and self._model_matches(definition.model, model)
+        ]
+        return owners[-1] if owners else ""
 
     def register_visibility(self, extension_id: str, definition: ExtensionModelVisibilityDefinition) -> None:
         normalized = str(extension_id or "").strip()
@@ -393,6 +554,7 @@ class ApplicationModelService:
         definitions = tuple([*self._relations_by_extension.get(normalized, ()), definition])
         self._relations_by_extension[normalized] = definitions
         self._host._get_or_create_runtime_view(normalized).model_relations = definitions
+        self._install_relation_descriptor(definition)
 
     def get_relations(self, *, extension_id: str | None = None) -> list[ExtensionModelRelationDefinition]:
         if extension_id is not None:
@@ -403,14 +565,38 @@ class ApplicationModelService:
         return definitions
 
     def get_relations_for_model(self, model: Any) -> list[ExtensionModelRelationDefinition]:
-        return [definition for definition in self.get_relations() if definition.model == model]
+        return [
+            definition
+            for definition in self.get_relations()
+            if self._model_matches(definition.model, model)
+        ]
 
-    def resolve_relation(self, model: Any, name: str, instance: Any):
+    def get_relation(self, model: Any, name: str) -> ExtensionModelRelationDefinition | None:
         normalized = str(name or "").strip()
+        if not normalized:
+            return None
         for definition in self.get_relations_for_model(model):
             if definition.name == normalized:
-                return definition.resolver(instance)
+                return definition
         return None
+
+    def resolve_relation(self, model: Any, name: str, instance: Any):
+        definition = self.get_relation(model, name)
+        if definition is None:
+            return None
+        return definition.resolver(instance)
+
+    def _install_relation_descriptor(self, definition: ExtensionModelRelationDefinition) -> None:
+        if not bool(getattr(definition, "inject_attribute", True)):
+            return
+        model_class = self._model_class(definition.model)
+        relation_name = str(definition.name or "").strip()
+        if model_class is None or not relation_name:
+            return
+        existing = getattr(model_class, relation_name, None)
+        if existing is not None and not isinstance(existing, ApplicationModelRelationDescriptor):
+            return
+        setattr(model_class, relation_name, ApplicationModelRelationDescriptor(definition))
 
     def register_cast(self, extension_id: str, definition: ExtensionModelCastDefinition) -> None:
         normalized = str(extension_id or "").strip()
@@ -431,7 +617,7 @@ class ApplicationModelService:
     def get_casts_for_model(self, model: Any) -> dict[str, Any]:
         casts: dict[str, Any] = {}
         for definition in self.get_casts():
-            if definition.model == model:
+            if self._model_matches(definition.model, model):
                 casts[definition.attribute] = definition.cast
         return casts
 
@@ -454,7 +640,7 @@ class ApplicationModelService:
     def get_defaults_for_model(self, model: Any) -> dict[str, Any]:
         defaults: dict[str, Any] = {}
         for definition in self.get_defaults():
-            if definition.model != model:
+            if not self._model_matches(definition.model, model):
                 continue
             value = definition.value
             defaults[definition.attribute] = value() if callable(value) else value
@@ -1998,6 +2184,7 @@ class ExtensionApplicationRecord:
     discussion_sorts: list[DiscussionSortDefinition] = field(default_factory=list)
     discussion_list_filters: list[DiscussionListFilterDefinition] = field(default_factory=list)
     locale_paths: list[str] = field(default_factory=list)
+    view_namespaces: list[ExtensionViewNamespaceDefinition] = field(default_factory=list)
     formatter_pipeline: list[ExtensionFormatterCallback] = field(default_factory=list)
     formatter_callbacks: list[ExtensionFormatterDefinition] = field(default_factory=list)
     resource_definitions: list[ExtensionResourceDefinition] = field(default_factory=list)
@@ -2024,6 +2211,7 @@ class ExtensionApplicationRecord:
     theme_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
     throttle_api_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
     user_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
+    signal_handlers: list[ExtensionSignalDefinition] = field(default_factory=list)
     event_listeners: list[ExtensionEventListenerDefinition] = field(default_factory=list)
     realtime_included: list[ExtensionRealtimeIncludedDefinition] = field(default_factory=list)
     discussion_lifecycle: list[ExtensionDiscussionLifecycleDefinition] = field(default_factory=list)
@@ -2052,6 +2240,7 @@ class ExtensionRuntimeView:
     extension_id: str
     name: str = ""
     source: str = ""
+    path: str = ""
     module_ids: tuple[str, ...] = ()
     frontend_admin_entry: str = ""
     frontend_forum_entry: str = ""
@@ -2085,6 +2274,7 @@ class ExtensionRuntimeView:
     discussion_sorts: tuple[DiscussionSortDefinition, ...] = ()
     discussion_list_filters: tuple[DiscussionListFilterDefinition, ...] = ()
     locale_paths: tuple[str, ...] = ()
+    view_namespaces: tuple[ExtensionViewNamespaceDefinition, ...] = ()
     formatter_pipeline: tuple[ExtensionFormatterCallback, ...] = ()
     formatter_callbacks: tuple[ExtensionFormatterDefinition, ...] = ()
     resource_definitions: tuple[ExtensionResourceDefinition, ...] = ()
@@ -2111,6 +2301,7 @@ class ExtensionRuntimeView:
     theme_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
     throttle_api_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
     user_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
+    signal_handlers: tuple[ExtensionSignalDefinition, ...] = ()
     event_listeners: tuple[ExtensionEventListenerDefinition, ...] = ()
     realtime_included: tuple[ExtensionRealtimeIncludedDefinition, ...] = ()
     discussion_lifecycle: tuple[ExtensionDiscussionLifecycleDefinition, ...] = ()
@@ -2181,6 +2372,7 @@ class ExtensionApplication:
         self.search = ApplicationSearchService(self)
         self.validators = ApplicationValidatorService(self)
         self.mail = ApplicationMailService(self)
+        self.views = ApplicationViewService(self)
         self.error_handling = ApplicationSystemHookService(self, "error_handlers")
         self.auth = ApplicationSystemHookService(self, "auth_handlers")
         self.csrf = ApplicationSystemHookService(self, "csrf_handlers")
@@ -2190,6 +2382,7 @@ class ExtensionApplication:
         self.theme = ApplicationSystemHookService(self, "theme_handlers")
         self.throttle_api = ApplicationSystemHookService(self, "throttle_api_handlers")
         self.user = ApplicationSystemHookService(self, "user_handlers")
+        self.signals = ApplicationSignalService(self)
         self.routes = ApplicationRouteService(self)
         self.frontend = ApplicationFrontendService(self)
         self.providers = ApplicationServiceProviderRegistry(self)
@@ -2227,6 +2420,8 @@ class ExtensionApplication:
         self.instance("extensions.validators", self.validators)
         self.instance("mail", self.mail)
         self.instance("extensions.mail", self.mail)
+        self.instance("views", self.views)
+        self.instance("extensions.views", self.views)
         self.instance("error.handling", self.error_handling)
         self.instance("extensions.error.handling", self.error_handling)
         self.instance("auth", self.auth)
@@ -2245,6 +2440,8 @@ class ExtensionApplication:
         self.instance("extensions.throttle.api", self.throttle_api)
         self.instance("user", self.user)
         self.instance("extensions.user", self.user)
+        self.instance("signals", self.signals)
+        self.instance("extensions.signals", self.signals)
         self.instance("providers", self.providers)
         self.instance("extensions.providers", self.providers)
         self.instance("locales", self.locales)
@@ -2307,8 +2504,9 @@ class ExtensionApplication:
 
     def _register_extensions(self) -> None:
         for extension in self.extensions_to_boot:
-            self.forum.register_external_module_id(extension.id)
-            self.forum.register_extension_module(extension)
+            if extension.source != "site":
+                self.forum.register_external_module_id(extension.id)
+                self.forum.register_extension_module(extension)
             self._mark_extension_lifecycle_phase(extension.id, "register")
             extension.register(self)
 
@@ -2324,6 +2522,7 @@ class ExtensionApplication:
         self.make("session")
         self.make("theme")
         self.make("throttle.api")
+        self.make("signals")
         for extension in self.extensions_to_boot:
             self._mark_extension_lifecycle_phase(extension.id, "boot")
 
@@ -2339,15 +2538,16 @@ class ExtensionApplication:
         extension,
         extenders,
     ) -> ExtensionRuntimeView:
+        from apps.core.extensions.extender_values import flatten_extenders
+
         runtime_view = self.get_or_create_runtime_view(
             extension.id,
             name=extension.name,
             source=extension.source,
+            path=getattr(getattr(extension, "manifest", None), "path", ""),
             module_ids=extension.module_ids or (extension.id,),
         )
-        normalized_extenders = extenders or []
-        if not isinstance(normalized_extenders, (list, tuple)):
-            normalized_extenders = [normalized_extenders]
+        normalized_extenders = flatten_extenders(extenders)
         for extender in normalized_extenders:
             extend_fn = getattr(extender, "extend", None)
             if not callable(extend_fn):
@@ -2506,6 +2706,7 @@ class ExtensionApplication:
         *,
         name: str = "",
         source: str = "",
+        path: str = "",
         module_ids: tuple[str, ...] | list[str] = (),
     ) -> ExtensionRuntimeView:
         normalized = str(extension_id or "").strip()
@@ -2513,12 +2714,13 @@ class ExtensionApplication:
             normalized,
             name=name,
             source=source,
+            path=path,
             module_ids=module_ids,
         )
 
     def get_records(self) -> list[ExtensionApplicationRecord]:
         return [
-            self._build_legacy_record(view)
+            self._build_application_record(view)
             for view in self.get_runtime_views()
         ]
 
@@ -2892,6 +3094,7 @@ class ExtensionApplication:
         *,
         name: str = "",
         source: str = "",
+        path: str = "",
         module_ids: tuple[str, ...] | list[str] = (),
     ) -> ExtensionRuntimeView:
         normalized = str(extension_id or "").strip()
@@ -2900,6 +3103,7 @@ class ExtensionApplication:
                 extension_id=normalized,
                 name=str(name or "").strip(),
                 source=str(source or "").strip(),
+                path=str(path or "").strip(),
                 module_ids=tuple(
                     item for item in dict.fromkeys(str(item).strip() for item in module_ids)
                     if item
@@ -2910,6 +3114,8 @@ class ExtensionApplication:
             view.name = str(name).strip()
         if source:
             view.source = str(source).strip()
+        if path:
+            view.path = str(path).strip()
         if module_ids:
             view.module_ids = tuple(
                 item for item in dict.fromkeys(str(item).strip() for item in module_ids)
@@ -2940,7 +3146,7 @@ class ExtensionApplication:
             return
         view.extender_keys = tuple([*view.extender_keys, extender_key])
 
-    def _build_legacy_record(self, view: ExtensionRuntimeView) -> ExtensionApplicationRecord:
+    def _build_application_record(self, view: ExtensionRuntimeView) -> ExtensionApplicationRecord:
         return ExtensionApplicationRecord(
             extension_id=view.extension_id,
             name=view.name,
@@ -2978,6 +3184,7 @@ class ExtensionApplication:
             discussion_sorts=list(view.discussion_sorts),
             discussion_list_filters=list(view.discussion_list_filters),
             locale_paths=list(view.locale_paths),
+            view_namespaces=list(view.view_namespaces),
             formatter_pipeline=list(view.formatter_pipeline),
             formatter_callbacks=list(view.formatter_callbacks),
             resource_definitions=list(view.resource_definitions),
@@ -3004,6 +3211,7 @@ class ExtensionApplication:
             theme_handlers=list(view.theme_handlers),
             throttle_api_handlers=list(view.throttle_api_handlers),
             user_handlers=list(view.user_handlers),
+            signal_handlers=list(view.signal_handlers),
             event_listeners=list(view.event_listeners),
             realtime_included=list(view.realtime_included),
             discussion_lifecycle=list(view.discussion_lifecycle),

@@ -15,7 +15,9 @@ import {
 } from './extensionRuntimeState.js'
 import {
   handleExtensionRuntimeError,
+  registerLoadedExtensionModule,
   runWithExtensionScope,
+  unregisterLoadedExtensionModule,
 } from '../common/extensionRuntime.js'
 
 const loadedAdminExtensionIds = new Set()
@@ -35,7 +37,7 @@ export async function bootstrapEnabledAdminExtensions({
 } = {}) {
   let addedRouteCount = 0
   const resolvedRegistry = registry || await loadAdminRegistry()
-  resetLoadedAdminExtensionsWhenRuntimeChanges(runtime, { router })
+  resetLoadedAdminExtensionsWhenRuntimeChanges(runtime, { router, app: application })
   const initializedApps = []
 
   for (const extension of extensions || []) {
@@ -58,6 +60,12 @@ export async function bootstrapEnabledAdminExtensions({
         loadedExtensionIds: loadedAdminExtensionIds,
         registry: resolvedRegistry,
         router,
+      })
+      registerLoadedExtensionModule(extensionId, module, {
+        app: application,
+        extension,
+        frontend: 'admin',
+        entryPath,
       })
       await runWithExtensionScope(extensionId, () => module.bootAdminExtension({
         app,
@@ -109,10 +117,10 @@ export function resetLoadedAdminExtensions() {
   })
 }
 
-export function resetLoadedAdminExtensionsWhenRuntimeChanges(runtime, { router } = {}) {
+export function resetLoadedAdminExtensionsWhenRuntimeChanges(runtime, { router, app } = {}) {
   return resetLoadedExtensionsWhenRuntimeChanges(loadedAdminExtensionIds, runtime, {
     onReset() {
-      resetAdminExtensionRuntimeContributions('', { router })
+      resetAdminExtensionRuntimeContributions('', { router, app })
     },
   })
 }
@@ -121,10 +129,11 @@ export function getAdminInitializers() {
   return getAdminExtensionInitializers()
 }
 
-export function resetAdminExtensionRuntimeContributions(extensionId = '', { router } = {}) {
+export function resetAdminExtensionRuntimeContributions(extensionId = '', { router, app } = {}) {
   removeAdminRuntimeRoutes(router, extensionId)
   clearAdminRoutesForExtension(extensionId)
   clearAdminRegistryExtensions(extensionId)
+  unregisterLoadedExtensionModule(extensionId, { app })
   resetAdminExtensionAppRuntime(extensionId)
 }
 

@@ -30,6 +30,7 @@ def resolve_extension_discovery_result(manifest: ExtensionManifest) -> Extension
         permissions_pages=extension.permissions_pages,
         operations_pages=extension.operations_pages,
         admin_actions=tuple(record.admin_actions) or manifest.admin_actions,
+        operations_profile=manifest.operations_profile,
         compatibility=manifest.compatibility,
         security=manifest.security,
         distribution=manifest.distribution,

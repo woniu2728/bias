@@ -15,7 +15,7 @@ from apps.core.extension_serialization import (
     serialize_admin_extension,
     serialize_admin_extensions_payload,
 )
-from apps.core.admin_module_helpers import resolve_module_extension_definition
+from apps.core.extensions.module_extension_view import resolve_module_extension_definition
 from apps.core.extensions import get_extension_registry
 from apps.core.extensions.exceptions import ExtensionNotFoundError
 from apps.core.forum_registry import get_forum_registry

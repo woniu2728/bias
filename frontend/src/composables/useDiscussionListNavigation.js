@@ -13,7 +13,6 @@ import {
 
 const DEFAULT_DISCUSSION_FILTERS = [
   { code: 'all', icon: 'far fa-comments', sidebar_visible: true, route_path: '/' },
-  { code: 'following', icon: 'fas fa-bell', requires_authenticated_user: true, sidebar_visible: true, route_path: '/following' },
 ]
 
 export function createDiscussionListNavigation({

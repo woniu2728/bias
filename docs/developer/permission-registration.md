@@ -7,7 +7,7 @@
 ## 步骤
 
 1. 注册 `PermissionDefinition`。
-2. 必要时补 `aliases` 兼容旧权限名。
+2. 权限 code 一经发布应保持稳定；需要改名时按迁移脚本更新持久化数据，不在运行时注册别名。
 3. 需要前置依赖时补 `required_permissions`。
 4. 用统一 helper 做校验，不要继续散落硬编码权限串。
 

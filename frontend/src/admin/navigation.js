@@ -23,9 +23,6 @@ export function getAdminNavSections() {
   )
   const coreItems = visibleRoutes
     .filter((route) => {
-      if (route.path === '/admin/modules') {
-        return false
-      }
       if (route.path.startsWith('/admin/extensions/')) {
         return false
       }

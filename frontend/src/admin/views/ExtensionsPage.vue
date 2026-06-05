@@ -346,7 +346,7 @@ function applyPayload(data) {
     }))
   })
   if (moduleEntries.length) {
-    adminRegistryStore.applyModules(moduleEntries)
+    adminRegistryStore.applyExtensionScopes(moduleEntries)
   }
 }
 

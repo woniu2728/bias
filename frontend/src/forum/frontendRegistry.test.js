@@ -238,14 +238,14 @@ test('notification renderers normalize module and navigation metadata aliases', 
     key: rendererKey,
     type: 'customNotification',
     label: '自定义通知',
-    module_id: 'mentions',
+    module_id: 'module-alpha',
     navigation_scope: 'post',
   })
 
   const renderer = getNotificationRenderers().find(item => item.key === rendererKey)
 
-  assert.equal(renderer.moduleId, 'mentions')
-  assert.equal(renderer.module_id, 'mentions')
+  assert.equal(renderer.moduleId, 'module-alpha')
+  assert.equal(renderer.module_id, 'module-alpha')
   assert.equal(renderer.navigationScope, 'post')
   assert.equal(renderer.navigation_scope, 'post')
 })
@@ -382,7 +382,7 @@ test('post review banner prefers matching surface-specific item', () => {
     key: scopedKey,
     order: 40,
     surfaces: ['discussion-post'],
-    isVisible: ({ post }) => post?.approval_status === 'pending',
+    isVisible: ({ post }) => post?.review_status === 'pending',
     resolve: () => ({
       message: 'scoped',
       tone: 'warning',
@@ -391,11 +391,11 @@ test('post review banner prefers matching surface-specific item', () => {
   })
 
   const surfaceResult = getPostReviewBanner({
-    post: { approval_status: 'pending' },
+    post: { review_status: 'pending' },
     surface: 'discussion-post',
   })
   const fallbackResult = getPostReviewBanner({
-    post: { approval_status: 'pending' },
+    post: { review_status: 'pending' },
     surface: 'other-surface',
   })
 
@@ -426,7 +426,7 @@ test('discussion review banner prefers matching surface-specific item', () => {
     key: scopedKey,
     order: 40,
     surfaces: ['discussion-hero'],
-    isVisible: ({ discussion }) => discussion?.approval_status === 'pending',
+    isVisible: ({ discussion }) => discussion?.review_status === 'pending',
     resolve: () => ({
       title: 'scoped',
       message: 'scoped message',
@@ -436,11 +436,11 @@ test('discussion review banner prefers matching surface-specific item', () => {
   })
 
   const surfaceResult = getDiscussionReviewBanner({
-    discussion: { approval_status: 'pending' },
+    discussion: { review_status: 'pending' },
     surface: 'discussion-hero',
   })
   const fallbackResult = getDiscussionReviewBanner({
-    discussion: { approval_status: 'pending' },
+    discussion: { review_status: 'pending' },
     surface: 'other-surface',
   })
 
@@ -497,9 +497,9 @@ test('post flag panel prefers matching surface-specific item', () => {
   assert.equal(fallbackResult.description, 'fallback description')
 })
 
-test('approval note prefers matching surface-specific item', () => {
-  const fallbackKey = uniqueKey('approval-note-fallback')
-  const scopedKey = uniqueKey('approval-note-scoped')
+test('approval note registry prefers matching surface-specific item', () => {
+  const fallbackKey = uniqueKey('review-note-fallback')
+  const scopedKey = uniqueKey('review-note-scoped')
 
   registerApprovalNote({
     key: fallbackKey,
@@ -514,18 +514,18 @@ test('approval note prefers matching surface-specific item', () => {
     key: scopedKey,
     order: 40,
     surfaces: ['profile-post'],
-    isVisible: ({ post }) => Boolean(post?.approval_note),
+    isVisible: ({ post }) => Boolean(post?.review_note),
     resolve: ({ post }) => ({
-      text: `scoped note: ${post.approval_note}`,
+      text: `scoped note: ${post.review_note}`,
     }),
   })
 
   const surfaceResult = getApprovalNote({
-    post: { approval_note: 'detail' },
+    post: { review_note: 'detail' },
     surface: 'profile-post',
   })
   const fallbackResult = getApprovalNote({
-    post: { approval_note: 'detail' },
+    post: { review_note: 'detail' },
     surface: 'other-surface',
   })
 
@@ -618,86 +618,86 @@ test('empty state resolves discussion list entries by list context', () => {
   assert.equal(defaultResult.text, 'discussion default empty')
 })
 
-test('empty state resolves notification entries by filter context', () => {
-  const unreadKey = uniqueKey('notifications-unread-empty')
-  const defaultKey = uniqueKey('notifications-default-empty')
+test('empty state resolves filtered list entries by filter context', () => {
+  const filteredKey = uniqueKey('filtered-list-empty')
+  const defaultKey = uniqueKey('filtered-list-default-empty')
 
   registerEmptyState({
-    key: unreadKey,
+    key: filteredKey,
     order: 10,
-    surfaces: ['notifications-page-empty'],
-    isVisible: ({ notifications, unreadOnly }) => Array.isArray(notifications) && notifications.length === 0 && Boolean(unreadOnly),
+    surfaces: ['filtered-list-empty'],
+    isVisible: ({ items, filteredOnly }) => Array.isArray(items) && items.length === 0 && Boolean(filteredOnly),
     resolve: () => ({
-      text: 'unread empty',
+      text: 'filtered empty',
     }),
   })
 
   registerEmptyState({
     key: defaultKey,
     order: 20,
-    surfaces: ['notifications-page-empty'],
-    isVisible: ({ notifications }) => Array.isArray(notifications) && notifications.length === 0,
+    surfaces: ['filtered-list-empty'],
+    isVisible: ({ items }) => Array.isArray(items) && items.length === 0,
     resolve: () => ({
-      text: 'notifications default empty',
+      text: 'filtered default empty',
     }),
   })
 
-  const unreadResult = getEmptyState({
-    surface: 'notifications-page-empty',
-    notifications: [],
-    unreadOnly: true,
+  const filteredResult = getEmptyState({
+    surface: 'filtered-list-empty',
+    items: [],
+    filteredOnly: true,
     activeType: '',
   })
   const defaultResult = getEmptyState({
-    surface: 'notifications-page-empty',
-    notifications: [],
-    unreadOnly: false,
+    surface: 'filtered-list-empty',
+    items: [],
+    filteredOnly: false,
     activeType: '',
   })
 
-  assert.equal(unreadResult.key, unreadKey)
-  assert.equal(unreadResult.text, 'unread empty')
+  assert.equal(filteredResult.key, filteredKey)
+  assert.equal(filteredResult.text, 'filtered empty')
   assert.equal(defaultResult.key, defaultKey)
-  assert.equal(defaultResult.text, 'notifications default empty')
+  assert.equal(defaultResult.text, 'filtered default empty')
 })
 
-test('empty state resolves tag surface entries', () => {
-  const tagsPageKey = uniqueKey('tags-page-empty')
-  const lastDiscussionKey = uniqueKey('tag-last-discussion-empty')
+test('empty state resolves resource surface entries', () => {
+  const collectionKey = uniqueKey('resource-collection-empty')
+  const relatedItemKey = uniqueKey('resource-related-empty')
 
   registerEmptyState({
-    key: tagsPageKey,
+    key: collectionKey,
     order: 10,
-    surfaces: ['tags-page-empty'],
-    isVisible: ({ tags }) => Array.isArray(tags) && tags.length === 0,
+    surfaces: ['resource-collection-empty'],
+    isVisible: ({ resources }) => Array.isArray(resources) && resources.length === 0,
     resolve: () => ({
-      text: 'tags empty',
+      text: 'resources empty',
     }),
   })
 
   registerEmptyState({
-    key: lastDiscussionKey,
+    key: relatedItemKey,
     order: 20,
-    surfaces: ['tag-last-discussion-empty'],
-    isVisible: ({ tag }) => !tag?.last_posted_discussion,
-    resolve: ({ tag }) => ({
-      text: `${tag?.name || 'tag'} no discussion`,
+    surfaces: ['resource-related-empty'],
+    isVisible: ({ resource }) => !resource?.last_item,
+    resolve: ({ resource }) => ({
+      text: `${resource?.name || 'resource'} no related item`,
     }),
   })
 
-  const tagsPageResult = getEmptyState({
-    surface: 'tags-page-empty',
-    tags: [],
+  const collectionResult = getEmptyState({
+    surface: 'resource-collection-empty',
+    resources: [],
   })
-  const lastDiscussionResult = getEmptyState({
-    surface: 'tag-last-discussion-empty',
-    tag: { name: 'Alpha', last_posted_discussion: null },
+  const relatedItemResult = getEmptyState({
+    surface: 'resource-related-empty',
+    resource: { name: 'Alpha', last_item: null },
   })
 
-  assert.equal(tagsPageResult.key, tagsPageKey)
-  assert.equal(tagsPageResult.text, 'tags empty')
-  assert.equal(lastDiscussionResult.key, lastDiscussionKey)
-  assert.equal(lastDiscussionResult.text, 'Alpha no discussion')
+  assert.equal(collectionResult.key, collectionKey)
+  assert.equal(collectionResult.text, 'resources empty')
+  assert.equal(relatedItemResult.key, relatedItemKey)
+  assert.equal(relatedItemResult.text, 'Alpha no related item')
 })
 
 test('empty state resolves search page and modal entries by query state', () => {
@@ -1052,7 +1052,7 @@ test('ui copy resolves search modal and page contextual copy', () => {
   assert.equal(heroResult.text, 'query:Vue')
 })
 
-test('ui copy resolves home, tags and start discussion copy', () => {
+test('ui copy resolves home and contextual start discussion copy', () => {
   const homeKey = uniqueKey('ui-home-hero')
   const startKey = uniqueKey('ui-start-discussion')
 
@@ -2177,11 +2177,12 @@ test('discussion action runtime confirms then dispatches to handler map', async 
 
 test('discussion action runtime dispatches registered extension handlers', async () => {
   const handlerKey = uniqueKey('discussion-runtime-extension-handler')
+  const moduleId = 'discussion-actions-demo'
   const calls = []
 
   registerDiscussionActionHandler({
     key: handlerKey,
-    moduleId: 'subscriptions',
+    moduleId,
     async handle(context) {
       calls.push({
         action: context.action,
@@ -2193,12 +2194,12 @@ test('discussion action runtime dispatches registered extension handlers', async
 
   const hiddenWhenDisabled = getDiscussionActionHandler(handlerKey, {
     forumStore: {
-      isModuleEnabled: moduleId => moduleId !== 'subscriptions',
+      isModuleEnabled: currentModuleId => currentModuleId !== moduleId,
     },
   })
   const visibleWhenEnabled = getDiscussionActionHandler(handlerKey, {
     forumStore: {
-      isModuleEnabled: moduleId => moduleId === 'subscriptions',
+      isModuleEnabled: currentModuleId => currentModuleId === moduleId,
     },
   })
   const completed = await runDiscussionAction(
@@ -2207,7 +2208,7 @@ test('discussion action runtime dispatches registered extension handlers', async
       action: handlerKey,
       discussion: { id: 88 },
       forumStore: {
-        isModuleEnabled: moduleId => moduleId === 'subscriptions',
+        isModuleEnabled: currentModuleId => currentModuleId === moduleId,
       },
     }
   )
@@ -2274,11 +2275,12 @@ test('post action runtime prefers explicit action key and respects cancellation'
 
 test('post action runtime dispatches registered extension handlers', async () => {
   const handlerKey = uniqueKey('post-runtime-extension-handler')
+  const moduleId = 'post-actions-demo'
   const calls = []
 
   registerPostActionHandler({
     key: handlerKey,
-    moduleId: 'flags',
+    moduleId,
     async handle(context) {
       calls.push({
         action: context.action,
@@ -2290,12 +2292,12 @@ test('post action runtime dispatches registered extension handlers', async () =>
 
   const hiddenWhenDisabled = getPostActionHandler(handlerKey, {
     forumStore: {
-      isModuleEnabled: moduleId => moduleId !== 'flags',
+      isModuleEnabled: currentModuleId => currentModuleId !== moduleId,
     },
   })
   const visibleWhenEnabled = getPostActionHandler(handlerKey, {
     forumStore: {
-      isModuleEnabled: moduleId => moduleId === 'flags',
+      isModuleEnabled: currentModuleId => currentModuleId === moduleId,
     },
   })
   const completed = await runPostAction(
@@ -2303,7 +2305,7 @@ test('post action runtime dispatches registered extension handlers', async () =>
     {
       action: handlerKey,
       forumStore: {
-        isModuleEnabled: moduleId => moduleId === 'flags',
+        isModuleEnabled: currentModuleId => currentModuleId === moduleId,
       },
       post: { id: 77 },
     }

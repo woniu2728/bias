@@ -195,6 +195,32 @@ class StartupStateMiddleware:
         return HttpResponse(body, status=503, content_type="text/html; charset=utf-8")
 
 
+class ExtensionRuntimeInvalidationMiddleware:
+    sync_capable = True
+    async_capable = True
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self._is_async = iscoroutinefunction(get_response)
+        if self._is_async:
+            markcoroutinefunction(self)
+
+    def __call__(self, request):
+        if self._is_async:
+            return self.__acall__(request)
+        self._sync_runtime_state()
+        return self.get_response(request)
+
+    async def __acall__(self, request):
+        await sync_to_async(self._sync_runtime_state, thread_sensitive=True)()
+        return await self.get_response(request)
+
+    def _sync_runtime_state(self):
+        from apps.core.extensions.lifecycle import sync_extension_runtime_state_if_stale
+
+        sync_extension_runtime_state_if_stale()
+
+
 class QueryLoggingMiddleware:
     sync_capable = True
     async_capable = True

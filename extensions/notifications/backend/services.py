@@ -147,7 +147,7 @@ class NotificationService:
 
         def enqueue():
             from apps.core.queue_service import QueueService
-            from apps.notifications.tasks import dispatch_notification_batch
+            from extensions.notifications.backend.tasks import dispatch_notification_batch
 
             QueueService.dispatch_celery_task(
                 dispatch_notification_batch,

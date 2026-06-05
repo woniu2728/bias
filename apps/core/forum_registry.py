@@ -31,7 +31,6 @@ class ForumRegistry:
         self._modules: Dict[str, ForumModuleDefinition] = {}
         self._external_enabled_module_ids: set[str] = set()
         self._permissions: Dict[str, PermissionDefinition] = {}
-        self._permission_aliases: Dict[str, str] = {}
         self._admin_pages: List[AdminPageDefinition] = []
         self._notification_types: Dict[str, NotificationTypeDefinition] = {}
         self._user_preferences: Dict[str, UserPreferenceDefinition] = {}
@@ -79,8 +78,6 @@ class ForumRegistry:
     def register_permission(self, definition: PermissionDefinition) -> None:
         self._append_to_module(definition.module_id, "permissions", definition, key=lambda item: item.code)
         self._permissions[definition.code] = definition
-        for alias in definition.aliases:
-            self._permission_aliases[alias] = definition.code
 
     def register_external_module_id(self, module_id: str) -> None:
         normalized = str(module_id or "").strip()
@@ -229,20 +226,12 @@ class ForumRegistry:
         }
         return definitions.get(code)
 
-    def get_permission_aliases(self) -> Dict[str, str]:
-        aliases = dict(self._permission_aliases)
-        for definition in self.get_all_permissions():
-            for alias in definition.aliases:
-                aliases[alias] = definition.code
-        return dict(sorted(aliases.items()))
-
     def get_valid_permission_codes(self) -> set[str]:
         return {definition.code for definition in self.get_all_permissions()}
 
     def normalize_permission_code(self, permission: str) -> str | None:
-        normalized = self._permission_aliases.get(permission, permission)
-        if normalized in self.get_valid_permission_codes():
-            return normalized
+        if permission in self.get_valid_permission_codes():
+            return permission
         return None
 
     def get_admin_pages(self) -> List[AdminPageDefinition]:
@@ -453,7 +442,6 @@ class ForumRegistry:
                     "description": permission.description,
                     "module_id": permission.module_id,
                     "required_permissions": list(permission.required_permissions),
-                    "aliases": list(permission.aliases),
                 }
             )
 

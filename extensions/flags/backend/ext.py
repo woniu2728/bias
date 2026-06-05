@@ -5,6 +5,7 @@ from apps.core.extensions import (
     EventListenersExtender,
     FrontendExtender,
     LifecycleExtender,
+    ModelExtender,
     ModelVisibilityExtender,
     PostLifecycleExtender,
     SettingsExtender,
@@ -65,7 +66,8 @@ def extend():
         AdminSurfaceExtender(
             permissions=permission_definitions(),
             admin_pages=admin_page_definitions(),
-            generated_permissions_page=True,
+            permissions_pages=("/admin/extensions/flags/permissions",),
+            operations_pages=("/admin/extensions/flags/operations",),
         ),
         ApiRoutesExtender(
             mounts=(("/admin", flags_admin_router),),
@@ -80,6 +82,10 @@ def extend():
         .endpoints(post_resource_endpoint_definitions)
         .add_default_include(("index", "show"), ("flags",)),
         ApiResourceExtender("user_detail").fields(user_detail_resource_field_definitions),
+        ModelExtender().owns(
+            PostFlag,
+            description="帖子举报记录由 flags 扩展拥有。",
+        ),
         ModelVisibilityExtender(
             definitions=flag_model_visibility_definitions(),
         ),

@@ -60,16 +60,16 @@ function createTestResourceStore() {
 
 test('normalizeExtensionForumEntry rewrites extension paths', () => {
   assert.equal(
-    normalizeExtensionForumEntry('extensions/sample-hello/frontend/forum/index.js'),
-    '../../../extensions/sample-hello/frontend/forum/index.js',
+    normalizeExtensionForumEntry('extensions/manifest-demo/frontend/forum/index.js'),
+    '../../../extensions/manifest-demo/frontend/forum/index.js',
   )
   assert.equal(normalizeExtensionForumEntry(''), '')
 })
 
 test('loadExtensionForumEntryModule loads filesystem importer entries', async () => {
-  const loaded = await loadExtensionForumEntryModule('../../../extensions/sample-hello/frontend/forum/index.js', {
+  const loaded = await loadExtensionForumEntryModule('../../../extensions/manifest-demo/frontend/forum/index.js', {
     importers: {
-      '../../../extensions/sample-hello/frontend/forum/index.js': async () => ({
+      '../../../extensions/manifest-demo/frontend/forum/index.js': async () => ({
         boot: true,
       }),
     },
@@ -176,16 +176,16 @@ test('loadEnabledForumExtensions loads enabled extension entries once and applie
   const payload = {
     enabled_extensions: [
       {
-        id: 'emoji',
-        frontend_forum_entry: 'extensions/emoji/frontend/forum/index.js',
+        id: 'alpha',
+        frontend_forum_entry: 'extensions/alpha/frontend/forum/index.js',
       },
       {
-        id: 'emoji',
-        frontend_forum_entry: 'extensions/emoji/frontend/forum/index.js',
+        id: 'alpha',
+        frontend_forum_entry: 'extensions/alpha/frontend/forum/index.js',
       },
     ],
     extension_document: {
-      preloads: ['/assets/emoji.css'],
+      preloads: ['/assets/alpha.css'],
     },
   }
 
@@ -193,8 +193,8 @@ test('loadEnabledForumExtensions loads enabled extension entries once and applie
     forumStore,
     fetchPayload: async () => payload,
     importers: {
-      '../../../extensions/emoji/frontend/forum/index.js': async () => {
-        calls.push('emoji')
+      '../../../extensions/alpha/frontend/forum/index.js': async () => {
+        calls.push('alpha')
         return {
           bootForumExtension: async ({ extension }) => {
             calls.push(extension.id)
@@ -205,13 +205,15 @@ test('loadEnabledForumExtensions loads enabled extension entries once and applie
   })
 
   assert.equal(calls.length, 2)
-  assert.equal(result.loadedExtensionIds.has('emoji'), true)
+  assert.equal(result.loadedExtensionIds.has('alpha'), true)
   assert.equal(forumStore.applied, payload)
-  assert.deepEqual(result.extensionDocument.preloads, ['/assets/emoji.css'])
+  assert.deepEqual(result.extensionDocument.preloads, ['/assets/alpha.css'])
 })
 
 test('loadEnabledForumExtensions passes public extension app object', async () => {
   let receivedApp = null
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
   const runtimeApp = createRuntimeApplication({
     kind: 'forum',
     resourceStore: createTestResourceStore(),
@@ -222,43 +224,49 @@ test('loadEnabledForumExtensions passes public extension app object', async () =
     },
   })
   const extension = {
-    id: 'emoji',
-    frontend_forum_entry: 'extensions/emoji/frontend/forum/index.js',
+    id: 'alpha',
+    frontend_forum_entry: 'extensions/alpha/frontend/forum/index.js',
   }
 
-  await loadEnabledForumExtensions({
-    app: runtimeApp,
-    fetchPayload: async () => ({ enabled_extensions: [extension] }),
-    registry: {
-      registerForumNavItem() {},
-    },
-    importers: {
-      '../../../extensions/emoji/frontend/forum/index.js': async () => ({
-        bootForumExtension: async ({ app, api, registry, documentRuntime }) => {
-          receivedApp = app
-          assert.equal(api, app.api)
-          assert.equal(registry, app.registry)
-          assert.equal(documentRuntime, app.documentRuntime)
-        },
-      }),
-    },
-  })
+  try {
+    await loadEnabledForumExtensions({
+      app: runtimeApp,
+      fetchPayload: async () => ({ enabled_extensions: [extension] }),
+      registry: {
+        registerForumNavItem() {},
+      },
+      importers: {
+        '../../../extensions/alpha/frontend/forum/index.js': async () => ({
+          bootForumExtension: async ({ app, api, registry, documentRuntime }) => {
+            receivedApp = app
+            assert.equal(api, app.api)
+            assert.equal(registry, app.registry)
+            assert.equal(documentRuntime, app.documentRuntime)
+          },
+        }),
+      },
+    })
 
-  assert.equal(receivedApp.extension, extension)
-  assert.equal(typeof receivedApp.registry.registerForumNavItem, 'function')
-  assert.equal(typeof receivedApp.documentRuntime.registerContent, 'function')
-  assert.equal(typeof receivedApp.initializers.add, 'function')
-  assert.equal(typeof receivedApp.extend, 'function')
-  assert.equal(typeof receivedApp.override, 'function')
-  assert.equal(typeof receivedApp.cache, 'object')
-  assert.equal(typeof receivedApp.alerts.success, 'function')
-  assert.equal(typeof receivedApp.translator.trans, 'function')
-  assert.equal(typeof receivedApp.errors.report, 'function')
-  assert.equal(receivedApp.route, runtimeApp.route)
-  assert.equal(receivedApp.routes, runtimeApp.routes)
-  assert.equal(receivedApp.search, runtimeApp.search)
-  assert.equal(receivedApp.notificationComponents, runtimeApp.notificationComponents)
-  assert.equal(receivedApp.postComponents, runtimeApp.postComponents)
+    assert.equal(receivedApp.extension, extension)
+    assert.equal(typeof receivedApp.registry.registerForumNavItem, 'function')
+    assert.equal(typeof receivedApp.documentRuntime.registerContent, 'function')
+    assert.equal(typeof receivedApp.initializers.add, 'function')
+    assert.equal(typeof receivedApp.extend, 'function')
+    assert.equal(typeof receivedApp.override, 'function')
+    assert.equal(typeof receivedApp.cache, 'object')
+    assert.equal(typeof receivedApp.alerts.success, 'function')
+    assert.equal(typeof receivedApp.translator.trans, 'function')
+    assert.equal(typeof receivedApp.errors.report, 'function')
+    assert.equal(receivedApp.route, runtimeApp.route)
+    assert.equal(receivedApp.routes, runtimeApp.routes)
+    assert.equal(receivedApp.search, runtimeApp.search)
+    assert.equal(receivedApp.notificationComponents, runtimeApp.notificationComponents)
+    assert.equal(receivedApp.postComponents, runtimeApp.postComponents)
+    assert.equal(runtimeApp.extensions.alpha.modules.forum.bootForumExtension instanceof Function, true)
+    assert.equal(globalThis.bias.extensions.alpha, runtimeApp.extensions.alpha)
+  } finally {
+    globalThis.bias = previousBias
+  }
 })
 
 test('loadEnabledForumExtensions runs scoped initializers', async () => {
@@ -916,39 +924,39 @@ test('registerExtensionForumRoutes registers declarative forum routes', () => {
   }
 
   const registered = registerExtensionForumRoutes(router, {
-    id: 'tags',
+    id: 'route-demo',
     frontend_routes: [
       {
-        path: '/tags',
-        name: 'tags',
-        component: 'TagsView',
+        path: '/route-demo',
+        name: 'route-demo',
+        component: 'RouteDemoView',
         frontend: 'forum',
-        module_id: 'tags',
-        title: '全部标签',
+        module_id: 'route-demo',
+        title: 'Route demo',
       },
       {
-        path: '/admin/tags',
-        name: 'admin-tags',
-        component: 'TagsView',
+        path: '/admin/route-demo',
+        name: 'admin-route-demo',
+        component: 'RouteDemoView',
         frontend: 'admin',
       },
     ],
   }, {
     components: {
-      TagsView: async () => ({ default: 'TagsView' }),
+      RouteDemoView: async () => ({ default: 'RouteDemoView' }),
     },
   })
 
-  assert.deepEqual(registered, ['tags'])
+  assert.deepEqual(registered, ['route-demo'])
   assert.equal(routes.length, 1)
-  assert.equal(routes[0].meta.extensionId, 'tags')
-  assert.equal(routes[0].meta.moduleId, 'tags')
+  assert.equal(routes[0].meta.extensionId, 'route-demo')
+  assert.equal(routes[0].meta.moduleId, 'route-demo')
 })
 
 test('registerExtensionForumRoutes removes declared forum routes', () => {
   const removed = []
   const router = {
-    existing: new Set(['tags']),
+    existing: new Set(['route-demo']),
     hasRoute(name) {
       return this.existing.has(name)
     },
@@ -962,25 +970,25 @@ test('registerExtensionForumRoutes removes declared forum routes', () => {
   }
 
   const registered = registerExtensionForumRoutes(router, {
-    id: 'tags',
+    id: 'route-demo',
     frontend_routes: [
       {
-        name: 'tags',
+        name: 'route-demo',
         frontend: 'forum',
         removed: true,
       },
     ],
   })
 
-  assert.deepEqual(registered, ['tags'])
-  assert.deepEqual(removed, ['tags'])
+  assert.deepEqual(registered, ['route-demo'])
+  assert.deepEqual(removed, ['route-demo'])
 })
 
 test('resetLoadedExtensionsWhenRuntimeChanges clears loaded ids on stamp change', () => {
-  const loadedIds = new Set(['emoji'])
+  const loadedIds = new Set(['alpha'])
 
   assert.equal(resetLoadedExtensionsWhenRuntimeChanges(loadedIds, { stamp: 'one' }), true)
-  assert.equal(loadedIds.has('emoji'), true)
+  assert.equal(loadedIds.has('alpha'), true)
   assert.equal(resetLoadedExtensionsWhenRuntimeChanges(loadedIds, { stamp: 'one' }), false)
   assert.equal(resetLoadedExtensionsWhenRuntimeChanges(loadedIds, { stamp: 'two' }), true)
   assert.equal(loadedIds.size, 0)
@@ -991,12 +999,12 @@ test('loadEnabledForumExtensions registers route-only extensions', async () => {
   const payload = {
     enabled_extensions: [
       {
-        id: 'tags',
+        id: 'route-demo',
         frontend_routes: [
           {
-            path: '/tags',
-            name: 'tags',
-            component: 'TagsView',
+            path: '/route-demo',
+            name: 'route-demo',
+            component: 'RouteDemoView',
             frontend: 'forum',
           },
         ],
@@ -1015,10 +1023,10 @@ test('loadEnabledForumExtensions registers route-only extensions', async () => {
       },
     },
     routeComponents: {
-      TagsView: async () => ({ default: 'TagsView' }),
+      RouteDemoView: async () => ({ default: 'RouteDemoView' }),
     },
   })
 
   assert.equal(routes.length, 1)
-  assert.equal(result.loadedExtensionIds.has('tags'), true)
+  assert.equal(result.loadedExtensionIds.has('route-demo'), true)
 })

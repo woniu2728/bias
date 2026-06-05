@@ -27,6 +27,24 @@
   "operations_pages": [
     "/admin/extensions/sample-hello/operations"
   ],
+  "operations_profile": {
+    "kicker": "Sample Runtime",
+    "title": "Sample Hello 操作宿主",
+    "description": "示例扩展通过清单声明操作页摘要，用于验证扩展自定义 operations profile 的透传。",
+    "highlights": [
+      "设置表单",
+      "权限矩阵",
+      "运行操作"
+    ],
+    "recommended_action_keys": [
+      "settings",
+      "operations",
+      "details"
+    ],
+    "next_steps": [
+      "将更多示例能力迁移到扩展声明。"
+    ]
+  },
   "settings_schema": [
     {
       "key": "welcome_message",

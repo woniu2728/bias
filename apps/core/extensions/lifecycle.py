@@ -1,20 +1,39 @@
 from __future__ import annotations
 
+import json
+import time
+import uuid
+
 from django.conf import settings
+from django.db import OperationalError, ProgrammingError
 from django.urls import clear_url_caches
+from django.utils import timezone
+
+
+RUNTIME_REBUILD_MARKER_KEY = "extensions_runtime_rebuild_required"
+RUNTIME_VERSION_KEY = "extensions_runtime_version"
+_runtime_version_seen = ""
+_runtime_version_last_checked_at = 0.0
+_runtime_version_check_interval_seconds = 1.0
 
 
 def mark_extension_runtime_requires_rebuild(reason: str, *, extension_id: str = "") -> None:
     from apps.core.models import Setting
 
+    version = f"{timezone.now().isoformat()}:{uuid.uuid4().hex}"
     payload = {
         "reason": reason,
         "extension_id": extension_id,
         "urlconf": settings.ROOT_URLCONF,
+        "version": version,
     }
     Setting.objects.update_or_create(
-        key="extensions_runtime_rebuild_required",
-        defaults={"value": __import__("json").dumps(payload, ensure_ascii=False)},
+        key=RUNTIME_REBUILD_MARKER_KEY,
+        defaults={"value": json.dumps(payload, ensure_ascii=False)},
+    )
+    Setting.objects.update_or_create(
+        key=RUNTIME_VERSION_KEY,
+        defaults={"value": json.dumps(payload, ensure_ascii=False)},
     )
 
 
@@ -63,13 +82,77 @@ def invalidate_extension_frontend_assets(
 def clear_extension_runtime_rebuild_marker() -> None:
     from apps.core.models import Setting
 
-    Setting.objects.filter(key="extensions_runtime_rebuild_required").delete()
+    Setting.objects.filter(key=RUNTIME_REBUILD_MARKER_KEY).delete()
 
 
 def rebuild_extension_runtime_state() -> None:
     reset_extension_runtime_state()
-    clear_url_caches()
+    rebuild_runtime_urlconf()
     clear_extension_runtime_rebuild_marker()
+    mark_extension_runtime_version_seen()
+
+
+def mark_extension_runtime_version_seen(version: str | None = None) -> None:
+    global _runtime_version_seen
+
+    _runtime_version_seen = str(version if version is not None else get_extension_runtime_version())
+
+
+def reset_extension_runtime_version_seen() -> None:
+    global _runtime_version_seen
+    global _runtime_version_last_checked_at
+
+    _runtime_version_seen = ""
+    _runtime_version_last_checked_at = 0.0
+
+
+def get_extension_runtime_version() -> str:
+    from apps.core.models import Setting
+
+    setting = Setting.objects.filter(key=RUNTIME_VERSION_KEY).only("value").first()
+    if setting is None:
+        return ""
+    return str(setting.value or "")
+
+
+def sync_extension_runtime_state_if_stale(*, force: bool = False) -> bool:
+    global _runtime_version_last_checked_at
+
+    now = time.monotonic()
+    if (
+        not force
+        and _runtime_version_seen
+        and now - _runtime_version_last_checked_at < _runtime_version_check_interval_seconds
+    ):
+        return False
+
+    _runtime_version_last_checked_at = now
+    try:
+        version = get_extension_runtime_version()
+    except (OperationalError, ProgrammingError, RuntimeError):
+        return False
+
+    if version == _runtime_version_seen:
+        return False
+
+    rebuild_extension_runtime_state()
+    mark_extension_runtime_version_seen(version)
+    return True
+
+
+def rebuild_runtime_urlconf() -> None:
+    import importlib
+
+    clear_url_caches()
+    try:
+        urlconf = importlib.import_module(settings.ROOT_URLCONF)
+    except Exception:
+        return
+
+    rebuild = getattr(urlconf, "rebuild_api_urlpatterns", None)
+    if callable(rebuild):
+        rebuild()
+        clear_url_caches()
 
 
 def reset_extension_runtime_state() -> None:
@@ -84,6 +167,11 @@ def reset_extension_runtime_state() -> None:
         bootstrap_extension_runtime_event_listeners,
         reset_extension_runtime_event_listener_bootstrap,
     )
+    from apps.core.extensions.signal_bootstrap import (
+        bootstrap_extension_signal_proxies,
+        reset_extension_signal_proxy_bootstrap,
+    )
+    from apps.core.extensions.signal_runtime import disconnect_runtime_signal_receivers
     from apps.core import forum_event_listeners
     from apps.core.forum_runtime import clear_realtime_included_enrichers
     from apps.core.forum_registry import get_forum_registry
@@ -94,6 +182,9 @@ def reset_extension_runtime_state() -> None:
     frontend_runtime_service._frontend_runtime_bootstrapped = False
     clear_extension_formatter_cache()
     clear_extension_locale_cache()
+    disconnect_runtime_signal_receivers()
+    reset_extension_signal_proxy_bootstrap()
+    bootstrap_extension_signal_proxies()
 
     clear_bootstrapped_extension_application()
     reset_extension_application_bootstrap_state()

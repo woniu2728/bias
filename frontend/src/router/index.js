@@ -68,16 +68,6 @@ const router = createRouter({
       }
     },
     {
-      path: '/following',
-      name: 'following',
-      component: () => import('@/views/DiscussionListView.vue'),
-      meta: {
-        requiresAuth: true,
-        title: '关注的讨论',
-        description: '查看你关注的讨论和最新回复。'
-      }
-    },
-    {
       path: '/profile',
       name: 'profile',
       component: () => import('@/views/ProfileView.vue'),
@@ -87,16 +77,6 @@ const router = createRouter({
       path: '/u/:id',
       name: 'user-profile',
       component: () => import('@/views/ProfileView.vue')
-    },
-    {
-      path: '/notifications',
-      name: 'notifications',
-      component: () => import('@/views/NotificationView.vue'),
-      meta: {
-        requiresAuth: true,
-        title: '通知',
-        description: '查看你的论坛通知、回复提醒和系统消息。'
-      }
     }
   ]
 })

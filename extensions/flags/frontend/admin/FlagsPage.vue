@@ -80,12 +80,13 @@ import {
   AdminFilterTabs,
   AdminPage,
   AdminStateBlock,
-  getAdminFlagsPageActionMeta,
-  getAdminFlagsPageConfig,
-  getAdminFlagsPageCopy,
+  getAdminPageActionMeta,
+  getAdminPageConfig,
+  getAdminPageCopy,
   useModalStore,
 } from '@/admin/registry'
 
+const PAGE_KEY = 'flags.index'
 const loading = ref(true)
 const saving = ref(false)
 const loadError = ref('')
@@ -96,9 +97,9 @@ const pendingStatus = ref('resolved')
 const selectedFlag = ref(null)
 const resolutionNote = ref('')
 const modalStore = useModalStore()
-const flagsCopy = computed(() => getAdminFlagsPageCopy())
-const flagsConfig = computed(() => getAdminFlagsPageConfig())
-const flagsActionMeta = computed(() => getAdminFlagsPageActionMeta())
+const flagsCopy = computed(() => getAdminPageCopy(PAGE_KEY))
+const flagsConfig = computed(() => getAdminPageConfig(PAGE_KEY))
+const flagsActionMeta = computed(() => getAdminPageActionMeta(PAGE_KEY))
 const flagFilters = computed(() => flagsConfig.value?.filters || [])
 
 onMounted(() => {

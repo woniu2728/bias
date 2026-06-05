@@ -1,11 +1,13 @@
 import {
-  registerAdminApprovalQueueNoteTemplate,
-  registerAdminApprovalQueuePageActionMeta,
-  registerAdminApprovalQueuePageConfig,
-  registerAdminApprovalQueuePageCopy,
+  registerAdminPageActionMeta,
+  registerAdminPageConfig,
+  registerAdminPageCopy,
+  registerAdminPageNoteTemplate,
 } from '@/admin/registry'
 
-registerAdminApprovalQueuePageCopy({
+const PAGE_KEY = 'approval.queue'
+
+registerAdminPageCopy(PAGE_KEY, {
   key: 'core-approval-queue-page-copy',
   order: 10,
   resolve: () => ({
@@ -51,7 +53,7 @@ registerAdminApprovalQueuePageCopy({
   }),
 })
 
-registerAdminApprovalQueuePageConfig({
+registerAdminPageConfig(PAGE_KEY, {
   key: 'core-approval-queue-page-config',
   order: 10,
   resolve: () => ({
@@ -63,7 +65,7 @@ registerAdminApprovalQueuePageConfig({
   }),
 })
 
-registerAdminApprovalQueuePageActionMeta({
+registerAdminPageActionMeta(PAGE_KEY, {
   key: 'core-approval-queue-page-actions-meta',
   order: 10,
   resolve: () => ({
@@ -81,7 +83,7 @@ registerAdminApprovalQueuePageActionMeta({
   }),
 })
 
-registerAdminApprovalQueueNoteTemplate({
+registerAdminPageNoteTemplate(PAGE_KEY, {
   key: 'approval-approve-compliant',
   order: 10,
   resolve: () => ({
@@ -92,7 +94,7 @@ registerAdminApprovalQueueNoteTemplate({
   }),
 })
 
-registerAdminApprovalQueueNoteTemplate({
+registerAdminPageNoteTemplate(PAGE_KEY, {
   key: 'approval-approve-context-complete',
   order: 20,
   resolve: () => ({
@@ -103,7 +105,7 @@ registerAdminApprovalQueueNoteTemplate({
   }),
 })
 
-registerAdminApprovalQueueNoteTemplate({
+registerAdminPageNoteTemplate(PAGE_KEY, {
   key: 'approval-reject-quality',
   order: 30,
   resolve: () => ({
@@ -114,7 +116,7 @@ registerAdminApprovalQueueNoteTemplate({
   }),
 })
 
-registerAdminApprovalQueueNoteTemplate({
+registerAdminPageNoteTemplate(PAGE_KEY, {
   key: 'approval-reject-duplicate',
   order: 40,
   resolve: () => ({
@@ -126,7 +128,7 @@ registerAdminApprovalQueueNoteTemplate({
   }),
 })
 
-registerAdminApprovalQueueNoteTemplate({
+registerAdminPageNoteTemplate(PAGE_KEY, {
   key: 'approval-reject-format',
   order: 50,
   resolve: () => ({

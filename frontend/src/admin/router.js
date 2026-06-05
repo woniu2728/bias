@@ -4,8 +4,6 @@ import { bootstrapEnabledAdminExtensions } from './extensionBootstrap'
 import { getRuntimeApplication } from '../common/applicationRegistry'
 import { useAdminRegistryStore } from '../stores/adminRegistry'
 
-normalizeLegacyAdminHash()
-
 const routes = [
   {
     path: '/',
@@ -23,21 +21,6 @@ const routes = [
   },
 ]
 
-function normalizeLegacyAdminHash() {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const legacyHash = window.location.hash || ''
-  const normalizedHash = legacyHash.replace(/^#\/admin#(?=\/admin(?:\/|$))/, '#')
-  if (normalizedHash === legacyHash) {
-    return
-  }
-
-  const { pathname, search } = window.location
-  window.history.replaceState(window.history.state, '', `${pathname}${search}${normalizedHash}`)
-}
-
 const router = createRouter({
   // Admin SPA is served from admin.html, so hash history avoids broken deep links
   // when navigating out to the forum and using the browser back button.
@@ -51,7 +34,7 @@ router.beforeEach(async (to) => {
   }
 
   const adminRegistryStore = useAdminRegistryStore()
-  await adminRegistryStore.fetchModules()
+  await adminRegistryStore.fetchExtensions()
   const bootstrapResult = await bootstrapEnabledAdminExtensions({
     app: getRuntimeApplication('admin'),
     extensions: adminRegistryStore.extensions,

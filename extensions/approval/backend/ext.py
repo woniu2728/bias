@@ -2,6 +2,7 @@ from apps.core.extensions import (
     AdminSurfaceExtender,
     ApiRoutesExtender,
     EventListenersExtender,
+    FrontendExtender,
     ForumCapabilitiesExtender,
     LifecycleExtender,
     NotificationsExtender,
@@ -40,10 +41,15 @@ EXTENSION_ID = "approval"
 
 def extend():
     return [
+        FrontendExtender(
+            admin_entry="extensions/approval/frontend/admin/index.js",
+            forum_entry="extensions/approval/frontend/forum/index.js",
+        ),
         AdminSurfaceExtender(
             permissions=permission_definitions(),
             admin_pages=admin_page_definitions(),
-            generated_permissions_page=True,
+            permissions_pages=("/admin/extensions/approval/permissions",),
+            operations_pages=("/admin/extensions/approval/operations",),
         ),
         ApiRoutesExtender(
             mounts=(("/admin", approval_admin_router),),

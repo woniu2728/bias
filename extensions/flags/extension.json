@@ -21,12 +21,6 @@
   "backend_entry": "extensions.flags.backend.ext",
   "frontend_admin_entry": "extensions/flags/frontend/admin/index.js",
   "frontend_forum_entry": "extensions/flags/frontend/forum/index.js",
-  "permissions_pages": [
-    "/admin/extensions/flags/permissions"
-  ],
-  "operations_pages": [
-    "/admin/extensions/flags/operations"
-  ],
   "compatibility": {
     "bias_version": "^1.0.0",
     "api_version": "1.0",

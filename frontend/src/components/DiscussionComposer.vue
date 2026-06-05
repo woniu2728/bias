@@ -687,8 +687,8 @@ function restoreDraft() {
       secondary_tag_id: draft.secondary_tag_id || '',
     }
     if (!form.value.primary_tag_id && draft.tag_id) {
-      const legacyTag = availableTags.value.find(tag => String(tag.id) === String(draft.tag_id))
-      applyTagSelection(legacyTag)
+      const draftTag = availableTags.value.find(tag => String(tag.id) === String(draft.tag_id))
+      applyTagSelection(draftTag)
     } else {
       handlePrimaryTagChange()
     }

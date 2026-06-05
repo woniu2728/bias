@@ -1,4 +1,4 @@
-import { registerAdminDashboardStat, registerAdminRoute } from '@/admin/registry'
+import { ExtensionGeneratedPermissionsPage, registerAdminDashboardStat, registerAdminRoute } from '@/admin/registry'
 import FlagsPage from './FlagsPage.vue'
 import './flagsPageBootstrap.js'
 
@@ -33,4 +33,8 @@ export function bootAdminExtension() {
 
 export function resolveOperationsPage() {
   return FlagsPage
+}
+
+export function resolvePermissionsPage() {
+  return ExtensionGeneratedPermissionsPage
 }

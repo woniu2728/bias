@@ -54,6 +54,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'apps.core.middleware.StartupStateMiddleware',
     'apps.core.middleware.ExtensionErrorHandlingMiddleware',
+    'apps.core.middleware.ExtensionRuntimeInvalidationMiddleware',
     'apps.core.middleware.ExtensionCsrfMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',

@@ -39,7 +39,7 @@ Bias 当前已经不是“功能原型”或“半成品论坛”，而是一个
 - 通知系统
 - 搜索系统
 - 用户系统：注册、登录、登出、邮箱验证、重置密码、资料页
-- 管理后台：仪表盘、权限、用户、标签、审核、邮件、外观、高级设置、模块中心
+- 管理后台：仪表盘、权限、用户、标签、审核、邮件、外观、高级设置、扩展中心
 - 上传与站点资源管理
 - Markdown 渲染、提及、表情、时间线事件帖
 - WebSocket / 实时更新
@@ -54,7 +54,7 @@ Bias 当前已经不是“功能原型”或“半成品论坛”，而是一个
 - 事件监听与时间线联动：`apps/core/forum_event_listeners.py`
 - 前端注册中心：`frontend/src/forum/frontendRegistry.js`
 - 前端资源缓存：`frontend/src/stores/resource.js`
-- 模块中心页面：`frontend/src/admin/views/ModulesPage.vue`
+- 扩展中心页面：`frontend/src/admin/views/ExtensionsPage.vue`
 
 ## 4. 路线图完成情况判断
 
@@ -93,7 +93,7 @@ Bias 当前已经不是“功能原型”或“半成品论坛”，而是一个
 - 帖子类型注册
 - 搜索过滤器注册
 - 讨论排序与列表过滤器注册
-- 后台模块中心
+- 后台扩展中心
 - 前端 discussion/header/nav/notification 等注入式渲染
 
 结论：

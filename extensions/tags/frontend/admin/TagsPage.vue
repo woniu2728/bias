@@ -392,12 +392,13 @@ import {
   AdminStateBlock,
   AdminSummaryGrid,
   AdminToolbar,
-  getAdminTagsPageActionMeta,
-  getAdminTagsPageConfig,
-  getAdminTagsPageCopy,
+  getAdminPageActionMeta,
+  getAdminPageConfig,
+  getAdminPageCopy,
   useModalStore,
 } from '@/admin/registry'
 
+const PAGE_KEY = 'tags.index'
 const tags = ref([])
 const loading = ref(true)
 const loadError = ref('')
@@ -409,9 +410,9 @@ const refreshingStats = ref(false)
 const editingTag = ref(null)
 const iconSearch = ref('')
 const modalStore = useModalStore()
-const tagsCopy = computed(() => getAdminTagsPageCopy())
-const tagsConfig = computed(() => getAdminTagsPageConfig())
-const tagsActionMeta = computed(() => getAdminTagsPageActionMeta())
+const tagsCopy = computed(() => getAdminPageCopy(PAGE_KEY))
+const tagsConfig = computed(() => getAdminPageConfig(PAGE_KEY))
+const tagsActionMeta = computed(() => getAdminPageActionMeta(PAGE_KEY))
 const tagColorPresets = computed(() => tagsConfig.value?.colorPresets || [])
 const tagScopeOptions = computed(() => tagsConfig.value?.scopeOptions || [])
 const tagIconOptions = computed(() => tagsConfig.value?.iconOptions || [])

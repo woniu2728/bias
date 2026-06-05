@@ -154,21 +154,6 @@ def get_setting_group(prefix: str, defaults: dict) -> dict:
     except (OperationalError, ProgrammingError):
         return defaults.copy()
 
-    if (
-        prefix == "appearance"
-        and "custom_head_html" in defaults
-        and "custom_head_html" not in found_keys
-    ):
-        try:
-            legacy_setting = Setting.objects.filter(key="appearance.custom_header").first()
-        except (OperationalError, ProgrammingError):
-            legacy_setting = None
-        if legacy_setting is not None:
-            try:
-                values["custom_head_html"] = json.loads(legacy_setting.value)
-            except json.JSONDecodeError:
-                values["custom_head_html"] = legacy_setting.value
-
     return values
 
 
@@ -518,13 +503,16 @@ def get_public_forum_settings(user=None) -> dict:
 
 def _serialize_extension_runtime_stamp() -> dict:
     from apps.core.models import Setting
+    from apps.core.extensions.lifecycle import RUNTIME_REBUILD_MARKER_KEY, RUNTIME_VERSION_KEY
 
     enabled_order = Setting.objects.filter(key="extensions_enabled_order").first()
-    rebuild_marker = Setting.objects.filter(key="extensions_runtime_rebuild_required").first()
+    rebuild_marker = Setting.objects.filter(key=RUNTIME_REBUILD_MARKER_KEY).first()
+    runtime_version = Setting.objects.filter(key=RUNTIME_VERSION_KEY).first()
     raw_order = str(getattr(enabled_order, "value", "") or "")
     raw_marker = str(getattr(rebuild_marker, "value", "") or "")
+    raw_version = str(getattr(runtime_version, "value", "") or "")
     return {
-        "stamp": f"{raw_order}:{raw_marker}",
+        "stamp": f"{raw_order}:{raw_version or raw_marker}",
         "rebuild_required": bool(raw_marker),
     }
 

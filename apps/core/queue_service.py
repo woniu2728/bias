@@ -64,7 +64,10 @@ class QueueService:
         if ".tests" in task_module or task_name.startswith("tests."):
             return False
 
-        return task_module.startswith("apps.")
+        return task_module.startswith("apps.") or (
+            task_module.startswith("extensions.")
+            and ".backend.tasks" in task_module
+        )
 
     @staticmethod
     def get_runtime_config() -> dict:

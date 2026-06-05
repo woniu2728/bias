@@ -1897,8 +1897,41 @@ class ResourceRegistry:
                     continue
                 if not self._is_relationship_includable(definition, resolved_context):
                     continue
-                payload[definition.relationship] = definition.resolver(instance, resolved_context)
+                payload[definition.relationship] = self._serialize_plain_relationship(
+                    definition,
+                    definition.resolver(instance, resolved_context),
+                    resolved_context,
+                )
         return payload
+
+    def _serialize_plain_relationship(
+        self,
+        definition: ResourceRelationshipDefinition,
+        value: Any,
+        context: dict,
+    ):
+        if definition.many:
+            return [
+                self._serialize_plain_related_item(definition, item, context)
+                for item in ResourceSerializer.relationship_values(value, many=True)
+                if item is not None
+            ]
+        return self._serialize_plain_related_item(definition, value, context)
+
+    def _serialize_plain_related_item(
+        self,
+        definition: ResourceRelationshipDefinition,
+        value: Any,
+        context: dict,
+    ):
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, dict):
+            return value
+        resource_type = ResourceSerializer(self, context).related_resource_type(definition, value, ensure_resource_context(context))
+        if not resource_type or self.get_resource(resource_type) is None:
+            return value
+        return self.serialize(resource_type, value, context)
 
     def serialize_jsonapi_document(
         self,

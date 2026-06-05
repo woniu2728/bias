@@ -1,4 +1,5 @@
 from apps.core.extensions import (
+    AdminSurfaceExtender,
     ConditionalExtender,
     ApiResourceExtender,
     EventListenersExtender,
@@ -6,15 +7,17 @@ from apps.core.extensions import (
     ForumCapabilitiesExtender,
     FrontendExtender,
     LifecycleExtender,
+    ModelExtender,
     NotificationsExtender,
     PostLifecycleExtender,
-    SettingsExtender,
 )
-from apps.core.extensions.backend import _build_setting_field_definition
 from apps.core.extensions.types import ExtensionEventListenerDefinition
 from apps.core.forum_events import UserMentionedEvent
-from apps.core.forum_registry_types import NotificationTypeDefinition, SearchFilterDefinition, UserPreferenceDefinition
-from apps.core.resource_registry import ResourceRelationshipDefinition
+from apps.core.forum_registry_types import NotificationTypeDefinition, PermissionDefinition, SearchFilterDefinition, UserPreferenceDefinition
+from apps.core.resource_registry import ResourceFieldDefinition
+from apps.posts.models import Post, PostMentionsUser
+from apps.users.services import UserService
+from apps.users.models import User
 from extensions.mentions.backend.formatter import render_mentions_html
 from extensions.mentions.backend.lifecycle import (
     apply_post_approved_mentions,
@@ -24,7 +27,10 @@ from extensions.mentions.backend.lifecycle import (
     prepare_post_delete_mentions,
 )
 from extensions.mentions.backend.listeners import handle_user_mentioned_notification
-from extensions.mentions.backend.resources import post_mentions_preload_resolver, resolve_post_mentions_users
+from extensions.mentions.backend.resources import (
+    post_mentions_preload_resolver,
+    resolve_post_mentions_user_models,
+)
 from extensions.mentions.backend.search import (
     apply_post_mentioned_me_search_filter,
     parse_mentioned_me_search_filter,
@@ -38,7 +44,12 @@ EXTENSION_ID = "mentions"
 def extend():
     return [
         FrontendExtender(
+            admin_entry="extensions/mentions/frontend/admin/index.js",
             forum_entry="extensions/mentions/frontend/forum/index.js",
+        ),
+        AdminSurfaceExtender(
+            permissions=permission_definitions(),
+            permissions_pages=("/admin/extensions/mentions/permissions",),
         ),
         ForumCapabilitiesExtender(
             search_filters=search_filter_definitions(),
@@ -53,11 +64,25 @@ def extend():
         FormatterExtender(transforms=(
             render_mentions_html,
         )),
-        SettingsExtender(fields=setting_definitions(), expose_to_forum=("allow_username_format",))
-        .default("allow_username_format", False)
-        .serialize_to_forum("allowUsernameMentionFormat", "allow_username_format", parse_bool_setting),
+        ModelExtender(model=Post).owns(
+            PostMentionsUser,
+            description="帖子提及用户关系由 mentions 扩展拥有。",
+        ).belongs_to_many(
+            "mentionsUsers",
+            User,
+            resolver=resolve_post_mentions_user_models,
+            description="帖子中被提及的用户模型关系。",
+        ),
         ConditionalExtender().when_extension_enabled("tags", tag_mentions_extenders),
-        ApiResourceExtender("post").relationships(post_resource_relationship_definitions),
+        ApiResourceExtender("post").model_relationship(
+            "mentionsUsers",
+            resource_type="user_summary",
+            many=True,
+            description="帖子中被提及的用户摘要列表。",
+            prefetch_related=("mentions__mentions_user",),
+            preload_resolver=post_mentions_preload_resolver,
+        ),
+        ApiResourceExtender("user_detail").fields(user_detail_resource_field_definitions),
         PostLifecycleExtender().handler(
             "mentions",
             apply_created=apply_post_created_mentions,
@@ -76,26 +101,18 @@ def extend():
     ]
 
 
-def setting_definitions():
+def permission_definitions():
     return (
-        _build_setting_field_definition({
-            "key": "allow_username_format",
-            "label": "允许用户名提及格式",
-            "type": "boolean",
-            "default": False,
-            "help_text": "向前端暴露 allowUsernameMentionFormat，用于控制是否兼容纯用户名提及格式。",
-            "order": 10,
-        }),
+        PermissionDefinition(
+            code="mentionGroups",
+            label="提及用户组",
+            section="posting",
+            section_label="发帖",
+            module_id=EXTENSION_ID,
+            icon="fas fa-at",
+            description="允许用户在回复中提及用户组。",
+        ),
     )
-
-
-def parse_bool_setting(value) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    text = str(value or "").strip().lower()
-    return text in {"1", "true", "yes", "on"}
 
 
 def search_filter_definitions():
@@ -152,20 +169,27 @@ def mention_event_listener_definitions():
     )
 
 
-def post_resource_relationship_definitions():
+def user_detail_resource_field_definitions():
     return (
-        ResourceRelationshipDefinition(
-            resource="post",
-            relationship="mentions_users",
+        ResourceFieldDefinition(
+            resource="user_detail",
+            field="canMentionGroups",
             module_id=EXTENSION_ID,
-            resolver=resolve_post_mentions_users,
-            description="帖子中被提及的用户摘要列表。",
-            prefetch_related=("mentions__mentions_user",),
-            preload_resolver=post_mentions_preload_resolver,
-            resource_type="user_summary",
-            many=True,
+            resolver=resolve_user_can_mention_groups,
+            description="当前用户是否可以提及用户组。",
+            visible=_visible_to_self,
         ),
     )
+
+
+def resolve_user_can_mention_groups(user, context: dict) -> bool:
+    actor = context.get("user")
+    return bool(actor and UserService.has_forum_permission(actor, "mentionGroups"))
+
+
+def _visible_to_self(user, context: dict) -> bool:
+    actor = context.get("user")
+    return bool(actor and actor.is_authenticated and user and actor.id == user.id)
 
 
 def tag_mentions_extenders():

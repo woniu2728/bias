@@ -101,58 +101,7 @@ test('admin routes can match extension permissions child paths', () => {
   assert.equal(route?.path, permissionsPath)
 })
 
-test('admin routes preserve compatibility redirects for legacy paths', () => {
-  const legacyPath = uniquePath('legacy')
-  const redirectTarget = '/admin/extensions/tags/settings'
-
-  registerAdminRoute({
-    path: legacyPath,
-    name: `route-${legacyPath}`,
-    label: '旧入口',
-    moduleId: 'tags',
-    redirect: redirectTarget,
-  })
-
-  const route = findAdminRouteByPath(legacyPath)
-
-  assert.equal(route?.redirect, redirectTarget)
-})
-
-test('admin routes preserve compatibility redirects for core operations pages', () => {
-  const usersLegacyPath = uniquePath('users')
-  const approvalLegacyPath = uniquePath('approval')
-  const flagsLegacyPath = uniquePath('flags')
-
-  registerAdminRoute({
-    path: usersLegacyPath,
-    name: `route-${usersLegacyPath}`,
-    label: '用户旧入口',
-    moduleId: 'users',
-    redirect: '/admin/extensions/users/operations',
-  })
-
-  registerAdminRoute({
-    path: approvalLegacyPath,
-    name: `route-${approvalLegacyPath}`,
-    label: '审核旧入口',
-    moduleId: 'approval',
-    redirect: '/admin/extensions/approval/operations',
-  })
-
-  registerAdminRoute({
-    path: flagsLegacyPath,
-    name: `route-${flagsLegacyPath}`,
-    label: '举报旧入口',
-    moduleId: 'flags',
-    redirect: '/admin/extensions/flags/operations',
-  })
-
-  assert.equal(findAdminRouteByPath(usersLegacyPath)?.redirect, '/admin/extensions/users/operations')
-  assert.equal(findAdminRouteByPath(approvalLegacyPath)?.redirect, '/admin/extensions/approval/operations')
-  assert.equal(findAdminRouteByPath(flagsLegacyPath)?.redirect, '/admin/extensions/flags/operations')
-})
-
-test('admin dashboard actions exclude redirect-only compatibility routes', () => {
+test('admin dashboard actions exclude redirect-only routes', () => {
   const directPath = uniquePath('direct-action')
   const redirectPath = uniquePath('redirect-action')
 
@@ -167,9 +116,9 @@ test('admin dashboard actions exclude redirect-only compatibility routes', () =>
   registerAdminRoute({
     path: redirectPath,
     name: `route-${redirectPath}`,
-    label: '兼容跳转操作',
-    moduleId: 'approval',
-    redirect: '/admin/extensions/approval/operations',
+    label: '跳转操作',
+    moduleId: 'route-demo',
+    redirect: '/admin/extensions/route-demo/settings',
     showInDashboardActions: true,
   })
 
@@ -221,26 +170,26 @@ test('admin routes can match first-class core admin pages directly', () => {
   })
 
   registerAdminRoute({
-    path: '/admin/approval',
-    name: 'admin-core-approval',
-    label: '审核队列',
-    moduleId: 'approval',
+    path: '/admin/extension-demo-a',
+    name: 'admin-extension-demo-a',
+    label: '扩展页面 A',
+    moduleId: 'extension-demo-a',
     showInNavigation: false,
   })
 
   registerAdminRoute({
-    path: '/admin/flags',
-    name: 'admin-core-flags',
-    label: '举报管理',
-    moduleId: 'flags',
+    path: '/admin/extension-demo-b',
+    name: 'admin-extension-demo-b',
+    label: '扩展页面 B',
+    moduleId: 'extension-demo-b',
     showInNavigation: false,
   })
 
   registerAdminRoute({
-    path: '/admin/tags',
-    name: 'admin-core-tags',
-    label: '标签管理',
-    moduleId: 'tags',
+    path: '/admin/extension-demo-c',
+    name: 'admin-extension-demo-c',
+    label: '扩展页面 C',
+    moduleId: 'extension-demo-c',
     showInNavigation: false,
   })
 
@@ -257,8 +206,8 @@ test('admin routes can match first-class core admin pages directly', () => {
   assert.equal(findAdminRouteByPath('/admin/mail')?.name, 'admin-core-mail')
   assert.equal(findAdminRouteByPath('/admin/advanced')?.name, 'admin-core-advanced')
   assert.equal(findAdminRouteByPath('/admin/audit-logs')?.name, 'admin-core-audit-logs')
-  assert.equal(findAdminRouteByPath('/admin/approval')?.name, 'admin-core-approval')
-  assert.equal(findAdminRouteByPath('/admin/flags')?.name, 'admin-core-flags')
-  assert.equal(findAdminRouteByPath('/admin/tags')?.name, 'admin-core-tags')
+  assert.equal(findAdminRouteByPath('/admin/extension-demo-a')?.name, 'admin-extension-demo-a')
+  assert.equal(findAdminRouteByPath('/admin/extension-demo-b')?.name, 'admin-extension-demo-b')
+  assert.equal(findAdminRouteByPath('/admin/extension-demo-c')?.name, 'admin-extension-demo-c')
   assert.equal(findAdminRouteByPath('/admin/docs')?.name, 'admin-core-docs')
 })

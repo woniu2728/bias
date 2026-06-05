@@ -27,37 +27,17 @@ from apps.discussions.schemas import DiscussionCreateSchema, DiscussionUpdateSch
 from apps.discussions.services import DiscussionService
 from apps.posts.models import Post
 from apps.posts.services import PostService
-from apps.tags.models import Tag
-from extensions.tags.backend.events import DiscussionTaggedEvent, TagStatsRefreshRequestedEvent
 from apps.users.models import Group, Permission, User
 
 
-def discussion_tags_payload(tag_ids):
-    return {
-        "data": {
-            "relationships": {
-                "tags": {
-                    "data": [
-                        {"type": "tag", "id": str(tag_id)}
-                        for tag_id in tag_ids
-                    ],
-                },
-            },
-        },
-    }
-
-
-def discussion_resource_payload(*, title=None, content=None, tag_ids=None):
+def discussion_resource_payload(*, title=None, content=None):
     attributes = {}
     if title is not None:
         attributes["title"] = title
     if content is not None:
         attributes["content"] = content
 
-    payload = {"data": {"type": "discussion", "attributes": attributes}}
-    if tag_ids is not None:
-        payload["data"]["relationships"] = discussion_tags_payload(tag_ids)["data"]["relationships"]
-    return payload
+    return {"data": {"type": "discussion", "attributes": attributes}}
 
 
 class DiscussionApiTests(TestCase):
@@ -84,31 +64,6 @@ class DiscussionApiTests(TestCase):
         self.assertNotIn("tag_ids", DiscussionCreateSchema.__fields__)
         self.assertNotIn("tag_ids", DiscussionUpdateSchema.__fields__)
 
-    def test_update_discussion_dispatches_tag_stats_refresh_request_event(self):
-        tag_a = Tag.objects.create(name="标签A", slug="tag-a", color="#3498db")
-        tag_b = Tag.objects.create(name="标签B", slug="tag-b", color="#2ecc71")
-        discussion = DiscussionService.create_discussion(
-            title="Tag stats event discussion",
-            content="Initial post",
-            user=self.author,
-            extension_payload=discussion_tags_payload([tag_a.id]),
-        )
-
-        mocked_bus = Mock()
-        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
-            with self.captureOnCommitCallbacks(execute=True):
-                DiscussionService.update_discussion(
-                    discussion_id=discussion.id,
-                    user=self.author,
-                    extension_payload=discussion_tags_payload([tag_b.id]),
-                )
-
-        events = [call.args[0] for call in mocked_bus.dispatch.call_args_list]
-        tag_refresh_event = next(
-            event for event in events if isinstance(event, TagStatsRefreshRequestedEvent)
-        )
-        self.assertEqual(tag_refresh_event.tag_ids, tuple(sorted((tag_a.id, tag_b.id))))
-
     def test_create_discussion_dispatches_created_event_after_commit(self):
         mocked_bus = Mock()
         with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
@@ -122,21 +77,6 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(len(callbacks), 1)
         event = mocked_bus.dispatch.call_args.args[0]
         self.assertEqual(event.discussion_id, discussion.id)
-
-    def test_create_discussion_auto_follows_through_subscriptions_extension(self):
-        self.author.preferences = {"follow_after_create": True}
-        self.author.save(update_fields=["preferences"])
-
-        with self.captureOnCommitCallbacks(execute=True):
-            discussion = DiscussionService.create_discussion(
-                title="Auto follow started discussion",
-                content="Initial post",
-                user=self.author,
-            )
-
-        state = DiscussionUser.objects.get(discussion=discussion, user=self.author)
-        self.assertTrue(state.is_subscribed)
-        self.assertEqual(state.last_read_post_number, 1)
 
     def test_create_discussion_applies_runtime_private_checkers(self):
         class RuntimeModelService:
@@ -308,46 +248,6 @@ class DiscussionApiTests(TestCase):
         self.assertNotIn(denied.id, visible_ids)
         self.assertTrue(can_view_allowed)
 
-
-    def test_update_discussion_dispatches_discussion_tagged_event_with_all_affected_tag_ids(self):
-        parent_tag = Tag.objects.create(name="父标签", slug="parent-tag", color="#3498db")
-        old_child_tag = Tag.objects.create(
-            name="旧子标签",
-            slug="old-child-tag",
-            color="#2ecc71",
-            parent=parent_tag,
-        )
-        new_child_tag = Tag.objects.create(
-            name="新子标签",
-            slug="new-child-tag",
-            color="#e67e22",
-            parent=parent_tag,
-        )
-        discussion = DiscussionService.create_discussion(
-            title="Discussion tagged event",
-            content="Initial post",
-            user=self.author,
-            extension_payload=discussion_tags_payload([parent_tag.id, old_child_tag.id]),
-        )
-
-        mocked_bus = Mock()
-        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
-            with self.captureOnCommitCallbacks(execute=True):
-                DiscussionService.update_discussion(
-                    discussion_id=discussion.id,
-                    user=self.author,
-                    extension_payload=discussion_tags_payload([parent_tag.id, new_child_tag.id]),
-                )
-
-        events = [call.args[0] for call in mocked_bus.dispatch.call_args_list]
-        tagged_event = next(
-            event for event in events if isinstance(event, DiscussionTaggedEvent)
-        )
-        self.assertEqual(
-            tagged_event.tag_ids,
-            tuple(sorted((parent_tag.id, old_child_tag.id, new_child_tag.id))),
-        )
-
     def test_approve_discussion_dispatches_event_after_commit(self):
         admin = User.objects.create_superuser(
             username="discussion-approver",
@@ -376,7 +276,6 @@ class DiscussionApiTests(TestCase):
             data=json.dumps(discussion_resource_payload(
                 title="JWT backed discussion",
                 content="Created through the API.",
-                tag_ids=[],
             )),
             content_type="application/json",
             **self.auth_header(self.author),
@@ -420,7 +319,6 @@ class DiscussionApiTests(TestCase):
         payload = response.json()
         self.assertIn("can_reply", payload)
         self.assertNotIn("can_edit", payload)
-        self.assertIn("tags", payload)
 
     def test_discussion_detail_supports_explicit_relationship_includes(self):
         discussion = DiscussionService.create_discussion(
@@ -439,7 +337,7 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(payload["user"]["id"], self.author.id)
         self.assertEqual(payload["last_posted_user"]["id"], self.author.id)
 
-    def test_discussion_list_avoids_n_plus_one_for_registered_user_and_tags(self):
+    def test_discussion_list_avoids_n_plus_one_for_registered_user_relationships(self):
         for index in range(3):
             DiscussionService.create_discussion(
                 title=f"预加载讨论 {index}",
@@ -519,12 +417,7 @@ class DiscussionApiTests(TestCase):
         self.assertFalse(discussion_payload["is_unread"])
         self.assertEqual(discussion_payload["unread_count"], 0)
 
-    def test_discussion_list_api_supports_registered_filters_and_legacy_subscription(self):
-        followed = DiscussionService.create_discussion(
-            title="关注过滤 API",
-            content="关注过滤内容",
-            user=self.author,
-        )
+    def test_discussion_list_api_supports_core_registered_filters(self):
         my_discussion = DiscussionService.create_discussion(
             title="我的过滤 API",
             content="我的过滤内容",
@@ -536,12 +429,6 @@ class DiscussionApiTests(TestCase):
             user=self.author,
         )
 
-        from apps.discussions.models import DiscussionUser
-        DiscussionUser.objects.update_or_create(
-            discussion=followed,
-            user=self.reader,
-            defaults={"is_subscribed": True, "last_read_post_number": 1},
-        )
         DiscussionUser.objects.update_or_create(
             discussion=unread_discussion,
             user=self.reader,
@@ -553,16 +440,6 @@ class DiscussionApiTests(TestCase):
             user=self.author,
         )
 
-        following_response = self.client.get(
-            "/api/discussions/",
-            {"filter": "following"},
-            **self.auth_header(self.reader),
-        )
-        legacy_following_response = self.client.get(
-            "/api/discussions/",
-            {"subscription": "following"},
-            **self.auth_header(self.reader),
-        )
         my_response = self.client.get(
             "/api/discussions/",
             {"filter": "my"},
@@ -574,13 +451,9 @@ class DiscussionApiTests(TestCase):
             **self.auth_header(self.reader),
         )
 
-        self.assertEqual(following_response.status_code, 200, following_response.content)
-        self.assertEqual(legacy_following_response.status_code, 200, legacy_following_response.content)
         self.assertEqual(my_response.status_code, 200, my_response.content)
         self.assertEqual(unread_response.status_code, 200, unread_response.content)
 
-        self.assertEqual([item["id"] for item in following_response.json()["data"]], [followed.id])
-        self.assertEqual([item["id"] for item in legacy_following_response.json()["data"]], [followed.id])
         self.assertEqual([item["id"] for item in my_response.json()["data"]], [my_discussion.id])
         self.assertEqual([item["id"] for item in unread_response.json()["data"]], [unread_discussion.id])
 
@@ -597,7 +470,6 @@ class DiscussionApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["page"], 1)
         self.assertEqual(payload["limit"], 100)
-        self.assertTrue(any(item["code"] == "following" and item["route_path"] == "/following" for item in payload["available_filters"]))
         self.assertTrue(any(item["code"] == "my" and item["sidebar_visible"] is False for item in payload["available_filters"]))
 
     def test_discussion_list_static_route_uses_resource_endpoint_mutator(self):
@@ -929,32 +801,6 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(payload["last_read_post_number"], 2)
         self.assertEqual(payload["unread_count"], 1)
 
-    def test_discussion_list_filters_by_tag_slug(self):
-        life_tag = Tag.objects.create(name="生活", slug="life", color="#4d698e")
-        tech_tag = Tag.objects.create(name="技术", slug="tech", color="#3498db")
-
-        life_discussion = DiscussionService.create_discussion(
-            title="Life discussion",
-            content="Only belongs to life.",
-            user=self.author,
-            extension_payload=discussion_tags_payload([life_tag.id]),
-        )
-        DiscussionService.create_discussion(
-            title="Tech discussion",
-            content="Only belongs to tech.",
-            user=self.author,
-            extension_payload=discussion_tags_payload([tech_tag.id]),
-        )
-
-        response = self.client.get("/api/discussions/", {"tag": life_tag.slug})
-
-        self.assertEqual(response.status_code, 200, response.content)
-        payload = response.json()
-        self.assertEqual(payload["total"], 1)
-        self.assertEqual(len(payload["data"]), 1)
-        self.assertEqual(payload["data"][0]["id"], life_discussion.id)
-        self.assertEqual(payload["data"][0]["tags"][0]["slug"], life_tag.slug)
-
     def test_suspended_user_cannot_create_discussion(self):
         self.author.suspended_until = timezone.now() + timedelta(days=1)
         self.author.suspend_message = "封禁期间不可发帖"
@@ -965,7 +811,6 @@ class DiscussionApiTests(TestCase):
             data=json.dumps(discussion_resource_payload(
                 title="Should fail",
                 content="Blocked content",
-                tag_ids=[],
             )),
             content_type="application/json",
             **self.auth_header(self.author),
@@ -984,7 +829,6 @@ class DiscussionApiTests(TestCase):
             data=json.dumps(discussion_resource_payload(
                 title="Should fail",
                 content="Blocked until email verification",
-                tag_ids=[],
             )),
             content_type="application/json",
             **self.auth_header(self.author),
@@ -1002,7 +846,6 @@ class DiscussionApiTests(TestCase):
             data=json.dumps(discussion_resource_payload(
                 title="Should fail",
                 content="Blocked by forum permission",
-                tag_ids=[],
             )),
             content_type="application/json",
             **self.auth_header(self.author),
@@ -1010,184 +853,6 @@ class DiscussionApiTests(TestCase):
 
         self.assertEqual(response.status_code, 403, response.content)
         self.assertEqual(response.json()["error"], "没有权限发起讨论")
-
-    def test_discussion_can_enter_approval_queue(self):
-        trusted_group = Group.objects.create(name="Trusted", color="#4d698e")
-        Permission.objects.create(group=trusted_group, permission="startDiscussionWithoutApproval")
-
-        response = self.client.post(
-            "/api/discussions/",
-            data=json.dumps(discussion_resource_payload(
-                title="Pending discussion",
-                content="Needs approval",
-                tag_ids=[],
-            )),
-            content_type="application/json",
-            **self.auth_header(self.author),
-        )
-
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.json()["approval_status"], "pending")
-
-    def test_author_can_still_view_rejected_discussion_and_note(self):
-        discussion = DiscussionService.create_discussion(
-            title="Rejected discussion",
-            content="Needs moderation",
-            user=self.author,
-        )
-        admin = User.objects.create_superuser(
-            username="approval-admin",
-            email="approval-admin@example.com",
-            password="password123",
-        )
-        DiscussionService.reject_discussion(discussion, admin, note="内容需要补充上下文")
-
-        detail_response = self.client.get(
-            f"/api/discussions/{discussion.id}",
-            **self.auth_header(self.author),
-        )
-
-        self.assertEqual(detail_response.status_code, 200, detail_response.content)
-        self.assertEqual(detail_response.json()["approval_status"], "rejected")
-        self.assertEqual(detail_response.json()["approval_note"], "内容需要补充上下文")
-
-        list_response = self.client.get(
-            "/api/discussions/",
-            **self.auth_header(self.author),
-        )
-
-        self.assertEqual(list_response.status_code, 200, list_response.content)
-        items = list_response.json()["data"]
-        self.assertTrue(any(item["id"] == discussion.id and item["approval_status"] == "rejected" for item in items))
-
-    def test_other_member_cannot_view_rejected_discussion(self):
-        discussion = DiscussionService.create_discussion(
-            title="Rejected discussion",
-            content="Needs moderation",
-            user=self.author,
-        )
-        admin = User.objects.create_superuser(
-            username="approval-admin-other",
-            email="approval-admin-other@example.com",
-            password="password123",
-        )
-        DiscussionService.reject_discussion(discussion, admin, note="拒绝原因")
-
-        detail_response = self.client.get(
-            f"/api/discussions/{discussion.id}",
-            **self.auth_header(self.reader),
-        )
-
-        self.assertEqual(detail_response.status_code, 404, detail_response.content)
-
-    def test_author_editing_rejected_discussion_resubmits_it_for_review(self):
-        discussion = DiscussionService.create_discussion(
-            title="Rejected discussion",
-            content="Needs moderation",
-            user=self.author,
-        )
-        admin = User.objects.create_superuser(
-            username="approval-admin-resubmit",
-            email="approval-admin-resubmit@example.com",
-            password="password123",
-        )
-        DiscussionService.reject_discussion(discussion, admin, note="请补充上下文")
-
-        response = self.client.patch(
-            f"/api/discussions/{discussion.id}",
-            data=json.dumps(discussion_resource_payload(
-                title="Rejected discussion updated",
-                content="Updated context for approval",
-                tag_ids=[],
-            )),
-            content_type="application/json",
-            **self.auth_header(self.author),
-        )
-
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(response.json()["approval_status"], "pending")
-
-        detail_response = self.client.get(
-            f"/api/discussions/{discussion.id}",
-            **self.auth_header(self.author),
-        )
-        self.assertEqual(detail_response.status_code, 200, detail_response.content)
-        self.assertEqual(detail_response.json()["approval_status"], "pending")
-        self.assertEqual(detail_response.json()["title"], "Rejected discussion updated")
-        self.assertEqual(detail_response.json()["first_post"]["content"], "Updated context for approval")
-        self.assertEqual(detail_response.json()["approval_note"], "")
-
-        reader_response = self.client.get(
-            f"/api/discussions/{discussion.id}",
-            **self.auth_header(self.reader),
-        )
-        self.assertEqual(reader_response.status_code, 404, reader_response.content)
-
-        reader_list_response = self.client.get(
-            "/api/discussions/",
-            **self.auth_header(self.reader),
-        )
-        self.assertEqual(reader_list_response.status_code, 200, reader_list_response.content)
-        self.assertFalse(any(item["id"] == discussion.id for item in reader_list_response.json()["data"]))
-
-    def test_approving_pending_discussion_makes_discussion_and_first_post_visible(self):
-        trusted_group = Group.objects.create(name="Trusted2", color="#4d698e")
-        Permission.objects.create(group=trusted_group, permission="startDiscussionWithoutApproval")
-
-        response = self.client.post(
-            "/api/discussions/",
-            data=json.dumps(discussion_resource_payload(
-                title="Pending discussion to approve",
-                content="Needs approval first",
-                tag_ids=[],
-            )),
-            content_type="application/json",
-            **self.auth_header(self.author),
-        )
-        self.assertEqual(response.status_code, 200, response.content)
-        discussion_id = response.json()["id"]
-
-        discussion = Discussion.objects.get(id=discussion_id)
-        self.assertEqual(discussion.approval_status, Discussion.APPROVAL_PENDING)
-
-        admin = User.objects.create_superuser(
-            username="approval-admin-visible",
-            email="approval-admin-visible@example.com",
-            password="password123",
-        )
-        with self.captureOnCommitCallbacks(execute=True):
-            DiscussionService.approve_discussion(discussion, admin, note="已通过审核")
-
-        discussion.refresh_from_db()
-        self.assertEqual(discussion.approval_status, Discussion.APPROVAL_APPROVED)
-
-        detail_response = self.client.get(
-            f"/api/discussions/{discussion.id}",
-            **self.auth_header(self.reader),
-        )
-        self.assertEqual(detail_response.status_code, 200, detail_response.content)
-        payload = detail_response.json()
-        self.assertEqual(payload["approval_status"], "approved")
-        self.assertEqual(payload["first_post"]["approval_status"], "approved")
-
-        posts_response = self.client.get(f"/api/discussions/{discussion.id}/posts")
-        self.assertEqual(posts_response.status_code, 200, posts_response.content)
-        event_post = next(item for item in posts_response.json()["data"] if item["type"] == "discussionApproved")
-        self.assertEqual(
-            event_post["event_data"],
-            {
-                "kind": "discussionApproved",
-                "note": "已通过审核",
-                "previous_status": "pending",
-            },
-        )
-
-        list_response = self.client.get(
-            "/api/discussions/",
-            **self.auth_header(self.reader),
-        )
-        self.assertEqual(list_response.status_code, 200, list_response.content)
-        self.assertTrue(any(item["id"] == discussion.id for item in list_response.json()["data"]))
 
     def test_discussion_approval_transitions_keep_author_counts_consistent(self):
         admin = User.objects.create_superuser(
@@ -1231,131 +896,6 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(self.author.discussion_count, 1)
         self.assertEqual(self.reader.comment_count, 1)
         self.assertEqual(reply.approval_status, "approved")
-
-    def test_rejecting_discussion_creates_discussion_rejected_event_post(self):
-        discussion = DiscussionService.create_discussion(
-            title="Reject me",
-            content="Needs rejection",
-            user=self.author,
-        )
-        admin = User.objects.create_superuser(
-            username="discussion-reject-admin",
-            email="discussion-reject-admin@example.com",
-            password="password123",
-        )
-
-        with self.captureOnCommitCallbacks(execute=True):
-            DiscussionService.reject_discussion(discussion, admin, note="内容不符合要求")
-
-        posts_response = self.client.get(
-            f"/api/discussions/{discussion.id}/posts",
-            **self.auth_header(admin),
-        )
-        self.assertEqual(posts_response.status_code, 200, posts_response.content)
-        event_post = next(item for item in posts_response.json()["data"] if item["type"] == "discussionRejected")
-        self.assertEqual(
-            event_post["event_data"],
-            {
-                "kind": "discussionRejected",
-                "note": "内容不符合要求",
-                "previous_status": "approved",
-            },
-        )
-
-    def test_editing_rejected_discussion_creates_resubmitted_event_post(self):
-        discussion = DiscussionService.create_discussion(
-            title="Resubmit me",
-            content="Original content",
-            user=self.author,
-        )
-        admin = User.objects.create_superuser(
-            username="discussion-resubmit-admin",
-            email="discussion-resubmit-admin@example.com",
-            password="password123",
-        )
-        DiscussionService.reject_discussion(discussion, admin, note="请补充细节")
-
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.patch(
-                f"/api/discussions/{discussion.id}",
-                data=json.dumps({
-                    "content": "Updated content for review",
-                }),
-                content_type="application/json",
-                **self.auth_header(self.author),
-            )
-
-        self.assertEqual(response.status_code, 200, response.content)
-        posts_response = self.client.get(
-            f"/api/discussions/{discussion.id}/posts",
-            **self.auth_header(self.author),
-        )
-        self.assertEqual(posts_response.status_code, 200, posts_response.content)
-        event_post = next(item for item in posts_response.json()["data"] if item["type"] == "discussionResubmitted")
-        self.assertEqual(
-            event_post["event_data"],
-            {
-                "kind": "discussionResubmitted",
-                "note": "",
-                "previous_status": "rejected",
-            },
-        )
-
-    def test_discussion_list_hides_staff_only_tag_for_non_staff(self):
-        staff_tag = Tag.objects.create(
-            name="Staff",
-            slug="staff-zone",
-            view_scope=Tag.ACCESS_STAFF,
-            start_discussion_scope=Tag.ACCESS_STAFF,
-            reply_scope=Tag.ACCESS_STAFF,
-        )
-        admin = User.objects.create_superuser(
-            username="discussion-admin",
-            email="discussion-admin@example.com",
-            password="password123",
-        )
-        discussion = DiscussionService.create_discussion(
-            title="仅管理员可见",
-            content="内部讨论",
-            user=admin,
-            extension_payload=discussion_tags_payload([staff_tag.id]),
-        )
-
-        guest_response = self.client.get("/api/discussions/")
-        self.assertEqual(guest_response.status_code, 200, guest_response.content)
-        self.assertEqual(guest_response.json()["total"], 0)
-
-        member_response = self.client.get("/api/discussions/", **self.auth_header(self.reader))
-        self.assertEqual(member_response.status_code, 200, member_response.content)
-        self.assertEqual(member_response.json()["total"], 0)
-
-        admin_response = self.client.get("/api/discussions/", **self.auth_header(admin))
-        self.assertEqual(admin_response.status_code, 200, admin_response.content)
-        self.assertEqual(admin_response.json()["total"], 1)
-        self.assertEqual(admin_response.json()["data"][0]["id"], discussion.id)
-
-    def test_cannot_create_discussion_in_staff_only_tag(self):
-        restricted_tag = Tag.objects.create(
-            name="管理员专用",
-            slug="staff-only-start",
-            view_scope=Tag.ACCESS_PUBLIC,
-            start_discussion_scope=Tag.ACCESS_STAFF,
-            reply_scope=Tag.ACCESS_PUBLIC,
-        )
-
-        response = self.client.post(
-            "/api/discussions/",
-            data=json.dumps(discussion_resource_payload(
-                title="Should fail",
-                content="Blocked by tag scope",
-                tag_ids=[restricted_tag.id],
-            )),
-            content_type="application/json",
-            **self.auth_header(self.author),
-        )
-
-        self.assertEqual(response.status_code, 403, response.content)
-        self.assertIn("没有权限", response.json()["error"])
 
     def test_admin_can_hide_and_restore_discussion(self):
         admin = User.objects.create_superuser(
@@ -1629,45 +1169,6 @@ class DiscussionApiTests(TestCase):
             },
         )
 
-    def test_updating_discussion_tags_creates_discussion_tagged_event_post(self):
-        member_group = Group.objects.create(name="DiscussionTagEditor", color="#4d698e")
-        Permission.objects.create(group=member_group, permission="startDiscussion")
-        Permission.objects.create(group=member_group, permission="discussion.editOwn")
-        self.author.user_groups.add(member_group)
-
-        original_tag = Tag.objects.create(name="后端", slug="backend", color="#2980b9")
-        new_tag = Tag.objects.create(name="前端", slug="frontend", color="#e67e22")
-        discussion = DiscussionService.create_discussion(
-            title="Retag me",
-            content="Original content",
-            user=self.author,
-            extension_payload=discussion_tags_payload([original_tag.id]),
-        )
-
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.patch(
-                f"/api/discussions/{discussion.id}",
-                data=json.dumps(discussion_tags_payload([new_tag.id])),
-                content_type="application/json",
-                **self.auth_header(self.author),
-            )
-
-        self.assertEqual(response.status_code, 200, response.content)
-        tagged_post = Post.objects.get(discussion=discussion, number=2)
-        self.assertEqual(tagged_post.type, "discussionTagged")
-
-        posts_response = self.client.get(f"/api/discussions/{discussion.id}/posts")
-        payload = posts_response.json()["data"]
-        event_post = next(item for item in payload if item["id"] == tagged_post.id)
-        self.assertEqual(
-            event_post["event_data"],
-            {
-                "kind": "discussionTagged",
-                "added_tags": [new_tag.name],
-                "removed_tags": [original_tag.name],
-            },
-        )
-
     def test_hiding_discussion_creates_discussion_hidden_event_post(self):
         discussion = DiscussionService.create_discussion(
             title="Hide me",
@@ -1757,31 +1258,6 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(audit_log.user_id, moderator.id)
         self.assertEqual(audit_log.target_type, "discussion")
         self.assertEqual(audit_log.data["title"], "Moderator deletes discussion")
-
-    def test_delete_discussion_dispatches_tag_refresh_through_extension_lifecycle(self):
-        admin = User.objects.create_superuser(
-            username="discussion-delete-tag-admin",
-            email="discussion-delete-tag-admin@example.com",
-            password="password123",
-        )
-        tag = Tag.objects.create(name="删除刷新标签", slug="delete-refresh-tag", color="#4d698e")
-        discussion = DiscussionService.create_discussion(
-            title="Delete tagged discussion",
-            content="Refresh tag stats after delete",
-            user=admin,
-            extension_payload=discussion_tags_payload([tag.id]),
-        )
-
-        mocked_bus = Mock()
-        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
-            with self.captureOnCommitCallbacks(execute=True):
-                DiscussionService.delete_discussion(discussion.id, admin)
-
-        events = [call.args[0] for call in mocked_bus.dispatch.call_args_list]
-        refresh_event = next(
-            event for event in events if isinstance(event, TagStatsRefreshRequestedEvent)
-        )
-        self.assertEqual(refresh_event.tag_ids, (tag.id,))
 
     def test_user_with_global_edit_permission_can_edit_others_discussion(self):
         editor_group = Group.objects.create(name="DiscussionEditor", color="#4d698e")
@@ -1893,58 +1369,3 @@ class DiscussionApiTests(TestCase):
         self.reader.refresh_from_db()
         self.assertEqual(self.author.discussion_count, 0)
         self.assertEqual(self.reader.comment_count, 0)
-
-    def test_cannot_create_discussion_with_secondary_tag_only(self):
-        parent_tag = Tag.objects.create(name="开发", slug="dev")
-        child_tag = Tag.objects.create(name="后端", slug="backend", parent=parent_tag)
-
-        response = self.client.post(
-            "/api/discussions/",
-            data=json.dumps(discussion_resource_payload(
-                title="Invalid child only",
-                content="Blocked by tag combination",
-                tag_ids=[child_tag.id],
-            )),
-            content_type="application/json",
-            **self.auth_header(self.author),
-        )
-
-        self.assertEqual(response.status_code, 400, response.content)
-        self.assertIn("次标签", response.json()["error"])
-
-    def test_cannot_create_discussion_with_two_primary_tags(self):
-        first_tag = Tag.objects.create(name="前端", slug="frontend")
-        second_tag = Tag.objects.create(name="后端", slug="backend-main")
-
-        response = self.client.post(
-            "/api/discussions/",
-            data=json.dumps(discussion_resource_payload(
-                title="Too many primary tags",
-                content="Blocked by primary count",
-                tag_ids=[first_tag.id, second_tag.id],
-            )),
-            content_type="application/json",
-            **self.auth_header(self.author),
-        )
-
-        self.assertEqual(response.status_code, 400, response.content)
-        self.assertIn("主标签", response.json()["error"])
-
-    def test_cannot_create_discussion_with_mismatched_parent_child_tags(self):
-        first_tag = Tag.objects.create(name="前端", slug="frontend-main")
-        second_tag = Tag.objects.create(name="后端", slug="backend-main")
-        child_tag = Tag.objects.create(name="Vue", slug="vue-child", parent=first_tag)
-
-        response = self.client.post(
-            "/api/discussions/",
-            data=json.dumps(discussion_resource_payload(
-                title="Mismatched tags",
-                content="Blocked by parent child mismatch",
-                tag_ids=[second_tag.id, child_tag.id],
-            )),
-            content_type="application/json",
-            **self.auth_header(self.author),
-        )
-
-        self.assertEqual(response.status_code, 400, response.content)
-        self.assertIn("主标签", response.json()["error"])

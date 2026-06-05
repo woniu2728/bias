@@ -94,6 +94,8 @@ def get_enabled_extension_runtime_entries(*, product_visible_only: bool = False)
         runtime_view = host.get_extension_view(extension.id)
         if extension is None:
             continue
+        if not getattr(extension.runtime, "enabled", False):
+            continue
         if runtime_view is None:
             continue
         entry = _build_runtime_entry(host, runtime_view, extension)

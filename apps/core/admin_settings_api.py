@@ -1,9 +1,56 @@
 import json
+import sys
+
+import django
+from django.conf import settings
+from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 
 from ninja import Body, Router
 
+from apps.core import admin_runtime_helpers
+from apps.core.api_errors import api_error
+from apps.core.audit import log_admin_action
+from apps.core.email_service import EmailService
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
+from apps.core.file_service import FileUploadService
 from apps.core.jwt_auth import AccessTokenAuth
+from apps.core.mail_drivers import (
+    can_mail_driver_send,
+    get_driver_definitions,
+    parse_mail_from,
+    serialize_mail_settings,
+    validate_mail_settings,
+)
+from apps.core.models import AuditLog
+from apps.core.queue_service import QueueService
+from apps.core.runtime_checks import (
+    build_runtime_dependency_checks,
+    detect_cache_driver,
+    detect_database_label,
+    detect_queue_driver_label,
+    detect_realtime_driver,
+    is_redis_enabled,
+)
+from apps.core.admin_runtime_summary import (
+    probe_cache_connection,
+    probe_queue_broker_connection,
+    probe_realtime_connection,
+)
+from apps.core.search_index_service import SearchIndexService
+from apps.core.settings_service import (
+    ADVANCED_SETTINGS_DEFAULTS,
+    APPEARANCE_SETTINGS_DEFAULTS,
+    BASIC_SETTINGS_DEFAULTS,
+    clear_runtime_setting_caches,
+    get_advanced_settings as get_runtime_advanced_settings,
+    get_mail_settings as get_runtime_mail_settings,
+    get_mail_settings_defaults,
+    get_setting_group,
+    save_setting_group,
+    sync_mail_settings_to_site_config,
+)
 from apps.discussions.models import Discussion
 from apps.posts.models import Post
 from apps.users.models import User
@@ -12,17 +59,86 @@ from apps.users.models import User
 router = Router()
 
 
-def _legacy():
-    from apps.core import admin_api as legacy
-
-    return legacy
-
-
 def _require_staff(request):
-    legacy = _legacy()
     if not request.auth or not request.auth.is_staff:
-        return legacy.admin_error("需要管理员权限", status=403)
+        return api_error("需要管理员权限", status=403)
     return None
+
+
+def _build_auth_secret_risks() -> list[dict]:
+    secret_key = admin_runtime_helpers.normalize_secret_value(settings.SECRET_KEY)
+    jwt_algorithm = str(settings.NINJA_JWT.get("ALGORITHM") or "").strip().upper()
+    jwt_signing_key = admin_runtime_helpers.normalize_secret_value(
+        settings.NINJA_JWT.get("SIGNING_KEY") or settings.SECRET_KEY
+    )
+    return admin_runtime_helpers.build_auth_secret_risks(
+        secret_key=secret_key,
+        jwt_algorithm=jwt_algorithm,
+        jwt_signing_key=jwt_signing_key,
+    )
+
+
+def _build_auth_secret_status() -> dict:
+    return admin_runtime_helpers.build_auth_secret_status(risks=_build_auth_secret_risks())
+
+
+def _build_runtime_risks(
+    *,
+    database_label: str,
+    cache_driver: str,
+    realtime_driver: str,
+    queue_enabled: bool,
+    queue_driver: str,
+    queue_worker_status: dict,
+    redis_enabled: bool,
+    cache_connection: dict,
+    realtime_connection: dict,
+    queue_broker_connection: dict,
+) -> list[dict]:
+    return admin_runtime_helpers.build_runtime_risks(
+        debug_mode=settings.DEBUG,
+        database_label=database_label,
+        cache_driver=cache_driver,
+        realtime_driver=realtime_driver,
+        queue_enabled=queue_enabled,
+        queue_driver=queue_driver,
+        queue_worker_status=queue_worker_status,
+        redis_enabled=redis_enabled,
+        cache_connection=cache_connection,
+        realtime_connection=realtime_connection,
+        queue_broker_connection=queue_broker_connection,
+        auth_secret_risks=_build_auth_secret_risks(),
+    )
+
+
+def _build_mail_settings_response(admin_email: str = "") -> dict:
+    settings_data = get_runtime_mail_settings()
+    errors = validate_mail_settings(settings_data)
+    driver_definitions = get_driver_definitions()
+    effective_test_to_email = (
+        str(settings_data.get("mail_test_recipient") or "").strip()
+        or str(admin_email or "").strip()
+    )
+    settings_data.update({
+        "drivers": driver_definitions,
+        "driver_options": [
+            {"value": key, "label": value.get("label") or key}
+            for key, value in driver_definitions.items()
+        ],
+        "sending": can_mail_driver_send(settings_data, errors),
+        "errors": errors,
+        "mail_test_recipient": str(settings_data.get("mail_test_recipient") or "").strip(),
+        "test_to_email": effective_test_to_email,
+    })
+    return settings_data
+
+
+def _validate_advanced_runtime_settings(payload: dict) -> list[str]:
+    return admin_runtime_helpers.validate_advanced_runtime_settings(
+        payload,
+        database_label=detect_database_label(),
+        realtime_driver=detect_realtime_driver(),
+    )
 
 
 @router.get("/stats", auth=AccessTokenAuth(), tags=["Admin"])
@@ -31,21 +147,19 @@ def get_stats(request):
     if denied:
         return denied
 
-    legacy = _legacy()
-    advanced_settings = legacy.get_runtime_advanced_settings()
+    advanced_settings = get_runtime_advanced_settings()
     queue_driver = advanced_settings.get("queue_driver", "sync")
     queue_enabled = bool(advanced_settings.get("queue_enabled", False))
-    queue_worker_status = legacy.QueueService.get_worker_status()
-    queue_metrics = legacy.QueueService.get_metrics()
-    database_label = legacy.detect_database_label()
-    cache_driver = legacy.detect_cache_driver()
-    realtime_driver = legacy.detect_realtime_driver()
-    redis_enabled = legacy.is_redis_enabled(queue_enabled=queue_enabled, queue_driver=queue_driver)
-    cache_connection = legacy._probe_cache_connection()
-    realtime_connection = legacy._probe_realtime_connection()
-    queue_broker_connection = legacy._probe_queue_broker_connection(queue_enabled, queue_driver)
-    runtime_risks = legacy.build_runtime_risks(
-        debug_mode=legacy.settings.DEBUG,
+    queue_worker_status = QueueService.get_worker_status()
+    queue_metrics = QueueService.get_metrics()
+    database_label = detect_database_label()
+    cache_driver = detect_cache_driver()
+    realtime_driver = detect_realtime_driver()
+    redis_enabled = is_redis_enabled(queue_enabled=queue_enabled, queue_driver=queue_driver)
+    cache_connection = probe_cache_connection()
+    realtime_connection = probe_realtime_connection()
+    queue_broker_connection = probe_queue_broker_connection(queue_enabled, queue_driver)
+    runtime_risks = _build_runtime_risks(
         database_label=database_label,
         cache_driver=cache_driver,
         realtime_driver=realtime_driver,
@@ -57,8 +171,8 @@ def get_stats(request):
         realtime_connection=realtime_connection,
         queue_broker_connection=queue_broker_connection,
     )
-    auth_secret_status = legacy.build_auth_secret_status()
-    runtime_dependency_checks = legacy.build_runtime_dependency_checks(
+    auth_secret_status = _build_auth_secret_status()
+    runtime_dependency_checks = build_runtime_dependency_checks(
         cache_connection=cache_connection,
         realtime_connection=realtime_connection,
         queue_broker_connection=queue_broker_connection,
@@ -67,13 +181,13 @@ def get_stats(request):
 
     stats = {
         "runtimeName": "Python",
-        "pythonVersion": legacy.sys.version.split()[0],
-        "djangoVersion": legacy.django.get_version(),
+        "pythonVersion": sys.version.split()[0],
+        "djangoVersion": django.get_version(),
         "databaseLabel": database_label,
         "cacheDriver": cache_driver,
         "queueDriver": queue_driver,
         "queueEnabled": queue_enabled,
-        "queueLabel": legacy.detect_queue_driver_label(queue_enabled, queue_driver),
+        "queueLabel": detect_queue_driver_label(queue_enabled, queue_driver),
         "queueWorkerStatus": queue_worker_status["status"],
         "queueWorkerLabel": queue_worker_status["label"],
         "queueWorkerAvailable": queue_worker_status["available"],
@@ -99,7 +213,7 @@ def get_stats(request):
         "authSecretStatus": auth_secret_status["status"],
         "authSecretLabel": auth_secret_status["label"],
         "authSecretMessage": auth_secret_status["message"],
-        "debugMode": legacy.settings.DEBUG,
+        "debugMode": settings.DEBUG,
         "maintenanceMode": bool(advanced_settings.get("maintenance_mode", False)),
         "maintenanceModeKey": advanced_settings.get("maintenance_mode_key", "none"),
         "maintenanceModeLabel": advanced_settings.get("maintenance_mode_label", "未启用"),
@@ -128,9 +242,8 @@ def reset_queue_metrics(request):
     if denied:
         return denied
 
-    legacy = _legacy()
-    metrics = legacy.QueueService.reset_metrics()
-    legacy.log_admin_action(request, "admin.queue_metrics.reset", data={"metrics": metrics})
+    metrics = QueueService.reset_metrics()
+    log_admin_action(request, "admin.queue_metrics.reset", data={"metrics": metrics})
     return {
         "message": "队列运行指标已重置",
         "metrics": metrics,
@@ -143,8 +256,7 @@ def get_settings(request):
     if denied:
         return denied
 
-    legacy = _legacy()
-    return legacy.get_setting_group("basic", legacy.BASIC_SETTINGS_DEFAULTS)
+    return get_setting_group("basic", BASIC_SETTINGS_DEFAULTS)
 
 
 @router.post("/settings", auth=AccessTokenAuth(), tags=["Admin"])
@@ -153,9 +265,8 @@ def save_settings(request, payload: dict = Body(...)):
     if denied:
         return denied
 
-    legacy = _legacy()
-    settings_data = legacy.save_setting_group("basic", legacy.BASIC_SETTINGS_DEFAULTS, payload)
-    legacy.log_admin_action(
+    settings_data = save_setting_group("basic", BASIC_SETTINGS_DEFAULTS, payload)
+    log_admin_action(
         request,
         "admin.settings.update",
         target_type="settings",
@@ -170,8 +281,7 @@ def get_appearance_settings(request):
     if denied:
         return denied
 
-    legacy = _legacy()
-    return legacy.get_setting_group("appearance", legacy.APPEARANCE_SETTINGS_DEFAULTS)
+    return get_setting_group("appearance", APPEARANCE_SETTINGS_DEFAULTS)
 
 
 @router.post("/appearance", auth=AccessTokenAuth(), tags=["Admin"])
@@ -180,9 +290,8 @@ def save_appearance_settings(request, payload: dict = Body(...)):
     if denied:
         return denied
 
-    legacy = _legacy()
-    settings_data = legacy.save_setting_group("appearance", legacy.APPEARANCE_SETTINGS_DEFAULTS, payload)
-    legacy.log_admin_action(
+    settings_data = save_setting_group("appearance", APPEARANCE_SETTINGS_DEFAULTS, payload)
+    log_admin_action(
         request,
         "admin.settings.update",
         target_type="settings",
@@ -197,20 +306,19 @@ def upload_appearance_asset(request, target: str):
     if denied:
         return denied
 
-    legacy = _legacy()
     if target not in {"logo", "favicon"}:
-        return legacy.admin_error("仅支持上传 logo 或 favicon", status=400)
+        return api_error("仅支持上传 logo 或 favicon", status=400)
 
     file = request.FILES.get("file")
     if not file:
-        return legacy.admin_error("请选择要上传的文件", status=400)
+        return api_error("请选择要上传的文件", status=400)
 
     try:
-        file_url, file_info = legacy.FileUploadService.upload_site_asset(file, target)
+        file_url, file_info = FileUploadService.upload_site_asset(file, target)
     except ValueError as exc:
-        return legacy.admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
 
-    legacy.log_admin_action(
+    log_admin_action(
         request,
         "admin.appearance_asset.upload",
         target_type="appearance_asset",
@@ -236,8 +344,7 @@ def get_mail_settings(request):
     if denied:
         return denied
 
-    legacy = _legacy()
-    return legacy.build_mail_settings_response(request.auth.email if request.auth else "")
+    return _build_mail_settings_response(request.auth.email if request.auth else "")
 
 
 @router.post("/mail", auth=AccessTokenAuth(), tags=["Admin"])
@@ -246,39 +353,38 @@ def save_mail_settings(request, payload: dict = Body(...)):
     if denied:
         return denied
 
-    legacy = _legacy()
     normalized_payload = dict(payload)
     if "mail_from" in normalized_payload:
-        mail_from_address, mail_from_name = legacy.parse_mail_from(normalized_payload.pop("mail_from"))
+        mail_from_address, mail_from_name = parse_mail_from(normalized_payload.pop("mail_from"))
         normalized_payload["mail_from_address"] = mail_from_address
         normalized_payload["mail_from_name"] = mail_from_name
 
-    defaults = legacy.get_mail_settings_defaults()
-    settings_data = legacy.save_setting_group("mail", defaults, normalized_payload)
-    expected_settings = legacy.serialize_mail_settings(settings_data)
+    defaults = get_mail_settings_defaults()
+    settings_data = save_setting_group("mail", defaults, normalized_payload)
+    expected_settings = serialize_mail_settings(settings_data)
     try:
-        config_path = legacy.sync_mail_settings_to_site_config(settings_data)
+        config_path = sync_mail_settings_to_site_config(settings_data)
     except Exception as exc:
-        return legacy.admin_error(f"邮件设置写入站点配置失败: {exc}", status=500)
+        return api_error(f"邮件设置写入站点配置失败: {exc}", status=500)
 
-    response = legacy.build_mail_settings_response(request.auth.email if request.auth else "")
+    response = _build_mail_settings_response(request.auth.email if request.auth else "")
     if response.get("mail_from") != expected_settings.get("mail_from"):
         location = config_path or "数据库设置"
-        return legacy.admin_error(
+        return api_error(
             "邮件设置保存后校验失败，运行时读取到的发件地址与刚保存的不一致。"
             f" 期望值: {expected_settings.get('mail_from') or '(空)'};"
             f" 实际值: {response.get('mail_from') or '(空)'};"
             f" 配置来源: {location}",
             status=500,
         )
-    legacy.log_admin_action(
+    log_admin_action(
         request,
         "admin.settings.update",
         target_type="settings",
         data={"group": "mail", "keys": sorted(normalized_payload.keys())},
     )
     response["message"] = "邮件设置保存成功"
-    response["settings"] = legacy.serialize_mail_settings(settings_data)
+    response["settings"] = serialize_mail_settings(settings_data)
     return response
 
 
@@ -288,7 +394,6 @@ def send_test_email(request):
     if denied:
         return denied
 
-    legacy = _legacy()
     payload = {}
     if request.body:
         raw_body = request.body.decode("utf-8", errors="ignore").strip()
@@ -298,30 +403,30 @@ def send_test_email(request):
             try:
                 payload = json.loads(raw_body) if raw_body else {}
             except json.JSONDecodeError:
-                return legacy.admin_error("测试邮件请求格式无效", status=400)
+                return api_error("测试邮件请求格式无效", status=400)
             if not isinstance(payload, dict):
                 payload = {}
 
-    mail_settings = legacy.get_setting_group("mail", legacy.get_mail_settings_defaults())
+    mail_settings = get_setting_group("mail", get_mail_settings_defaults())
     to_email = (
         str(payload.get("to_email") or "").strip()
         or str(mail_settings.get("mail_test_recipient") or "").strip()
         or str(request.auth.email or "").strip()
     )
     if not to_email:
-        return legacy.admin_error("请先填写测试收件箱", status=400)
+        return api_error("请先填写测试收件箱", status=400)
 
     try:
-        legacy.validate_email(to_email)
-    except legacy.ValidationError:
-        return legacy.admin_error("测试收件箱格式无效", status=400)
+        validate_email(to_email)
+    except ValidationError:
+        return api_error("测试收件箱格式无效", status=400)
 
     try:
-        sent_count = legacy.EmailService.send_test_email(to_email)
+        sent_count = EmailService.send_test_email(to_email)
     except Exception as exc:
-        return legacy.admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
 
-    legacy.log_admin_action(
+    log_admin_action(
         request,
         "admin.mail.test",
         target_type="mail",
@@ -336,8 +441,7 @@ def get_advanced_settings(request):
     if denied:
         return denied
 
-    legacy = _legacy()
-    return legacy.get_runtime_advanced_settings()
+    return get_runtime_advanced_settings()
 
 
 @router.post("/advanced", auth=AccessTokenAuth(), tags=["Admin"])
@@ -346,25 +450,24 @@ def save_advanced_settings(request, payload: dict = Body(...)):
     if denied:
         return denied
 
-    legacy = _legacy()
     runtime_payload = dict(payload)
     runtime_payload.pop("debug_mode", None)
     if "maintenance_mode_key" in runtime_payload:
         runtime_payload["maintenance_mode"] = str(
             runtime_payload.get("maintenance_mode_key") or "none"
         ).strip().lower() != "none"
-    validation_errors = legacy.validate_advanced_runtime_settings(runtime_payload)
+    validation_errors = _validate_advanced_runtime_settings(runtime_payload)
     if validation_errors:
-        return legacy.admin_error(
+        return api_error(
             "；".join(validation_errors),
             status=400,
             code="invalid_runtime_configuration",
             field_errors={"advanced": validation_errors},
         )
 
-    settings_data = legacy.save_setting_group("advanced", legacy.ADVANCED_SETTINGS_DEFAULTS, runtime_payload)
-    settings_data["debug_mode"] = legacy.get_runtime_advanced_settings()["debug_mode"]
-    legacy.log_admin_action(
+    settings_data = save_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS, runtime_payload)
+    settings_data["debug_mode"] = get_runtime_advanced_settings()["debug_mode"]
+    log_admin_action(
         request,
         "admin.settings.update",
         target_type="settings",
@@ -379,10 +482,9 @@ def clear_cache(request):
     if denied:
         return denied
 
-    legacy = _legacy()
     try:
-        legacy.cache.clear()
-        legacy.clear_runtime_setting_caches()
+        cache.clear()
+        clear_runtime_setting_caches()
         from apps.core.extensions.event_bus import get_extension_event_bus
         from apps.core.extensions.events import RuntimeCacheClearedEvent
         from apps.core.extensions.runtime_event_listeners import bootstrap_extension_runtime_event_listeners
@@ -390,9 +492,9 @@ def clear_cache(request):
         bootstrap_extension_runtime_event_listeners()
         get_extension_event_bus().dispatch(RuntimeCacheClearedEvent())
     except Exception as exc:
-        return legacy.admin_error(f"缓存清理失败: {exc}", status=503)
+        return api_error(f"缓存清理失败: {exc}", status=503)
 
-    legacy.log_admin_action(request, "admin.cache.clear", target_type="cache")
+    log_admin_action(request, "admin.cache.clear", target_type="cache")
     return {"message": "缓存已清除"}
 
 
@@ -402,10 +504,9 @@ def get_search_index_status(request):
     if denied:
         return denied
 
-    legacy = _legacy()
-    queue_worker_status = legacy.QueueService.get_worker_status()
-    latest_rebuild = legacy.AuditLog.objects.filter(action="admin.search_indexes.rebuild").first()
-    search_index_status = legacy.SearchIndexService.get_status()
+    queue_worker_status = QueueService.get_worker_status()
+    latest_rebuild = AuditLog.objects.filter(action="admin.search_indexes.rebuild").first()
+    search_index_status = SearchIndexService.get_status()
 
     last_rebuild = None
     if latest_rebuild:
@@ -417,7 +518,7 @@ def get_search_index_status(request):
 
     return {
         **search_index_status,
-        "databaseLabel": legacy.detect_database_label(),
+        "databaseLabel": detect_database_label(),
         "lastRebuild": last_rebuild,
         "queueWorkerStatus": queue_worker_status["status"],
         "queueWorkerLabel": queue_worker_status["label"],
@@ -433,15 +534,14 @@ def rebuild_search_indexes(request):
     if denied:
         return denied
 
-    legacy = _legacy()
     try:
-        result = legacy.SearchIndexService.rebuild_postgres_indexes()
+        result = SearchIndexService.rebuild_postgres_indexes()
     except RuntimeError as exc:
-        return legacy.admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
     except Exception as exc:
-        return legacy.admin_error(f"搜索索引重建失败: {exc}", status=503)
+        return api_error(f"搜索索引重建失败: {exc}", status=503)
 
-    legacy.log_admin_action(
+    log_admin_action(
         request,
         "admin.search_indexes.rebuild",
         target_type="search_index",

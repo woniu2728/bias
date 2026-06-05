@@ -19,9 +19,6 @@
     "tag-stats-refresh"
   ],
   "backend_entry": "extensions.tags.backend.ext",
-  "settings_pages": [
-    "/admin/extensions/tags/settings"
-  ],
   "compatibility": {
     "bias_version": "^1.0.0",
     "api_version": "1.0",

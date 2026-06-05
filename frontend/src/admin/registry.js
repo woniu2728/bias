@@ -22,6 +22,7 @@ export { default as AdminSelectMenu } from './components/AdminSelectMenu.vue'
 export { default as AdminStateBlock } from './components/AdminStateBlock.vue'
 export { default as AdminSummaryGrid } from './components/AdminSummaryGrid.vue'
 export { default as AdminToolbar } from './components/AdminToolbar.vue'
+export { default as ExtensionGeneratedPermissionsPage } from './views/ExtensionGeneratedPermissionsPage.vue'
 export { useAdminSaveFeedback } from './composables/useAdminSaveFeedback.js'
 export {
   resolveApprovalSelectionState,
@@ -58,30 +59,21 @@ export {
   getAdminAppearancePageActionMeta,
   getAdminAppearancePageConfig,
   getAdminAppearancePageCopy,
-  getAdminApprovalQueueNoteTemplates,
-  getAdminApprovalQueuePageActionMeta,
-  getAdminApprovalQueuePageConfig,
-  getAdminApprovalQueuePageCopy,
   getAdminAuditLogsPageConfig,
   getAdminAuditLogsPageCopy,
   getAdminBasicsPageActionMeta,
   getAdminBasicsPageConfig,
   getAdminBasicsPageCopy,
-  getAdminFlagsPageActionMeta,
-  getAdminFlagsPageConfig,
-  getAdminFlagsPageCopy,
   getAdminMailPageActionMeta,
   getAdminMailPageConfig,
   getAdminMailPageCopy,
-  getAdminModulesPageActionMeta,
-  getAdminModulesPageConfig,
-  getAdminModulesPageCopy,
+  getAdminPageActionMeta,
+  getAdminPageConfig,
+  getAdminPageCopy,
+  getAdminPageNoteTemplates,
   getAdminPermissionsPageActionMeta,
   getAdminPermissionsPageConfig,
   getAdminPermissionsPageCopy,
-  getAdminTagsPageActionMeta,
-  getAdminTagsPageConfig,
-  getAdminTagsPageCopy,
   getAdminUsersPageActionMeta,
   getAdminUsersPageConfig,
   getAdminUsersPageCopy,
@@ -91,30 +83,21 @@ export {
   registerAdminAppearancePageActionMeta,
   registerAdminAppearancePageConfig,
   registerAdminAppearancePageCopy,
-  registerAdminApprovalQueueNoteTemplate,
-  registerAdminApprovalQueuePageActionMeta,
-  registerAdminApprovalQueuePageConfig,
-  registerAdminApprovalQueuePageCopy,
   registerAdminAuditLogsPageConfig,
   registerAdminAuditLogsPageCopy,
   registerAdminBasicsPageActionMeta,
   registerAdminBasicsPageConfig,
   registerAdminBasicsPageCopy,
-  registerAdminFlagsPageActionMeta,
-  registerAdminFlagsPageConfig,
-  registerAdminFlagsPageCopy,
   registerAdminMailPageActionMeta,
   registerAdminMailPageConfig,
   registerAdminMailPageCopy,
-  registerAdminModulesPageActionMeta,
-  registerAdminModulesPageConfig,
-  registerAdminModulesPageCopy,
+  registerAdminPageActionMeta,
+  registerAdminPageConfig,
+  registerAdminPageCopy,
+  registerAdminPageNoteTemplate,
   registerAdminPermissionsPageActionMeta,
   registerAdminPermissionsPageConfig,
   registerAdminPermissionsPageCopy,
-  registerAdminTagsPageActionMeta,
-  registerAdminTagsPageConfig,
-  registerAdminTagsPageCopy,
   registerAdminUsersPageActionMeta,
   registerAdminUsersPageConfig,
   registerAdminUsersPageCopy,
@@ -122,7 +105,6 @@ export {
 
 import './registry/bootstrap/routes.js'
 import './registry/bootstrap/dashboard.js'
-import './registry/bootstrap/modulesPage.js'
 import './registry/bootstrap/basicsPage.js'
 import './registry/bootstrap/appearancePage.js'
 import './registry/bootstrap/mailPage.js'

@@ -1,4 +1,5 @@
 import { defineAsyncComponent } from 'vue'
+import api from '@/api'
 import {
   buildDiscussionPath,
   buildUserPath,

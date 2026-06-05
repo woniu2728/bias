@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from django.conf import settings
@@ -35,6 +36,9 @@ from apps.core.extensions.types import (
     ExtensionRuntimeState,
 )
 from apps.core.models import ExtensionInstallation, Setting
+
+
+EXTENSION_PACKAGE_LOCK_SETTING = "extensions.package_lock"
 
 
 class ExtensionManager:
@@ -100,15 +104,38 @@ class ExtensionManager:
         self._validate_bias_compatibility(extension, action="install")
         self._dispatch_extension_lifecycle_event(ExtensionEnablingEvent(extension_id=extension.id))
         migration_result = self._run_install_migrations_if_declared(extension)
+        applied_files = list((migration_result or {}).get("details", {}).get("migration_files") or [])
+        self._write_installation_state(
+            extension,
+            installed=True,
+            enabled=False,
+            booted=False,
+            meta_updates={
+                "migration_execution": dict(migration_result or {}),
+                "applied_migration_files": applied_files,
+            },
+        )
         install_result = self._run_lifecycle_extenders(
             extension,
             "install",
             meta={"action": "install"},
+            target_runtime={"installed": True, "enabled": False, "booted": False},
+        )
+        self._write_installation_state(
+            extension,
+            installed=True,
+            enabled=True,
+            booted=True,
+            meta_updates={
+                "migration_execution": dict(migration_result or {}),
+                "applied_migration_files": applied_files,
+            },
         )
         enable_result = self._run_lifecycle_extenders(
             extension,
             "enable",
             meta={"action": "install_enable"},
+            target_runtime={"installed": True, "enabled": True, "booted": True},
         )
         asset_result = publish_extension_assets(extension)
 
@@ -119,7 +146,6 @@ class ExtensionManager:
         }
         if migration_result is not None:
             backend_hooks["run_migrations"] = migration_result
-        applied_files = list((migration_result or {}).get("details", {}).get("migration_files") or [])
         return self._persist_installation_state(
             extension,
             installed=True,
@@ -159,10 +185,21 @@ class ExtensionManager:
             disable_asset_result = dict(extension.runtime.backend_hooks.get("unpublish_assets") or {})
 
         migration_result = self._run_uninstall_migrations_if_declared(extension)
+        self._write_installation_state(
+            extension,
+            installed=False,
+            enabled=False,
+            booted=False,
+            meta_updates={
+                "migration_execution": dict(migration_result or {}),
+                "applied_migration_files": [],
+            },
+        )
         uninstall_result = self._run_lifecycle_extenders(
             extension,
             "uninstall",
             meta={"action": "uninstall"},
+            target_runtime={"installed": False, "enabled": False, "booted": False},
         )
         asset_result = unpublish_extension_assets(extension)
         backend_hooks = {"run_uninstall": uninstall_result, "unpublish_assets": asset_result}
@@ -195,10 +232,20 @@ class ExtensionManager:
             self._validate_enable(extension, extensions)
             self._dispatch_extension_lifecycle_event(ExtensionEnablingEvent(extension_id=extension.id))
             migration_result = self._run_install_migrations_if_declared(extension)
+            self._write_installation_state(
+                extension,
+                installed=True,
+                enabled=True,
+                booted=True,
+                meta_updates={
+                    "migration_execution": dict(migration_result or {}),
+                } if migration_result is not None else None,
+            )
             hook_result = self._run_lifecycle_extenders(
                 extension,
                 "enable",
                 meta={"action": "enable"},
+                target_runtime={"installed": True, "enabled": True, "booted": True},
             )
             asset_result = publish_extension_assets(extension)
             backend_hooks = {
@@ -229,10 +276,17 @@ class ExtensionManager:
     def _disable_extension(self, extension, extensions) -> Extension:
         self._validate_disable(extension, extensions)
         self._dispatch_extension_lifecycle_event(ExtensionDisablingEvent(extension_id=extension.id))
+        self._write_installation_state(
+            extension,
+            installed=True,
+            enabled=False,
+            booted=False,
+        )
         hook_result = self._run_lifecycle_extenders(
             extension,
             "disable",
             meta={"action": "disable"},
+            target_runtime={"installed": True, "enabled": False, "booted": False},
         )
         asset_result = unpublish_extension_assets(extension)
         return self._persist_installation_state(
@@ -424,18 +478,69 @@ class ExtensionManager:
                 installation.save(update_fields=["enabled", "booted", "meta", "updated_at"])
                 pruned.append(extension_id)
 
+        self._persist_package_lock(discovered=discovered, installations=installations)
         self._persist_enabled_order()
-        reset_extension_runtime_state()
         self.load(force=True)
-        if updated or pruned:
-            self._dispatch_extension_lifecycle_event(ExtensionPackagesSyncedEvent(
-                updated=tuple(updated),
-                pruned=tuple(pruned),
-            ))
+
+        def after_commit() -> None:
+            reset_extension_runtime_state()
+            if updated or pruned:
+                self._dispatch_extension_lifecycle_event(ExtensionPackagesSyncedEvent(
+                    updated=tuple(updated),
+                    pruned=tuple(pruned),
+                ))
+
+        self._run_after_commit(after_commit)
         return {
             "discovered": sorted(discovered.keys()),
             "updated": updated,
             "pruned": pruned,
+            "locked": len(self._build_package_lock(discovered=discovered, installations=installations)["packages"]),
+        }
+
+    def _persist_package_lock(
+        self,
+        *,
+        discovered: dict[str, Extension],
+        installations: dict[str, ExtensionInstallation],
+    ) -> None:
+        payload = self._build_package_lock(discovered=discovered, installations=installations)
+        Setting.objects.update_or_create(
+            key=EXTENSION_PACKAGE_LOCK_SETTING,
+            defaults={"value": json.dumps(payload, ensure_ascii=False, sort_keys=True)},
+        )
+
+    def _build_package_lock(
+        self,
+        *,
+        discovered: dict[str, Extension],
+        installations: dict[str, ExtensionInstallation],
+    ) -> dict:
+        packages = []
+        for extension_id in sorted(set(discovered.keys()) | set(installations.keys())):
+            extension = discovered.get(extension_id)
+            installation = installations.get(extension_id)
+            distribution = {}
+            if extension is not None:
+                distribution = dict((extension.manifest.extra or {}).get("python_distribution") or {})
+            runtime = extension.runtime if extension is not None else None
+            packages.append({
+                "id": extension_id,
+                "version": installation.version if installation is not None else (extension.version if extension is not None else ""),
+                "source": installation.source if installation is not None else (extension.source if extension is not None else ""),
+                "path": str(extension.manifest.path or "") if extension is not None else "",
+                "distribution": {
+                    "name": str(distribution.get("name") or ""),
+                    "version": str(distribution.get("version") or ""),
+                } if distribution else {},
+                "installed": bool(installation.installed) if installation is not None else bool(runtime and runtime.installed),
+                "enabled": bool(installation.enabled) if installation is not None else bool(runtime and runtime.enabled),
+                "booted": bool(installation.booted) if installation is not None else bool(runtime and runtime.booted),
+                "missing": extension is None,
+            })
+        return {
+            "schema": 1,
+            "packages": packages,
         }
 
     def sort_extensions_for_boot(self, extensions: list[Extension]) -> list[Extension]:
@@ -607,6 +712,7 @@ class ExtensionManager:
                 path for path in extension.locale_paths
                 if str(path or "").strip()
             ),
+            view_namespaces=tuple(extension.view_namespaces),
             formatter_pipeline=tuple(extension.formatter_pipeline),
             formatter_callbacks=tuple(extension.formatter_callbacks),
             resource_definitions=tuple(extension.resource_definitions),
@@ -778,6 +884,36 @@ class ExtensionManager:
         lifecycle_event=None,
         lifecycle_events: tuple | list | None = None,
     ):
+        self._write_installation_state(
+            extension,
+            installed=installed,
+            enabled=enabled,
+            booted=booted,
+            meta_updates=meta_updates,
+        )
+
+        self.load(force=True)
+        self._persist_enabled_order()
+        events_to_dispatch = tuple(lifecycle_events or (() if lifecycle_event is None else (lifecycle_event,)))
+
+        def after_commit() -> None:
+            reset_extension_runtime_state()
+            if invalidate_frontend_assets:
+                for event in events_to_dispatch:
+                    self._dispatch_extension_lifecycle_event(event)
+
+        self._run_after_commit(after_commit)
+        return self.get_extension(extension.id)
+
+    def _write_installation_state(
+        self,
+        extension,
+        *,
+        installed: bool,
+        enabled: bool,
+        booted: bool,
+        meta_updates: dict | None = None,
+    ) -> ExtensionInstallation:
         installation, _created = ExtensionInstallation.objects.get_or_create(
             extension_id=extension.id,
             defaults={
@@ -815,19 +951,19 @@ class ExtensionManager:
             "meta",
             "updated_at",
         ])
-
-        reset_extension_runtime_state()
-        self.load(force=True)
-        self._persist_enabled_order()
-        events_to_dispatch = tuple(lifecycle_events or (() if lifecycle_event is None else (lifecycle_event,)))
-        if invalidate_frontend_assets:
-            for event in events_to_dispatch:
-                self._dispatch_extension_lifecycle_event(event)
-        return self.get_extension(extension.id)
+        return installation
 
     def _dispatch_extension_lifecycle_event(self, event) -> None:
         bootstrap_extension_runtime_event_listeners()
         get_extension_event_bus().dispatch(event)
+
+    @staticmethod
+    def _run_after_commit(callback) -> None:
+        connection = transaction.get_connection()
+        if connection.in_atomic_block:
+            transaction.on_commit(callback)
+            return
+        callback()
 
     def _persist_enabled_order(self) -> None:
         extensions = [
@@ -848,7 +984,14 @@ class ExtensionManager:
             meta=meta,
         )
 
-    def _run_lifecycle_extenders(self, extension, action: str, *, meta: dict | None = None) -> dict:
+    def _run_lifecycle_extenders(
+        self,
+        extension,
+        action: str,
+        *,
+        meta: dict | None = None,
+        target_runtime: dict | None = None,
+    ) -> dict:
         from apps.core.extensions.backend import build_backend_context
 
         method_name = {
@@ -864,14 +1007,44 @@ class ExtensionManager:
             "uninstall": "run_uninstall",
         }.get(action, action)
 
-        context = build_backend_context(extension, meta=meta)
+        context_extension = extension
+        if target_runtime:
+            context_extension = replace(
+                extension,
+                runtime=replace(extension.runtime, **dict(target_runtime)),
+            )
+        context = build_backend_context(context_extension, meta=meta)
         results = []
         for extender in extension.get_extenders():
             callback = getattr(extender, method_name, None)
             if not callable(callback):
                 continue
-            result = callback(context)
-            results.append(_normalize_lifecycle_result(result, hook_name))
+            try:
+                result = callback(context)
+            except Exception as exc:
+                raise ExtensionStateError(
+                    f"扩展 {extension.id} 的 {method_name} 生命周期处理器执行失败: {exc}",
+                    code="extension_lifecycle_failed",
+                    details={
+                        "extension_id": extension.id,
+                        "action": action,
+                        "hook": hook_name,
+                        "handler": callback.__name__ if hasattr(callback, "__name__") else callback.__class__.__name__,
+                    },
+                ) from exc
+            normalized_result = _normalize_lifecycle_result(result, hook_name)
+            if normalized_result.get("status") not in ("ok", "skipped"):
+                raise ExtensionStateError(
+                    normalized_result.get("message") or f"扩展 {extension.id} 的 {method_name} 生命周期处理器执行失败。",
+                    code="extension_lifecycle_failed",
+                    details={
+                        "extension_id": extension.id,
+                        "action": action,
+                        "hook": hook_name,
+                        "result": normalized_result,
+                    },
+                )
+            results.append(normalized_result)
 
         if not results:
             return {
@@ -879,16 +1052,6 @@ class ExtensionManager:
                 "status": "skipped",
                 "status_label": "已跳过",
                 "message": f"扩展未声明 {method_name} 生命周期处理器。",
-            }
-
-        failed = [item for item in results if item.get("status") not in ("ok", "skipped")]
-        if failed:
-            return {
-                "hook": hook_name,
-                "status": "error",
-                "status_label": "失败",
-                "message": failed[0].get("message") or "扩展生命周期处理器执行失败。",
-                "details": {"results": results},
             }
 
         effective = next((item for item in results if item.get("status") != "skipped"), results[-1])
@@ -1048,7 +1211,7 @@ def _build_runtime_actions(extension: Extension) -> tuple[ExtensionRuntimeAction
     action_prefix.extend(list(manifest_actions))
 
     if not extension.runtime.installed:
-        return tuple(action_prefix + [
+        return tuple([
             ExtensionRuntimeActionDefinition(
                 key="install",
                 label="安装扩展",
@@ -1060,6 +1223,7 @@ def _build_runtime_actions(extension: Extension) -> tuple[ExtensionRuntimeAction
                 success_message="扩展已安装并启用。",
                 order=10,
             ),
+            *action_prefix,
         ])
 
     actions = list(action_prefix)
@@ -1108,10 +1272,6 @@ def _build_runtime_actions(extension: Extension) -> tuple[ExtensionRuntimeAction
 def _build_manifest_runtime_actions(extension: Extension) -> tuple[ExtensionRuntimeActionDefinition, ...]:
     actions = []
     for action in sorted(extension.manifest_runtime_actions, key=lambda item: (item.order, item.key)):
-        if action.requires_installed and not extension.runtime.installed:
-            continue
-        if action.requires_enabled and not extension.runtime.enabled:
-            continue
         actions.append(ExtensionRuntimeActionDefinition(
             key=action.key,
             label=action.label,

@@ -142,6 +142,8 @@ test('admin runtime registry scopes settings permissions pages and general index
 test('bootstrapEnabledAdminExtensions runs runtime application initializers', async () => {
   resetLoadedAdminExtensions()
   const calls = []
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
   const runtimeApp = createRuntimeApplication({ kind: 'admin' })
   const router = {
     addRoute() {},
@@ -154,28 +156,34 @@ test('bootstrapEnabledAdminExtensions runs runtime application initializers', as
     removeRoute() {},
   }
 
-  await bootstrapEnabledAdminExtensions({
-    app: runtimeApp,
-    router,
-    runtime: { stamp: 'runtime-initializer-test' },
-    registry: { adminApi: {} },
-    extensions: [{
-      id: 'runtime-admin',
-      enabled: true,
-      frontend_admin_entry: 'extensions/runtime-admin/frontend/admin/index.js',
-    }],
-    entryModules: {
-      '../../../extensions/runtime-admin/frontend/admin/index.js': async () => ({
-        bootAdminExtension: async ({ app }) => {
-          assert.equal(app.initializers, runtimeApp.initializers)
-          app.initializers.add('runtime-admin', extensionApp => {
-            calls.push(extensionApp.extension.id)
-          })
-        },
-      }),
-    },
-  })
+  try {
+    await bootstrapEnabledAdminExtensions({
+      app: runtimeApp,
+      router,
+      runtime: { stamp: 'runtime-initializer-test' },
+      registry: { adminApi: {} },
+      extensions: [{
+        id: 'runtime-admin',
+        enabled: true,
+        frontend_admin_entry: 'extensions/runtime-admin/frontend/admin/index.js',
+      }],
+      entryModules: {
+        '../../../extensions/runtime-admin/frontend/admin/index.js': async () => ({
+          bootAdminExtension: async ({ app }) => {
+            assert.equal(app.initializers, runtimeApp.initializers)
+            app.initializers.add('runtime-admin', extensionApp => {
+              calls.push(extensionApp.extension.id)
+            })
+          },
+        }),
+      },
+    })
 
-  assert.deepEqual(calls, ['runtime-admin'])
-  assert.equal(runtimeApp.initializers.list().length, 0)
+    assert.deepEqual(calls, ['runtime-admin'])
+    assert.equal(runtimeApp.initializers.list().length, 0)
+    assert.equal(runtimeApp.extensions['runtime-admin'].modules.admin.bootAdminExtension instanceof Function, true)
+    assert.equal(globalThis.bias.extensions['runtime-admin'], runtimeApp.extensions['runtime-admin'])
+  } finally {
+    globalThis.bias = previousBias
+  }
 })

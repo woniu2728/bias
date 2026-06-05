@@ -21,9 +21,6 @@
   "backend_entry": "extensions.approval.backend.ext",
   "frontend_admin_entry": "extensions/approval/frontend/admin/index.js",
   "frontend_forum_entry": "extensions/approval/frontend/forum/index.js",
-  "operations_pages": [
-    "/admin/extensions/approval/operations"
-  ],
   "compatibility": {
     "bias_version": "^1.0.0",
     "api_version": "1.0",

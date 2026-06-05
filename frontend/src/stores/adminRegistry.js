@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import api from '@/api'
 
 export const useAdminRegistryStore = defineStore('adminRegistry', () => {
-  const modules = ref([])
+  const extensionScopes = ref([])
   const extensions = ref([])
   const extensionRuntime = ref({})
   const loading = ref(false)
@@ -11,7 +11,7 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
 
   const enabledModuleIds = computed(() => {
     const ids = new Set()
-    for (const item of modules.value) {
+    for (const item of extensionScopes.value) {
       if (item?.id && item.enabled !== false) {
         ids.add(String(item.id))
       }
@@ -19,7 +19,7 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
     return ids
   })
 
-  async function fetchModules(force = false) {
+  async function fetchExtensions(force = false) {
     if (loading.value) {
       return
     }
@@ -29,18 +29,15 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
 
     loading.value = true
     try {
-      const [modulesData, extensionsData] = await Promise.all([
-        api.get('/admin/modules'),
-        api.get('/admin/extensions'),
-      ])
-      modules.value = Array.isArray(modulesData?.modules) ? modulesData.modules : []
+      const extensionsData = await api.get('/admin/extensions')
       extensions.value = Array.isArray(extensionsData?.extensions)
         ? extensionsData.extensions.filter(item => item?.product_visible !== false)
         : []
+      extensionScopes.value = deriveExtensionScopes(extensionsData?.extensions || [])
       extensionRuntime.value = extensionsData?.runtime || extensionsData?.runtime_rebuild || {}
       loaded.value = true
     } catch (error) {
-      console.error('加载后台模块注册表失败:', error)
+      console.error('加载后台扩展注册表失败:', error)
     } finally {
       loading.value = false
     }
@@ -57,15 +54,15 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
     return enabledModuleIds.value.has(normalized)
   }
 
-  function applyModules(nextModules) {
-    if (!Array.isArray(nextModules)) {
-      modules.value = []
+  function applyExtensionScopes(nextScopes) {
+    if (!Array.isArray(nextScopes)) {
+      extensionScopes.value = []
       loaded.value = true
       return
     }
 
-    const byId = new Map((modules.value || []).map(item => [String(item.id || ''), item]))
-    for (const item of nextModules) {
+    const byId = new Map((extensionScopes.value || []).map(item => [String(item.id || ''), item]))
+    for (const item of nextScopes) {
       const moduleId = String(item?.id || '').trim()
       if (!moduleId) {
         continue
@@ -76,7 +73,7 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
         id: moduleId,
       })
     }
-    modules.value = Array.from(byId.values())
+    extensionScopes.value = Array.from(byId.values())
     loaded.value = true
   }
 
@@ -84,21 +81,50 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
     if (!Array.isArray(nextExtensions)) {
       extensions.value = []
       extensionRuntime.value = {}
+      extensionScopes.value = deriveExtensionScopes([])
       return
     }
     extensions.value = nextExtensions.filter(item => item?.product_visible !== false)
+    extensionScopes.value = deriveExtensionScopes(nextExtensions)
   }
 
   return {
-    modules,
+    extensionScopes,
     extensions,
     extensionRuntime,
     loading,
     loaded,
     enabledModuleIds,
-    fetchModules,
+    fetchExtensions,
     isModuleEnabled,
-    applyModules,
+    applyExtensionScopes,
     applyExtensions,
   }
 })
+
+function deriveExtensionScopes(extensions) {
+  const byId = new Map([
+    ['core', { id: 'core', enabled: true }],
+    ['users', { id: 'users', enabled: true }],
+    ['discussions', { id: 'discussions', enabled: true }],
+    ['posts', { id: 'posts', enabled: true }],
+  ])
+
+  for (const extension of extensions || []) {
+    const moduleIds = Array.isArray(extension?.module_ids) ? extension.module_ids : []
+    for (const moduleId of moduleIds) {
+      const normalized = String(moduleId || '').trim()
+      if (!normalized) {
+        continue
+      }
+      const existing = byId.get(normalized) || {}
+      byId.set(normalized, {
+        ...existing,
+        id: normalized,
+        enabled: existing.enabled === true || extension.enabled !== false,
+      })
+    }
+  }
+
+  return Array.from(byId.values())
+}

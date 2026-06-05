@@ -6,6 +6,7 @@ from typing import Any, Callable
 from typing import Protocol, TYPE_CHECKING
 
 from apps.core.extensions.container import resolve_container_value, wrap_callback
+from apps.core.extensions.extender_values import flatten_extenders
 from apps.core.extensions.types import (
     ExtensionAdminActionDefinition,
     ExtensionDiscussionLifecycleDefinition,
@@ -34,8 +35,10 @@ from apps.core.extensions.types import (
     ExtensionResourceSortDefinition,
     ExtensionRealtimeIncludedDefinition,
     ExtensionSearchDriverDefinition,
+    ExtensionSignalDefinition,
     ExtensionSystemHookDefinition,
     ExtensionValidatorDefinition,
+    ExtensionViewNamespaceDefinition,
     ExtensionMailDefinition,
 )
 from apps.core.forum_registry_types import (
@@ -677,6 +680,49 @@ class ApiResourceExtender:
             sorts=self._sorts,
         )
 
+    def model_relationship(
+        self,
+        name: str,
+        *,
+        resource_type: str = "",
+        many: bool = False,
+        description: str = "",
+        select_related: tuple[str, ...] = (),
+        prefetch_related: tuple[Any, ...] = (),
+        preload_resolver: Callable[[dict], tuple[tuple[str, ...], tuple[Any, ...]]] | None = None,
+        visible: Callable[[Any, dict], bool] | bool = True,
+        includable: Callable[[dict], bool] | bool = True,
+    ) -> "ApiResourceExtender":
+        relationship_name = str(name or "").strip()
+        if not relationship_name:
+            return self
+
+        def resolver(instance, context):
+            from apps.core.extensions.runtime_access import resolve_runtime_model_relation
+
+            return resolve_runtime_model_relation(
+                instance,
+                relationship_name,
+                default=[] if many else None,
+            )
+
+        return self.relationships_with(
+            ExtensionResourceRelationshipDefinition(
+                resource=self.resource_name,
+                relationship=relationship_name,
+                module_id="",
+                resolver=resolver,
+                description=description,
+                select_related=select_related,
+                prefetch_related=prefetch_related,
+                preload_resolver=preload_resolver,
+                visible=visible,
+                includable=includable,
+                resource_type=resource_type,
+                many=many,
+            )
+        )
+
     def relationships_before(
         self,
         anchor: str,
@@ -1041,6 +1087,35 @@ class ModelExtender:
     defaults: tuple[ExtensionModelDefaultDefinition, ...] = ()
     model: Any = None
 
+    def owns(
+        self,
+        model: Any = None,
+        *,
+        key: str = "",
+        description: str = "",
+    ) -> "ModelExtender":
+        resolved_model = model or self.model
+        if resolved_model is None:
+            raise ValueError("ModelExtender ownership requires a model")
+        owner_key = str(key or "").strip() or _model_definition_key(resolved_model)
+        return ModelExtender(
+            definitions=tuple([
+                *self.definitions,
+                ExtensionModelDefinition(
+                    model=resolved_model,
+                    key=owner_key,
+                    handler=resolved_model,
+                    kind="owner",
+                    description=str(description or "").strip(),
+                ),
+            ]),
+            visibility=self.visibility,
+            relations=self.relations,
+            casts=self.casts,
+            defaults=self.defaults,
+            model=self.model,
+        )
+
     def relationship(self, *definitions: ExtensionModelRelationDefinition) -> "ModelExtender":
         return ModelExtender(
             definitions=self.definitions,
@@ -1061,6 +1136,7 @@ class ModelExtender:
         owner_key: str = "",
         resolver: Callable[[Any], Any] | None = None,
         description: str = "",
+        inject_attribute: bool = True,
     ) -> "ModelExtender":
         return self._simple_relation(
             "belongsTo",
@@ -1071,6 +1147,7 @@ class ModelExtender:
             owner_key=owner_key,
             resolver=resolver,
             description=description,
+            inject_attribute=inject_attribute,
         )
 
     def belongs_to_many(
@@ -1083,6 +1160,7 @@ class ModelExtender:
         owner_key: str = "",
         resolver: Callable[[Any], Any] | None = None,
         description: str = "",
+        inject_attribute: bool = True,
     ) -> "ModelExtender":
         return self._simple_relation(
             "belongsToMany",
@@ -1093,6 +1171,7 @@ class ModelExtender:
             owner_key=owner_key,
             resolver=resolver,
             description=description,
+            inject_attribute=inject_attribute,
         )
 
     def has_one(
@@ -1105,6 +1184,7 @@ class ModelExtender:
         local_key: str = "",
         resolver: Callable[[Any], Any] | None = None,
         description: str = "",
+        inject_attribute: bool = True,
     ) -> "ModelExtender":
         return self._simple_relation(
             "hasOne",
@@ -1115,6 +1195,7 @@ class ModelExtender:
             owner_key=local_key,
             resolver=resolver,
             description=description,
+            inject_attribute=inject_attribute,
         )
 
     def has_many(
@@ -1127,6 +1208,7 @@ class ModelExtender:
         local_key: str = "",
         resolver: Callable[[Any], Any] | None = None,
         description: str = "",
+        inject_attribute: bool = True,
     ) -> "ModelExtender":
         return self._simple_relation(
             "hasMany",
@@ -1137,6 +1219,7 @@ class ModelExtender:
             owner_key=local_key,
             resolver=resolver,
             description=description,
+            inject_attribute=inject_attribute,
         )
 
     def cast(self, *definitions: ExtensionModelCastDefinition) -> "ModelExtender":
@@ -1170,6 +1253,7 @@ class ModelExtender:
         owner_key: str = "",
         resolver: Callable[[Any], Any] | None = None,
         description: str = "",
+        inject_attribute: bool = True,
     ) -> "ModelExtender":
         source_model = model or self.model
         if source_model is None:
@@ -1185,6 +1269,7 @@ class ModelExtender:
                 foreign_key=foreign_key,
                 owner_key=owner_key,
                 description=description,
+                inject_attribute=inject_attribute,
             )
         )
 
@@ -1248,6 +1333,16 @@ class ModelPrivateExtender:
             return models
 
         app.resolving("models", apply)
+
+
+def _model_definition_key(model: Any) -> str:
+    meta = getattr(model, "_meta", None)
+    label = str(getattr(meta, "label_lower", "") or "").strip()
+    if label:
+        return label
+    module = str(getattr(model, "__module__", "") or "").strip()
+    name = str(getattr(model, "__name__", "") or getattr(model, "__qualname__", "") or "").strip()
+    return ".".join(item for item in (module, name) if item) or str(model)
 
 
 @dataclass(frozen=True)
@@ -1472,6 +1567,54 @@ class MailExtender:
 
 
 @dataclass(frozen=True)
+class ViewExtender:
+    namespaces: tuple[ExtensionViewNamespaceDefinition, ...] = ()
+
+    def namespace(
+        self,
+        namespace: str,
+        *hints: str,
+        description: str = "",
+        order: int = 100,
+    ) -> "ViewExtender":
+        normalized_hints = tuple(str(item or "").strip() for item in hints if str(item or "").strip())
+        return ViewExtender(namespaces=tuple([*self.namespaces, ExtensionViewNamespaceDefinition(
+            namespace=str(namespace or "").strip(),
+            hints=normalized_hints,
+            description=str(description or "").strip(),
+            order=int(order),
+        )]))
+
+    def extend_namespace(
+        self,
+        namespace: str,
+        *hints: str,
+        description: str = "",
+        order: int = 100,
+    ) -> "ViewExtender":
+        normalized_hints = tuple(str(item or "").strip() for item in hints if str(item or "").strip())
+        return ViewExtender(namespaces=tuple([*self.namespaces, ExtensionViewNamespaceDefinition(
+            namespace=str(namespace or "").strip(),
+            hints=normalized_hints,
+            description=str(description or "").strip(),
+            order=int(order),
+            prepend=True,
+        )]))
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.namespaces:
+            return
+        extension_id = extension.extension_id
+
+        def apply(views, host: "ExtensionHost"):
+            for definition in self.namespaces:
+                views.namespace(extension_id, replace(definition, module_id=definition.module_id or extension_id))
+            return views
+
+        app.resolving("views", apply)
+
+
+@dataclass(frozen=True)
 class EventListenersExtender:
     listeners: tuple[ExtensionEventListenerDefinition, ...] = ()
 
@@ -1487,6 +1630,52 @@ class EventListenersExtender:
             return events
 
         app.resolving("events", apply)
+
+
+@dataclass(frozen=True)
+class SignalExtender:
+    definitions: tuple[ExtensionSignalDefinition, ...] = ()
+
+    def connect(
+        self,
+        signal: Any,
+        receiver: Any,
+        *,
+        sender: Any = None,
+        dispatch_uid: str = "",
+        weak: bool = False,
+        description: str = "",
+        order: int = 100,
+    ) -> "SignalExtender":
+        return SignalExtender(tuple([
+            *self.definitions,
+            ExtensionSignalDefinition(
+                signal=signal,
+                receiver=receiver,
+                sender=sender,
+                dispatch_uid=str(dispatch_uid or "").strip(),
+                weak=bool(weak),
+                description=str(description or "").strip(),
+                order=int(order),
+            ),
+        ]))
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.definitions:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(signals, host: "ExtensionHost"):
+            for definition in self.definitions:
+                receiver = definition.receiver
+                if isinstance(receiver, str) or isinstance(receiver, type):
+                    receiver = wrap_callback(receiver, host)
+                    definition = replace(definition, receiver=receiver)
+                signals.register(extension_id, replace(definition, module_id=definition.module_id or extension_id))
+            return signals
+
+        app.resolving("signals", apply)
 
 
 @dataclass(frozen=True)
@@ -1802,6 +1991,8 @@ class SettingsExtender:
 class AdminSurfaceExtender:
     permissions: tuple[PermissionDefinition, ...] = ()
     admin_pages: tuple[AdminPageDefinition, ...] = ()
+    permissions_pages: tuple[str, ...] = ()
+    operations_pages: tuple[str, ...] = ()
     generated_permissions_page: bool = False
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
@@ -1816,6 +2007,16 @@ class AdminSurfaceExtender:
 
         if self.permissions or self.admin_pages:
             app.resolving("forum", apply)
+        if self.permissions_pages or self.operations_pages:
+            def apply_pages(frontend, host: "ExtensionHost"):
+                host.register_admin_surface_pages(
+                    extension,
+                    permissions_pages=self.permissions_pages,
+                    operations_pages=self.operations_pages,
+                )
+                return frontend
+
+            app.resolving("frontend", apply_pages)
         if self.generated_permissions_page:
             def apply_actions(actions, host: "ExtensionHost"):
                 actions.mark_generated_permissions_page(extension_id)
@@ -2718,11 +2919,7 @@ class ConditionalExtender:
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
         for resolver in self.callbacks:
             extenders = resolver(app)
-            if extenders is None:
-                continue
-            if not isinstance(extenders, (list, tuple)):
-                extenders = [extenders]
-            for extender in extenders:
+            for extender in flatten_extenders(extenders):
                 extend_fn = getattr(extender, "extend", None)
                 if callable(extend_fn):
                     app._mark_extension_extender(extension.extension_id, extender)

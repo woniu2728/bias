@@ -320,7 +320,7 @@ async function loadExtension() {
         fallbacks: [resolveFallbackExtensionPermissionsPage],
       })
       : null
-    syncModulesFromExtension(extension.value)
+    syncExtensionScopesFromExtension(extension.value)
   } catch (error) {
     console.error('加载扩展详情失败:', error)
     errorMessage.value = error.response?.data?.error || '加载扩展详情失败，请稍后重试'
@@ -383,12 +383,12 @@ function resolveActionToneClass(action) {
   return ''
 }
 
-function syncModulesFromExtension(currentExtension) {
+function syncExtensionScopesFromExtension(currentExtension) {
   if (!currentExtension || !Array.isArray(currentExtension.module_ids) || !currentExtension.module_ids.length) {
     return
   }
 
-  adminRegistryStore.applyModules(
+  adminRegistryStore.applyExtensionScopes(
     currentExtension.module_ids.map(moduleId => ({
       id: moduleId,
       enabled: currentExtension.enabled !== false,
@@ -402,14 +402,14 @@ function handleExtensionUpdated(payload) {
   }
   if (payload.extension && typeof payload.extension === 'object') {
     extension.value = payload.extension
-    syncModulesFromExtension(extension.value)
+    syncExtensionScopesFromExtension(extension.value)
     return
   }
   if (Array.isArray(payload.extensions) && extension.value?.id) {
     const updated = payload.extensions.find(item => item.id === extension.value.id)
     if (updated) {
       extension.value = updated
-      syncModulesFromExtension(extension.value)
+      syncExtensionScopesFromExtension(extension.value)
     }
   }
 }

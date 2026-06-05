@@ -1,4 +1,4 @@
-import { registerAdminDashboardStat, registerAdminRoute } from '@/admin/registry'
+import { ExtensionGeneratedPermissionsPage, registerAdminDashboardStat, registerAdminRoute } from '@/admin/registry'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
 import './approvalQueuePageBootstrap.js'
 
@@ -33,4 +33,8 @@ export function bootAdminExtension() {
 
 export function resolveOperationsPage() {
   return ApprovalQueuePage
+}
+
+export function resolvePermissionsPage() {
+  return ExtensionGeneratedPermissionsPage
 }

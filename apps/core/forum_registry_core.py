@@ -53,14 +53,6 @@ def _register_core_modules(registry) -> None:
                     description="查看论坛概况和系统状态。",
                 ),
                 AdminPageDefinition(
-                    path="/admin/modules",
-                    label="模块中心",
-                    icon="fas fa-cubes",
-                    module_id="core",
-                    nav_section="core",
-                    description="查看核心模块、依赖、权限和后台入口。",
-                ),
-                AdminPageDefinition(
                     path="/admin/basics",
                     label="基础设置",
                     icon="fas fa-pencil-alt",
@@ -187,7 +179,6 @@ def _register_core_modules(registry) -> None:
                     module_id="discussions",
                     icon="fas fa-reply",
                     description="允许在讨论中发布回复。",
-                    aliases=("reply",),
                     required_permissions=("viewForum",),
                 ),
                 PermissionDefinition(
@@ -218,7 +209,6 @@ def _register_core_modules(registry) -> None:
                     module_id="discussions",
                     icon="fas fa-pencil-alt",
                     description="允许作者编辑自己的讨论首帖或回复。",
-                    aliases=("editOwnPosts",),
                 ),
                 PermissionDefinition(
                     code="discussion.deleteOwn",
@@ -228,7 +218,6 @@ def _register_core_modules(registry) -> None:
                     module_id="discussions",
                     icon="fas fa-times",
                     description="允许作者删除自己的讨论或回复。",
-                    aliases=("deleteOwnPosts",),
                 ),
                 PermissionDefinition(
                     code="discussion.edit",
@@ -238,7 +227,6 @@ def _register_core_modules(registry) -> None:
                     module_id="discussions",
                     icon="fas fa-pencil-alt",
                     description="允许管理任意讨论首帖与回复。",
-                    aliases=("editPosts",),
                     required_permissions=("viewForum",),
                 ),
                 PermissionDefinition(
@@ -249,7 +237,6 @@ def _register_core_modules(registry) -> None:
                     module_id="discussions",
                     icon="fas fa-trash",
                     description="允许删除任意讨论或回复。",
-                    aliases=("deletePosts",),
                     required_permissions=("discussion.hide",),
                 ),
                 PermissionDefinition(
@@ -260,7 +247,6 @@ def _register_core_modules(registry) -> None:
                     module_id="discussions",
                     icon="fas fa-eye-slash",
                     description="允许隐藏或恢复讨论内容。",
-                    aliases=("hideDiscussions",),
                     required_permissions=("viewForum",),
                 ),
                 PermissionDefinition(
@@ -281,7 +267,6 @@ def _register_core_modules(registry) -> None:
                     module_id="discussions",
                     icon="fas fa-lock",
                     description="允许锁定或解锁讨论。",
-                    aliases=("lockDiscussions",),
                     required_permissions=("viewForum",),
                 ),
                 PermissionDefinition(
@@ -292,7 +277,6 @@ def _register_core_modules(registry) -> None:
                     module_id="discussions",
                     icon="fas fa-thumbtack",
                     description="允许置顶或取消置顶讨论。",
-                    aliases=("stickyDiscussions",),
                     required_permissions=("viewForum",),
                 ),
             ),

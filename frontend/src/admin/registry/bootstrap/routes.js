@@ -1,5 +1,4 @@
 import DashboardPage from '../../views/DashboardPage.vue'
-import ModulesPage from '../../views/ModulesPage.vue'
 import BasicsPage from '../../views/BasicsPage.vue'
 import PermissionsPage from '../../views/PermissionsPage.vue'
 import AuditLogsPage from '../../views/AuditLogsPage.vue'
@@ -77,20 +76,6 @@ registerAdminRoute({
   showInNavigation: false,
   moduleId: 'core',
   extensionHostKind: 'operations',
-})
-
-registerAdminRoute({
-  path: '/admin/modules',
-  name: 'admin-modules',
-  component: ModulesPage,
-  icon: 'fas fa-cubes',
-  label: '模块中心',
-  navDescription: '查看核心模块、扩展能力和注册快照。',
-  navSection: 'core',
-  navOrder: 25,
-  showInNavigation: false,
-  showInDashboardActions: false,
-  moduleId: 'core'
 })
 
 registerAdminRoute({

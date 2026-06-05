@@ -2,6 +2,8 @@ from apps.core.extensions import (
     AdminSurfaceExtender,
     ApiResourceExtender,
     ApiRoutesExtender,
+    ConsoleExtender,
+    ConditionalExtender,
     DiscussionLifecycleExtender,
     EventListenersExtender,
     ForumCapabilitiesExtender,
@@ -75,6 +77,9 @@ from extensions.tags.backend.discussion_relationships import set_discussion_tags
 from extensions.tags.backend.resources import (
     resolve_discussion_tags,
     resolve_discussion_tagged_event_data,
+    resolve_forum_can_bypass_tag_counts,
+    resolve_forum_tags,
+    resolve_post_event_mentions_tags,
     resolve_tag_can_reply,
     resolve_tag_can_start_discussion,
     resolve_tag_last_posted_discussion,
@@ -83,6 +88,7 @@ from extensions.tags.backend.resources import (
 from extensions.tags.backend.search import apply_discussion_tag_search_filter, parse_tag_search_filter
 from extensions.tags.backend.services import TagService
 from extensions.tags.backend.slug import TagSlugDriver
+from extensions.tags.backend import tasks as tag_tasks  # noqa: F401
 
 
 EXTENSION_ID = "tags"
@@ -113,6 +119,11 @@ def extend():
         AdminSurfaceExtender(
             admin_pages=admin_page_definitions(),
         ),
+        ConsoleExtender().command(
+            "tags.refresh_stats",
+            refresh_tag_stats_console_command,
+            description="重新计算标签讨论数和最后发帖讨论。",
+        ),
         ApiRoutesExtender(
             mounts=(("/admin", admin_tags_router),),
             tags=("Admin",),
@@ -138,6 +149,12 @@ def extend():
         ModelExtender(
             definitions=model_definitions(),
             relations=model_relation_definitions(),
+        ).owns(
+            Tag,
+            description="标签模型由 tags 扩展拥有。",
+        ).owns(
+            DiscussionTag,
+            description="讨论标签关系由 tags 扩展拥有。",
         ),
         ModelUrlExtender(Tag).add_slug_driver(
             "default",
@@ -161,10 +178,22 @@ def extend():
         .fields(discussion_resource_field_definitions)
         .relationships(discussion_resource_relationship_definitions)
         .add_default_include(("index", "show", "create"), ("tags",)),
+        ApiResourceExtender("forum")
+        .fields(forum_resource_field_definitions)
+        .relationships(forum_resource_relationship_definitions),
+        ApiResourceExtender("post")
+        .model_relationship(
+            "eventPostMentionsTags",
+            resource_type="tag",
+            many=True,
+            description="标签变更事件帖中涉及的标签关系。",
+        )
+        .add_default_include(("index",), ("eventPostMentionsTags",)),
         ApiResourceExtender(tag_resource_definition())
         .fields(tag_resource_field_definitions)
         .relationships(tag_resource_relationship_definitions)
         .endpoints(tag_resource_endpoints),
+        ConditionalExtender().when_extension_enabled("flags", flag_resource_extenders),
         EventListenersExtender(
             listeners=tag_event_listener_definitions(),
         ),
@@ -304,6 +333,7 @@ def model_relation_definitions():
             relation_type="belongsToMany",
             related_model=Tag,
             description="讨论关联标签。",
+            inject_attribute=False,
         ),
         ExtensionModelRelationDefinition(
             model=Tag,
@@ -320,6 +350,14 @@ def model_relation_definitions():
             relation_type="hasMany",
             related_model=Tag,
             description="标签子级。",
+        ),
+        ExtensionModelRelationDefinition(
+            model=Post,
+            name="eventPostMentionsTags",
+            resolver=resolve_post_event_mentions_tags,
+            relation_type="relationship",
+            related_model=Tag,
+            description="标签变更事件帖中涉及的标签。",
         ),
     )
 
@@ -408,6 +446,40 @@ def discussion_resource_relationship_definitions():
             writable=True,
             value_type="array",
             setter=set_discussion_tags_relationship,
+        ),
+    )
+
+
+def forum_resource_field_definitions():
+    return (
+        ResourceFieldDefinition(
+            resource="forum",
+            field="tags",
+            module_id=EXTENSION_ID,
+            resolver=resolve_forum_tags,
+            description="论坛首页可见标签树。",
+            prefetch_related=("children",),
+        ),
+        ResourceFieldDefinition(
+            resource="forum",
+            field="can_bypass_tag_counts",
+            module_id=EXTENSION_ID,
+            resolver=resolve_forum_can_bypass_tag_counts,
+            description="当前用户是否可绕过发帖标签数量限制。",
+        ),
+    )
+
+
+def forum_resource_relationship_definitions():
+    return (
+        ResourceRelationshipDefinition(
+            resource="forum",
+            relationship="tags",
+            module_id=EXTENSION_ID,
+            resolver=resolve_forum_tags,
+            description="论坛首页可见标签关系。",
+            resource_type="tag",
+            many=True,
         ),
     )
 
@@ -548,6 +620,39 @@ def tag_resource_endpoints():
             auth_required=True,
         ),
     )
+
+
+def flag_resource_extenders():
+    return [
+        ApiResourceExtender("flag").eager_load_when_included(
+            "index",
+            "post",
+            "post__discussion__discussion_tags__tag",
+        ),
+    ]
+
+
+def refresh_tag_stats_console_command(options: dict | None = None) -> dict:
+    tag_ids = (options or {}).get("tag_ids")
+    if tag_ids is None:
+        tag_ids = (options or {}).get("tag_id")
+    if tag_ids is None:
+        normalized_tag_ids = None
+    elif isinstance(tag_ids, (list, tuple, set)):
+        normalized_tag_ids = [int(item) for item in tag_ids if item is not None]
+    else:
+        normalized_tag_ids = [int(tag_ids)]
+
+    TagService.refresh_tag_stats(normalized_tag_ids)
+    refreshed_count = None if normalized_tag_ids is None else len(set(normalized_tag_ids))
+    return {
+        "status": "ok",
+        "message": "已刷新全部标签统计" if refreshed_count is None else f"已刷新 {refreshed_count} 个标签统计",
+        "details": {
+            "tag_ids": normalized_tag_ids or [],
+            "refreshed_count": refreshed_count,
+        },
+    }
 
 
 def tag_event_listener_definitions():

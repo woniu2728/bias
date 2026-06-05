@@ -2,7 +2,7 @@ from ninja import Body, Router
 from django.db.models import Max
 from django.shortcuts import get_object_or_404
 
-from apps.core.admin_api import admin_error
+from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.tags.models import Tag
@@ -14,7 +14,7 @@ router = Router()
 
 def _require_staff(request):
     if not request.auth or not request.auth.is_staff:
-        return admin_error("需要管理员权限", status=403)
+        return api_error("需要管理员权限", status=403)
     return None
 
 
@@ -106,9 +106,9 @@ def create_admin_tag(request, payload: dict = Body(...)):
         )
         return serialize_admin_tag(tag)
     except ValueError as exc:
-        return admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
     except Exception as exc:
-        return admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
 
 
 @router.put("/tags/{tag_id}", auth=AccessTokenAuth(), tags=["Admin"])
@@ -177,9 +177,9 @@ def update_admin_tag(request, tag_id: int, payload: dict = Body(...)):
         )
         return serialize_admin_tag(tag)
     except ValueError as exc:
-        return admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
     except Exception as exc:
-        return admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
 
 
 @router.post("/tags/{tag_id}/move", auth=AccessTokenAuth(), tags=["Admin"])
@@ -208,9 +208,9 @@ def move_admin_tag(request, tag_id: int, payload: dict = Body(...)):
             "data": [serialize_admin_tag(item) for item in tags],
         }
     except ValueError as exc:
-        return admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
     except Tag.DoesNotExist:
-        return admin_error("标签不存在", status=404)
+        return api_error("标签不存在", status=404)
 
 
 @router.delete("/tags/{tag_id}", auth=AccessTokenAuth(), tags=["Admin"])
@@ -232,7 +232,7 @@ def delete_admin_tag(request, tag_id: int):
         )
         return {"message": "标签删除成功"}
     except ValueError as exc:
-        return admin_error(str(exc), status=400)
+        return api_error(str(exc), status=400)
 
 
 @router.post("/tags/stats/refresh", auth=AccessTokenAuth(), tags=["Admin"])

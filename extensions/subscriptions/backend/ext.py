@@ -2,6 +2,7 @@ from apps.core.extensions import (
     ApiResourceExtender,
     EventListenersExtender,
     ForumCapabilitiesExtender,
+    FrontendExtender,
     LifecycleExtender,
     NotificationsExtender,
 )
@@ -46,6 +47,17 @@ EXTENSION_ID = "subscriptions"
 
 def extend():
     return [
+        FrontendExtender(
+            forum_entry="extensions/subscriptions/frontend/forum/index.js",
+        ).route(
+            "/following",
+            "following",
+            "DiscussionListView",
+            title="关注的讨论",
+            description="查看你关注的讨论和最新回复。",
+            order=20,
+            requires_auth=True,
+        ),
         ForumCapabilitiesExtender(
             discussion_list_filters=discussion_list_filter_definitions(),
             search_filters=search_filter_definitions(),

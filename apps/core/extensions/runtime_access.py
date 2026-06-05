@@ -36,6 +36,23 @@ def generate_runtime_model_slug(model: Any, source: Any, **kwargs) -> str | None
         return None
 
 
+def get_runtime_model_relation(model: Any, name: str):
+    service = get_runtime_model_service()
+    if service is None or not hasattr(service, "get_relation"):
+        return None
+    return service.get_relation(model, name)
+
+
+def resolve_runtime_model_relation(instance: Any, name: str, *, model: Any | None = None, default: Any = None):
+    service = get_runtime_model_service()
+    if service is None or instance is None:
+        return default
+    if hasattr(service, "resolve_relation"):
+        resolved = service.resolve_relation(model or instance.__class__, name, instance)
+        return default if resolved is None else resolved
+    return default
+
+
 def apply_runtime_model_visibility(model: Any, queryset, context: dict | None = None):
     model_service = get_runtime_model_service()
     if model_service is None:
@@ -139,6 +156,17 @@ def get_runtime_locale_service():
 
 def get_runtime_formatter_service():
     return get_extension_host_service("formatters")
+
+
+def get_runtime_view_service():
+    return get_extension_host_service("views")
+
+
+def render_runtime_template(template_name: str, context: dict | None = None, *, request: Any = None) -> str:
+    service = get_runtime_view_service()
+    if service is None:
+        raise RuntimeError("扩展视图服务尚未启动")
+    return service.render(template_name, context or {}, request=request)
 
 
 def get_runtime_discussion_lifecycle_service():

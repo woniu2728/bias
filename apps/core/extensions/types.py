@@ -161,9 +161,31 @@ class ExtensionMailDefinition:
 
 
 @dataclass(frozen=True)
+class ExtensionViewNamespaceDefinition:
+    namespace: str
+    hints: Tuple[str, ...]
+    module_id: str = ""
+    description: str = ""
+    order: int = 100
+    prepend: bool = False
+
+
+@dataclass(frozen=True)
 class ExtensionSystemHookDefinition:
     key: str
     callback: Callable[[Any, dict], Any] | Any
+    module_id: str = ""
+    description: str = ""
+    order: int = 100
+
+
+@dataclass(frozen=True)
+class ExtensionSignalDefinition:
+    signal: Any
+    receiver: Callable[..., Any]
+    sender: Any = None
+    dispatch_uid: str = ""
+    weak: bool = False
     module_id: str = ""
     description: str = ""
     order: int = 100
@@ -306,6 +328,7 @@ class ExtensionModelRelationDefinition:
     foreign_key: str = ""
     owner_key: str = ""
     description: str = ""
+    inject_attribute: bool = True
 
 
 @dataclass(frozen=True)
@@ -504,6 +527,7 @@ class ExtensionManifest:
     permissions_pages: Tuple[str, ...] = ()
     operations_pages: Tuple[str, ...] = ()
     admin_actions: Tuple[ExtensionAdminActionDefinition, ...] = ()
+    operations_profile: dict[str, Any] = field(default_factory=dict)
     compatibility: ExtensionCompatibilityDefinition = ExtensionCompatibilityDefinition()
     security: ExtensionSecurityDefinition = ExtensionSecurityDefinition()
     distribution: ExtensionDistributionDefinition = ExtensionDistributionDefinition()
@@ -563,6 +587,7 @@ class ExtensionDiscoveryResult:
     discussion_sorts: Tuple[DiscussionSortDefinition, ...] = ()
     discussion_list_filters: Tuple[DiscussionListFilterDefinition, ...] = ()
     locale_paths: Tuple[str, ...] = ()
+    view_namespaces: Tuple[ExtensionViewNamespaceDefinition, ...] = ()
     formatter_pipeline: Tuple[ExtensionFormatterCallback, ...] = ()
     formatter_callbacks: Tuple[ExtensionFormatterDefinition, ...] = ()
     resource_definitions: Tuple[ExtensionResourceDefinition, ...] = ()
@@ -614,6 +639,7 @@ class ExtensionAssembly:
     discussion_sorts: Tuple[Any, ...]
     discussion_list_filters: Tuple[Any, ...]
     locale_paths: Tuple[str, ...]
+    view_namespaces: Tuple[Any, ...]
     formatter_pipeline: Tuple[Any, ...]
     formatter_callbacks: Tuple[Any, ...]
     resource_definitions: Tuple[Any, ...]

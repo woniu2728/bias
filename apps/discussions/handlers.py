@@ -262,7 +262,6 @@ def dispatch_discussion_index(context):
     tag = _discussion_query_value(context, "tag")
     author = _discussion_query_value(context, "author")
     filter_code = _discussion_query_value(context, "filter", "all")
-    subscription = _discussion_query_value(context, "subscription")
     sort = _discussion_query_value(context, "sort", "latest")
     page, limit = PaginationService.normalize(
         _discussion_query_value(context, "page", 1),
@@ -271,15 +270,11 @@ def dispatch_discussion_index(context):
     resource_options = context.get("resource_options") or parse_resource_query_options(request, "discussion")
     default_includes = _discussion_default_includes(context)
 
-    normalized_filter = filter_code
-    if subscription == "following" and normalized_filter == "all":
-        normalized_filter = "following"
-
     discussions, total = DiscussionService.get_discussion_list(
         q=q,
         tag=tag,
         author=author,
-        list_filter=normalized_filter,
+        list_filter=filter_code,
         sort=sort,
         page=page,
         limit=limit,
@@ -291,7 +286,7 @@ def dispatch_discussion_index(context):
             default_includes=default_includes,
         ),
     )
-    active_filter = DiscussionService.normalize_discussion_list_filter(normalized_filter)
+    active_filter = DiscussionService.normalize_discussion_list_filter(filter_code)
     active_sort = DiscussionService.normalize_discussion_sort(sort)
     return {
         "total": total,

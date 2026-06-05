@@ -69,19 +69,6 @@ export function buildExtensionDetailRouteTarget(extensionId, source = '') {
 }
 
 export function resolveExtensionBackTarget(source, fallback = '/admin') {
-  if (source && typeof source === 'object' && source.query) {
-    const from = String(source.query.from || '').trim()
-    const moduleId = String(source.query.module || '').trim()
-    if (from === 'modules' && moduleId) {
-      return {
-        path: '/admin/modules',
-        query: {
-          from: 'modules',
-          module: moduleId,
-        },
-      }
-    }
-  }
   const from = resolveExtensionNavigationSource(source)
   if (from === 'extensions') {
     return '/admin'
@@ -261,116 +248,132 @@ export function resolveExtensionPrimaryAdminAction(extension) {
   return actions.find(action => action?.kind === 'route') || null
 }
 
+const operationFocusCopy = {
+  notification_types: {
+    title: '通知类型',
+    description: '查看扩展声明的通知类型、偏好键和触达场景。',
+  },
+  user_preferences: {
+    title: '用户偏好',
+    description: '查看扩展暴露给用户的偏好项和默认开关。',
+  },
+  event_listeners: {
+    title: '事件监听',
+    description: '查看扩展挂接到运行时事件总线的监听链路。',
+  },
+  search_filters: {
+    title: '搜索过滤',
+    description: '查看扩展注册的搜索语法、目标资源和过滤说明。',
+  },
+  discussion_sorts: {
+    title: '讨论排序',
+    description: '查看扩展注册到讨论列表的排序能力。',
+  },
+  discussion_list_filters: {
+    title: '列表过滤',
+    description: '查看扩展注册到讨论列表的入口和筛选能力。',
+  },
+  resource_fields: {
+    title: '资源字段',
+    description: '查看扩展追加到 API 资源上的字段。',
+  },
+  resource_relationships: {
+    title: '资源关系',
+    description: '查看扩展追加到 API 资源上的关系。',
+  },
+  resource_definitions: {
+    title: '资源定义',
+    description: '查看扩展声明的独立 API 资源。',
+  },
+  post_types: {
+    title: '帖子类型',
+    description: '查看扩展注册的帖子类型和渲染入口。',
+  },
+  language_packs: {
+    title: '语言包',
+    description: '查看扩展声明的语言包能力。',
+  },
+}
+
 export function resolveExtensionOperationsProfile(extension) {
-  const extensionId = String(extension?.id || '').trim()
-  const profiles = {
-    discussions: {
-      kicker: 'Discussion Runtime',
-      title: '讨论流与内容治理',
-      description: '集中查看讨论列表、搜索语法、排序规则和内容治理能力，作为核心讨论模块的统一操作宿主页。',
-      highlights: ['讨论列表', '搜索过滤', '排序规则', '治理权限'],
-      focusPanels: [
-        { key: 'discussion_sorts', title: '讨论排序', description: '用于确认讨论流当前暴露了哪些排序方式，以及默认排序是否已经进入扩展协议。' },
-        { key: 'discussion_list_filters', title: '讨论列表入口', description: '用于检查讨论流、我的讨论、未读等列表入口是否都已通过统一列表过滤协议暴露。' },
-        { key: 'search_filters', title: '讨论搜索语法', description: '用于查看作者、状态、创建时间等搜索过滤是否已经完成注册。' },
-      ],
-      recommendedActionKeys: ['permissions', 'operations', 'details'],
-      nextSteps: ['后续将讨论治理和列表策略拆成更细的自定义操作页。'],
-    },
-    posts: {
-      kicker: 'Post Stream',
-      title: '帖子流与内容输出',
-      description: '集中查看帖子类型、帖子搜索和楼层内容输出能力，作为核心帖子模块的统一操作宿主页。',
-      highlights: ['帖子类型', '帖子搜索', '内容输出'],
-      focusPanels: [
-        { key: 'post_types', title: '帖子类型', description: '用于确认评论、系统事件帖等帖子类型是否已经全部进入统一帖子类型协议。' },
-        { key: 'search_filters', title: '帖子搜索语法', description: '用于检查按作者、创建时间、提及等帖子搜索扩展是否已经按协议注册。' },
-      ],
-      recommendedActionKeys: ['operations', 'details'],
-      nextSteps: ['后续将帖子流诊断、渲染策略和系统事件帖说明拆到独立操作页。'],
-    },
-    notifications: {
-      kicker: 'Notification Hub',
-      title: '通知分发与偏好',
-      description: '集中查看站内通知类型、通知偏好和通知相关动作，便于继续拆分独立通知设置页。',
-      highlights: ['通知类型', '通知偏好', '站内提醒动作'],
-      focusPanels: [
-        { key: 'notification_types', title: '通知触达面', description: '优先关注当前扩展声明了哪些通知类型，以及这些通知最终会触达哪些用户场景。' },
-        { key: 'user_preferences', title: '用户通知偏好', description: '这里收口通知开关和默认偏好，后续可继续演进为独立通知策略设置页。' },
-      ],
-    },
-    mentions: {
-      kicker: 'Mention Signals',
-      title: '提及规则与提醒',
-      description: '集中查看 @提及 相关的搜索过滤、通知能力和后续可扩展的处理动作。',
-      highlights: ['@提及通知', '提及搜索过滤', '提及触发链路'],
-      focusPanels: [
-        { key: 'notification_types', title: '提及提醒', description: '用于确认 @提及 的提醒类型和最终通知入口。' },
-        { key: 'search_filters', title: '提及过滤语法', description: '用于检查与提及相关的搜索过滤是否已经进入统一搜索扩展协议。' },
-      ],
-    },
-    subscriptions: {
-      kicker: 'Subscription Flow',
-      title: '关注流与关注通知',
-      description: '集中查看关注讨论、关注流和关注后通知能力，为后续独立关注设置页做准备。',
-      highlights: ['关注偏好', '关注列表过滤', '关注后通知'],
-      focusPanels: [
-        { key: 'user_preferences', title: '关注偏好', description: '用于检查自动关注和关注后通知等核心偏好是否都已经走统一配置协议。' },
-        { key: 'discussion_list_filters', title: '关注列表入口', description: '用于检查关注列表过滤能力是否已经稳定挂接到讨论列表协议。' },
-        { key: 'event_listeners', title: '关注触发链路', description: '用于确认回复后关注通知的事件监听是否仍然沿统一总线分发。' },
-      ],
-    },
-    realtime: {
-      kicker: 'Realtime Runtime',
-      title: '实时连接与广播',
-      description: '集中查看实时广播、连接能力和相关运行操作，便于后续收口为独立实时运维页。',
-      highlights: ['实时广播', '事件监听', '连接运行状态'],
-      focusPanels: [
-        { key: 'event_listeners', title: '广播事件链路', description: '用于确认实时广播依赖的事件监听和消息分发入口是否已经注册到统一协议。' },
-      ],
-      recommendedActionKeys: ['operations', 'details'],
-      nextSteps: ['继续补齐实时连接诊断与广播状态摘要。', '后续将实时运行操作收口到独立运维页。'],
-    },
-    likes: {
-      kicker: 'Reaction Flow',
-      title: '点赞互动与提醒',
-      description: '集中查看点赞通知、互动偏好和后续可扩展的互动后台动作。',
-      highlights: ['点赞通知', '互动偏好'],
-      focusPanels: [
-        { key: 'notification_types', title: '点赞通知', description: '用于确认点赞触发后的提醒类型和对应偏好是否已经标准化。' },
-        { key: 'user_preferences', title: '互动偏好', description: '用于检查点赞相关通知偏好是否已进入统一用户偏好协议。' },
-      ],
-      recommendedActionKeys: ['operations', 'details'],
-      nextSteps: ['继续补齐点赞统计和互动诊断入口。'],
-    },
-    'tag-stats': {
-      kicker: 'Tag Runtime',
-      title: '标签统计刷新链路',
-      description: '集中查看标签统计依赖的事件刷新链路，为后续拆分标签运维页做准备。',
-      highlights: ['统计刷新', '事件监听'],
-      focusPanels: [
-        { key: 'event_listeners', title: '刷新事件链路', description: '用于确认标签统计刷新依赖的事件监听是否已经全部走统一总线。' },
-      ],
-      recommendedActionKeys: ['operations', 'details'],
-      nextSteps: ['继续补齐标签统计刷新任务与延迟队列的运行摘要。'],
-    },
-  }
-
-  const profile = profiles[extensionId]
-  if (profile) {
-    return profile
-  }
-
-  const name = extension?.name || '当前扩展'
-  return {
+  const explicitProfile = normalizeOperationsProfile(extension?.operations_profile || extension?.admin_operations_profile)
+  const capabilitySummary = resolveExtensionCapabilitySummaryItems(extension)
+  const focusPanels = resolveDefaultOperationsFocusPanels(extension)
+  const name = extension?.name || extension?.title || extension?.id || '当前扩展'
+  const highlights = capabilitySummary.slice(0, 4).map(item => item.label)
+  const capabilityText = highlights.length ? highlights.join('、') : '后台动作、运行操作和能力摘要'
+  const defaults = {
     kicker: 'Extension Operations',
     title: `${name} 操作宿主`,
-    description: `${name} 当前复用统一操作宿主页承接后台动作、运行操作和能力摘要，后续可逐步替换为扩展自定义操作页。`,
-    highlights: [],
-    focusPanels: [],
+    description: `${name} 当前通过扩展协议暴露${capabilityText}，可在统一操作宿主页集中查看运行状态。`,
+    highlights,
+    focusPanels,
     recommendedActionKeys: ['operations', 'details'],
     nextSteps: [],
   }
+
+  if (explicitProfile) {
+    return {
+      ...defaults,
+      kicker: explicitProfile.kicker || defaults.kicker,
+      title: explicitProfile.title || defaults.title,
+      description: explicitProfile.description || defaults.description,
+      highlights: explicitProfile.highlights.length ? explicitProfile.highlights : defaults.highlights,
+      focusPanels: explicitProfile.focusPanels.length ? explicitProfile.focusPanels : defaults.focusPanels,
+      recommendedActionKeys: explicitProfile.recommendedActionKeys.length
+        ? explicitProfile.recommendedActionKeys
+        : defaults.recommendedActionKeys,
+      nextSteps: explicitProfile.nextSteps,
+    }
+  }
+
+  return defaults
+}
+
+function normalizeOperationsProfile(profile) {
+  if (!profile || typeof profile !== 'object') {
+    return null
+  }
+  return {
+    kicker: String(profile.kicker || '').trim(),
+    title: String(profile.title || '').trim(),
+    description: String(profile.description || '').trim(),
+    highlights: normalizeStringList(profile.highlights),
+    focusPanels: normalizeFocusPanels(profile.focus_panels || profile.focusPanels),
+    recommendedActionKeys: normalizeStringList(profile.recommended_action_keys || profile.recommendedActionKeys),
+    nextSteps: normalizeStringList(profile.next_steps || profile.nextSteps),
+  }
+}
+
+function resolveDefaultOperationsFocusPanels(extension) {
+  return resolveExtensionCapabilityPanels(extension).map((panel) => {
+    const copy = operationFocusCopy[panel.key] || {}
+    return {
+      key: panel.key,
+      title: copy.title || panel.label,
+      description: copy.description || '查看该能力组下由扩展协议注册的项目。',
+    }
+  })
+}
+
+function normalizeFocusPanels(panels) {
+  if (!Array.isArray(panels)) {
+    return []
+  }
+  return panels
+    .map((panel) => ({
+      key: String(panel?.key || '').trim(),
+      title: String(panel?.title || '').trim(),
+      description: String(panel?.description || '').trim(),
+    }))
+    .filter(panel => panel.key)
+}
+
+function normalizeStringList(items) {
+  if (!Array.isArray(items)) {
+    return []
+  }
+  return items.map(item => String(item || '').trim()).filter(Boolean)
 }
 
 export function resolveExtensionOperationsFocusSections(extension) {
@@ -580,7 +583,7 @@ export function resolveExtensionCapabilityPanels(extension) {
 
 function shouldIncludeAdminPageCard(page, hostKind) {
   const path = String(page?.path || '').trim()
-  if (!path || path === '/admin' || path === '/admin/modules' || path === '/admin/permissions' || path === '/admin/docs') {
+  if (!path || path === '/admin' || path === '/admin/permissions' || path === '/admin/docs') {
     return false
   }
 

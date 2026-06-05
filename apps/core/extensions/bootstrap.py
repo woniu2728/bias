@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.apps import apps as django_apps
 from django.db import OperationalError, ProgrammingError
 
 from apps.core.extensions.bootstrap_state import (
@@ -8,9 +9,11 @@ from apps.core.extensions.bootstrap_state import (
     reset_extension_host_bootstrap_state,
 )
 from apps.core.extensions.manager import get_extension_manager
+from apps.core.extensions.site_extenders import build_site_extension, load_site_extenders
 
 
 _extension_application = None
+_extension_application_base_dir = ""
 
 
 def get_extension_host(*, force: bool = False):
@@ -23,7 +26,9 @@ def get_extension_application(*, force: bool = False):
 
 def clear_bootstrapped_extension_application() -> None:
     global _extension_application
+    global _extension_application_base_dir
     _extension_application = None
+    _extension_application_base_dir = ""
 
 
 def clear_bootstrapped_extension_host() -> None:
@@ -76,6 +81,9 @@ def build_extension_host(
     resolved_manager = manager or get_extension_manager()
     resolved_manager.load(force=force)
     extensions_to_boot = tuple(resolved_manager.get_enabled_extensions())
+    site_extension = build_site_extension(load_site_extenders())
+    if site_extension is not None:
+        extensions_to_boot = (*extensions_to_boot, site_extension)
     return ExtensionApplication(
         extensions_to_boot=extensions_to_boot,
         forum_registry=forum_registry or get_forum_registry(),
@@ -90,13 +98,32 @@ def bootstrap_extension_application(*, force: bool = False):
 
 def bootstrap_extension_host(*, force: bool = False):
     global _extension_application
-    if is_extension_host_bootstrapped() and not force and _extension_application is not None:
+    global _extension_application_base_dir
+    current_base_dir = _current_base_dir()
+    if (
+        is_extension_host_bootstrapped()
+        and not force
+        and _extension_application is not None
+        and _extension_application_base_dir == current_base_dir
+    ):
         return _extension_application
+    if _extension_application_base_dir and _extension_application_base_dir != current_base_dir:
+        clear_bootstrapped_extension_application()
+        reset_extension_host_bootstrap_state()
+    if not django_apps.ready:
+        return None
 
     try:
         application = build_extension_host(force=force)
         _extension_application = application
+        _extension_application_base_dir = current_base_dir
     except (OperationalError, ProgrammingError, RuntimeError):
         return None
     mark_extension_host_bootstrapped()
     return application
+
+
+def _current_base_dir() -> str:
+    from django.conf import settings
+
+    return str(settings.BASE_DIR)

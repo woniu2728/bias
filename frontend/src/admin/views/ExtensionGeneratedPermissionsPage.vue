@@ -33,9 +33,6 @@
               <span v-if="permission.required_permissions?.length">
                 依赖：{{ permission.required_permissions.join('、') }}
               </span>
-              <span v-if="permission.aliases?.length">
-                别名：{{ permission.aliases.join('、') }}
-              </span>
             </div>
           </article>
         </div>

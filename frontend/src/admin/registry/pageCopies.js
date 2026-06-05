@@ -1,25 +1,36 @@
 import { createSingleItemRegistry } from './shared.js'
 
 
-function createPageCopyRegistry() {
-  return createSingleItemRegistry()
+const pageCopyRegistries = new Map()
+
+function getPageCopyRegistry(pageKey = '') {
+  const normalizedPageKey = String(pageKey || '').trim()
+  if (!normalizedPageKey) {
+    throw new Error('admin page copy registry requires a page key')
+  }
+
+  if (!pageCopyRegistries.has(normalizedPageKey)) {
+    pageCopyRegistries.set(normalizedPageKey, createSingleItemRegistry())
+  }
+
+  return pageCopyRegistries.get(normalizedPageKey)
 }
 
+export function registerAdminPageCopy(pageKey, item) {
+  return getPageCopyRegistry(pageKey).register(item)
+}
 
-const modulesPageCopy = createPageCopyRegistry()
-const basicsPageCopy = createPageCopyRegistry()
-const appearancePageCopy = createPageCopyRegistry()
-const mailPageCopy = createPageCopyRegistry()
-const advancedPageCopy = createPageCopyRegistry()
-const approvalQueuePageCopy = createPageCopyRegistry()
-const flagsPageCopy = createPageCopyRegistry()
-const permissionsPageCopy = createPageCopyRegistry()
-const usersPageCopy = createPageCopyRegistry()
-const tagsPageCopy = createPageCopyRegistry()
-const auditLogsPageCopy = createPageCopyRegistry()
+export function getAdminPageCopy(pageKey, context = {}) {
+  return getPageCopyRegistry(pageKey).get(context)
+}
 
-export const registerAdminModulesPageCopy = modulesPageCopy.register
-export const getAdminModulesPageCopy = modulesPageCopy.get
+const basicsPageCopy = getPageCopyRegistry('core.basics')
+const appearancePageCopy = getPageCopyRegistry('core.appearance')
+const mailPageCopy = getPageCopyRegistry('core.mail')
+const advancedPageCopy = getPageCopyRegistry('core.advanced')
+const permissionsPageCopy = getPageCopyRegistry('core.permissions')
+const usersPageCopy = getPageCopyRegistry('core.users')
+const auditLogsPageCopy = getPageCopyRegistry('core.audit-logs')
 
 export const registerAdminBasicsPageCopy = basicsPageCopy.register
 export const getAdminBasicsPageCopy = basicsPageCopy.get
@@ -36,17 +47,8 @@ export const getAdminAdvancedPageCopy = advancedPageCopy.get
 export const registerAdminAuditLogsPageCopy = auditLogsPageCopy.register
 export const getAdminAuditLogsPageCopy = auditLogsPageCopy.get
 
-export const registerAdminApprovalQueuePageCopy = approvalQueuePageCopy.register
-export const getAdminApprovalQueuePageCopy = approvalQueuePageCopy.get
-
-export const registerAdminFlagsPageCopy = flagsPageCopy.register
-export const getAdminFlagsPageCopy = flagsPageCopy.get
-
 export const registerAdminPermissionsPageCopy = permissionsPageCopy.register
 export const getAdminPermissionsPageCopy = permissionsPageCopy.get
 
 export const registerAdminUsersPageCopy = usersPageCopy.register
 export const getAdminUsersPageCopy = usersPageCopy.get
-
-export const registerAdminTagsPageCopy = tagsPageCopy.register
-export const getAdminTagsPageCopy = tagsPageCopy.get

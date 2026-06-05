@@ -7,12 +7,12 @@ import {
 } from './dashboard.js'
 import {
   getAdminAdvancedPageActionMeta,
-  getAdminApprovalQueuePageConfig,
-  getAdminModulesPageCopy,
+  getAdminPageConfig,
+  getAdminPageCopy,
   registerAdminAdvancedPageActionMeta,
-  registerAdminApprovalQueueNoteTemplate,
-  registerAdminApprovalQueuePageConfig,
-  registerAdminModulesPageCopy,
+  registerAdminPageConfig,
+  registerAdminPageCopy,
+  registerAdminPageNoteTemplate,
 } from './pages.js'
 import { runWithExtensionScope } from '../../common/extensionRuntime.js'
 import { clearAdminRegistryExtensions } from './shared.js'
@@ -24,10 +24,11 @@ function uniqueKey(prefix) {
 
 
 test('admin page copy registry returns the first visible item by order', () => {
-  const fallbackKey = uniqueKey('modules-copy-fallback')
-  const preferredKey = uniqueKey('modules-copy-preferred')
+  const pageKey = uniqueKey('extension-copy-page')
+  const fallbackKey = uniqueKey('extension-copy-fallback')
+  const preferredKey = uniqueKey('extension-copy-preferred')
 
-  registerAdminModulesPageCopy({
+  registerAdminPageCopy(pageKey, {
     key: fallbackKey,
     order: 30,
     resolve: () => ({
@@ -35,7 +36,7 @@ test('admin page copy registry returns the first visible item by order', () => {
     }),
   })
 
-  registerAdminModulesPageCopy({
+  registerAdminPageCopy(pageKey, {
     key: preferredKey,
     order: 10,
     resolve: () => ({
@@ -43,33 +44,34 @@ test('admin page copy registry returns the first visible item by order', () => {
     }),
   })
 
-  const copy = getAdminModulesPageCopy()
+  const copy = getAdminPageCopy(pageKey)
 
   assert.equal(copy.key, preferredKey)
   assert.equal(copy.title, 'preferred')
 })
 
-test('approval queue page config merges note templates from dedicated registry', () => {
-  const configKey = uniqueKey('approval-config')
-  const templateKey = uniqueKey('approval-template')
+test('admin page config merges note templates by page key', () => {
+  const pageKey = uniqueKey('extension-review-page')
+  const configKey = uniqueKey('review-config')
+  const templateKey = uniqueKey('review-template')
 
-  registerAdminApprovalQueuePageConfig({
+  registerAdminPageConfig(pageKey, {
     key: configKey,
     resolve: () => ({
       filters: ['pending'],
     }),
   })
 
-  registerAdminApprovalQueueNoteTemplate({
+  registerAdminPageNoteTemplate(pageKey, {
     key: templateKey,
     order: 5,
     resolve: () => ({
-      label: '通过模板',
-      value: '内容符合规范。',
+      label: 'Review template',
+      value: 'Looks good.',
     }),
   })
 
-  const config = getAdminApprovalQueuePageConfig()
+  const config = getAdminPageConfig(pageKey)
 
   assert.equal(config.key, configKey)
   assert.deepEqual(config.filters, ['pending'])
@@ -102,31 +104,6 @@ test('admin page action meta registry stays available through aggregate exports'
 
   assert.equal(actionMeta.key, visibleKey)
   assert.equal(actionMeta.saveLabel, 'visible')
-})
-
-test('modules page copy registry preserves lifecycle labels for module center rendering', () => {
-  const lifecycleKey = uniqueKey('modules-copy-lifecycle')
-
-  registerAdminModulesPageCopy({
-    key: lifecycleKey,
-    order: 5,
-    resolve: () => ({
-      lifecycleLabel: '生命周期',
-      readinessProbeLabel: '就绪判定',
-      supportsDisableLabel: '可停用',
-      supportsTeardownLabel: '可回收',
-      lifecycleTitle: '生命周期',
-    }),
-  })
-
-  const copy = getAdminModulesPageCopy()
-
-  assert.equal(copy.key, lifecycleKey)
-  assert.equal(copy.lifecycleLabel, '生命周期')
-  assert.equal(copy.readinessProbeLabel, '就绪判定')
-  assert.equal(copy.supportsDisableLabel, '可停用')
-  assert.equal(copy.supportsTeardownLabel, '可回收')
-  assert.equal(copy.lifecycleTitle, '生命周期')
 })
 
 test('admin registry scopes extension items and filters by module state', () => {

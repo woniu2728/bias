@@ -1,26 +1,50 @@
 import { createSingleItemRegistry } from './shared.js'
-import { getAdminApprovalQueueNoteTemplates } from './pageNoteTemplates.js'
+import { getAdminPageNoteTemplates } from './pageNoteTemplates.js'
 
 
-function createPageConfigRegistry() {
-  return createSingleItemRegistry()
+const pageConfigRegistries = new Map()
+
+function getPageConfigRegistry(pageKey = '') {
+  const normalizedPageKey = String(pageKey || '').trim()
+  if (!normalizedPageKey) {
+    throw new Error('admin page config registry requires a page key')
+  }
+
+  if (!pageConfigRegistries.has(normalizedPageKey)) {
+    pageConfigRegistries.set(normalizedPageKey, createSingleItemRegistry())
+  }
+
+  return pageConfigRegistries.get(normalizedPageKey)
 }
 
+export function registerAdminPageConfig(pageKey, item) {
+  return getPageConfigRegistry(pageKey).register(item)
+}
 
-const modulesPageConfig = createPageConfigRegistry()
-const basicsPageConfig = createPageConfigRegistry()
-const appearancePageConfig = createPageConfigRegistry()
-const mailPageConfig = createPageConfigRegistry()
-const advancedPageConfig = createPageConfigRegistry()
-const approvalQueuePageConfig = createPageConfigRegistry()
-const flagsPageConfig = createPageConfigRegistry()
-const permissionsPageConfig = createPageConfigRegistry()
-const usersPageConfig = createPageConfigRegistry()
-const tagsPageConfig = createPageConfigRegistry()
-const auditLogsPageConfig = createPageConfigRegistry()
+export function getAdminPageConfig(pageKey, context = {}) {
+  const config = getPageConfigRegistry(pageKey).get(context)
+  if (!config) {
+    return null
+  }
 
-export const registerAdminModulesPageConfig = modulesPageConfig.register
-export const getAdminModulesPageConfig = modulesPageConfig.get
+  const noteTemplates = getAdminPageNoteTemplates(pageKey, context)
+  if (!noteTemplates.length) {
+    return config
+  }
+
+  return {
+    ...config,
+    noteTemplates,
+  }
+}
+
+const basicsPageConfig = getPageConfigRegistry('core.basics')
+const appearancePageConfig = getPageConfigRegistry('core.appearance')
+const mailPageConfig = getPageConfigRegistry('core.mail')
+const advancedPageConfig = getPageConfigRegistry('core.advanced')
+const permissionsPageConfig = getPageConfigRegistry('core.permissions')
+const usersPageConfig = getPageConfigRegistry('core.users')
+const auditLogsPageConfig = getPageConfigRegistry('core.audit-logs')
 
 export const registerAdminBasicsPageConfig = basicsPageConfig.register
 export const getAdminBasicsPageConfig = basicsPageConfig.get
@@ -37,27 +61,8 @@ export const getAdminAdvancedPageConfig = advancedPageConfig.get
 export const registerAdminAuditLogsPageConfig = auditLogsPageConfig.register
 export const getAdminAuditLogsPageConfig = auditLogsPageConfig.get
 
-export const registerAdminApprovalQueuePageConfig = approvalQueuePageConfig.register
-export function getAdminApprovalQueuePageConfig(context = {}) {
-  const config = approvalQueuePageConfig.get(context)
-  if (!config) {
-    return null
-  }
-
-  return {
-    ...config,
-    noteTemplates: getAdminApprovalQueueNoteTemplates(context),
-  }
-}
-
-export const registerAdminFlagsPageConfig = flagsPageConfig.register
-export const getAdminFlagsPageConfig = flagsPageConfig.get
-
 export const registerAdminPermissionsPageConfig = permissionsPageConfig.register
 export const getAdminPermissionsPageConfig = permissionsPageConfig.get
 
 export const registerAdminUsersPageConfig = usersPageConfig.register
 export const getAdminUsersPageConfig = usersPageConfig.get
-
-export const registerAdminTagsPageConfig = tagsPageConfig.register
-export const getAdminTagsPageConfig = tagsPageConfig.get

@@ -652,7 +652,7 @@ class TagService:
                 return {"mode": "skipped", "tag_ids": [], "message": "没有需要刷新的标签"}
 
         from apps.core.queue_service import QueueService
-        from apps.tags.tasks import refresh_tag_stats_task
+        from extensions.tags.backend.tasks import refresh_tag_stats_task
 
         def fallback():
             TagService.refresh_tag_stats(normalized_tag_ids)

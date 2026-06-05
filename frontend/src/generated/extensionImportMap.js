@@ -6,6 +6,8 @@ export const generatedAdminExtensionModules = {
   "approval": () => import("../../../extensions/approval/frontend/admin/index.js"),
   "../../../extensions/flags/frontend/admin/index.js": () => import("../../../extensions/flags/frontend/admin/index.js"),
   "flags": () => import("../../../extensions/flags/frontend/admin/index.js"),
+  "../../../extensions/mentions/frontend/admin/index.js": () => import("../../../extensions/mentions/frontend/admin/index.js"),
+  "mentions": () => import("../../../extensions/mentions/frontend/admin/index.js"),
   "../../../extensions/tags/frontend/admin/index.js": () => import("../../../extensions/tags/frontend/admin/index.js"),
   "tags": () => import("../../../extensions/tags/frontend/admin/index.js"),
 }

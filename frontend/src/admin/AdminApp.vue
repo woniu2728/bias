@@ -69,7 +69,7 @@ onMounted(async () => {
     return
   }
 
-  await adminRegistryStore.fetchModules()
+  await adminRegistryStore.fetchExtensions()
 
   // 如果当前路径不是 /admin 开头，重定向到仪表盘
   if (!route.path.startsWith('/admin')) {

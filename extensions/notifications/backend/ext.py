@@ -1,4 +1,14 @@
-from apps.core.extensions import ApiResourceExtender, EventListenersExtender, LifecycleExtender, NotificationsExtender
+from django.db.models.signals import post_delete, post_save
+
+from apps.core.extensions import (
+    ApiResourceExtender,
+    EventListenersExtender,
+    FrontendExtender,
+    LifecycleExtender,
+    ModelExtender,
+    NotificationsExtender,
+    SignalExtender,
+)
 from apps.core.extensions.types import ExtensionEventListenerDefinition
 from apps.core.forum_events import (
     PostCreatedEvent,
@@ -8,6 +18,7 @@ from apps.core.forum_events import (
 )
 from apps.core.forum_registry_types import NotificationTypeDefinition, UserPreferenceDefinition
 from apps.core.resource_registry import ResourceEndpointDefinition
+from apps.notifications.models import Notification
 from extensions.notifications.backend.handlers import (
     dispatch_notification_delete,
     dispatch_notification_delete_all_read,
@@ -30,6 +41,11 @@ from extensions.notifications.backend.resources import (
     notification_resource_field_definitions,
     notification_resource_relationship_definitions,
 )
+from extensions.notifications.backend.signals import (
+    invalidate_unread_count_on_delete,
+    invalidate_unread_count_on_save,
+)
+from extensions.notifications.backend import tasks as notification_tasks  # noqa: F401
 
 
 EXTENSION_ID = "notifications"
@@ -37,9 +53,24 @@ EXTENSION_ID = "notifications"
 
 def extend():
     return [
+        FrontendExtender(
+            forum_entry="extensions/notifications/frontend/forum/index.js",
+        ).route(
+            "/notifications",
+            "notifications",
+            "NotificationView",
+            title="通知",
+            description="查看你的论坛通知、回复提醒和系统消息。",
+            order=40,
+            requires_auth=True,
+        ),
         NotificationsExtender(
             notification_types=notification_type_definitions(),
             user_preferences=user_preference_definitions(),
+        ),
+        ModelExtender().owns(
+            Notification,
+            description="通知记录由 notifications 扩展拥有。",
         ),
         ApiResourceExtender(notification_resource_definition())
         .fields(notification_resource_field_definitions)
@@ -47,6 +78,21 @@ def extend():
         .endpoints(notification_resource_endpoints),
         EventListenersExtender(
             listeners=notification_event_listener_definitions(),
+        ),
+        SignalExtender()
+        .connect(
+            post_save,
+            invalidate_unread_count_on_save,
+            sender=Notification,
+            dispatch_uid="notifications.invalidate_unread_count_on_save",
+            description="通知写入后清除用户未读数缓存。",
+        )
+        .connect(
+            post_delete,
+            invalidate_unread_count_on_delete,
+            sender=Notification,
+            dispatch_uid="notifications.invalidate_unread_count_on_delete",
+            description="通知删除后清除用户未读数缓存。",
         ),
         LifecycleExtender(
             install=install,

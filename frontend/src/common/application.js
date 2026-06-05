@@ -21,6 +21,7 @@ export function createRuntimeApplication({
   const bootedCallbacks = []
   const beforeMountCallbacks = []
   const initializers = createExtensionInitializers()
+  const extensions = Object.create(null)
   const errors = []
   const data = {
     apiDocument: null,
@@ -61,6 +62,7 @@ export function createRuntimeApplication({
     alerts: alerts || createAlertApi(),
     translator: translator || createTranslatorApi(),
     initializers,
+    extensions,
     cache,
     data,
     errors,
@@ -75,6 +77,9 @@ export function createRuntimeApplication({
     },
     get booted() {
       return booted
+    },
+    extension(extensionId) {
+      return extensions[String(extensionId || '').trim()] || null
     },
     load(payload = {}) {
       Object.assign(data, normalizeApplicationPayload(payload))

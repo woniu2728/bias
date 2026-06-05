@@ -1,24 +1,35 @@
 import { createSingleItemRegistry } from './shared.js'
 
 
-function createPageActionMetaRegistry() {
-  return createSingleItemRegistry()
+const pageActionMetaRegistries = new Map()
+
+function getPageActionMetaRegistry(pageKey = '') {
+  const normalizedPageKey = String(pageKey || '').trim()
+  if (!normalizedPageKey) {
+    throw new Error('admin page action meta registry requires a page key')
+  }
+
+  if (!pageActionMetaRegistries.has(normalizedPageKey)) {
+    pageActionMetaRegistries.set(normalizedPageKey, createSingleItemRegistry())
+  }
+
+  return pageActionMetaRegistries.get(normalizedPageKey)
 }
 
+export function registerAdminPageActionMeta(pageKey, item) {
+  return getPageActionMetaRegistry(pageKey).register(item)
+}
 
-const modulesPageActionMeta = createPageActionMetaRegistry()
-const basicsPageActionMeta = createPageActionMetaRegistry()
-const appearancePageActionMeta = createPageActionMetaRegistry()
-const mailPageActionMeta = createPageActionMetaRegistry()
-const advancedPageActionMeta = createPageActionMetaRegistry()
-const approvalQueuePageActionMeta = createPageActionMetaRegistry()
-const flagsPageActionMeta = createPageActionMetaRegistry()
-const permissionsPageActionMeta = createPageActionMetaRegistry()
-const usersPageActionMeta = createPageActionMetaRegistry()
-const tagsPageActionMeta = createPageActionMetaRegistry()
+export function getAdminPageActionMeta(pageKey, context = {}) {
+  return getPageActionMetaRegistry(pageKey).get(context)
+}
 
-export const registerAdminModulesPageActionMeta = modulesPageActionMeta.register
-export const getAdminModulesPageActionMeta = modulesPageActionMeta.get
+const basicsPageActionMeta = getPageActionMetaRegistry('core.basics')
+const appearancePageActionMeta = getPageActionMetaRegistry('core.appearance')
+const mailPageActionMeta = getPageActionMetaRegistry('core.mail')
+const advancedPageActionMeta = getPageActionMetaRegistry('core.advanced')
+const permissionsPageActionMeta = getPageActionMetaRegistry('core.permissions')
+const usersPageActionMeta = getPageActionMetaRegistry('core.users')
 
 export const registerAdminBasicsPageActionMeta = basicsPageActionMeta.register
 export const getAdminBasicsPageActionMeta = basicsPageActionMeta.get
@@ -32,17 +43,8 @@ export const getAdminMailPageActionMeta = mailPageActionMeta.get
 export const registerAdminAdvancedPageActionMeta = advancedPageActionMeta.register
 export const getAdminAdvancedPageActionMeta = advancedPageActionMeta.get
 
-export const registerAdminApprovalQueuePageActionMeta = approvalQueuePageActionMeta.register
-export const getAdminApprovalQueuePageActionMeta = approvalQueuePageActionMeta.get
-
-export const registerAdminFlagsPageActionMeta = flagsPageActionMeta.register
-export const getAdminFlagsPageActionMeta = flagsPageActionMeta.get
-
 export const registerAdminPermissionsPageActionMeta = permissionsPageActionMeta.register
 export const getAdminPermissionsPageActionMeta = permissionsPageActionMeta.get
 
 export const registerAdminUsersPageActionMeta = usersPageActionMeta.register
 export const getAdminUsersPageActionMeta = usersPageActionMeta.get
-
-export const registerAdminTagsPageActionMeta = tagsPageActionMeta.register
-export const getAdminTagsPageActionMeta = tagsPageActionMeta.get
