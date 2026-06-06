@@ -1,9 +1,9 @@
 import {
   Forum,
-  PostReportModal,
   forumApi,
   getUiCopy,
 } from '@bias/forum'
+import PostReportModal from './PostReportModal.vue'
 
 export const extend = [
   buildFlagsForumExtender(),
@@ -20,6 +20,7 @@ function registerFlagsForum(forum) {
     key: 'open-report-modal',
     moduleId: 'flags',
     order: 30,
+    surfaces: ['post-menu'],
     isVisible: ({ post, canReportPost }) => Boolean(canReportPost(post)),
     resolve: () => ({
       key: 'open-report-modal',

@@ -13,6 +13,7 @@ export function useDiscussionDetailMenus({
   canModerateDiscussionSettings,
   canReplyFromMenu,
   discussion,
+  forumStore,
   hasActiveComposer,
   isSuspended,
   showDiscussionMenu,
@@ -21,6 +22,7 @@ export function useDiscussionDetailMenus({
   postActionHandlers,
   modalStore,
   patchDiscussion,
+  router,
   setTogglingSubscription,
   showActionError,
   showSuspensionAlert,
@@ -44,6 +46,7 @@ export function useDiscussionDetailMenus({
       authStore,
       discussion: discussion.value || {},
       discussionActionHandlers,
+      forumStore,
       modalStore,
       patchDiscussion,
       setTogglingSubscription,
@@ -60,6 +63,7 @@ export function useDiscussionDetailMenus({
     canModerateDiscussionSettings: canModerateDiscussionSettings.value,
     canReplyFromMenu: canReplyFromMenu.value,
     discussion: discussion.value || {},
+    forumStore,
     hasActiveComposer: hasActiveComposer.value,
     isSuspended: isSuspended.value,
     surface: 'discussion-menu',
@@ -72,6 +76,7 @@ export function useDiscussionDetailMenus({
     canModerateDiscussionSettings: canModerateDiscussionSettings.value,
     canReplyFromMenu: canReplyFromMenu.value,
     discussion: discussion.value || {},
+    forumStore,
     hasActiveComposer: hasActiveComposer.value,
     isSuspended: isSuspended.value,
     surface: 'discussion-sidebar',
@@ -84,6 +89,7 @@ export function useDiscussionDetailMenus({
     canModerateDiscussionSettings: canModerateDiscussionSettings.value,
     canReplyFromMenu: canReplyFromMenu.value,
     discussion: discussion.value || {},
+    forumStore,
     hasActiveComposer: hasActiveComposer.value,
     isSuspended: isSuspended.value,
     surface: 'discussion-mobile-primary',
@@ -94,19 +100,35 @@ export function useDiscussionDetailMenus({
     return getPostMenuOptions(post).length > 0
   }
 
-  function getPostMenuOptions(post) {
+  function getPostActionOptions(post, surface) {
     return getPostMenuItems({
+      authStore,
       canDeletePost,
       canEditPost,
       canModeratePostVisibility,
       canReportPost,
-      post
+      discussion: discussion.value || {},
+      forumStore,
+      isSuspended: isSuspended.value,
+      post,
+      surface,
+      uiText,
     })
   }
 
-  async function handlePostMenuSelection(post, action, extraContext = {}) {
-    const item = getPostMenuOptions(post).find(entry => entry.key === action) || { key: action, action }
-    if (!item || item.disabled) return
+  function getPostMenuOptions(post) {
+    return getPostActionOptions(post, 'post-menu')
+  }
+
+  function getPostPrimaryActions(post) {
+    return getPostActionOptions(post, 'discussion-post-primary')
+  }
+
+  function getPostFeedbackActions(post) {
+    return getPostActionOptions(post, 'discussion-post-feedback')
+  }
+
+  function createPostActionContext(post, item, extraContext = {}) {
     const patchPost = (postId, patch) => {
       if (typeof upsertPost !== 'function') return null
       const targetPost = String(post?.id) === String(postId) ? post : { id: postId }
@@ -117,21 +139,31 @@ export function useDiscussionDetailMenus({
       })
     }
 
-    const ran = await runPostAction(item, {
-      action: item.key,
+    return {
+      action: item.action || item.key,
       authStore,
       discussion: discussion.value || {},
+      forumStore,
       isSuspended: isSuspended.value,
       modalStore,
       patchPost,
       post,
       postActionHandlers,
+      router,
       showActionError,
       showSuspensionAlert,
       uiText,
       upsertPost,
       ...extraContext,
-    })
+    }
+  }
+
+  async function handlePostActionSelection(post, action, extraContext = {}) {
+    const surface = extraContext.surface || 'post-menu'
+    const item = getPostActionOptions(post, surface).find(entry => entry.key === action || entry.action === action) || { key: action, action }
+    if (!item || item.disabled) return
+
+    const ran = await runPostAction(item, createPostActionContext(post, item, extraContext))
     if (ran) {
       activePostMenuId.value = null
     }
@@ -141,9 +173,12 @@ export function useDiscussionDetailMenus({
     discussionMenuItems,
     discussionMobileActionItems,
     discussionSidebarActionItems,
+    getPostFeedbackActions,
     getPostMenuOptions,
+    getPostPrimaryActions,
     handleDiscussionMenuSelection,
-    handlePostMenuSelection,
+    handlePostActionSelection,
+    handlePostMenuSelection: handlePostActionSelection,
     hasPostControls,
   }
 }

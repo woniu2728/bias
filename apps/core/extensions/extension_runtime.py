@@ -274,6 +274,10 @@ class Extension:
         return tuple(self.discover().resource_sorts)
 
     @property
+    def resource_filters(self):
+        return tuple(self.discover().resource_filters)
+
+    @property
     def model_definitions(self):
         return tuple(self.discover().model_definitions)
 

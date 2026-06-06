@@ -59,5 +59,4 @@ export {
   setTwemojiBaseUrl,
   setTwemojiEnabled,
 } from '../utils/twemoji.js'
-export const PostReportModal = null
 export * from '../common/sdk.js'

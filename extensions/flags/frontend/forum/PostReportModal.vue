@@ -68,9 +68,13 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
-import { getUiCopy } from '@/forum/registry'
-import { useModalStore } from '@/stores/modal'
+import {
+  computed,
+  getUiCopy,
+  reactive,
+  ref,
+  useModalStore,
+} from '@bias/forum'
 
 const props = defineProps({
   post: {

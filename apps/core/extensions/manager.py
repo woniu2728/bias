@@ -799,6 +799,7 @@ class ExtensionManager:
             resource_relationships=tuple(extension.resource_relationships),
             resource_endpoints=tuple(extension.resource_endpoints),
             resource_sorts=tuple(extension.resource_sorts),
+            resource_filters=tuple(extension.resource_filters),
             model_definitions=tuple(extension.model_definitions),
             model_visibility=tuple(extension.model_visibility),
             model_relations=tuple(extension.model_relations),

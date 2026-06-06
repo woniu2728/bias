@@ -57,6 +57,5 @@ test('discussion detail permission state builds suspension notice and blocks pos
 
   assert.equal(state.isSuspended.value, true)
   assert.match(state.suspensionNotice.value, /账号已被封禁至/)
-  assert.equal(state.canLikePost({ user: { id: 8 } }), false)
   assert.equal(state.canEditPost({ user: { id: 5 } }), false)
 })

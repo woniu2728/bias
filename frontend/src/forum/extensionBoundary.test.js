@@ -166,6 +166,8 @@ test('approval flags subscriptions and likes own interaction contributions', () 
     'open-report-modal',
     'toggle-subscription',
     'postLiked',
+    'discussion-detail-like-summary',
+    'discussion-post-like-action',
   ])
   assert.equal(approvalForumSource.includes('new Forum()'), true)
   assert.equal(approvalForumSource.includes('forum.approvalNote'), true)
@@ -179,7 +181,14 @@ test('approval flags subscriptions and likes own interaction contributions', () 
   assert.equal(subscriptionsForumSource.includes('forum.discussionActionHandler'), true)
   assert.equal(subscriptionsForumSource.includes('forum.notificationRenderer'), true)
   assert.equal(subscriptionsForumSource.includes("moduleId: 'subscriptions'"), true)
-  assert.equal(likesForumSource.includes('new Forum().notificationRenderer'), true)
+  assert.equal(likesForumSource.includes('new Forum()'), true)
+  assert.equal(likesForumSource.includes('forum.postAction'), true)
+  assert.equal(likesForumSource.includes('forum.postActionHandler'), true)
+  assert.equal(likesForumSource.includes('forum.uiCopy'), true)
+  assert.equal(likesForumSource.includes("key: 'toggle-post-like-primary'"), true)
+  assert.equal(likesForumSource.includes("key: 'post-like-feedback'"), true)
+  assert.equal(likesForumSource.includes("key: 'toggle-post-like'"), true)
+  assert.equal(likesForumSource.includes('forum.notificationRenderer'), true)
   assert.equal(likesForumSource.includes("moduleId: 'likes'"), true)
 })
 

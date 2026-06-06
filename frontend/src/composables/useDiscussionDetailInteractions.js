@@ -5,7 +5,6 @@ import { useDiscussionDetailUserActions } from '@/composables/useDiscussionDetai
 export function useDiscussionDetailInteractions({
   authStore,
   canEditDiscussion,
-  canLikePost,
   canModeratePendingDiscussion,
   canModeratePendingPost,
   canModeratePostVisibility,
@@ -27,7 +26,6 @@ export function useDiscussionDetailInteractions({
   const userActions = useDiscussionDetailUserActions({
     authStore,
     canEditDiscussion,
-    canLikePost,
     composerStore,
     discussion,
     hasActiveComposer,
@@ -74,10 +72,8 @@ export function useDiscussionDetailInteractions({
   return {
     formatAbsoluteDate,
     formatDate: userActions.formatDate,
-    formatLikeSummary: userActions.formatLikeSummary,
     goToLoginForReply: userActions.goToLoginForReply,
     isSuspended,
-    likePendingPostIds: userActions.likePendingPostIds,
     openComposer: userActions.openComposer,
     postActionHandlers,
     replyToPost: userActions.replyToPost,
@@ -85,7 +81,6 @@ export function useDiscussionDetailInteractions({
     discussionActionHandlers,
     showSuspensionAlert: userActions.showSuspensionAlert,
     suspensionNotice,
-    toggleLike: userActions.toggleLike,
     ...moderationActions,
     ...userActions,
   }

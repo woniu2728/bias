@@ -304,6 +304,20 @@ class ExtensionResourceSortDefinition:
 
 
 @dataclass(frozen=True)
+class ExtensionResourceFilterDefinition:
+    resource: str
+    filter: str
+    module_id: str
+    handler: Callable[[Any, Any, dict], Any]
+    description: str = ""
+    visible: Callable[[dict], bool] | bool = True
+    operation: str = "add"
+    anchor: str = ""
+    mutator: Callable[[Any], Any] | None = None
+    condition: Callable[[dict], bool] | None = None
+
+
+@dataclass(frozen=True)
 class ExtensionModelDefinition:
     model: Any
     key: str
@@ -600,6 +614,7 @@ class ExtensionDiscoveryResult:
     resource_relationships: Tuple[ExtensionResourceRelationshipDefinition, ...] = ()
     resource_endpoints: Tuple[ExtensionResourceEndpointDefinition, ...] = ()
     resource_sorts: Tuple[ExtensionResourceSortDefinition, ...] = ()
+    resource_filters: Tuple[ExtensionResourceFilterDefinition, ...] = ()
     model_definitions: Tuple[ExtensionModelDefinition, ...] = ()
     model_visibility: Tuple[ExtensionModelVisibilityDefinition, ...] = ()
     model_relations: Tuple[ExtensionModelRelationDefinition, ...] = ()
@@ -653,6 +668,7 @@ class ExtensionAssembly:
     resource_relationships: Tuple[Any, ...]
     resource_endpoints: Tuple[Any, ...]
     resource_sorts: Tuple[Any, ...]
+    resource_filters: Tuple[Any, ...]
     model_definitions: Tuple[Any, ...]
     model_visibility: Tuple[Any, ...]
     model_relations: Tuple[Any, ...]

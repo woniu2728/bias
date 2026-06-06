@@ -8,7 +8,7 @@ from apps.core.extensions.bootstrap_state import (
     mark_extension_host_bootstrapped,
     reset_extension_host_bootstrap_state,
 )
-from apps.core.extensions.manager import get_extension_manager
+from apps.core.extensions.registry import get_extension_registry
 from apps.core.extensions.site_extenders import build_site_extension, load_site_extenders
 
 
@@ -78,7 +78,7 @@ def build_extension_host(
     from apps.core.resource_registry import get_resource_registry
     from apps.core.extensions.application import ExtensionApplication
 
-    resolved_manager = manager or get_extension_manager()
+    resolved_manager = manager or get_extension_registry()
     resolved_manager.load(force=force)
     extensions_to_boot = tuple(resolved_manager.get_enabled_extensions())
     site_extension = build_site_extension(load_site_extenders())

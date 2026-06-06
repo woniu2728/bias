@@ -76,6 +76,7 @@ def resolve_extension_discovery_result(manifest: ExtensionManifest) -> Extension
         resource_relationships=tuple(record.resource_relationships),
         resource_endpoints=tuple(record.resource_endpoints),
         resource_sorts=tuple(record.resource_sorts),
+        resource_filters=tuple(record.resource_filters),
         model_definitions=tuple(record.model_definitions),
         model_visibility=tuple(record.model_visibility),
         model_relations=tuple(record.model_relations),

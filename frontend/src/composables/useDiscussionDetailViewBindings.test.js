@@ -12,7 +12,6 @@ function createBindings(overrides = {}) {
     canDeletePost: () => true,
     canEditDiscussion: ref(true),
     canEditPost: () => true,
-    canLikePost: () => true,
     canModerateDiscussionSettings: ref(true),
     canModeratePendingDiscussion: ref(false),
     canModeratePendingPost: () => false,
@@ -31,8 +30,9 @@ function createBindings(overrides = {}) {
     editDiscussion() {},
     formatAbsoluteDate: value => value,
     formatDate: value => value,
-    formatLikeSummary: value => value,
+    getPostFeedbackActions: post => [{ key: `feedback-${post.id}` }],
     getPostMenuOptions: post => [{ key: `post-${post.id}` }],
+    getPostPrimaryActions: post => [{ key: `primary-${post.id}` }],
     getUserAvatarColor: () => '#000',
     getUserDisplayName: () => 'alice',
     getUserInitial: () => 'A',
@@ -51,7 +51,6 @@ function createBindings(overrides = {}) {
     highlightedPostNumber: ref(3),
     isSuspended: ref(false),
     jumpToPost() {},
-    likePendingPostIds: ref([8]),
     loadPendingNewReplies() {},
     loadMorePosts() {},
     loading: ref(false),
@@ -85,7 +84,6 @@ function createBindings(overrides = {}) {
     showUnreadDivider: post => post.number === 4,
     suspensionNotice: ref('账号已停用'),
     toggleDiscussionMenu() {},
-    toggleLike() {},
     togglePostMenu() {},
     togglingSubscription: ref(false),
     unreadCount: ref(2),
@@ -106,7 +104,8 @@ test('discussion detail view bindings expose grouped bindings', () => {
   assert.equal(bindings.mobileBindings.value.scrubberPositionText, '3 / 20')
   assert.equal(bindings.mobileBindings.value.unreadStartPostNumber, 19)
   assert.equal(bindings.postStreamBindings.value.isTargetPost({ number: 3 }), true)
-  assert.equal(bindings.postStreamBindings.value.isLikePending({ id: 8 }), true)
+  assert.equal(bindings.postStreamBindings.value.getPostPrimaryActions({ id: 8 })[0].key, 'primary-8')
+  assert.equal(bindings.postStreamBindings.value.getPostFeedbackActions({ id: 8 })[0].key, 'feedback-8')
   assert.equal(bindings.postStreamBindings.value.isFlagPending({ id: 9, is_flag_pending: true }), true)
   assert.equal(bindings.postStreamBindings.value.hasPendingNewReplies, true)
   assert.equal(bindings.postStreamBindings.value.pendingNewReplyCount, 3)
@@ -127,6 +126,9 @@ test('discussion detail view bindings expose stable event handlers', () => {
     },
     handlePostMenuSelection(post, action, context = {}) {
       calls.push(['post-menu', post.id, action, context.status])
+    },
+    handlePostActionSelection(post, action, context = {}) {
+      calls.push(['post-action', post.id, action, context.surface])
     },
     handleScrubberMouseDown(event) {
       calls.push(['scrubber-down', event])
@@ -164,9 +166,6 @@ test('discussion detail view bindings expose stable event handlers', () => {
     toggleDiscussionMenu() {
       calls.push('toggle-menu')
     },
-    toggleLike(post) {
-      calls.push(['like', post.id])
-    },
     togglePostMenu(post) {
       calls.push(['toggle-post-menu', post.id])
     },
@@ -183,7 +182,7 @@ test('discussion detail view bindings expose stable event handlers', () => {
   bindings.mobileEvents.jumpToPost(18)
   bindings.postStreamEvents.loadPreviousPosts()
   bindings.postStreamEvents.jumpToPost(12)
-  bindings.postStreamEvents.toggleLike({ id: 3 })
+  bindings.postStreamEvents.postAction({ post: { id: 3 }, action: 'toggle-post-like', surface: 'discussion-post-primary' })
   bindings.postStreamEvents.replyToPost({ id: 4 })
   bindings.postStreamEvents.togglePostMenu({ id: 5 })
   bindings.postStreamEvents.editPost({ id: 6 })
@@ -215,7 +214,7 @@ test('discussion detail view bindings expose stable event handlers', () => {
     ['jump', 18],
     'load-previous',
     ['jump', 12],
-    ['like', 3],
+    ['post-action', 3, 'toggle-post-like', 'discussion-post-primary'],
     ['reply', 4],
     ['toggle-post-menu', 5],
     ['post-menu', 6, 'edit-post', undefined],

@@ -5,8 +5,9 @@ from apps.core.extensions import (
     FrontendExtender,
     LifecycleExtender,
     NotificationsExtender,
+    SearchDriverExtender,
 )
-from apps.core.extensions.types import ExtensionEventListenerDefinition
+from apps.core.extensions.types import ExtensionEventListenerDefinition, ExtensionSearchDriverDefinition
 from apps.core.forum_events import (
     DiscussionCreatedEvent,
     PostApprovedEvent,
@@ -62,6 +63,9 @@ def extend():
             discussion_list_filters=discussion_list_filter_definitions(),
             search_filters=search_filter_definitions(),
         ),
+        SearchDriverExtender(
+            drivers=search_driver_definitions(),
+        ),
         NotificationsExtender(
             notification_types=notification_type_definitions(),
             user_preferences=user_preference_definitions(),
@@ -108,6 +112,17 @@ def search_filter_definitions():
             applier=apply_discussion_following_search_filter,
             syntax="is:following",
             description="仅返回当前用户已关注的讨论。",
+        ),
+    )
+
+
+def search_driver_definitions():
+    return (
+        ExtensionSearchDriverDefinition(
+            target="discussion",
+            driver="database",
+            filters=search_filter_definitions(),
+            description="按关注状态过滤讨论搜索。",
         ),
     )
 

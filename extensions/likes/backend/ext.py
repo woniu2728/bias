@@ -1,14 +1,35 @@
-from apps.core.extensions import ApiResourceExtender, FrontendExtender, LifecycleExtender, ModelExtender, NotificationsExtender
+from apps.core.extensions import (
+    ApiResourceExtender,
+    ForumCapabilitiesExtender,
+    FrontendExtender,
+    LifecycleExtender,
+    ModelExtender,
+    NotificationsExtender,
+    PolicyExtender,
+    SearchDriverExtender,
+    SettingsExtender,
+)
+from apps.core.extensions.backend import _build_setting_field_definition
+from apps.core.extensions.types import ExtensionModelRelationDefinition, ExtensionSearchDriverDefinition
 from apps.core.forum_registry_types import NotificationTypeDefinition, UserPreferenceDefinition
-from apps.core.resource_registry import ResourceEndpointDefinition, ResourceFieldDefinition
+from apps.core.forum_registry_types import SearchFilterDefinition
+from apps.core.resource_registry import ResourceEndpointDefinition, ResourceFieldDefinition, ResourceFilterDefinition, ResourceRelationshipDefinition
 from apps.posts.models import PostLike
+from apps.posts.models import Post
+from apps.users.models import User
 from extensions.likes.backend.handlers import dispatch_post_like_mutation
 from extensions.likes.backend.resources import (
     post_like_preload_resolver,
+    resolve_post_likes,
     resolve_post_is_liked,
     resolve_post_like_count,
 )
-from extensions.likes.backend.services import resolve_post_can_like
+from extensions.likes.backend.search import (
+    apply_liked_by_filter,
+    apply_liked_by_resource_filter,
+    parse_liked_by_search_filter,
+)
+from extensions.likes.backend.services import like_post_policy, resolve_post_can_like
 
 
 EXTENSION_ID = "likes"
@@ -23,13 +44,27 @@ def extend():
             notification_types=notification_type_definitions(),
             user_preferences=user_preference_definitions(),
         ),
-        ModelExtender().owns(
+        SettingsExtender(fields=setting_definitions())
+        .default("like_own_post", False),
+        ForumCapabilitiesExtender(
+            search_filters=search_filter_definitions(),
+        ),
+        SearchDriverExtender(
+            drivers=search_driver_definitions(),
+        ),
+        PolicyExtender(mounts=(("post.like", like_post_policy),)),
+        ModelExtender(
+            relations=model_relation_definitions(),
+        ).owns(
             PostLike,
             description="帖子点赞记录由 likes 扩展拥有。",
         ),
         ApiResourceExtender("post")
         .fields(post_resource_field_definitions)
-        .endpoints(post_resource_endpoints),
+        .relationships(post_resource_relationship_definitions)
+        .filters(post_resource_filter_definitions)
+        .endpoints(post_resource_endpoints)
+        .add_default_include(("index", "show"), ("likes",)),
         LifecycleExtender(
             install=install,
             enable=enable,
@@ -68,6 +103,62 @@ def user_preference_definitions():
     )
 
 
+def setting_definitions():
+    return (
+        _build_setting_field_definition({
+            "key": "like_own_post",
+            "label": "允许点赞自己的回复",
+            "type": "boolean",
+            "default": False,
+            "help_text": "开启后用户可以给自己的回复点赞。",
+            "order": 10,
+        }),
+    )
+
+
+def search_filter_definitions():
+    return (
+        SearchFilterDefinition(
+            code="likedBy",
+            label="按点赞用户过滤",
+            module_id=EXTENSION_ID,
+            target="post",
+            parser=parse_liked_by_search_filter,
+            applier=apply_liked_by_filter,
+            syntax="likedBy:<username>",
+            description="仅返回被指定用户点赞过的回复。",
+        ),
+    )
+
+
+def search_driver_definitions():
+    return (
+        ExtensionSearchDriverDefinition(
+            target="post",
+            driver="database",
+            filters=search_filter_definitions(),
+            description="按点赞用户过滤回复搜索。",
+        ),
+    )
+
+
+def model_relation_definitions():
+    return (
+        ExtensionModelRelationDefinition(
+            model=Post,
+            name="likes",
+            resolver=lambda post: [
+                like.user
+                for like in post.likes.select_related("user").all()
+            ],
+            relation_type="belongsToMany",
+            related_model=User,
+            description="点赞该回复的用户。",
+            inject_attribute=False,
+        ),
+    )
+
+
 def post_resource_field_definitions():
     return (
         ResourceFieldDefinition(
@@ -92,6 +183,33 @@ def post_resource_field_definitions():
             module_id=EXTENSION_ID,
             resolver=resolve_post_can_like,
             description="当前用户是否可以点赞该回复。",
+        ),
+    )
+
+
+def post_resource_relationship_definitions():
+    return (
+        ResourceRelationshipDefinition(
+            resource="post",
+            relationship="likes",
+            module_id=EXTENSION_ID,
+            resolver=resolve_post_likes,
+            description="点赞该回复的用户列表。",
+            preload_resolver=post_like_preload_resolver,
+            resource_type="post_user",
+            many=True,
+        ),
+    )
+
+
+def post_resource_filter_definitions():
+    return (
+        ResourceFilterDefinition(
+            resource="post",
+            filter="likedBy",
+            module_id=EXTENSION_ID,
+            handler=apply_liked_by_resource_filter,
+            description="仅返回被指定用户点赞过的回复。",
         ),
     )
 

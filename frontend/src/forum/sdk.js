@@ -44,7 +44,6 @@ export { default as ForumPagination } from '../components/forum/ForumPagination.
 export { default as ForumPrimaryNav } from '../components/forum/ForumPrimaryNav.vue'
 export { default as ForumSearchFilterNav } from '../components/forum/ForumSearchFilterNav.vue'
 export { default as ForumStateBlock } from '../components/forum/ForumStateBlock.vue'
-export { default as PostReportModal } from '../components/modals/PostReportModal.vue'
 export { useAuthStore } from '../stores/auth.js'
 export { useComposerStore } from '../stores/composer.js'
 export { useForumStore } from '../stores/forum.js'

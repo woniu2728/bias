@@ -30,6 +30,7 @@ from apps.core.extensions.types import (
     ExtensionResourceEndpointDefinition,
     ExtensionResourceFieldMutatorDefinition,
     ExtensionResourceFieldDefinition,
+    ExtensionResourceFilterDefinition,
     ExtensionResourceObjectDefinition,
     ExtensionResourceRelationshipDefinition,
     ExtensionResourceSortDefinition,
@@ -53,7 +54,7 @@ from apps.core.forum_registry_types import (
     SearchFilterDefinition,
     UserPreferenceDefinition,
 )
-from apps.core.resource_objects import ResourceEndpoint, ResourceField, ResourceRelationship, ResourceSort
+from apps.core.resource_objects import ResourceEndpoint, ResourceField, ResourceFilter, ResourceRelationship, ResourceSort
 from apps.core.resource_registry import ResourceRegistry
 
 if TYPE_CHECKING:
@@ -494,9 +495,10 @@ class ResourceExtender:
     relationships: tuple[ExtensionResourceRelationshipDefinition, ...] = ()
     endpoints: tuple[ExtensionResourceEndpointDefinition, ...] = ()
     sorts: tuple[ExtensionResourceSortDefinition, ...] = ()
+    filters: tuple[ExtensionResourceFilterDefinition, ...] = ()
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
-        if not (self.resources or self.fields or self.field_mutators or self.relationships or self.endpoints or self.sorts):
+        if not (self.resources or self.fields or self.field_mutators or self.relationships or self.endpoints or self.sorts or self.filters):
             return
 
         extension_id = extension.extension_id
@@ -516,6 +518,8 @@ class ResourceExtender:
                 resources.register_endpoint(self._with_module_id(self._resolve_definition_callbacks(definition, host), extension_id), extension_id=extension_id)
             for definition in self.sorts:
                 resources.register_sort(self._with_module_id(self._resolve_definition_callbacks(definition, host), extension_id), extension_id=extension_id)
+            for definition in self.filters:
+                resources.register_filter(self._with_module_id(self._resolve_definition_callbacks(definition, host), extension_id), extension_id=extension_id)
             return resources
 
         app.resolving("resources", apply)
@@ -578,6 +582,7 @@ class ApiResourceExtender:
     _relationships: tuple[Any, ...] = ()
     _endpoints: tuple[Any, ...] = ()
     _sorts: tuple[Any, ...] = ()
+    _filters: tuple[Any, ...] = ()
 
     def __init__(
         self,
@@ -587,6 +592,7 @@ class ApiResourceExtender:
         relationships: tuple[Any, ...] = (),
         endpoints: tuple[Any, ...] = (),
         sorts: tuple[Any, ...] = (),
+        filters: tuple[Any, ...] = (),
     ) -> None:
         object.__setattr__(self, "resource", resource)
         object.__setattr__(self, "_fields", tuple(fields or ()))
@@ -594,6 +600,7 @@ class ApiResourceExtender:
         object.__setattr__(self, "_relationships", tuple(relationships or ()))
         object.__setattr__(self, "_endpoints", tuple(endpoints or ()))
         object.__setattr__(self, "_sorts", tuple(sorts or ()))
+        object.__setattr__(self, "_filters", tuple(filters or ()))
 
     @property
     def resource_name(self) -> str:
@@ -609,6 +616,7 @@ class ApiResourceExtender:
             self._endpoints,
             self._sorts,
             self._field_mutators,
+            self._filters,
         ):
             for definition in definitions:
                 resource = getattr(definition, "resource", "")
@@ -635,6 +643,7 @@ class ApiResourceExtender:
             relationships=self._relationships,
             endpoints=self._endpoints,
             sorts=self._sorts,
+            filters=self._filters,
         )
 
     def fields_before(self, anchor: str, *definitions: ExtensionResourceFieldDefinition) -> "ApiResourceExtender":
@@ -668,6 +677,7 @@ class ApiResourceExtender:
             relationships=self._relationships,
             endpoints=self._endpoints,
             sorts=self._sorts,
+            filters=self._filters,
         )
 
     def relationships(self, relationships: Any = None, *definitions: ExtensionResourceRelationshipDefinition) -> "ApiResourceExtender":
@@ -685,6 +695,7 @@ class ApiResourceExtender:
             relationships=tuple([*self._relationships, *definitions]),
             endpoints=self._endpoints,
             sorts=self._sorts,
+            filters=self._filters,
         )
 
     def model_relationship(
@@ -786,6 +797,7 @@ class ApiResourceExtender:
             relationships=self._relationships,
             endpoints=tuple([*self._endpoints, *definitions]),
             sorts=self._sorts,
+            filters=self._filters,
         )
 
     def add_default_include(self, endpoints, includes) -> "ApiResourceExtender":
@@ -887,6 +899,44 @@ class ApiResourceExtender:
             relationships=self._relationships,
             endpoints=self._endpoints,
             sorts=tuple([*self._sorts, *definitions]),
+            filters=self._filters,
+        )
+
+    def filters(self, filters: Any = None, *definitions: ExtensionResourceFilterDefinition) -> "ApiResourceExtender":
+        if filters is None:
+            items = definitions
+        else:
+            items = (filters, *definitions)
+        return self.filter(*items)
+
+    def filters_with(self, *definitions: Any) -> "ApiResourceExtender":
+        return self.filter(*definitions)
+
+    def remove_filters(self, *filters: str, condition: Callable[[dict], bool] | None = None) -> "ApiResourceExtender":
+        definitions = tuple(
+            ExtensionResourceFilterDefinition(
+                resource=self.resource_name,
+                filter=item,
+                module_id="",
+                handler=lambda queryset, value, context: queryset,
+                operation="remove",
+                condition=condition,
+            )
+            for item in filters
+        )
+        return self.filter(*definitions)
+
+    def filter(self, *definitions) -> "ApiResourceExtender":
+        if self._is_named_mutator_call(definitions):
+            definitions = self._named_filter_mutators(definitions[0], definitions[1])
+        return ApiResourceExtender(
+            resource=self.resource,
+            fields=self._fields,
+            field_mutators=self._field_mutators,
+            relationships=self._relationships,
+            endpoints=self._endpoints,
+            sorts=self._sorts,
+            filters=tuple([*self._filters, *definitions]),
         )
 
     def _field_mutators_with_operation(
@@ -943,6 +993,19 @@ class ApiResourceExtender:
                 mutator=mutator,
             )
             for sort in self._normalize_names(sorts)
+        )
+
+    def _named_filter_mutators(self, filters, mutator: Callable[[Any], Any]):
+        return tuple(
+            ExtensionResourceFilterDefinition(
+                resource=self.resource_name,
+                filter=filter_name,
+                module_id="",
+                handler=lambda queryset, value, context: queryset,
+                operation="mutate",
+                mutator=mutator,
+            )
+            for filter_name in self._normalize_names(filters)
         )
 
     def _relationship_mutators_with_operation(
@@ -1012,6 +1075,7 @@ class ApiResourceExtender:
         relationships = self._normalize_resource_relationships(self._resolve_definition_groups(self._relationships, app))
         endpoints = self._normalize_resource_endpoints(self._resolve_definition_groups(self._endpoints, app))
         sorts = self._normalize_resource_sorts(self._resolve_definition_groups(self._sorts, app))
+        filters = self._normalize_resource_filters(self._resolve_definition_groups(self._filters, app))
         ResourceExtender(
             resources=resources,
             fields=fields,
@@ -1019,6 +1083,7 @@ class ApiResourceExtender:
             relationships=relationships,
             endpoints=endpoints,
             sorts=sorts,
+            filters=filters,
         ).extend(app, extension)
 
     @staticmethod
@@ -1065,6 +1130,14 @@ class ApiResourceExtender:
         return tuple(
             ResourceRegistry._sort_to_definition(self.resource_name, item)
             if isinstance(item, ResourceSort)
+            else item
+            for item in items
+        )
+
+    def _normalize_resource_filters(self, items: tuple[Any, ...]) -> tuple[Any, ...]:
+        return tuple(
+            ResourceRegistry._filter_to_definition(self.resource_name, item)
+            if isinstance(item, ResourceFilter)
             else item
             for item in items
         )

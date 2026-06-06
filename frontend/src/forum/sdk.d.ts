@@ -44,7 +44,6 @@ export declare const ForumPagination: any
 export declare const ForumPrimaryNav: any
 export declare const ForumSearchFilterNav: any
 export declare const ForumStateBlock: any
-export declare const PostReportModal: any
 export declare function usePaginatedListState(options?: Record<string, any>): any
 export declare function useRouteListState(options?: Record<string, any>): any
 export declare function useRoutePagination(options?: Record<string, any>): any

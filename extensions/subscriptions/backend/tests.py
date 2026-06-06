@@ -52,6 +52,7 @@ class SubscriptionsExtensionTests(TestCase):
         )
         self.assertTrue(any(item["code"] == "following" for item in payload["discussion_list_filters"]))
         self.assertTrue(any(item["code"] == "is_following" for item in payload["search_filters"]))
+        self.assertTrue(any(item["target"] == "discussion" for item in payload["search_drivers"]))
         self.assertTrue(any(item["code"] == "discussionReply" for item in payload["notification_types"]))
         self.assertTrue(any(item["key"] == "follow_after_reply" for item in payload["user_preferences"]))
         self.assertTrue(any(item["key"] == "notify_new_post" for item in payload["user_preferences"]))

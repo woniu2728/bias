@@ -110,7 +110,6 @@ import { renderTwemojiHtml, setTwemojiBaseUrl, setTwemojiEnabled } from '@/utils
 export { registerNotificationType } from './notificationTypes'
 export { registerPostType } from './postTypes'
 export { registerSearchFilter } from './searchFilters'
-export { default as PostReportModal } from '@/components/modals/PostReportModal.vue'
 export { api as forumApi }
 
 export {
@@ -2449,29 +2448,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'discussion-detail-like-summary',
-  order: 479,
-  surfaces: ['discussion-detail-like-summary'],
-  resolve: ({ count, isLiked }) => {
-    if (Number(count || 0) <= 0) {
-      return {
-        text: '',
-      }
-    }
-
-    if (isLiked) {
-      return {
-        text: Number(count) === 1 ? '你赞了这条回复' : `你和其他 ${Number(count) - 1} 人赞了这条回复`,
-      }
-    }
-
-    return {
-      text: `${Number(count)} 人赞了这条回复`,
-    }
-  },
-})
-
-registerUiCopy({
   key: 'discussion-detail-unknown-time',
   order: 479,
   surfaces: ['discussion-detail-unknown-time'],
@@ -2844,15 +2820,6 @@ registerUiCopy({
   surfaces: ['discussion-post-edited-label'],
   resolve: () => ({
     text: '已编辑',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-post-like-action',
-  order: 479,
-  surfaces: ['discussion-post-like-action'],
-  resolve: () => ({
-    text: '赞',
   }),
 })
 

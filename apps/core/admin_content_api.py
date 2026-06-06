@@ -339,6 +339,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
     resource_fields = _build_extension_resource_fields(extension)
     resource_endpoints = _build_extension_resource_endpoints(extension)
     resource_sorts = _build_extension_resource_sorts(extension)
+    resource_filters = _build_extension_resource_filters(extension)
     model_definitions = _build_extension_model_definitions(runtime_view)
     owned_models = _build_extension_owned_models(runtime_view)
     model_relations = _build_extension_model_relations(runtime_view)
@@ -360,6 +361,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         resource_fields=resource_fields,
         resource_endpoints=resource_endpoints,
         resource_sorts=resource_sorts,
+        resource_filters=resource_filters,
         model_relations=model_relations,
         language_packs=language_packs,
     )
@@ -475,6 +477,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "resource_fields": resource_fields,
         "resource_endpoints": resource_endpoints,
         "resource_sorts": resource_sorts,
+        "resource_filters": resource_filters,
         "model_definitions": model_definitions,
         "owned_models": owned_models,
         "model_relations": model_relations,
@@ -987,6 +990,25 @@ def _build_extension_resource_sorts(extension):
     ]
 
 
+def _build_extension_resource_filters(extension):
+    module_ids = set(extension.module_ids or ())
+    if not module_ids:
+        return []
+
+    return [
+        {
+            "resource": item.resource,
+            "filter": item.filter,
+            "module_id": item.module_id,
+            "operation": getattr(item, "operation", "add"),
+            "anchor": getattr(item, "anchor", ""),
+            "description": item.description,
+        }
+        for item in get_runtime_resource_registry().get_all_filters()
+        if item.module_id in module_ids
+    ]
+
+
 def _build_extension_resource_fields(extension):
     module_ids = set(extension.module_ids or ())
     if not module_ids:
@@ -1279,6 +1301,7 @@ def _build_extension_capability_summary(
     resource_fields,
     resource_endpoints,
     resource_sorts,
+    resource_filters,
     model_relations,
     language_packs,
 ):
@@ -1296,6 +1319,7 @@ def _build_extension_capability_summary(
         "resource_field_count": len(resource_fields),
         "resource_endpoint_count": len(resource_endpoints),
         "resource_sort_count": len(resource_sorts),
+        "resource_filter_count": len(resource_filters),
         "model_relation_count": len(model_relations),
         "language_pack_count": len(language_packs),
     }

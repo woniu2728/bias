@@ -30,6 +30,7 @@ from apps.core.extensions.types import (
     ExtensionResourceEndpointDefinition,
     ExtensionResourceFieldMutatorDefinition,
     ExtensionResourceFieldDefinition,
+    ExtensionResourceFilterDefinition,
     ExtensionResourceRelationshipDefinition,
     ExtensionResourceSortDefinition,
     ExtensionRealtimeIncludedDefinition,
@@ -2139,6 +2140,10 @@ class ApplicationResourceService:
         self._registry.register_sort(definition)
         self._append_extension_tuple(extension_id, "resource_sorts", definition)
 
+    def register_filter(self, definition, *, extension_id: str = "") -> None:
+        self._registry.register_filter(definition)
+        self._append_extension_tuple(extension_id, "resource_filters", definition)
+
     def _append_extension_tuple(self, extension_id: str, field_name: str, definition: Any) -> None:
         normalized = str(extension_id or "").strip()
         if not normalized:
@@ -2198,6 +2203,7 @@ class ExtensionApplicationRecord:
     resource_relationships: list[ExtensionResourceRelationshipDefinition] = field(default_factory=list)
     resource_endpoints: list[ExtensionResourceEndpointDefinition] = field(default_factory=list)
     resource_sorts: list[ExtensionResourceSortDefinition] = field(default_factory=list)
+    resource_filters: list[ExtensionResourceFilterDefinition] = field(default_factory=list)
     model_definitions: list[ExtensionModelDefinition] = field(default_factory=list)
     model_visibility: list[ExtensionModelVisibilityDefinition] = field(default_factory=list)
     model_relations: list[ExtensionModelRelationDefinition] = field(default_factory=list)
@@ -2289,6 +2295,7 @@ class ExtensionRuntimeView:
     resource_relationships: tuple[ExtensionResourceRelationshipDefinition, ...] = ()
     resource_endpoints: tuple[ExtensionResourceEndpointDefinition, ...] = ()
     resource_sorts: tuple[ExtensionResourceSortDefinition, ...] = ()
+    resource_filters: tuple[ExtensionResourceFilterDefinition, ...] = ()
     model_definitions: tuple[ExtensionModelDefinition, ...] = ()
     model_visibility: tuple[ExtensionModelVisibilityDefinition, ...] = ()
     model_relations: tuple[ExtensionModelRelationDefinition, ...] = ()
@@ -3205,6 +3212,7 @@ class ExtensionApplication:
             resource_relationships=list(view.resource_relationships),
             resource_endpoints=list(view.resource_endpoints),
             resource_sorts=list(view.resource_sorts),
+            resource_filters=list(view.resource_filters),
             model_definitions=list(view.model_definitions),
             model_visibility=list(view.model_visibility),
             model_relations=list(view.model_relations),

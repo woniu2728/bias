@@ -11,6 +11,7 @@ from apps.core.resource_api import (
     merge_resource_includes,
     parse_resource_query_options,
 )
+from apps.core.resource_errors import BadJsonApiRequest
 from apps.core.resource_registry import ResourceEndpointDefinition
 from apps.core.services import PaginationService
 from apps.posts.models import Post
@@ -175,6 +176,24 @@ def _post_default_includes(context) -> tuple[str, ...]:
     return tuple(context.get("default_include") or ())
 
 
+def _post_resource_filters(context) -> dict[str, str]:
+    query = context.get("query") if isinstance(context.get("query"), dict) else {}
+    filters: dict[str, str] = {}
+    for key, value in query.items():
+        normalized = str(key or "").strip()
+        if normalized == "filter":
+            if isinstance(value, dict):
+                filters.update(value)
+            elif value not in (None, ""):
+                filters["q"] = value
+            continue
+        if normalized.startswith("filter[") and normalized.endswith("]"):
+            name = normalized[len("filter[") : -1].strip()
+            if name:
+                filters[name] = value
+    return filters
+
+
 def dispatch_post_global_index(context):
     user = context.get("user")
     author = _post_query_value(context, "author")
@@ -204,8 +223,18 @@ def dispatch_post_global_index(context):
     if user_id:
         queryset = queryset.filter(user_id=user_id)
 
-    sort_context = {"user": user, "author": author, "user_id": user_id}
     resource_registry = get_resource_registry()
+    try:
+        queryset = resource_registry.apply_resource_filters(
+            "post",
+            queryset,
+            _post_resource_filters(context),
+            {"user": user, "query": context.get("query") or {}},
+        )
+    except BadJsonApiRequest as error:
+        return api_error(str(error), status=400)
+
+    sort_context = {"user": user, "author": author, "user_id": user_id}
     if resource_registry.has_named_sort("post", "recent", sort_context):
         queryset = resource_registry.apply_named_sort("post", queryset, "recent", sort_context)
     else:

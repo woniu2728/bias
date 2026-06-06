@@ -7,7 +7,6 @@ export function createDiscussionDetailViewBindings({
   canDeletePost,
   canEditDiscussion,
   canEditPost,
-  canLikePost,
   canModerateDiscussionSettings,
   canModeratePendingDiscussion,
   canModeratePendingPost,
@@ -26,8 +25,9 @@ export function createDiscussionDetailViewBindings({
   editDiscussion,
   formatAbsoluteDate,
   formatDate,
-  formatLikeSummary,
+  getPostFeedbackActions,
   getPostMenuOptions,
+  getPostPrimaryActions,
   getUserAvatarColor,
   getUserDisplayName,
   getUserInitial,
@@ -35,6 +35,7 @@ export function createDiscussionDetailViewBindings({
   getUserPrimaryGroupIcon,
   getUserPrimaryGroupLabel,
   handleDiscussionMenuSelection,
+  handlePostActionSelection,
   handlePostMenuSelection,
   handleScrubberMouseDown,
   handleScrubberTrackClick,
@@ -46,7 +47,6 @@ export function createDiscussionDetailViewBindings({
   highlightedPostNumber,
   isSuspended,
   jumpToPost,
-  likePendingPostIds,
   loadPendingNewReplies,
   loadMorePosts,
   loading,
@@ -80,7 +80,6 @@ export function createDiscussionDetailViewBindings({
   showUnreadDivider,
   suspensionNotice,
   toggleDiscussionMenu,
-  toggleLike,
   togglePostMenu,
   togglingSubscription,
   unreadCount,
@@ -88,6 +87,8 @@ export function createDiscussionDetailViewBindings({
   unreadHeightPercent,
   unreadTopPercent,
 }) {
+  const runPostActionSelection = handlePostActionSelection || handlePostMenuSelection
+
   const stateBindings = computed(() => ({
     loading: loading.value,
     loadingStateText: loadingStateText.value,
@@ -149,7 +150,6 @@ export function createDiscussionDetailViewBindings({
     highlightedPostNumber: highlightedPostNumber.value,
     isSuspended: isSuspended.value,
     activePostMenuId: activePostMenuId.value,
-    canLikePost,
     canEditPost,
     canDeletePost,
     canReportPost,
@@ -172,19 +172,17 @@ export function createDiscussionDetailViewBindings({
     getUserPrimaryGroupLabel,
     formatAbsoluteDate,
     formatDate,
-    formatLikeSummary,
     showUnreadDivider,
     resolvePostComponent,
     hasPostControls,
+    getPostFeedbackActions,
     getPostMenuOptions,
+    getPostPrimaryActions,
     isTargetPost(post) {
       return highlightedPostNumber.value === post.number
     },
     isPostMenuOpen(post) {
       return activePostMenuId.value === post.id
-    },
-    isLikePending(post) {
-      return likePendingPostIds.value.includes(post.id)
     },
     isFlagPending(post) {
       return Boolean(post?.is_flag_pending)
@@ -199,8 +197,10 @@ export function createDiscussionDetailViewBindings({
     loadPreviousPosts,
     openComposer,
     replyToPost,
-    toggleLike,
     togglePostMenu,
+    postAction({ post, action, surface }) {
+      return runPostActionSelection(post, action, { surface })
+    },
     editPost(post) {
       return handlePostMenuSelection(post, 'edit-post')
     },

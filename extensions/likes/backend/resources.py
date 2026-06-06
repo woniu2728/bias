@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.db.models import Prefetch
 
 from apps.posts.models import PostLike
+from apps.core.forum_resources_users import serialize_user_payload
 
 
 def post_like_preload_resolver(context: dict):
@@ -40,3 +41,13 @@ def resolve_post_is_liked(post, context: dict) -> bool:
     if not user or not user.is_authenticated:
         return False
     return PostLike.objects.filter(post_id=post.id, user=user).exists()
+
+
+def resolve_post_likes(post, context: dict) -> list[dict]:
+    cached = getattr(post, "likes_cache", None)
+    likes = cached if cached is not None else PostLike.objects.filter(post_id=post.id).select_related("user")
+    return [
+        serialize_user_payload(like.user, resource="post_user")
+        for like in likes
+        if getattr(like, "user", None)
+    ]

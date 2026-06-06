@@ -3044,7 +3044,7 @@ class ExtensionManifestLoaderTests(TestCase):
             event_bus = DomainEventBus()
             resource_registry = ResourceRegistry()
 
-            with patch("apps.core.extensions.bootstrap.get_extension_manager", return_value=manager), patch(
+            with patch("apps.core.extensions.bootstrap.get_extension_registry", return_value=manager), patch(
                 "apps.core.forum_registry.get_forum_registry",
                 return_value=forum_registry,
             ), patch(

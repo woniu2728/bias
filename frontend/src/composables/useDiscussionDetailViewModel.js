@@ -45,6 +45,7 @@ export function useDiscussionDetailViewModel({
     composerStore,
     discussion,
     discussionMobileNavRef,
+    forumStore,
     hasActiveComposer,
     modalStore,
     pageState,

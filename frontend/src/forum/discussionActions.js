@@ -243,6 +243,7 @@ registerPostAction({
   key: 'edit-post',
   moduleId: 'posts',
   order: 10,
+  surfaces: ['post-menu'],
   isVisible: ({ post, canEditPost }) => Boolean(canEditPost(post)),
   resolve: () => ({
     key: 'edit-post',
@@ -261,6 +262,7 @@ registerPostAction({
   key: 'delete-post',
   moduleId: 'posts',
   order: 20,
+  surfaces: ['post-menu'],
   isVisible: ({ post, canDeletePost }) => Boolean(canDeletePost(post)),
   resolve: () => ({
     key: 'delete-post',
@@ -295,6 +297,7 @@ registerPostAction({
   key: 'toggle-hide-post',
   moduleId: 'posts',
   order: 25,
+  surfaces: ['post-menu'],
   isVisible: ({ post, canModeratePostVisibility }) => Boolean(canModeratePostVisibility?.(post)),
   resolve: ({ post }) => ({
     key: 'toggle-hide-post',

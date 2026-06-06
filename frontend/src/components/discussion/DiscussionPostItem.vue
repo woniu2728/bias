@@ -66,15 +66,17 @@
         <div class="post-body" v-html="post.content_html"></div>
         <aside class="post-actions" :class="{ 'is-open': isPostMenuOpen }">
           <button
-            v-if="canLikePost(post)"
+            v-for="actionItem in postPrimaryActions"
+            :key="actionItem.key"
             type="button"
             class="post-action"
-            :class="{ 'is-active': post.is_liked }"
-            :disabled="likePending"
-            @click="$emit('toggle-like', post)"
+            :class="{ 'is-active': actionItem.active }"
+            :disabled="actionItem.disabled"
+            :title="actionItem.title || actionItem.description || ''"
+            @click="handlePostAction(actionItem, 'discussion-post-primary')"
           >
-            <i class="fas fa-thumbs-up"></i>
-            <span>{{ postLikeActionText }}</span>
+            <i v-if="actionItem.icon" :class="actionItem.icon"></i>
+            <span>{{ actionItem.label }}</span>
           </button>
           <button
             v-if="authStore.isAuthenticated && !discussion.is_locked && !isSuspended"
@@ -152,26 +154,30 @@
           </div>
         </div>
 
-        <footer v-if="post.like_count > 0" class="post-footer">
-          <button
-            v-if="canLikePost(post)"
-            type="button"
-            class="post-feedback"
-            :class="{ 'is-active': post.is_liked }"
-            :disabled="likePending"
-            @click="$emit('toggle-like', post)"
-          >
-            <i class="fas fa-thumbs-up"></i>
-            <span>{{ formatLikeSummary(post) }}</span>
-          </button>
-          <div
-            v-else
-            class="post-feedback"
-            :class="{ 'is-active': post.is_liked }"
-          >
-            <i class="fas fa-thumbs-up"></i>
-            <span>{{ formatLikeSummary(post) }}</span>
-          </div>
+        <footer v-if="postFeedbackActions.length > 0" class="post-footer">
+          <template v-for="actionItem in postFeedbackActions" :key="actionItem.key">
+            <div
+              v-if="actionItem.readonly"
+              class="post-feedback"
+              :class="{ 'is-active': actionItem.active }"
+              :title="actionItem.title || actionItem.description || ''"
+            >
+              <i v-if="actionItem.icon" :class="actionItem.icon"></i>
+              <span>{{ actionItem.label }}</span>
+            </div>
+            <button
+              v-else
+              type="button"
+              class="post-feedback"
+              :class="{ 'is-active': actionItem.active }"
+              :disabled="actionItem.disabled"
+              :title="actionItem.title || actionItem.description || ''"
+              @click="handlePostAction(actionItem, 'discussion-post-feedback')"
+            >
+              <i v-if="actionItem.icon" :class="actionItem.icon"></i>
+              <span>{{ actionItem.label }}</span>
+            </button>
+          </template>
         </footer>
       </div>
     </div>
@@ -191,9 +197,7 @@ const props = defineProps({
   isTarget: { type: Boolean, default: false },
   isSuspended: { type: Boolean, default: false },
   isPostMenuOpen: { type: Boolean, default: false },
-  likePending: { type: Boolean, default: false },
   flagPending: { type: Boolean, default: false },
-  canLikePost: { type: Function, required: true },
   canEditPost: { type: Function, required: true },
   canDeletePost: { type: Function, required: true },
   canReportPost: { type: Function, required: true },
@@ -208,7 +212,8 @@ const props = defineProps({
   getUserPrimaryGroupLabel: { type: Function, required: true },
   formatAbsoluteDate: { type: Function, required: true },
   formatDate: { type: Function, required: true },
-  formatLikeSummary: { type: Function, required: true },
+  postPrimaryActions: { type: Array, default: () => [] },
+  postFeedbackActions: { type: Array, default: () => [] },
   postMenuItems: { type: Array, default: () => [] },
 })
 
@@ -239,18 +244,14 @@ const postEditedLabelText = computed(() => getUiCopy({
   surface: 'discussion-post-edited-label',
 })?.text || '已编辑')
 
-const postLikeActionText = computed(() => getUiCopy({
-  surface: 'discussion-post-like-action',
-})?.text || '赞')
-
 const postReplyActionText = computed(() => getUiCopy({
   surface: 'discussion-post-reply-action',
 })?.text || '回复')
 
 const emit = defineEmits([
   'jump-to-post',
-  'toggle-like',
   'reply-to-post',
+  'post-action',
   'toggle-post-menu',
   'edit-post',
   'delete-post',
@@ -263,6 +264,15 @@ const emit = defineEmits([
 function handleMenuAction(eventName, payload) {
   emit(eventName, payload)
   emit('close-post-menu')
+}
+
+function handlePostAction(actionItem, surface) {
+  if (!actionItem || actionItem.disabled) return
+  emit('post-action', {
+    post: props.post,
+    action: actionItem.action || actionItem.key,
+    surface,
+  })
 }
 
 function handleReviewAction(action) {

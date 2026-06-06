@@ -43,10 +43,10 @@ export function useDiscussionDetailPermissionState({
     return uiText(
       'discussion-detail-suspension-notice',
       user.suspended_until
-        ? `账号已被封禁至 ${formatAbsoluteDate(user.suspended_until)}，暂时无法回复、点赞、举报或关注讨论。`
-        : '账号当前已被封禁，暂时无法回复、点赞、举报或关注讨论。',
+        ? `账号已被封禁至 ${formatAbsoluteDate(user.suspended_until)}，暂时无法回复、参与互动或关注讨论。`
+        : '账号当前已被封禁，暂时无法回复、参与互动或关注讨论。',
       {
-        fallbackMessage: '暂时无法回复、点赞、举报或关注讨论。',
+        fallbackMessage: '暂时无法回复、参与互动或关注讨论。',
         suspendedUntilText: user.suspended_until ? formatAbsoluteDate(user.suspended_until) : '',
         user,
       }
@@ -61,12 +61,6 @@ export function useDiscussionDetailPermissionState({
   function canDeletePost(post) {
     if (isSuspended.value) return false
     return authStore.user?.id === post.user.id || authStore.user?.is_staff
-  }
-
-  function canLikePost(post) {
-    if (!authStore.isAuthenticated) return false
-    if (isSuspended.value) return false
-    return Boolean(post?.can_like ?? (post?.user?.id !== authStore.user?.id))
   }
 
   function canReportPost(post) {
@@ -91,7 +85,6 @@ export function useDiscussionDetailPermissionState({
     canDeletePost,
     canEditDiscussion,
     canEditPost,
-    canLikePost,
     canModerateDiscussionSettings,
     canModeratePendingDiscussion,
     canModeratePendingPost,

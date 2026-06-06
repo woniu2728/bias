@@ -1,13 +1,10 @@
-import { ref } from 'vue'
 import api from '@/api'
 import { getUiCopy, runComposerInitialStateContributors } from '@/forum/registry'
-import { useResourceStore } from '@/stores/resource'
 import { buildDiscussionPath, formatRelativeTime } from '@/utils/forum'
 
 export function useDiscussionDetailUserActions({
   authStore,
   canEditDiscussion,
-  canLikePost,
   composerStore,
   discussion,
   hasActiveComposer,
@@ -21,9 +18,6 @@ export function useDiscussionDetailUserActions({
   suspensionNotice,
   totalPosts,
 }) {
-  const resourceStore = useResourceStore()
-  const likePendingPostIds = ref([])
-
   function uiText(surface, fallback, context = {}) {
     return getUiCopy({
       surface,
@@ -49,51 +43,6 @@ export function useDiscussionDetailUserActions({
       message: suspensionNotice.value,
       tone: 'danger'
     })
-  }
-
-  async function toggleLike(post) {
-    if (!authStore.isAuthenticated) {
-      router.push('/login')
-      return
-    }
-    if (!canLikePost(post)) {
-      return
-    }
-    if (isSuspended.value) {
-      await showSuspensionAlert()
-      return
-    }
-    if (likePendingPostIds.value.includes(post.id)) {
-      return
-    }
-
-    likePendingPostIds.value.push(post.id)
-    const previousLiked = Boolean(post.is_liked)
-    const previousLikeCount = Number(post.like_count || 0)
-    try {
-      if (previousLiked) {
-        resourceStore.patch('posts', post.id, {
-          like_count: Math.max(0, previousLikeCount - 1),
-          is_liked: false,
-        })
-        await api.delete(`/posts/${post.id}/like`)
-      } else {
-        resourceStore.patch('posts', post.id, {
-          like_count: previousLikeCount + 1,
-          is_liked: true,
-        })
-        await api.post(`/posts/${post.id}/like`)
-      }
-    } catch (error) {
-      resourceStore.patch('posts', post.id, {
-        like_count: previousLikeCount,
-        is_liked: previousLiked,
-      })
-      console.error('点赞失败:', error)
-      await showActionError('点赞', error)
-    } finally {
-      likePendingPostIds.value = likePendingPostIds.value.filter(id => id !== post.id)
-    }
   }
 
   function replyToPost(post) {
@@ -248,28 +197,17 @@ export function useDiscussionDetailUserActions({
     return formatRelativeTime(dateString)
   }
 
-  function formatLikeSummary(post) {
-    const count = Number(post?.like_count || 0)
-    return uiText('discussion-detail-like-summary', '', {
-      count,
-      isLiked: Boolean(post?.is_liked),
-    })
-  }
-
   return {
     deletePost,
     editDiscussion,
     editPost,
     formatDate,
-    formatLikeSummary,
     goToLoginForReply,
-    likePendingPostIds,
     openComposer,
     replyToPost,
     shareDiscussion,
     showActionError,
     showSuspensionAlert,
-    toggleLike,
     uiText,
   }
 }
