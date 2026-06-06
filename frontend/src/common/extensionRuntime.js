@@ -3,6 +3,7 @@ import ItemList from './itemList.js'
 
 let currentExtensionId = ''
 const patchRecords = []
+const lazyPatchRecords = []
 const handledRuntimeErrors = new Set()
 const runtimeErrors = []
 const lazyModuleRegistry = new Map()
@@ -153,7 +154,7 @@ export function createExtensionPatcher() {
 export function extendMethod(target, methods, callback, { extensionId = getCurrentExtensionId() } = {}) {
   const normalizedExtensionId = String(extensionId || '').trim()
   if (typeof target === 'string') {
-    return onLazyModuleLoad(target, module => extendMethod(resolveLazyModuleTarget(module), methods, callback, { extensionId: normalizedExtensionId }))
+    return registerLazyMethodPatch('extend', target, methods, callback, { extensionId: normalizedExtensionId })
   }
   if (!target || typeof callback !== 'function') {
     return false
@@ -178,7 +179,7 @@ export function extendMethod(target, methods, callback, { extensionId = getCurre
 export function overrideMethod(target, methods, callback, { extensionId = getCurrentExtensionId() } = {}) {
   const normalizedExtensionId = String(extensionId || '').trim()
   if (typeof target === 'string') {
-    return onLazyModuleLoad(target, module => overrideMethod(resolveLazyModuleTarget(module), methods, callback, { extensionId: normalizedExtensionId }))
+    return registerLazyMethodPatch('override', target, methods, callback, { extensionId: normalizedExtensionId })
   }
   if (!target || typeof callback !== 'function') {
     return false
@@ -204,6 +205,14 @@ export function overrideMethod(target, methods, callback, { extensionId = getCur
 
 export function resetExtensionPatches(extensionId = '') {
   const normalizedExtensionId = String(extensionId || '').trim()
+  for (let index = lazyPatchRecords.length - 1; index >= 0; index -= 1) {
+    const record = lazyPatchRecords[index]
+    if (normalizedExtensionId && record.extensionId !== normalizedExtensionId) {
+      continue
+    }
+    record.active = false
+    lazyPatchRecords.splice(index, 1)
+  }
   for (let index = patchRecords.length - 1; index >= 0; index -= 1) {
     const record = patchRecords[index]
     if (normalizedExtensionId && record.extensionId !== normalizedExtensionId) {
@@ -214,13 +223,55 @@ export function resetExtensionPatches(extensionId = '') {
   }
 }
 
-export function registerLazyExtensionModule(key, module) {
+function registerLazyMethodPatch(kind, key, methods, callback, { extensionId = '' } = {}) {
+  const normalizedKey = String(key || '').trim()
+  const normalizedExtensionId = String(extensionId || '').trim()
+  if (!normalizedKey || typeof callback !== 'function') {
+    return false
+  }
+
+  const record = {
+    active: true,
+    extensionId: normalizedExtensionId,
+    key: normalizedKey,
+    kind,
+    methods,
+    callback,
+  }
+  lazyPatchRecords.push(record)
+
+  const registered = onLazyModuleLoad(normalizedKey, module => {
+    if (!record.active) {
+      return
+    }
+    record.active = false
+    removeMatching(lazyPatchRecords, item => item === record)
+    const resolvedTarget = resolveLazyModuleTarget(module)
+    if (kind === 'override') {
+      overrideMethod(resolvedTarget, methods, callback, { extensionId: normalizedExtensionId })
+      return
+    }
+    extendMethod(resolvedTarget, methods, callback, { extensionId: normalizedExtensionId })
+  })
+
+  if (!registered) {
+    record.active = false
+    removeMatching(lazyPatchRecords, item => item === record)
+  }
+  return registered
+}
+
+export function registerLazyExtensionModule(key, module, { extensionId = getCurrentExtensionId() } = {}) {
   const normalizedKey = String(key || '').trim()
   if (!normalizedKey) {
     return false
   }
+  const normalizedExtensionId = String(extensionId || extensionIdFromRuntimeKey(normalizedKey) || '').trim()
   ensureBiasNamespace().reg.registerModule(normalizedKey, module)
-  lazyModuleRegistry.set(normalizedKey, module)
+  lazyModuleRegistry.set(normalizedKey, {
+    extensionId: normalizedExtensionId,
+    module,
+  })
   return true
 }
 
@@ -275,12 +326,17 @@ export function unregisterLoadedExtensionModule(extensionId = '', { app = null }
         delete app.extensions[key]
       }
     }
+    namespace.reg.clear()
+    unregisterLazyExtensionModules()
     return
   }
   delete namespace.extensions[normalizedExtensionId]
   if (app?.extensions) {
     delete app.extensions[normalizedExtensionId]
   }
+  namespace.reg.clearNamespace?.(normalizedExtensionId)
+  app?.exportRegistry?.clearNamespace?.(normalizedExtensionId)
+  unregisterLazyExtensionModules(normalizedExtensionId)
 }
 
 export function onLazyModuleLoad(key, callback) {
@@ -295,10 +351,28 @@ export function onLazyModuleLoad(key, callback) {
     return true
   }
   if (lazyModuleRegistry.has(normalizedKey)) {
-    callback(lazyModuleRegistry.get(normalizedKey))
+    callback(lazyModuleRegistry.get(normalizedKey).module)
     return true
   }
   return registry.onLoadPath(normalizedKey, callback)
+}
+
+export function unregisterLazyExtensionModules(extensionId = '') {
+  const normalizedExtensionId = String(extensionId || '').trim()
+  const registry = ensureBiasNamespace().reg
+  if (!normalizedExtensionId) {
+    for (const key of lazyModuleRegistry.keys()) {
+      registry.unregisterModule?.(key)
+    }
+    lazyModuleRegistry.clear()
+    return
+  }
+  for (const [key, record] of [...lazyModuleRegistry.entries()]) {
+    if (record.extensionId === normalizedExtensionId || extensionIdFromRuntimeKey(key) === normalizedExtensionId) {
+      registry.unregisterModule?.(key)
+      lazyModuleRegistry.delete(key)
+    }
+  }
 }
 
 export function getExtensionRuntimeErrors() {
@@ -350,6 +424,11 @@ export function handleExtensionRuntimeError(error, extensionId = '', operation =
 
 function resolveLazyModuleTarget(module) {
   return module?.default?.prototype || module?.prototype || module?.default || module
+}
+
+function extensionIdFromRuntimeKey(key) {
+  const parts = String(key || '').trim().replace(/\\/g, '/').split('/').filter(Boolean)
+  return parts[0] === 'extensions' && parts[1] ? parts[1] : ''
 }
 
 function ensureBiasNamespace() {

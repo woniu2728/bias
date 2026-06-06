@@ -1,32 +1,24 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { runComposerSecondaryAction } from '@/forum/composerRuntime'
 import {
+  getComposerAutocompleteProviders,
   getComposerDraftMeta,
   getComposerNotices,
   getComposerSecondaryActions,
   getComposerStatusItems,
   getComposerTools,
   getUiCopy,
-  runComposerMentionProviders,
   runComposerPreviewTransformers,
 } from '@/forum/registry'
 import {
   BASE_COMPOSER_TOOLS,
-  COMPOSER_EMOJI_PICKER_WIDTH,
-  EMOJI_GROUPS,
   buildComposerToolReplacement,
-  buildEmojiReplacement,
-  buildMentionReplacement,
-  buildMentionTrigger,
   buildUploadedFileMarkdown,
   defaultToolCursorOffset,
-  detectEmojiQuery,
-  detectMentionQuery,
   fetchComposerPreview,
   getComposerErrorMessage,
   getTextareaCaretCoordinates,
   replaceSelection,
-  searchEmojiItems,
   uploadComposerFile,
 } from '@/utils/composer'
 
@@ -53,21 +45,18 @@ export function useComposerRuntime(options = {}) {
   const composerTextarea = ref(null)
   const attachmentInput = ref(null)
   const imageInput = ref(null)
-  const emojiToolRef = ref(null)
 
   const uploading = ref(false)
   const uploadNotice = ref('')
   const uploadNoticeTone = ref('info')
-  const showEmojiPicker = ref(false)
-  const emojiSuggestions = ref([])
-  const emojiAutocompleteState = ref(null)
-  const emojiAutocompleteCaret = ref(null)
-  const emojiAutocompleteActiveIndex = ref(0)
-  const mentionUsers = ref([])
-  const mentionState = ref(null)
-  const mentionCaret = ref(null)
-  const mentionLoading = ref(false)
-  const mentionActiveIndex = ref(0)
+  const activeToolPopoverKey = ref('')
+  const activeToolPopoverAnchor = ref(null)
+  const autocompleteItems = ref([])
+  const autocompleteState = ref(null)
+  const autocompleteCaret = ref(null)
+  const autocompleteProvider = ref(null)
+  const autocompleteLoading = ref(false)
+  const autocompleteActiveIndex = ref(0)
   const showPreview = ref(false)
   const previewHtml = ref('')
   const previewLoading = ref(false)
@@ -79,43 +68,65 @@ export function useComposerRuntime(options = {}) {
   let resizeStartY = 0
   let resizeStartHeight = composerHeight.value
   let previewTimer = null
-  let mentionTimer = null
-  let mentionRequestId = 0
+  let autocompleteTimer = null
+  let autocompleteRequestId = 0
 
-  const emojiGroups = EMOJI_GROUPS
   const isPhoneViewport = computed(() => viewportWidth.value <= 768)
   const isPhoneOverlay = computed(() => isPhoneViewport.value && showComposer.value && !composerStore.isMinimized)
   const showBackdrop = computed(() => isPhoneOverlay.value)
-  const showMentionPicker = computed(() => {
-    return Boolean(mentionState.value) && (mentionLoading.value || mentionUsers.value.length > 0)
+  const activeToolPopover = computed(() => {
+    const key = activeToolPopoverKey.value
+    if (!key) return null
+
+    const tool = composerTools.value.find(item => item.key === key)
+    const component = tool?.popoverComponent || tool?.popover_component
+    if (!tool || !component) return null
+
+    const componentProps = typeof tool.popoverProps === 'function'
+      ? tool.popoverProps(buildToolContext(tool))
+      : (tool.popoverProps || tool.popover_props || {})
+
+    return {
+      key,
+      tool,
+      component,
+      componentProps: componentProps && typeof componentProps === 'object' ? componentProps : {},
+      styleObject: buildFloatingPickerStyle(
+        getToolPopoverAnchor(),
+        Number(tool.popoverHeight || tool.popover_height || tool.preferredHeight || 320),
+        Number(tool.popoverWidth || tool.popover_width || 420)
+      ),
+    }
   })
-  const showEmojiAutocomplete = computed(() => {
-    return Boolean(emojiAutocompleteState.value) && emojiSuggestions.value.length > 0
+  const activeAutocomplete = computed(() => {
+    const provider = autocompleteProvider.value
+    const state = autocompleteState.value
+    if (!provider || !state || !provider.component) {
+      return null
+    }
+
+    const showWhenEmpty = Boolean(provider.showWhenEmpty || provider.show_when_empty)
+    if (!autocompleteLoading.value && autocompleteItems.value.length <= 0 && !showWhenEmpty) {
+      return null
+    }
+
+    return {
+      key: state.providerKey || provider.key,
+      provider,
+      state,
+      component: provider.component,
+      items: autocompleteItems.value,
+      activeIndex: autocompleteActiveIndex.value,
+      loading: autocompleteLoading.value,
+      styleObject: buildFloatingPickerStyle(autocompleteCaret.value, Number(provider.height || provider.preferredHeight || 320)),
+    }
+  })
+  const showAutocomplete = computed(() => {
+    return Boolean(activeAutocomplete.value)
   })
   const composerInlineStyle = computed(() => {
     if (composerStore.isMinimized || composerStore.isExpanded || isPhoneOverlay.value) return {}
     return { height: `${composerHeight.value}px` }
-  })
-  const emojiPickerStyle = computed(() => {
-    const anchor = emojiToolRef.value
-    if (!anchor || typeof window === 'undefined') return {}
-
-    const rect = anchor.getBoundingClientRect()
-    const pickerWidth = Math.min(COMPOSER_EMOJI_PICKER_WIDTH, Math.max(280, window.innerWidth - 32))
-    const left = Math.max(16, Math.min(rect.right - pickerWidth, window.innerWidth - pickerWidth - 16))
-    const top = Math.max(16, rect.top - 12)
-
-    return {
-      left: `${left}px`,
-      top: `${top}px`,
-      transform: 'translateY(-100%)',
-    }
-  })
-  const mentionPickerStyle = computed(() => {
-    return buildFloatingPickerStyle(mentionCaret.value, 280)
-  })
-  const emojiAutocompleteStyle = computed(() => {
-    return buildFloatingPickerStyle(emojiAutocompleteCaret.value, 320)
   })
   const composerTools = computed(() => {
     return sortByOrder([
@@ -164,7 +175,7 @@ export function useComposerRuntime(options = {}) {
 
   onBeforeUnmount(() => {
     clearPreviewTimer()
-    clearMentionSuggestions()
+    clearInlineSuggestions()
     window.removeEventListener('resize', handleViewportResize)
     window.removeEventListener('mousemove', handleResizeMove)
     window.removeEventListener('mouseup', stopResize)
@@ -193,8 +204,7 @@ export function useComposerRuntime(options = {}) {
     return buildExtensionContext({
       tool,
       clearInlineSuggestions() {
-        clearMentionSuggestions()
-        clearEmojiAutocomplete()
+        clearInlineSuggestions()
       },
       focusEditor() {
         focusEditor?.()
@@ -208,8 +218,8 @@ export function useComposerRuntime(options = {}) {
       },
       selectionEnd: textarea?.selectionEnd ?? content.value.length,
       selectionStart: textarea?.selectionStart ?? content.value.length,
-      setEmojiPickerVisible(value) {
-        showEmojiPicker.value = Boolean(value)
+      setToolPopoverVisible(value) {
+        setToolPopoverVisible(tool, Boolean(value))
       },
       setPreviewVisible(value) {
         showPreview.value = Boolean(value)
@@ -217,7 +227,7 @@ export function useComposerRuntime(options = {}) {
     })
   }
 
-  async function applyComposerTool(tool) {
+  async function applyComposerTool(tool, event = null) {
     openComposer?.()
     await nextTick()
 
@@ -227,28 +237,27 @@ export function useComposerRuntime(options = {}) {
     }
 
     if (tool.key === 'upload') {
-      showEmojiPicker.value = false
-      clearMentionSuggestions()
-      clearEmojiAutocomplete()
+      closeToolPopover()
+      clearInlineSuggestions()
       attachmentInput.value?.click()
       return
     }
     if (tool.key === 'image') {
-      showEmojiPicker.value = false
-      clearMentionSuggestions()
-      clearEmojiAutocomplete()
+      closeToolPopover()
+      clearInlineSuggestions()
       imageInput.value?.click()
       return
     }
-    if (tool.key === 'emoji') {
-      clearMentionSuggestions()
-      clearEmojiAutocomplete()
+
+    if (tool.popoverComponent || tool.popover_component) {
+      clearInlineSuggestions()
       if (showPreview.value) {
         showPreview.value = false
         await nextTick()
       }
-      showEmojiPicker.value = !showEmojiPicker.value
-      if (showEmojiPicker.value) {
+      activeToolPopoverAnchor.value = event?.currentTarget || null
+      setToolPopoverVisible(tool, activeToolPopoverKey.value !== tool.key)
+      if (activeToolPopoverKey.value === tool.key) {
         focusEditor?.()
       }
       return
@@ -259,16 +268,6 @@ export function useComposerRuntime(options = {}) {
 
     const start = textarea.selectionStart ?? content.value.length
     const end = textarea.selectionEnd ?? content.value.length
-    if (tool.key === 'mention') {
-      const replacement = buildMentionTrigger(content.value, start)
-      await insertComposerText(replacement, {
-        start,
-        end,
-        cursor: start + replacement.length,
-      })
-      return
-    }
-
     const selected = content.value.slice(start, end)
     const replacement = buildComposerToolReplacement(tool, selected)
     const cursor = selected ? start + replacement.length : start + defaultToolCursorOffset(tool)
@@ -294,19 +293,14 @@ export function useComposerRuntime(options = {}) {
     }
 
     if (event.key === 'Escape') {
-      if (showMentionPicker.value) {
+      if (showAutocomplete.value) {
         event.preventDefault()
-        clearMentionSuggestions()
+        clearInlineSuggestions()
         return
       }
-      if (showEmojiAutocomplete.value) {
+      if (activeToolPopover.value) {
         event.preventDefault()
-        clearEmojiAutocomplete()
-        return
-      }
-      if (showEmojiPicker.value) {
-        event.preventDefault()
-        showEmojiPicker.value = false
+        closeToolPopover()
         return
       }
       if (showPreview.value) {
@@ -320,61 +314,38 @@ export function useComposerRuntime(options = {}) {
       return
     }
 
-    if (showEmojiAutocomplete.value) {
+    if (showAutocomplete.value) {
       if (event.key === 'ArrowDown') {
         event.preventDefault()
-        emojiAutocompleteActiveIndex.value =
-          (emojiAutocompleteActiveIndex.value + 1) % Math.max(emojiSuggestions.value.length, 1)
+        autocompleteActiveIndex.value =
+          (autocompleteActiveIndex.value + 1) % Math.max(autocompleteItems.value.length, 1)
         return
       }
 
       if (event.key === 'ArrowUp') {
         event.preventDefault()
-        emojiAutocompleteActiveIndex.value =
-          (emojiAutocompleteActiveIndex.value - 1 + Math.max(emojiSuggestions.value.length, 1)) % Math.max(emojiSuggestions.value.length, 1)
+        autocompleteActiveIndex.value =
+          (autocompleteActiveIndex.value - 1 + Math.max(autocompleteItems.value.length, 1)) % Math.max(autocompleteItems.value.length, 1)
         return
       }
 
       if (
-        (event.key === 'Enter' || event.key === 'Tab')
+        shouldAcceptAutocompleteKey(event.key)
         && !event.shiftKey
         && !event.ctrlKey
         && !event.metaKey
         && !event.altKey
       ) {
-        const activeEmoji = emojiSuggestions.value[emojiAutocompleteActiveIndex.value]
-        if (!activeEmoji) return
+        const activeItem = autocompleteItems.value[autocompleteActiveIndex.value]
+        if (!activeItem) return
         event.preventDefault()
-        handleEmojiAutocompleteSelect(activeEmoji)
+        handleAutocompleteSelect(activeItem)
         return
       }
-    }
 
-    if (!showMentionPicker.value) return
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      mentionActiveIndex.value = (mentionActiveIndex.value + 1) % Math.max(mentionUsers.value.length, 1)
-      return
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      mentionActiveIndex.value =
-        (mentionActiveIndex.value - 1 + Math.max(mentionUsers.value.length, 1)) % Math.max(mentionUsers.value.length, 1)
-      return
-    }
-
-    if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
-      const activeUser = mentionUsers.value[mentionActiveIndex.value]
-      if (!activeUser) return
-      event.preventDefault()
-      handleMentionSelect(activeUser)
-      return
-    }
-
-    if (event.key === 'Escape') {
-      clearMentionSuggestions()
+      if (event.key === 'Escape') {
+        clearInlineSuggestions()
+      }
     }
   }
 
@@ -425,108 +396,112 @@ export function useComposerRuntime(options = {}) {
     }
   }
 
-  async function handleEmojiSelect(emoji) {
-    showEmojiPicker.value = false
-    await insertComposerText(emoji)
-  }
-
-  async function handleEmojiAutocompleteSelect(item) {
-    if (!emojiAutocompleteState.value || !item?.emoji) return
-
-    const replacement = buildEmojiReplacement(item.emoji)
-    await insertComposerText(replacement, {
-      start: emojiAutocompleteState.value.start,
-      end: emojiAutocompleteState.value.end,
-      cursor: emojiAutocompleteState.value.start + replacement.length,
-    })
-    clearEmojiAutocomplete()
-  }
-
   function syncInlineSuggestions() {
     if (showPreview.value) {
-      clearMentionSuggestions()
-      clearEmojiAutocomplete()
+      clearInlineSuggestions()
       return
     }
 
     const textarea = composerTextarea.value
     if (!textarea || textarea.selectionStart !== textarea.selectionEnd) {
-      clearMentionSuggestions()
-      clearEmojiAutocomplete()
+      clearInlineSuggestions()
       return
     }
 
-    const detected = detectMentionQuery(content.value, textarea.selectionStart)
-    if (detected) {
-      clearEmojiAutocomplete()
-      mentionState.value = detected
-      mentionCaret.value = getTextareaCaretCoordinates(textarea, detected.start)
-      scheduleMentionSearch(detected.query)
-      return
-    }
-
-    clearMentionSuggestions()
-
-    const detectedEmoji = detectEmojiQuery(content.value, textarea.selectionStart)
-    if (!detectedEmoji) {
-      clearEmojiAutocomplete()
-      return
-    }
-
-    emojiAutocompleteState.value = detectedEmoji
-    emojiAutocompleteCaret.value = getTextareaCaretCoordinates(textarea, detectedEmoji.start)
-    emojiSuggestions.value = searchEmojiItems(detectedEmoji.query, {
-      limit: 8,
-      includeCommonWhenEmpty: true,
+    const cursorPosition = textarea.selectionStart
+    const context = buildExtensionContext({
+      cursorPosition,
+      selectionStart: cursorPosition,
+      selectionEnd: cursorPosition,
     })
-    emojiAutocompleteActiveIndex.value = 0
+    const providers = getComposerAutocompleteProviders(context)
+
+    for (const provider of providers) {
+      if (typeof provider.detect !== 'function') {
+        continue
+      }
+      const detected = provider.detect(context)
+      if (!detected) {
+        continue
+      }
+      activateAutocompleteProvider(provider, detected, textarea)
+      return
+    }
+
+    clearInlineSuggestions()
   }
 
-  function scheduleMentionSearch(query) {
-    if (mentionTimer) {
-      clearTimeout(mentionTimer)
+  function activateAutocompleteProvider(provider, detected, textarea) {
+    const renderer = normalizeAutocompleteRenderer(provider)
+    const state = {
+      ...detected,
+      providerKey: provider.key,
+      renderer,
+    }
+    const caret = getTextareaCaretCoordinates(textarea, state.start)
+
+    clearAutocomplete()
+    autocompleteProvider.value = provider
+    autocompleteState.value = state
+    autocompleteCaret.value = caret
+    scheduleAutocompleteSearch(provider, state)
+  }
+
+  function scheduleAutocompleteSearch(provider, state) {
+    if (autocompleteTimer) {
+      clearTimeout(autocompleteTimer)
     }
 
-    mentionLoading.value = true
-    const requestId = ++mentionRequestId
-    mentionTimer = setTimeout(async () => {
+    const renderer = state.renderer
+    autocompleteLoading.value = typeof provider.search === 'function'
+    const requestId = ++autocompleteRequestId
+    const delay = Number(provider.debounce ?? provider.debounceMs ?? 0)
+
+    autocompleteTimer = setTimeout(async () => {
       try {
-        const users = await runComposerMentionProviders(buildExtensionContext({
-          mentionQuery: query,
-          limit: 5,
-        }))
-        if (requestId !== mentionRequestId || !mentionState.value) return
-        mentionUsers.value = Array.isArray(users) ? users.slice(0, 5) : []
-        mentionActiveIndex.value = 0
+        const items = typeof provider.search === 'function'
+          ? await provider.search(buildExtensionContext({
+              autocomplete: state,
+              autocompleteProvider: provider,
+              query: state.query || '',
+              limit: Number(provider.limit || 8),
+            }))
+          : []
+        if (requestId !== autocompleteRequestId || !isAutocompleteProviderActive(provider)) return
+        applyAutocompleteItems(provider, Array.isArray(items) ? items : [])
       } catch (error) {
-        if (requestId !== mentionRequestId) return
-        mentionUsers.value = []
+        if (requestId !== autocompleteRequestId) return
+        applyAutocompleteItems(provider, [])
       } finally {
-        if (requestId === mentionRequestId) {
-          mentionLoading.value = false
+        if (requestId === autocompleteRequestId) {
+          autocompleteLoading.value = false
         }
       }
-    }, 150)
+    }, Math.max(0, delay))
   }
 
-  async function handleMentionSelect(user) {
-    if (!mentionState.value || !user?.username) return
+  async function handleAutocompleteSelect(item) {
+    if (!autocompleteState.value || !item) return
 
-    const replacement = buildMentionReplacement(user.username)
+    const replacement = resolveAutocompleteReplacement(autocompleteProvider.value, item, autocompleteState.value)
+    if (!replacement) return
     await insertComposerText(replacement, {
-      start: mentionState.value.start,
-      end: mentionState.value.end,
-      cursor: mentionState.value.start + replacement.length,
+      start: autocompleteState.value.start,
+      end: autocompleteState.value.end,
+      cursor: autocompleteState.value.start + replacement.length,
     })
-    clearMentionSuggestions()
+    clearAutocomplete()
+  }
+
+  function handleAutocompleteHighlight(index) {
+    autocompleteActiveIndex.value = Number(index) || 0
   }
 
   function togglePreview() {
     showPreview.value = !showPreview.value
     previewError.value = ''
-    showEmojiPicker.value = false
-    clearMentionSuggestions()
-    clearEmojiAutocomplete()
+    closeToolPopover()
+    clearInlineSuggestions()
 
     if (showPreview.value) {
       requestPreview()
@@ -593,17 +568,12 @@ export function useComposerRuntime(options = {}) {
   }
 
   function handleDocumentMouseDown(event) {
-    if (showEmojiPicker.value && !emojiToolRef.value?.contains(event.target)) {
-      showEmojiPicker.value = false
+    if (activeToolPopover.value && !getToolPopoverAnchorElement()?.contains(event.target)) {
+      closeToolPopover()
     }
     if (event.target !== composerTextarea.value) {
-      clearMentionSuggestions()
-      clearEmojiAutocomplete()
+      clearInlineSuggestions()
     }
-  }
-
-  function setEmojiToolRef(element) {
-    emojiToolRef.value = element
   }
 
   function clearPreviewTimer() {
@@ -613,45 +583,94 @@ export function useComposerRuntime(options = {}) {
     }
   }
 
-  function clearMentionSuggestions() {
-    if (mentionTimer) {
-      clearTimeout(mentionTimer)
-      mentionTimer = null
-    }
-    mentionLoading.value = false
-    mentionUsers.value = []
-    mentionState.value = null
-    mentionCaret.value = null
-    mentionActiveIndex.value = 0
+  function clearAutocomplete() {
+    autocompleteLoading.value = false
+    autocompleteItems.value = []
+    autocompleteState.value = null
+    autocompleteCaret.value = null
+    autocompleteProvider.value = null
+    autocompleteActiveIndex.value = 0
   }
 
-  function clearEmojiAutocomplete() {
-    emojiSuggestions.value = []
-    emojiAutocompleteState.value = null
-    emojiAutocompleteCaret.value = null
-    emojiAutocompleteActiveIndex.value = 0
+  function clearInlineSuggestions() {
+    if (autocompleteTimer) {
+      clearTimeout(autocompleteTimer)
+      autocompleteTimer = null
+    }
+    autocompleteRequestId += 1
+    clearAutocomplete()
   }
 
   function clearRuntimeState() {
     uploadNotice.value = ''
     uploadNoticeTone.value = 'info'
-    showEmojiPicker.value = false
+    closeToolPopover()
     showPreview.value = false
     previewHtml.value = ''
     previewLoading.value = false
     previewError.value = ''
     clearPreviewTimer()
-    clearMentionSuggestions()
-    clearEmojiAutocomplete()
+    clearInlineSuggestions()
   }
 
   function handleViewportResize() {
     viewportWidth.value = window.innerWidth
-    if (mentionState.value || emojiAutocompleteState.value) {
+    if (autocompleteState.value) {
       nextTick(() => {
         syncInlineSuggestions()
       })
     }
+  }
+
+  function normalizeAutocompleteRenderer(provider = {}) {
+    const renderer = String(provider.renderer || provider.type || provider.kind || '').trim()
+    return renderer === 'emoji' ? 'emoji' : 'mention'
+  }
+
+  function isAutocompleteProviderActive(provider) {
+    return autocompleteProvider.value?.key === provider.key && Boolean(autocompleteState.value)
+  }
+
+  function applyAutocompleteItems(provider, items) {
+    const limit = Number(provider.limit || 8)
+    const normalizedItems = items.slice(0, Math.max(1, limit))
+    autocompleteItems.value = normalizedItems
+    autocompleteActiveIndex.value = 0
+  }
+
+  function resolveAutocompleteReplacement(provider, item, state) {
+    if (!provider) return ''
+    const context = buildExtensionContext({
+      autocomplete: state,
+      autocompleteProvider: provider,
+      item,
+      query: state?.query || '',
+    })
+    if (typeof provider.replacement === 'function') {
+      return String(provider.replacement(context) || '')
+    }
+    if (typeof item?.replacement === 'function') {
+      return String(item.replacement(context) || '')
+    }
+    if (typeof item?.replacement === 'string') {
+      return item.replacement
+    }
+    if (typeof item?.emoji === 'string') {
+      return `${item.emoji.trim()} `
+    }
+    if (typeof item?.username === 'string') {
+      return `@${item.username.trim()} `
+    }
+    return ''
+  }
+
+  function shouldAcceptAutocompleteKey(key) {
+    const provider = autocompleteProvider.value
+    const configuredKeys = provider?.acceptKeys || provider?.accept_keys || provider?.selectionKeys || provider?.selection_keys
+    const keys = Array.isArray(configuredKeys) && configuredKeys.length
+      ? configuredKeys
+      : ['Enter', 'Tab']
+    return keys.includes(key)
   }
 
   function startResize(event) {
@@ -730,13 +749,14 @@ export function useComposerRuntime(options = {}) {
     return Math.max(min, Math.min(value, windowMax))
   }
 
-  function buildFloatingPickerStyle(anchor, preferredHeight) {
+  function buildFloatingPickerStyle(anchor, preferredHeight, preferredWidth = 320) {
     if (!anchor || typeof window === 'undefined') return {}
 
-    const pickerWidth = Math.min(320, Math.max(240, window.innerWidth - 32))
+    const pickerWidth = Math.min(preferredWidth, Math.max(240, window.innerWidth - 32))
     const pickerHeight = Math.min(preferredHeight, Math.max(180, window.innerHeight - 32))
     const left = Math.max(16, Math.min(anchor.left, window.innerWidth - pickerWidth - 16))
-    const belowTop = anchor.top + anchor.lineHeight + 8
+    const lineHeight = Number(anchor.lineHeight || anchor.height || 20)
+    const belowTop = anchor.top + lineHeight + 8
     const openAbove = belowTop + pickerHeight > window.innerHeight - 16 && anchor.top > pickerHeight + 24
 
     return {
@@ -746,8 +766,55 @@ export function useComposerRuntime(options = {}) {
     }
   }
 
+  function setToolPopoverVisible(tool, value) {
+    const key = String(tool?.key || '').trim()
+    if (!key) return
+    activeToolPopoverKey.value = value ? key : ''
+    if (!value) {
+      activeToolPopoverAnchor.value = null
+    }
+  }
+
+  function closeToolPopover() {
+    activeToolPopoverKey.value = ''
+    activeToolPopoverAnchor.value = null
+  }
+
+  function getToolPopoverAnchor() {
+    const element = getToolPopoverAnchorElement()
+    return element?.getBoundingClientRect?.() || null
+  }
+
+  function getToolPopoverAnchorElement() {
+    return activeToolPopoverAnchor.value?.closest?.('.composer-tool') || activeToolPopoverAnchor.value
+  }
+
+  async function handleToolPopoverSelect(value) {
+    const tool = activeToolPopover.value?.tool
+    const context = buildToolContext(tool)
+    closeToolPopover()
+    if (typeof tool?.onSelect === 'function') {
+      await tool.onSelect({
+        ...context,
+        value,
+      })
+      return
+    }
+    if (typeof tool?.popoverSelect === 'function') {
+      await tool.popoverSelect({
+        ...context,
+        value,
+      })
+      return
+    }
+    await insertComposerText(String(value || ''))
+  }
+
   return {
     attachmentInput,
+    activeAutocomplete,
+    activeToolPopover,
+    autocompleteActiveIndex,
     composerExtensionNotices,
     composerHeight,
     composerInlineStyle,
@@ -755,37 +822,25 @@ export function useComposerRuntime(options = {}) {
     composerStatusItems,
     composerTextarea,
     composerTools,
-    emojiSuggestions,
-    emojiAutocompleteActiveIndex,
-    emojiAutocompleteStyle,
-    emojiGroups,
-    emojiPickerStyle,
     handleAttachmentSelected,
     handleComposerSecondaryAction,
     handleEditorInteraction,
     handleEditorKeydown,
-    handleEmojiAutocompleteSelect,
-    handleEmojiSelect,
+    handleAutocompleteHighlight,
+    handleAutocompleteSelect,
     handleImageSelected,
-    handleMentionSelect,
+    handleToolPopoverSelect,
     imageInput,
     insertComposerText,
     isPhoneOverlay,
     isPhoneViewport,
-    mentionActiveIndex,
-    mentionLoading,
-    mentionPickerStyle,
-    mentionUsers,
     previewError,
     previewHtml,
     previewLoading,
     requestPreview,
     resizing,
-    setEmojiToolRef,
     showBackdrop,
-    showEmojiAutocomplete,
-    showEmojiPicker,
-    showMentionPicker,
+    showAutocomplete,
     showPreview,
     startResize,
     syncInlineSuggestions,

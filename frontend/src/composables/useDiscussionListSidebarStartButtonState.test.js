@@ -5,8 +5,8 @@ import { createDiscussionListSidebarStartButtonState } from './useDiscussionList
 
 test('discussion list sidebar start button state resolves registry copy', () => {
   const state = createDiscussionListSidebarStartButtonState({
-    currentTag: ref({ name: '公告' }),
-    getText: ({ surface, tagName }) => ({ text: `${surface}-${tagName}-copy` }),
+    contextSubject: ref({ name: '公告' }),
+    getText: ({ surface, subjectName }) => ({ text: `${surface}-${subjectName}-copy` }),
   })
 
   assert.equal(state.labelText.value, 'start-discussion-button-公告-copy')
@@ -14,7 +14,7 @@ test('discussion list sidebar start button state resolves registry copy', () => 
 
 test('discussion list sidebar start button state falls back to default label', () => {
   const state = createDiscussionListSidebarStartButtonState({
-    currentTag: ref(null),
+    contextSubject: ref(null),
     getText: () => null,
   })
 

@@ -1,0 +1,11 @@
+{
+  "name": "@bias/forum",
+  "private": true,
+  "exports": {
+    ".": {
+      "browser": "./frontend/src/forum/sdk.js",
+      "node": "./frontend/src/forum/nodeSdk.js",
+      "default": "./frontend/src/forum/sdk.js"
+    }
+  }
+}

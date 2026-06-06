@@ -52,10 +52,9 @@ import { useComposerStore } from './stores/composer'
 import { useForumStore } from './stores/forum'
 import { useForumUiStore } from './stores/forumUi'
 import { useForumRealtimeStore } from './stores/forumRealtime'
-import { useNotificationStore } from './stores/notification'
 import { useOnlineUsersStore } from './stores/onlineUsers'
 import { useForumRealtimeStatus } from './composables/useForumRealtimeStatus'
-import { getUiCopy } from './forum/registry'
+import { getUiCopy, runForumRuntimeHook } from './forum/registry'
 import { openLoginModal } from './utils/authModal'
 
 const authStore = useAuthStore()
@@ -63,7 +62,6 @@ const composerStore = useComposerStore()
 const forumStore = useForumStore()
 const forumUiStore = useForumUiStore()
 const forumRealtimeStore = useForumRealtimeStore()
-const notificationStore = useNotificationStore()
 const onlineUsersStore = useOnlineUsersStore()
 const route = useRoute()
 const forumRealtimeStatus = useForumRealtimeStatus({
@@ -127,14 +125,23 @@ function handleBeforeUnload(event) {
   event.returnValue = composerStore.unsavedMessage || ''
 }
 
-async function syncNotificationState() {
-  try {
-    await notificationStore.fetchStats()
-  } catch (error) {
-    console.error('同步通知角标失败:', error)
+function buildForumRuntimeContext() {
+  return {
+    authStore,
+    forumStore,
+    forumUiStore,
+    forumRealtimeStore,
+    onlineUsersStore,
+    route,
   }
+}
 
-  notificationStore.connect()
+async function runForumRuntime(name) {
+  await runForumRuntimeHook(name, buildForumRuntimeContext())
+}
+
+async function syncAuthenticatedRuntime() {
+  await runForumRuntime('onAuthenticated')
   forumRealtimeStore.connect()
 }
 
@@ -167,12 +174,14 @@ onMounted(async () => {
   onlineUsersStore.connect()
 
   if (showMaintenance.value) {
+    await runForumRuntime('onMaintenance')
     return
   }
 
-  // 如果已登录，连接WebSocket
+  await runForumRuntime('onMounted')
+
   if (authStore.isAuthenticated) {
-    await syncNotificationState()
+    await syncAuthenticatedRuntime()
   }
 })
 
@@ -194,8 +203,7 @@ watch(
     }
 
     if (showMaintenance.value) {
-      notificationStore.disconnect()
-      notificationStore.resetState()
+      await runForumRuntime('onMaintenance')
       forumRealtimeStore.disconnect()
       onlineUsersStore.disconnect()
       return
@@ -203,12 +211,11 @@ watch(
 
     if (isAuthenticated) {
       onlineUsersStore.reconnect()
-      await syncNotificationState()
+      await syncAuthenticatedRuntime()
       return
     }
 
-    notificationStore.disconnect()
-    notificationStore.resetState()
+    await runForumRuntime('onGuest')
     forumRealtimeStore.disconnect()
     onlineUsersStore.reconnect()
   }
@@ -223,10 +230,12 @@ watch(
 )
 
 function applyRouteMeta() {
-  if (route.meta?.title || route.meta?.description) {
+  const routeDocument = resolveRouteDocumentMeta(route)
+  if (route.meta?.title || route.meta?.description || routeDocument) {
     forumStore.setPageMeta({
       title: route.meta.title,
       description: route.meta.description,
+      ...(routeDocument || {}),
     })
     return
   }
@@ -234,7 +243,51 @@ function applyRouteMeta() {
   forumStore.resetPageMeta()
 }
 
+function resolveRouteDocumentMeta(currentRoute) {
+  const documentMeta = currentRoute.meta?.extensionDocument
+  if (!documentMeta || typeof documentMeta !== 'object') {
+    return null
+  }
+
+  return {
+    preloads: resolveRouteDocumentValues(documentMeta.preloads || [], currentRoute),
+    documentAttributes: resolveRouteDocumentValues(documentMeta.documentAttributes || [], currentRoute),
+    headTags: resolveRouteDocumentValues(documentMeta.headTags || [], currentRoute),
+  }
+}
+
+function resolveRouteDocumentValues(values, currentRoute) {
+  return (Array.isArray(values) ? values : [])
+    .map(value => resolveRouteDocumentValue(value, currentRoute))
+    .filter(Boolean)
+}
+
+function resolveRouteDocumentValue(value, currentRoute) {
+  if (typeof value === 'string') {
+    return applyRouteParams(value, currentRoute)
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => resolveRouteDocumentValue(item, currentRoute)).filter(Boolean)
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([key, item]) => [key, resolveRouteDocumentValue(item, currentRoute)])
+        .filter(([, item]) => item !== undefined && item !== null && item !== false)
+    )
+  }
+  return value
+}
+
+function applyRouteParams(value, currentRoute) {
+  return String(value || '').replace(/:([A-Za-z0-9_]+)/g, (_match, key) => {
+    const param = currentRoute.params?.[key]
+    return encodeURIComponent(Array.isArray(param) ? (param[0] || '') : (param || ''))
+  })
+}
+
 onBeforeUnmount(() => {
+  runForumRuntime('onBeforeUnmount')
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('resize', syncViewportWidth)
   window.removeEventListener('bias:auth-required', handleAuthRequired)

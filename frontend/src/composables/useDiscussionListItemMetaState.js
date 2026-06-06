@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import {
   getApprovalNote,
+  getDiscussionPresentationItems,
   getDiscussionStateBadges,
   getUiCopy,
 } from '../forum/frontendRegistry.js'
@@ -10,6 +11,7 @@ export function createDiscussionListItemMetaState({
   formatRelativeTime,
   getDiscussionApprovalNote = getApprovalNote,
   getDiscussionBadges = getDiscussionStateBadges,
+  getDiscussionPresentation = getDiscussionPresentationItems,
   getText = getUiCopy,
 }) {
   const discussionStateBadges = computed(() => getDiscussionBadges({
@@ -20,6 +22,11 @@ export function createDiscussionListItemMetaState({
   const approvalNote = computed(() => getDiscussionApprovalNote({
     discussion: discussion.value,
     surface: 'discussion-list-item',
+  }))
+
+  const presentationItems = computed(() => getDiscussionPresentation({
+    discussion: discussion.value,
+    surface: 'discussion-list-item-meta',
   }))
 
   const createdAtText = computed(() => {
@@ -47,6 +54,7 @@ export function createDiscussionListItemMetaState({
     createdAtText,
     discussionStateBadges,
     lastPostedAtText,
+    presentationItems,
   }
 }
 

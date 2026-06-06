@@ -222,6 +222,10 @@ class Extension:
         return tuple(self.discover().search_filters)
 
     @property
+    def discussion_list_queries(self):
+        return tuple(self.discover().discussion_list_queries)
+
+    @property
     def discussion_sorts(self):
         return tuple(self.discover().discussion_sorts)
 

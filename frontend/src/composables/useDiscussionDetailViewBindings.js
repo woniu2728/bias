@@ -3,7 +3,6 @@ import { computed } from 'vue'
 export function createDiscussionDetailViewBindings({
   activePostMenuId,
   authStore,
-  buildTagPath,
   buildUserPath,
   canDeletePost,
   canEditDiscussion,
@@ -102,7 +101,6 @@ export function createDiscussionDetailViewBindings({
     discussionHeaderStyle: discussionHeaderStyle.value,
     canModeratePendingDiscussion: canModeratePendingDiscussion.value,
     canEditDiscussion: canEditDiscussion.value,
-    buildTagPath,
   }))
 
   const heroEvents = {

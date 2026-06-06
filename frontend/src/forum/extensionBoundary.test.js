@@ -5,11 +5,11 @@ import { resolve, relative } from 'node:path'
 
 const repoRoot = resolve(process.cwd(), '..')
 const extensionRoot = resolve(repoRoot, 'extensions')
-const allowedPublicImports = new Set([
-  '@/forum/registry',
-  '@/admin/registry',
-  '@/forum/documentRuntime',
-  '@/common/extensionRuntime',
+const allowedPublicPackageImports = new Set([
+  '@bias/forum',
+  '@bias/admin',
+  '@bias/admin/components',
+  '@bias/core',
 ])
 
 function listFrontendFiles(directory) {
@@ -58,21 +58,25 @@ test('extension frontend imports only public app APIs', () => {
   for (const path of listFrontendFiles(extensionRoot)) {
     const source = readFileSync(path, 'utf8')
     for (const importPath of extractImports(source)) {
-      if (!importPath.startsWith('@/')) {
+      if (allowedPublicPackageImports.has(importPath)) {
         continue
       }
-      if (allowedPublicImports.has(importPath)) {
-        continue
+      if (
+        importPath.startsWith('@/')
+        || importPath.includes('frontend/src/')
+        || importPath.includes('../../../../frontend/src')
+      ) {
+        offenders.push(`${relative(repoRoot, path)} imports ${importPath}`)
       }
-      offenders.push(`${relative(repoRoot, path)} imports ${importPath}`)
     }
   }
 
   assert.deepEqual(offenders, [])
 })
 
-test('mentions extension owns composer mention provider and toolbar tool registration', () => {
+test('mentions extension owns composer autocomplete provider and toolbar tool registration', () => {
   const composerSource = readFileSync(resolve(repoRoot, 'frontend/src/utils/composer.js'), 'utf8')
+  const runtimeSource = readFileSync(resolve(repoRoot, 'frontend/src/composables/useComposerRuntime.js'), 'utf8')
   const mentionsForumSource = readExtensionForumSource('mentions')
 
   assertCoreRegistryDoesNotOwn([
@@ -82,8 +86,14 @@ test('mentions extension owns composer mention provider and toolbar tool registr
     'composer-mention-picker-label',
   ])
   assert.equal(composerSource.includes("key: 'mention'"), false)
+  assert.equal(runtimeSource.includes('runComposerMentionProviders'), false)
+  assert.equal(runtimeSource.includes('detectMentionQuery'), false)
   assert.equal(mentionsForumSource.includes('new Forum()'), true)
-  assert.equal(mentionsForumSource.includes('forum.composerMentionProvider'), true)
+  assert.equal(mentionsForumSource.includes('forum.composerMentionProvider'), false)
+  assert.equal(mentionsForumSource.includes('forum.composerAutocompleteProvider'), true)
+  assert.equal(mentionsForumSource.includes('detectMentionQuery'), true)
+  assert.equal(mentionsForumSource.includes('buildMentionReplacement'), true)
+  assert.equal(mentionsForumSource.includes('buildMentionTrigger'), true)
   assert.equal(mentionsForumSource.includes('forum.composerTool'), true)
   assert.equal(mentionsForumSource.includes('forum.stateBlock'), true)
   assert.equal(mentionsForumSource.includes('forum.uiCopy'), true)
@@ -92,6 +102,7 @@ test('mentions extension owns composer mention provider and toolbar tool registr
 })
 
 test('emoji extension owns composer emoji tool and picker copy registration', () => {
+  const runtimeSource = readFileSync(resolve(repoRoot, 'frontend/src/composables/useComposerRuntime.js'), 'utf8')
   const emojiForumSource = readExtensionForumSource('emoji')
 
   assertCoreRegistryDoesNotOwn([
@@ -102,7 +113,13 @@ test('emoji extension owns composer emoji tool and picker copy registration', ()
     'composer-emoji-picker-summary',
     'composer-emoji-autocomplete-label',
   ])
+  assert.equal(runtimeSource.includes('detectEmojiQuery'), false)
+  assert.equal(runtimeSource.includes('searchEmojiItems'), false)
   assert.equal(emojiForumSource.includes('new Forum()'), true)
+  assert.equal(emojiForumSource.includes('forum.composerAutocompleteProvider'), true)
+  assert.equal(emojiForumSource.includes('detectEmojiQuery'), true)
+  assert.equal(emojiForumSource.includes('searchEmojiItems'), true)
+  assert.equal(emojiForumSource.includes('buildEmojiReplacement'), true)
   assert.equal(emojiForumSource.includes('forum.composerTool'), true)
   assert.equal(emojiForumSource.includes('forum.uiCopy'), true)
   assert.equal(emojiForumSource.includes("key: 'emoji'"), true)
@@ -117,13 +134,19 @@ test('tags and notifications extensions own navigational forum contributions', (
     "key: 'tags'",
     'tags-page-empty',
     'tags-page-hero-title',
+    'discussion-list-tag-empty',
+    'discussion-primary-tag',
+    'discussion-selected-tag',
     "key: 'notifications'",
     'notifications-page-empty',
     'notifications-menu-empty',
   ])
   assert.equal(tagsForumSource.includes('new Forum()'), true)
+  assert.equal(tagsForumSource.includes('new PostTypes()'), true)
+  assert.equal(tagsForumSource.includes("add('discussionTagged'"), true)
   assert.equal(tagsForumSource.includes('forum.navItem'), true)
   assert.equal(tagsForumSource.includes('forum.emptyState'), true)
+  assert.equal(tagsForumSource.includes('forum.composerSubmitGuard'), true)
   assert.equal(tagsForumSource.includes("moduleId: 'tags'"), true)
   assert.equal(notificationsForumSource.includes('new Forum()'), true)
   assert.equal(notificationsForumSource.includes('forum.navItem'), true)

@@ -2,7 +2,7 @@
   <button
     type="button"
     class="btn-start-discussion"
-    :class="{ 'btn-start-discussion--tag': Boolean(currentTag?.color) }"
+    :class="{ 'btn-start-discussion--context': Boolean(contextSubject?.color) }"
     :style="startDiscussionButtonStyle"
     @click="$emit('click')"
   >
@@ -16,7 +16,7 @@ import { toRef } from 'vue'
 import { useDiscussionListSidebarStartButtonState } from '@/composables/useDiscussionListSidebarStartButtonState'
 
 const props = defineProps({
-  currentTag: {
+  contextSubject: {
     type: Object,
     default: null
   },
@@ -29,7 +29,7 @@ const props = defineProps({
 defineEmits(['click'])
 
 const { labelText } = useDiscussionListSidebarStartButtonState({
-  currentTag: toRef(props, 'currentTag'),
+  contextSubject: toRef(props, 'contextSubject'),
 })
 </script>
 
@@ -58,7 +58,7 @@ const { labelText } = useDiscussionListSidebarStartButtonState({
   filter: brightness(0.92);
 }
 
-.btn-start-discussion--tag {
+.btn-start-discussion--context {
   background: var(--tag-button-bg);
   color: var(--tag-button-text);
 }

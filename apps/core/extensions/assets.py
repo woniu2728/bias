@@ -114,6 +114,7 @@ def build_extension_frontend_manifest(extensions) -> dict:
             "preloads": _serialize_frontend_values(getattr(extension.discover(), "frontend_preloads", ()) or ()),
             "document_attributes": _serialize_frontend_values(getattr(extension.discover(), "frontend_document_attributes", ()) or ()),
             "title_driver": _serialize_frontend_value(getattr(extension.discover(), "frontend_title_driver", None)),
+            "routes": _serialize_frontend_routes_for_manifest(getattr(extension.discover(), "frontend_routes", ()) or ()),
             "inputs": {},
         }
         if admin_entry:
@@ -207,6 +208,29 @@ def _serialize_frontend_value(value):
     if isinstance(value, (list, tuple)):
         return [_serialize_frontend_value(item) for item in value]
     return getattr(value, "__name__", str(value))
+
+
+def _serialize_frontend_routes_for_manifest(routes) -> list[dict]:
+    output = []
+    for route in routes or ():
+        frontend = str(getattr(route, "frontend", "") or "forum").strip() or "forum"
+        output.append({
+            "path": str(getattr(route, "path", "") or "").strip(),
+            "name": str(getattr(route, "name", "") or "").strip(),
+            "component": str(getattr(route, "component", "") or "").strip(),
+            "frontend": frontend,
+            "module_id": str(getattr(route, "module_id", "") or "").strip(),
+            "title": str(getattr(route, "title", "") or "").strip(),
+            "description": str(getattr(route, "description", "") or "").strip(),
+            "requires_auth": bool(getattr(route, "requires_auth", False)),
+            "order": int(getattr(route, "order", 100) or 100),
+            "removed": bool(getattr(route, "removed", False)),
+        })
+    return [
+        item
+        for item in output
+        if item["name"] and (item["removed"] or item["component"])
+    ]
 
 
 def _result(extension_id: str, status: str, status_label: str, message: str, *, details: dict | None = None) -> dict:

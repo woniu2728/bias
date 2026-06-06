@@ -43,31 +43,31 @@ export function getDiscussionListFilterHeroDescriptionText(filterCode) {
 
 export function resolveDiscussionListPageMetaTitle({
   filterCode,
-  currentTagName,
+  subjectName,
   searchQuery,
 }) {
   const search = String(searchQuery || '').trim()
-  const baseTitle = currentTagName || getDiscussionListFilterHeroTitleText(filterCode)
+  const baseTitle = subjectName || getDiscussionListFilterHeroTitleText(filterCode)
 
   return search ? `${baseTitle} - 搜索“${search}”` : baseTitle
 }
 
 export function resolveDiscussionListPageMetaDescription({
   filterCode,
-  currentTagName,
-  currentTagDescription,
+  subjectName,
+  subjectDescription,
   searchQuery,
 }) {
   const search = String(searchQuery || '').trim()
-  const tagName = String(currentTagName || '').trim()
-  const tagDescription = String(currentTagDescription || '').trim()
+  const name = String(subjectName || '').trim()
+  const description = String(subjectDescription || '').trim()
 
-  if (tagName) {
+  if (name) {
     if (search) {
-      return `查看标签“${tagName}”下与“${search}”相关的讨论。`
+      return `查看“${name}”范围内与“${search}”相关的讨论。`
     }
 
-    return tagDescription || `查看标签“${tagName}”下的最新讨论和回复。`
+    return description || `查看“${name}”范围内的最新讨论和回复。`
   }
 
   if (search) {

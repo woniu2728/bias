@@ -2,13 +2,13 @@ import { computed } from 'vue'
 import { getUiCopy } from '../forum/frontendRegistry.js'
 
 export function createDiscussionListSidebarStartButtonState({
-  currentTag,
+  contextSubject,
   getText = getUiCopy,
 }) {
   const labelText = computed(() => getText({
     surface: 'start-discussion-button',
-    hasTag: Boolean(currentTag.value),
-    tagName: currentTag.value?.name || '',
+    hasContextSubject: Boolean(contextSubject.value),
+    subjectName: contextSubject.value?.name || contextSubject.value?.title || '',
   })?.text || '发起讨论')
 
   return {

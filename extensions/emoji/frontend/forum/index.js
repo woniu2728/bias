@@ -1,9 +1,12 @@
-import { Forum } from '@bias/forum'
 import {
+  Forum,
   renderTwemojiHtml,
   setTwemojiBaseUrl,
   setTwemojiEnabled,
-} from '@/forum/registry'
+} from '@bias/forum'
+import ComposerEmojiAutocomplete from './ComposerEmojiAutocomplete.vue'
+import ComposerEmojiPicker from './ComposerEmojiPicker.vue'
+import { EMOJI_GROUPS, searchEmojiItems } from './emojiData.js'
 
 function resolveEmojiSettings(context = {}) {
   const settings = context.extension?.forum_settings || context.extension?.settings_values || {}
@@ -45,6 +48,34 @@ function registerEmojiForum(forum) {
     order: 140,
     title: '表情',
     icon: 'far fa-smile',
+    popoverComponent: ComposerEmojiPicker,
+    popoverWidth: 420,
+    popoverHeight: 360,
+    popoverProps: () => ({
+      groups: EMOJI_GROUPS,
+    }),
+  })
+
+  forum.composerAutocompleteProvider({
+    key: 'emoji-autocomplete',
+    moduleId: 'emoji',
+    order: 20,
+    renderer: 'emoji',
+    component: ComposerEmojiAutocomplete,
+    height: 320,
+    limit: 8,
+    detect({ content = '', cursorPosition }) {
+      return detectEmojiQuery(content, cursorPosition)
+    },
+    search({ query = '', limit = 8 }) {
+      return searchEmojiItems(query, {
+        limit,
+        includeCommonWhenEmpty: true,
+      })
+    },
+    replacement({ item }) {
+      return buildEmojiReplacement(item?.emoji)
+    },
   })
 
   forum.uiCopy({
@@ -109,4 +140,24 @@ function registerEmojiForum(forum) {
       }
     },
   })
+}
+
+function detectEmojiQuery(content, cursorPosition) {
+  const safeContent = String(content || '')
+  const safeCursor = Math.max(0, Math.min(cursorPosition ?? safeContent.length, safeContent.length))
+  const beforeCursor = safeContent.slice(0, safeCursor)
+  const match = beforeCursor.match(/(^|[\s([{"'“‘]):([A-Za-z0-9_+\-\u4e00-\u9fa5]{0,32})$/u)
+  if (!match) return null
+
+  const query = match[2] || ''
+  const start = safeCursor - query.length - 1
+  return {
+    query,
+    start,
+    end: safeCursor
+  }
+}
+
+function buildEmojiReplacement(emoji) {
+  return `${String(emoji || '').trim()} `
 }

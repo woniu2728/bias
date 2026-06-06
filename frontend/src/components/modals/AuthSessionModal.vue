@@ -255,7 +255,6 @@ import { getUiCopy } from '@/forum/registry'
 import { useAuthStore } from '@/stores/auth'
 import { useForumStore } from '@/stores/forum'
 import { useModalStore } from '@/stores/modal'
-import { useNotificationStore } from '@/stores/notification'
 import { sanitizeRedirectPath } from '@/utils/authModal'
 import { ensureTurnstileScript } from '@/utils/turnstile'
 
@@ -294,7 +293,6 @@ const router = useRouter()
 const authStore = useAuthStore()
 const forumStore = useForumStore()
 const modalStore = useModalStore()
-const notificationStore = useNotificationStore()
 
 const loginIdentificationInput = ref(null)
 const registerUsernameInput = ref(null)
@@ -703,7 +701,6 @@ async function handleLogin() {
       return
     }
 
-    notificationStore.requestPermission()
     modalStore.close({ authenticated: true })
 
     const redirect = sanitizeRedirectPath(props.redirectPath)

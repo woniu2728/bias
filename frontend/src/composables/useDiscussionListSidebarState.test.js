@@ -17,8 +17,6 @@ test('discussion list sidebar state resolves visibility and copy', () => {
   assert.equal(state.showStartDiscussionButton.value, true)
   assert.equal(state.showProfileLink.value, true)
   assert.equal(state.profileLinkLabel.value, 'discussion-list-sidebar-profile-link-copy')
-  assert.equal(state.tagsLinkLabel.value, 'discussion-list-sidebar-tags-link-copy')
-  assert.equal(state.moreTagsLinkLabel.value, 'discussion-list-sidebar-more-tags-link-copy')
 })
 
 test('discussion list sidebar state hides start button while restoring missing user', () => {

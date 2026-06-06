@@ -19,7 +19,7 @@ export function useDiscussionListLoadState({
     getText: getUiCopy,
     listStateFactory({ load, reset }) {
       return usePaginatedListState({
-        watchSources: () => [route.name, route.params.slug, searchQuery.value, sortBy.value, listFilter.value],
+        watchSources: () => [route.name, route.fullPath, searchQuery.value, sortBy.value, listFilter.value],
         initialLoading: true,
         load,
         reset,

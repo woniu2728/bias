@@ -3,7 +3,6 @@ import DiscussionLockedPostItem from '@/components/discussion/DiscussionLockedPo
 import DiscussionRenamedPostItem from '@/components/discussion/DiscussionRenamedPostItem.vue'
 import DiscussionHiddenPostItem from '@/components/discussion/DiscussionHiddenPostItem.vue'
 import DiscussionStickyPostItem from '@/components/discussion/DiscussionStickyPostItem.vue'
-import DiscussionTaggedPostItem from '@/components/discussion/DiscussionTaggedPostItem.vue'
 import DiscussionGenericEventPostItem from '@/components/discussion/DiscussionGenericEventPostItem.vue'
 import DiscussionApprovedPostItem from '@/components/discussion/DiscussionApprovedPostItem.vue'
 import DiscussionRejectedPostItem from '@/components/discussion/DiscussionRejectedPostItem.vue'
@@ -19,7 +18,6 @@ const postTypeComponents = {
   discussionRenamed: DiscussionRenamedPostItem,
   discussionLocked: DiscussionLockedPostItem,
   discussionSticky: DiscussionStickyPostItem,
-  discussionTagged: DiscussionTaggedPostItem,
   discussionHidden: DiscussionHiddenPostItem,
   discussionApproved: DiscussionApprovedPostItem,
   discussionRejected: DiscussionRejectedPostItem,
@@ -109,11 +107,6 @@ syncPostTypes([
     code: 'discussionSticky',
     label: '讨论置顶状态变更',
     order: 40
-  },
-  {
-    code: 'discussionTagged',
-    label: '讨论标签变更',
-    order: 50
   },
   {
     code: 'discussionHidden',

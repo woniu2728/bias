@@ -87,6 +87,7 @@ class PostTypeDefinition:
 
 SearchFilterParser = Callable[[str], Any | None]
 SearchFilterApplier = Callable[[Any, Any, dict], Any]
+DiscussionListQueryApplier = Callable[[Any, dict], Any]
 DiscussionSortApplier = Callable[[Any, dict], Any]
 DiscussionListFilterApplier = Callable[[Any, dict], Any]
 
@@ -114,6 +115,15 @@ class DiscussionSortDefinition:
     is_default: bool = False
     order: int = 100
     toolbar_visible: bool = True
+
+
+@dataclass(frozen=True)
+class DiscussionListQueryDefinition:
+    key: str
+    module_id: str
+    applier: DiscussionListQueryApplier
+    description: str = ""
+    order: int = 100
 
 
 @dataclass(frozen=True)
@@ -199,6 +209,7 @@ class ForumModuleDefinition:
     event_listeners: Tuple[EventListenerDefinition, ...] = ()
     post_types: Tuple[PostTypeDefinition, ...] = ()
     search_filters: Tuple[SearchFilterDefinition, ...] = ()
+    discussion_list_queries: Tuple[DiscussionListQueryDefinition, ...] = ()
     discussion_sorts: Tuple[DiscussionSortDefinition, ...] = ()
     discussion_list_filters: Tuple[DiscussionListFilterDefinition, ...] = ()
     settings_groups: Tuple[str, ...] = ()

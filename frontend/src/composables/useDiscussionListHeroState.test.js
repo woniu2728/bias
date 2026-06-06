@@ -5,28 +5,35 @@ import { createDiscussionListHeroState } from './useDiscussionListHeroState.js'
 
 test('discussion list hero state resolves filter hero copy and icon', () => {
   const state = createDiscussionListHeroState({
-    currentTag: ref(null),
-    getText: ({ surface }) => ({ text: `${surface}-copy` }),
+    contextSubject: ref(null),
+    getHero: ({ activeFilterCode }) => ({
+      title: `hero:${activeFilterCode}`,
+      icon: 'fas fa-inbox',
+    }),
     isFollowingPage: ref(false),
     listFilter: ref('unread'),
   })
 
   assert.equal(state.activeFilterCode.value, 'unread')
-  assert.equal(state.showFilterHero.value, true)
-  assert.equal(state.filterHeroPillText.value, 'discussion-list-filter-hero-pill-copy')
-  assert.equal(state.filterHeroTitleText.value, 'discussion-list-filter-hero-title-copy')
-  assert.equal(state.filterHeroDescriptionText.value, 'discussion-list-filter-hero-description-copy')
-  assert.equal(state.filterHeroIcon.value, 'fas fa-inbox')
+  assert.deepEqual(state.hero.value, {
+    title: 'hero:unread',
+    icon: 'fas fa-inbox',
+  })
 })
 
-test('discussion list hero state falls back to tag description defaults', () => {
+test('discussion list hero state passes context subject into registered resolver', () => {
   const state = createDiscussionListHeroState({
-    currentTag: ref({ name: '公告' }),
-    getText: () => null,
+    contextSubject: ref({ name: '公告' }),
+    getHero: ({ contextSubject }) => ({
+      title: contextSubject.name,
+      description: 'tag hero',
+    }),
     isFollowingPage: ref(false),
     listFilter: ref('all'),
   })
 
-  assert.equal(state.showFilterHero.value, false)
-  assert.equal(state.currentTagDescriptionText.value, '这个标签下的讨论会集中显示在这里。')
+  assert.deepEqual(state.hero.value, {
+    title: '公告',
+    description: 'tag hero',
+  })
 })

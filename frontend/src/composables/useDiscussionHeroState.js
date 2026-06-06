@@ -1,11 +1,16 @@
 import { computed } from 'vue'
-import { getDiscussionReviewBanner, getHeroMetaItems } from '../forum/frontendRegistry.js'
+import {
+  getDiscussionPresentationItems,
+  getDiscussionReviewBanner,
+  getHeroMetaItems,
+} from '../forum/frontendRegistry.js'
 
 export function createDiscussionHeroState({
   canEditDiscussion,
   canModeratePendingDiscussion,
   discussion,
   getHeroMeta = getHeroMetaItems,
+  getPresentationItems = getDiscussionPresentationItems,
   getReviewBanner = getDiscussionReviewBanner,
 }) {
   const discussionReviewBanner = computed(() => getReviewBanner({
@@ -20,9 +25,15 @@ export function createDiscussionHeroState({
     surface: 'discussion-hero',
   }))
 
+  const presentationItems = computed(() => getPresentationItems({
+    discussion: discussion.value,
+    surface: 'discussion-hero',
+  }))
+
   return {
     discussionReviewBanner,
     heroMetaItems,
+    presentationItems,
   }
 }
 

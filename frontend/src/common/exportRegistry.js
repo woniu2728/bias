@@ -198,6 +198,23 @@ export class ExportRegistry {
     return this.get(namespace, id)
   }
 
+  unregister(namespace, id) {
+    const [resolvedNamespace, resolvedId] = normalizeNamespaceId(namespace, id)
+    if (!resolvedNamespace || !resolvedId) {
+      return false
+    }
+    const key = registryKey(resolvedNamespace, resolvedId)
+    const removed = this.modules.delete(key)
+    this.chunkModules.delete(key)
+    this.onLoads.delete(key)
+    return removed
+  }
+
+  unregisterModule(path) {
+    const [namespace, id] = this.namespaceAndIdFromPath(path)
+    return this.unregister(namespace, id)
+  }
+
   checkModule(namespace, id) {
     return this.get(namespace, id) || false
   }
@@ -253,6 +270,19 @@ export class ExportRegistry {
     this.chunks.clear()
     this.chunkModules.clear()
     this.onLoads.clear()
+  }
+
+  clearNamespace(namespace) {
+    const normalizedNamespace = normalizePart(namespace)
+    if (!normalizedNamespace) {
+      return false
+    }
+    const prefix = `${normalizedNamespace}:`
+    clearMapByKeyPrefix(this.modules, prefix)
+    clearMapByKeyPrefix(this.chunks, prefix)
+    clearMapByKeyPrefix(this.chunkModules, prefix)
+    clearMapByKeyPrefix(this.onLoads, prefix)
+    return true
   }
 
   flushLoadHandlers(namespace, id, module) {
@@ -332,6 +362,14 @@ function normalizePart(value) {
 
 function registryKey(namespace, id) {
   return `${namespace}:${id}`
+}
+
+function clearMapByKeyPrefix(map, prefix) {
+  for (const key of [...map.keys()]) {
+    if (String(key).startsWith(prefix)) {
+      map.delete(key)
+    }
+  }
 }
 
 function resolveAssetUrl(file, baseUrl = '', revision = '') {

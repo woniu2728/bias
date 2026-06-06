@@ -44,6 +44,7 @@ from apps.core.extensions.exceptions import ExtensionBootError
 from apps.core.forum_registry_types import (
     AdminPageDefinition,
     DiscussionListFilterDefinition,
+    DiscussionListQueryDefinition,
     DiscussionSortDefinition,
     EventListenerDefinition,
     LanguagePackDefinition,
@@ -2083,6 +2084,10 @@ class ApplicationForumService:
         self._registry.register_search_filter(definition)
         self._append_extension_tuple(extension_id, "search_filters", definition)
 
+    def register_discussion_list_query(self, definition, *, extension_id: str = "") -> None:
+        self._registry.register_discussion_list_query(definition)
+        self._append_extension_tuple(extension_id, "discussion_list_queries", definition)
+
     def register_discussion_sort(self, definition, *, extension_id: str = "") -> None:
         self._registry.register_discussion_sort(definition)
         self._append_extension_tuple(extension_id, "discussion_sorts", definition)
@@ -2180,6 +2185,7 @@ class ExtensionApplicationRecord:
     language_packs: list[LanguagePackDefinition] = field(default_factory=list)
     post_types: list[PostTypeDefinition] = field(default_factory=list)
     search_filters: list[SearchFilterDefinition] = field(default_factory=list)
+    discussion_list_queries: list[DiscussionListQueryDefinition] = field(default_factory=list)
     discussion_sorts: list[DiscussionSortDefinition] = field(default_factory=list)
     discussion_list_filters: list[DiscussionListFilterDefinition] = field(default_factory=list)
     locale_paths: list[str] = field(default_factory=list)
@@ -2270,6 +2276,7 @@ class ExtensionRuntimeView:
     language_packs: tuple[LanguagePackDefinition, ...] = ()
     post_types: tuple[PostTypeDefinition, ...] = ()
     search_filters: tuple[SearchFilterDefinition, ...] = ()
+    discussion_list_queries: tuple[DiscussionListQueryDefinition, ...] = ()
     discussion_sorts: tuple[DiscussionSortDefinition, ...] = ()
     discussion_list_filters: tuple[DiscussionListFilterDefinition, ...] = ()
     locale_paths: tuple[str, ...] = ()
@@ -2928,6 +2935,11 @@ class ExtensionApplication:
         view.search_filters = tuple([*view.search_filters, definition])
         self.forum.register_search_filter(definition)
 
+    def register_discussion_list_query(self, extension: ExtensionRuntimeView, definition) -> None:
+        view = self._get_or_create_runtime_view(extension.extension_id)
+        view.discussion_list_queries = tuple([*view.discussion_list_queries, definition])
+        self.forum.register_discussion_list_query(definition)
+
     def register_discussion_sort(self, extension: ExtensionRuntimeView, definition) -> None:
         view = self._get_or_create_runtime_view(extension.extension_id)
         view.discussion_sorts = tuple([*view.discussion_sorts, definition])
@@ -3180,6 +3192,7 @@ class ExtensionApplication:
             language_packs=list(view.language_packs),
             post_types=list(view.post_types),
             search_filters=list(view.search_filters),
+            discussion_list_queries=list(view.discussion_list_queries),
             discussion_sorts=list(view.discussion_sorts),
             discussion_list_filters=list(view.discussion_list_filters),
             locale_paths=list(view.locale_paths),

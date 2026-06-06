@@ -149,10 +149,6 @@ const props = defineProps({
     type: Object,
     required: true
   },
-  notificationStore: {
-    type: Object,
-    required: true
-  },
   currentSearchQuery: {
     type: String,
     default: ''
@@ -203,7 +199,6 @@ const profileSectionTitleText = computed(() => getUiCopy({
 const mobilePrimaryNavItems = computed(() => getForumNavItems({
   authStore: props.authStore,
   forumStore: props.forumStore,
-  notificationStore: props.notificationStore,
   surface: 'mobile-drawer',
 }).filter(item => (item.section || 'primary') === 'primary').map(item => ({
   ...item,

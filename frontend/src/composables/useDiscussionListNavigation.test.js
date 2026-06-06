@@ -6,8 +6,8 @@ import { createDiscussionListNavigation } from './useDiscussionListNavigation.js
 test('discussion list navigation resolves sidebar filters and page state copy', () => {
   const state = createDiscussionListNavigation({
     authStore: { user: { id: 7 } },
-    currentTag: ref({ slug: 'announcements', color: '#112233' }),
-    currentTagSlug: ref('announcements'),
+    contextSubject: ref({ key: 'announcements', color: '#112233' }),
+    contextSubjectKey: ref('announcements'),
     filterOptions: ref([
       { code: 'all', sidebar_visible: true },
       { code: 'following', sidebar_visible: true, requires_authenticated_user: true },
@@ -18,34 +18,59 @@ test('discussion list navigation resolves sidebar filters and page state copy', 
       { key: 'home', label: '全部讨论', icon: 'far fa-comments' },
       { key: 'following', label: '关注中', icon: 'fas fa-bell' },
     ],
+    discussionListContextData: ref({
+      tags: {
+        currentTagSlug: 'announcements',
+        flatTags: [
+          { id: 1, slug: 'announcements', color: '#112233', children: [] },
+          { id: 2, slug: 'general', color: '#334455', children: [] },
+        ],
+      },
+    }),
+    getDiscussionSidebarSections: ({ discussionListContextData }) => [
+      {
+        key: 'tags',
+        component: 'TagsSection',
+        componentProps: {
+          currentTagSlug: discussionListContextData.tags.currentTagSlug,
+          count: discussionListContextData.tags.flatTags.length,
+        },
+      },
+    ],
     getDiscussionLoadingState: () => ({ text: 'loading-copy' }),
     isFollowingPage: ref(false),
     listFilter: ref('all'),
     route: { name: 'home', params: {} },
-    tags: ref([
-      { id: 1, slug: 'announcements', color: '#112233', children: [] },
-      { id: 2, slug: 'general', color: '#334455', children: [] },
-    ]),
   })
 
   assert.equal(state.isTagsPage.value, false)
   assert.equal(state.isAllDiscussionsPage.value, false)
   assert.equal(state.emptyStateText.value, 'empty-copy')
   assert.equal(state.loadingStateText.value, 'loading-copy')
-  assert.equal(state.showMoreTagsLink.value, true)
   assert.deepEqual(state.startDiscussionButtonStyle.value, {
     '--tag-button-bg': '#112233',
     '--tag-button-text': '#ffffff',
   })
   assert.equal(state.sidebarFilterItems.value[0].label, '全部讨论')
   assert.equal(state.sidebarFilterItems.value[1].label, '关注中')
+  assert.deepEqual(state.sidebarExtensionSections.value, [
+    {
+      key: 'tags',
+      component: 'TagsSection',
+      componentProps: {
+        currentTagSlug: 'announcements',
+        count: 2,
+      },
+    },
+  ])
 })
 
 test('discussion list navigation hides auth-only filters and falls back to default copy', () => {
   const state = createDiscussionListNavigation({
     authStore: { user: null },
-    currentTag: ref(null),
-    currentTagSlug: ref(''),
+    contextSubject: ref(null),
+    contextSubjectKey: ref(''),
+    discussionListContextData: ref({}),
     filterOptions: ref([{ code: 'unread', sidebar_visible: true, requires_authenticated_user: true }]),
     getDefaultFilterLabelText: (code) => `${code}-fallback`,
     getDiscussionEmptyState: () => null,
@@ -54,7 +79,6 @@ test('discussion list navigation hides auth-only filters and falls back to defau
     isFollowingPage: ref(false),
     listFilter: ref('all'),
     route: { name: 'tags', params: {} },
-    tags: ref([]),
   })
 
   assert.equal(state.isTagsPage.value, true)
@@ -62,6 +86,5 @@ test('discussion list navigation hides auth-only filters and falls back to defau
   assert.equal(state.emptyStateText.value, '暂无讨论。')
   assert.equal(state.loadingStateText.value, '正在加载讨论...')
   assert.deepEqual(state.sidebarFilterItems.value, [])
-  assert.equal(state.hasSidebarTagNavigation.value, false)
-  assert.equal(state.showMoreTagsLink.value, false)
+  assert.deepEqual(state.sidebarExtensionSections.value, [])
 })

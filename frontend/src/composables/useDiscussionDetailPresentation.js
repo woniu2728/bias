@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { getDiscussionPresentationItems } from '@/forum/frontendRegistry'
 import {
   getUserPrimaryGroupColor,
   getUserPrimaryGroupIcon,
@@ -6,18 +7,11 @@ import {
 } from '@/utils/userPrimaryGroup'
 
 export function useDiscussionDetailPresentation(discussion) {
-  const discussionHeroColor = computed(() => {
-    const primaryTag = discussion.value?.tags?.find(tag => tag?.color)
-    return primaryTag?.color || '#f2554b'
-  })
-
   const discussionHeaderStyle = computed(() => {
-    const color = discussionHeroColor.value
-    return {
-      '--discussion-hero-color': color,
-      '--discussion-hero-color-dark': shadeColor(color, -12),
-      '--discussion-hero-contrast': getContrastColor(color)
-    }
+    return mergeDiscussionHeroStyle(getDiscussionPresentationItems({
+      discussion: discussion.value,
+      surface: 'discussion-hero',
+    }))
   })
 
   return {
@@ -28,6 +22,22 @@ export function useDiscussionDetailPresentation(discussion) {
     },
     getUserPrimaryGroupLabel
   }
+}
+
+export function buildDiscussionHeroColorStyle(color) {
+  const normalized = String(color || '').trim() || '#f2554b'
+  return {
+    '--discussion-hero-color': normalized,
+    '--discussion-hero-color-dark': shadeColor(normalized, -12),
+    '--discussion-hero-contrast': getContrastColor(normalized)
+  }
+}
+
+function mergeDiscussionHeroStyle(items = []) {
+  return items.reduce((style, item) => ({
+    ...style,
+    ...(item?.heroStyle || {}),
+  }), buildDiscussionHeroColorStyle('#f2554b'))
 }
 
 function getContrastColor(color) {

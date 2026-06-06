@@ -3,10 +3,9 @@ import { computed, ref } from 'vue'
 import {
   normalizeDiscussion,
   normalizePost,
-  normalizeTag,
   normalizeUser,
   unwrapList,
-} from '@/utils/forum'
+} from '../utils/forum.js'
 
 const NORMALIZERS = {
   users: normalizeUser,
@@ -15,18 +14,15 @@ const NORMALIZERS = {
   discussion: normalizeDiscussion,
   posts: normalizePost,
   post: normalizePost,
-  tags: normalizeTag,
-  tag: normalizeTag,
-  notifications: normalizeNotification,
-  notification: normalizeNotification,
 }
 
-function normalizeNotification(notification = {}) {
-  return {
-    ...notification,
-    is_read: Boolean(notification.is_read),
-    from_user: notification.from_user ? normalizeUser(notification.from_user) : null,
+export function registerResourceNormalizer(type, normalizer) {
+  const normalizedType = normalizeResourceType(type)
+  if (!normalizedType || typeof normalizer !== 'function') {
+    return null
   }
+  NORMALIZERS[normalizedType] = normalizer
+  return normalizer
 }
 
 function inferTypeFromCollectionKey(key) {

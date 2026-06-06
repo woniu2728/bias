@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 export function useHeaderUiState({
   authStore,
   closeMobileDrawer,
-  closeNotifications,
+  closeHeaderOverlays = () => {},
   handleLogout,
   openLogin,
   openRegister,
@@ -18,17 +18,13 @@ export function useHeaderUiState({
   }
 
   function toggleUserMenu() {
-    closeNotifications()
+    closeHeaderOverlays({ source: 'user-menu' })
     showUserMenu.value = !showUserMenu.value
   }
 
   function handleWindowClick(event) {
     if (!event.target.closest('.user-dropdown')) {
       closeUserMenu()
-    }
-
-    if (!event.target.closest('.notifications-dropdown')) {
-      closeNotifications()
     }
   }
 
@@ -60,7 +56,7 @@ export function useHeaderUiState({
     () => authStore.isAuthenticated,
     (isAuthenticated) => {
       if (!isAuthenticated) {
-        closeNotifications()
+        closeHeaderOverlays({ source: 'auth' })
       }
     },
     { immediate: true }
@@ -69,7 +65,7 @@ export function useHeaderUiState({
   watch(
     () => route.fullPath,
     () => {
-      closeNotifications()
+      closeHeaderOverlays({ source: 'route' })
       closeUserMenu()
       closeMobileDrawer()
 

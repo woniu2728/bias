@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import api from '@/api'
-import { getUiCopy } from '@/forum/registry'
+import { getUiCopy, runComposerInitialStateContributors } from '@/forum/registry'
 import { useResourceStore } from '@/stores/resource'
 import { buildDiscussionPath, formatRelativeTime } from '@/utils/forum'
 
@@ -130,17 +130,14 @@ export function useDiscussionDetailUserActions({
     })
   }
 
-  function editDiscussion() {
+  async function editDiscussion() {
     if (!discussion.value || !canEditDiscussion.value) return
     if (isSuspended.value) {
       showSuspensionAlert()
       return
     }
 
-    const primaryTag = (discussion.value.tags || []).find(tag => !tag.parent_id)
-    const secondaryTag = (discussion.value.tags || []).find(tag => tag.parent_id)
-
-    composerStore.openEditDiscussionComposer({
+    const initialState = await runComposerInitialStateContributors({
       source: 'discussion-detail',
       discussionId: discussion.value.id,
       discussionTitle: discussion.value.title || '',
@@ -148,9 +145,16 @@ export function useDiscussionDetailUserActions({
       approvalNote: discussion.value.approval_note || '',
       initialTitle: discussion.value.title || '',
       initialContent: discussion.value.first_post?.content || '',
-      initialPrimaryTagId: primaryTag?.id || '',
-      initialSecondaryTagId: secondaryTag?.id || ''
+      extensions: {},
+    }, {
+      discussion: discussion.value,
+      mode: 'edit',
+      source: 'discussion-detail',
+      submitKind: 'edit-discussion',
+      type: 'discussion',
     })
+
+    composerStore.openEditDiscussionComposer(initialState)
   }
 
   function openComposer() {

@@ -2,6 +2,8 @@ import { generatedAdminExtensionModules } from '../generated/extensionImportMap.
 import {
   clearAdminRoutesForExtension,
   getAdminRoutes,
+  registerAdminRoute,
+  removeAdminRoute,
 } from './registry/routes.js'
 import { clearAdminRegistryExtensions } from './registry/shared.js'
 import {
@@ -18,6 +20,13 @@ import {
   registerLoadedExtensionModule,
   unregisterLoadedExtensionModule,
 } from '../common/extensionRuntime.js'
+import {
+  normalizeExtensionFrontendEntry,
+  registerExtensionFrontendOutput,
+  resolveExtensionRouteComponent,
+  resolveExtensionRouteComponentKeys,
+  withRuntimeApplication,
+} from '../common/extensionRouteRuntime.js'
 
 const loadedAdminExtensionIds = new Set()
 
@@ -26,12 +35,27 @@ const adminEntryModules = {
   ...generatedAdminExtensionModules,
 }
 
+const adminRouteComponents = {
+  AdvancedPage: () => import('./views/AdvancedPage.vue'),
+  AppearancePage: () => import('./views/AppearancePage.vue'),
+  AuditLogsPage: () => import('./views/AuditLogsPage.vue'),
+  BasicsPage: () => import('./views/BasicsPage.vue'),
+  DashboardPage: () => import('./views/DashboardPage.vue'),
+  DeveloperDocsPage: () => import('./views/DeveloperDocsPage.vue'),
+  ExtensionDetailPage: () => import('./views/ExtensionDetailPage.vue'),
+  ExtensionHostPage: () => import('./views/ExtensionHostPage.vue'),
+  MailPage: () => import('./views/MailPage.vue'),
+  PermissionsPage: () => import('./views/PermissionsPage.vue'),
+  UsersPage: () => import('./views/UsersPage.vue'),
+}
+
 export async function bootstrapEnabledAdminExtensions({
   app: application,
   extensions = [],
   router,
   runtime,
   entryModules = adminEntryModules,
+  routeComponents = adminRouteComponents,
   registry = null,
 } = {}) {
   let addedRouteCount = 0
@@ -43,8 +67,24 @@ export async function bootstrapEnabledAdminExtensions({
     const extensionId = String(extension?.id || '').trim()
     const entryPath = normalizeAdminBootstrapEntry(extension?.frontend_admin_entry)
     if (!extensionId || !entryPath || loadedAdminExtensionIds.has(extensionId) || extension.enabled === false) {
+      if (extensionId && extension?.enabled !== false && !loadedAdminExtensionIds.has(extensionId)) {
+        const runtimeExtension = withRuntimeApplication(extension, application)
+        registerExtensionFrontendOutput(application, extensionId, 'admin', runtimeExtension?.frontend_outputs?.admin)
+        registerExtensionAdminRoutes(router, runtimeExtension, {
+          components: routeComponents,
+          importers: entryModules,
+        })
+        loadedAdminExtensionIds.add(extensionId)
+      }
       continue
     }
+
+    const runtimeExtension = withRuntimeApplication(extension, application)
+    registerExtensionFrontendOutput(application, extensionId, 'admin', runtimeExtension?.frontend_outputs?.admin)
+    registerExtensionAdminRoutes(router, runtimeExtension, {
+      components: routeComponents,
+      importers: entryModules,
+    })
 
     const importer = entryModules[entryPath] || entryModules[extensionId]
     if (!importer) {
@@ -55,18 +95,17 @@ export async function bootstrapEnabledAdminExtensions({
     if (module?.extend) {
       const app = createAdminExtensionApp({
         app: application,
-        extension,
+        extension: runtimeExtension,
         loadedExtensionIds: loadedAdminExtensionIds,
         registry: resolvedRegistry,
         router,
       })
       registerLoadedExtensionModule(extensionId, module, {
         app: application,
-        extension,
+        extension: runtimeExtension,
         frontend: 'admin',
         entryPath,
       })
-      registerExtensionFrontendOutput(application, extensionId, 'admin', extension?.frontend_outputs?.admin)
       await bootModuleExtenders(application, extensionId, module, app)
       initializedApps.push({ app, extensionId })
     }
@@ -99,18 +138,83 @@ export async function bootstrapEnabledAdminExtensions({
   return { addedRouteCount }
 }
 
-function registerExtensionFrontendOutput(application, extensionId, frontend, output) {
-  const registry = application?.exportRegistry
-  if (!registry || !output || typeof registry.registerViteOutput !== 'function') {
-    return []
+export function registerExtensionAdminRoutes(router, extension, { components = adminRouteComponents, importers = generatedAdminExtensionModules } = {}) {
+  const routes = Array.isArray(extension?.frontend_routes)
+    ? extension.frontend_routes
+    : []
+  const registeredRoutes = []
+
+  for (const route of routes) {
+    if (String(route?.frontend || '').trim() !== 'admin') {
+      continue
+    }
+
+    const name = String(route?.name || '').trim()
+    if (!name) {
+      continue
+    }
+    if (route?.removed) {
+      removeAdminRoute(name)
+      if (router && typeof router.removeRoute === 'function' && (!router.hasRoute || router.hasRoute(name))) {
+        router.removeRoute(name)
+      }
+      registeredRoutes.push(name)
+      continue
+    }
+
+    const path = String(route?.path || '').trim()
+    const componentKey = String(route?.component || '').trim()
+    if (!path || !componentKey) {
+      continue
+    }
+
+    const component = resolveAdminRouteComponent(componentKey, extension, { components, importers })
+    if (!component) {
+      throw new Error(`找不到扩展后台路由组件: ${componentKey}`)
+    }
+
+    registerAdminRoute({
+      path,
+      name,
+      component,
+      icon: route.icon || extension?.icon || 'fas fa-puzzle-piece',
+      label: route.title || route.label || name,
+      navDescription: route.description || '',
+      navSection: route.nav_section || route.navSection || 'feature',
+      navOrder: Number(route.order || route.nav_order || route.navOrder || 100),
+      showInNavigation: route.show_in_navigation ?? route.showInNavigation ?? true,
+      showInDashboardActions: route.show_in_dashboard_actions ?? route.showInDashboardActions ?? false,
+      moduleId: route.module_id || extension.id,
+      extensionId: extension.id,
+      meta: {
+        ...(route.meta || {}),
+        extensionId: extension.id,
+        moduleId: route.module_id || extension.id,
+        requiresAuth: Boolean(route.requires_auth),
+        title: route.title || undefined,
+        description: route.description || undefined,
+      },
+    })
+    registeredRoutes.push(name)
   }
-  return registry.registerViteOutput(extensionId, frontend, output, {
-    baseUrl: resolveFrontendAssetsBaseUrl(),
+
+  return registeredRoutes
+}
+
+export function resolveAdminRouteComponent(componentKey, extension, { components = adminRouteComponents, importers = generatedAdminExtensionModules } = {}) {
+  return resolveExtensionRouteComponent(componentKey, extension, {
+    frontend: 'admin',
+    components,
+    importers,
+    normalizeEntry: normalizeAdminBootstrapEntry,
   })
 }
 
-function resolveFrontendAssetsBaseUrl() {
-  return globalThis.bias?.frontendAssetsBaseUrl || '/static/frontend'
+export function resolveAdminRouteComponentKeys(componentKey, extension = {}) {
+  return resolveExtensionRouteComponentKeys(componentKey, extension, {
+    frontend: 'admin',
+    normalizeEntry: normalizeAdminBootstrapEntry,
+  })
 }
 
 async function bootModuleExtenders(application, extensionId, module, extensionApp) {
@@ -195,11 +299,5 @@ async function runAdminExtensionInitializers(items) {
 }
 
 function normalizeAdminBootstrapEntry(entry) {
-  const value = String(entry || '').trim()
-  if (!value) {
-    return ''
-  }
-  return value.startsWith('extensions/')
-    ? `../../../${value}`.replace(/\\/g, '/')
-    : value.replace(/\\/g, '/')
+  return normalizeExtensionFrontendEntry(entry)
 }

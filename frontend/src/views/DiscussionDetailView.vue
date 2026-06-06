@@ -12,7 +12,6 @@
             :discussion-header-style="heroBindings.discussionHeaderStyle"
             :can-moderate-pending-discussion="heroBindings.canModeratePendingDiscussion"
             :can-edit-discussion="heroBindings.canEditDiscussion"
-            :build-tag-path="heroBindings.buildTagPath"
             @moderate-discussion="heroEvents.moderateDiscussion"
             @edit-discussion="heroEvents.editDiscussion"
           />

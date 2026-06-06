@@ -7,6 +7,7 @@ from io import StringIO
 from unittest.mock import Mock, patch
 
 from apps.discussions.services import DiscussionService
+from apps.core.extensions.lifecycle import rebuild_runtime_urlconf, reset_extension_runtime_state
 from apps.core.models import AuditLog
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
@@ -486,7 +487,7 @@ class TagForumSettingsTests(TestCase):
             any(
                 route["path"] == "/tags"
                 and route["name"] == "tags"
-                and route["component"] == "TagsView"
+                and route["component"] == "./TagsView.vue"
                 for route in tags_extension["frontend_routes"]
             )
         )
@@ -923,6 +924,18 @@ class TagDiscussionForumApiTests(TestCase):
 
 
 class AdminTagManagementApiTests(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        reset_extension_runtime_state()
+        rebuild_runtime_urlconf()
+
+    @classmethod
+    def tearDownClass(cls):
+        reset_extension_runtime_state()
+        rebuild_runtime_urlconf()
+        super().tearDownClass()
+
     def setUp(self):
         self.admin = User.objects.create_superuser(
             username="admin-tag-mgr",

@@ -37,4 +37,12 @@ class Command(BaseCommand):
             self.stdout.write(f"已更新安装记录: {', '.join(result['updated'])}")
         if result["pruned"]:
             self.stdout.write(f"已禁用缺失扩展: {', '.join(result['pruned'])}")
+        package_summary = dict((result.get("package_inspection") or {}).get("summary") or {})
+        if package_summary:
+            self.stdout.write(
+                "包锁定: "
+                f"{package_summary.get('locked_count', 0)} 个，"
+                f"缺失 {package_summary.get('missing_count', 0)} 个，"
+                f"版本漂移 {package_summary.get('version_drift_count', 0)} 个"
+            )
         self.stdout.write(self.style.SUCCESS("[OK] 扩展状态同步完成"))

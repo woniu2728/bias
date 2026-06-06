@@ -57,33 +57,12 @@
           </div>
 
           <template v-else>
-            <!-- 通知 -->
-            <HeaderNotificationsMenu
-              :show-notifications="showNotifications"
-              :notification-store="notificationStore"
-              :notification-items="notificationItems"
-              :notification-groups="notificationGroups"
-              :notification-type-summaries="notificationTypeSummaries"
-              :empty-state-text="notificationEmptyStateText"
-              :loading-state-text="notificationLoadingStateText"
-              :has-read-notifications="hasReadNotifications"
-              :action-message="actionMessage"
-              :action-tone="actionTone"
-              :marking-all-read="markingAllRead"
-              :clearing-read="clearingRead"
-              :get-notification-presentation="getNotificationPresentation"
-              :get-notification-icon-class="getNotificationIconClass"
-              :get-notification-text-html="getNotificationTextHtml"
-              :format-relative-time="formatRelativeTime"
-              @toggle="toggleNotifications"
-              @mark-all-read="markAllNotificationsAsRead"
-              @clear-read="clearReadNotifications"
-              @open-group="openNotificationGroup"
-              @open-type="openNotificationsPageByType"
-              @notification-click="handleNotificationClick"
-              @open-page="openNotificationsPage"
+            <component
+              :is="item.component"
+              v-for="item in headerComponentItems"
+              :key="item.key"
+              v-bind="item.componentProps || {}"
             />
-
             <component
               :is="item.href ? 'a' : 'button'"
               v-for="item in headerActionItems"
@@ -128,7 +107,6 @@
       :show-mobile-drawer="showMobileDrawer"
       :auth-store="authStore"
       :forum-store="forumStore"
-      :notification-store="notificationStore"
       :current-search-query="currentSearchQuery"
       :is-mobile-nav-active="isMobileNavActive"
       :profile-path="profilePath"
@@ -148,17 +126,11 @@
 <script setup>
 import { computed } from 'vue'
 import HeaderMobileDrawer from '@/components/header/HeaderMobileDrawer.vue'
-import HeaderNotificationsMenu from '@/components/header/HeaderNotificationsMenu.vue'
 import HeaderSearchBox from '@/components/header/HeaderSearchBox.vue'
 import HeaderUserMenu from '@/components/header/HeaderUserMenu.vue'
 import { useHeaderActions } from '@/composables/useHeaderActions'
 import { useHeaderMobileState } from '@/composables/useHeaderMobileState'
-import { useHeaderNotifications } from '@/composables/useHeaderNotifications'
 import { useHeaderUiState } from '@/composables/useHeaderUiState'
-import {
-  getNotificationIconClass,
-  getNotificationTextHtml
-} from '@/composables/useNotificationPresentation'
 import { getHeaderItems } from '@/forum/frontendRegistry'
 import { useStartDiscussionAction } from '@/composables/useStartDiscussionAction'
 import { useAuthStore } from '@/stores/auth'
@@ -166,11 +138,9 @@ import { useComposerStore } from '@/stores/composer'
 import { useForumStore } from '@/stores/forum'
 import { useForumUiStore } from '@/stores/forumUi'
 import { useModalStore } from '@/stores/modal'
-import { useNotificationStore } from '@/stores/notification'
 import { useRoute, useRouter } from 'vue-router'
 import {
   buildUserPath,
-  formatRelativeTime,
   getUserAvatarColor,
   getUserInitial
 } from '@/utils/forum'
@@ -180,7 +150,6 @@ const composerStore = useComposerStore()
 const forumStore = useForumStore()
 const forumUiStore = useForumUiStore()
 const modalStore = useModalStore()
-const notificationStore = useNotificationStore()
 const route = useRoute()
 const router = useRouter()
 const { startDiscussion } = useStartDiscussionAction({
@@ -209,33 +178,6 @@ const {
   route
 })
 const {
-  showNotifications,
-  notificationItems,
-  hasReadNotifications,
-  notificationGroups,
-  notificationTypeSummaries,
-  emptyStateText: notificationEmptyStateText,
-  loadingStateText: notificationLoadingStateText,
-  actionMessage,
-  actionTone,
-  markingAllRead,
-  clearingRead,
-  getNotificationPresentation,
-  toggleNotifications,
-  markAllNotificationsAsRead,
-  clearReadNotifications,
-  handleNotificationClick,
-  openNotificationGroup,
-  openNotificationsPage,
-  openNotificationsPageByType,
-  closeNotifications
-} = useHeaderNotifications({
-  modalStore,
-  notificationStore,
-  forumTitle: forumStore.settings.forum_title || '论坛',
-  router
-})
-const {
   openSearchModal,
   openLogin,
   openRegister,
@@ -246,7 +188,6 @@ const {
   composerStore,
   currentSearchQuery: computed(() => String(route.query.q ?? route.query.search ?? '').trim()),
   modalStore,
-  notificationStore,
   route,
   router
 })
@@ -257,7 +198,6 @@ function buildHeaderExtensionContext() {
     authStore,
     forumStore,
     forumUiStore,
-    notificationStore,
     route,
     router,
     handleLogout,
@@ -267,7 +207,9 @@ function buildHeaderExtensionContext() {
   }
 }
 
-const headerActionItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'after-search'))
+const afterSearchHeaderItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'after-search'))
+const headerComponentItems = computed(() => afterSearchHeaderItems.value.filter(item => item.component))
+const headerActionItems = computed(() => afterSearchHeaderItems.value.filter(item => !item.component))
 const guestActionItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'guest-actions'))
 const userMenuItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'user-menu'))
 const mobileDrawerGuestItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'mobile-drawer-auth'))
@@ -281,7 +223,7 @@ const {
 } = useHeaderUiState({
   authStore,
   closeMobileDrawer,
-  closeNotifications,
+  closeHeaderOverlays,
   handleLogout,
   openLogin,
   openRegister,
@@ -290,13 +232,20 @@ const {
   updateMobileHeaderOverride
 })
 
+function closeHeaderOverlays(detail = {}) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('bias:header-overlays-close', {
+    detail
+  }))
+}
+
 function profilePath() {
   return authStore.user ? buildUserPath(authStore.user) : '/profile'
 }
 
 function toggleMobileDrawer() {
   showUserMenu.value = false
-  closeNotifications()
+  closeHeaderOverlays({ source: 'mobile-drawer' })
   flipMobileDrawer()
 }
 
@@ -637,7 +586,7 @@ function openSearchFromDrawer() {
 
   .logo,
   .search-box,
-  .notifications-dropdown,
+  .header-extension-dropdown,
   .header-plugin-action,
   .user-dropdown,
   .header-account-cluster,

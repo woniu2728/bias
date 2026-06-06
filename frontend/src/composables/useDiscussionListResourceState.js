@@ -1,19 +1,23 @@
 import { computed, ref } from 'vue'
-import api from '@/api'
-import { useResourceStore } from '@/stores/resource'
-import { normalizeDiscussion, normalizeTag, unwrapList } from '@/utils/forum'
+import api from '../api/index.js'
+import { getDiscussionListRequests } from '../forum/frontendRegistry.js'
+import { useResourceStore } from '../stores/resource.js'
+import { normalizeDiscussion, unwrapList } from '../utils/forum.js'
 
 export function useDiscussionListResourceState({
-  currentTagSlug,
+  discussionListContexts,
   isFollowingPage,
   listFilter,
+  primaryDiscussionListContext,
+  route,
   searchQuery,
   sortBy,
 }) {
   const resourceStore = useResourceStore()
   const discussionIds = ref([])
-  const tagIds = ref([])
-  const currentTagId = ref(null)
+  const contextSubject = ref(null)
+  const contextSubjectKey = ref('')
+  const discussionListContextData = ref({})
   const sortOptions = ref([])
   const filterOptions = ref([])
   const currentPage = ref(1)
@@ -21,19 +25,29 @@ export function useDiscussionListResourceState({
   const pageSize = 20
 
   const discussions = computed(() => resourceStore.list('discussions', discussionIds.value))
-  const tags = computed(() => resourceStore.list('tags', tagIds.value))
-  const currentTag = computed(() => (currentTagId.value ? resourceStore.get('tags', currentTagId.value) : null))
   const hasMore = computed(() => currentPage.value * pageSize < total.value)
+  const activeDiscussionListContexts = computed(() => Array.isArray(discussionListContexts?.value)
+    ? discussionListContexts.value
+    : [])
+  const activeContextSubject = computed(() => {
+    const contextSubjectValue = primaryDiscussionListContext?.value?.subject
+    if (contextSubjectValue) {
+      return contextSubjectValue
+    }
+    return contextSubject.value
+  })
 
   function reset() {
     discussionIds.value = []
-    currentTagId.value = null
+    contextSubject.value = null
+    contextSubjectKey.value = ''
+    discussionListContextData.value = {}
     currentPage.value = 1
     total.value = 0
   }
 
   async function loadInitialResources() {
-    await Promise.all([loadTags(), loadCurrentTag(), loadDiscussions({ append: false })])
+    await Promise.all([loadExtensionResources(), loadDiscussions({ append: false })])
   }
 
   async function loadMoreDiscussions() {
@@ -50,43 +64,62 @@ export function useDiscussionListResourceState({
     await loadDiscussions({ append: false })
   }
 
-  async function loadTags() {
-    const response = await api.get('/tags', {
-      params: {
-        include_children: true
-      }
-    })
-    tagIds.value = unwrapList(response)
-      .map(normalizeTag)
-      .map(item => resourceStore.upsert('tags', item).id)
-  }
-
-  async function loadCurrentTag() {
-    if (!currentTagSlug.value || isFollowingPage.value) {
-      currentTagId.value = null
+  async function loadExtensionResources() {
+    const contexts = activeDiscussionListContexts.value
+    if (!contexts.length) {
+      contextSubject.value = null
+      contextSubjectKey.value = ''
+      discussionListContextData.value = {}
       return
     }
 
-    try {
-      const response = await api.get(`/tags/slug/${currentTagSlug.value}`)
-      const tag = resourceStore.upsert('tags', normalizeTag(response))
-      currentTagId.value = tag.id
-    } catch (error) {
-      currentTagId.value = null
-      console.error('加载标签详情失败:', error)
+    const results = await Promise.all(contexts.map(item => loadContextResources(item)))
+    let nextContextSubject = null
+    let nextContextSubjectKey = ''
+    const nextContextData = {}
+    for (const result of results) {
+      if (!result) {
+        continue
+      }
+      const contextKey = String(result.contextKey || result.key || '').trim()
+      if (contextKey && result.contextData && typeof result.contextData === 'object') {
+        nextContextData[contextKey] = result.contextData
+      }
+      if (result.subject !== undefined) {
+        nextContextSubject = result.subject
+      }
+      if (result.subjectKey) {
+        nextContextSubjectKey = String(result.subjectKey || '')
+      }
+    }
+    contextSubject.value = nextContextSubject
+    contextSubjectKey.value = nextContextSubjectKey
+    discussionListContextData.value = nextContextData
+  }
+
+  async function loadContextResources(item) {
+    if (typeof item.loadResources !== 'function') {
+      return null
+    }
+    const result = await item.loadResources(buildDiscussionListResourceContext(item))
+    if (!result || typeof result !== 'object') {
+      return result
+    }
+    return {
+      contextKey: item.key,
+      ...result,
     }
   }
 
   async function loadDiscussions({ append }) {
     const response = await api.get('/discussions/', {
-      params: {
+      params: buildDiscussionListRequestParams({
         page: currentPage.value,
         limit: pageSize,
         sort: sortBy.value,
         filter: listFilter.value,
         q: searchQuery.value || undefined,
-        tag: currentTagSlug.value || undefined,
-      }
+      })
     })
 
     const items = unwrapList(response).map(normalizeDiscussion)
@@ -101,11 +134,66 @@ export function useDiscussionListResourceState({
     filterOptions.value = Array.isArray(response.available_filters) ? response.available_filters : []
   }
 
+  function buildDiscussionListResourceContext(item = {}) {
+    return {
+      api,
+      context: item,
+      contextSubject: activeContextSubject.value,
+      contextSubjectKey: contextSubjectKey.value,
+      isFollowingPage: isFollowingPage.value,
+      listFilter: listFilter.value,
+      resourceStore,
+      route,
+      searchQuery: searchQuery.value,
+      sortBy: sortBy.value,
+    }
+  }
+
+  function buildDiscussionListRequestParams(baseParams = {}) {
+    const params = { ...baseParams }
+    const requests = getDiscussionListRequests({
+      contexts: activeDiscussionListContexts.value,
+      contextSubject: activeContextSubject.value,
+      contextSubjectKey: contextSubjectKey.value,
+      isFollowingPage: isFollowingPage.value,
+      listFilter: listFilter.value,
+      params,
+      route,
+      searchQuery: searchQuery.value,
+      sortBy: sortBy.value,
+      surface: 'discussion-list-request',
+    })
+
+    for (const item of requests) {
+      if (typeof item.apply === 'function') {
+        const nextParams = item.apply({
+          contexts: activeDiscussionListContexts.value,
+          contextSubject: activeContextSubject.value,
+          contextSubjectKey: contextSubjectKey.value,
+          isFollowingPage: isFollowingPage.value,
+          listFilter: listFilter.value,
+          params,
+          route,
+          searchQuery: searchQuery.value,
+          sortBy: sortBy.value,
+        })
+        if (nextParams && typeof nextParams === 'object') {
+          Object.assign(params, nextParams)
+        }
+      } else if (item.params && typeof item.params === 'object') {
+        Object.assign(params, item.params)
+      }
+    }
+
+    return params
+  }
+
   return {
+    contextSubject: activeContextSubject,
+    contextSubjectKey,
     currentPage,
-    currentTag,
-    currentTagId,
     discussionIds,
+    discussionListContextData,
     discussions,
     filterOptions,
     hasMore,
@@ -114,8 +202,6 @@ export function useDiscussionListResourceState({
     refreshDiscussions,
     reset,
     sortOptions,
-    tagIds,
-    tags,
     total,
   }
 }

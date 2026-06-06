@@ -1,4 +1,8 @@
 const forumNavItems = []
+const forumSidebarSections = []
+const discussionListContextItems = []
+const discussionListRequestItems = []
+const discussionListHeroItems = []
 const discussionActionItems = []
 const discussionActionHandlers = []
 const postActionItems = []
@@ -6,20 +10,25 @@ const postActionHandlers = []
 const headerItems = []
 const forumNavSections = []
 const composerTools = []
+const composerFields = []
 const composerNotices = []
 const composerSubmitGuards = []
+const composerPayloadContributors = []
+const composerInitialStateContributors = []
 const composerSecondaryActions = []
 const composerStatusItems = []
 const composerDraftMetaItems = []
 const composerSubmitSuccessHandlers = []
-const composerMentionProviders = []
+const composerAutocompleteProviders = []
 const composerPreviewTransformers = []
 const profilePanels = []
 const notificationRenderers = []
 const searchSources = []
+const searchModalSections = []
 const userBadges = []
 const discussionBadges = []
 const discussionStateBadges = []
+const discussionPresentationItems = []
 const postStateBadges = []
 const heroMetaItems = []
 const discussionReplyStates = []
@@ -31,12 +40,17 @@ const emptyStates = []
 const pageStates = []
 const stateBlocks = []
 const uiCopies = []
+const forumRuntimeHooks = []
 
 import { getCurrentExtensionId } from '../common/extensionRuntime.js'
 import ItemList from '../common/itemList.js'
 
 const registryTargets = [
   forumNavItems,
+  forumSidebarSections,
+  discussionListContextItems,
+  discussionListRequestItems,
+  discussionListHeroItems,
   discussionActionItems,
   discussionActionHandlers,
   postActionItems,
@@ -44,20 +58,25 @@ const registryTargets = [
   headerItems,
   forumNavSections,
   composerTools,
+  composerFields,
   composerNotices,
   composerSubmitGuards,
+  composerPayloadContributors,
+  composerInitialStateContributors,
   composerSecondaryActions,
   composerStatusItems,
   composerDraftMetaItems,
   composerSubmitSuccessHandlers,
-  composerMentionProviders,
+  composerAutocompleteProviders,
   composerPreviewTransformers,
   profilePanels,
   notificationRenderers,
   searchSources,
+  searchModalSections,
   userBadges,
   discussionBadges,
   discussionStateBadges,
+  discussionPresentationItems,
   postStateBadges,
   heroMetaItems,
   discussionReplyStates,
@@ -69,6 +88,7 @@ const registryTargets = [
   pageStates,
   stateBlocks,
   uiCopies,
+  forumRuntimeHooks,
 ]
 
 function upsertByKey(target, key, value) {
@@ -179,6 +199,8 @@ function resolveRegisteredItem(item, context = {}) {
     href: getResolvedValue('href'),
     badge: getResolvedValue('badge'),
     count: getResolvedValue('count'),
+    component: getResolvedValue('component'),
+    componentProps: getResolvedValue('componentProps') || {},
     active: Boolean(
       'isActive' in resolvedItem
         ? (typeof resolvedItem.isActive === 'function' ? resolvedItem.isActive(context) : resolvedItem.active)
@@ -206,6 +228,50 @@ export function registerForumNavSection(section) {
     ...section,
   }
   return upsertByKey(forumNavSections, normalizedSection.key, normalizedSection)
+}
+
+export function registerForumSidebarSection(section) {
+  const normalizedSection = normalizeRegisteredItem(section)
+  return upsertByKey(forumSidebarSections, normalizedSection.key, normalizedSection)
+}
+
+export function getForumSidebarSections(context = {}) {
+  return orderedRegisteredItems(forumSidebarSections)
+    .map(item => resolveRegisteredItem(item, context))
+    .filter(Boolean)
+}
+
+export function registerDiscussionListContext(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(discussionListContextItems, normalizedItem.key, normalizedItem)
+}
+
+export function getDiscussionListContexts(context = {}) {
+  return orderedRegisteredItems(discussionListContextItems)
+    .map(item => resolveRegisteredItem(item, context))
+    .filter(Boolean)
+}
+
+export function registerDiscussionListRequest(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(discussionListRequestItems, normalizedItem.key, normalizedItem)
+}
+
+export function getDiscussionListRequests(context = {}) {
+  return orderedRegisteredItems(discussionListRequestItems)
+    .map(item => resolveRegisteredItem(item, context))
+    .filter(Boolean)
+}
+
+export function registerDiscussionListHero(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(discussionListHeroItems, normalizedItem.key, normalizedItem)
+}
+
+export function getDiscussionListHero(context = {}) {
+  return orderedRegisteredItems(discussionListHeroItems)
+    .map(item => resolveRegisteredItem(item, context))
+    .filter(Boolean)[0] || null
 }
 
 export function getForumNavItems(context = {}) {
@@ -323,6 +389,17 @@ export function getComposerTools(context = {}) {
     .filter(Boolean)
 }
 
+export function registerComposerField(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(composerFields, normalizedItem.key, normalizedItem)
+}
+
+export function getComposerFields(context = {}) {
+  return orderedRegisteredItems(composerFields)
+    .map(item => resolveRegisteredItem(item, context))
+    .filter(Boolean)
+}
+
 export function registerComposerNotice(item) {
   const normalizedItem = normalizeRegisteredItem(item)
   return upsertByKey(composerNotices, normalizedItem.key, normalizedItem)
@@ -337,6 +414,16 @@ export function getComposerNotices(context = {}) {
 export function registerComposerSubmitGuard(item) {
   const normalizedItem = normalizeRegisteredItem(item)
   return upsertByKey(composerSubmitGuards, normalizedItem.key, normalizedItem)
+}
+
+export function registerComposerPayloadContributor(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(composerPayloadContributors, normalizedItem.key, normalizedItem)
+}
+
+export function registerComposerInitialState(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(composerInitialStateContributors, normalizedItem.key, normalizedItem)
 }
 
 export function registerComposerSecondaryAction(item) {
@@ -377,9 +464,15 @@ export function registerComposerSubmitSuccess(item) {
   return upsertByKey(composerSubmitSuccessHandlers, normalizedItem.key, normalizedItem)
 }
 
-export function registerComposerMentionProvider(item) {
+export function registerComposerAutocompleteProvider(item) {
   const normalizedItem = normalizeRegisteredItem(item)
-  return upsertByKey(composerMentionProviders, normalizedItem.key, normalizedItem)
+  return upsertByKey(composerAutocompleteProviders, normalizedItem.key, normalizedItem)
+}
+
+export function getComposerAutocompleteProviders(context = {}) {
+  return orderedRegisteredItems(composerAutocompleteProviders)
+    .map(item => resolveRegisteredItem(item, context))
+    .filter(Boolean)
 }
 
 export function registerComposerPreviewTransformer(item) {
@@ -435,6 +528,17 @@ export function getSearchSources(context = {}) {
     .filter(Boolean)
 }
 
+export function registerSearchModalSection(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(searchModalSections, normalizedItem.key, normalizedItem)
+}
+
+export function getSearchModalSections(context = {}) {
+  return orderedRegisteredItems(searchModalSections)
+    .map(item => resolveRegisteredItem(item, context))
+    .filter(Boolean)
+}
+
 export function registerUserBadge(item) {
   const normalizedItem = normalizeRegisteredItem(item)
   return upsertByKey(userBadges, normalizedItem.key, normalizedItem)
@@ -464,6 +568,17 @@ export function registerDiscussionStateBadge(item) {
 
 export function getDiscussionStateBadges(context = {}) {
   return orderedRegisteredItems(discussionStateBadges)
+    .map(item => resolveRegisteredItem(item, context))
+    .filter(Boolean)
+}
+
+export function registerDiscussionPresentation(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(discussionPresentationItems, normalizedItem.key, normalizedItem)
+}
+
+export function getDiscussionPresentationItems(context = {}) {
+  return orderedRegisteredItems(discussionPresentationItems)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -679,6 +794,46 @@ export function registerUiCopy(item) {
   return upsertByKey(uiCopies, normalizedItem.key, normalizedItem)
 }
 
+export function registerForumRuntime(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(forumRuntimeHooks, normalizedItem.key, normalizedItem)
+}
+
+export async function runForumRuntimeHook(name, context = {}) {
+  const normalizedName = String(name || '').trim()
+  if (!normalizedName) {
+    return []
+  }
+
+  const results = []
+  for (const item of orderedRegisteredItems(forumRuntimeHooks)) {
+    if (!isRegisteredItemEnabled(item, context)) {
+      continue
+    }
+    const isVisible = typeof item.isVisible === 'function' ? item.isVisible(context) : true
+    if (!isVisible) {
+      continue
+    }
+
+    const handler = item[normalizedName]
+    if (typeof handler !== 'function') {
+      continue
+    }
+    try {
+      results.push(await handler(context))
+    } catch (error) {
+      if (typeof console !== 'undefined' && typeof console.error === 'function') {
+        console.error(`论坛运行时扩展钩子执行失败: ${normalizedName}`, error)
+      }
+      results.push({
+        key: item.key,
+        error,
+      })
+    }
+  }
+  return results
+}
+
 export function getUiCopy(context = {}) {
   const resolvedItems = orderedRegisteredItems(uiCopies)
     .map(item => resolveRegisteredItem(item, context))
@@ -733,6 +888,56 @@ export async function runComposerSubmitGuards(context = {}) {
   return null
 }
 
+export async function runComposerPayloadContributors(payload = {}, context = {}) {
+  let nextPayload = payload && typeof payload === 'object' ? payload : {}
+  const contributors = orderedRegisteredItems(composerPayloadContributors)
+
+  for (const contributor of contributors) {
+    if (!isRegisteredItemEnabled(contributor, context)) {
+      continue
+    }
+    const isVisible = typeof contributor.isVisible === 'function' ? contributor.isVisible(context) : true
+    if (!isVisible || typeof contributor.contribute !== 'function') {
+      continue
+    }
+
+    const result = await contributor.contribute({
+      ...context,
+      payload: nextPayload,
+    })
+    if (result && typeof result === 'object') {
+      nextPayload = result
+    }
+  }
+
+  return nextPayload
+}
+
+export async function runComposerInitialStateContributors(initialState = {}, context = {}) {
+  let nextState = normalizeComposerInitialState(initialState)
+  const contributors = orderedRegisteredItems(composerInitialStateContributors)
+
+  for (const contributor of contributors) {
+    if (!isRegisteredItemEnabled(contributor, context)) {
+      continue
+    }
+    const isVisible = typeof contributor.isVisible === 'function' ? contributor.isVisible(context) : true
+    if (!isVisible || typeof contributor.contribute !== 'function') {
+      continue
+    }
+
+    const result = await contributor.contribute({
+      ...context,
+      initialState: nextState,
+    })
+    if (result && typeof result === 'object') {
+      nextState = mergeComposerInitialState(nextState, result)
+    }
+  }
+
+  return nextState
+}
+
 export async function runComposerSubmitSuccess(context = {}) {
   const handlers = orderedRegisteredItems(composerSubmitSuccessHandlers)
 
@@ -751,45 +956,64 @@ export async function runComposerSubmitSuccess(context = {}) {
   }
 }
 
-export async function runComposerMentionProviders(context = {}) {
-  const providers = orderedRegisteredItems(composerMentionProviders)
-
-  const items = []
-  const seenKeys = new Set()
-
-  for (const provider of providers) {
-    if (!isRegisteredItemEnabled(provider, context)) {
-      continue
-    }
-    const isVisible = typeof provider.isVisible === 'function' ? provider.isVisible(context) : true
-    if (!isVisible) {
-      continue
-    }
-
-    const result = typeof provider.search === 'function'
-      ? await provider.search(context)
-      : []
-
-    if (!Array.isArray(result)) {
-      continue
-    }
-
-    for (const item of result) {
-      if (!item) {
-        continue
+function normalizeComposerInitialState(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? {
+        ...value,
+        extensions: normalizeExtensionState(value.extensions || value.extensionState),
       }
-      const itemKey = String(item.id ?? item.username ?? item.key ?? '')
-      if (itemKey && seenKeys.has(itemKey)) {
-        continue
-      }
-      if (itemKey) {
-        seenKeys.add(itemKey)
-      }
-      items.push(item)
-    }
+    : { extensions: {} }
+}
+
+function mergeComposerInitialState(current, next) {
+  const normalizedNext = normalizeComposerInitialState(next)
+  return {
+    ...current,
+    ...normalizedNext,
+    extensions: mergeExtensionState(current.extensions, normalizedNext.extensions),
+  }
+}
+
+function normalizeExtensionState(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
   }
 
-  return items
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => String(key || '').trim())
+      .map(([key, state]) => [
+        String(key).trim(),
+        state && typeof state === 'object' && !Array.isArray(state) ? { ...state } : state,
+      ])
+  )
+}
+
+function mergeExtensionState(current = {}, next = {}) {
+  const normalizedCurrent = normalizeExtensionState(current)
+  const normalizedNext = normalizeExtensionState(next)
+  const merged = { ...normalizedCurrent }
+
+  for (const [key, value] of Object.entries(normalizedNext)) {
+    const currentValue = merged[key]
+    if (
+      currentValue &&
+      typeof currentValue === 'object' &&
+      !Array.isArray(currentValue) &&
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value)
+    ) {
+      merged[key] = {
+        ...currentValue,
+        ...value,
+      }
+      continue
+    }
+    merged[key] = value
+  }
+
+  return merged
 }
 
 export async function runComposerPreviewTransformers(context = {}) {

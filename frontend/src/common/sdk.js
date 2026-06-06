@@ -13,8 +13,18 @@ export {
   registerLoadedExtensionModule,
   resetExtensionPatches,
   runWithExtensionScope,
+  unregisterLazyExtensionModules,
   unregisterLoadedExtensionModule,
 } from './extensionRuntime.js'
+export {
+  importRouteComponentFromExportRegistry,
+  normalizeExtensionFrontendEntry,
+  registerExtensionFrontendOutput,
+  resolveDefaultComponent,
+  resolveExtensionRouteComponent,
+  resolveExtensionRouteComponentKeys,
+  withRuntimeApplication,
+} from './extensionRouteRuntime.js'
 export { ExportRegistry, ensureExportRegistry } from './exportRegistry.js'
 export { ItemList, itemContentValue } from './itemList.js'
 export {
@@ -22,4 +32,8 @@ export {
   createListItemRegistry,
   createSingleItemRegistry,
 } from './listRegistry.js'
+export {
+  ResourceModel,
+  normalizeModelData,
+} from './resourceModel.js'
 export * from './extenders.js'

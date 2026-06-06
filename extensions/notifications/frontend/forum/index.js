@@ -1,4 +1,6 @@
-import { Forum } from '@bias/forum'
+import { Forum, normalizeUser, registerResourceNormalizer } from '@bias/forum'
+import NotificationHeaderItem from './NotificationHeaderItem.vue'
+import { useNotificationStore } from './store.js'
 
 export const extend = [
   buildNotificationsForumExtender(),
@@ -7,10 +9,60 @@ export const extend = [
 function buildNotificationsForumExtender() {
   const forum = new Forum()
   registerNavigation(forum)
+  registerRuntime(forum)
   registerNotificationRenderers(forum)
   registerNotificationStates(forum)
   registerNotificationCopy(forum)
   return forum
+}
+
+function registerRuntime(forum) {
+  registerResourceNormalizer('notifications', normalizeNotification)
+  registerResourceNormalizer('notification', normalizeNotification)
+
+  forum.runtime({
+    key: 'notifications-runtime',
+    moduleId: 'notifications',
+    async onAuthenticated() {
+      const notificationStore = useNotificationStore()
+      try {
+        await notificationStore.fetchStats()
+      } catch (error) {
+        console.error('同步通知角标失败:', error)
+      }
+      notificationStore.requestPermission()
+      notificationStore.connect()
+    },
+    onGuest() {
+      resetNotificationsRuntime()
+    },
+    onMaintenance() {
+      resetNotificationsRuntime()
+    },
+    onBeforeUnmount() {
+      resetNotificationsRuntime()
+    },
+  })
+}
+
+function normalizeNotification(notification = {}) {
+  return {
+    ...notification,
+    is_read: Boolean(notification.is_read),
+    from_user: notification.from_user ? normalizeUser(notification.from_user) : null,
+  }
+}
+
+function resetNotificationsRuntime() {
+  const notificationStore = useNotificationStore()
+  notificationStore.disconnect()
+  notificationStore.resetState()
+}
+
+function getUnreadNotificationBadge() {
+  const notificationStore = useNotificationStore()
+  const count = Number(notificationStore?.unreadCount || 0)
+  return count > 0 ? count : ''
 }
 
 function registerNavigation(forum) {
@@ -23,11 +75,17 @@ function registerNavigation(forum) {
     description: '查看回复、提及和审核通知。',
     section: 'personal',
     order: 40,
-    badge: ({ notificationStore }) => {
-      const count = Number(notificationStore?.unreadCount || 0)
-      return count > 0 ? count : ''
-    },
-    isVisible: ({ showNotifications }) => Boolean(showNotifications),
+    badge: getUnreadNotificationBadge,
+    isVisible: ({ authStore }) => Boolean(authStore?.user),
+  })
+
+  forum.headerItem({
+    key: 'notifications-menu',
+    moduleId: 'notifications',
+    placement: 'after-search',
+    order: 20,
+    component: NotificationHeaderItem,
+    isVisible: ({ authStore }) => Boolean(authStore?.user),
   })
 
   forum.headerItem({
@@ -38,10 +96,7 @@ function registerNavigation(forum) {
     icon: 'fas fa-bell',
     label: '通知',
     to: '/notifications',
-    badge: ({ notificationStore }) => {
-      const count = Number(notificationStore?.unreadCount || 0)
-      return count > 0 ? count : ''
-    },
+    badge: getUnreadNotificationBadge,
     isVisible: ({ authStore }) => Boolean(authStore?.user),
     isActive: ({ route }) => route?.name === 'notifications',
   })
@@ -54,10 +109,7 @@ function registerNavigation(forum) {
     icon: 'fas fa-inbox',
     label: '通知',
     to: '/notifications',
-    badge: ({ notificationStore }) => {
-      const count = Number(notificationStore?.unreadCount || 0)
-      return count > 0 ? count : ''
-    },
+    badge: getUnreadNotificationBadge,
     isVisible: ({ authStore }) => Boolean(authStore?.user),
     isActive: ({ route }) => route?.name === 'notifications',
   })
@@ -211,6 +263,7 @@ function registerNotificationCopy(forum) {
     ['notifications-menu-action-failed-title', 479, () => '操作失败'],
     ['notifications-menu-action-retry-message', 479, () => '请稍后重试'],
     ['notification-page-hero-title', 940, () => '通知'],
+    ['notifications-mobile-page-title', 300, () => '通知'],
     ['notification-page-hero-pill', 950, () => '消息中心'],
     ['notification-page-hero-description', 960, () => '这里会显示回复、提及、点赞、审核和账号状态相关通知。'],
     ['notification-page-mark-all', 970, ({ marking, hasActiveFilter }) => (marking ? '处理中...' : (hasActiveFilter ? '当前筛选标记已读' : '全部标记为已读'))],
@@ -244,7 +297,10 @@ function registerNotificationCopy(forum) {
       key,
       moduleId: 'notifications',
       order,
-      surfaces: [key],
+      surfaces: key === 'notifications-mobile-page-title' ? ['header-mobile-page-title'] : [key],
+      isVisible: key === 'notifications-mobile-page-title'
+        ? ({ routeName }) => routeName === 'notifications'
+        : undefined,
       resolve: context => ({ text: resolveText(context || {}) }),
     })
   }

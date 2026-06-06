@@ -49,7 +49,6 @@ from apps.core.extensions.extension_runtime import Extension
 from apps.core.extensions.frontend_runtime_service import (
     bootstrap_extension_frontend_runtime,
 )
-from apps.core.extensions.frontend_event_listeners import bootstrap_extension_frontend_event_listeners
 from apps.core.extensions.frontend_compiler import (
     build_extension_frontend_output_manifest,
     copy_frontend_dist_to_static,
@@ -59,6 +58,7 @@ from apps.core.extensions.frontend_compiler import (
     get_published_frontend_root,
     write_extension_frontend_import_map,
 )
+from apps.core.extensions.runtime_event_listeners import bootstrap_extension_runtime_event_listeners
 from apps.core.extensions.lifecycle import reset_extension_runtime_state
 from apps.core.extensions.settings_runtime_service import (
     get_enabled_extension_settings_definitions,
@@ -1988,7 +1988,7 @@ class ExtensionManifestLoaderTests(TestCase):
                 output_manifest.write_text('{"stale": true}', encoding="utf-8")
                 build_manifest.write_text('{"stale": true}', encoding="utf-8")
 
-                bootstrap_extension_frontend_event_listeners()
+                bootstrap_extension_runtime_event_listeners()
                 registry = ExtensionRegistry(extensions_path=extensions_dir)
                 with self.captureOnCommitCallbacks(execute=True):
                     installed = registry.install_extension("alpha-tools")
@@ -2017,6 +2017,9 @@ class ExtensionManifestLoaderTests(TestCase):
                 with self.captureOnCommitCallbacks(execute=True):
                     registry.set_extension_enabled("alpha-tools", False)
                 self.assertFalse(published_file.exists())
+                disabled_marker = Setting.objects.get(key="extensions_runtime_rebuild_required")
+                self.assertIn("extension_disabled", disabled_marker.value)
+                self.assertNotIn("alpha-tools", build_manifest.read_text(encoding="utf-8"))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -2126,6 +2129,11 @@ class ExtensionManifestLoaderTests(TestCase):
                         "file": "assets/chunk.js",
                         "css": ["assets/chunk.css"],
                         "imports": ["assets/vendor.js"],
+                    },
+                    "../../../extensions/alpha-tools/frontend/forum/Page.vue": {
+                        "file": "assets/page.js",
+                        "css": ["assets/page.css"],
+                        "imports": ["assets/vendor.js"],
                     }
                 }, ensure_ascii=False), encoding="utf-8")
                 output = build_extension_frontend_output_manifest({
@@ -2134,6 +2142,12 @@ class ExtensionManifestLoaderTests(TestCase):
                             "extension_id": "alpha-tools",
                             "forum_entry": "extensions/alpha-tools/frontend/forum/index.js",
                             "admin_entry": "",
+                            "routes": [{
+                                "path": "/alpha",
+                                "name": "alpha.page",
+                                "component": "./Page.vue",
+                                "frontend": "forum",
+                            }],
                         }
                     }
                 })
@@ -2150,6 +2164,58 @@ class ExtensionManifestLoaderTests(TestCase):
                 self.assertEqual(forum_output["chunks"][0]["file"], "assets/chunk.js")
                 self.assertEqual(forum_output["chunks"][0]["css"], ["assets/chunk.css"])
                 self.assertEqual(forum_output["chunks"][0]["revision"], output["revision"])
+                self.assertEqual(forum_output["chunks"][1]["module_id"], "frontend/forum/Page.vue")
+                self.assertEqual(forum_output["chunks"][1]["file"], "assets/page.js")
+                self.assertEqual(forum_output["chunks"][1]["css"], ["assets/page.css"])
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_extension_frontend_output_manifest_maps_route_only_components(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                vite_manifest = get_frontend_vite_manifest_path()
+                vite_manifest.parent.mkdir(parents=True, exist_ok=True)
+                vite_manifest.write_text(json.dumps({
+                    "../../../extensions/alpha-tools/frontend/admin/Page.vue": {
+                        "file": "assets/admin-page.js",
+                        "css": ["assets/admin-page.css"],
+                    },
+                    "../../../extensions/alpha-tools/frontend/forum/Page.vue": {
+                        "file": "assets/forum-page.js",
+                        "css": ["assets/forum-page.css"],
+                    },
+                }, ensure_ascii=False), encoding="utf-8")
+
+                output = build_extension_frontend_output_manifest({
+                    "extensions": {
+                        "alpha-tools": {
+                            "extension_id": "alpha-tools",
+                            "admin_entry": "",
+                            "forum_entry": "",
+                            "routes": [
+                                {
+                                    "path": "/admin/alpha",
+                                    "name": "alpha.admin",
+                                    "component": "./Page.vue",
+                                    "frontend": "admin",
+                                },
+                                {
+                                    "path": "/alpha",
+                                    "name": "alpha.page",
+                                    "component": "./Page.vue",
+                                    "frontend": "forum",
+                                },
+                            ],
+                        }
+                    }
+                })
+
+                outputs = output["extensions"]["alpha-tools"]["outputs"]
+                self.assertEqual(outputs["admin"]["chunks"][0]["module_id"], "frontend/admin/Page.vue")
+                self.assertEqual(outputs["admin"]["chunks"][0]["file"], "assets/admin-page.js")
+                self.assertEqual(outputs["forum"]["chunks"][0]["module_id"], "frontend/forum/Page.vue")
+                self.assertEqual(outputs["forum"]["chunks"][0]["file"], "assets/forum-page.js")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -2172,7 +2238,48 @@ class ExtensionManifestLoaderTests(TestCase):
                 source = path.read_text(encoding="utf-8")
                 self.assertIn("../../../extensions/alpha-tools/frontend/admin/index.js", source)
                 self.assertIn("../../../extensions/alpha-tools/frontend/forum/index.js", source)
-                self.assertIn('"alpha-tools": () => import', source)
+                self.assertIn('"alpha-tools": () =>', source)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_extension_frontend_import_map_includes_css_and_route_components(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                path = write_extension_frontend_import_map({
+                    "extensions": {
+                        "alpha-tools": {
+                            "extension_id": "alpha-tools",
+                            "admin_entry": "extensions/alpha-tools/frontend/admin/index.js",
+                            "forum_entry": "extensions/alpha-tools/frontend/forum/index.js",
+                            "css": ["frontend/forum/style.css"],
+                            "routes": [
+                                {
+                                    "path": "/admin/alpha",
+                                    "name": "alpha.admin",
+                                    "component": "./AdminPage.vue",
+                                    "frontend": "admin",
+                                },
+                                {
+                                    "path": "/alpha",
+                                    "name": "alpha.page",
+                                    "component": "./Page.vue",
+                                    "frontend": "forum",
+                                },
+                            ],
+                        }
+                    }
+                })
+
+                source = path.read_text(encoding="utf-8")
+                self.assertIn("loadExtensionModule", source)
+                self.assertIn("../../../extensions/alpha-tools/frontend/forum/style.css", source)
+                self.assertNotIn('"./AdminPage.vue": () => import(', source)
+                self.assertIn('"extensions/alpha-tools/frontend/admin/AdminPage.vue": () => import("../../../extensions/alpha-tools/frontend/admin/AdminPage.vue")', source)
+                self.assertIn('"alpha-tools:./AdminPage.vue": () => import("../../../extensions/alpha-tools/frontend/admin/AdminPage.vue")', source)
+                self.assertNotIn('"./Page.vue": () => import(', source)
+                self.assertIn('"extensions/alpha-tools/frontend/forum/Page.vue": () => import("../../../extensions/alpha-tools/frontend/forum/Page.vue")', source)
+                self.assertIn('"alpha-tools:./Page.vue": () => import("../../../extensions/alpha-tools/frontend/forum/Page.vue")', source)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -2236,7 +2343,8 @@ class ExtensionManifestLoaderTests(TestCase):
                     booted=True,
                 )
 
-                call_command("sync_extensions", stdout=StringIO())
+                stdout = StringIO()
+                call_command("sync_extensions", stdout=stdout)
                 installation = ExtensionInstallation.objects.get(extension_id="missing-package")
                 self.assertFalse(installation.enabled)
                 self.assertFalse(installation.booted)
@@ -2245,6 +2353,7 @@ class ExtensionManifestLoaderTests(TestCase):
                 self.assertEqual(lock["schema"], 1)
                 self.assertEqual(lock["packages"][0]["id"], "missing-package")
                 self.assertTrue(lock["packages"][0]["missing"])
+                self.assertIn("包锁定:", stdout.getvalue())
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -2291,6 +2400,8 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(result["discovered"], ["alpha-tools"])
             self.assertEqual(result["updated"], ["alpha-tools"])
             self.assertEqual(result["locked"], 1)
+            self.assertEqual(result["package_inspection"]["summary"]["locked_count"], 1)
+            self.assertEqual(result["package_inspection"]["summary"]["missing_count"], 0)
             self.assertEqual(installation.version, "1.2.3")
             self.assertEqual(installation.source, "python-package")
             self.assertEqual(lock["packages"][0]["id"], "alpha-tools")
@@ -2298,6 +2409,7 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(lock["packages"][0]["distribution"]["name"], "alpha-tools")
             self.assertEqual(lock["packages"][0]["distribution"]["version"], "1.2.3")
             self.assertFalse(lock["packages"][0]["missing"])
+            self.assertTrue(lock["packages"][0]["discovered"])
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -4408,6 +4520,9 @@ class ExtensionManagementCommandTests(TestCase):
         self.assertEqual(payload["meta"]["extension_id"], "sample-hello")
         self.assertEqual(payload["extensions"][0]["id"], "sample-hello")
         self.assertIn("permission_sections", payload["extensions"][0])
+        self.assertIn("package_lock", payload)
+        self.assertIn("summary", payload["package_lock"])
+        self.assertIn("packages", payload["package_lock"])
 
     def test_inspect_extensions_command_can_filter_attention_only(self):
         ExtensionInstallation.objects.create(
@@ -4749,7 +4864,7 @@ class ExtensionRegistryTests(TestCase):
                 locale_service._extension_locale_cache = [{"stale": True}]
                 formatter_service._extension_formatter_pipeline_cache = {"render": [lambda value: value]}
 
-                bootstrap_extension_frontend_event_listeners()
+                bootstrap_extension_runtime_event_listeners()
                 get_extension_event_bus().dispatch(ExtensionEnabledEvent(extension_id="alpha-tools"))
 
                 marker = Setting.objects.get(key="extensions_runtime_rebuild_required")
@@ -4765,6 +4880,64 @@ class ExtensionRegistryTests(TestCase):
                 self.assertFalse(frontend_runtime_service._frontend_runtime_bootstrapped)
                 self.assertIsNone(locale_service._extension_locale_cache)
                 self.assertEqual(formatter_service._extension_formatter_pipeline_cache, {})
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_runtime_cache_clear_event_refreshes_extension_frontend_assets(self):
+        from apps.core.extensions.event_bus import get_extension_event_bus
+        from apps.core.extensions.events import RuntimeCacheClearedEvent
+
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                import_map = get_extension_frontend_import_map_path()
+                output_manifest = get_extension_frontend_output_manifest_path()
+                build_manifest = Path(temp_dir) / "static" / "extensions" / "frontend-build-manifest.json"
+                import_map.parent.mkdir(parents=True, exist_ok=True)
+                output_manifest.parent.mkdir(parents=True, exist_ok=True)
+                build_manifest.parent.mkdir(parents=True, exist_ok=True)
+                import_map.write_text("export const staleExtensionModules = {}\n", encoding="utf-8")
+                output_manifest.write_text('{"stale": true}', encoding="utf-8")
+                build_manifest.write_text('{"stale": true}', encoding="utf-8")
+
+                bootstrap_extension_runtime_event_listeners()
+                get_extension_event_bus().dispatch(RuntimeCacheClearedEvent())
+
+                marker = Setting.objects.get(key="extensions_runtime_rebuild_required")
+                self.assertIn("runtime_cache_cleared", marker.value)
+                self.assertTrue(output_manifest.exists())
+                self.assertTrue(build_manifest.exists())
+                self.assertNotIn("stale", output_manifest.read_text(encoding="utf-8"))
+                self.assertNotIn("stale", build_manifest.read_text(encoding="utf-8"))
+                self.assertTrue(import_map.exists())
+                self.assertIn("generatedForumExtensionModules", import_map.read_text(encoding="utf-8"))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_clear_runtime_cache_command_refreshes_extension_frontend_assets(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                import_map = get_extension_frontend_import_map_path()
+                output_manifest = get_extension_frontend_output_manifest_path()
+                build_manifest = Path(temp_dir) / "static" / "extensions" / "frontend-build-manifest.json"
+                import_map.parent.mkdir(parents=True, exist_ok=True)
+                output_manifest.parent.mkdir(parents=True, exist_ok=True)
+                build_manifest.parent.mkdir(parents=True, exist_ok=True)
+                import_map.write_text("export const staleExtensionModules = {}\n", encoding="utf-8")
+                output_manifest.write_text('{"stale": true}', encoding="utf-8")
+                build_manifest.write_text('{"stale": true}', encoding="utf-8")
+
+                stdout = StringIO()
+                call_command("clear_runtime_cache", stdout=stdout)
+
+                self.assertIn("[OK] 已清理运行时缓存", stdout.getvalue())
+                marker = Setting.objects.get(key="extensions_runtime_rebuild_required")
+                self.assertIn("runtime_cache_cleared", marker.value)
+                self.assertNotIn("stale", output_manifest.read_text(encoding="utf-8"))
+                self.assertNotIn("stale", build_manifest.read_text(encoding="utf-8"))
+                self.assertTrue(import_map.exists())
+                self.assertIn("generatedForumExtensionModules", import_map.read_text(encoding="utf-8"))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -13522,7 +13695,16 @@ class InstallForumCommandTests(TestCase):
                 CommandError,
                 "PostgreSQL 模式缺少必要配置: db_name, db_user, db_password",
             ):
-                with override_settings(BASE_DIR=Path(temp_dir)):
+                with patch.dict(
+                    os.environ,
+                    {
+                        "DB_NAME": "",
+                        "DB_USER": "",
+                        "DB_PASSWORD": "",
+                        "BIAS_SITE_CONFIG": "",
+                    },
+                    clear=False,
+                ), override_settings(BASE_DIR=Path(temp_dir)):
                     call_command(
                         "install_forum",
                         "--database",
@@ -13677,6 +13859,7 @@ class BootstrapConfigFallbackTests(TestCase):
                 with patch.dict(
                     os.environ,
                     {
+                        "BIAS_SITE_CONFIG": "",
                         "DB_NAME": "bias",
                         "DB_USER": "postgres",
                         "DB_PASSWORD": "postgres",
@@ -13969,7 +14152,9 @@ class ReleaseVersionControlTests(TestCase):
                 encoding="utf-8",
             )
 
-            with patch("apps.core.management.commands.prepare_release.Command._inspect_extensions") as inspect_mock:
+            with patch("apps.core.management.commands.prepare_release.call_command") as validate_mock, patch(
+                "apps.core.management.commands.prepare_release.Command._inspect_extensions"
+            ) as inspect_mock:
                 inspect_mock.return_value = {
                     "summary": {
                         "attention_count": 0,
@@ -13978,6 +14163,7 @@ class ReleaseVersionControlTests(TestCase):
                 }
                 with override_settings(BASE_DIR=base_dir):
                     call_command("prepare_release", "--tag", "v1.2.3")
+                validate_mock.assert_called_once_with("validate_extensions", "--strict")
 
             self.assertEqual((base_dir / "VERSION").read_text(encoding="utf-8").strip(), "1.2.3")
             package_json = json.loads((base_dir / "frontend" / "package.json").read_text(encoding="utf-8"))
@@ -14007,7 +14193,9 @@ class ReleaseVersionControlTests(TestCase):
                 encoding="utf-8",
             )
 
-            with patch("apps.core.management.commands.prepare_release.Command._inspect_extensions") as inspect_mock:
+            with patch("apps.core.management.commands.prepare_release.call_command") as validate_mock, patch(
+                "apps.core.management.commands.prepare_release.Command._inspect_extensions"
+            ) as inspect_mock:
                 inspect_mock.return_value = {
                     "summary": {
                         "blocking_count": 2,
@@ -14019,6 +14207,7 @@ class ReleaseVersionControlTests(TestCase):
                 with override_settings(BASE_DIR=base_dir):
                     with self.assertRaisesMessage(CommandError, "扩展诊断存在 2 个阻断项"):
                         call_command("prepare_release", "--set-version", "1.0.0", "--allow-dirty")
+                validate_mock.assert_called_once_with("validate_extensions", "--strict")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -14038,7 +14227,9 @@ class ReleaseVersionControlTests(TestCase):
             )
             report_path = base_dir / "artifacts" / "extensions-report.json"
 
-            with patch("apps.core.management.commands.prepare_release.Command._inspect_extensions") as inspect_mock:
+            with patch("apps.core.management.commands.prepare_release.call_command") as validate_mock, patch(
+                "apps.core.management.commands.prepare_release.Command._inspect_extensions"
+            ) as inspect_mock:
                 inspect_mock.return_value = {
                     "summary": {
                         "blocking_count": 0,
@@ -14061,6 +14252,7 @@ class ReleaseVersionControlTests(TestCase):
                         "--extension-report",
                         str(report_path),
                     )
+                validate_mock.assert_called_once_with("validate_extensions", "--strict")
 
             payload = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary"]["attention_count"], 0)

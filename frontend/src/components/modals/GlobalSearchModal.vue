@@ -182,13 +182,12 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSearchFilterCatalog } from '@/composables/useSearchFilterCatalog'
-import { getEmptyState, getSearchSources, getStateBlock, getUiCopy } from '@/forum/registry'
+import { getEmptyState, getSearchModalSections, getSearchSources, getStateBlock, getUiCopy } from '@/forum/registry'
 import { useForumStore } from '@/stores/forum'
 import { useForumRealtimeStore } from '@/stores/forumRealtime'
 import { useModalStore } from '@/stores/modal'
 import { useResourceStore } from '@/stores/resource'
 import api from '@/api'
-import { buildTagPath } from '@/utils/forum'
 import {
   unwrapList
 } from '@/utils/forum'
@@ -201,7 +200,6 @@ import {
 
 const RECENT_SEARCH_STORAGE_KEY = 'bias:search:recent'
 const RECENT_SEARCH_LIMIT = 6
-const POPULAR_TAG_LIMIT = 6
 const SEARCH_PREVIEW_LIMIT = 5
 
 const props = defineProps({
@@ -240,7 +238,7 @@ const loading = ref(false)
 const discussionIds = ref([])
 const postIds = ref([])
 const userIds = ref([])
-const popularTagIds = ref([])
+const extensionEmptyPanelSections = ref([])
 const recentSearches = ref(loadRecentSearches())
 const totals = ref({
   discussions: 0,
@@ -250,6 +248,7 @@ const totals = ref({
 const activeResultIndex = ref(-1)
 let searchTimer = null
 let requestId = 0
+let emptyPanelRequestId = 0
 
 const normalizedQuery = computed(() => query.value.trim())
 const searchResults = computed(() => ({
@@ -257,7 +256,6 @@ const searchResults = computed(() => ({
   posts: resourceStore.list('posts', postIds.value),
   users: resourceStore.list('users', userIds.value),
 }))
-const popularTags = computed(() => resourceStore.list('tags', popularTagIds.value))
 const trackedDiscussionIds = computed(() => [
   ...getTrackedDiscussionIdsFromDiscussionItems(searchResults.value.discussions),
   ...getTrackedDiscussionIdsFromPostItems(searchResults.value.posts),
@@ -382,23 +380,20 @@ const filterSuggestions = computed(() => {
 const recentSearchTitleText = computed(() => getUiCopy({
   surface: 'search-modal-recent-title',
 })?.text || '最近搜索')
-const popularTagsTitleText = computed(() => getUiCopy({
-  surface: 'search-modal-popular-tags-title',
-})?.text || '热门标签')
 const syntaxTipsTitleText = computed(() => getUiCopy({
   surface: 'search-modal-syntax-title',
 })?.text || '搜索语法')
-const emptyPanelSections = computed(() => {
+const coreEmptyPanelSections = computed(() => {
   if (normalizedQuery.value) {
     return []
   }
 
   const sections = []
-  let selectIndex = 0
 
   if (recentSearches.value.length) {
     sections.push({
       key: 'recent-searches',
+      order: 10,
       title: recentSearchTitleText.value,
       items: recentSearches.value.map(item => ({
         key: `recent-${item.query}-${item.type || 'all'}`,
@@ -414,26 +409,6 @@ const emptyPanelSections = computed(() => {
               surface: 'search-modal-recent-all-subtitle',
             })?.text || '搜索全部内容',
         action: () => runRecentSearch(item),
-        selectIndex: selectIndex++,
-      })),
-    })
-  }
-
-  if (popularTags.value.length) {
-    sections.push({
-      key: 'popular-tags',
-      title: popularTagsTitleText.value,
-      items: popularTags.value.map(tag => ({
-        key: `tag-${tag.id}`,
-        kind: 'popular-tag',
-        icon: 'fas fa-tags',
-        title: tag.name,
-        subtitle: getUiCopy({
-          surface: 'search-modal-tag-subtitle',
-          count: Number(tag.discussion_count || 0),
-        })?.text || `${Number(tag.discussion_count || 0)} 条讨论`,
-        action: () => openTag(tag),
-        selectIndex: selectIndex++,
       })),
     })
   }
@@ -441,6 +416,7 @@ const emptyPanelSections = computed(() => {
   if (filterSuggestions.value.length) {
     sections.push({
       key: 'search-syntax',
+      order: 90,
       title: syntaxTipsTitleText.value,
       items: filterSuggestions.value.map(item => ({
         key: `syntax-${item.key}`,
@@ -450,12 +426,28 @@ const emptyPanelSections = computed(() => {
         subtitle: item.label,
         description: item.description || '',
         action: () => applyFilterSyntax(item.syntax),
-        selectIndex: selectIndex++,
       })),
     })
   }
 
   return sections
+})
+const emptyPanelSections = computed(() => {
+  const sections = [
+    ...coreEmptyPanelSections.value,
+    ...extensionEmptyPanelSections.value,
+  ]
+    .filter(section => Array.isArray(section?.items) && section.items.length > 0)
+    .sort((left, right) => (Number(left.order || 100) || 100) - (Number(right.order || 100) || 100))
+  let selectIndex = 0
+
+  return sections.map(section => ({
+    ...section,
+    items: section.items.map(item => ({
+      ...item,
+      selectIndex: selectIndex++,
+    })),
+  }))
 })
 const emptySelectableItems = computed(() => emptyPanelSections.value.flatMap(section => section.items))
 
@@ -464,7 +456,7 @@ watch(
   showing => {
     if (!showing) return
 
-    loadPopularTags()
+    loadExtensionEmptyPanelSections()
 
     nextTick(() => {
       inputRef.value?.focus()
@@ -490,6 +482,7 @@ watch(
       postIds.value = []
       userIds.value = []
       totals.value = { discussions: 0, posts: 0, users: 0 }
+      loadExtensionEmptyPanelSections()
       return
     }
 
@@ -527,7 +520,7 @@ watch(
 )
 
 onMounted(() => {
-  loadPopularTags()
+  loadExtensionEmptyPanelSections()
   nextTick(() => {
     inputRef.value?.focus()
     inputRef.value?.select?.()
@@ -703,11 +696,6 @@ function runRecentSearch(item) {
   })
 }
 
-function openTag(tag) {
-  modalStore.dismiss()
-  router.push(buildTagPath(tag))
-}
-
 function getResultAvatarStyle(item) {
   if (!item?.avatarMode || item?.avatarUrl || !item?.avatarColor) {
     return null
@@ -736,18 +724,60 @@ function saveRecentSearch(item) {
   persistRecentSearches(recentSearches.value)
 }
 
-async function loadPopularTags() {
-  try {
-    const response = await api.get('/tags/popular', {
-      params: {
-        limit: POPULAR_TAG_LIMIT,
-      }
-    })
-    popularTagIds.value = resourceStore.upsertMany('tags', unwrapList(response))
-      .map(item => item.id)
-  } catch (error) {
-    popularTagIds.value = []
+async function loadExtensionEmptyPanelSections() {
+  const currentRequestId = ++emptyPanelRequestId
+  if (normalizedQuery.value) {
+    extensionEmptyPanelSections.value = []
+    return
   }
+
+  const sections = getSearchModalSections({
+    surface: 'search-modal-empty',
+    activeType: activeType.value,
+    allowedTypes,
+    api,
+    forumStore,
+    getUiCopy,
+    modalStore,
+    query: normalizedQuery.value,
+    resourceStore,
+    router,
+    tabs: tabs.value,
+  })
+
+  const loadedSections = []
+  for (const section of sections) {
+    try {
+      const result = typeof section.load === 'function'
+        ? await section.load({
+            activeType: activeType.value,
+            allowedTypes,
+            api,
+            forumStore,
+            getUiCopy,
+            modalStore,
+            query: normalizedQuery.value,
+            resourceStore,
+            router,
+            tabs: tabs.value,
+          })
+        : section
+      if (!result || !Array.isArray(result.items) || result.items.length <= 0) {
+        continue
+      }
+      loadedSections.push({
+        ...section,
+        ...result,
+        key: result.key || section.key,
+      })
+    } catch (error) {
+      console.error('加载搜索弹窗扩展内容失败:', error)
+    }
+  }
+  if (currentRequestId !== emptyPanelRequestId || normalizedQuery.value) {
+    return
+  }
+  extensionEmptyPanelSections.value = loadedSections
 }
 
 function loadRecentSearches() {

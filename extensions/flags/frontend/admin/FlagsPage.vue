@@ -84,7 +84,7 @@ import {
   getAdminPageConfig,
   getAdminPageCopy,
   useModalStore,
-} from '@/admin/registry'
+} from '@bias/admin/components'
 
 const PAGE_KEY = 'flags.index'
 const loading = ref(true)

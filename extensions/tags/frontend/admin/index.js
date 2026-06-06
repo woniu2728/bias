@@ -16,6 +16,14 @@ export const extend = [
     showInDashboardActions: true,
     dashboardActionLabel: '管理标签',
     moduleId: 'tags',
+  }).permissionScope({
+    key: 'tag-permissions',
+    moduleId: 'tags',
+    icon: 'fas fa-tags',
+    label: '标签权限范围',
+    description: '按标签配置查看、发起讨论和回复的访问范围。',
+    actionLabel: '管理标签权限',
+    to: '/admin/tags',
   }),
 
   buildTagsPageExtender(),

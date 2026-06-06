@@ -34,7 +34,7 @@ from apps.core.forum_events import (
     PostHiddenEvent,
     PostRejectedEvent,
 )
-from apps.core.forum_registry_types import AdminPageDefinition, PostTypeDefinition, SearchFilterDefinition
+from apps.core.forum_registry_types import AdminPageDefinition, DiscussionListQueryDefinition, PostTypeDefinition, SearchFilterDefinition
 from apps.core.resource_registry import ResourceDefinition, ResourceEndpointDefinition, ResourceFieldDefinition, ResourceRelationshipDefinition
 from apps.discussions.models import Discussion
 from apps.posts.models import Post
@@ -85,7 +85,11 @@ from extensions.tags.backend.resources import (
     resolve_tag_last_posted_discussion,
     serialize_tag_base,
 )
-from extensions.tags.backend.search import apply_discussion_tag_search_filter, parse_tag_search_filter
+from extensions.tags.backend.search import (
+    apply_discussion_tag_list_query,
+    apply_discussion_tag_search_filter,
+    parse_tag_search_filter,
+)
 from extensions.tags.backend.services import TagService
 from extensions.tags.backend.slug import TagSlugDriver
 from extensions.tags.backend import tasks as tag_tasks  # noqa: F401
@@ -103,9 +107,16 @@ def extend():
         .route(
             "/tags",
             "tags",
-            "TagsView",
+            "./TagsView.vue",
             title="全部标签",
             description="浏览论坛标签，按主题发现相关讨论。",
+            preloads=(
+                {
+                    "href": "/api/tags?include_children=true",
+                    "as": "fetch",
+                    "crossorigin": "anonymous",
+                },
+            ),
             order=30,
         )
         .route(
@@ -114,6 +125,18 @@ def extend():
             "DiscussionListView",
             title="标签讨论",
             description="查看该标签下的论坛讨论。",
+            preloads=(
+                {
+                    "href": "/api/tags/slug/:slug",
+                    "as": "fetch",
+                    "crossorigin": "anonymous",
+                },
+                {
+                    "href": "/api/tags?include_children=true",
+                    "as": "fetch",
+                    "crossorigin": "anonymous",
+                },
+            ),
             order=31,
         ),
         AdminSurfaceExtender(
@@ -139,6 +162,7 @@ def extend():
         ),
         ForumCapabilitiesExtender(
             post_types=post_type_definitions(),
+            discussion_list_queries=discussion_list_query_definitions(),
             search_filters=search_filter_definitions(),
         ),
         PostEventExtender().type(
@@ -298,6 +322,18 @@ def search_filter_definitions():
             applier=apply_discussion_tag_search_filter,
             syntax="tag:<slug>",
             description="按标签 slug 过滤讨论搜索结果。",
+        ),
+    )
+
+
+def discussion_list_query_definitions():
+    return (
+        DiscussionListQueryDefinition(
+            key="tag",
+            module_id=EXTENSION_ID,
+            applier=apply_discussion_tag_list_query,
+            description="按标签 slug 过滤讨论列表。",
+            order=40,
         ),
     )
 

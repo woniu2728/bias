@@ -5,10 +5,6 @@ export function useDiscussionCreatePage({
   router,
   startDiscussion,
 }) {
-  function resolveTagId() {
-    return typeof route.query.tag === 'string' ? route.query.tag : ''
-  }
-
   function resolveReturnTo() {
     return typeof route.query.returnTo === 'string' ? route.query.returnTo : '/'
   }
@@ -17,13 +13,11 @@ export function useDiscussionCreatePage({
     startDiscussion({
       redirectToLogin: true,
       source: 'route',
-      tagId: resolveTagId(),
     })
     router.replace(resolveReturnTo())
   })
 
   return {
     resolveReturnTo,
-    resolveTagId,
   }
 }

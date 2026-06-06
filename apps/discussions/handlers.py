@@ -233,6 +233,10 @@ def _discussion_query_value(context, key: str, default=None):
     return dict(context.get("query") or {}).get(key, default)
 
 
+def _discussion_query_params(context) -> dict:
+    return dict(context.get("query") or {})
+
+
 def dispatch_discussion_create(context):
     raw_payload = _discussion_payload(context)
     payload = DiscussionCreateSchema(**_discussion_attributes(raw_payload))
@@ -259,7 +263,6 @@ def dispatch_discussion_index(context):
     request = context["request"]
     user = context.get("user")
     q = _discussion_query_value(context, "q")
-    tag = _discussion_query_value(context, "tag")
     author = _discussion_query_value(context, "author")
     filter_code = _discussion_query_value(context, "filter", "all")
     sort = _discussion_query_value(context, "sort", "latest")
@@ -272,13 +275,13 @@ def dispatch_discussion_index(context):
 
     discussions, total = DiscussionService.get_discussion_list(
         q=q,
-        tag=tag,
         author=author,
         list_filter=filter_code,
         sort=sort,
         page=page,
         limit=limit,
         user=user,
+        query_params=_discussion_query_params(context),
         preload=lambda queryset: apply_discussion_resource_preloads(
             queryset,
             user=user,

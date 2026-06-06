@@ -10,6 +10,7 @@ from apps.core.forum_registry_types import (
     AdminPageDefinition,
     DiscussionListFilterDefinition,
     DiscussionListFilterApplier,
+    DiscussionListQueryDefinition,
     DiscussionSortApplier,
     DiscussionSortDefinition,
     EventListenerDefinition,
@@ -38,6 +39,7 @@ class ForumRegistry:
         self._event_listeners: List[EventListenerDefinition] = []
         self._post_types: Dict[str, PostTypeDefinition] = {}
         self._search_filters: List[SearchFilterDefinition] = []
+        self._discussion_list_queries: Dict[str, DiscussionListQueryDefinition] = {}
         self._discussion_sorts: Dict[str, DiscussionSortDefinition] = {}
         self._discussion_list_filters: Dict[str, DiscussionListFilterDefinition] = {}
 
@@ -67,6 +69,9 @@ class ForumRegistry:
 
         for search_filter in module.search_filters:
             self.register_search_filter(search_filter)
+
+        for discussion_list_query in module.discussion_list_queries:
+            self.register_discussion_list_query(discussion_list_query)
 
         for discussion_sort in module.discussion_sorts:
             self.register_discussion_sort(discussion_sort)
@@ -151,6 +156,10 @@ class ForumRegistry:
     def register_discussion_sort(self, definition: DiscussionSortDefinition) -> None:
         self._append_to_module(definition.module_id, "discussion_sorts", definition, key=lambda item: item.code)
         self._discussion_sorts[definition.code] = definition
+
+    def register_discussion_list_query(self, definition: DiscussionListQueryDefinition) -> None:
+        self._append_to_module(definition.module_id, "discussion_list_queries", definition, key=lambda item: item.key)
+        self._discussion_list_queries[definition.key] = definition
 
     def register_discussion_list_filter(self, definition: DiscussionListFilterDefinition) -> None:
         self._append_to_module(definition.module_id, "discussion_list_filters", definition, key=lambda item: item.code)
@@ -395,6 +404,17 @@ class ForumRegistry:
             if definition.is_default:
                 return definition.code
         return "latest"
+
+    def get_discussion_list_queries(self) -> List[DiscussionListQueryDefinition]:
+        enabled_module_ids = self._get_enabled_module_ids()
+        return sorted(
+            [
+                item
+                for item in self._discussion_list_queries.values()
+                if item.module_id in enabled_module_ids
+            ],
+            key=lambda item: (item.order, item.module_id, item.key),
+        )
 
     def get_discussion_list_filters(self) -> List[DiscussionListFilterDefinition]:
         enabled_module_ids = self._get_enabled_module_ids()

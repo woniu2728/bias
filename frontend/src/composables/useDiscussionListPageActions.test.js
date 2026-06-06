@@ -2,11 +2,19 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { useDiscussionListPageActions } from './useDiscussionListPageActions.js'
 
-test('discussion list page actions pass current tag and route name to start discussion', () => {
+test('discussion list page actions pass extension state and route name to start discussion', () => {
   const calls = []
   const actions = useDiscussionListPageActions({
-    currentTag: {
-      value: { id: 42 },
+    discussionListContextData: {
+      value: {
+        tags: {
+          startDiscussionExtensionState: {
+            tags: {
+              requestedTagId: '42',
+            },
+          },
+        },
+      },
     },
     route: {
       name: 'following',
@@ -21,7 +29,11 @@ test('discussion list page actions pass current tag and route name to start disc
 
   assert.equal(result, true)
   assert.deepEqual(calls, [{
-    tagId: 42,
+    extensionState: {
+      tags: {
+        requestedTagId: '42',
+      },
+    },
     source: 'following',
   }])
 })
@@ -29,9 +41,7 @@ test('discussion list page actions pass current tag and route name to start disc
 test('discussion list page actions fall back to index source when route name is absent', () => {
   const calls = []
   const actions = useDiscussionListPageActions({
-    currentTag: {
-      value: null,
-    },
+    discussionListContextData: { value: {} },
     route: {
       name: null,
     },
@@ -45,7 +55,7 @@ test('discussion list page actions fall back to index source when route name is 
 
   assert.equal(result, false)
   assert.deepEqual(calls, [{
-    tagId: undefined,
+    extensionState: {},
     source: 'index',
   }])
 })

@@ -138,6 +138,7 @@ class Command(BaseCommand):
             "only_blocking": only_blocking,
             "include_permissions": include_permissions,
         }
+        payload["package_lock"] = registry.inspect_extension_packages(force=True)
         self.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2))
 
 

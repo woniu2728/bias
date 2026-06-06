@@ -1,5 +1,5 @@
 import { Admin, AdminDashboard } from '@bias/admin'
-import { ExtensionGeneratedPermissionsPage } from '@/admin/registry'
+import { ExtensionGeneratedPermissionsPage } from '@bias/admin/components'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
 import { buildApprovalQueuePageExtender } from './approvalQueuePageBootstrap.js'
 

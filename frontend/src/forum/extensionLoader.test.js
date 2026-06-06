@@ -9,6 +9,7 @@ import {
   normalizeExtensionDocumentPayload,
   normalizeExtensionForumEntry,
   registerExtensionForumRoutes,
+  resolveForumRouteComponentKeys,
   resetForumExtensionRuntimeContributions,
   resetLoadedExtensionsWhenRuntimeChanges,
   validateForumExtensionModule,
@@ -18,6 +19,7 @@ import {
   clearExtensionRuntimeErrors,
   extendMethod,
   getExtensionRuntimeErrors,
+  onLazyModuleLoad,
   registerLazyExtensionModule,
   registerLoadedExtensionModule,
 } from '../common/extensionRuntime.js'
@@ -349,23 +351,84 @@ test('runtime export registry resolves loaded extension modules', () => {
   }
 })
 
-test('runtime export registry imports lazy chunk modules by path', async () => {
+test('resetForumExtensionRuntimeContributions clears loaded extension export registry namespace', () => {
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
   const runtimeApp = createRuntimeApplication({ kind: 'forum' })
-  const module = { named: 'lazy-tool' }
-  const calls = []
+  const module = { extend: [] }
 
-  runtimeApp.exportRegistry.onLoadPath('extensions/alpha-tools/frontend/forum/lazy.js', loaded => {
-    calls.push(loaded)
-  })
-  runtimeApp.exportRegistry.registerChunk('alpha-tools', 'forum-lazy', {
-    'frontend/forum/lazy.js': async () => module,
-  })
+  try {
+    registerLoadedExtensionModule('alpha-tools', module, {
+      app: runtimeApp,
+      frontend: 'forum',
+      entryPath: 'extensions/alpha-tools/frontend/forum/index.js',
+    })
 
-  const loaded = await runtimeApp.exportRegistry.asyncModuleImport('extensions/alpha-tools/frontend/forum/lazy.js')
+    assert.equal(runtimeApp.exportRegistry.get('alpha-tools', 'forum'), module)
+    assert.equal(runtimeApp.exportRegistry.getModule('extensions/alpha-tools/frontend/forum/index.js'), module)
 
-  assert.equal(loaded, module)
-  assert.equal(loaded.default, module)
-  assert.deepEqual(calls, [module])
+    resetForumExtensionRuntimeContributions('alpha-tools', { app: runtimeApp })
+
+    assert.equal(runtimeApp.exportRegistry.get('alpha-tools', 'forum'), null)
+    assert.equal(runtimeApp.exportRegistry.getModule('extensions/alpha-tools/frontend/forum/index.js'), null)
+  } finally {
+    globalThis.bias = previousBias
+  }
+})
+
+test('runtime export registry imports lazy chunk modules by path', async () => {
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
+
+  try {
+    const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+    const module = { named: 'lazy-tool' }
+    const calls = []
+
+    runtimeApp.exportRegistry.onLoadPath('extensions/alpha-tools/frontend/forum/lazy.js', loaded => {
+      calls.push(loaded)
+    })
+    runtimeApp.exportRegistry.registerChunk('alpha-tools', 'forum-lazy', {
+      'frontend/forum/lazy.js': async () => module,
+    })
+
+    const loaded = await runtimeApp.exportRegistry.asyncModuleImport('extensions/alpha-tools/frontend/forum/lazy.js')
+
+    assert.equal(loaded, module)
+    assert.equal(loaded.default, module)
+    assert.deepEqual(calls, [module])
+  } finally {
+    globalThis.bias = previousBias
+  }
+})
+
+test('resetForumExtensionRuntimeContributions clears extension chunks and pending path load handlers', async () => {
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
+
+  try {
+    const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+    const module = { named: 'lazy-tool' }
+    const calls = []
+
+    runtimeApp.exportRegistry.onLoadPath('extensions/alpha-tools/frontend/forum/lazy.js', loaded => {
+      calls.push(loaded)
+    })
+    runtimeApp.exportRegistry.registerChunk('alpha-tools', 'forum-lazy', {
+      'frontend/forum/lazy.js': async () => module,
+    })
+
+    resetForumExtensionRuntimeContributions('alpha-tools', { app: runtimeApp })
+
+    await assert.rejects(
+      runtimeApp.exportRegistry.asyncModuleImport('extensions/alpha-tools/frontend/forum/lazy.js'),
+      /No chunk found/,
+    )
+    runtimeApp.exportRegistry.registerModule('extensions/alpha-tools/frontend/forum/lazy.js', module)
+    assert.deepEqual(calls, [])
+  } finally {
+    globalThis.bias = previousBias
+  }
 })
 
 test('loadEnabledForumExtensions boots declarative extenders and registers output chunks', async () => {
@@ -785,6 +848,9 @@ test('frontend dedicated extenders register notification post search and routes'
   const searchFilters = []
   const themeModes = []
   const forumNavItems = []
+  const discussionListContexts = []
+  const discussionListHeroes = []
+  const discussionListRequests = []
   const dashboardStats = []
   const adminPageCopies = []
   const adminPageConfigs = []
@@ -794,6 +860,7 @@ test('frontend dedicated extenders register notification post search and routes'
   const adminPages = []
   const adminSettings = []
   const adminPermissions = []
+  const adminPermissionScopes = []
   const adminSettingOperations = []
   const adminPermissionOperations = []
   const adminRegistryContexts = []
@@ -827,6 +894,15 @@ test('frontend dedicated extenders register notification post search and routes'
       },
       registerForumNavItem(definition) {
         forumNavItems.push(definition)
+      },
+      registerDiscussionListContext(definition) {
+        discussionListContexts.push(definition)
+      },
+      registerDiscussionListHero(definition) {
+        discussionListHeroes.push(definition)
+      },
+      registerDiscussionListRequest(definition) {
+        discussionListRequests.push(definition)
       },
       registerAdminDashboardStat(definition) {
         dashboardStats.push(definition)
@@ -864,6 +940,9 @@ test('frontend dedicated extenders register notification post search and routes'
       registerPermission(definition, type, priority) {
         adminPermissions.push({ definition, type, priority })
       },
+      registerAdminPermissionScope(definition) {
+        adminPermissionScopes.push(definition)
+      },
       setPermission(permission, replacement, type) {
         adminPermissionOperations.push(['replace', permission, type, replacement({ permission })])
       },
@@ -896,7 +975,11 @@ test('frontend dedicated extenders register notification post search and routes'
           .filter({ key: 'alpha', target: 'discussions', syntax: 'alpha:' })
           .gambit('posts', { key: 'flagged', syntax: 'is:flagged', label: 'Flagged' }),
         new ThemeModeExtender().add('sepia', 'Sepia'),
-        new ForumExtender().navItem({ key: 'alpha-nav', label: 'Alpha nav', order: 15 }),
+        new ForumExtender()
+          .navItem({ key: 'alpha-nav', label: 'Alpha nav', order: 15 })
+          .discussionListContext({ key: 'alpha-context', order: 20 })
+          .discussionListHero({ key: 'alpha-hero', order: 20 })
+          .discussionListRequest({ key: 'alpha-request', order: 20 }),
         new AdminDashboardExtender().stat({ key: 'alpha-stat', label: 'Alpha stat', order: 15 }),
         new AdminPageExtender('alpha.page')
           .copy({ key: 'alpha-copy', label: 'Alpha copy' })
@@ -918,6 +1001,7 @@ test('frontend dedicated extenders register notification post search and routes'
           .setSettingPriority('alpha_setting', 20)
           .removeSetting('old_setting')
           .permission(() => ({ permission: 'alpha.use' }), 'moderate', 30)
+          .permissionScope({ key: 'alpha-scope', label: 'Alpha scope' })
           .replacePermission('alpha.use', original => ({ ...original, replaced: true }), 'moderate')
           .setPermissionPriority('alpha.use', 'moderate', 40)
           .removePermission('old.use', 'moderate')
@@ -942,6 +1026,12 @@ test('frontend dedicated extenders register notification post search and routes'
   assert.deepEqual(themeModes[0], { id: 'sepia', mode: 'sepia', label: 'Sepia' })
   assert.equal(forumNavItems[0].key, 'alpha-nav')
   assert.equal(forumNavItems[0].extensionId, 'frontend')
+  assert.equal(discussionListContexts[0].key, 'alpha-context')
+  assert.equal(discussionListContexts[0].extensionId, 'frontend')
+  assert.equal(discussionListHeroes[0].key, 'alpha-hero')
+  assert.equal(discussionListHeroes[0].extensionId, 'frontend')
+  assert.equal(discussionListRequests[0].key, 'alpha-request')
+  assert.equal(discussionListRequests[0].extensionId, 'frontend')
   assert.equal(dashboardStats[0].key, 'alpha-stat')
   assert.equal(dashboardStats[0].moduleId, 'frontend')
   assert.deepEqual(adminPageCopies[0], {
@@ -976,6 +1066,8 @@ test('frontend dedicated extenders register notification post search and routes'
     ['remove', 'old_setting'],
   ])
   assert.deepEqual(adminPermissions[0], { definition: { permission: 'alpha.use' }, type: 'moderate', priority: 30 })
+  assert.equal(adminPermissionScopes[0].key, 'alpha-scope')
+  assert.equal(adminPermissionScopes[0].extensionId, 'frontend')
   assert.deepEqual(adminPermissionOperations, [
     ['replace', 'alpha.use', 'moderate', { permission: 'alpha.use', replaced: true }],
     ['priority', 'alpha.use', 'moderate', 40],
@@ -1000,10 +1092,14 @@ test('common extenders export unified frontend extension entry', () => {
   assert.equal(new Search().gambit('users', query => query) instanceof SearchExtender, true)
   assert.equal(new ThemeMode().add('dark', 'Dark') instanceof ThemeModeExtender, true)
   assert.equal(new Admin().page({ path: '/admin/demo' }) instanceof AdminExtender, true)
+  assert.equal(new Admin().permissionScope({ key: 'demo' }) instanceof AdminExtender, true)
   assert.equal(new AdminDashboard().stat({ key: 'demo' }) instanceof AdminDashboardExtender, true)
   assert.equal(new AdminPage('demo.page').copy({ key: 'demo' }) instanceof AdminPageExtender, true)
   assert.equal(new Exports().module('demo', {}) instanceof ExportsExtender, true)
   assert.equal(new Forum().navItem({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new Forum().discussionListContext({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new Forum().discussionListHero({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new Forum().discussionListRequest({ key: 'demo' }) instanceof ForumExtender, true)
 })
 
 test('search gambits transform store find filter queries', async () => {
@@ -1099,6 +1195,52 @@ test('extension runtime supports lazy module patching and error dedupe', () => {
   assert.equal(getExtensionRuntimeErrors().length, 0)
 })
 
+test('resetForumExtensionRuntimeContributions cancels pending lazy patches', () => {
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
+
+  try {
+    class PendingTarget {
+      items() {
+        return []
+      }
+    }
+
+    extendMethod('pending-target', 'items', items => items.push('pending'), { extensionId: 'pending-extension' })
+    resetForumExtensionRuntimeContributions('pending-extension')
+    registerLazyExtensionModule('pending-target', PendingTarget)
+
+    assert.deepEqual(new PendingTarget().items(), [])
+  } finally {
+    globalThis.bias = previousBias
+  }
+})
+
+test('resetForumExtensionRuntimeContributions clears loaded lazy modules by owner', () => {
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
+
+  try {
+    const ownedModule = { name: 'owned-lazy' }
+    const pathModule = { name: 'path-lazy' }
+    const calls = []
+
+    registerLazyExtensionModule('shared-lazy-key', ownedModule, { extensionId: 'lazy-owner' })
+    registerLazyExtensionModule('extensions/path-owner/frontend/forum/lazy.js', pathModule)
+    resetForumExtensionRuntimeContributions('lazy-owner')
+    resetForumExtensionRuntimeContributions('path-owner')
+
+    onLazyModuleLoad('shared-lazy-key', loaded => calls.push(loaded))
+    onLazyModuleLoad('extensions/path-owner/frontend/forum/lazy.js', loaded => calls.push(loaded))
+
+    assert.equal(globalThis.bias.reg.getModule('shared-lazy-key'), null)
+    assert.equal(globalThis.bias.reg.getModule('extensions/path-owner/frontend/forum/lazy.js'), null)
+    assert.deepEqual(calls, [])
+  } finally {
+    globalThis.bias = previousBias
+  }
+})
+
 test('resetForumExtensionRuntimeContributions removes scoped registry items', () => {
   registerForumNavItem({
     key: 'manual-core',
@@ -1157,6 +1299,47 @@ test('registerExtensionForumRoutes registers declarative forum routes', () => {
   assert.equal(routes.length, 1)
   assert.equal(routes[0].meta.extensionId, 'route-demo')
   assert.equal(routes[0].meta.moduleId, 'route-demo')
+})
+
+test('registerExtensionForumRoutes resolves extension-owned route components from generated importers', async () => {
+  const routes = []
+  const router = {
+    existing: new Set(),
+    hasRoute(name) {
+      return this.existing.has(name)
+    },
+    addRoute(route) {
+      this.existing.add(route.name)
+      routes.push(route)
+    },
+  }
+  const loadedComponent = { name: 'RouteDemoPage' }
+  const extension = {
+    id: 'route-demo',
+    frontend_forum_entry: 'extensions/route-demo/frontend/forum/index.js',
+    frontend_routes: [{
+      path: '/route-demo',
+      name: 'route-demo.page',
+      component: './Page.vue',
+      frontend: 'forum',
+    }],
+  }
+
+  const registered = registerExtensionForumRoutes(router, extension, {
+    importers: {
+      'route-demo:./Page.vue': async () => ({ default: loadedComponent }),
+    },
+  })
+
+  assert.deepEqual(registered, ['route-demo.page'])
+  assert.deepEqual(resolveForumRouteComponentKeys('./Page.vue', extension), [
+    'route-demo:./Page.vue',
+    'route-demo:extensions/route-demo/frontend/forum/Page.vue',
+    'extensions/route-demo/frontend/forum/Page.vue',
+    '../../../extensions/route-demo/frontend/forum/Page.vue',
+    './Page.vue',
+  ])
+  assert.equal(await routes[0].component(), loadedComponent)
 })
 
 test('registerExtensionForumRoutes removes declared forum routes', () => {
@@ -1235,4 +1418,51 @@ test('loadEnabledForumExtensions registers route-only extensions', async () => {
 
   assert.equal(routes.length, 1)
   assert.equal(result.loadedExtensionIds.has('route-demo'), true)
+})
+
+test('loadEnabledForumExtensions resolves route-only components from frontend outputs', async () => {
+  const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+  const routes = []
+  const component = { name: 'RouteOnlyPage' }
+
+  const result = await loadEnabledForumExtensions({
+    app: runtimeApp,
+    fetchPayload: async () => ({
+      enabled_extensions: [{
+        id: 'route-output',
+        frontend_outputs: {
+          forum: {
+            revision: 'rev-route',
+            chunks: [{
+              file: 'assets/route-output-page.js',
+              module_id: 'frontend/forum/Page.vue',
+            }],
+          },
+        },
+        frontend_routes: [{
+          path: '/route-output',
+          name: 'route-output.page',
+          component: './Page.vue',
+          frontend: 'forum',
+        }],
+      }],
+    }),
+    router: {
+      hasRoute() {
+        return false
+      },
+      addRoute(route) {
+        routes.push(route)
+      },
+    },
+    importers: {},
+  })
+
+  runtimeApp.exportRegistry.registerChunk('route-output', 'forum/assets/route-output-page.js', {
+    'frontend/forum/Page.vue': async () => ({ default: component }),
+  })
+
+  assert.equal(result.loadedExtensionIds.has('route-output'), true)
+  assert.equal(routes.length, 1)
+  assert.equal(await routes[0].component(), component)
 })

@@ -19,7 +19,6 @@
         :has-new-replies="hasNewReplies"
         :new-reply-count="newReplyCount"
         :build-discussion-path="buildDiscussionPath"
-        :build-tag-path="buildTagPath"
         :build-user-path="buildUserPath"
         :format-relative-time="formatRelativeTime"
       />
@@ -41,10 +40,6 @@ const props = defineProps({
     required: true
   },
   buildDiscussionPath: {
-    type: Function,
-    required: true
-  },
-  buildTagPath: {
     type: Function,
     required: true
   },

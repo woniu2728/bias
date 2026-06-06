@@ -1,6 +1,7 @@
 <template>
   <DiscussionListHero
-    :current-tag="currentTag"
+    :context-subject="contextSubject"
+    :discussion-list-contexts="discussionListContexts"
     :is-following-page="isFollowingPage"
     :list-filter="listFilter"
   />
@@ -25,9 +26,13 @@ defineProps({
     type: Object,
     required: true
   },
-  currentTag: {
+  contextSubject: {
     type: Object,
     default: null
+  },
+  discussionListContexts: {
+    type: Array,
+    default: () => []
   },
   isFollowingPage: {
     type: Boolean,

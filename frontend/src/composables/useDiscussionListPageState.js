@@ -17,14 +17,15 @@ export function useDiscussionListPageState({
 
   const navigationState = useDiscussionListNavigation({
     authStore,
-    currentTag: dataState.currentTag,
-    currentTagSlug: dataState.currentTagSlug,
+    contextSubject: dataState.contextSubject,
+    contextSubjectKey: dataState.contextSubjectKey,
+    discussionListContextData: dataState.discussionListContextData,
+    discussionListContexts: dataState.discussionListContexts,
     filterOptions: dataState.filterOptions,
     forumStore,
     isFollowingPage: dataState.isFollowingPage,
     listFilter: dataState.listFilter,
     route,
-    tags: dataState.tags,
   })
 
   return {

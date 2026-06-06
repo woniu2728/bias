@@ -27,14 +27,16 @@
     </p>
 
     <ul class="discussion-list-item-info">
-      <li v-if="discussion.tags.length" class="item-tags">
-        <ForumTagBadge
-          v-for="tag in discussion.tags"
-          :key="tag.id"
-          :tag="tag"
-          :to="buildTagPath(tag)"
-          size="sm"
-          max-width="160px"
+      <li
+        v-for="item in presentationItems"
+        :key="item.key"
+        class="item-extension"
+        :class="item.className || ''"
+      >
+        <component
+          :is="item.component"
+          v-if="item.component"
+          v-bind="item.componentProps"
         />
       </li>
       <li class="item-author">
@@ -53,7 +55,6 @@
 
 <script setup>
 import { toRef } from 'vue'
-import ForumTagBadge from '@/components/forum/ForumTagBadge.vue'
 import ForumStateBadge from '@/components/forum/ForumStateBadge.vue'
 import { useDiscussionListItemMetaState } from '@/composables/useDiscussionListItemMetaState'
 
@@ -78,10 +79,6 @@ const props = defineProps({
     type: Function,
     required: true
   },
-  buildTagPath: {
-    type: Function,
-    required: true
-  },
   buildUserPath: {
     type: Function,
     required: true
@@ -97,6 +94,7 @@ const {
   createdAtText,
   discussionStateBadges,
   lastPostedAtText,
+  presentationItems,
 } = useDiscussionListItemMetaState({
   discussion: toRef(props, 'discussion'),
   formatRelativeTime: props.formatRelativeTime,
@@ -174,7 +172,7 @@ const {
   min-width: 0;
 }
 
-.item-tags {
+.item-extension {
   display: flex;
   gap: 6px;
   min-width: 0;
@@ -244,7 +242,7 @@ const {
     max-width: 100%;
   }
 
-  .item-tags {
+  .item-extension {
     flex-wrap: wrap;
   }
 

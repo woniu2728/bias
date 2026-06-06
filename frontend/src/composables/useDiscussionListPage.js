@@ -23,7 +23,7 @@ export function useDiscussionListPage({
     router,
   })
   const pageActions = useDiscussionListPageActions({
-    currentTag: pageState.currentTag,
+    discussionListContextData: pageState.discussionListContextData,
     route,
     startDiscussion,
   })

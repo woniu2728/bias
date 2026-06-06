@@ -60,6 +60,21 @@ export function clearAdminRoutesForExtension(extensionId = '') {
   }
 }
 
+export function removeAdminRoute(name) {
+  const normalizedName = String(name || '').trim()
+  if (!normalizedName) {
+    return false
+  }
+  let removed = false
+  for (let index = adminRoutes.length - 1; index >= 0; index -= 1) {
+    if (String(adminRoutes[index]?.name || '').trim() === normalizedName) {
+      adminRoutes.splice(index, 1)
+      removed = true
+    }
+  }
+  return removed
+}
+
 function sortAdminRoutes(routes) {
   return [...routes].sort((left, right) => {
     if (left.path === '/admin') return -1

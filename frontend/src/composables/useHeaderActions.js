@@ -6,7 +6,6 @@ export function useHeaderActions({
   composerStore,
   currentSearchQuery,
   modalStore,
-  notificationStore,
   route,
   router
 }) {
@@ -45,7 +44,6 @@ export function useHeaderActions({
     }
 
     authStore.logout()
-    notificationStore.disconnect()
     router.push('/')
   }
 

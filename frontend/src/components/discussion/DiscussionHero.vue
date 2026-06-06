@@ -13,13 +13,12 @@
       </span>
     </div>
     <h1>{{ discussion.title }}</h1>
-    <div v-if="discussion.tags && discussion.tags.length" class="discussion-tags">
-      <ForumTagBadge
-        v-for="tag in discussion.tags"
-        :key="tag.id"
-        :tag="tag"
-        :to="buildTagPath(tag)"
-        max-width="220px"
+    <div v-if="presentationItems.length" class="discussion-presentation">
+      <component
+        :is="item.component"
+        v-for="item in presentationItems"
+        :key="item.key"
+        v-bind="item.componentProps"
       />
     </div>
     <ul v-if="heroMetaItems.length" class="discussion-meta-list">
@@ -67,7 +66,6 @@
 
 <script setup>
 import { toRef } from 'vue'
-import ForumTagBadge from '@/components/forum/ForumTagBadge.vue'
 import { useDiscussionHeroState } from '@/composables/useDiscussionHeroState'
 
 const props = defineProps({
@@ -87,10 +85,6 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
-  buildTagPath: {
-    type: Function,
-    required: true
-  },
   discussionBadges: {
     type: Array,
     default: () => []
@@ -100,6 +94,7 @@ const props = defineProps({
 const {
   discussionReviewBanner,
   heroMetaItems,
+  presentationItems,
 } = useDiscussionHeroState({
   canEditDiscussion: toRef(props, 'canEditDiscussion'),
   canModeratePendingDiscussion: toRef(props, 'canModeratePendingDiscussion'),
@@ -170,7 +165,7 @@ function handleReviewAction(action) {
   word-break: break-word;
 }
 
-.discussion-tags {
+.discussion-presentation {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -274,7 +269,7 @@ function handleReviewAction(action) {
   }
 
   .discussion-badges,
-  .discussion-tags,
+  .discussion-presentation,
   .discussion-meta-list {
     flex-wrap: wrap;
     justify-content: center;

@@ -64,6 +64,7 @@ def resolve_extension_discovery_result(manifest: ExtensionManifest) -> Extension
         language_packs=tuple(record.language_packs),
         post_types=tuple(record.post_types),
         search_filters=tuple(record.search_filters),
+        discussion_list_queries=tuple(record.discussion_list_queries),
         discussion_sorts=tuple(record.discussion_sorts),
         discussion_list_filters=tuple(record.discussion_list_filters),
         locale_paths=tuple(record.locale_paths),

@@ -7,7 +7,7 @@ import {
 } from '../utils/discussionList.js'
 
 export function createDiscussionListMetaState({
-  currentTag,
+  contextSubject,
   forumStore,
   isFollowingPage,
   listFilter,
@@ -23,29 +23,32 @@ export function createDiscussionListMetaState({
     listFilter: listFilter.value,
   }))
 
+  const subjectName = computed(() => contextSubject.value?.name || contextSubject.value?.title || '')
+  const subjectDescription = computed(() => contextSubject.value?.description || '')
+
   const pageMetaTitle = computed(() => getText({
     surface: 'discussion-list-page-meta-title',
     listFilter: activeFilterCode.value,
-    currentTagName: currentTag.value?.name || '',
+    subjectName: subjectName.value,
     searchQuery: searchQuery.value,
     hasSearchQuery: Boolean(searchQuery.value),
   })?.text || resolveMetaTitle({
     filterCode: activeFilterCode.value,
-    currentTagName: currentTag.value?.name || '',
+    subjectName: subjectName.value,
     searchQuery: searchQuery.value,
   }))
 
   const pageMetaDescription = computed(() => getText({
     surface: 'discussion-list-page-meta-description',
     listFilter: activeFilterCode.value,
-    currentTagName: currentTag.value?.name || '',
-    currentTagDescription: currentTag.value?.description || '',
+    subjectName: subjectName.value,
+    subjectDescription: subjectDescription.value,
     searchQuery: searchQuery.value,
     hasSearchQuery: Boolean(searchQuery.value),
   })?.text || resolveMetaDescription({
     filterCode: activeFilterCode.value,
-    currentTagName: currentTag.value?.name || '',
-    currentTagDescription: currentTag.value?.description || '',
+    subjectName: subjectName.value,
+    subjectDescription: subjectDescription.value,
     searchQuery: searchQuery.value,
   }))
 

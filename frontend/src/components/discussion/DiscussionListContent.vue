@@ -2,7 +2,8 @@
   <main class="index-content">
     <DiscussionListHeaderSection
       :auth-store="authStore"
-      :current-tag="currentTag"
+      :context-subject="contextSubject"
+      :discussion-list-contexts="discussionListContexts"
       :is-following-page="isFollowingPage"
       :list-filter="listFilter"
       :sort-by="sortBy"
@@ -35,7 +36,6 @@
             :key="discussion.id"
             :discussion="discussion"
             :build-discussion-path="buildDiscussionPath"
-            :build-tag-path="buildTagPath"
             :build-user-path="buildUserPath"
             :format-relative-time="formatRelativeTime"
             :get-user-avatar-color="getUserAvatarColor"
@@ -68,9 +68,13 @@ defineProps({
     type: Object,
     required: true
   },
-  currentTag: {
+  contextSubject: {
     type: Object,
     default: null
+  },
+  discussionListContexts: {
+    type: Array,
+    default: () => []
   },
   isFollowingPage: {
     type: Boolean,
@@ -121,10 +125,6 @@ defineProps({
     default: false
   },
   buildDiscussionPath: {
-    type: Function,
-    required: true
-  },
-  buildTagPath: {
     type: Function,
     required: true
   },

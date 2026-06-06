@@ -396,7 +396,7 @@ import {
   getAdminPageConfig,
   getAdminPageCopy,
   useModalStore,
-} from '@/admin/registry'
+} from '@bias/admin/components'
 
 const PAGE_KEY = 'tags.index'
 const tags = ref([])

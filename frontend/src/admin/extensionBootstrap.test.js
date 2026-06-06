@@ -7,11 +7,18 @@ import {
 } from './extensionRuntimeState.js'
 import {
   bootstrapEnabledAdminExtensions,
+  registerExtensionAdminRoutes,
+  resolveAdminRouteComponentKeys,
   resetAdminExtensionRuntimeContributions,
   resetLoadedAdminExtensions,
 } from './extensionBootstrap.js'
 import { createAdminExtensionApp } from './extensionApp.js'
 import { createRuntimeApplication } from '../common/application.js'
+import {
+  onLazyModuleLoad,
+  registerLazyExtensionModule,
+  registerLoadedExtensionModule,
+} from '../common/extensionRuntime.js'
 import { createAdminRuntimeRegistry } from './runtimeRegistry.js'
 import {
   Exports as AdminSdkExports,
@@ -19,6 +26,7 @@ import {
   createAdminRuntimeRegistry as createAdminRuntimeRegistryFromSdk,
 } from './sdk.js'
 import {
+  clearAdminRoutesForExtension,
   getAdminRoutes,
   registerAdminRoute,
 } from './registry/routes.js'
@@ -128,6 +136,65 @@ test('resetAdminExtensionRuntimeContributions removes scoped admin routes and it
   resetAdminExtensionRuntimeContributions('scoped', { app })
   assert.equal(getAdminRoutes().some(route => route.name === 'admin-scoped'), false)
   assert.equal(app.registry.get('toolbar-actions').some(item => item.key === 'inspect'), false)
+})
+
+test('resetAdminExtensionRuntimeContributions clears export registry namespace', () => {
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
+  const runtimeApp = createRuntimeApplication({ kind: 'admin' })
+  const module = { extend: [] }
+
+  try {
+    registerLoadedExtensionModule('admin-tools', module, {
+      app: runtimeApp,
+      frontend: 'admin',
+      entryPath: 'extensions/admin-tools/frontend/admin/index.js',
+    })
+
+    assert.equal(runtimeApp.exportRegistry.get('admin-tools', 'admin'), module)
+    assert.equal(runtimeApp.exportRegistry.getModule('extensions/admin-tools/frontend/admin/index.js'), module)
+
+    resetAdminExtensionRuntimeContributions('admin-tools', { app: runtimeApp })
+
+    assert.equal(runtimeApp.exportRegistry.get('admin-tools', 'admin'), null)
+    assert.equal(runtimeApp.exportRegistry.getModule('extensions/admin-tools/frontend/admin/index.js'), null)
+  } finally {
+    globalThis.bias = previousBias
+  }
+})
+
+test('resetAdminExtensionRuntimeContributions clears chunks and loaded lazy modules', async () => {
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
+
+  try {
+    const runtimeApp = createRuntimeApplication({ kind: 'admin' })
+    const lazyModule = { name: 'admin-lazy' }
+    const ownedModule = { name: 'owned-admin-lazy' }
+    const calls = []
+
+    runtimeApp.exportRegistry.onLoadPath('extensions/admin-tools/frontend/admin/lazy.js', loaded => {
+      calls.push(loaded)
+    })
+    runtimeApp.exportRegistry.registerChunk('admin-tools', 'admin-lazy', {
+      'frontend/admin/lazy.js': async () => lazyModule,
+    })
+    registerLazyExtensionModule('admin-shared-lazy-key', ownedModule, { extensionId: 'admin-tools' })
+
+    resetAdminExtensionRuntimeContributions('admin-tools', { app: runtimeApp })
+
+    await assert.rejects(
+      runtimeApp.exportRegistry.asyncModuleImport('extensions/admin-tools/frontend/admin/lazy.js'),
+      /No chunk found/,
+    )
+    runtimeApp.exportRegistry.registerModule('extensions/admin-tools/frontend/admin/lazy.js', lazyModule)
+    onLazyModuleLoad('admin-shared-lazy-key', loaded => calls.push(loaded))
+
+    assert.equal(globalThis.bias.reg.getModule('admin-shared-lazy-key'), null)
+    assert.deepEqual(calls, [])
+  } finally {
+    globalThis.bias = previousBias
+  }
 })
 
 test('admin extension app runs scoped initializers and resets patches', async () => {
@@ -264,5 +331,191 @@ test('bootstrapEnabledAdminExtensions runs runtime application initializers', as
     assert.equal(globalThis.bias.extensions['runtime-admin'], runtimeApp.extensions['runtime-admin'])
   } finally {
     globalThis.bias = previousBias
+  }
+})
+
+test('registerExtensionAdminRoutes resolves extension-owned route components from generated importers', async () => {
+  const component = { name: 'AdminRoutePage' }
+  const extension = {
+    id: 'admin-route-demo',
+    frontend_admin_entry: 'extensions/admin-route-demo/frontend/admin/index.js',
+    frontend_routes: [{
+      frontend: 'admin',
+      path: '/admin/route-demo',
+      name: 'admin-route-demo.page',
+      component: './Page.vue',
+      title: 'Route Demo',
+      description: 'Demo route',
+      order: 42,
+    }],
+  }
+
+  try {
+    assert.deepEqual(resolveAdminRouteComponentKeys('./Page.vue', extension), [
+      'admin-route-demo:./Page.vue',
+      'admin-route-demo:extensions/admin-route-demo/frontend/admin/Page.vue',
+      'extensions/admin-route-demo/frontend/admin/Page.vue',
+      '../../../extensions/admin-route-demo/frontend/admin/Page.vue',
+      './Page.vue',
+    ])
+
+    const registered = registerExtensionAdminRoutes(null, extension, {
+      importers: {
+        '../../../extensions/admin-route-demo/frontend/admin/Page.vue': async () => ({ default: component }),
+      },
+    })
+
+    assert.deepEqual(registered, ['admin-route-demo.page'])
+    const route = getAdminRoutes().find(item => item.name === 'admin-route-demo.page')
+    assert.equal(route.path, '/admin/route-demo')
+    assert.equal(route.label, 'Route Demo')
+    assert.equal(route.navDescription, 'Demo route')
+    assert.equal(route.navOrder, 42)
+    assert.equal(route.extensionId, 'admin-route-demo')
+    assert.equal(await route.component(), component)
+  } finally {
+    clearAdminRoutesForExtension('admin-route-demo')
+  }
+})
+
+test('bootstrapEnabledAdminExtensions registers backend-only admin routes', async () => {
+  resetLoadedAdminExtensions()
+  const component = { name: 'BackendOnlyAdminPage' }
+  const addedRoutes = []
+  const router = {
+    addRoute(route) {
+      addedRoutes.push(route)
+    },
+    hasRoute() {
+      return false
+    },
+    getRoutes() {
+      return []
+    },
+    removeRoute() {},
+  }
+
+  try {
+    const result = await bootstrapEnabledAdminExtensions({
+      router,
+      runtime: { stamp: 'backend-only-admin-routes' },
+      registry: { adminApi: {} },
+      extensions: [{
+        id: 'admin-backend-only',
+        enabled: true,
+        frontend_routes: [{
+          frontend: 'admin',
+          path: '/admin/backend-only',
+          name: 'admin-backend-only.page',
+          component: 'extensions/admin-backend-only/frontend/admin/Page.vue',
+          title: 'Backend Only',
+        }],
+      }],
+      entryModules: {
+        '../../../extensions/admin-backend-only/frontend/admin/Page.vue': async () => ({ default: component }),
+      },
+    })
+
+    assert.equal(result.addedRouteCount, 1)
+    assert.equal(addedRoutes[0].name, 'admin-backend-only.page')
+    assert.equal(await addedRoutes[0].component(), component)
+  } finally {
+    clearAdminRoutesForExtension('admin-backend-only')
+  }
+})
+
+test('bootstrapEnabledAdminExtensions resolves backend-only route components from frontend outputs', async () => {
+  resetLoadedAdminExtensions()
+  const runtimeApp = createRuntimeApplication({ kind: 'admin' })
+  const component = { name: 'BackendOnlyOutputPage' }
+  const addedRoutes = []
+  const router = {
+    addRoute(route) {
+      addedRoutes.push(route)
+    },
+    hasRoute() {
+      return false
+    },
+    getRoutes() {
+      return []
+    },
+    removeRoute() {},
+  }
+
+  try {
+    const result = await bootstrapEnabledAdminExtensions({
+      app: runtimeApp,
+      router,
+      runtime: { stamp: 'backend-only-admin-output-routes' },
+      registry: { adminApi: {} },
+      extensions: [{
+        id: 'admin-output-route',
+        enabled: true,
+        frontend_outputs: {
+          admin: {
+            revision: 'rev-route',
+            chunks: [{
+              file: 'assets/admin-output-route-page.js',
+              module_id: 'frontend/admin/Page.vue',
+            }],
+          },
+        },
+        frontend_routes: [{
+          frontend: 'admin',
+          path: '/admin/output-route',
+          name: 'admin-output-route.page',
+          component: './Page.vue',
+          title: 'Output Route',
+        }],
+      }],
+      entryModules: {},
+    })
+
+    runtimeApp.exportRegistry.registerChunk('admin-output-route', 'admin/assets/admin-output-route-page.js', {
+      'frontend/admin/Page.vue': async () => ({ default: component }),
+    })
+
+    assert.equal(result.addedRouteCount, 1)
+    assert.equal(addedRoutes[0].name, 'admin-output-route.page')
+    assert.equal(await addedRoutes[0].component(), component)
+  } finally {
+    clearAdminRoutesForExtension('admin-output-route')
+  }
+})
+
+test('registerExtensionAdminRoutes removes declared admin routes', () => {
+  const removed = []
+  const router = {
+    hasRoute(name) {
+      return name === 'admin-route-remove.page'
+    },
+    removeRoute(name) {
+      removed.push(name)
+    },
+  }
+
+  try {
+    registerAdminRoute({
+      path: '/admin/remove-me',
+      name: 'admin-route-remove.page',
+      label: 'Remove me',
+      extensionId: 'admin-route-remove',
+    })
+    assert.equal(getAdminRoutes().some(route => route.name === 'admin-route-remove.page'), true)
+
+    const registered = registerExtensionAdminRoutes(router, {
+      id: 'admin-route-remove',
+      frontend_routes: [{
+        frontend: 'admin',
+        name: 'admin-route-remove.page',
+        removed: true,
+      }],
+    })
+
+    assert.deepEqual(registered, ['admin-route-remove.page'])
+    assert.deepEqual(removed, ['admin-route-remove.page'])
+    assert.equal(getAdminRoutes().some(route => route.name === 'admin-route-remove.page'), false)
+  } finally {
+    clearAdminRoutesForExtension('admin-route-remove')
   }
 })

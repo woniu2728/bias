@@ -1,8 +1,8 @@
-import { Forum } from '@bias/forum'
 import {
+  Forum,
   getUiCopy,
   forumApi,
-} from '@/forum/registry'
+} from '@bias/forum'
 
 export const extend = [
   buildSubscriptionsForumExtender(),

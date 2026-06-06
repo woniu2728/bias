@@ -88,7 +88,7 @@ registerDiscussionAction({
     icon: 'fas fa-pen',
     description: getUiCopy({
       surface: 'discussion-action-edit-description',
-    })?.text || '修改标题、正文和标签。',
+    })?.text || '修改标题和正文。',
     order: 30
   })
 })

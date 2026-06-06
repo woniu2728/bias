@@ -1,0 +1,30 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+
+test('node test runtime resolves public Bias SDK package aliases', async () => {
+  const forum = await import('@bias/forum')
+  const admin = await import('@bias/admin')
+  const adminComponents = await import('@bias/admin/components')
+  const core = await import('@bias/core')
+
+  assert.equal(typeof forum.Forum, 'function')
+  assert.equal(typeof forum.ref, 'function')
+  assert.equal(typeof admin.Admin, 'function')
+  assert.equal(typeof admin.createAdminRuntimeRegistry, 'function')
+  assert.equal(typeof adminComponents.resolveApprovalSelectionState, 'function')
+  assert.equal(adminComponents.ExtensionGeneratedPermissionsPage, null)
+  assert.equal(typeof core.extend, 'function')
+  assert.equal(typeof core.override, 'function')
+  assert.equal(typeof core.resetPatches, 'function')
+  assert.equal(typeof core.ItemList, 'function')
+  assert.equal(typeof core.createExtensionInitializers, 'function')
+  assert.equal(typeof core.createExtensionPatcher, 'function')
+  assert.equal(typeof core.ExportRegistry, 'function')
+  assert.equal(typeof core.ResourceModel, 'function')
+  assert.equal(typeof core.normalizeExtensionFrontendEntry, 'function')
+  assert.equal(typeof core.resolveExtensionRouteComponentKeys, 'function')
+  assert.equal(typeof core.registerExtensionFrontendOutput, 'function')
+  assert.equal(typeof core.onLazyModuleLoad, 'function')
+  assert.equal(typeof core.registerLazyExtensionModule, 'function')
+  assert.equal(typeof core.unregisterLazyExtensionModules, 'function')
+})

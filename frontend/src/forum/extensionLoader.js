@@ -1,4 +1,5 @@
 import api from '../api/index.js'
+import { generatedForumExtensionModules } from '../generated/extensionImportMap.js'
 import { createRuntimeApplication } from '../common/application.js'
 import {
   applyExtensionDocumentPayload,
@@ -19,6 +20,13 @@ import {
   registerLoadedExtensionModule,
   unregisterLoadedExtensionModule,
 } from '../common/extensionRuntime.js'
+import {
+  normalizeExtensionFrontendEntry,
+  registerExtensionFrontendOutput,
+  resolveExtensionRouteComponent,
+  resolveExtensionRouteComponentKeys,
+  withRuntimeApplication,
+} from '../common/extensionRouteRuntime.js'
 
 export {
   applyExtensionDocumentPayload,
@@ -30,24 +38,13 @@ export {
 
 const forumRouteComponents = {
   DiscussionListView: () => import('../views/DiscussionListView.vue'),
-  NotificationView: () => import('../views/NotificationView.vue'),
-  TagsView: () => import('../views/TagsView.vue'),
 }
 
 export function normalizeExtensionForumEntry(entry) {
-  const value = String(entry || '').trim()
-  if (!value) {
-    return ''
-  }
-
-  const normalized = value.startsWith('extensions/')
-    ? `../../../${value}`
-    : value
-
-  return normalized.replace(/\\/g, '/')
+  return normalizeExtensionFrontendEntry(entry)
 }
 
-export function registerExtensionForumRoutes(router, extension, { components = forumRouteComponents } = {}) {
+export function registerExtensionForumRoutes(router, extension, { components = forumRouteComponents, importers = generatedForumExtensionModules } = {}) {
   if (!router || typeof router.addRoute !== 'function') {
     return []
   }
@@ -82,7 +79,7 @@ export function registerExtensionForumRoutes(router, extension, { components = f
       continue
     }
 
-    const component = components[componentKey]
+    const component = resolveForumRouteComponent(componentKey, extension, { components, importers })
     if (!component) {
       throw new Error(`找不到扩展前台路由组件: ${componentKey}`)
     }
@@ -97,12 +94,33 @@ export function registerExtensionForumRoutes(router, extension, { components = f
         requiresAuth: Boolean(route.requires_auth),
         title: route.title || undefined,
         description: route.description || undefined,
+        extensionDocument: {
+          preloads: Array.isArray(route.preloads) ? route.preloads : [],
+          documentAttributes: Array.isArray(route.document_attributes) ? route.document_attributes : [],
+          headTags: Array.isArray(route.head_tags) ? route.head_tags : [],
+        },
       },
     })
     registeredRoutes.push(name)
   }
 
   return registeredRoutes
+}
+
+export function resolveForumRouteComponent(componentKey, extension, { components = forumRouteComponents, importers = generatedForumExtensionModules } = {}) {
+  return resolveExtensionRouteComponent(componentKey, extension, {
+    frontend: 'forum',
+    components,
+    importers,
+    normalizeEntry: normalizeExtensionForumEntry,
+  })
+}
+
+export function resolveForumRouteComponentKeys(componentKey, extension = {}) {
+  return resolveExtensionRouteComponentKeys(componentKey, extension, {
+    frontend: 'forum',
+    normalizeEntry: normalizeExtensionForumEntry,
+  })
 }
 
 export async function loadExtensionForumEntryModule(entryPath, { importers = {} } = {}) {
@@ -166,8 +184,14 @@ export async function loadEnabledForumExtensions({
     if (!extensionId || loadedIds.has(extensionId)) {
       continue
     }
+    const runtimeExtension = withRuntimeApplication(extension, application)
+    registerExtensionFrontendOutput(application, extensionId, 'common', runtimeExtension?.frontend_outputs?.common)
+    registerExtensionFrontendOutput(application, extensionId, 'forum', runtimeExtension?.frontend_outputs?.forum)
 
-    const registeredRoutes = registerExtensionForumRoutes(router, extension, { components: routeComponents || forumRouteComponents })
+    const registeredRoutes = registerExtensionForumRoutes(router, runtimeExtension, {
+      components: routeComponents || forumRouteComponents,
+      importers,
+    })
     let app = null
     const commonEntryPath = normalizeExtensionForumEntry(extension?.frontend_common_entry)
     if (commonEntryPath) {
@@ -176,7 +200,7 @@ export async function loadEnabledForumExtensions({
       app = createForumExtensionApp({
         app: application,
         forumStore,
-        extension,
+        extension: runtimeExtension,
         loadedExtensionIds: loadedIds,
         registry,
         router,
@@ -184,11 +208,10 @@ export async function loadEnabledForumExtensions({
       })
       registerLoadedExtensionModule(extensionId, commonModule, {
         app: application,
-        extension,
+        extension: runtimeExtension,
         frontend: 'common',
         entryPath: commonEntryPath,
       })
-      registerExtensionFrontendOutput(application, extensionId, 'common', extension?.frontend_outputs?.common)
       await bootModuleExtenders(application, extensionId, commonModule, app)
     }
 
@@ -206,7 +229,7 @@ export async function loadEnabledForumExtensions({
     app = createForumExtensionApp({
       app: application,
       forumStore,
-      extension,
+      extension: runtimeExtension,
       loadedExtensionIds: loadedIds,
       registry,
       router,
@@ -214,11 +237,10 @@ export async function loadEnabledForumExtensions({
     })
     registerLoadedExtensionModule(extensionId, module, {
       app: application,
-      extension,
+      extension: runtimeExtension,
       frontend: 'forum',
       entryPath,
     })
-    registerExtensionFrontendOutput(application, extensionId, 'forum', extension?.frontend_outputs?.forum)
     await bootModuleExtenders(application, extensionId, module, app)
     initializedApps.push({ app, extensionId })
     loadedIds.add(extensionId)
@@ -237,20 +259,6 @@ export async function loadEnabledForumExtensions({
     extensionDocument,
     loadedExtensionIds: loadedIds,
   }
-}
-
-function registerExtensionFrontendOutput(application, extensionId, frontend, output) {
-  const registry = application?.exportRegistry
-  if (!registry || !output || typeof registry.registerViteOutput !== 'function') {
-    return []
-  }
-  return registry.registerViteOutput(extensionId, frontend, output, {
-    baseUrl: resolveFrontendAssetsBaseUrl(),
-  })
-}
-
-function resolveFrontendAssetsBaseUrl() {
-  return globalThis.bias?.frontendAssetsBaseUrl || '/static/frontend'
 }
 
 async function bootModuleExtenders(application, extensionId, module, extensionApp) {

@@ -7,6 +7,7 @@ import { useDiscussionListRouteActions } from '@/composables/useDiscussionListRo
 import { useDiscussionListResourceState } from '@/composables/useDiscussionListResourceState'
 import { useDiscussionListRouteState } from '@/composables/useDiscussionListRouteState'
 import { useDiscussionListRealtimeState } from '@/composables/useDiscussionListRealtimeState'
+import { getDiscussionListContexts } from '@/forum/frontendRegistry'
 import { useForumRealtimeStore } from '@/stores/forumRealtime'
 import { useResourceStore } from '@/stores/resource'
 
@@ -23,15 +24,26 @@ export function useDiscussionListData({
   const routeState = useDiscussionListRouteState({ route, router })
   const markingAllRead = ref(false)
 
-  const currentTagSlug = computed(() => route.params.slug || null)
   const searchQuery = routeState.searchQuery
   const sortBy = routeState.sortBy
   const listFilter = routeState.listFilter
   const isFollowingPage = computed(() => route.name === 'following' || listFilter.value === 'following')
+  const discussionListContexts = computed(() => getDiscussionListContexts({
+    authStore,
+    isFollowingPage: isFollowingPage.value,
+    listFilter: listFilter.value,
+    route,
+    searchQuery: searchQuery.value,
+    sortBy: sortBy.value,
+    surface: 'discussion-list',
+  }))
+  const primaryDiscussionListContext = computed(() => discussionListContexts.value[0] || null)
   const resourceState = useDiscussionListResourceState({
-    currentTagSlug,
+    discussionListContexts,
     isFollowingPage,
     listFilter,
+    primaryDiscussionListContext,
+    route,
     searchQuery,
     sortBy,
   })
@@ -123,8 +135,10 @@ export function useDiscussionListData({
   return {
     changeSortBy: routeActions.changeSortBy,
     clearPendingReturnRestore,
-    currentTag: resourceState.currentTag,
-    currentTagSlug,
+    contextSubject: resourceState.contextSubject,
+    contextSubjectKey: resourceState.contextSubjectKey,
+    discussionListContextData: resourceState.discussionListContextData,
+    discussionListContexts,
     discussions: resourceState.discussions,
     filterOptions: resourceState.filterOptions,
     getPendingReturnRestore,
@@ -144,6 +158,5 @@ export function useDiscussionListData({
     searchQuery,
     sortBy,
     sortOptions: resourceState.sortOptions,
-    tags: resourceState.tags,
   }
 }

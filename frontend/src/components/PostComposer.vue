@@ -55,22 +55,11 @@
           :status-text="previewStatusText"
           :html="previewHtml"
         />
-        <ComposerMentionPicker
-          v-if="showMentionPicker"
-          :items="mentionUsers"
-          :active-index="mentionActiveIndex"
-          :loading="mentionLoading"
-          :style-object="mentionPickerStyle"
-          @highlight="mentionActiveIndex = $event"
-          @select="handleMentionSelect"
-        />
-        <ComposerEmojiAutocomplete
-          v-if="showEmojiAutocomplete"
-          :items="emojiSuggestions"
-          :active-index="emojiAutocompleteActiveIndex"
-          :style-object="emojiAutocompleteStyle"
-          @highlight="emojiAutocompleteActiveIndex = $event"
-          @select="handleEmojiAutocompleteSelect"
+        <ComposerAutocompleteOutlet
+          v-if="showAutocomplete"
+          :active="activeAutocomplete"
+          @highlight="handleAutocompleteHighlight"
+          @select="handleAutocompleteSelect"
         />
 
         <ComposerActionBar
@@ -90,22 +79,23 @@
               <i class="far fa-eye"></i>
             </button>
             <template v-for="tool in composerTools" :key="tool.key">
-              <div v-if="tool.key === 'emoji'" :ref="setEmojiToolRef" class="composer-tool">
+              <div v-if="tool.popoverComponent || tool.popover_component" class="composer-tool">
                 <button
                   type="button"
                   :title="tool.title"
                   :disabled="submitting || uploading || isSuspended"
-                  :class="{ 'is-active': showEmojiPicker }"
-                  @click="applyComposerTool(tool)"
+                  :class="{ 'is-active': activeToolPopover?.key === tool.key }"
+                  @click="applyComposerTool(tool, $event)"
                 >
                   <i v-if="tool.icon" :class="tool.icon"></i>
                   <span v-else>{{ tool.label }}</span>
                 </button>
-                <ComposerEmojiPicker
-                  v-if="showEmojiPicker"
-                  :groups="emojiGroups"
-                  :style-object="emojiPickerStyle"
-                  @select="handleEmojiSelect"
+                <component
+                  :is="activeToolPopover.component"
+                  v-if="activeToolPopover?.key === tool.key"
+                  v-bind="activeToolPopover.componentProps"
+                  :style-object="activeToolPopover.styleObject"
+                  @select="handleToolPopoverSelect"
                 />
               </div>
               <button
@@ -113,7 +103,7 @@
                 type="button"
                 :title="tool.title"
                 :disabled="submitting || uploading || isSuspended"
-                @click="applyComposerTool(tool)"
+                @click="applyComposerTool(tool, $event)"
               >
                 <i v-if="tool.icon" :class="tool.icon"></i>
                 <span v-else>{{ tool.label }}</span>
@@ -158,11 +148,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import ComposerEmojiAutocomplete from '@/components/ComposerEmojiAutocomplete.vue'
-import ComposerEmojiPicker from '@/components/ComposerEmojiPicker.vue'
+import ComposerAutocompleteOutlet from '@/components/composer/ComposerAutocompleteOutlet.vue'
 import ComposerActionBar from '@/components/composer/ComposerActionBar.vue'
 import ComposerHeaderBar from '@/components/composer/ComposerHeaderBar.vue'
-import ComposerMentionPicker from '@/components/ComposerMentionPicker.vue'
 import ComposerNoticeStack from '@/components/composer/ComposerNoticeStack.vue'
 import ComposerPreviewPanel from '@/components/composer/ComposerPreviewPanel.vue'
 import ComposerStatusBar from '@/components/composer/ComposerStatusBar.vue'
@@ -246,6 +234,8 @@ const runtime = useComposerRuntime({
 
 const {
   attachmentInput,
+  activeAutocomplete,
+  activeToolPopover,
   applyComposerTool,
   buildExtensionContext,
   clearRuntimeState,
@@ -255,33 +245,21 @@ const {
   composerStatusItems,
   composerTextarea,
   composerTools,
-  emojiSuggestions,
-  emojiAutocompleteActiveIndex,
-  emojiAutocompleteStyle,
-  emojiGroups,
-  emojiPickerStyle,
   handleAttachmentSelected,
   handleComposerSecondaryAction,
   handleEditorInteraction,
   handleEditorKeydown,
-  handleEmojiAutocompleteSelect,
-  handleEmojiSelect,
+  handleAutocompleteHighlight,
+  handleAutocompleteSelect,
   handleImageSelected,
-  handleMentionSelect,
+  handleToolPopoverSelect,
   imageInput,
   isPhoneOverlay,
-  mentionActiveIndex,
-  mentionLoading,
-  mentionPickerStyle,
-  mentionUsers,
   previewError,
   previewHtml,
   previewLoading,
-  setEmojiToolRef,
   showBackdrop,
-  showEmojiAutocomplete,
-  showEmojiPicker,
-  showMentionPicker,
+  showAutocomplete,
   showPreview,
   startResize,
   syncInlineSuggestions,

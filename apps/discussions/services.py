@@ -171,7 +171,6 @@ class DiscussionService:
     @staticmethod
     def get_discussion_list(
         q: Optional[str] = None,
-        tag: Optional[str] = None,
         author: Optional[str] = None,
         list_filter: str = 'all',
         sort: str = 'latest',
@@ -179,13 +178,13 @@ class DiscussionService:
         limit: int = 20,
         user: Optional[User] = None,
         preload=None,
+        query_params: Optional[dict] = None,
     ) -> Tuple[List[Discussion], int]:
         """
         获取讨论列表
 
         Args:
             q: 搜索关键词
-            tag: 标签slug
             author: 作者用户名
             sort: 排序方式
             page: 页码
@@ -205,13 +204,25 @@ class DiscussionService:
         if q:
             queryset = SearchService.apply_discussion_search(queryset, q, user=user)
 
-        # 扩展过滤，例如 tags 扩展注册的 tag:<slug> 过滤器。
-        if tag:
-            queryset = SearchService.apply_discussion_search(queryset, f"tag:{tag}", user=user)
-
         # 按作者过滤
         if author:
             queryset = queryset.filter(user__username=author)
+
+        normalized_query_params = dict(query_params or {})
+        query_context = {
+            "user": user,
+            "query": q,
+            "author": author,
+            "params": normalized_query_params,
+        }
+        for query_definition in _get_forum_registry().get_discussion_list_queries():
+            queryset = query_definition.applier(
+                queryset,
+                {
+                    **query_context,
+                    "key": query_definition.key,
+                },
+            )
 
         filter_definition = _get_forum_registry().get_discussion_list_filter(list_filter)
         queryset = filter_definition.applier(
@@ -220,8 +231,8 @@ class DiscussionService:
                 "user": user,
                 "filter": filter_definition.code,
                 "query": q,
-                "tag": tag,
                 "author": author,
+                "params": normalized_query_params,
             },
         )
 
@@ -233,9 +244,9 @@ class DiscussionService:
                 "user": user,
                 "sort": sort_definition.code,
                 "query": q,
-                "tag": tag,
                 "author": author,
                 "filter": filter_definition.code,
+                "params": normalized_query_params,
             },
         )
         queryset = get_runtime_resource_registry().apply_named_sort(
@@ -246,9 +257,9 @@ class DiscussionService:
                 "user": user,
                 "sort": sort_definition.code,
                 "query": q,
-                "tag": tag,
                 "author": author,
                 "filter": filter_definition.code,
+                "params": normalized_query_params,
             },
         )
 

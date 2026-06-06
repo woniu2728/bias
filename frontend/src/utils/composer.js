@@ -1,7 +1,5 @@
-import api from '@/api'
-export { EMOJI_GROUPS, searchEmojiItems } from '@/utils/emojiData'
+import api from '../api/index.js'
 
-export const COMPOSER_EMOJI_PICKER_WIDTH = 420
 export const BASE_COMPOSER_TOOLS = [
   { key: 'upload', title: '上传附件', icon: 'fas fa-file-upload', order: 10 },
   { key: 'heading', title: '标题', label: 'H', before: '## ', after: '', order: 20 },
@@ -81,38 +79,6 @@ export function buildUploadedFileMarkdown(fileName, url, options = {}) {
   return image ? `![${safeLabel}](${url})` : `[${safeLabel}](${url})`
 }
 
-export function detectMentionQuery(content, cursorPosition) {
-  const safeContent = String(content || '')
-  const safeCursor = Math.max(0, Math.min(cursorPosition ?? safeContent.length, safeContent.length))
-  const beforeCursor = safeContent.slice(0, safeCursor)
-  const match = beforeCursor.match(/(^|[\s(])@([A-Za-z0-9_.-]{0,30})$/)
-  if (!match) return null
-
-  const query = match[2] || ''
-  const start = safeCursor - query.length - 1
-  return {
-    query,
-    start,
-    end: safeCursor
-  }
-}
-
-export function detectEmojiQuery(content, cursorPosition) {
-  const safeContent = String(content || '')
-  const safeCursor = Math.max(0, Math.min(cursorPosition ?? safeContent.length, safeContent.length))
-  const beforeCursor = safeContent.slice(0, safeCursor)
-  const match = beforeCursor.match(/(^|[\s([{"'“‘]):([A-Za-z0-9_+\-\u4e00-\u9fa5]{0,32})$/u)
-  if (!match) return null
-
-  const query = match[2] || ''
-  const start = safeCursor - query.length - 1
-  return {
-    query,
-    start,
-    end: safeCursor
-  }
-}
-
 export function getTextareaCaretCoordinates(textarea, position) {
   if (!textarea || typeof window === 'undefined' || typeof document === 'undefined') {
     return null
@@ -184,21 +150,6 @@ export function getTextareaCaretCoordinates(textarea, position) {
 
   mirror.remove()
   return coordinates
-}
-
-export function buildMentionReplacement(username) {
-  return `@${String(username || '').trim()} `
-}
-
-export function buildEmojiReplacement(emoji) {
-  return `${String(emoji || '').trim()} `
-}
-
-export function buildMentionTrigger(content, start) {
-  const safeContent = String(content || '')
-  const safeStart = Math.max(0, Math.min(start ?? safeContent.length, safeContent.length))
-  const previousCharacter = safeContent.slice(Math.max(0, safeStart - 1), safeStart)
-  return /[\s(]/.test(previousCharacter) || !previousCharacter ? '@' : ' @'
 }
 
 export function isImageFile(file) {

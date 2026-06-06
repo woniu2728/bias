@@ -25,14 +25,6 @@ const props = defineProps({
     type: Object,
     required: true
   },
-  showNotifications: {
-    type: Boolean,
-    default: true
-  },
-  notificationStore: {
-    type: Object,
-    default: null
-  },
   forumStore: {
     type: Object,
     default: null
@@ -42,8 +34,6 @@ const props = defineProps({
 const navSections = computed(() => getForumNavSections({
   authStore: props.authStore,
   forumStore: props.forumStore,
-  showNotifications: props.showNotifications,
-  notificationStore: props.notificationStore,
   surface: 'primary-nav',
 }).map(section => ({
   ...section,

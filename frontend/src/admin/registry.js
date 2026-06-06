@@ -5,6 +5,7 @@ export {
   getAdminNavSections,
   getAdminRoutes,
   registerAdminRoute,
+  removeAdminRoute,
 } from './registry/routes.js'
 import { registerAdminRoute as registerAdminRouteEntry } from './registry/routes.js'
 import { createAdminRuntimeRegistry } from './runtimeRegistry.js'
@@ -102,6 +103,10 @@ export {
   registerAdminUsersPageConfig,
   registerAdminUsersPageCopy,
 } from './registry/pages.js'
+export {
+  getAdminPermissionScopes,
+  registerAdminPermissionScope,
+} from './registry/permissionScopes.js'
 
 import './registry/bootstrap/routes.js'
 import './registry/bootstrap/dashboard.js'

@@ -496,6 +496,74 @@ class ExtensionManager:
             "updated": updated,
             "pruned": pruned,
             "locked": len(self._build_package_lock(discovered=discovered, installations=installations)["packages"]),
+            "package_inspection": self.inspect_extension_packages(force=True),
+        }
+
+    def get_extension_package_lock(self) -> dict:
+        setting = Setting.objects.filter(key=EXTENSION_PACKAGE_LOCK_SETTING).only("value").first()
+        if setting is None:
+            return {"schema": 1, "packages": []}
+        try:
+            payload = json.loads(str(setting.value or "{}"))
+        except json.JSONDecodeError:
+            return {"schema": 1, "packages": [], "invalid": True}
+        if not isinstance(payload, dict):
+            return {"schema": 1, "packages": [], "invalid": True}
+        return {
+            "schema": int(payload.get("schema") or 1),
+            "packages": list(payload.get("packages") or []),
+        }
+
+    def inspect_extension_packages(self, *, force: bool = False) -> dict:
+        self.load(force=force)
+        discovered = {
+            extension.id: extension
+            for extension in self.get_extensions()
+        }
+        installations = {
+            installation.extension_id: installation
+            for installation in ExtensionInstallation.objects.all()
+        }
+        packages = self._build_package_lock(discovered=discovered, installations=installations)["packages"]
+        missing = [item["id"] for item in packages if item["missing"]]
+        version_drift = [item["id"] for item in packages if item.get("version_mismatch")]
+        source_drift = [item["id"] for item in packages if item.get("source_mismatch")]
+        unmanaged = [
+            item["id"]
+            for item in packages
+            if item.get("discovered") and not item.get("installed")
+        ]
+        lock = self.get_extension_package_lock()
+        locked_ids = {
+            str(item.get("id") or "").strip()
+            for item in lock.get("packages", [])
+            if isinstance(item, dict) and str(item.get("id") or "").strip()
+        }
+        discovered_ids = set(discovered.keys())
+        installed_ids = set(installations.keys())
+        return {
+            "schema": 1,
+            "packages": packages,
+            "lock": {
+                "schema": lock.get("schema", 1),
+                "count": len(lock.get("packages") or []),
+                "stale_ids": sorted(locked_ids - (discovered_ids | installed_ids)),
+                "invalid": bool(lock.get("invalid")),
+            },
+            "summary": {
+                "discovered_count": len(discovered_ids),
+                "installed_count": sum(1 for item in packages if item.get("installed")),
+                "installation_record_count": len(installed_ids),
+                "locked_count": len(packages),
+                "missing_count": len(missing),
+                "version_drift_count": len(version_drift),
+                "source_drift_count": len(source_drift),
+                "unmanaged_discovered_count": len(unmanaged),
+            },
+            "missing": missing,
+            "version_drift": version_drift,
+            "source_drift": source_drift,
+            "unmanaged_discovered": unmanaged,
         }
 
     def _persist_package_lock(
@@ -524,10 +592,16 @@ class ExtensionManager:
             if extension is not None:
                 distribution = dict((extension.manifest.extra or {}).get("python_distribution") or {})
             runtime = extension.runtime if extension is not None else None
+            installed_version = installation.version if installation is not None else ""
+            installed_source = installation.source if installation is not None else ""
+            discovered_version = extension.version if extension is not None else ""
+            discovered_source = extension.source if extension is not None else ""
             packages.append({
                 "id": extension_id,
-                "version": installation.version if installation is not None else (extension.version if extension is not None else ""),
-                "source": installation.source if installation is not None else (extension.source if extension is not None else ""),
+                "version": installed_version or discovered_version,
+                "source": installed_source or discovered_source,
+                "discovered_version": discovered_version,
+                "discovered_source": discovered_source,
                 "path": str(extension.manifest.path or "") if extension is not None else "",
                 "distribution": {
                     "name": str(distribution.get("name") or ""),
@@ -536,7 +610,10 @@ class ExtensionManager:
                 "installed": bool(installation.installed) if installation is not None else bool(runtime and runtime.installed),
                 "enabled": bool(installation.enabled) if installation is not None else bool(runtime and runtime.enabled),
                 "booted": bool(installation.booted) if installation is not None else bool(runtime and runtime.booted),
+                "discovered": extension is not None,
                 "missing": extension is None,
+                "version_mismatch": bool(installation is not None and extension is not None and installed_version != discovered_version),
+                "source_mismatch": bool(installation is not None and extension is not None and installed_source != discovered_source),
             })
         return {
             "schema": 1,
@@ -706,6 +783,7 @@ class ExtensionManager:
             language_packs=tuple(extension.language_packs),
             post_types=tuple(extension.post_types),
             search_filters=tuple(extension.search_filters),
+            discussion_list_queries=tuple(extension.discussion_list_queries),
             discussion_sorts=tuple(extension.discussion_sorts),
             discussion_list_filters=tuple(extension.discussion_list_filters),
             locale_paths=tuple(

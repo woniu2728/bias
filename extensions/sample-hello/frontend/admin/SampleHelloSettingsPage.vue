@@ -112,7 +112,7 @@ import {
   AdminInlineMessage,
   AdminStateBlock,
   useAdminSaveFeedback,
-} from '@/admin/registry'
+} from '@bias/admin/components'
 
 const props = defineProps({
   extension: {

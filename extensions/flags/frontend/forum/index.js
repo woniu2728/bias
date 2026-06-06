@@ -1,9 +1,9 @@
-import { Forum } from '@bias/forum'
 import {
+  Forum,
   PostReportModal,
   forumApi,
   getUiCopy,
-} from '@/forum/registry'
+} from '@bias/forum'
 
 export const extend = [
   buildFlagsForumExtender(),

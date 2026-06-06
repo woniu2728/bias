@@ -55,6 +55,9 @@ class ExtensionFrontendRouteDefinition:
     module_id: str = ""
     title: str = ""
     description: str = ""
+    preloads: Tuple[Any, ...] = ()
+    document_attributes: Tuple[Any, ...] = ()
+    head_tags: Tuple[Any, ...] = ()
     requires_auth: bool = False
     order: int = 100
     removed: bool = False
@@ -584,6 +587,7 @@ class ExtensionDiscoveryResult:
     language_packs: Tuple[LanguagePackDefinition, ...] = ()
     post_types: Tuple[PostTypeDefinition, ...] = ()
     search_filters: Tuple[SearchFilterDefinition, ...] = ()
+    discussion_list_queries: Tuple[Any, ...] = ()
     discussion_sorts: Tuple[DiscussionSortDefinition, ...] = ()
     discussion_list_filters: Tuple[DiscussionListFilterDefinition, ...] = ()
     locale_paths: Tuple[str, ...] = ()
@@ -636,6 +640,7 @@ class ExtensionAssembly:
     language_packs: Tuple[Any, ...]
     post_types: Tuple[Any, ...]
     search_filters: Tuple[Any, ...]
+    discussion_list_queries: Tuple[Any, ...]
     discussion_sorts: Tuple[Any, ...]
     discussion_list_filters: Tuple[Any, ...]
     locale_paths: Tuple[str, ...]

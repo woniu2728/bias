@@ -8,7 +8,6 @@ function createBindings(overrides = {}) {
     activePostMenuId: ref(7),
     authStore: { isAuthenticated: true },
     buildDiscussionPath: value => `/d/${value.id || value}`,
-    buildTagPath: value => `/tags/${value.slug || value}`,
     buildUserPath: value => `/u/${value.id || value}`,
     canDeletePost: () => true,
     canEditDiscussion: ref(true),

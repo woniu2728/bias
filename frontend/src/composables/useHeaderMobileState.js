@@ -68,7 +68,7 @@ export function useHeaderMobileState({
 
   function isMobileNavActive(key) {
     if (key === 'home') {
-      return route.name === 'home' || route.name === 'tag-detail'
+      return route.name === 'home'
     }
 
     if (key === 'profile') {
@@ -119,13 +119,9 @@ function resolveMobilePageTitle(routeName, forumTitle, listFilter = 'all') {
       return resolveDiscussionListFilterLabel(listFilter)
     case 'following':
       return resolveDiscussionListFilterLabel('following')
-    case 'tags':
-      return '标签'
     case 'profile':
     case 'user-profile':
       return '个人主页'
-    case 'notifications':
-      return '通知'
     case 'search':
       return '搜索结果'
     case 'discussion-detail':

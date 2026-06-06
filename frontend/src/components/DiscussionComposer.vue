@@ -43,30 +43,13 @@
           @keydown.esc.prevent="closeComposer"
         />
 
-        <div class="composer-meta">
-          <select
-            v-model="form.primary_tag_id"
-            class="composer-field composer-tag-select"
-            :disabled="submitting || loadingTags || isSuspended"
-            @change="handlePrimaryTagChange"
-            @keydown.esc.prevent="closeComposer"
-          >
-            <option value="">{{ primaryTagPlaceholderText }}</option>
-            <option v-for="tag in primaryTags" :key="tag.id" :value="String(tag.id)">
-              {{ tag.name }}
-            </option>
-          </select>
-          <select
-            v-model="form.secondary_tag_id"
-            class="composer-field composer-tag-select"
-            :disabled="submitting || loadingTags || isSuspended || !secondaryTagOptions.length"
-            @keydown.esc.prevent="closeComposer"
-          >
-            <option value="">{{ secondaryTagPlaceholderText }}</option>
-            <option v-for="tag in secondaryTagOptions" :key="tag.id" :value="String(tag.id)">
-              {{ tag.name }}
-            </option>
-          </select>
+        <div class="composer-meta" :class="{ 'has-extension-fields': composerFields.length }">
+          <component
+            :is="field.component"
+            v-for="field in composerFields"
+            :key="field.key"
+            v-bind="field.componentProps || {}"
+          />
           <span class="composer-counter">{{ form.title.length }}/200</span>
         </div>
         <textarea
@@ -89,22 +72,11 @@
           :status-text="previewStatusText"
           :html="previewHtml"
         />
-        <ComposerMentionPicker
-          v-if="showMentionPicker"
-          :items="mentionUsers"
-          :active-index="mentionActiveIndex"
-          :loading="mentionLoading"
-          :style-object="mentionPickerStyle"
-          @highlight="mentionActiveIndex = $event"
-          @select="handleMentionSelect"
-        />
-        <ComposerEmojiAutocomplete
-          v-if="showEmojiAutocomplete"
-          :items="emojiSuggestions"
-          :active-index="emojiAutocompleteActiveIndex"
-          :style-object="emojiAutocompleteStyle"
-          @highlight="emojiAutocompleteActiveIndex = $event"
-          @select="handleEmojiAutocompleteSelect"
+        <ComposerAutocompleteOutlet
+          v-if="showAutocomplete"
+          :active="activeAutocomplete"
+          @highlight="handleAutocompleteHighlight"
+          @select="handleAutocompleteSelect"
         />
 
         <ComposerActionBar
@@ -124,22 +96,23 @@
               <i class="far fa-eye"></i>
             </button>
             <template v-for="tool in composerTools" :key="tool.key">
-              <div v-if="tool.key === 'emoji'" :ref="setEmojiToolRef" class="composer-tool">
+              <div v-if="tool.popoverComponent || tool.popover_component" class="composer-tool">
                 <button
                   type="button"
                   :title="tool.title"
                   :disabled="submitting || isSuspended || uploading"
-                  :class="{ 'is-active': showEmojiPicker }"
-                  @click="applyComposerTool(tool)"
+                  :class="{ 'is-active': activeToolPopover?.key === tool.key }"
+                  @click="applyComposerTool(tool, $event)"
                 >
                   <i v-if="tool.icon" :class="tool.icon"></i>
                   <span v-else>{{ tool.label }}</span>
                 </button>
-                <ComposerEmojiPicker
-                  v-if="showEmojiPicker"
-                  :groups="emojiGroups"
-                  :style-object="emojiPickerStyle"
-                  @select="handleEmojiSelect"
+                <component
+                  :is="activeToolPopover.component"
+                  v-if="activeToolPopover?.key === tool.key"
+                  v-bind="activeToolPopover.componentProps"
+                  :style-object="activeToolPopover.styleObject"
+                  @select="handleToolPopoverSelect"
                 />
               </div>
               <button
@@ -147,7 +120,7 @@
                 type="button"
                 :title="tool.title"
                 :disabled="submitting || isSuspended || uploading"
-                @click="applyComposerTool(tool)"
+                @click="applyComposerTool(tool, $event)"
               >
                 <i v-if="tool.icon" :class="tool.icon"></i>
                 <span v-else>{{ tool.label }}</span>
@@ -192,43 +165,40 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import ComposerEmojiAutocomplete from '@/components/ComposerEmojiAutocomplete.vue'
-import ComposerEmojiPicker from '@/components/ComposerEmojiPicker.vue'
+import ComposerAutocompleteOutlet from '@/components/composer/ComposerAutocompleteOutlet.vue'
 import ComposerActionBar from '@/components/composer/ComposerActionBar.vue'
 import ComposerHeaderBar from '@/components/composer/ComposerHeaderBar.vue'
-import ComposerMentionPicker from '@/components/ComposerMentionPicker.vue'
 import ComposerNoticeStack from '@/components/composer/ComposerNoticeStack.vue'
 import ComposerPreviewPanel from '@/components/composer/ComposerPreviewPanel.vue'
 import ComposerStatusBar from '@/components/composer/ComposerStatusBar.vue'
 import { useComposerRuntime } from '@/composables/useComposerRuntime'
-import { getUiCopy, runComposerSubmitGuards, runComposerSubmitSuccess } from '@/forum/registry'
+import { getComposerFields, getUiCopy, runComposerPayloadContributors, runComposerSubmitGuards, runComposerSubmitSuccess } from '@/forum/registry'
 import { useAuthStore } from '@/stores/auth'
 import { useComposerStore } from '@/stores/composer'
 import { useModalStore } from '@/stores/modal'
 import api from '@/api'
-import { flattenTags, normalizeDiscussion, normalizeTag, unwrapList } from '@/utils/forum'
+import { normalizeDiscussion } from '@/utils/forum'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
 const modalStore = useModalStore()
 
-const EMPTY_FORM = {
-  title: '',
-  content: '',
-  primary_tag_id: '',
-  secondary_tag_id: '',
+function createEmptyForm(extensions = {}) {
+  return {
+    title: '',
+    content: '',
+    extensions: normalizeExtensionState(extensions),
+  }
 }
 
-const form = ref({ ...EMPTY_FORM })
+const form = ref(createEmptyForm())
 const editorContent = computed({
   get: () => form.value.content,
   set: value => {
     form.value.content = value
   },
 })
-const tags = ref([])
-const loadingTags = ref(false)
 const submitting = ref(false)
 const titleInput = ref(null)
 const draftSavedAt = ref('')
@@ -238,21 +208,7 @@ const submitNotice = ref('')
 const submitNoticeTone = ref('info')
 let draftTimer = null
 
-const availableTags = computed(() => flattenTags(tags.value))
-const primaryTags = computed(() => tags.value.filter(tag => !tag.parent_id))
-const secondaryTagOptions = computed(() => {
-  if (!form.value.primary_tag_id) return []
-  const primaryTag = primaryTags.value.find(tag => String(tag.id) === String(form.value.primary_tag_id))
-  return primaryTag?.children || []
-})
 const isEditingDiscussion = computed(() => composerStore.current.type === 'edit-discussion')
-const selectedTagIds = computed(() => {
-  return [form.value.primary_tag_id, form.value.secondary_tag_id]
-    .filter(Boolean)
-    .map(value => parseInt(value, 10))
-    .filter(Number.isInteger)
-})
-const hasStartableTags = computed(() => primaryTags.value.length > 0)
 const showComposer = computed(() => {
   return (
     composerStore.isOpen
@@ -264,10 +220,16 @@ const hasDraftContent = computed(() => {
   return Boolean(
     form.value.title.trim()
     || form.value.content.trim()
-    || form.value.primary_tag_id
-    || form.value.secondary_tag_id
+    || hasExtensionState.value
   )
 })
+const hasExtensionState = computed(() => Object.values(form.value.extensions || {}).some(value => {
+  if (!value || typeof value !== 'object') return Boolean(value)
+  return Object.values(value).some(nested => {
+    if (Array.isArray(nested)) return nested.length > 0
+    return Boolean(nested)
+  })
+}))
 const isSuspended = computed(() => Boolean(authStore.user?.is_suspended))
 
 const runtime = useComposerRuntime({
@@ -294,6 +256,8 @@ const runtime = useComposerRuntime({
 
 const {
   attachmentInput,
+  activeAutocomplete,
+  activeToolPopover,
   applyComposerTool,
   buildExtensionContext,
   clearRuntimeState,
@@ -303,33 +267,21 @@ const {
   composerStatusItems,
   composerTextarea,
   composerTools,
-  emojiSuggestions,
-  emojiAutocompleteActiveIndex,
-  emojiAutocompleteStyle,
-  emojiGroups,
-  emojiPickerStyle,
   handleAttachmentSelected,
   handleComposerSecondaryAction,
   handleEditorInteraction,
   handleEditorKeydown,
-  handleEmojiAutocompleteSelect,
-  handleEmojiSelect,
+  handleAutocompleteHighlight,
+  handleAutocompleteSelect,
   handleImageSelected,
-  handleMentionSelect,
+  handleToolPopoverSelect,
   imageInput,
   isPhoneOverlay,
-  mentionActiveIndex,
-  mentionLoading,
-  mentionPickerStyle,
-  mentionUsers,
   previewError,
   previewHtml,
   previewLoading,
-  setEmojiToolRef,
   showBackdrop,
-  showEmojiAutocomplete,
-  showEmojiPicker,
-  showMentionPicker,
+  showAutocomplete,
   showPreview,
   startResize,
   syncInlineSuggestions,
@@ -344,18 +296,17 @@ const canSubmit = computed(() => {
     authStore.isAuthenticated &&
     form.value.title.trim() &&
     form.value.content.trim() &&
-    form.value.primary_tag_id &&
     !submitting.value &&
     !uploading.value &&
-    !loadingTags.value &&
-    hasStartableTags.value &&
     !isSuspended.value
   )
 })
-const selectedTagName = computed(() => {
-  const primaryTag = primaryTags.value.find(item => String(item.id) === String(form.value.primary_tag_id))
-  const secondaryTag = secondaryTagOptions.value.find(item => String(item.id) === String(form.value.secondary_tag_id))
-  return [primaryTag?.name, secondaryTag?.name].filter(Boolean).join(' / ')
+const composerFields = computed(() => getComposerFields(buildExtensionContext()))
+const selectedExtensionLabel = computed(() => {
+  return composerFields.value
+    .map(item => item.statusText || item.label)
+    .filter(Boolean)
+    .join(' · ')
 })
 const composerStatusText = computed(() => {
   if (composerStore.isMinimized) return minimizedSummary.value
@@ -365,13 +316,13 @@ const composerStatusText = computed(() => {
     hasDraftSavedAt: Boolean(draftSavedAt.value),
     draftSavedAtText: draftSavedAt.value ? formatDraftTime(draftSavedAt.value) : '',
     isEditingDiscussion: isEditingDiscussion.value,
-    selectedTagName: selectedTagName.value,
+    selectedExtensionLabel: selectedExtensionLabel.value,
   })?.text || (draftSavedAt.value
     ? `草稿保存于 ${formatDraftTime(draftSavedAt.value)}`
     : (isEditingDiscussion.value
         ? '修改后可重新提交审核或直接更新讨论。'
-        : (selectedTagName.value
-            ? `将发布到 ${selectedTagName.value}`
+        : (selectedExtensionLabel.value
+            ? `将发布到 ${selectedExtensionLabel.value}`
             : '支持 Markdown，可最小化继续编辑。')))
 })
 const minimizedSummary = computed(() => {
@@ -380,10 +331,10 @@ const minimizedSummary = computed(() => {
   return getUiCopy({
     surface: 'discussion-composer-minimized-summary',
     isEditingDiscussion: isEditingDiscussion.value,
-    selectedTagName: selectedTagName.value,
+    selectedExtensionLabel: selectedExtensionLabel.value,
   })?.text || (isEditingDiscussion.value
     ? '编辑讨论'
-    : (selectedTagName.value ? `新讨论 · ${selectedTagName.value}` : '发起讨论'))
+    : (selectedExtensionLabel.value ? `新讨论 · ${selectedExtensionLabel.value}` : '发起讨论'))
 })
 const composerHeading = computed(() => getUiCopy({
   surface: 'discussion-composer-heading',
@@ -407,19 +358,6 @@ const submitButtonText = computed(() => getUiCopy({
 const unsavedExitMessage = computed(() => getUiCopy({
   surface: 'discussion-composer-unsaved-exit-message',
 })?.text || '你有未发布的讨论内容。确定要离开当前页面吗？')
-const primaryTagPlaceholderText = computed(() => {
-  return getUiCopy({
-    surface: 'discussion-composer-primary-tag-placeholder',
-    loadingTags: loadingTags.value,
-    hasStartableTags: hasStartableTags.value,
-  })?.text || (loadingTags.value ? '加载标签中...' : (hasStartableTags.value ? '选择主标签' : '暂无可发帖标签'))
-})
-const secondaryTagPlaceholderText = computed(() => {
-  return getUiCopy({
-    surface: 'discussion-composer-secondary-tag-placeholder',
-    hasSecondaryOptions: secondaryTagOptions.value.length > 0,
-  })?.text || (secondaryTagOptions.value.length ? '选择次标签（可选）' : '无可用次标签')
-})
 const previewStatusText = computed(() => {
   return getUiCopy({
     surface: 'discussion-composer-preview-status',
@@ -513,7 +451,6 @@ async function prepareComposer() {
     return
   }
 
-  await ensureTagsLoaded()
   clearRuntimeState()
   submitNotice.value = ''
   submitNoticeTone.value = 'info'
@@ -522,83 +459,22 @@ async function prepareComposer() {
     form.value = {
       title: composerStore.current.initialTitle || '',
       content: composerStore.current.initialContent || '',
-      primary_tag_id: composerStore.current.initialPrimaryTagId || '',
-      secondary_tag_id: composerStore.current.initialSecondaryTagId || '',
+      extensions: normalizeExtensionState(composerStore.current.extensions),
     }
-    handlePrimaryTagChange()
     draftSavedAt.value = ''
     draftMessage.value = ''
     draftNoticeTone.value = 'info'
   } else {
     const restored = restoreDraft()
     if (!restored) {
-      form.value = { ...EMPTY_FORM }
+      form.value = createEmptyForm(composerStore.current.extensions)
       draftSavedAt.value = ''
       draftMessage.value = ''
       draftNoticeTone.value = 'info'
     }
-    applyRequestedTag()
   }
 
   await focusPreferredField()
-}
-
-async function ensureTagsLoaded() {
-  if (loadingTags.value || tags.value.length) return
-
-  loadingTags.value = true
-  try {
-    const response = await api.get('/tags', {
-      params: {
-        include_children: true,
-        purpose: 'start_discussion',
-      },
-    })
-    tags.value = unwrapList(response).map(normalizeTag)
-  } catch (error) {
-    console.error('加载标签失败:', error)
-  } finally {
-    loadingTags.value = false
-  }
-}
-
-function applyRequestedTag() {
-  const requestedTagId = composerStore.current.tagId
-  if (!requestedTagId) return
-
-  const requestedTag = availableTags.value.find(tag => String(tag.id) === String(requestedTagId))
-  if (!requestedTag) {
-    if (String(form.value.primary_tag_id) === String(requestedTagId)) {
-      form.value.primary_tag_id = ''
-    }
-    if (String(form.value.secondary_tag_id) === String(requestedTagId)) {
-      form.value.secondary_tag_id = ''
-    }
-    return
-  }
-
-  if (!form.value.primary_tag_id || (!form.value.title.trim() && !form.value.content.trim())) {
-    applyTagSelection(requestedTag)
-  }
-}
-
-function applyTagSelection(tag) {
-  if (!tag) return
-
-  if (tag.parent_id) {
-    form.value.primary_tag_id = String(tag.parent_id)
-    form.value.secondary_tag_id = String(tag.id)
-    return
-  }
-
-  form.value.primary_tag_id = String(tag.id)
-  handlePrimaryTagChange()
-}
-
-function handlePrimaryTagChange() {
-  if (!secondaryTagOptions.value.some(option => String(option.id) === String(form.value.secondary_tag_id))) {
-    form.value.secondary_tag_id = ''
-  }
 }
 
 async function focusPreferredField() {
@@ -683,14 +559,7 @@ function restoreDraft() {
     form.value = {
       title: draft.title || '',
       content: draft.content || '',
-      primary_tag_id: draft.primary_tag_id || '',
-      secondary_tag_id: draft.secondary_tag_id || '',
-    }
-    if (!form.value.primary_tag_id && draft.tag_id) {
-      const draftTag = availableTags.value.find(tag => String(tag.id) === String(draft.tag_id))
-      applyTagSelection(draftTag)
-    } else {
-      handlePrimaryTagChange()
+      extensions: draft.extensions && typeof draft.extensions === 'object' ? draft.extensions : {},
     }
     draftSavedAt.value = draft.updatedAt || ''
     draftNoticeTone.value = 'success'
@@ -740,8 +609,7 @@ function saveDraft(showMessage = true) {
     JSON.stringify({
       title: form.value.title,
       content: form.value.content,
-      primary_tag_id: form.value.primary_tag_id,
-      secondary_tag_id: form.value.secondary_tag_id,
+      extensions: form.value.extensions,
       updatedAt,
     })
   )
@@ -774,7 +642,7 @@ async function clearDraft(options = {}) {
     if (!confirmed) return
   }
 
-  form.value = { ...EMPTY_FORM }
+  form.value = createEmptyForm()
   clearRuntimeState()
   clearDraftStorage(getUiCopy({
     surface: 'discussion-composer-draft-cleared-local',
@@ -794,7 +662,7 @@ function clearDraftStorage(message = '') {
 function resetComposer() {
   clearDraftStorage()
   clearRuntimeState()
-  form.value = { ...EMPTY_FORM }
+  form.value = createEmptyForm()
   submitNotice.value = ''
   submitNoticeTone.value = 'info'
   composerStore.closeComposer()
@@ -826,7 +694,7 @@ async function submitDiscussion() {
     if (isEditingDiscussion.value) {
       data = await api.patch(
         `/discussions/${composerStore.current.discussionId}`,
-        buildDiscussionResourcePayload(),
+        await buildDiscussionResourcePayload(),
       )
 
       window.dispatchEvent(new CustomEvent('bias:discussion-updated', {
@@ -856,7 +724,7 @@ async function submitDiscussion() {
         })
       }
     } else {
-      data = await api.post('/discussions/', buildDiscussionResourcePayload())
+      data = await api.post('/discussions/', await buildDiscussionResourcePayload())
 
       if (data.approval_status === 'pending') {
         await modalStore.alert({
@@ -897,24 +765,21 @@ async function submitDiscussion() {
   }
 }
 
-function buildDiscussionResourcePayload() {
-  return {
+async function buildDiscussionResourcePayload() {
+  const payload = {
     data: {
       type: 'discussion',
       attributes: {
         title: form.value.title,
         content: form.value.content,
       },
-      relationships: {
-        tags: {
-          data: selectedTagIds.value.map(tagId => ({
-            type: 'tag',
-            id: String(tagId),
-          })),
-        },
-      },
+      relationships: {},
     },
   }
+  return runComposerPayloadContributors(payload, {
+    ...buildExtensionContext(),
+    submitKind: isEditingDiscussion.value ? 'edit-discussion' : 'discussion',
+  })
 }
 
 function formatDraftTime(value) {
@@ -934,7 +799,6 @@ function buildBaseContext() {
   return {
     approvalNote: composerStore.current.approvalNote || '',
     approvalStatus: composerStore.current.approvalStatus || '',
-    availablePrimaryTagCount: primaryTags.value.length,
     authStore,
     canSubmit: canSubmit.value,
     draftSavedAt: draftSavedAt.value,
@@ -945,19 +809,46 @@ function buildBaseContext() {
     isEditing: isEditingDiscussion.value,
     mode: isEditingDiscussion.value ? 'edit' : 'create',
     modalStore,
-    primaryTagId: form.value.primary_tag_id,
+    extensionState: form.value.extensions,
+    updateExtensionState,
     route: null,
     router,
     secondaryActionHandlers: {
       'clear-draft': () => clearDraft({ skipConfirm: true }),
     },
-    secondaryTagId: form.value.secondary_tag_id,
-    selectedTagIds: selectedTagIds.value,
-    selectedTagLabel: selectedTagName.value,
+    current: composerStore.current,
+    isSuspended: isSuspended.value,
+    closeComposer,
     source: composerStore.current.source || '',
     title: form.value.title,
     type: 'discussion',
   }
+}
+
+function updateExtensionState(key, value) {
+  const normalizedKey = String(key || '').trim()
+  if (!normalizedKey) return
+  form.value.extensions = {
+    ...(form.value.extensions || {}),
+    [normalizedKey]: {
+      ...(form.value.extensions?.[normalizedKey] || {}),
+      ...(value && typeof value === 'object' ? value : {}),
+    },
+  }
+}
+
+function normalizeExtensionState(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => String(key || '').trim())
+      .map(([key, state]) => [
+        String(key).trim(),
+        state && typeof state === 'object' && !Array.isArray(state) ? { ...state } : state,
+      ])
+  )
 }
 </script>
 
@@ -1059,7 +950,7 @@ function buildBaseContext() {
   border-bottom: 1px solid #dbe2ea;
 }
 
-.composer-tag-select {
+.composer-meta :deep(.composer-field) {
   padding: 0;
   font-size: 13px;
   color: #506172;
@@ -1124,7 +1015,7 @@ function buildBaseContext() {
     flex-wrap: wrap;
   }
 
-  .composer-tag-select {
+  .composer-meta :deep(.composer-field) {
     max-width: none;
   }
 

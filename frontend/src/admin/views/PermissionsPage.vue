@@ -10,6 +10,29 @@
         {{ permissionsCopy?.metaSummaryText?.(permissionMetaSummary) || `当前共注册 ${permissionMetaSummary.permissionCount} 项权限，来自 ${permissionMetaSummary.moduleCount} 个模块。保存时会自动补齐依赖权限，避免出现“子权限已勾选但前置权限缺失”的配置。` }}
       </AdminInlineMessage>
 
+      <section v-if="permissionScopes.length" class="PermissionScopes">
+        <article
+          v-for="scope in permissionScopes"
+          :key="scope.key"
+          class="PermissionScopeCard"
+        >
+          <div class="PermissionScopeCard-main">
+            <div class="PermissionScopeCard-title">
+              <i v-if="scope.icon" :class="scope.icon"></i>
+              <strong>{{ scope.label }}</strong>
+            </div>
+            <p v-if="scope.description">{{ scope.description }}</p>
+          </div>
+          <RouterLink
+            v-if="scope.to"
+            class="Button Button--secondary PermissionScopeCard-action"
+            :to="scope.to"
+          >
+            {{ scope.actionLabel || '配置' }}
+          </RouterLink>
+        </article>
+      </section>
+
       <!-- 用户组管理 -->
       <div class="PermissionsPage-groups">
         <div class="GroupBar">
@@ -265,6 +288,9 @@ import {
 import {
   getAdminPermissionsPageActionMeta,
 } from '../registry/pageActionMeta.js'
+import {
+  getAdminPermissionScopes,
+} from '../registry/permissionScopes.js'
 
 const groups = ref([])
 const activeGroupId = ref(null)
@@ -282,6 +308,11 @@ const { saveSuccess, resetSaveFeedback, showSaveSuccess } = useAdminSaveFeedback
 const permissionsCopy = computed(() => getAdminPermissionsPageCopy())
 const permissionsConfig = computed(() => getAdminPermissionsPageConfig())
 const permissionsActionMeta = computed(() => getAdminPermissionsPageActionMeta())
+const permissionScopes = computed(() => getAdminPermissionScopes({
+  surface: 'admin-permissions',
+  groups: groups.value,
+  permissionSections: permissionSections.value,
+}))
 const groupForm = ref(getEmptyGroupForm())
 const activeGroup = computed(() => {
   if (!groups.value.length) {
@@ -663,6 +694,49 @@ function getEmptyGroupForm() {
 
 .PermissionsPage-grid {
   min-width: 0;
+}
+
+.PermissionScopes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.PermissionScopeCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--forum-border-color);
+  border-radius: var(--forum-radius-sm);
+  background: var(--forum-bg-elevated);
+}
+
+.PermissionScopeCard-main {
+  min-width: 0;
+}
+
+.PermissionScopeCard-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--forum-text-color);
+}
+
+.PermissionScopeCard-title i {
+  color: var(--forum-primary-color);
+}
+
+.PermissionScopeCard p {
+  margin: 6px 0 0;
+  color: var(--forum-text-muted);
+  font-size: var(--forum-font-size-sm);
+  line-height: 1.5;
+}
+
+.PermissionScopeCard-action {
+  flex-shrink: 0;
 }
 
 .PermissionMobileList {

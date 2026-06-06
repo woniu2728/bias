@@ -19,20 +19,10 @@ export function createDiscussionListSidebarState({
     surface: 'discussion-list-sidebar-profile-link',
   })?.text || '我的主页')
 
-  const tagsLinkLabel = computed(() => getText({
-    surface: 'discussion-list-sidebar-tags-link',
-  })?.text || '标签')
-
-  const moreTagsLinkLabel = computed(() => getText({
-    surface: 'discussion-list-sidebar-more-tags-link',
-  })?.text || '更多标签')
-
   return {
-    moreTagsLinkLabel,
     profileLinkLabel,
     showProfileLink,
     showStartDiscussionButton,
-    tagsLinkLabel,
   }
 }
 

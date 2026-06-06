@@ -79,7 +79,7 @@ class NotificationServiceTests(TestCase):
             any(
                 route["path"] == "/notifications"
                 and route["name"] == "notifications"
-                and route["component"] == "NotificationView"
+                and route["component"] == "./NotificationView.vue"
                 and route["requires_auth"]
                 for route in payload["frontend_routes"]
             )

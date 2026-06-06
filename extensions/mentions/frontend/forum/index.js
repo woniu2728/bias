@@ -1,7 +1,8 @@
-import { Forum } from '@bias/forum'
 import {
+  Forum,
   forumApi,
-} from '@/forum/registry'
+} from '@bias/forum'
+import ComposerMentionAutocomplete from './ComposerMentionAutocomplete.vue'
 
 export const extend = [
   buildMentionsForumExtender(),
@@ -13,6 +14,32 @@ function buildMentionsForumExtender() {
   return forum
 }
 
+function detectMentionQuery(content, cursorPosition) {
+  const safeContent = String(content || '')
+  const safeCursor = Math.max(0, Math.min(cursorPosition ?? safeContent.length, safeContent.length))
+  const beforeCursor = safeContent.slice(0, safeCursor)
+  const match = beforeCursor.match(/(^|[\s(])@([A-Za-z0-9_.-]{0,30})$/)
+  if (!match) return null
+
+  const query = match[2] || ''
+  const start = safeCursor - query.length - 1
+  return {
+    query,
+    start,
+    end: safeCursor
+  }
+}
+
+function buildMentionReplacement(username) {
+  return `@${String(username || '').trim()} `
+}
+
+function buildMentionTrigger(content, start) {
+  const before = String(content || '').slice(0, start ?? 0)
+  const needsPrefix = before && !/\s$/.test(before)
+  return `${needsPrefix ? ' ' : ''}@`
+}
+
 function registerMentionsForum(forum) {
   forum.composerTool({
     key: 'mention',
@@ -20,8 +47,14 @@ function registerMentionsForum(forum) {
     order: 130,
     title: '@ 提及',
     icon: 'fas fa-at',
-    before: '@',
-    after: '',
+    run: async ({ content, insertText, selectionStart, selectionEnd }) => {
+      const replacement = buildMentionTrigger(content, selectionStart)
+      await insertText(replacement, {
+        start: selectionStart,
+        end: selectionEnd,
+        cursor: selectionStart + replacement.length,
+      })
+    },
   })
 
   forum.stateBlock({
@@ -56,21 +89,33 @@ function registerMentionsForum(forum) {
     }),
   })
 
-  forum.composerMentionProvider({
-    key: 'mentions-users',
+  forum.composerAutocompleteProvider({
+    key: 'mentions-users-autocomplete',
     moduleId: 'mentions',
     order: 10,
-    async search({ mentionQuery = '', limit = 5 }) {
+    renderer: 'mention',
+    component: ComposerMentionAutocomplete,
+    showWhenEmpty: true,
+    height: 280,
+    limit: 5,
+    debounce: 150,
+    detect({ content = '', cursorPosition }) {
+      return detectMentionQuery(content, cursorPosition)
+    },
+    async search({ query = '', limit = 5 }) {
       if (typeof forumApi?.get !== 'function') {
         return []
       }
       const users = await forumApi.get('/users', {
         params: {
-          q: mentionQuery,
+          q: query,
           limit,
         },
       })
       return Array.isArray(users) ? users.slice(0, limit) : []
+    },
+    replacement({ item }) {
+      return buildMentionReplacement(item?.username)
     },
   })
 

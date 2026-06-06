@@ -211,11 +211,16 @@ export class ForumExtender {
 
   navItem(definition) { return this.register('registerForumNavItem', definition) }
   navSection(definition) { return this.register('registerForumNavSection', definition) }
+  sidebarSection(definition) { return this.register('registerForumSidebarSection', definition) }
+  discussionListContext(definition) { return this.register('registerDiscussionListContext', definition) }
+  discussionListHero(definition) { return this.register('registerDiscussionListHero', definition) }
+  discussionListRequest(definition) { return this.register('registerDiscussionListRequest', definition) }
   headerItem(definition) { return this.register('registerHeaderItem', definition) }
   discussionAction(definition) { return this.register('registerDiscussionAction', definition) }
   discussionActionHandler(definition) { return this.register('registerDiscussionActionHandler', definition) }
   discussionBadge(definition) { return this.register('registerDiscussionBadge', definition) }
   discussionStateBadge(definition) { return this.register('registerDiscussionStateBadge', definition) }
+  discussionPresentation(definition) { return this.register('registerDiscussionPresentation', definition) }
   discussionReplyState(definition) { return this.register('registerDiscussionReplyState', definition) }
   discussionReviewBanner(definition) { return this.register('registerDiscussionReviewBanner', definition) }
   postAction(definition) { return this.register('registerPostAction', definition) }
@@ -224,14 +229,23 @@ export class ForumExtender {
   postReviewBanner(definition) { return this.register('registerPostReviewBanner', definition) }
   postFlagPanel(definition) { return this.register('registerPostFlagPanel', definition) }
   composerTool(definition) { return this.register('registerComposerTool', definition) }
+  composerField(definition) { return this.register('registerComposerField', definition) }
   composerNotice(definition) { return this.register('registerComposerNotice', definition) }
-  composerMentionProvider(definition) { return this.register('registerComposerMentionProvider', definition) }
+  composerSubmitGuard(definition) { return this.register('registerComposerSubmitGuard', definition) }
+  composerPayloadContributor(definition) { return this.register('registerComposerPayloadContributor', definition) }
+  composerInitialState(definition) { return this.register('registerComposerInitialState', definition) }
+  composerSecondaryAction(definition) { return this.register('registerComposerSecondaryAction', definition) }
+  composerStatusItem(definition) { return this.register('registerComposerStatusItem', definition) }
+  composerDraftMeta(definition) { return this.register('registerComposerDraftMeta', definition) }
+  composerAutocompleteProvider(definition) { return this.register('registerComposerAutocompleteProvider', definition) }
   composerPreviewTransformer(definition) { return this.register('registerComposerPreviewTransformer', definition) }
   notificationRenderer(definition) { return this.register('registerNotificationRenderer', definition) }
+  searchModalSection(definition) { return this.register('registerSearchModalSection', definition) }
   emptyState(definition) { return this.register('registerEmptyState', definition) }
   stateBlock(definition) { return this.register('registerStateBlock', definition) }
   uiCopy(definition) { return this.register('registerUiCopy', definition) }
   approvalNote(definition) { return this.register('registerApprovalNote', definition) }
+  runtime(definition) { return this.register('registerForumRuntime', definition) }
 
   extend(app, extension = {}) {
     const registry = resolveRegistry(app)
@@ -261,6 +275,7 @@ export class AdminExtender {
     this.permissionReplacements = []
     this.permissionPriorityChanges = []
     this.permissionRemovals = []
+    this.permissionScopes = []
     this.generalIndexes = []
   }
 
@@ -316,6 +331,13 @@ export class AdminExtender {
   permission(permission, type = 'moderate', priority = 0) {
     if (permission) {
       this.permissions.push({ permission, type: normalizeKey(type) || 'moderate', priority })
+    }
+    return this
+  }
+
+  permissionScope(definition) {
+    if (definition) {
+      this.permissionScopes.push(definition)
     }
     return this
   }
@@ -418,6 +440,16 @@ export class AdminExtender {
         const permission = resolveExtenderDefinition(item.permission)
         if (permission && typeof registry?.registerPermission === 'function') {
           registry.registerPermission(permission, item.type, item.priority)
+        }
+      }
+
+      for (const item of this.permissionScopes) {
+        const scope = resolveExtenderDefinition(item)
+        if (scope && typeof registry?.registerAdminPermissionScope === 'function') {
+          registry.registerAdminPermissionScope({
+            ...scope,
+            ...(extensionId ? { extensionId, extension_id: extensionId } : {}),
+          })
         }
       }
       for (const item of this.permissionReplacements) {

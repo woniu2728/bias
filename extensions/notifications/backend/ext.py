@@ -58,7 +58,7 @@ def extend():
         ).route(
             "/notifications",
             "notifications",
-            "NotificationView",
+            "./NotificationView.vue",
             title="通知",
             description="查看你的论坛通知、回复提醒和系统消息。",
             order=40,

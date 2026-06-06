@@ -4,6 +4,7 @@
     "paths": {
       "@/*": ["src/*"],
       "@bias/core": ["src/common/sdk.js"],
+      "@bias/admin/components": ["src/admin/componentsSdk.js"],
       "@bias/admin": ["src/admin/sdk.js"],
       "@bias/forum": ["src/forum/sdk.js"]
     }

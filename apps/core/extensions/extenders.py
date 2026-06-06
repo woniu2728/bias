@@ -44,6 +44,7 @@ from apps.core.extensions.types import (
 from apps.core.forum_registry_types import (
     AdminPageDefinition,
     DiscussionListFilterDefinition,
+    DiscussionListQueryDefinition,
     DiscussionSortDefinition,
     LanguagePackDefinition,
     NotificationTypeDefinition,
@@ -249,6 +250,9 @@ class FrontendExtender:
         frontend: str = "forum",
         title: str = "",
         description: str = "",
+        preloads: tuple[Any, ...] = (),
+        document_attributes: tuple[Any, ...] = (),
+        head_tags: tuple[Any, ...] = (),
         requires_auth: bool = False,
         order: int = 100,
     ) -> "FrontendExtender":
@@ -259,6 +263,9 @@ class FrontendExtender:
             frontend=str(frontend or "forum").strip() or "forum",
             title=str(title or "").strip(),
             description=str(description or "").strip(),
+            preloads=tuple(preloads or ()),
+            document_attributes=tuple(document_attributes or ()),
+            head_tags=tuple(head_tags or ()),
             requires_auth=bool(requires_auth),
             order=int(order),
         )
@@ -2205,6 +2212,7 @@ class UserExtender:
 class ForumCapabilitiesExtender:
     post_types: tuple[PostTypeDefinition, ...] = ()
     search_filters: tuple[SearchFilterDefinition, ...] = ()
+    discussion_list_queries: tuple[DiscussionListQueryDefinition, ...] = ()
     discussion_sorts: tuple[DiscussionSortDefinition, ...] = ()
     discussion_list_filters: tuple[DiscussionListFilterDefinition, ...] = ()
 
@@ -2212,6 +2220,7 @@ class ForumCapabilitiesExtender:
         if not (
             self.post_types
             or self.search_filters
+            or self.discussion_list_queries
             or self.discussion_sorts
             or self.discussion_list_filters
         ):
@@ -2224,6 +2233,8 @@ class ForumCapabilitiesExtender:
                 forum.register_post_type(definition, extension_id=extension_id)
             for definition in self.search_filters:
                 forum.register_search_filter(definition, extension_id=extension_id)
+            for definition in self.discussion_list_queries:
+                forum.register_discussion_list_query(definition, extension_id=extension_id)
             for definition in self.discussion_sorts:
                 forum.register_discussion_sort(definition, extension_id=extension_id)
             for definition in self.discussion_list_filters:

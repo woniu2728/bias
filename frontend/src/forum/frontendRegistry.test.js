@@ -3,7 +3,12 @@ import assert from 'node:assert/strict'
 import {
   getDiscussionActions,
   getDiscussionActionHandler,
+  getDiscussionListContexts,
+  getDiscussionListHero,
+  getDiscussionListRequests,
+  getComposerAutocompleteProviders,
   getComposerDraftMeta,
+  getComposerFields,
   getApprovalNote,
   getDiscussionReplyState,
   getDiscussionReviewBanner,
@@ -16,20 +21,28 @@ import {
   getProfilePanels,
   getPostActions,
   getPostActionHandler,
+  getSearchModalSections,
   getSearchSources,
   getStateBlock,
   getUiCopy,
   getPostFlagPanel,
   getPostReviewBanner,
   getPostStateBadges,
+  registerComposerAutocompleteProvider,
   registerComposerDraftMeta,
-  registerComposerMentionProvider,
+  registerComposerField,
+  registerComposerInitialState,
+  registerComposerPayloadContributor,
   registerComposerPreviewTransformer,
   registerComposerSubmitSuccess,
   registerApprovalNote,
   registerDiscussionAction,
   registerDiscussionActionHandler,
+  registerDiscussionListContext,
+  registerDiscussionListHero,
+  registerDiscussionListRequest,
   registerForumNavItem,
+  registerForumRuntime,
   registerHeaderItem,
   registerDiscussionReplyState,
   registerDiscussionReviewBanner,
@@ -45,10 +58,13 @@ import {
   registerPostFlagPanel,
   registerPostReviewBanner,
   registerPostStateBadge,
+  registerSearchModalSection,
   registerSearchSource,
-  runComposerMentionProviders,
+  runComposerInitialStateContributors,
+  runComposerPayloadContributors,
   runComposerPreviewTransformers,
   runComposerSubmitSuccess,
+  runForumRuntimeHook,
 } from './frontendRegistry.js'
 import {
   resolveDiscussionAction,
@@ -82,6 +98,80 @@ test('discussion reply state returns the first visible item by order', () => {
 
   assert.equal(result.key, lowOrderKey)
   assert.equal(result.message, 'low')
+})
+
+test('discussion list context and request registrations resolve by surface', () => {
+  const contextKey = uniqueKey('discussion-list-context')
+  const requestKey = uniqueKey('discussion-list-request')
+
+  registerDiscussionListContext({
+    key: contextKey,
+    order: 10,
+    surfaces: ['discussion-list'],
+    isVisible: ({ route }) => route?.name === 'tag-detail',
+    resolve: ({ route }) => ({
+      currentTagSlug: route.params.slug,
+    }),
+  })
+
+  registerDiscussionListRequest({
+    key: requestKey,
+    order: 10,
+    surfaces: ['discussion-list-request'],
+    resolve: () => ({
+      apply({ params }) {
+        return {
+          ...params,
+          tag: 'announcements',
+        }
+      },
+    }),
+  })
+
+  const [context] = getDiscussionListContexts({
+    surface: 'discussion-list',
+    route: { name: 'tag-detail', params: { slug: 'announcements' } },
+  })
+  const [request] = getDiscussionListRequests({
+    surface: 'discussion-list-request',
+  })
+
+  assert.equal(context.key, contextKey)
+  assert.equal(context.currentTagSlug, 'announcements')
+  assert.equal(request.key, requestKey)
+  assert.deepEqual(request.apply({ params: { page: 1 } }), {
+    page: 1,
+    tag: 'announcements',
+  })
+  assert.deepEqual(getDiscussionListContexts({
+    surface: 'other',
+    route: { name: 'tag-detail', params: { slug: 'announcements' } },
+  }), [])
+})
+
+test('discussion list hero resolves first visible hero for surface', () => {
+  const heroKey = uniqueKey('discussion-list-hero')
+
+  registerDiscussionListHero({
+    key: heroKey,
+    order: 10,
+    surfaces: ['discussion-list-hero'],
+    isVisible: ({ contextSubject }) => Boolean(contextSubject),
+    resolve: ({ contextSubject }) => ({
+      title: contextSubject.name,
+      pill: '标签',
+    }),
+  })
+
+  const hero = getDiscussionListHero({
+    surface: 'discussion-list-hero',
+    contextSubject: { name: '公告' },
+  })
+
+  assert.equal(hero.key, heroKey)
+  assert.equal(hero.title, '公告')
+  assert.equal(hero.pill, '标签')
+  assert.equal(getDiscussionListHero({ surface: 'other', contextSubject: { name: '公告' } }), null)
 })
 
 test('discussion reply state respects surface filtering', () => {
@@ -121,6 +211,25 @@ test('header items resolve dynamic label and icon fields', () => {
   assert.equal(item.key, key)
   assert.equal(item.icon, 'fas fa-moon')
   assert.equal(item.label, '主题：深色')
+})
+
+test('header items preserve custom component registrations', () => {
+  const key = uniqueKey('header-component')
+
+  registerHeaderItem({
+    key,
+    placement: 'after-search',
+    order: 10,
+    component: 'NotificationMenuComponent',
+    componentProps: ({ unread }) => ({ unread }),
+    isVisible: () => true,
+  })
+
+  const [item] = getHeaderItems({ unread: 5 }, 'after-search')
+
+  assert.equal(item.key, key)
+  assert.equal(item.component, 'NotificationMenuComponent')
+  assert.deepEqual(item.componentProps, { unread: 5 })
 })
 
 test('resolved items preserve top-level dynamic fields when resolve omits them', () => {
@@ -314,6 +423,146 @@ test('registered items with module id are filtered by forum runtime state', () =
   assert.equal(getSearchSources(context).some(item => item.key === searchKey), false)
   assert.equal(getDiscussionActions(context).some(item => item.key === discussionActionKey), false)
   assert.equal(getPostActions(context).some(item => item.key === postActionKey), false)
+})
+
+test('search modal sections resolve by order, surface and module state', () => {
+  const earlyKey = uniqueKey('search-modal-section-early')
+  const lateKey = uniqueKey('search-modal-section-late')
+  const hiddenKey = uniqueKey('search-modal-section-hidden')
+
+  registerSearchModalSection({
+    key: lateKey,
+    moduleId: 'tags',
+    order: 30,
+    surfaces: ['search-modal-empty'],
+    resolve: () => ({
+      title: 'late',
+      items: [{ key: 'late-item' }],
+    }),
+  })
+
+  registerSearchModalSection({
+    key: earlyKey,
+    moduleId: 'tags',
+    order: 10,
+    surfaces: ['search-modal-empty'],
+    resolve: () => ({
+      title: 'early',
+      items: [{ key: 'early-item' }],
+    }),
+  })
+
+  registerSearchModalSection({
+    key: hiddenKey,
+    moduleId: 'hidden-module',
+    order: 5,
+    surfaces: ['search-modal-empty'],
+    resolve: () => ({
+      title: 'hidden',
+      items: [{ key: 'hidden-item' }],
+    }),
+  })
+
+  const context = {
+    surface: 'search-modal-empty',
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId === 'tags'
+      },
+    },
+  }
+  const sections = getSearchModalSections(context)
+
+  assert.equal(sections.some(item => item.key === hiddenKey), false)
+  assert.equal(sections.findIndex(item => item.key === earlyKey) < sections.findIndex(item => item.key === lateKey), true)
+  assert.deepEqual(getSearchModalSections({
+    ...context,
+    surface: 'other-surface',
+  }).filter(item => [earlyKey, lateKey].includes(item.key)), [])
+})
+
+test('forum runtime hooks run in order and respect module state', async () => {
+  const calls = []
+  const skippedKey = uniqueKey('runtime-skipped')
+  const lateKey = uniqueKey('runtime-late')
+  const earlyKey = uniqueKey('runtime-early')
+
+  registerForumRuntime({
+    key: skippedKey,
+    moduleId: 'disabled-module',
+    order: 1,
+    onAuthenticated: () => {
+      calls.push('skipped')
+      return 'skipped'
+    },
+  })
+
+  registerForumRuntime({
+    key: lateKey,
+    moduleId: 'enabled-module',
+    order: 30,
+    onAuthenticated: () => {
+      calls.push('late')
+      return 'late'
+    },
+  })
+
+  registerForumRuntime({
+    key: earlyKey,
+    moduleId: 'enabled-module',
+    order: 10,
+    onAuthenticated: async () => {
+      calls.push('early')
+      return 'early'
+    },
+  })
+
+  const results = await runForumRuntimeHook('onAuthenticated', {
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId === 'enabled-module'
+      },
+    },
+  })
+
+  assert.deepEqual(calls, ['early', 'late'])
+  assert.deepEqual(results, ['early', 'late'])
+})
+
+test('forum runtime hooks continue after extension failures', async () => {
+  const calls = []
+  const failingKey = uniqueKey('runtime-failing')
+  const stableKey = uniqueKey('runtime-stable')
+
+  registerForumRuntime({
+    key: failingKey,
+    order: 10,
+    onMounted: () => {
+      calls.push('failing')
+      throw new Error('runtime failed')
+    },
+  })
+
+  registerForumRuntime({
+    key: stableKey,
+    order: 20,
+    onMounted: () => {
+      calls.push('stable')
+      return 'stable'
+    },
+  })
+
+  const previousConsoleError = console.error
+  console.error = () => {}
+  try {
+    const results = await runForumRuntimeHook('onMounted', {})
+    assert.deepEqual(calls, ['failing', 'stable'])
+    assert.equal(results[0].key, failingKey)
+    assert.equal(results[0].error.message, 'runtime failed')
+    assert.equal(results[1], 'stable')
+  } finally {
+    console.error = previousConsoleError
+  }
 })
 
 test('admin header entry remains visible for staff even when forum modules are filtered', () => {
@@ -1069,8 +1318,8 @@ test('ui copy resolves home and contextual start discussion copy', () => {
     key: startKey,
     order: 20,
     surfaces: ['start-discussion-button'],
-    resolve: ({ hasTag, tagName }) => ({
-      text: hasTag ? `start in ${tagName}` : 'start discussion',
+    resolve: ({ hasContextSubject, subjectName }) => ({
+      text: hasContextSubject ? `start in ${subjectName}` : 'start discussion',
     }),
   })
 
@@ -1079,8 +1328,8 @@ test('ui copy resolves home and contextual start discussion copy', () => {
   })
   const startResult = getUiCopy({
     surface: 'start-discussion-button',
-    hasTag: true,
-    tagName: 'Vue',
+    hasContextSubject: true,
+    subjectName: 'Vue',
   })
 
   assert.equal(homeResult.key, homeKey)
@@ -1365,8 +1614,8 @@ test('ui copy resolves mobile header and discussion list navigation copy', () =>
     key: pageMetaKey,
     order: 80,
     surfaces: ['discussion-list-page-meta-title'],
-    resolve: ({ listFilter, currentTagName, hasSearchQuery }) => ({
-      text: `meta:${listFilter}:${currentTagName}:${hasSearchQuery}`,
+    resolve: ({ listFilter, subjectName, hasSearchQuery }) => ({
+      text: `meta:${listFilter}:${subjectName}:${hasSearchQuery}`,
     }),
   })
 
@@ -1401,7 +1650,7 @@ test('ui copy resolves mobile header and discussion list navigation copy', () =>
   const pageMetaResult = getUiCopy({
     surface: 'discussion-list-page-meta-title',
     listFilter: 'my',
-    currentTagName: '前端',
+    subjectName: '前端',
     hasSearchQuery: true,
   })
 
@@ -1861,6 +2110,167 @@ test('composer draft meta returns ordered visible items', () => {
   assert.deepEqual(hiddenItems, [])
 })
 
+test('composer fields and payload contributors are extension-owned and ordered', async () => {
+  const fieldKey = uniqueKey('composer-field')
+  const contributorFirstKey = uniqueKey('composer-payload-first')
+  const contributorSecondKey = uniqueKey('composer-payload-second')
+
+  registerComposerField({
+    key: fieldKey,
+    moduleId: 'tags',
+    order: 10,
+    isVisible: ({ type }) => type === 'discussion',
+    resolve: ({ extensionState }) => ({
+      component: 'TagField',
+      statusText: extensionState?.tags?.selectedTagLabel || '',
+    }),
+  })
+
+  registerComposerPayloadContributor({
+    key: contributorSecondKey,
+    moduleId: 'tags',
+    order: 20,
+    contribute({ payload }) {
+      return {
+        ...payload,
+        data: {
+          ...payload.data,
+          relationships: {
+            ...payload.data.relationships,
+            secondary: { data: [{ type: 'tag', id: '2' }] },
+          },
+        },
+      }
+    },
+  })
+
+  registerComposerPayloadContributor({
+    key: contributorFirstKey,
+    moduleId: 'tags',
+    order: 10,
+    contribute({ payload }) {
+      return {
+        ...payload,
+        data: {
+          ...payload.data,
+          relationships: {
+            ...payload.data.relationships,
+            primary: { data: [{ type: 'tag', id: '1' }] },
+          },
+        },
+      }
+    },
+  })
+
+  const context = {
+    type: 'discussion',
+    extensionState: {
+      tags: { selectedTagLabel: '公告' },
+    },
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId === 'tags'
+      },
+    },
+  }
+  const fields = getComposerFields(context)
+  const payload = await runComposerPayloadContributors({
+    data: {
+      type: 'discussion',
+      relationships: {},
+    },
+  }, context)
+
+  assert.equal(fields.some(item => item.key === fieldKey), true)
+  assert.equal(fields.find(item => item.key === fieldKey).component, 'TagField')
+  assert.equal(fields.find(item => item.key === fieldKey).statusText, '公告')
+  assert.deepEqual(Object.keys(payload.data.relationships), ['primary', 'secondary'])
+  assert.deepEqual(getComposerFields({
+    ...context,
+    forumStore: { isModuleEnabled: () => false },
+  }).some(item => item.key === fieldKey), false)
+})
+
+test('composer initial state contributors merge ordered extension state', async () => {
+  const firstKey = uniqueKey('composer-initial-first')
+  const secondKey = uniqueKey('composer-initial-second')
+  const disabledKey = uniqueKey('composer-initial-disabled')
+
+  registerComposerInitialState({
+    key: secondKey,
+    moduleId: 'tags',
+    order: 20,
+    contribute({ initialState }) {
+      return {
+        discussionTitle: `${initialState.discussionTitle}:tagged`,
+        extensions: {
+          tags: {
+            secondaryTagId: '2',
+          },
+        },
+      }
+    },
+  })
+
+  registerComposerInitialState({
+    key: firstKey,
+    moduleId: 'tags',
+    order: 10,
+    contribute() {
+      return {
+        extensions: {
+          tags: {
+            primaryTagId: '1',
+          },
+        },
+      }
+    },
+  })
+
+  registerComposerInitialState({
+    key: disabledKey,
+    moduleId: 'disabled-module',
+    order: 5,
+    contribute() {
+      return {
+        extensions: {
+          disabled: {
+            touched: true,
+          },
+        },
+      }
+    },
+  })
+
+  const state = await runComposerInitialStateContributors({
+    discussionTitle: '公告',
+    extensions: {
+      polls: {
+        question: '选择？',
+      },
+    },
+  }, {
+    type: 'discussion',
+    submitKind: 'edit-discussion',
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId === 'tags'
+      },
+    },
+  })
+
+  assert.equal(state.discussionTitle, '公告:tagged')
+  assert.deepEqual(state.extensions, {
+    polls: {
+      question: '选择？',
+    },
+    tags: {
+      primaryTagId: '1',
+      secondaryTagId: '2',
+    },
+  })
+})
+
 test('composer submit success handlers run in order and respect visibility', async () => {
   const calls = []
   const firstKey = uniqueKey('composer-submit-success-first')
@@ -1899,41 +2309,59 @@ test('composer submit success handlers run in order and respect visibility', asy
   assert.deepEqual(calls, ['first:7', 'second:7'])
 })
 
-test('composer mention providers merge ordered results and dedupe by username/id', async () => {
-  const firstKey = uniqueKey('composer-mention-provider-first')
-  const secondKey = uniqueKey('composer-mention-provider-second')
+test('composer autocomplete providers resolve by order, surface and module state', () => {
+  const firstKey = uniqueKey('composer-autocomplete-first')
+  const secondKey = uniqueKey('composer-autocomplete-second')
+  const hiddenKey = uniqueKey('composer-autocomplete-hidden')
 
-  registerComposerMentionProvider({
+  registerComposerAutocompleteProvider({
     key: firstKey,
+    moduleId: 'mentions',
     order: 20,
-    async search() {
-      return [
-        { id: 2, username: 'beta' },
-        { id: 3, username: 'shared' },
-      ]
-    },
+    renderer: 'mention',
+    surfaces: ['composer-body'],
+    detect: () => ({ query: 'b' }),
+    search: () => [{ id: 2, username: 'beta' }],
+    replacement: ({ item }) => `@${item.username} `,
   })
 
-  registerComposerMentionProvider({
+  registerComposerAutocompleteProvider({
     key: secondKey,
+    moduleId: 'emoji',
     order: 10,
-    async search() {
-      return [
-        { id: 1, username: 'alpha' },
-        { id: 3, username: 'shared' },
-      ]
-    },
+    renderer: 'emoji',
+    surfaces: ['composer-body'],
+    detect: () => ({ query: 'a' }),
+    search: () => [{ id: 'smile', emoji: '🙂' }],
+    replacement: ({ item }) => item.emoji,
   })
 
-  const result = await runComposerMentionProviders({
-    mentionQuery: 'a',
-    limit: 5,
+  registerComposerAutocompleteProvider({
+    key: hiddenKey,
+    moduleId: 'disabled-module',
+    order: 5,
+    renderer: 'hidden',
+    surfaces: ['composer-body'],
+  })
+
+  const providers = getComposerAutocompleteProviders({
+    surface: 'composer-body',
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId !== 'disabled-module'
+      },
+    },
   })
 
   assert.deepEqual(
-    result.map(item => item.username),
-    ['alpha', 'shared', 'beta']
+    providers.filter(item => [firstKey, secondKey, hiddenKey].includes(item.key)).map(item => item.key),
+    [secondKey, firstKey]
   )
+  assert.equal(providers.find(item => item.key === firstKey).renderer, 'mention')
+  assert.equal(providers.find(item => item.key === secondKey).replacement({ item: { emoji: '🙂' } }), '🙂')
+  assert.deepEqual(getComposerAutocompleteProviders({
+    surface: 'other-surface',
+  }).filter(item => [firstKey, secondKey, hiddenKey].includes(item.key)), [])
 })
 
 test('composer preview transformers run in order and pass transformed html forward', async () => {

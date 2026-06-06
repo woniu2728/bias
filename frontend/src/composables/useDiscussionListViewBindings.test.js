@@ -8,23 +8,20 @@ test('discussion list view bindings expose sidebar and content bindings', () => 
     authStore: { isAuthenticated: true },
     buildDiscussionPath: value => `/d/${value.id || value}`,
     buildTrackedDiscussionPath: value => ({ path: `/d/${value.id || value}`, query: { returnDiscussion: value.id || value } }),
-    buildTagPath: value => `/t/${value.slug || value}`,
     buildUserPath: value => `/u/${value.id || value}`,
     changeSortBy() {},
-    currentTag: ref({ name: '公告' }),
+    contextSubject: ref({ name: '公告' }),
+    discussionListContexts: ref([{ key: 'tag-filter' }]),
     discussions: ref([{ id: 1 }]),
     emptyStateText: ref('empty'),
     formatRelativeTime: value => value,
-    getSidebarTagStyle: () => ({}),
     getUserAvatarColor: () => '#000',
     getUserDisplayName: () => 'alice',
     getUserInitial: () => 'A',
     handleStartDiscussion() {},
     hasMore: ref(true),
-    hasSidebarTagNavigation: ref(true),
     isFollowingPage: ref(false),
     isOwnProfilePage: ref(false),
-    isSidebarTagActive: () => false,
     isTagsPage: ref(false),
     listFilter: ref('all'),
     loading: ref(false),
@@ -35,17 +32,17 @@ test('discussion list view bindings expose sidebar and content bindings', () => 
     markAllAsRead() {},
     refreshDiscussionList() {},
     refreshing: ref(false),
-    showMoreTagsLink: ref(true),
+    sidebarExtensionSections: ref([{ key: 'tags', component: 'TagsSection' }]),
     sidebarFilterItems: ref([{ key: 'all' }]),
-    sidebarPrimaryTagItems: ref([{ key: '公告' }]),
-    sidebarSecondaryTagItems: ref([]),
     sortBy: ref('latest'),
     sortOptions: ref([{ code: 'latest' }]),
     startDiscussionButtonStyle: ref({ tone: 'primary' }),
   })
 
-  assert.equal(bindings.sidebarBindings.value.currentTag.name, '公告')
+  assert.equal(bindings.sidebarBindings.value.contextSubject.name, '公告')
+  assert.deepEqual(bindings.contentBindings.value.discussionListContexts, [{ key: 'tag-filter' }])
   assert.deepEqual(bindings.contentBindings.value.discussions, [{ id: 1 }])
+  assert.deepEqual(bindings.sidebarBindings.value.sidebarExtensionSections, [{ key: 'tags', component: 'TagsSection' }])
   assert.equal(bindings.contentBindings.value.sortBy, 'latest')
   assert.equal(bindings.contentBindings.value.listFilter, 'all')
   assert.equal(bindings.contentBindings.value.emptyStateText, 'empty')

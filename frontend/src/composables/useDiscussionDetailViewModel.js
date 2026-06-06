@@ -3,7 +3,6 @@ import { useDiscussionDetailPage } from '@/composables/useDiscussionDetailPage'
 import { useDiscussionDetailPresentationState } from '@/composables/useDiscussionDetailPresentationState'
 import { useDiscussionDetailViewBindings } from '@/composables/useDiscussionDetailViewBindings'
 import {
-  buildTagPath,
   buildUserPath,
   getUserAvatarColor,
   getUserDisplayName,
@@ -68,7 +67,6 @@ export function useDiscussionDetailViewModel({
     ...metaState,
     ...presentationState,
     authStore,
-    buildTagPath,
     buildUserPath,
     getUserAvatarColor,
     getUserDisplayName,

@@ -1,14 +1,9 @@
 import { computed } from 'vue'
-import { getEmptyState, getForumNavItems, getStateBlock, getUiCopy } from '../forum/frontendRegistry.js'
-import { flattenTags, normalizeTag, unwrapList } from '../utils/forumData.js'
+import { getEmptyState, getForumNavItems, getForumSidebarSections, getStateBlock, getUiCopy } from '../forum/frontendRegistry.js'
 import {
   buildDiscussionFilterLocation,
-  buildDiscussionListPrimaryTagItems,
-  buildDiscussionListSecondaryTagItems,
-  findDiscussionListSidebarContextParent,
   getDiscussionListStartButtonStyle,
   isDiscussionFilterActive,
-  isDiscussionSidebarTagActive,
 } from '../utils/discussionListNavigation.js'
 
 const DEFAULT_DISCUSSION_FILTERS = [
@@ -17,8 +12,10 @@ const DEFAULT_DISCUSSION_FILTERS = [
 
 export function createDiscussionListNavigation({
   authStore,
-  currentTag,
-  currentTagSlug,
+  contextSubject,
+  contextSubjectKey,
+  discussionListContextData,
+  discussionListContexts,
   filterOptions,
   forumStore,
   getDefaultFilterLabelText = (code) => getUiCopy({
@@ -27,14 +24,14 @@ export function createDiscussionListNavigation({
   })?.text || code,
   getDiscussionEmptyState = getEmptyState,
   getDiscussionForumNavItems = getForumNavItems,
+  getDiscussionSidebarSections = getForumSidebarSections,
   getDiscussionLoadingState = getStateBlock,
   isFollowingPage,
   listFilter,
   route,
-  tags
 }) {
   const isTagsPage = computed(() => route.name === 'tags')
-  const isAllDiscussionsPage = computed(() => route.name === 'home' && !currentTagSlug.value)
+  const isAllDiscussionsPage = computed(() => route.name === 'home' && !contextSubjectKey.value)
   const isOwnProfilePage = computed(() => {
     if (!authStore.user) return false
 
@@ -43,21 +40,29 @@ export function createDiscussionListNavigation({
       || (route.name === 'user-profile' && String(route.params.id) === String(authStore.user.id))
     )
   })
-  const normalizedTags = computed(() => unwrapList(tags.value).map(normalizeTag))
-  const flatTags = computed(() => flattenTags(tags.value))
-  const currentTagContextParent = computed(() => findDiscussionListSidebarContextParent(currentTagSlug.value, normalizedTags.value))
-  const sidebarPrimaryTagItems = computed(() => buildDiscussionListPrimaryTagItems(flatTags.value, currentTagContextParent.value))
-  const sidebarSecondaryTagItems = computed(() => buildDiscussionListSecondaryTagItems(flatTags.value))
+  const activeDiscussionListContexts = computed(() => Array.isArray(discussionListContexts?.value)
+    ? discussionListContexts.value
+    : [])
+  const activeDiscussionListContextData = computed(() => discussionListContextData?.value || {})
   const sidebarFilterItems = computed(() => buildSidebarFilterItems())
-  const hasSidebarTagNavigation = computed(() => tags.value.length > 0)
-  const showMoreTagsLink = computed(() => sidebarSecondaryTagItems.value.length > 0)
-  const startDiscussionButtonStyle = computed(() => getDiscussionListStartButtonStyle(currentTag.value))
+  const sidebarExtensionSections = computed(() => getDiscussionSidebarSections({
+    authStore,
+    contexts: activeDiscussionListContexts.value,
+    contextSubject: contextSubject.value,
+    contextSubjectKey: contextSubjectKey.value,
+    discussionListContextData: activeDiscussionListContextData.value,
+    forumStore,
+    isTagsPage: isTagsPage.value,
+    route,
+    surface: 'discussion-sidebar',
+  }))
+  const startDiscussionButtonStyle = computed(() => getDiscussionListStartButtonStyle(contextSubject.value))
   const emptyStateText = computed(() => {
     const emptyState = getDiscussionEmptyState({
       surface: 'discussion-list-empty',
       isFollowingPage: isFollowingPage.value,
       listFilter: listFilter.value,
-      currentTag: currentTag.value,
+      contextSubject: contextSubject.value,
     })
 
     return emptyState?.text || '暂无讨论。'
@@ -67,7 +72,7 @@ export function createDiscussionListNavigation({
       surface: 'discussion-list-loading',
       loading: true,
       listFilter: listFilter.value,
-      currentTag: currentTag.value,
+      contextSubject: contextSubject.value,
     })
 
     return stateBlock?.text || '正在加载讨论...'
@@ -109,7 +114,7 @@ export function createDiscussionListNavigation({
         ...item,
         to: item.to || buildDiscussionFilterLocation(item),
         active: isDiscussionFilterActive({
-          currentTagSlug: currentTagSlug.value,
+          contextSubjectKey: contextSubjectKey.value,
           routeName: route.name,
           isFollowingPage: isFollowingPage.value,
           listFilter: listFilter.value,
@@ -118,34 +123,14 @@ export function createDiscussionListNavigation({
       }))
   }
 
-  function getSidebarTagStyle(tag) {
-    return {
-      '--tag-color': tag.color || '#6c7a89'
-    }
-  }
-
-  function isSidebarTagActive(tag) {
-    return isDiscussionSidebarTagActive({
-      currentTag: currentTag.value,
-      currentTagSlug: currentTagSlug.value,
-      normalizedTags: normalizedTags.value,
-      tag,
-    })
-  }
-
   return {
     emptyStateText,
     loadingStateText,
-    getSidebarTagStyle,
-    hasSidebarTagNavigation,
     isAllDiscussionsPage,
     isOwnProfilePage,
-    isSidebarTagActive,
     isTagsPage,
     sidebarFilterItems,
-    showMoreTagsLink,
-    sidebarPrimaryTagItems,
-    sidebarSecondaryTagItems,
+    sidebarExtensionSections,
     startDiscussionButtonStyle
   }
 }

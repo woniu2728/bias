@@ -1,0 +1,9 @@
+export declare function computed(...args: any[]): any
+export declare function nextTick(...args: any[]): any
+export declare function onBeforeUnmount(...args: any[]): any
+export declare function onMounted(...args: any[]): any
+export declare function reactive(...args: any[]): any
+export declare function ref(...args: any[]): any
+export declare function watch(...args: any[]): any
+export declare function useRoute(...args: any[]): any
+export declare function useRouter(...args: any[]): any

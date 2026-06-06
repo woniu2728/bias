@@ -5,8 +5,8 @@ export function useStartDiscussionAction({
 }) {
   function startDiscussion({
     redirectToLogin = true,
+    extensionState = {},
     source = 'unknown',
-    tagId = ''
   } = {}) {
     if (!authStore.isAuthenticated) {
       if (redirectToLogin) {
@@ -18,8 +18,8 @@ export function useStartDiscussionAction({
     if (!authStore.canStartDiscussion) return false
 
     composerStore.openDiscussionComposer({
-      source,
-      tagId
+      extensions: extensionState,
+      source
     })
     return true
   }

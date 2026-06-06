@@ -11,6 +11,20 @@
 3. 需要前置依赖时补 `required_permissions`。
 4. 用统一 helper 做校验，不要继续散落硬编码权限串。
 
+## 权限范围入口
+
+如果扩展需要像标签权限那样维护分域访问范围，不要把控件写进核心权限页。前端使用 `new Admin().permissionScope({ ... })` 注册入口，权限页会在布尔权限矩阵上方渲染对应 scope panel。
+
+常用字段：
+
+- `key`
+- `moduleId`
+- `label`
+- `description`
+- `icon`
+- `to`
+- `actionLabel`
+
 ## 校验
 
 - `/api/admin/permissions/meta`

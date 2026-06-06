@@ -1,4 +1,4 @@
-import { renderTwemojiHtml } from '@/utils/twemoji'
+import { renderTwemojiHtml } from './twemoji.js'
 import {
   getDiscussionListFilterHeroDescriptionText,
   getDiscussionListFilterHeroTitleText,
@@ -6,8 +6,8 @@ import {
   resolveDiscussionListActiveFilterCode,
   resolveDiscussionListPageMetaDescription,
   resolveDiscussionListPageMetaTitle,
-} from '@/utils/discussionList'
-import { flattenTags, normalizeTag, unwrapList } from '@/utils/forumData'
+} from './discussionList.js'
+import { unwrapList } from './forumData.js'
 
 export function normalizeUser(user = {}) {
   return {
@@ -32,7 +32,7 @@ export function normalizeDiscussion(discussion = {}) {
     last_read_post_number: Number(discussion.last_read_post_number || 0),
     user: discussion.user ? normalizeUser(discussion.user) : null,
     last_post: discussion.last_post ? normalizePost(discussion.last_post) : null,
-    tags: unwrapList(discussion.tags).map(normalizeTag)
+    tags: unwrapList(discussion.tags)
   }
 }
 
@@ -52,11 +52,9 @@ export function normalizePost(post = {}) {
 }
 
 export {
-  flattenTags,
   getDiscussionListFilterHeroDescriptionText,
   getDiscussionListFilterHeroTitleText,
   getDiscussionListFilterLabelText,
-  normalizeTag,
   resolveDiscussionListActiveFilterCode,
   resolveDiscussionListPageMetaDescription,
   resolveDiscussionListPageMetaTitle,
@@ -88,11 +86,6 @@ export function buildDiscussionPath(discussionOrId) {
 export function buildUserPath(userOrId) {
   const id = typeof userOrId === 'object' ? userOrId?.id : userOrId
   return `/u/${id}`
-}
-
-export function buildTagPath(tagOrSlug) {
-  const slug = typeof tagOrSlug === 'object' ? tagOrSlug?.slug : tagOrSlug
-  return `/t/${slug}`
 }
 
 export function formatRelativeTime(dateString) {

@@ -1,5 +1,5 @@
 import { Admin, AdminDashboard } from '@bias/admin'
-import { ExtensionGeneratedPermissionsPage } from '@/admin/registry'
+import { ExtensionGeneratedPermissionsPage } from '@bias/admin/components'
 import FlagsPage from './FlagsPage.vue'
 import { buildFlagsPageExtender } from './flagsPageBootstrap.js'
 

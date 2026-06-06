@@ -3,8 +3,8 @@ import { ref } from 'vue'
 
 const EMPTY_STATE = {
   type: null,
-  tagId: '',
   source: '',
+  extensions: {},
   discussionId: null,
   discussionTitle: '',
   approvalStatus: '',
@@ -14,8 +14,6 @@ const EMPTY_STATE = {
   postNumber: null,
   username: '',
   initialContent: '',
-  initialPrimaryTagId: '',
-  initialSecondaryTagId: '',
   requestId: 0
 }
 
@@ -28,9 +26,11 @@ export const useComposerStore = defineStore('composer', () => {
   const unsavedMessage = ref('')
 
   function openComposerState(nextState = {}, options = {}) {
+    const extensions = normalizeExtensions(nextState.extensions || nextState.extensionState)
     current.value = {
       ...EMPTY_STATE,
       ...nextState,
+      extensions,
       requestId: current.value.requestId + 1
     }
     isOpen.value = true
@@ -41,7 +41,7 @@ export const useComposerStore = defineStore('composer', () => {
   function openDiscussionComposer(options = {}) {
     openComposerState({
       type: 'discussion',
-      tagId: options.tagId ? String(options.tagId) : '',
+      extensions: options.extensions || options.extensionState || {},
       source: options.source || ''
     }, options)
   }
@@ -55,9 +55,7 @@ export const useComposerStore = defineStore('composer', () => {
       approvalStatus: options.approvalStatus || '',
       approvalNote: options.approvalNote || '',
       initialTitle: options.initialTitle || '',
-      initialContent: options.initialContent || '',
-      initialPrimaryTagId: options.initialPrimaryTagId ? String(options.initialPrimaryTagId) : '',
-      initialSecondaryTagId: options.initialSecondaryTagId ? String(options.initialSecondaryTagId) : ''
+      initialContent: options.initialContent || ''
     }, options)
   }
 
@@ -97,6 +95,7 @@ export const useComposerStore = defineStore('composer', () => {
     unsavedMessage.value = ''
     current.value = {
       ...EMPTY_STATE,
+      extensions: {},
       requestId: current.value.requestId
     }
   }
@@ -144,3 +143,18 @@ export const useComposerStore = defineStore('composer', () => {
     setUnsavedState
   }
 })
+
+function normalizeExtensions(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => String(key || '').trim())
+      .map(([key, state]) => [
+        String(key).trim(),
+        state && typeof state === 'object' && !Array.isArray(state) ? { ...state } : state,
+      ])
+  )
+}

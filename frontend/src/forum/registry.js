@@ -20,22 +20,29 @@ import {
 } from '@/forum/discussionActionRuntime'
 import {
   getComposerNotices,
+  getComposerFields,
+  getComposerAutocompleteProviders,
   getComposerSecondaryActions,
   getComposerDraftMeta,
-  runComposerMentionProviders,
   runComposerPreviewTransformers,
   getComposerStatusItems,
   getComposerTools,
+  getDiscussionListHero,
+  getDiscussionListContexts,
+  getDiscussionListRequests,
   getForumNavItems,
   getForumNavSections,
+  getForumSidebarSections,
   getDiscussionActions,
   getDiscussionActionHandler,
   getPostActions,
   getPostActionHandler,
   getNotificationRenderers,
   getProfilePanels,
+  getSearchModalSections,
   getSearchSources,
   getDiscussionBadges,
+  getDiscussionPresentationItems,
   getDiscussionStateBadges,
   getHeroMetaItems,
   getDiscussionReplyState,
@@ -52,6 +59,7 @@ import {
   registerDiscussionAction,
   registerDiscussionActionHandler,
   registerDiscussionBadge,
+  registerDiscussionPresentation,
   registerDiscussionReplyState,
   registerDiscussionReviewBanner,
   registerHeroMeta,
@@ -61,29 +69,41 @@ import {
   registerPageState,
   registerStateBlock,
   registerUiCopy,
+  registerForumRuntime,
   registerDiscussionStateBadge,
   registerPostStateBadge,
   registerPostReviewBanner,
   registerComposerNotice,
+  registerComposerField,
   registerComposerSecondaryAction,
+  registerComposerPayloadContributor,
+  registerComposerInitialState,
   registerComposerDraftMeta,
-  registerComposerMentionProvider,
+  registerComposerAutocompleteProvider,
   registerComposerPreviewTransformer,
   registerComposerStatusItem,
   registerComposerSubmitSuccess,
   registerComposerSubmitGuard,
   registerComposerTool,
+  registerDiscussionListHero,
+  registerDiscussionListContext,
+  registerDiscussionListRequest,
   registerHeaderItem,
   registerForumNavItem,
   registerForumNavSection,
+  registerForumSidebarSection,
   registerNotificationRenderer,
   registerProfilePanel,
+  registerSearchModalSection,
   registerPostAction,
   registerPostActionHandler,
   registerSearchSource,
   registerUserBadge,
   runComposerSubmitGuards,
+  runComposerPayloadContributors,
+  runComposerInitialStateContributors,
   runComposerSubmitSuccess,
+  runForumRuntimeHook,
 } from '@/forum/frontendRegistry'
 import { highlightSearchText } from '@/utils/search'
 import { renderTwemojiHtml, setTwemojiBaseUrl, setTwemojiEnabled } from '@/utils/twemoji'
@@ -96,13 +116,18 @@ export { api as forumApi }
 export {
   getForumNavItems,
   getForumNavSections,
+  getForumSidebarSections,
   getComposerNotices,
+  getComposerFields,
+  getComposerAutocompleteProviders,
   getComposerSecondaryActions,
   getComposerDraftMeta,
-  runComposerMentionProviders,
   runComposerPreviewTransformers,
   getComposerStatusItems,
   getComposerTools,
+  getDiscussionListHero,
+  getDiscussionListContexts,
+  getDiscussionListRequests,
   resolveDiscussionAction,
   resolvePostAction,
   getDiscussionActions,
@@ -111,6 +136,7 @@ export {
   getPostActionHandler,
   getNotificationRenderers,
   getDiscussionBadges,
+  getDiscussionPresentationItems,
   getDiscussionStateBadges,
   getHeroMetaItems,
   getDiscussionReplyState,
@@ -126,6 +152,7 @@ export {
   registerDiscussionAction,
   registerDiscussionActionHandler,
   registerDiscussionBadge,
+  registerDiscussionPresentation,
   registerDiscussionReplyState,
   registerDiscussionReviewBanner,
   registerHeroMeta,
@@ -135,23 +162,32 @@ export {
   registerPageState,
   registerStateBlock,
   registerUiCopy,
+  registerForumRuntime,
   registerDiscussionStateBadge,
   registerPostStateBadge,
   registerPostReviewBanner,
   registerComposerNotice,
+  registerComposerField,
   registerComposerSecondaryAction,
+  registerComposerPayloadContributor,
+  registerComposerInitialState,
   registerComposerDraftMeta,
-  registerComposerMentionProvider,
+  registerComposerAutocompleteProvider,
   registerComposerPreviewTransformer,
   registerComposerStatusItem,
   registerComposerSubmitSuccess,
   registerComposerSubmitGuard,
   registerComposerTool,
+  registerDiscussionListHero,
+  registerDiscussionListContext,
+  registerDiscussionListRequest,
   registerHeaderItem,
   registerForumNavItem,
   registerForumNavSection,
+  registerForumSidebarSection,
   registerNotificationRenderer,
   registerProfilePanel,
+  registerSearchModalSection,
   registerPostAction,
   registerPostActionHandler,
   registerSearchSource,
@@ -159,8 +195,12 @@ export {
   runDiscussionAction,
   runPostAction,
   runComposerSubmitGuards,
+  runComposerPayloadContributors,
+  runComposerInitialStateContributors,
   runComposerSubmitSuccess,
+  runForumRuntimeHook,
   getProfilePanels,
+  getSearchModalSections,
   getSearchSources,
   getUserBadges,
   renderTwemojiHtml,
@@ -703,16 +743,6 @@ registerEmptyState({
 })
 
 registerEmptyState({
-  key: 'discussion-list-tag-empty',
-  order: 40,
-  surfaces: ['discussion-list-empty'],
-  isVisible: ({ currentTag }) => Boolean(currentTag),
-  resolve: () => ({
-    text: '这个标签下还没有讨论。',
-  }),
-})
-
-registerEmptyState({
   key: 'discussion-list-default-empty',
   order: 50,
   surfaces: ['discussion-list-empty'],
@@ -877,24 +907,6 @@ registerUiCopy({
   surfaces: ['discussion-create-description'],
   resolve: () => ({
     text: '系统会自动切换到浮层编辑器。',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-composer-primary-tag-placeholder',
-  order: 30,
-  surfaces: ['discussion-composer-primary-tag-placeholder'],
-  resolve: ({ loadingTags, hasStartableTags }) => ({
-    text: loadingTags ? '加载标签中...' : (hasStartableTags ? '选择主标签' : '暂无可发帖标签'),
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-composer-secondary-tag-placeholder',
-  order: 40,
-  surfaces: ['discussion-composer-secondary-tag-placeholder'],
-  resolve: ({ hasSecondaryOptions }) => ({
-    text: hasSecondaryOptions ? '选择次标签（可选）' : '无可用次标签',
   }),
 })
 
@@ -1805,8 +1817,8 @@ registerUiCopy({
   key: 'start-discussion-button',
   order: 479,
   surfaces: ['start-discussion-button'],
-  resolve: ({ hasTag, tagName }) => ({
-    text: hasTag && tagName ? `在 ${tagName} 下发起讨论` : '发起讨论',
+  resolve: ({ hasContextSubject, subjectName }) => ({
+    text: hasContextSubject && subjectName ? `在 ${subjectName} 下发起讨论` : '发起讨论',
   }),
 })
 
@@ -1941,7 +1953,7 @@ registerUiCopy({
   order: 479,
   surfaces: ['discussion-action-edit-description'],
   resolve: () => ({
-    text: '修改标题、正文和标签。',
+    text: '修改标题和正文。',
   }),
 })
 
@@ -2487,10 +2499,8 @@ registerUiCopy({
       : routeName === 'following'
         ? getDiscussionListFilterLabelText('following')
         : ({
-          tags: '标签',
           profile: '个人主页',
           'user-profile': '个人主页',
-          notifications: '通知',
           search: '搜索结果',
           'discussion-detail': '讨论详情',
           login: '登录',
@@ -2563,6 +2573,42 @@ registerUiCopy({
   }),
 })
 
+function resolveDiscussionListFilterHeroIcon(filterCode) {
+  switch (String(filterCode || 'all').trim()) {
+    case 'unread':
+      return 'fas fa-inbox'
+    case 'my':
+      return 'fas fa-user-pen'
+    default:
+      return 'fas fa-bell'
+  }
+}
+
+registerDiscussionListHero({
+  key: 'discussion-list-filter-hero',
+  order: 100,
+  surfaces: ['discussion-list-hero'],
+  isVisible: ({ activeFilterCode, contextSubject }) => !contextSubject && String(activeFilterCode || 'all') !== 'all',
+  resolve: ({ activeFilterCode }) => ({
+    pill: getUiCopy({
+      surface: 'discussion-list-filter-hero-pill',
+      listFilter: activeFilterCode,
+    })?.text || getDiscussionListFilterLabelText(activeFilterCode),
+    title: getUiCopy({
+      surface: 'discussion-list-filter-hero-title',
+      listFilter: activeFilterCode,
+    })?.text || getDiscussionListFilterHeroTitleText(activeFilterCode),
+    description: getUiCopy({
+      surface: 'discussion-list-filter-hero-description',
+      listFilter: activeFilterCode,
+    })?.text || getDiscussionListFilterHeroDescriptionText(activeFilterCode),
+    icon: resolveDiscussionListFilterHeroIcon(activeFilterCode),
+    style: {
+      '--discussion-list-hero-color': 'var(--forum-primary-color)',
+    },
+  }),
+})
+
 registerUiCopy({
   key: 'discussion-list-filter-hero-pill',
   order: 479,
@@ -2591,23 +2637,14 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'discussion-list-tag-hero-description',
-  order: 479,
-  surfaces: ['discussion-list-tag-hero-description'],
-  resolve: () => ({
-    text: '这个标签下的讨论会集中显示在这里。',
-  }),
-})
-
-registerUiCopy({
   key: 'discussion-list-page-meta-title',
   order: 479,
   surfaces: ['discussion-list-page-meta-title'],
-  resolve: ({ listFilter, currentTagName, searchQuery, hasSearchQuery }) => {
+  resolve: ({ listFilter, subjectName, searchQuery, hasSearchQuery }) => {
     return {
       text: resolveDiscussionListPageMetaTitle({
         filterCode: listFilter,
-        currentTagName,
+        subjectName,
         searchQuery: hasSearchQuery ? searchQuery : '',
       }),
     }
@@ -2618,12 +2655,12 @@ registerUiCopy({
   key: 'discussion-list-page-meta-description',
   order: 479,
   surfaces: ['discussion-list-page-meta-description'],
-  resolve: ({ listFilter, currentTagName, currentTagDescription, searchQuery, hasSearchQuery }) => {
+  resolve: ({ listFilter, subjectName, subjectDescription, searchQuery, hasSearchQuery }) => {
     return {
       text: resolveDiscussionListPageMetaDescription({
         filterCode: listFilter,
-        currentTagName,
-        currentTagDescription,
+        subjectName,
+        subjectDescription,
         searchQuery: hasSearchQuery ? searchQuery : '',
       }),
     }
@@ -2708,33 +2745,6 @@ registerUiCopy({
   surfaces: ['discussion-event-sticky-label'],
   resolve: ({ isSticky }) => ({
     text: isSticky ? '置顶了该讨论' : '取消了该讨论的置顶状态',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-event-tagged-label',
-  order: 479,
-  surfaces: ['discussion-event-tagged-label'],
-  resolve: () => ({
-    text: '更新了讨论标签',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-event-tagged-added-prefix',
-  order: 479,
-  surfaces: ['discussion-event-tagged-added-prefix'],
-  resolve: () => ({
-    text: '新增',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-event-tagged-removed-prefix',
-  order: 479,
-  surfaces: ['discussion-event-tagged-removed-prefix'],
-  resolve: () => ({
-    text: '移除',
   }),
 })
 
@@ -2960,7 +2970,7 @@ registerUiCopy({
   key: 'discussion-composer-status-text',
   order: 611,
   surfaces: ['discussion-composer-status-text'],
-  resolve: ({ hasDraftSavedAt, draftSavedAtText, isEditingDiscussion, selectedTagName }) => {
+  resolve: ({ hasDraftSavedAt, draftSavedAtText, isEditingDiscussion, selectedExtensionLabel }) => {
     if (hasDraftSavedAt) {
       return {
         text: `草稿保存于 ${draftSavedAtText}`,
@@ -2973,9 +2983,9 @@ registerUiCopy({
       }
     }
 
-    if (selectedTagName) {
+    if (selectedExtensionLabel) {
       return {
-        text: `将发布到 ${selectedTagName}`,
+        text: `将发布到 ${selectedExtensionLabel}`,
       }
     }
 
@@ -2989,8 +2999,8 @@ registerUiCopy({
   key: 'discussion-composer-minimized-summary',
   order: 612,
   surfaces: ['discussion-composer-minimized-summary'],
-  resolve: ({ isEditingDiscussion, selectedTagName }) => ({
-    text: isEditingDiscussion ? '编辑讨论' : (selectedTagName ? `新讨论 · ${selectedTagName}` : '发起讨论'),
+  resolve: ({ isEditingDiscussion, selectedExtensionLabel }) => ({
+    text: isEditingDiscussion ? '编辑讨论' : (selectedExtensionLabel ? `新讨论 · ${selectedExtensionLabel}` : '发起讨论'),
   }),
 })
 
@@ -4343,32 +4353,6 @@ registerComposerNotice({
   }),
 })
 
-registerComposerNotice({
-  key: 'discussion-tag-permission',
-  order: 30,
-  isVisible: ({ type, availablePrimaryTagCount }) => {
-    return type === 'discussion' && Number(availablePrimaryTagCount || 0) <= 0
-  },
-  resolve: () => ({
-    label: '标签',
-    tone: 'warning',
-    message: '当前没有可发帖的标签，请联系管理员开放标签权限。',
-  }),
-})
-
-registerComposerNotice({
-  key: 'discussion-tag-selection',
-  order: 40,
-  isVisible: ({ type, availablePrimaryTagCount, primaryTagId }) => {
-    return type === 'discussion' && Number(availablePrimaryTagCount || 0) > 0 && !primaryTagId
-  },
-  resolve: () => ({
-    label: '标签',
-    tone: 'info',
-    message: '先选择主标签，再发布讨论。',
-  }),
-})
-
 registerComposerTool({
   key: 'discussion-template',
   order: 15,
@@ -4425,26 +4409,6 @@ registerComposerSubmitGuard({
     return {
       tone: 'error',
       message: '当前账号没有发起讨论的权限。',
-    }
-  },
-})
-
-registerComposerSubmitGuard({
-  key: 'discussion-primary-tag',
-  order: 30,
-  isVisible: ({ type }) => type === 'discussion',
-  check: ({ availablePrimaryTagCount, primaryTagId }) => {
-    if (Number(availablePrimaryTagCount || 0) <= 0) {
-      return {
-        tone: 'error',
-        message: '当前没有可用主标签，暂时无法发布讨论。',
-      }
-    }
-
-    if (primaryTagId) return null
-    return {
-      tone: 'error',
-      message: '请选择主标签后再发布讨论。',
     }
   },
 })
@@ -4535,16 +4499,6 @@ registerComposerSecondaryAction({
         },
       }))
     },
-  }),
-})
-
-registerComposerStatusItem({
-  key: 'discussion-selected-tag',
-  order: 10,
-  isVisible: ({ type, selectedTagLabel, minimized }) => type === 'discussion' && Boolean(selectedTagLabel) && !minimized,
-  resolve: ({ selectedTagLabel }) => ({
-    label: '标签',
-    value: selectedTagLabel,
   }),
 })
 
