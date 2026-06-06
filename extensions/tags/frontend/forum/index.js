@@ -1,12 +1,17 @@
-import {
-  registerEmptyState,
-  registerForumNavItem,
-  registerStateBlock,
-  registerUiCopy,
-} from '@/forum/registry'
+import { Forum } from '@bias/forum'
 
-export async function bootForumExtension() {
-  registerForumNavItem({
+export const extend = [
+  buildTagsForumExtender(),
+]
+
+function buildTagsForumExtender() {
+  const forum = new Forum()
+  registerTagsForum(forum)
+  return forum
+}
+
+function registerTagsForum(forum) {
+  forum.navItem({
     key: 'tags',
     moduleId: 'tags',
     to: '/tags',
@@ -18,7 +23,7 @@ export async function bootForumExtension() {
     surfaces: ['primary-nav', 'discussion-sidebar', 'mobile-drawer']
   })
 
-  registerEmptyState({
+  forum.emptyState({
     key: 'tags-page-empty',
     moduleId: 'tags',
     order: 50,
@@ -29,7 +34,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerEmptyState({
+  forum.emptyState({
     key: 'tag-last-discussion-empty',
     moduleId: 'tags',
     order: 60,
@@ -40,7 +45,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerStateBlock({
+  forum.stateBlock({
     key: 'tags-page-loading',
     moduleId: 'tags',
     order: 40,
@@ -51,7 +56,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'search-modal-popular-tags-title',
     moduleId: 'tags',
     order: 476,
@@ -61,7 +66,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'search-modal-tag-subtitle',
     moduleId: 'tags',
     order: 476,
@@ -71,7 +76,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'tags-page-hero-title',
     moduleId: 'tags',
     order: 479,
@@ -81,7 +86,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'tags-page-hero-description',
     moduleId: 'tags',
     order: 479,
@@ -93,7 +98,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-list-sidebar-tags-link',
     moduleId: 'tags',
     order: 479,
@@ -103,7 +108,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-list-sidebar-more-tags-link',
     moduleId: 'tags',
     order: 479,
@@ -113,7 +118,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'mobile-drawer-all-tags',
     moduleId: 'tags',
     order: 530,

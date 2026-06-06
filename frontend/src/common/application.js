@@ -1,6 +1,8 @@
 import { createExtensionInitializers, runWithExtensionScope } from './extensionRuntime.js'
 import { registerDefaultResourceModels } from './resourceModels.js'
 import { createResourceStoreAdapter } from './resourceStoreAdapter.js'
+import { createExtensionRegistry } from './listRegistry.js'
+import { ensureExportRegistry } from './exportRegistry.js'
 
 export function createRuntimeApplication({
   kind,
@@ -22,6 +24,8 @@ export function createRuntimeApplication({
   const beforeMountCallbacks = []
   const initializers = createExtensionInitializers()
   const extensions = Object.create(null)
+  const extensionRegistry = createExtensionRegistry()
+  const exportRegistry = ensureExportRegistry()
   const errors = []
   const data = {
     apiDocument: null,
@@ -32,6 +36,7 @@ export function createRuntimeApplication({
   let initialRoute = ''
   let title = ''
   let titleCount = 0
+  let currentInitializerExtension = null
 
   const app = {
     kind: String(kind || 'app'),
@@ -63,6 +68,9 @@ export function createRuntimeApplication({
     translator: translator || createTranslatorApi(),
     initializers,
     extensions,
+    extensionRegistry,
+    exportRegistry,
+    items: extensionRegistry,
     cache,
     data,
     errors,
@@ -77,6 +85,12 @@ export function createRuntimeApplication({
     },
     get booted() {
       return booted
+    },
+    get currentInitializerExtension() {
+      return currentInitializerExtension
+    },
+    set currentInitializerExtension(value) {
+      currentInitializerExtension = value == null ? null : String(value || '').trim()
     },
     extension(extensionId) {
       return extensions[String(extensionId || '').trim()] || null
@@ -110,6 +124,8 @@ export function createRuntimeApplication({
           ? createExtensionApp(extensionId, extension, app)
           : app
         for (const extender of extenders) {
+          const previousInitializerExtension = app.currentInitializerExtension
+          app.currentInitializerExtension = extensionId
           try {
             await runWithExtensionScope(extensionId, () => extender.extend(extensionApp, {
               name: extensionId,
@@ -118,6 +134,8 @@ export function createRuntimeApplication({
           } catch (error) {
             app.handleError(error, `extension:${extensionId}:extender`)
             if (typeof onError === 'function') onError(error, extensionId)
+          } finally {
+            app.currentInitializerExtension = previousInitializerExtension
           }
         }
       }

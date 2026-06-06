@@ -1,7 +1,5 @@
+import { Forum } from '@bias/forum'
 import {
-  registerComposerPreviewTransformer,
-  registerComposerTool,
-  registerUiCopy,
   renderTwemojiHtml,
   setTwemojiBaseUrl,
   setTwemojiEnabled,
@@ -14,15 +12,34 @@ function resolveEmojiSettings(context = {}) {
   }
 }
 
-export async function bootForumExtension(context = {}) {
-  const emojiSettings = resolveEmojiSettings(context)
+export const extend = [
+  buildEmojiForumExtender(),
+  new EmojiSettingsExtender(),
+]
+
+class EmojiSettingsExtender {
+  extend(app) {
+    applyEmojiSettings(app)
+  }
+}
+
+function applyEmojiSettings(app = {}) {
+  const emojiSettings = resolveEmojiSettings(app)
   setTwemojiEnabled(true)
 
   if (emojiSettings.cdnUrl) {
     setTwemojiBaseUrl(emojiSettings.cdnUrl)
   }
+}
 
-  registerComposerTool({
+function buildEmojiForumExtender() {
+  const forum = new Forum()
+  registerEmojiForum(forum)
+  return forum
+}
+
+function registerEmojiForum(forum) {
+  forum.composerTool({
     key: 'emoji',
     moduleId: 'emoji',
     order: 140,
@@ -30,7 +47,7 @@ export async function bootForumExtension(context = {}) {
     icon: 'far fa-smile',
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'emoji-picker-empty',
     moduleId: 'emoji',
     order: 80,
@@ -40,7 +57,7 @@ export async function bootForumExtension(context = {}) {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'emoji-picker-dialog-label',
     moduleId: 'emoji',
     order: 550,
@@ -50,7 +67,7 @@ export async function bootForumExtension(context = {}) {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'emoji-picker-search-placeholder',
     moduleId: 'emoji',
     order: 560,
@@ -60,7 +77,7 @@ export async function bootForumExtension(context = {}) {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'emoji-picker-summary',
     moduleId: 'emoji',
     order: 570,
@@ -72,7 +89,7 @@ export async function bootForumExtension(context = {}) {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'emoji-autocomplete-label',
     moduleId: 'emoji',
     order: 1090,
@@ -82,7 +99,7 @@ export async function bootForumExtension(context = {}) {
     }),
   })
 
-  registerComposerPreviewTransformer({
+  forum.composerPreviewTransformer({
     key: 'emoji-twemoji-preview',
     moduleId: 'emoji',
     order: 10,

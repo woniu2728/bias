@@ -1,13 +1,20 @@
+import { Forum } from '@bias/forum'
 import {
-  registerComposerMentionProvider,
-  registerComposerTool,
-  registerNotificationRenderer,
-  registerStateBlock,
-  registerUiCopy,
+  forumApi,
 } from '@/forum/registry'
 
-export async function bootForumExtension({ api } = {}) {
-  registerComposerTool({
+export const extend = [
+  buildMentionsForumExtender(),
+]
+
+function buildMentionsForumExtender() {
+  const forum = new Forum()
+  registerMentionsForum(forum)
+  return forum
+}
+
+function registerMentionsForum(forum) {
+  forum.composerTool({
     key: 'mention',
     moduleId: 'mentions',
     order: 130,
@@ -17,7 +24,7 @@ export async function bootForumExtension({ api } = {}) {
     after: '',
   })
 
-  registerStateBlock({
+  forum.stateBlock({
     key: 'mentions-composer-loading',
     moduleId: 'mentions',
     order: 100,
@@ -28,7 +35,7 @@ export async function bootForumExtension({ api } = {}) {
     }),
   })
 
-  registerStateBlock({
+  forum.stateBlock({
     key: 'mentions-composer-empty',
     moduleId: 'mentions',
     order: 110,
@@ -39,7 +46,7 @@ export async function bootForumExtension({ api } = {}) {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'mentions-composer-picker-label',
     moduleId: 'mentions',
     order: 1080,
@@ -49,15 +56,15 @@ export async function bootForumExtension({ api } = {}) {
     }),
   })
 
-  registerComposerMentionProvider({
+  forum.composerMentionProvider({
     key: 'mentions-users',
     moduleId: 'mentions',
     order: 10,
     async search({ mentionQuery = '', limit = 5 }) {
-      if (typeof api?.get !== 'function') {
+      if (typeof forumApi?.get !== 'function') {
         return []
       }
-      const users = await api.get('/users', {
+      const users = await forumApi.get('/users', {
         params: {
           q: mentionQuery,
           limit,
@@ -67,7 +74,7 @@ export async function bootForumExtension({ api } = {}) {
     },
   })
 
-  registerNotificationRenderer({
+  forum.notificationRenderer({
     type: 'userMentioned',
     key: 'userMentioned',
     moduleId: 'mentions',

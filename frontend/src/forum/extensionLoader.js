@@ -1,4 +1,5 @@
 import api from '../api/index.js'
+import { createRuntimeApplication } from '../common/application.js'
 import {
   applyExtensionDocumentPayload,
   clearExtensionDocumentRuntime,
@@ -16,7 +17,6 @@ import { clearForumRegistryExtensions } from './frontendRegistry.js'
 import {
   handleExtensionRuntimeError,
   registerLoadedExtensionModule,
-  runWithExtensionScope,
   unregisterLoadedExtensionModule,
 } from '../common/extensionRuntime.js'
 
@@ -119,22 +119,22 @@ export async function loadExtensionForumEntryModule(entryPath, { importers = {} 
 }
 
 export function validateForumExtensionModule(module, extensionId = '') {
-  if (!module || typeof module.bootForumExtension !== 'function') {
+  if (!module || !module.extend) {
     const suffix = extensionId ? ` (${extensionId})` : ''
-    throw new Error(`扩展前台入口缺少 bootForumExtension 导出${suffix}`)
+    throw new Error(`扩展前台入口缺少 extend 导出${suffix}`)
   }
 }
 
 export function validateCommonExtensionModule(module, extensionId = '') {
-  if (!module || typeof module.bootCommonExtension !== 'function') {
+  if (!module || !module.extend) {
     const suffix = extensionId ? ` (${extensionId})` : ''
-    throw new Error(`扩展通用入口缺少 bootCommonExtension 导出${suffix}`)
+    throw new Error(`扩展通用入口缺少 extend 导出${suffix}`)
   }
 }
 
 export async function loadEnabledForumExtensions({
   forumStore,
-  app: application,
+  app: providedApplication,
   importers = {},
   router,
   routeComponents,
@@ -142,6 +142,7 @@ export async function loadEnabledForumExtensions({
   fetchPayload,
   loadedExtensionIds,
 } = {}) {
+  const application = providedApplication || createRuntimeApplication({ kind: 'forum' })
   const payload = typeof fetchPayload === 'function'
     ? await fetchPayload()
     : await api.get('/forum')
@@ -187,17 +188,8 @@ export async function loadEnabledForumExtensions({
         frontend: 'common',
         entryPath: commonEntryPath,
       })
-      await runWithExtensionScope(extensionId, () => commonModule.bootCommonExtension({
-        app,
-        api: app.api,
-        registry: app.registry,
-        forumStore,
-        extension,
-        loadedExtensionIds: loadedIds,
-        router,
-        registeredRoutes,
-        documentRuntime: app.documentRuntime,
-      }))
+      registerExtensionFrontendOutput(application, extensionId, 'common', extension?.frontend_outputs?.common)
+      await bootModuleExtenders(application, extensionId, commonModule, app)
     }
 
     const entryPath = normalizeExtensionForumEntry(extension?.frontend_forum_entry)
@@ -226,17 +218,8 @@ export async function loadEnabledForumExtensions({
       frontend: 'forum',
       entryPath,
     })
-    await runWithExtensionScope(extensionId, () => module.bootForumExtension({
-      app,
-      api: app.api,
-      registry: app.registry,
-      forumStore,
-      extension,
-      loadedExtensionIds: loadedIds,
-      router,
-      registeredRoutes,
-      documentRuntime: app.documentRuntime,
-    }))
+    registerExtensionFrontendOutput(application, extensionId, 'forum', extension?.frontend_outputs?.forum)
+    await bootModuleExtenders(application, extensionId, module, app)
     initializedApps.push({ app, extensionId })
     loadedIds.add(extensionId)
   }
@@ -254,6 +237,34 @@ export async function loadEnabledForumExtensions({
     extensionDocument,
     loadedExtensionIds: loadedIds,
   }
+}
+
+function registerExtensionFrontendOutput(application, extensionId, frontend, output) {
+  const registry = application?.exportRegistry
+  if (!registry || !output || typeof registry.registerViteOutput !== 'function') {
+    return []
+  }
+  return registry.registerViteOutput(extensionId, frontend, output, {
+    baseUrl: resolveFrontendAssetsBaseUrl(),
+  })
+}
+
+function resolveFrontendAssetsBaseUrl() {
+  return globalThis.bias?.frontendAssetsBaseUrl || '/static/frontend'
+}
+
+async function bootModuleExtenders(application, extensionId, module, extensionApp) {
+  if (!application || !module?.extend) {
+    return
+  }
+  await application.bootExtensions({
+    [extensionId]: module,
+  }, {
+    createExtensionApp: () => extensionApp,
+    onError(error, failingExtensionId) {
+      handleExtensionRuntimeError(error, failingExtensionId, 'extender')
+    },
+  })
 }
 
 export function getForumInitializers() {
@@ -306,5 +317,5 @@ export function resetForumExtensionRuntimeContributions(extensionId = '', { app 
     clearExtensionDocumentRuntime()
   }
   unregisterLoadedExtensionModule(extensionId, { app })
-  resetForumExtensionAppRuntime(extensionId)
+  resetForumExtensionAppRuntime(extensionId, { app })
 }

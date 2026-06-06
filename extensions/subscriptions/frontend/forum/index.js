@@ -1,17 +1,21 @@
+import { Forum } from '@bias/forum'
 import {
   getUiCopy,
-  registerEmptyState,
-  registerDiscussionAction,
-  registerDiscussionActionHandler,
-  registerDiscussionStateBadge,
   forumApi,
-  registerForumNavItem,
-  registerNotificationRenderer,
-  registerUiCopy,
 } from '@/forum/registry'
 
-export async function bootForumExtension() {
-  registerForumNavItem({
+export const extend = [
+  buildSubscriptionsForumExtender(),
+]
+
+function buildSubscriptionsForumExtender() {
+  const forum = new Forum()
+  registerSubscriptionsForum(forum)
+  return forum
+}
+
+function registerSubscriptionsForum(forum) {
+  forum.navItem({
     key: 'following',
     moduleId: 'subscriptions',
     to: '/following',
@@ -24,7 +28,7 @@ export async function bootForumExtension() {
     isVisible: ({ authStore }) => Boolean(authStore?.user),
   })
 
-  registerNotificationRenderer({
+  forum.notificationRenderer({
     type: 'discussionReply',
     key: 'discussionReply',
     moduleId: 'subscriptions',
@@ -40,7 +44,7 @@ export async function bootForumExtension() {
     },
   })
 
-  registerEmptyState({
+  forum.emptyState({
     key: 'discussion-list-following-empty',
     moduleId: 'subscriptions',
     order: 10,
@@ -51,7 +55,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-list-following-hero-pill',
     moduleId: 'subscriptions',
     order: 479,
@@ -61,7 +65,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-list-following-hero-title',
     moduleId: 'subscriptions',
     order: 479,
@@ -71,7 +75,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-list-following-hero-description',
     moduleId: 'subscriptions',
     order: 479,
@@ -81,7 +85,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'mobile-drawer-following',
     moduleId: 'subscriptions',
     order: 520,
@@ -91,7 +95,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerDiscussionAction({
+  forum.discussionAction({
     key: 'toggle-subscription',
     moduleId: 'subscriptions',
     order: 20,
@@ -120,14 +124,14 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerDiscussionActionHandler({
+  forum.discussionActionHandler({
     key: 'toggle-subscription',
     moduleId: 'subscriptions',
     order: 10,
     handle: handleToggleSubscription,
   })
 
-  registerDiscussionStateBadge({
+  forum.discussionStateBadge({
     key: 'subscribed',
     moduleId: 'subscriptions',
     order: 40,
@@ -139,7 +143,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-action-toggle-subscription-label',
     moduleId: 'subscriptions',
     order: 479,
@@ -149,7 +153,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-action-toggle-subscription-description',
     moduleId: 'subscriptions',
     order: 479,
@@ -159,7 +163,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-action-toggle-subscription-disabled',
     moduleId: 'subscriptions',
     order: 479,
@@ -169,7 +173,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-sidebar-subscribed',
     moduleId: 'subscriptions',
     order: 479,

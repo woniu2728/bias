@@ -1,25 +1,21 @@
-import {
-  registerApprovalNote,
-  registerComposerNotice,
-  registerDiscussionBadge,
-  registerDiscussionReplyState,
-  registerDiscussionReviewBanner,
-  registerDiscussionStateBadge,
-  registerNotificationRenderer,
-  registerPostReviewBanner,
-  registerPostStateBadge,
-} from '@/forum/registry'
+import { Forum } from '@bias/forum'
 
-export async function bootForumExtension() {
-  registerApprovalNotificationRenderers()
-  registerApprovalBadges()
-  registerApprovalReviewBanners()
-  registerApprovalFeedback()
-  registerApprovalComposerNotices()
+export const extend = [
+  buildApprovalForumExtender(),
+]
+
+function buildApprovalForumExtender() {
+  const forum = new Forum()
+  registerApprovalNotificationRenderers(forum)
+  registerApprovalBadges(forum)
+  registerApprovalReviewBanners(forum)
+  registerApprovalFeedback(forum)
+  registerApprovalComposerNotices(forum)
+  return forum
 }
 
-function registerApprovalNotificationRenderers() {
-  registerNotificationRenderer({
+function registerApprovalNotificationRenderers(forum) {
+  forum.notificationRenderer({
     type: 'discussionApproved',
     key: 'discussionApproved',
     moduleId: 'approval',
@@ -35,7 +31,7 @@ function registerApprovalNotificationRenderers() {
     },
   })
 
-  registerNotificationRenderer({
+  forum.notificationRenderer({
     type: 'discussionRejected',
     key: 'discussionRejected',
     moduleId: 'approval',
@@ -52,7 +48,7 @@ function registerApprovalNotificationRenderers() {
     },
   })
 
-  registerNotificationRenderer({
+  forum.notificationRenderer({
     type: 'postApproved',
     key: 'postApproved',
     moduleId: 'approval',
@@ -68,7 +64,7 @@ function registerApprovalNotificationRenderers() {
     },
   })
 
-  registerNotificationRenderer({
+  forum.notificationRenderer({
     type: 'postRejected',
     key: 'postRejected',
     moduleId: 'approval',
@@ -86,8 +82,8 @@ function registerApprovalNotificationRenderers() {
   })
 }
 
-function registerApprovalBadges() {
-  registerDiscussionBadge({
+function registerApprovalBadges(forum) {
+  forum.discussionBadge({
     key: 'pending',
     moduleId: 'approval',
     order: 40,
@@ -99,7 +95,7 @@ function registerApprovalBadges() {
     }),
   })
 
-  registerDiscussionStateBadge({
+  forum.discussionStateBadge({
     key: 'pending',
     moduleId: 'approval',
     order: 10,
@@ -111,7 +107,7 @@ function registerApprovalBadges() {
     }),
   })
 
-  registerDiscussionStateBadge({
+  forum.discussionStateBadge({
     key: 'rejected',
     moduleId: 'approval',
     order: 20,
@@ -123,7 +119,7 @@ function registerApprovalBadges() {
     }),
   })
 
-  registerPostStateBadge({
+  forum.postStateBadge({
     key: 'pending',
     moduleId: 'approval',
     order: 10,
@@ -135,7 +131,7 @@ function registerApprovalBadges() {
     }),
   })
 
-  registerPostStateBadge({
+  forum.postStateBadge({
     key: 'rejected',
     moduleId: 'approval',
     order: 20,
@@ -148,8 +144,8 @@ function registerApprovalBadges() {
   })
 }
 
-function registerApprovalReviewBanners() {
-  registerDiscussionReplyState({
+function registerApprovalReviewBanners(forum) {
+  forum.discussionReplyState({
     key: 'pending',
     moduleId: 'approval',
     order: 40,
@@ -162,7 +158,7 @@ function registerApprovalReviewBanners() {
     }),
   })
 
-  registerDiscussionReplyState({
+  forum.discussionReplyState({
     key: 'rejected',
     moduleId: 'approval',
     order: 50,
@@ -175,7 +171,7 @@ function registerApprovalReviewBanners() {
     }),
   })
 
-  registerDiscussionReviewBanner({
+  forum.discussionReviewBanner({
     key: 'pending',
     moduleId: 'approval',
     order: 10,
@@ -194,7 +190,7 @@ function registerApprovalReviewBanners() {
     }),
   })
 
-  registerDiscussionReviewBanner({
+  forum.discussionReviewBanner({
     key: 'rejected',
     moduleId: 'approval',
     order: 20,
@@ -215,7 +211,7 @@ function registerApprovalReviewBanners() {
     }),
   })
 
-  registerPostReviewBanner({
+  forum.postReviewBanner({
     key: 'pending',
     moduleId: 'approval',
     order: 10,
@@ -233,7 +229,7 @@ function registerApprovalReviewBanners() {
     }),
   })
 
-  registerPostReviewBanner({
+  forum.postReviewBanner({
     key: 'rejected',
     moduleId: 'approval',
     order: 20,
@@ -254,8 +250,8 @@ function registerApprovalReviewBanners() {
   })
 }
 
-function registerApprovalFeedback() {
-  registerApprovalNote({
+function registerApprovalFeedback(forum) {
+  forum.approvalNote({
     key: 'rejected-discussion-list',
     moduleId: 'approval',
     order: 10,
@@ -266,7 +262,7 @@ function registerApprovalFeedback() {
     }),
   })
 
-  registerApprovalNote({
+  forum.approvalNote({
     key: 'rejected-profile-post',
     moduleId: 'approval',
     order: 20,
@@ -278,8 +274,8 @@ function registerApprovalFeedback() {
   })
 }
 
-function registerApprovalComposerNotices() {
-  registerComposerNotice({
+function registerApprovalComposerNotices(forum) {
+  forum.composerNotice({
     key: 'approval-feedback',
     moduleId: 'approval',
     order: 20,

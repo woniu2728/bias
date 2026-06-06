@@ -1,9 +1,10 @@
-import { ExtensionGeneratedPermissionsPage, registerAdminDashboardStat, registerAdminRoute } from '@/admin/registry'
+import { Admin, AdminDashboard } from '@bias/admin'
+import { ExtensionGeneratedPermissionsPage } from '@/admin/registry'
 import FlagsPage from './FlagsPage.vue'
-import './flagsPageBootstrap.js'
+import { buildFlagsPageExtender } from './flagsPageBootstrap.js'
 
-export function bootAdminExtension() {
-  registerAdminDashboardStat({
+export const extend = [
+  new AdminDashboard().stat({
     key: 'open-flags',
     order: 50,
     icon: 'fas fa-flag',
@@ -13,9 +14,9 @@ export function bootAdminExtension() {
       label: copy?.openFlagsStatLabel || '待处理举报',
       value: stats?.openFlags || 0,
     }),
-  })
+  }),
 
-  registerAdminRoute({
+  new Admin().route({
     path: '/admin/flags',
     name: 'admin-flags',
     component: FlagsPage,
@@ -28,8 +29,10 @@ export function bootAdminExtension() {
     showInDashboardActions: true,
     dashboardActionLabel: '处理举报',
     moduleId: 'flags',
-  })
-}
+  }),
+
+  buildFlagsPageExtender(),
+]
 
 export function resolveOperationsPage() {
   return FlagsPage

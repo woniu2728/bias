@@ -474,6 +474,7 @@ def get_public_forum_settings(user=None) -> dict:
             "name": extension["name"],
             "frontend_common_entry": extension.get("frontend_common_entry", ""),
             "frontend_forum_entry": extension["frontend_forum_entry"],
+            "frontend_outputs": dict(extension.get("frontend_outputs") or {}),
             "frontend_routes": [
                 route
                 for route in extension.get("frontend_routes", [])

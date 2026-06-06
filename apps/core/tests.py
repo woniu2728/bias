@@ -607,7 +607,7 @@ class ExtensionManifestLoaderTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    def test_extension_extenders_are_flattened_like_flarum_extend_files(self):
+    def test_extension_extenders_are_flattened_from_nested_extend_files(self):
         temp_dir = make_workspace_temp_dir()
         try:
             extensions_dir = Path(temp_dir) / "extensions"
@@ -969,7 +969,10 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertEqual(app.make("bias.api.resources"), [])
 
     def test_view_extender_registers_template_namespaces(self):
+        from django.template.loader import render_to_string
+
         from apps.core.extensions import ViewExtender
+        from apps.core.extensions.template_loader import clear_extension_template_caches
 
         temp_dir = make_workspace_temp_dir()
         extension_dir = Path(temp_dir) / "extensions" / "alpha-tools"
@@ -1003,7 +1006,10 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertTrue(namespaces[0].prepend)
             self.assertEqual(namespaces[1].hints, (str(templates_dir.resolve()), str(overrides_dir.resolve())))
             self.assertEqual(runtime_view.view_namespaces, tuple(namespaces))
-            self.assertEqual(app.views.render("alpha::hello.html", {"name": "Bias"}), "Override Bias")
+            with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=app):
+                clear_extension_template_caches()
+                self.assertEqual(app.views.render("alpha::hello.html", {"name": "Bias"}), "Override Bias")
+                self.assertEqual(render_to_string("alpha::hello.html", {"name": "Bias"}), "Override Bias")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -2114,7 +2120,12 @@ class ExtensionManifestLoaderTests(TestCase):
                         "file": "assets/alpha-forum.js",
                         "css": ["assets/alpha-forum.css"],
                         "imports": ["assets/vendor.js"],
-                        "dynamicImports": ["assets/chunk.js"],
+                        "dynamicImports": ["../../../extensions/alpha-tools/frontend/forum/lazy.js"],
+                    },
+                    "../../../extensions/alpha-tools/frontend/forum/lazy.js": {
+                        "file": "assets/chunk.js",
+                        "css": ["assets/chunk.css"],
+                        "imports": ["assets/vendor.js"],
                     }
                 }, ensure_ascii=False), encoding="utf-8")
                 output = build_extension_frontend_output_manifest({
@@ -2128,10 +2139,17 @@ class ExtensionManifestLoaderTests(TestCase):
                 })
 
                 forum_output = output["extensions"]["alpha-tools"]["outputs"]["forum"]
+                self.assertTrue(output["revision"])
+                self.assertEqual(output["extensions"]["alpha-tools"]["revision"], output["revision"])
+                self.assertEqual(forum_output["revision"], output["revision"])
                 self.assertEqual(forum_output["file"], "assets/alpha-forum.js")
                 self.assertEqual(forum_output["css"], ["assets/alpha-forum.css"])
                 self.assertEqual(forum_output["imports"], ["assets/vendor.js"])
-                self.assertEqual(forum_output["dynamic_imports"], ["assets/chunk.js"])
+                self.assertEqual(forum_output["dynamic_imports"], ["../../../extensions/alpha-tools/frontend/forum/lazy.js"])
+                self.assertEqual(forum_output["chunks"][0]["module_id"], "frontend/forum/lazy.js")
+                self.assertEqual(forum_output["chunks"][0]["file"], "assets/chunk.js")
+                self.assertEqual(forum_output["chunks"][0]["css"], ["assets/chunk.css"])
+                self.assertEqual(forum_output["chunks"][0]["revision"], output["revision"])
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -3441,9 +3459,11 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
             }, ensure_ascii=False), encoding="utf-8")
             (forum_dir / "index.js").write_text(
                 "import { registerForumNavItem } from '@/forum/registry'\n"
-                "export function bootForumExtension() {\n"
-                "  registerForumNavItem({ key: 'alpha', moduleId: 'core' })\n"
-                "}\n",
+                "export const extend = [{\n"
+                "  extend() {\n"
+                "    registerForumNavItem({ key: 'alpha', moduleId: 'core' })\n"
+                "  },\n"
+                "}]\n",
                 encoding="utf-8",
             )
 
@@ -3563,7 +3583,7 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
                 "frontend_forum_entry": "extensions/alpha-tools/frontend/forum/index.js",
             }, ensure_ascii=False), encoding="utf-8")
             (forum_dir / "index.js").write_text(
-                "export const bootForumExtension = null\n",
+                "export const setup = null\n",
                 encoding="utf-8",
             )
 
@@ -4077,6 +4097,12 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertIn("def install(context):", backend_source)
                 self.assertIn("def run_migrations(context):", backend_source)
                 self.assertIn("def uninstall(context):", backend_source)
+                admin_source = (extension_dir / "frontend" / "admin" / "index.js").read_text(encoding="utf-8")
+                forum_source = (extension_dir / "frontend" / "forum" / "index.js").read_text(encoding="utf-8")
+                self.assertIn("from '@bias/admin'", admin_source)
+                self.assertIn("export const extend", admin_source)
+                self.assertIn("from '@bias/forum'", forum_source)
+                self.assertIn("new Forum().navItem", forum_source)
                 migration_source = (extension_dir / "backend" / "migrations" / "0001_initial.py").read_text(encoding="utf-8")
                 self.assertIn("def apply():", migration_source)
                 readme_source = (extension_dir / "docs" / "README.md").read_text(encoding="utf-8")
@@ -4096,7 +4122,8 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertIn("import PermissionsPage from './PermissionsPage.vue'", entry_source)
                 self.assertIn("export function resolvePermissionsPage()", entry_source)
                 forum_entry_source = (Path(temp_dir) / "extensions" / "alpha-tools" / "frontend" / "forum" / "index.js").read_text(encoding="utf-8")
-                self.assertIn("registerForumNavItem", forum_entry_source)
+                self.assertIn("export const extend", forum_entry_source)
+                self.assertIn("new Forum().navItem", forum_entry_source)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -4682,6 +4709,8 @@ class ExtensionRegistryTests(TestCase):
         ) as clear_locale, patch(
             "apps.core.extensions.formatter_service.clear_extension_formatter_cache"
         ) as clear_formatter, patch(
+            "apps.core.extensions.template_loader.clear_extension_template_caches"
+        ) as clear_templates, patch(
             "apps.core.extensions.runtime_event_listeners.invalidate_extension_frontend_assets"
         ) as invalidate_assets, patch(
             "apps.core.extensions.lifecycle.reset_extension_runtime_state"
@@ -4693,6 +4722,7 @@ class ExtensionRegistryTests(TestCase):
         clear_frontend.assert_called_once_with()
         clear_locale.assert_called_once_with()
         clear_formatter.assert_called_once_with()
+        clear_templates.assert_called_once_with()
         invalidate_assets.assert_called_once_with("extension_disabled", extension_id="alpha-tools")
         reset_runtime.assert_called_once_with()
         rebuild_urlconf.assert_called_once_with()

@@ -1,6 +1,10 @@
 import { ModelExtender, StoreExtender } from './resourceModel.js'
 import {
   AdminExtender,
+  AdminDashboardExtender,
+  AdminPageExtender,
+  ExportsExtender,
+  ForumExtender,
   NotificationExtender,
   PostTypesExtender,
   RoutesExtender,
@@ -17,6 +21,10 @@ export {
   SearchExtender,
   ThemeModeExtender,
   AdminExtender,
+  AdminDashboardExtender,
+  AdminPageExtender,
+  ExportsExtender,
+  ForumExtender,
 }
 
 export {
@@ -28,6 +36,10 @@ export {
   SearchExtender as Search,
   ThemeModeExtender as ThemeMode,
   AdminExtender as Admin,
+  AdminDashboardExtender as AdminDashboard,
+  AdminPageExtender as AdminPage,
+  ExportsExtender as Exports,
+  ForumExtender as Forum,
 }
 
 export default {
@@ -39,4 +51,8 @@ export default {
   Search: SearchExtender,
   ThemeMode: ThemeModeExtender,
   Admin: AdminExtender,
+  AdminDashboard: AdminDashboardExtender,
+  AdminPage: AdminPageExtender,
+  Exports: ExportsExtender,
+  Forum: ForumExtender,
 }

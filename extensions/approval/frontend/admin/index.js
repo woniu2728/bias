@@ -1,9 +1,10 @@
-import { ExtensionGeneratedPermissionsPage, registerAdminDashboardStat, registerAdminRoute } from '@/admin/registry'
+import { Admin, AdminDashboard } from '@bias/admin'
+import { ExtensionGeneratedPermissionsPage } from '@/admin/registry'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
-import './approvalQueuePageBootstrap.js'
+import { buildApprovalQueuePageExtender } from './approvalQueuePageBootstrap.js'
 
-export function bootAdminExtension() {
-  registerAdminDashboardStat({
+export const extend = [
+  new AdminDashboard().stat({
     key: 'pending-approvals',
     order: 40,
     icon: 'fas fa-user-check',
@@ -13,9 +14,9 @@ export function bootAdminExtension() {
       label: copy?.pendingApprovalsStatLabel || '待审核内容',
       value: stats?.pendingApprovals || 0,
     }),
-  })
+  }),
 
-  registerAdminRoute({
+  new Admin().route({
     path: '/admin/approval',
     name: 'admin-approval',
     component: ApprovalQueuePage,
@@ -28,8 +29,10 @@ export function bootAdminExtension() {
     showInDashboardActions: true,
     dashboardActionLabel: '处理审核',
     moduleId: 'approval',
-  })
-}
+  }),
+
+  buildApprovalQueuePageExtender(),
+]
 
 export function resolveOperationsPage() {
   return ApprovalQueuePage

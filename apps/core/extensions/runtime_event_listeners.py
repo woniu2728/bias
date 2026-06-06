@@ -46,10 +46,12 @@ def handle_extension_runtime_invalidation(event) -> None:
         rebuild_runtime_urlconf,
         reset_extension_runtime_state,
     )
+    from apps.core.extensions.template_loader import clear_extension_template_caches
 
     clear_extension_frontend_runtime_cache()
     clear_extension_locale_cache()
     clear_extension_formatter_cache()
+    clear_extension_template_caches()
     invalidate_extension_frontend_assets(
         str(getattr(event, "reason", "") or "extension_runtime_invalidated"),
         extension_id=str(getattr(event, "extension_id", "") or ""),

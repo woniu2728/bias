@@ -1,13 +1,10 @@
-import {
-  registerAdminPageActionMeta,
-  registerAdminPageConfig,
-  registerAdminPageCopy,
-  registerAdminPageNoteTemplate,
-} from '@/admin/registry'
+import { AdminPage } from '@bias/admin'
 
 const PAGE_KEY = 'approval.queue'
 
-registerAdminPageCopy(PAGE_KEY, {
+export function buildApprovalQueuePageExtender() {
+  return new AdminPage(PAGE_KEY)
+    .copy({
   key: 'core-approval-queue-page-copy',
   order: 10,
   resolve: () => ({
@@ -52,8 +49,7 @@ registerAdminPageCopy(PAGE_KEY, {
     unknownTimeText: '未知时间',
   }),
 })
-
-registerAdminPageConfig(PAGE_KEY, {
+    .config({
   key: 'core-approval-queue-page-config',
   order: 10,
   resolve: () => ({
@@ -64,8 +60,7 @@ registerAdminPageConfig(PAGE_KEY, {
     ],
   }),
 })
-
-registerAdminPageActionMeta(PAGE_KEY, {
+    .actionMeta({
   key: 'core-approval-queue-page-actions-meta',
   order: 10,
   resolve: () => ({
@@ -82,8 +77,7 @@ registerAdminPageActionMeta(PAGE_KEY, {
     submitFailedMessage: '未知错误',
   }),
 })
-
-registerAdminPageNoteTemplate(PAGE_KEY, {
+    .noteTemplate({
   key: 'approval-approve-compliant',
   order: 10,
   resolve: () => ({
@@ -93,8 +87,7 @@ registerAdminPageNoteTemplate(PAGE_KEY, {
     actions: ['approve'],
   }),
 })
-
-registerAdminPageNoteTemplate(PAGE_KEY, {
+    .noteTemplate({
   key: 'approval-approve-context-complete',
   order: 20,
   resolve: () => ({
@@ -104,8 +97,7 @@ registerAdminPageNoteTemplate(PAGE_KEY, {
     actions: ['approve'],
   }),
 })
-
-registerAdminPageNoteTemplate(PAGE_KEY, {
+    .noteTemplate({
   key: 'approval-reject-quality',
   order: 30,
   resolve: () => ({
@@ -115,8 +107,7 @@ registerAdminPageNoteTemplate(PAGE_KEY, {
     actions: ['reject'],
   }),
 })
-
-registerAdminPageNoteTemplate(PAGE_KEY, {
+    .noteTemplate({
   key: 'approval-reject-duplicate',
   order: 40,
   resolve: () => ({
@@ -127,8 +118,7 @@ registerAdminPageNoteTemplate(PAGE_KEY, {
     itemTypes: ['discussion', 'post'],
   }),
 })
-
-registerAdminPageNoteTemplate(PAGE_KEY, {
+    .noteTemplate({
   key: 'approval-reject-format',
   order: 50,
   resolve: () => ({
@@ -138,3 +128,4 @@ registerAdminPageNoteTemplate(PAGE_KEY, {
     actions: ['reject'],
   }),
 })
+}

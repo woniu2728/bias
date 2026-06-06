@@ -16,7 +16,6 @@ import {
 import {
   handleExtensionRuntimeError,
   registerLoadedExtensionModule,
-  runWithExtensionScope,
   unregisterLoadedExtensionModule,
 } from '../common/extensionRuntime.js'
 
@@ -53,7 +52,7 @@ export async function bootstrapEnabledAdminExtensions({
     }
 
     const module = await importer()
-    if (typeof module?.bootAdminExtension === 'function') {
+    if (module?.extend) {
       const app = createAdminExtensionApp({
         app: application,
         extension,
@@ -67,13 +66,8 @@ export async function bootstrapEnabledAdminExtensions({
         frontend: 'admin',
         entryPath,
       })
-      await runWithExtensionScope(extensionId, () => module.bootAdminExtension({
-        app,
-        api: app.api,
-        registry: app.registry,
-        extension,
-        router,
-      }))
+      registerExtensionFrontendOutput(application, extensionId, 'admin', extension?.frontend_outputs?.admin)
+      await bootModuleExtenders(application, extensionId, module, app)
       initializedApps.push({ app, extensionId })
     }
     loadedAdminExtensionIds.add(extensionId)
@@ -105,6 +99,34 @@ export async function bootstrapEnabledAdminExtensions({
   return { addedRouteCount }
 }
 
+function registerExtensionFrontendOutput(application, extensionId, frontend, output) {
+  const registry = application?.exportRegistry
+  if (!registry || !output || typeof registry.registerViteOutput !== 'function') {
+    return []
+  }
+  return registry.registerViteOutput(extensionId, frontend, output, {
+    baseUrl: resolveFrontendAssetsBaseUrl(),
+  })
+}
+
+function resolveFrontendAssetsBaseUrl() {
+  return globalThis.bias?.frontendAssetsBaseUrl || '/static/frontend'
+}
+
+async function bootModuleExtenders(application, extensionId, module, extensionApp) {
+  if (!application || !module?.extend) {
+    return
+  }
+  await application.bootExtensions({
+    [extensionId]: module,
+  }, {
+    createExtensionApp: () => extensionApp,
+    onError(error, failingExtensionId) {
+      handleExtensionRuntimeError(error, failingExtensionId, 'extender')
+    },
+  })
+}
+
 async function loadAdminRegistry() {
   return import('./registry.js')
 }
@@ -134,7 +156,7 @@ export function resetAdminExtensionRuntimeContributions(extensionId = '', { rout
   clearAdminRoutesForExtension(extensionId)
   clearAdminRegistryExtensions(extensionId)
   unregisterLoadedExtensionModule(extensionId, { app })
-  resetAdminExtensionAppRuntime(extensionId)
+  resetAdminExtensionAppRuntime(extensionId, { app })
 }
 
 function removeAdminRuntimeRoutes(router, extensionId = '') {

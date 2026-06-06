@@ -13,6 +13,7 @@ from apps.core.version import APP_VERSION
 SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 EXTENSION_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 EXPORT_FUNCTION_PATTERN = re.compile(r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(")
+EXPORT_DECLARATION_PATTERN = re.compile(r"export\s+(?:const|let|var|class)\s+([A-Za-z0-9_]+)\b")
 VERSION_RANGE_PATTERN = re.compile(r"^(?:\^|~|>=|<=|>|<)?\d+\.\d+\.\d+$")
 API_VERSION_PATTERN = re.compile(r"^\d+\.\d+$")
 MIGRATION_FILE_PATTERN = re.compile(r"^\d{4}_[a-z0-9_]+\.py$")
@@ -208,7 +209,7 @@ def inspect_frontend_admin_entry(
         return payload
 
     source = absolute_path.read_text(encoding="utf-8")
-    payload["available_exports"] = tuple(sorted(set(EXPORT_FUNCTION_PATTERN.findall(source))))
+    payload["available_exports"] = _inspect_available_frontend_exports(source)
     return payload
 
 
@@ -292,8 +293,8 @@ def inspect_frontend_forum_entry(
     payload: dict[str, Any] = {
         "entry": entry,
         "entry_type": "missing",
-        "required_exports": ("bootForumExtension",),
-        "optional_exports": ("bootForumExtension",),
+        "required_exports": ("extend",),
+        "optional_exports": (),
         "available_exports": (),
         "exists": False,
         "resolved_path": "",
@@ -327,7 +328,7 @@ def inspect_frontend_forum_entry(
         return payload
 
     source = absolute_path.read_text(encoding="utf-8")
-    payload["available_exports"] = tuple(sorted(set(EXPORT_FUNCTION_PATTERN.findall(source))))
+    payload["available_exports"] = _inspect_available_frontend_exports(source)
     return payload
 
 
@@ -371,6 +372,13 @@ def inspect_backend_entry(
     inspection = inspect_extension_backend_entry(debug_definition)
     payload.update(inspection)
     return payload
+
+
+def _inspect_available_frontend_exports(source: str) -> tuple[str, ...]:
+    return tuple(sorted(set(
+        EXPORT_FUNCTION_PATTERN.findall(source)
+        + EXPORT_DECLARATION_PATTERN.findall(source)
+    )))
 
 
 def resolve_bias_version_compatibility(manifest: ExtensionManifest, *, current_version: str | None = None) -> dict[str, str | bool]:
@@ -1067,7 +1075,7 @@ def _validate_frontend_forum_entry(
         if export_name not in available_exports:
             collector.add_error(
                 "missing_frontend_forum_export",
-                f"frontend_forum_entry 缺少导出函数: {export_name}",
+                f"frontend_forum_entry 缺少导出: {export_name}",
                 extension_id=manifest.id,
                 field="frontend_forum_entry",
             )

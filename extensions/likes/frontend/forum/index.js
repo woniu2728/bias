@@ -1,7 +1,7 @@
-import { registerNotificationRenderer } from '@/forum/registry'
+import { Forum } from '@bias/forum'
 
-export async function bootForumExtension() {
-  registerNotificationRenderer({
+export const extend = [
+  new Forum().notificationRenderer({
     type: 'postLiked',
     key: 'postLiked',
     moduleId: 'likes',
@@ -14,5 +14,5 @@ export async function bootForumExtension() {
       const fromUser = notification?.from_user?.display_name || notification?.from_user?.username || '有人'
       return `${fromUser} 点赞了你的回复`
     },
-  })
-}
+  }),
+]

@@ -46,8 +46,8 @@ test('resolveExtensionForumEntryState detects forum entry health', () => {
     debug_info: {
       frontend_forum_entry: {
         exists: true,
-        required_exports: ['bootForumExtension'],
-        available_exports: ['bootForumExtension'],
+        required_exports: ['extend'],
+        available_exports: ['extend'],
       },
     },
   }), '已就绪')

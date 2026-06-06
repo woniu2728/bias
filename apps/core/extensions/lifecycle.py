@@ -163,6 +163,7 @@ def reset_extension_runtime_state() -> None:
     from apps.core.extensions import frontend_runtime_service
     from apps.core.extensions.locale_service import clear_extension_locale_cache
     from apps.core.extensions.manager import get_extension_manager
+    from apps.core.extensions.template_loader import clear_extension_template_caches
     from apps.core.extensions.runtime_event_listeners import (
         bootstrap_extension_runtime_event_listeners,
         reset_extension_runtime_event_listener_bootstrap,
@@ -182,6 +183,7 @@ def reset_extension_runtime_state() -> None:
     frontend_runtime_service._frontend_runtime_bootstrapped = False
     clear_extension_formatter_cache()
     clear_extension_locale_cache()
+    clear_extension_template_caches()
     disconnect_runtime_signal_receivers()
     reset_extension_signal_proxy_bootstrap()
     bootstrap_extension_signal_proxies()

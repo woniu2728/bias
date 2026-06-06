@@ -19,12 +19,17 @@ import {
   extendMethod,
   getExtensionRuntimeErrors,
   registerLazyExtensionModule,
+  registerLoadedExtensionModule,
 } from '../common/extensionRuntime.js'
 import { ApplicationRequestError, createRuntimeApplication } from '../common/application.js'
 import { ModelExtender } from '../common/resourceModel.js'
-import extenders, { Admin, Model, Search, ThemeMode } from '../common/extenders.js'
+import extenders, { Admin, AdminDashboard, AdminPage, Exports, Forum, Model, Search, ThemeMode } from '../common/extenders.js'
 import {
+  AdminDashboardExtender,
   AdminExtender,
+  AdminPageExtender,
+  ExportsExtender,
+  ForumExtender,
   NotificationExtender,
   PostTypesExtender,
   RoutesExtender,
@@ -78,11 +83,12 @@ test('loadExtensionForumEntryModule loads filesystem importer entries', async ()
   assert.equal(loaded.boot, true)
 })
 
-test('validateForumExtensionModule rejects modules without bootForumExtension', () => {
+test('validateForumExtensionModule rejects modules without extend', () => {
   assert.throws(
     () => validateForumExtensionModule({}),
-    /bootForumExtension/,
+    /extend/,
   )
+  assert.doesNotThrow(() => validateForumExtensionModule({ extend: [] }))
 })
 
 test('normalizeExtensionDocumentPayload extracts document runtime contracts', () => {
@@ -196,9 +202,7 @@ test('loadEnabledForumExtensions loads enabled extension entries once and applie
       '../../../extensions/alpha/frontend/forum/index.js': async () => {
         calls.push('alpha')
         return {
-          bootForumExtension: async ({ extension }) => {
-            calls.push(extension.id)
-          },
+          extend: [{ extend: app => calls.push(app.extension.id) }],
         }
       },
     },
@@ -227,22 +231,28 @@ test('loadEnabledForumExtensions passes public extension app object', async () =
     id: 'alpha',
     frontend_forum_entry: 'extensions/alpha/frontend/forum/index.js',
   }
+  const navItems = []
 
   try {
     await loadEnabledForumExtensions({
       app: runtimeApp,
       fetchPayload: async () => ({ enabled_extensions: [extension] }),
       registry: {
-        registerForumNavItem() {},
+        registerForumNavItem(item) {
+          navItems.push(item)
+        },
       },
       importers: {
         '../../../extensions/alpha/frontend/forum/index.js': async () => ({
-          bootForumExtension: async ({ app, api, registry, documentRuntime }) => {
+          extend: [{
+            extend(app) {
             receivedApp = app
-            assert.equal(api, app.api)
-            assert.equal(registry, app.registry)
-            assert.equal(documentRuntime, app.documentRuntime)
-          },
+            app.registry.for('alpha').registerForumNavItem({ key: 'alpha-link', label: 'Alpha' })
+            assert.equal(app.api, receivedApp.api)
+            assert.equal(app.registry, receivedApp.registry)
+            assert.equal(app.documentRuntime, receivedApp.documentRuntime)
+            },
+          }],
         }),
       },
     })
@@ -253,6 +263,10 @@ test('loadEnabledForumExtensions passes public extension app object', async () =
     assert.equal(typeof receivedApp.initializers.add, 'function')
     assert.equal(typeof receivedApp.extend, 'function')
     assert.equal(typeof receivedApp.override, 'function')
+    assert.equal(typeof receivedApp.ItemList, 'function')
+    assert.equal(typeof receivedApp.registry.list, 'function')
+    assert.equal(typeof receivedApp.items.add, 'function')
+    assert.equal(typeof receivedApp.exportRegistry.onLoad, 'function')
     assert.equal(typeof receivedApp.cache, 'object')
     assert.equal(typeof receivedApp.alerts.success, 'function')
     assert.equal(typeof receivedApp.translator.trans, 'function')
@@ -262,11 +276,133 @@ test('loadEnabledForumExtensions passes public extension app object', async () =
     assert.equal(receivedApp.search, runtimeApp.search)
     assert.equal(receivedApp.notificationComponents, runtimeApp.notificationComponents)
     assert.equal(receivedApp.postComponents, runtimeApp.postComponents)
-    assert.equal(runtimeApp.extensions.alpha.modules.forum.bootForumExtension instanceof Function, true)
+    assert.equal(Array.isArray(runtimeApp.extensions.alpha.modules.forum.extend), true)
     assert.equal(globalThis.bias.extensions.alpha, runtimeApp.extensions.alpha)
+    assert.equal(navItems[0].extensionId, 'alpha')
+    assert.equal(navItems[0].key, 'alpha-link')
   } finally {
     globalThis.bias = previousBias
   }
+})
+
+test('forum extension app exposes scoped priority item lists', async () => {
+  let receivedApp = null
+  const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+
+  await loadEnabledForumExtensions({
+    app: runtimeApp,
+    fetchPayload: async () => ({
+      enabled_extensions: [{
+        id: 'item-list',
+        frontend_forum_entry: 'extensions/item-list/frontend/forum/index.js',
+      }],
+    }),
+    importers: {
+      '../../../extensions/item-list/frontend/forum/index.js': async () => ({
+        extend: [{
+          extend(app) {
+          receivedApp = app
+          const list = new app.ItemList()
+          list.add('low', 'low', 1).add('high', 'high', 10)
+          const wrappedItems = list.toArray()
+          assert.deepEqual(wrappedItems.map(item => item.valueOf()), ['high', 'low'])
+          assert.equal(wrappedItems[0].itemName, 'high')
+          assert.throws(() => {
+            wrappedItems[0].itemName = 'changed'
+          }, /read-only/)
+          assert.deepEqual(list.toArray(true), ['high', 'low'])
+          app.registry.add('discussion-controls', { key: 'alpha', label: 'Alpha' }, 20)
+          },
+        }],
+      }),
+    },
+  })
+
+  assert.equal(receivedApp.registry.get('discussion-controls')[0].extensionId, 'item-list')
+  assert.equal(receivedApp.registry.get('discussion-controls')[0].label, 'Alpha')
+  resetForumExtensionRuntimeContributions('item-list', { app: receivedApp })
+  assert.deepEqual(receivedApp.registry.get('discussion-controls'), [])
+})
+
+test('runtime export registry resolves loaded extension modules', () => {
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
+  const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+  const module = { extend: [] }
+  const calls = []
+
+  try {
+    runtimeApp.exportRegistry.onLoad('alpha-tools', 'forum', loaded => {
+      calls.push(loaded)
+    })
+    registerLoadedExtensionModule('alpha-tools', module, {
+      app: runtimeApp,
+      frontend: 'forum',
+      entryPath: 'extensions/alpha-tools/frontend/forum/index.js',
+    })
+
+    assert.equal(runtimeApp.exportRegistry.get('alpha-tools', 'forum'), module)
+    assert.equal(runtimeApp.exportRegistry.getModule('extensions/alpha-tools/frontend/forum/index.js'), module)
+    assert.deepEqual(calls, [module])
+  } finally {
+    globalThis.bias = previousBias
+  }
+})
+
+test('runtime export registry imports lazy chunk modules by path', async () => {
+  const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+  const module = { named: 'lazy-tool' }
+  const calls = []
+
+  runtimeApp.exportRegistry.onLoadPath('extensions/alpha-tools/frontend/forum/lazy.js', loaded => {
+    calls.push(loaded)
+  })
+  runtimeApp.exportRegistry.registerChunk('alpha-tools', 'forum-lazy', {
+    'frontend/forum/lazy.js': async () => module,
+  })
+
+  const loaded = await runtimeApp.exportRegistry.asyncModuleImport('extensions/alpha-tools/frontend/forum/lazy.js')
+
+  assert.equal(loaded, module)
+  assert.equal(loaded.default, module)
+  assert.deepEqual(calls, [module])
+})
+
+test('loadEnabledForumExtensions boots declarative extenders and registers output chunks', async () => {
+  const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+
+  await loadEnabledForumExtensions({
+    app: runtimeApp,
+    fetchPayload: async () => ({
+      enabled_extensions: [{
+        id: 'declarative',
+        frontend_forum_entry: 'extensions/declarative/frontend/forum/index.js',
+        frontend_outputs: {
+          forum: {
+            revision: 'rev123',
+            chunks: [{
+              key: '../../../extensions/declarative/frontend/forum/lazy.js',
+              module_id: 'frontend/forum/lazy.js',
+              file: 'assets/declarative-lazy.js',
+            }],
+          },
+        },
+      }],
+    }),
+    importers: {
+      '../../../extensions/declarative/frontend/forum/index.js': async () => ({
+        extend: [
+          new ExportsExtender().module('toolbox', { ready: true }),
+        ],
+      }),
+    },
+  })
+
+  assert.deepEqual(runtimeApp.exportRegistry.get('declarative', 'toolbox'), { ready: true })
+  assert.equal(
+    runtimeApp.exportRegistry.getChunk('declarative', 'forum/assets/declarative-lazy.js').url,
+    '/static/frontend/assets/declarative-lazy.js?v=rev123',
+  )
 })
 
 test('loadEnabledForumExtensions runs scoped initializers', async () => {
@@ -286,14 +422,16 @@ test('loadEnabledForumExtensions runs scoped initializers', async () => {
     }),
     importers: {
       '../../../extensions/scoped/frontend/forum/index.js': async () => ({
-        bootForumExtension: async ({ app }) => {
+        extend: [{
+          extend(app) {
           app.initializers.add('scoped', () => {
             app.extend(target, 'items', (items) => {
               items.push('extended')
             })
             calls.push('initializer')
           })
-        },
+          },
+        }],
       }),
     },
   })
@@ -319,12 +457,14 @@ test('loadEnabledForumExtensions runs runtime application initializers', async (
     }),
     importers: {
       '../../../extensions/runtime-scoped/frontend/forum/index.js': async () => ({
-        bootForumExtension: async ({ app }) => {
+        extend: [{
+          extend(app) {
           assert.equal(app.initializers, runtimeApp.initializers)
           app.initializers.add('runtime-scoped', extensionApp => {
             calls.push(extensionApp.extension.id)
           })
-        },
+          },
+        }],
       }),
     },
   })
@@ -644,6 +784,12 @@ test('frontend dedicated extenders register notification post search and routes'
   const postTypes = []
   const searchFilters = []
   const themeModes = []
+  const forumNavItems = []
+  const dashboardStats = []
+  const adminPageCopies = []
+  const adminPageConfigs = []
+  const adminPageActionMeta = []
+  const adminPageNoteTemplates = []
   const adminRoutes = []
   const adminPages = []
   const adminSettings = []
@@ -678,6 +824,24 @@ test('frontend dedicated extenders register notification post search and routes'
       },
       registerThemeMode(definition) {
         themeModes.push(definition)
+      },
+      registerForumNavItem(definition) {
+        forumNavItems.push(definition)
+      },
+      registerAdminDashboardStat(definition) {
+        dashboardStats.push(definition)
+      },
+      registerAdminPageCopy(pageKey, definition) {
+        adminPageCopies.push({ pageKey, definition })
+      },
+      registerAdminPageConfig(pageKey, definition) {
+        adminPageConfigs.push({ pageKey, definition })
+      },
+      registerAdminPageActionMeta(pageKey, definition) {
+        adminPageActionMeta.push({ pageKey, definition })
+      },
+      registerAdminPageNoteTemplate(pageKey, definition) {
+        adminPageNoteTemplates.push({ pageKey, definition })
       },
       registerAdminRoute(definition) {
         adminRoutes.push(definition)
@@ -732,9 +896,17 @@ test('frontend dedicated extenders register notification post search and routes'
           .filter({ key: 'alpha', target: 'discussions', syntax: 'alpha:' })
           .gambit('posts', { key: 'flagged', syntax: 'is:flagged', label: 'Flagged' }),
         new ThemeModeExtender().add('sepia', 'Sepia'),
+        new ForumExtender().navItem({ key: 'alpha-nav', label: 'Alpha nav', order: 15 }),
+        new AdminDashboardExtender().stat({ key: 'alpha-stat', label: 'Alpha stat', order: 15 }),
+        new AdminPageExtender('alpha.page')
+          .copy({ key: 'alpha-copy', label: 'Alpha copy' })
+          .config({ key: 'alpha-config', value: true })
+          .actionMeta({ key: 'alpha-action-meta', title: 'Alpha action' })
+          .noteTemplate({ key: 'alpha-note', value: 'Alpha note' }),
         new RoutesExtender()
           .add('alpha.page', '/alpha', () => null, { meta: { title: 'Alpha' } })
           .helper('alphaUser', (app, id) => app.route('user', { id })),
+        new ExportsExtender().module('toolbox', { ready: true }),
         new AdminExtender().page({
           name: 'admin.alpha',
           path: '/admin/alpha',
@@ -768,11 +940,33 @@ test('frontend dedicated extenders register notification post search and routes'
   assert.equal(searchFilters.some(item => item.key === 'flagged'), true)
   assert.deepEqual(runtimeApp.search.gambits.gambits.posts, [{ key: 'flagged', syntax: 'is:flagged', label: 'Flagged' }])
   assert.deepEqual(themeModes[0], { id: 'sepia', mode: 'sepia', label: 'Sepia' })
+  assert.equal(forumNavItems[0].key, 'alpha-nav')
+  assert.equal(forumNavItems[0].extensionId, 'frontend')
+  assert.equal(dashboardStats[0].key, 'alpha-stat')
+  assert.equal(dashboardStats[0].moduleId, 'frontend')
+  assert.deepEqual(adminPageCopies[0], {
+    pageKey: 'alpha.page',
+    definition: {
+      key: 'alpha-copy',
+      label: 'Alpha copy',
+      extensionId: 'frontend',
+      extension_id: 'frontend',
+      moduleId: 'frontend',
+      module_id: 'frontend',
+    },
+  })
+  assert.equal(adminPageConfigs[0].definition.key, 'alpha-config')
+  assert.equal(adminPageConfigs[0].definition.extensionId, 'frontend')
+  assert.equal(adminPageActionMeta[0].definition.key, 'alpha-action-meta')
+  assert.equal(adminPageActionMeta[0].definition.extensionId, 'frontend')
+  assert.equal(adminPageNoteTemplates[0].definition.key, 'alpha-note')
+  assert.equal(adminPageNoteTemplates[0].definition.extensionId, 'frontend')
   assert.equal(runtimeApp.themeModes[0].id, 'sepia')
   assert.equal(routes[0].name, 'alpha.page')
   assert.equal(runtimeApp.routes.definitions['alpha.page'].path, '/alpha')
   assert.equal(runtimeApp.route.alphaUser(7), '/resolved/user/7')
-  assert.deepEqual(adminRegistryContexts, ['frontend'])
+  assert.deepEqual(runtimeApp.exportRegistry.get('frontend', 'toolbox'), { ready: true })
+  assert.deepEqual(adminRegistryContexts, ['frontend', 'frontend', 'frontend'])
   assert.equal(adminPages[0].path, '/admin/alpha')
   assert.equal(adminPages[0].extensionId, 'frontend')
   assert.deepEqual(adminSettings[0], { definition: { key: 'alpha_setting' }, priority: 10 })
@@ -798,10 +992,18 @@ test('common extenders export unified frontend extension entry', () => {
   assert.equal(extenders.Search, SearchExtender)
   assert.equal(extenders.ThemeMode, ThemeModeExtender)
   assert.equal(extenders.Admin, AdminExtender)
+  assert.equal(extenders.AdminDashboard, AdminDashboardExtender)
+  assert.equal(extenders.AdminPage, AdminPageExtender)
+  assert.equal(extenders.Exports, ExportsExtender)
+  assert.equal(extenders.Forum, ForumExtender)
   assert.equal(new Model(UserModel) instanceof ModelExtender, true)
   assert.equal(new Search().gambit('users', query => query) instanceof SearchExtender, true)
   assert.equal(new ThemeMode().add('dark', 'Dark') instanceof ThemeModeExtender, true)
   assert.equal(new Admin().page({ path: '/admin/demo' }) instanceof AdminExtender, true)
+  assert.equal(new AdminDashboard().stat({ key: 'demo' }) instanceof AdminDashboardExtender, true)
+  assert.equal(new AdminPage('demo.page').copy({ key: 'demo' }) instanceof AdminPageExtender, true)
+  assert.equal(new Exports().module('demo', {}) instanceof ExportsExtender, true)
+  assert.equal(new Forum().navItem({ key: 'demo' }) instanceof ForumExtender, true)
 })
 
 test('search gambits transform store find filter queries', async () => {
@@ -853,21 +1055,25 @@ test('loadEnabledForumExtensions runs initializers after all entries load', asyn
     }),
     importers: {
       '../../../extensions/first/frontend/forum/index.js': async () => ({
-        bootForumExtension: async ({ app }) => {
-          calls.push('first:boot')
+        extend: [{
+          extend(app) {
+          calls.push('first:extend')
           app.initializers.add('first', () => calls.push('first:init'))
-        },
+          },
+        }],
       }),
       '../../../extensions/second/frontend/forum/index.js': async () => ({
-        bootForumExtension: async ({ app }) => {
-          calls.push('second:boot')
+        extend: [{
+          extend(app) {
+          calls.push('second:extend')
           app.initializers.add('second', () => calls.push('second:init'))
-        },
+          },
+        }],
       }),
     },
   })
 
-  assert.deepEqual(calls, ['first:boot', 'second:boot', 'first:init', 'second:init'])
+  assert.deepEqual(calls, ['first:extend', 'second:extend', 'first:init', 'second:init'])
 })
 
 test('extension runtime supports lazy module patching and error dedupe', () => {

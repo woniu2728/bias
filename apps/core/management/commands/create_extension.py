@@ -163,10 +163,24 @@ class Command(BaseCommand):
 
     def _build_admin_index_source(self, extension_id: str) -> str:
         return (
+            "import { Admin } from '@bias/admin'\n"
             "import DetailPage from './DetailPage.vue'\n"
             "import OperationsPage from './OperationsPage.vue'\n"
             "import PermissionsPage from './PermissionsPage.vue'\n"
             "import SettingsPage from './SettingsPage.vue'\n\n"
+            "export const extend = [\n"
+            "  new Admin().page({\n"
+            f"    path: '/admin/extensions/{extension_id}',\n"
+            f"    name: 'admin-{extension_id}',\n"
+            "    component: DetailPage,\n"
+            "    icon: 'fas fa-puzzle-piece',\n"
+            f"    label: '{extension_id}',\n"
+            "    navDescription: '扩展后台入口已成功注册。',\n"
+            "    navSection: 'feature',\n"
+            "    navOrder: 1000,\n"
+            "    showInNavigation: false,\n"
+            "  }),\n"
+            "]\n\n"
             "export function resolveDetailPage() {\n"
             "  return DetailPage\n"
             "}\n\n"
@@ -222,9 +236,9 @@ class Command(BaseCommand):
 
     def _build_forum_index_source(self, extension_id: str, name: str) -> str:
         return (
-            "import { registerForumNavItem } from '@/forum/registry'\n\n"
-            "export async function bootForumExtension() {\n"
-            "  registerForumNavItem({\n"
+            "import { Forum } from '@bias/forum'\n\n"
+            "export const extend = [\n"
+            "  new Forum().navItem({\n"
             f"    key: '{extension_id}-entry',\n"
             f"    moduleId: '{extension_id}',\n"
             "    section: 'primary',\n"
@@ -233,8 +247,8 @@ class Command(BaseCommand):
             f"    label: '{name}',\n"
             "    to: '/',\n"
             "    description: '扩展前台入口已成功注册。',\n"
-            "  })\n"
-            "}\n"
+            "  }),\n"
+            "]\n"
         )
 
     def _build_settings_page_source(self, name: str) -> str:

@@ -253,10 +253,9 @@ class ApplicationViewService:
         raise FileNotFoundError(f"扩展模板不存在: {template_name}")
 
     def get_template(self, template_name: str):
-        from django.template import engines
+        from django.template.loader import get_template
 
-        path = self.resolve_template_path(template_name)
-        return engines["django"].from_string(path.read_text(encoding="utf-8"))
+        return get_template(template_name)
 
     def render(self, template_name: str, context: dict | None = None, *, request: Any = None) -> str:
         return self.get_template(template_name).render(context=dict(context or {}), request=request)

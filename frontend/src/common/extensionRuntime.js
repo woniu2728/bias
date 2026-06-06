@@ -1,9 +1,11 @@
+import { ensureExportRegistry } from './exportRegistry.js'
+import ItemList from './itemList.js'
+
 let currentExtensionId = ''
 const patchRecords = []
 const handledRuntimeErrors = new Set()
 const runtimeErrors = []
 const lazyModuleRegistry = new Map()
-const lazyModuleListeners = new Map()
 
 export function getCurrentExtensionId() {
   return currentExtensionId
@@ -44,21 +46,59 @@ export function createExtensionInitializers() {
       }
       removeMatching(items, item => item.extensionId === normalizedExtensionId)
     },
+    remove(extensionId = '') {
+      this.clear(extensionId)
+      return this
+    },
+    has(extensionId = '') {
+      const normalizedExtensionId = String(extensionId || '').trim()
+      return items.some(item => item.extensionId === normalizedExtensionId)
+    },
+    get(extensionId = '') {
+      const normalizedExtensionId = String(extensionId || '').trim()
+      return items.find(item => item.extensionId === normalizedExtensionId)?.callback || null
+    },
     list() {
       return [...items].sort((left, right) => {
         const priority = (right.priority || 0) - (left.priority || 0)
         return priority || left.order - right.order
       })
     },
+    toItemList() {
+      const list = new ItemList()
+      for (const initializer of items) {
+        list.add(
+          initializerName(initializer),
+          initializer.callback,
+          initializer.priority
+        )
+      }
+      return list
+    },
+    toArray(options = false) {
+      return this.toItemList().toArray(options)
+    },
+    toObject() {
+      return this.toItemList().toObject()
+    },
     async run(app, { onError } = {}) {
       const errors = []
       for (const initializer of this.list()) {
+        const contextApp = resolveInitializerContextApp(app)
+        const previousInitializerExtension = contextApp?.currentInitializerExtension ?? null
+        if (contextApp && 'currentInitializerExtension' in contextApp) {
+          contextApp.currentInitializerExtension = initializer.extensionId
+        }
         try {
           await runWithExtensionScope(initializer.extensionId, () => initializer.callback(app))
         } catch (error) {
           errors.push({ extensionId: initializer.extensionId, error })
           if (typeof onError === 'function') {
             onError(error, initializer.extensionId)
+          }
+        } finally {
+          if (contextApp && 'currentInitializerExtension' in contextApp) {
+            contextApp.currentInitializerExtension = previousInitializerExtension
           }
         }
       }
@@ -68,6 +108,11 @@ export function createExtensionInitializers() {
       const errors = []
       for (const initializer of this.list()) {
         const app = typeof resolveApp === 'function' ? resolveApp(initializer.extensionId) : null
+        const contextApp = resolveInitializerContextApp(app)
+        const previousInitializerExtension = contextApp?.currentInitializerExtension ?? null
+        if (contextApp && 'currentInitializerExtension' in contextApp) {
+          contextApp.currentInitializerExtension = initializer.extensionId
+        }
         try {
           await runWithExtensionScope(initializer.extensionId, () => initializer.callback(app))
         } catch (error) {
@@ -75,11 +120,24 @@ export function createExtensionInitializers() {
           if (typeof onError === 'function') {
             onError(error, initializer.extensionId)
           }
+        } finally {
+          if (contextApp && 'currentInitializerExtension' in contextApp) {
+            contextApp.currentInitializerExtension = previousInitializerExtension
+          }
         }
       }
       return errors
     },
   })
+}
+
+function initializerName(initializer) {
+  const suffix = Number.isFinite(initializer.order) ? initializer.order : 0
+  return `${initializer.extensionId}/${suffix}`
+}
+
+function resolveInitializerContextApp(app) {
+  return app?.application || app || null
 }
 
 export function createExtensionPatcher() {
@@ -161,12 +219,8 @@ export function registerLazyExtensionModule(key, module) {
   if (!normalizedKey) {
     return false
   }
+  ensureBiasNamespace().reg.registerModule(normalizedKey, module)
   lazyModuleRegistry.set(normalizedKey, module)
-  const listeners = lazyModuleListeners.get(normalizedKey) || []
-  lazyModuleListeners.delete(normalizedKey)
-  for (const listener of listeners) {
-    listener(module)
-  }
   return true
 }
 
@@ -182,6 +236,7 @@ export function registerLoadedExtensionModule(extensionId, module, {
   }
 
   const namespace = ensureBiasNamespace()
+  const normalizedFrontend = String(frontend || 'default').trim() || 'default'
   const globalRecord = namespace.extensions[normalizedExtensionId] || createLoadedExtensionRecord(normalizedExtensionId)
   const targetRecord = app?.extensions
     ? (app.extensions[normalizedExtensionId] || globalRecord)
@@ -195,6 +250,10 @@ export function registerLoadedExtensionModule(extensionId, module, {
   })
 
   namespace.extensions[normalizedExtensionId] = record
+  namespace.reg.register(normalizedExtensionId, normalizedFrontend, module)
+  if (entryPath) {
+    namespace.reg.registerModule(entryPath, module)
+  }
   if (app?.extensions) {
     app.extensions[normalizedExtensionId] = record
   }
@@ -229,14 +288,17 @@ export function onLazyModuleLoad(key, callback) {
   if (!normalizedKey || typeof callback !== 'function') {
     return false
   }
+  const registry = ensureBiasNamespace().reg
+  const registeredModule = registry.getModule(normalizedKey)
+  if (registeredModule) {
+    callback(registeredModule)
+    return true
+  }
   if (lazyModuleRegistry.has(normalizedKey)) {
     callback(lazyModuleRegistry.get(normalizedKey))
     return true
   }
-  const listeners = lazyModuleListeners.get(normalizedKey) || []
-  listeners.push(callback)
-  lazyModuleListeners.set(normalizedKey, listeners)
-  return true
+  return registry.onLoadPath(normalizedKey, callback)
 }
 
 export function getExtensionRuntimeErrors() {
@@ -294,6 +356,7 @@ function ensureBiasNamespace() {
   if (!globalThis.bias || typeof globalThis.bias !== 'object') {
     globalThis.bias = {}
   }
+  ensureExportRegistry(globalThis)
   if (!globalThis.bias.extensions || typeof globalThis.bias.extensions !== 'object') {
     globalThis.bias.extensions = Object.create(null)
   }

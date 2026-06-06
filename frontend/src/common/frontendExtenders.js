@@ -195,6 +195,60 @@ export class ThemeModeExtender {
   }
 }
 
+export class ForumExtender {
+  constructor(context = '') {
+    this.context = normalizeKey(context)
+    this.items = []
+  }
+
+  register(method, definition) {
+    const normalizedMethod = normalizeKey(method)
+    if (normalizedMethod && definition) {
+      this.items.push({ method: normalizedMethod, definition })
+    }
+    return this
+  }
+
+  navItem(definition) { return this.register('registerForumNavItem', definition) }
+  navSection(definition) { return this.register('registerForumNavSection', definition) }
+  headerItem(definition) { return this.register('registerHeaderItem', definition) }
+  discussionAction(definition) { return this.register('registerDiscussionAction', definition) }
+  discussionActionHandler(definition) { return this.register('registerDiscussionActionHandler', definition) }
+  discussionBadge(definition) { return this.register('registerDiscussionBadge', definition) }
+  discussionStateBadge(definition) { return this.register('registerDiscussionStateBadge', definition) }
+  discussionReplyState(definition) { return this.register('registerDiscussionReplyState', definition) }
+  discussionReviewBanner(definition) { return this.register('registerDiscussionReviewBanner', definition) }
+  postAction(definition) { return this.register('registerPostAction', definition) }
+  postActionHandler(definition) { return this.register('registerPostActionHandler', definition) }
+  postStateBadge(definition) { return this.register('registerPostStateBadge', definition) }
+  postReviewBanner(definition) { return this.register('registerPostReviewBanner', definition) }
+  postFlagPanel(definition) { return this.register('registerPostFlagPanel', definition) }
+  composerTool(definition) { return this.register('registerComposerTool', definition) }
+  composerNotice(definition) { return this.register('registerComposerNotice', definition) }
+  composerMentionProvider(definition) { return this.register('registerComposerMentionProvider', definition) }
+  composerPreviewTransformer(definition) { return this.register('registerComposerPreviewTransformer', definition) }
+  notificationRenderer(definition) { return this.register('registerNotificationRenderer', definition) }
+  emptyState(definition) { return this.register('registerEmptyState', definition) }
+  stateBlock(definition) { return this.register('registerStateBlock', definition) }
+  uiCopy(definition) { return this.register('registerUiCopy', definition) }
+  approvalNote(definition) { return this.register('registerApprovalNote', definition) }
+
+  extend(app, extension = {}) {
+    const registry = resolveRegistry(app)
+    const extensionId = normalizeKey(extension.name || app?.extension?.id || app?.application?.extension?.id || this.context)
+    const scopedRegistry = typeof registry?.for === 'function'
+      ? (registry.for(this.context || extensionId) || registry)
+      : registry
+    for (const item of this.items) {
+      const register = scopedRegistry?.[item.method]
+      if (typeof register !== 'function') {
+        continue
+      }
+      register(withExtensionId(resolveExtenderDefinition(item.definition), extensionId))
+    }
+  }
+}
+
 export class AdminExtender {
   constructor(context = '') {
     this.context = normalizeKey(context)
@@ -341,7 +395,7 @@ export class AdminExtender {
       }
 
       for (const item of this.settings) {
-        const setting = resolveAdminDefinition(item.setting)
+        const setting = resolveExtenderDefinition(item.setting)
         if (!setting) continue
         if (item.custom && typeof registry?.registerCustomSetting === 'function') {
           registry.registerCustomSetting(setting, item.priority)
@@ -361,7 +415,7 @@ export class AdminExtender {
       }
 
       for (const item of this.permissions) {
-        const permission = resolveAdminDefinition(item.permission)
+        const permission = resolveExtenderDefinition(item.permission)
         if (permission && typeof registry?.registerPermission === 'function') {
           registry.registerPermission(permission, item.type, item.priority)
         }
@@ -381,7 +435,7 @@ export class AdminExtender {
         generalIndex.for(context)
       }
       for (const item of this.generalIndexes) {
-        const values = resolveAdminDefinition(item.items) || []
+        const values = resolveExtenderDefinition(item.items) || []
         if (typeof generalIndex?.add === 'function') {
           generalIndex.add(item.type, values)
         } else if (typeof registry?.registerGeneralIndexItems === 'function') {
@@ -398,7 +452,122 @@ export class AdminExtender {
   }
 }
 
-function resolveAdminDefinition(value) {
+export class AdminDashboardExtender {
+  constructor(context = '') {
+    this.context = normalizeKey(context)
+    this.items = []
+  }
+
+  register(method, definition) {
+    const normalizedMethod = normalizeKey(method)
+    if (normalizedMethod && definition) {
+      this.items.push({ method: normalizedMethod, definition })
+    }
+    return this
+  }
+
+  stat(definition) { return this.register('registerAdminDashboardStat', definition) }
+  action(definition) { return this.register('registerAdminDashboardAction', definition) }
+  actionMeta(definition) { return this.register('registerAdminDashboardActionMeta', definition) }
+  alert(definition) { return this.register('registerAdminDashboardAlert', definition) }
+  config(definition) { return this.register('registerAdminDashboardConfig', definition) }
+  copy(definition) { return this.register('registerAdminDashboardCopy', definition) }
+  queueMetric(definition) { return this.register('registerAdminDashboardQueueMetric', definition) }
+  statusBadge(definition) { return this.register('registerAdminDashboardStatusBadge', definition) }
+  statusItem(definition) { return this.register('registerAdminDashboardStatusItem', definition) }
+  statusSummary(definition) { return this.register('registerAdminDashboardStatusSummary', definition) }
+
+  extend(app, extension = {}) {
+    const registry = resolveRegistry(app)
+    const extensionId = normalizeKey(extension.name || app?.extension?.id || app?.application?.extension?.id || this.context)
+    const scopedRegistry = typeof registry?.for === 'function'
+      ? (registry.for(this.context || extensionId) || registry)
+      : registry
+    for (const item of this.items) {
+      const register = scopedRegistry?.[item.method]
+      if (typeof register === 'function') {
+        register(withExtensionId(resolveExtenderDefinition(item.definition), extensionId))
+      }
+    }
+  }
+}
+
+export class AdminPageExtender {
+  constructor(pageKey = '', context = '') {
+    this.pageKey = normalizeKey(pageKey)
+    this.context = normalizeKey(context)
+    this.items = []
+  }
+
+  register(method, definition) {
+    const normalizedMethod = normalizeKey(method)
+    if (normalizedMethod && definition) {
+      this.items.push({ method: normalizedMethod, definition })
+    }
+    return this
+  }
+
+  copy(definition) { return this.register('registerAdminPageCopy', definition) }
+  config(definition) { return this.register('registerAdminPageConfig', definition) }
+  actionMeta(definition) { return this.register('registerAdminPageActionMeta', definition) }
+  noteTemplate(definition) { return this.register('registerAdminPageNoteTemplate', definition) }
+
+  extend(app, extension = {}) {
+    const registry = resolveRegistry(app)
+    const pageKey = this.pageKey
+    if (!pageKey || !registry) {
+      return
+    }
+    const extensionId = normalizeKey(extension.name || app?.extension?.id || app?.application?.extension?.id || this.context)
+    for (const item of this.items) {
+      const register = registry?.[item.method]
+      if (typeof register === 'function') {
+        register(pageKey, withExtensionId(resolveExtenderDefinition(item.definition), extensionId))
+      }
+    }
+  }
+}
+
+export class ExportsExtender {
+  constructor(namespace = '') {
+    this.namespace = normalizeKey(namespace)
+    this.modules = []
+    this.chunks = []
+  }
+
+  module(id, value) {
+    const normalizedId = normalizeKey(id)
+    if (normalizedId && value != null) {
+      this.modules.push({ id: normalizedId, value })
+    }
+    return this
+  }
+
+  chunk(id, modules = {}) {
+    const normalizedId = normalizeKey(id)
+    if (normalizedId && modules && typeof modules === 'object') {
+      this.chunks.push({ id: normalizedId, modules })
+    }
+    return this
+  }
+
+  extend(app, extension = {}) {
+    const targetApp = resolveApplication(app)
+    const registry = targetApp?.exportRegistry || app?.exportRegistry
+    const namespace = this.namespace || normalizeKey(extension.name || app?.extension?.id || targetApp?.extension?.id)
+    if (!namespace || !registry) {
+      return
+    }
+    for (const item of this.modules) {
+      registry.register(namespace, item.id, item.value)
+    }
+    for (const item of this.chunks) {
+      registry.registerChunk(namespace, item.id, item.modules)
+    }
+  }
+}
+
+function resolveExtenderDefinition(value) {
   return typeof value === 'function' ? value() : value
 }
 
@@ -408,6 +577,19 @@ function resolveApplication(app) {
 
 function resolveRegistry(app) {
   return app?.registry || app?.application?.registry || null
+}
+
+function withExtensionId(value, extensionId) {
+  if (!extensionId || !value || typeof value !== 'object') {
+    return value
+  }
+  return {
+    ...value,
+    extensionId: value.extensionId || value.extension_id || extensionId,
+    extension_id: value.extension_id || value.extensionId || extensionId,
+    moduleId: value.moduleId || value.module_id || extensionId,
+    module_id: value.module_id || value.moduleId || extensionId,
+  }
 }
 
 function normalizeComponentDefinition(type, definitionOrComponent) {

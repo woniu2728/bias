@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from hashlib import sha256
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -227,8 +228,10 @@ def write_extension_frontend_import_map(manifest: dict) -> Path:
 
 def build_extension_frontend_output_manifest(manifest: dict) -> dict:
     vite_manifest = _read_json(get_frontend_vite_manifest_path())
+    revision = _build_frontend_revision(vite_manifest)
     output = {
         "generated_at": timezone.now().isoformat(),
+        "revision": revision,
         "extensions": {},
         "vite_manifest_path": str(get_frontend_vite_manifest_path()),
         "vite_manifest_exists": bool(vite_manifest),
@@ -238,9 +241,10 @@ def build_extension_frontend_output_manifest(manifest: dict) -> dict:
         forum_entry = str(payload.get("forum_entry") or "").strip()
         output["extensions"][extension_id] = {
             **dict(payload),
+            "revision": revision,
             "outputs": {
-                "admin": _resolve_vite_entry(vite_manifest, admin_entry),
-                "forum": _resolve_vite_entry(vite_manifest, forum_entry),
+                "admin": _resolve_vite_entry(vite_manifest, admin_entry, revision=revision),
+                "forum": _resolve_vite_entry(vite_manifest, forum_entry, revision=revision),
             },
         }
     return output
@@ -355,7 +359,7 @@ def _forum_loader_key(entry: str) -> str:
     return normalized
 
 
-def _resolve_vite_entry(vite_manifest: dict, entry: str) -> dict:
+def _resolve_vite_entry(vite_manifest: dict, entry: str, *, revision: str = "") -> dict:
     normalized = str(entry or "").strip().replace("\\", "/")
     if not normalized:
         return {}
@@ -369,13 +373,65 @@ def _resolve_vite_entry(vite_manifest: dict, entry: str) -> dict:
     for key in candidates:
         payload = vite_manifest.get(key)
         if isinstance(payload, dict):
+            dynamic_imports = list(payload.get("dynamicImports") or [])
             return {
                 "file": payload.get("file", ""),
                 "css": list(payload.get("css") or []),
                 "imports": list(payload.get("imports") or []),
-                "dynamic_imports": list(payload.get("dynamicImports") or []),
+                "dynamic_imports": dynamic_imports,
+                "revision": revision,
+                "chunks": _resolve_vite_chunks(vite_manifest, dynamic_imports, revision=revision),
             }
     return {}
+
+
+def _resolve_vite_chunks(vite_manifest: dict, dynamic_imports: list[str], *, revision: str = "") -> list[dict]:
+    chunks = []
+    for key in dynamic_imports:
+        normalized_key = str(key or "").strip().replace("\\", "/")
+        if not normalized_key:
+            continue
+        payload = vite_manifest.get(normalized_key)
+        if not isinstance(payload, dict):
+            chunks.append({
+                "key": normalized_key,
+                "module_id": _resolve_vite_module_id(normalized_key),
+                "file": normalized_key,
+                "css": [],
+                "imports": [],
+                "dynamic_imports": [],
+                "revision": revision,
+            })
+            continue
+        nested_dynamic_imports = list(payload.get("dynamicImports") or [])
+        chunks.append({
+            "key": normalized_key,
+            "module_id": _resolve_vite_module_id(normalized_key),
+            "file": str(payload.get("file") or "").strip(),
+            "css": list(payload.get("css") or []),
+            "imports": list(payload.get("imports") or []),
+            "dynamic_imports": nested_dynamic_imports,
+            "revision": revision,
+        })
+    return chunks
+
+
+def _build_frontend_revision(vite_manifest: dict) -> str:
+    if not vite_manifest:
+        return ""
+    payload = json.dumps(vite_manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _resolve_vite_module_id(key: str) -> str:
+    normalized = str(key or "").strip().replace("\\", "/").lstrip("./")
+    marker = "extensions/"
+    if marker in normalized:
+        suffix = normalized.split(marker, 1)[1]
+        parts = suffix.split("/", 1)
+        if len(parts) == 2:
+            return parts[1]
+    return normalized
 
 
 def _read_json(path: Path) -> dict:

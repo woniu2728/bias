@@ -262,13 +262,13 @@ def _build_frontend_forum_check(root_path: Path | None, extension: Extension) ->
     forum_file = root_path / "frontend" / "forum" / "index.js" if root_path else None
     if forum_file and forum_file.exists():
         source = forum_file.read_text(encoding="utf-8")
-        if "export async function bootForumExtension" not in source and "export function bootForumExtension" not in source:
+        if not _source_exports_extend(source):
             return ExtensionDeliveryCheckDefinition(
                 key="frontend-forum-entry",
                 label="前台入口",
                 status="attention",
                 status_label="缺少导出",
-                message="frontend/forum/index.js 存在，但没有导出 bootForumExtension。",
+                message="frontend/forum/index.js 存在，但没有导出 extend。",
                 path=str(forum_file),
                 optional=True,
             )
@@ -289,6 +289,15 @@ def _build_frontend_forum_check(root_path: Path | None, extension: Extension) ->
         message="contract 已声明 frontend_forum_entry，但 frontend/forum/index.js 不存在。",
         path=str(forum_file or ""),
         optional=True,
+    )
+
+
+def _source_exports_extend(source: str) -> bool:
+    return (
+        "export const extend" in source
+        or "export let extend" in source
+        or "export var extend" in source
+        or "export { extend" in source
     )
 
 

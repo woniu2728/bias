@@ -6,7 +6,10 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@bias/core': fileURLToPath(new URL('./src/common/sdk.js', import.meta.url)),
+      '@bias/admin': fileURLToPath(new URL('./src/admin/sdk.js', import.meta.url)),
+      '@bias/forum': fileURLToPath(new URL('./src/forum/sdk.js', import.meta.url))
     }
   },
   server: {

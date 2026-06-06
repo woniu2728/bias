@@ -1,12 +1,10 @@
-import {
-  registerAdminPageActionMeta,
-  registerAdminPageConfig,
-  registerAdminPageCopy,
-} from '@/admin/registry'
+import { AdminPage } from '@bias/admin'
 
 const PAGE_KEY = 'flags.index'
 
-registerAdminPageCopy(PAGE_KEY, {
+export function buildFlagsPageExtender() {
+  return new AdminPage(PAGE_KEY)
+    .copy({
   key: 'flags-page-copy',
   order: 10,
   resolve: () => ({
@@ -38,8 +36,7 @@ registerAdminPageCopy(PAGE_KEY, {
     ignoreNotePlaceholder: '例如：举报理由不足，暂不处理',
   }),
 })
-
-registerAdminPageConfig(PAGE_KEY, {
+    .config({
   key: 'flags-page-config',
   order: 10,
   resolve: () => ({
@@ -50,8 +47,7 @@ registerAdminPageConfig(PAGE_KEY, {
     ],
   }),
 })
-
-registerAdminPageActionMeta(PAGE_KEY, {
+    .actionMeta({
   key: 'flags-page-actions-meta',
   order: 10,
   resolve: () => ({
@@ -64,3 +60,4 @@ registerAdminPageActionMeta(PAGE_KEY, {
     resolveFailedMessage: '未知错误',
   }),
 })
+}

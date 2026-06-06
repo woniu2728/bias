@@ -1,16 +1,22 @@
+import { Forum } from '@bias/forum'
 import {
   PostReportModal,
   forumApi,
   getUiCopy,
-  registerPostAction,
-  registerPostActionHandler,
-  registerPostFlagPanel,
-  registerPostStateBadge,
-  registerUiCopy,
 } from '@/forum/registry'
 
-export async function bootForumExtension() {
-  registerPostAction({
+export const extend = [
+  buildFlagsForumExtender(),
+]
+
+function buildFlagsForumExtender() {
+  const forum = new Forum()
+  registerFlagsForum(forum)
+  return forum
+}
+
+function registerFlagsForum(forum) {
+  forum.postAction({
     key: 'open-report-modal',
     moduleId: 'flags',
     order: 30,
@@ -24,14 +30,14 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerPostActionHandler({
+  forum.postActionHandler({
     key: 'open-report-modal',
     moduleId: 'flags',
     order: 10,
     handle: handleOpenReportModal,
   })
 
-  registerPostActionHandler({
+  forum.postActionHandler({
     key: 'resolve-post-flags',
     moduleId: 'flags',
     order: 10,
@@ -39,7 +45,7 @@ export async function bootForumExtension() {
     handle: handleResolvePostFlags,
   })
 
-  registerPostStateBadge({
+  forum.postStateBadge({
     key: 'viewer-open-flag',
     moduleId: 'flags',
     order: 30,
@@ -51,7 +57,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerPostStateBadge({
+  forum.postStateBadge({
     key: 'open-flags',
     moduleId: 'flags',
     order: 40,
@@ -63,7 +69,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerPostFlagPanel({
+  forum.postFlagPanel({
     key: 'moderation-flags',
     moduleId: 'flags',
     order: 10,
@@ -97,7 +103,7 @@ export async function bootForumExtension() {
     }),
   })
 
-  registerFlagsUiCopy()
+  registerFlagsUiCopy(forum)
 }
 
 async function handleOpenReportModal({
@@ -216,8 +222,8 @@ function resolveText(uiText, surface, fallback, context = {}) {
   return typeof uiText === 'function' ? uiText(surface, fallback, context) : fallback
 }
 
-function registerFlagsUiCopy() {
-  registerUiCopy({
+function registerFlagsUiCopy(forum) {
+  forum.uiCopy({
     key: 'post-action-report-label',
     moduleId: 'flags',
     order: 479,
@@ -225,7 +231,7 @@ function registerFlagsUiCopy() {
     resolve: () => ({ text: '举报' }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'post-action-report-description',
     moduleId: 'flags',
     order: 479,
@@ -233,7 +239,7 @@ function registerFlagsUiCopy() {
     resolve: () => ({ text: '向版主提交这条回复的问题反馈。' }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-detail-report-success-title',
     moduleId: 'flags',
     order: 479,
@@ -241,7 +247,7 @@ function registerFlagsUiCopy() {
     resolve: () => ({ text: '举报已提交' }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-detail-report-success-message',
     moduleId: 'flags',
     order: 479,
@@ -249,7 +255,7 @@ function registerFlagsUiCopy() {
     resolve: () => ({ text: '版主会尽快查看并处理。' }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-detail-flag-resolve-confirm-title',
     moduleId: 'flags',
     order: 479,
@@ -257,7 +263,7 @@ function registerFlagsUiCopy() {
     resolve: ({ isIgnoring }) => ({ text: isIgnoring ? '忽略举报' : '处理举报' }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-detail-flag-resolve-confirm-message',
     moduleId: 'flags',
     order: 479,
@@ -269,7 +275,7 @@ function registerFlagsUiCopy() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-detail-flag-resolve-confirm-confirm',
     moduleId: 'flags',
     order: 479,
@@ -277,7 +283,7 @@ function registerFlagsUiCopy() {
     resolve: ({ isIgnoring }) => ({ text: isIgnoring ? '忽略' : '已处理' }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-detail-flag-resolve-success-title',
     moduleId: 'flags',
     order: 479,
@@ -285,7 +291,7 @@ function registerFlagsUiCopy() {
     resolve: ({ isIgnoring }) => ({ text: isIgnoring ? '举报已忽略' : '举报已处理' }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'discussion-detail-flag-resolve-success-message',
     moduleId: 'flags',
     order: 479,
@@ -295,7 +301,7 @@ function registerFlagsUiCopy() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'post-report-title',
     moduleId: 'flags',
     order: 840,
@@ -303,7 +309,7 @@ function registerFlagsUiCopy() {
     resolve: () => ({ text: '举报帖子' }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'post-report-description',
     moduleId: 'flags',
     order: 850,
@@ -313,7 +319,7 @@ function registerFlagsUiCopy() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'post-report-reason-label',
     moduleId: 'flags',
     order: 860,
@@ -321,7 +327,7 @@ function registerFlagsUiCopy() {
     resolve: () => ({ text: '举报原因' }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'post-report-message-label',
     moduleId: 'flags',
     order: 870,
@@ -329,7 +335,7 @@ function registerFlagsUiCopy() {
     resolve: () => ({ text: '补充说明' }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'post-report-message-help',
     moduleId: 'flags',
     order: 880,
@@ -339,7 +345,7 @@ function registerFlagsUiCopy() {
     }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'post-report-message-placeholder',
     moduleId: 'flags',
     order: 890,
@@ -347,7 +353,7 @@ function registerFlagsUiCopy() {
     resolve: () => ({ text: '告诉管理员这条帖子为什么需要处理' }),
   })
 
-  registerUiCopy({
+  forum.uiCopy({
     key: 'post-report-submit-button',
     moduleId: 'flags',
     order: 900,

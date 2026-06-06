@@ -39,6 +39,7 @@ def bootstrap_extension_frontend_runtime() -> None:
         item.extension_id: item
         for item in host.get_frontend_extensions()
     }
+    frontend_outputs = _get_extension_frontend_outputs()
     for extension_id, extension in extension_map.items():
         runtime_view = host.get_extension_view(extension_id)
         frontend = frontend_map.get(extension_id)
@@ -58,6 +59,7 @@ def bootstrap_extension_frontend_runtime() -> None:
             "frontend_admin_entry": admin_entry,
             "frontend_forum_entry": forum_entry,
             "frontend_common_entry": common_entry,
+            "frontend_outputs": dict(frontend_outputs.get(extension_id) or {}),
             "frontend_routes": _serialize_frontend_routes(frontend_routes),
             "frontend_document": _build_frontend_document_payload(runtime_view),
             "settings_pages": list((frontend.settings_pages if frontend else runtime_view.settings_pages) or ()),
@@ -128,6 +130,7 @@ def _build_runtime_entry(
     forum_entry = str((frontend.forum_entry if frontend else runtime_view.frontend_forum_entry) or "").strip()
     common_entry = str((frontend.common_entry if frontend else runtime_view.frontend_common_entry) or "").strip()
     frontend_routes = tuple((frontend.routes if frontend else runtime_view.frontend_routes) or ())
+    frontend_outputs = _get_extension_frontend_outputs().get(runtime_view.extension_id) or {}
     settings_definition = {
         "forum_settings_keys": tuple(runtime_view.forum_settings_keys),
         "forum_serializations": tuple(runtime_view.settings_forum_serializations),
@@ -143,6 +146,7 @@ def _build_runtime_entry(
         "frontend_admin_entry": admin_entry,
         "frontend_forum_entry": forum_entry,
         "frontend_common_entry": common_entry,
+        "frontend_outputs": dict(frontend_outputs),
         "frontend_routes": _serialize_frontend_routes(frontend_routes),
         "frontend_document": _build_frontend_document_payload(runtime_view, settings_values=settings_values),
         "settings_pages": list((frontend.settings_pages if frontend else runtime_view.settings_pages) or ()),
@@ -162,6 +166,16 @@ def _build_runtime_entry(
         ),
     })
     return static_entry
+
+
+def _get_extension_frontend_outputs() -> dict[str, dict[str, Any]]:
+    from apps.core.extensions.frontend_compiler import inspect_extension_frontend_output_manifest
+
+    output_manifest = inspect_extension_frontend_output_manifest()
+    outputs: dict[str, dict[str, Any]] = {}
+    for extension_id, payload in dict(output_manifest.get("extensions") or {}).items():
+        outputs[str(extension_id)] = dict(dict(payload or {}).get("outputs") or {})
+    return outputs
 
 
 def _is_product_visible_frontend_extension(

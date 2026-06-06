@@ -1,21 +1,20 @@
-import {
-  registerEmptyState,
-  registerForumNavItem,
-  registerHeaderItem,
-  registerNotificationRenderer,
-  registerStateBlock,
-  registerUiCopy,
-} from '@/forum/registry'
+import { Forum } from '@bias/forum'
 
-export async function bootForumExtension() {
-  registerNavigation()
-  registerNotificationRenderers()
-  registerNotificationStates()
-  registerNotificationCopy()
+export const extend = [
+  buildNotificationsForumExtender(),
+]
+
+function buildNotificationsForumExtender() {
+  const forum = new Forum()
+  registerNavigation(forum)
+  registerNotificationRenderers(forum)
+  registerNotificationStates(forum)
+  registerNotificationCopy(forum)
+  return forum
 }
 
-function registerNavigation() {
-  registerForumNavItem({
+function registerNavigation(forum) {
+  forum.navItem({
     key: 'notifications',
     moduleId: 'notifications',
     to: '/notifications',
@@ -31,7 +30,7 @@ function registerNavigation() {
     isVisible: ({ showNotifications }) => Boolean(showNotifications),
   })
 
-  registerHeaderItem({
+  forum.headerItem({
     key: 'user-notifications-menu',
     moduleId: 'notifications',
     placement: 'user-menu',
@@ -47,7 +46,7 @@ function registerNavigation() {
     isActive: ({ route }) => route?.name === 'notifications',
   })
 
-  registerHeaderItem({
+  forum.headerItem({
     key: 'mobile-notifications',
     moduleId: 'notifications',
     placement: 'mobile-drawer-personal',
@@ -64,8 +63,8 @@ function registerNavigation() {
   })
 }
 
-function registerNotificationRenderers() {
-  registerNotificationRenderer({
+function registerNotificationRenderers(forum) {
+  forum.notificationRenderer({
     type: 'postReply',
     key: 'postReply',
     moduleId: 'notifications',
@@ -80,7 +79,7 @@ function registerNotificationRenderers() {
     },
   })
 
-  registerNotificationRenderer({
+  forum.notificationRenderer({
     type: 'userSuspended',
     key: 'userSuspended',
     moduleId: 'notifications',
@@ -96,7 +95,7 @@ function registerNotificationRenderers() {
     },
   })
 
-  registerNotificationRenderer({
+  forum.notificationRenderer({
     type: 'userUnsuspended',
     key: 'userUnsuspended',
     moduleId: 'notifications',
@@ -112,8 +111,8 @@ function registerNotificationRenderers() {
   })
 }
 
-function registerNotificationStates() {
-  registerEmptyState({
+function registerNotificationStates(forum) {
+  forum.emptyState({
     key: 'notifications-page-unread-empty',
     moduleId: 'notifications',
     order: 10,
@@ -122,7 +121,7 @@ function registerNotificationStates() {
     resolve: () => ({ text: '当前没有未读通知' }),
   })
 
-  registerEmptyState({
+  forum.emptyState({
     key: 'notifications-page-filter-empty',
     moduleId: 'notifications',
     order: 20,
@@ -131,7 +130,7 @@ function registerNotificationStates() {
     resolve: () => ({ text: '当前筛选下暂无通知' }),
   })
 
-  registerEmptyState({
+  forum.emptyState({
     key: 'notifications-page-default-empty',
     moduleId: 'notifications',
     order: 30,
@@ -140,7 +139,7 @@ function registerNotificationStates() {
     resolve: () => ({ text: '暂无通知' }),
   })
 
-  registerEmptyState({
+  forum.emptyState({
     key: 'notifications-menu-empty',
     moduleId: 'notifications',
     order: 40,
@@ -149,7 +148,7 @@ function registerNotificationStates() {
     resolve: () => ({ text: '暂无通知' }),
   })
 
-  registerStateBlock({
+  forum.stateBlock({
     key: 'notifications-page-loading',
     moduleId: 'notifications',
     order: 20,
@@ -158,7 +157,7 @@ function registerNotificationStates() {
     resolve: () => ({ text: '正在加载通知...' }),
   })
 
-  registerStateBlock({
+  forum.stateBlock({
     key: 'notifications-menu-loading',
     moduleId: 'notifications',
     order: 30,
@@ -168,7 +167,7 @@ function registerNotificationStates() {
   })
 }
 
-function registerNotificationCopy() {
+function registerNotificationCopy(forum) {
   const copies = [
     ['notification-filter-all-label', 479, () => '全部通知'],
     ['notification-view-mode-timeline', 479, () => '时间流'],
@@ -241,7 +240,7 @@ function registerNotificationCopy() {
   ]
 
   for (const [key, order, resolveText] of copies) {
-    registerUiCopy({
+    forum.uiCopy({
       key,
       moduleId: 'notifications',
       order,

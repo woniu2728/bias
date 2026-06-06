@@ -2,6 +2,8 @@ import SampleHelloDetailPage from './SampleHelloDetailPage.vue'
 import SampleHelloOperationsPage from './SampleHelloOperationsPage.vue'
 import SampleHelloSettingsPage from './SampleHelloSettingsPage.vue'
 
+export const extend = []
+
 export function resolveDetailPage() {
   return SampleHelloDetailPage
 }

@@ -1,12 +1,10 @@
-import {
-  registerAdminPageActionMeta,
-  registerAdminPageConfig,
-  registerAdminPageCopy,
-} from '@/admin/registry'
+import { AdminPage } from '@bias/admin'
 
 const PAGE_KEY = 'tags.index'
 
-registerAdminPageCopy(PAGE_KEY, {
+export function buildTagsPageExtender() {
+  return new AdminPage(PAGE_KEY)
+    .copy({
   key: 'tags-page-copy',
   order: 10,
   resolve: () => ({
@@ -94,8 +92,7 @@ registerAdminPageCopy(PAGE_KEY, {
     configPostingLabel: '发帖 / 回帖',
   }),
 })
-
-registerAdminPageConfig(PAGE_KEY, {
+    .config({
   key: 'tags-page-config',
   order: 10,
   resolve: () => ({
@@ -158,8 +155,7 @@ registerAdminPageConfig(PAGE_KEY, {
     ],
   }),
 })
-
-registerAdminPageActionMeta(PAGE_KEY, {
+    .actionMeta({
   key: 'tags-page-actions-meta',
   order: 10,
   resolve: () => ({
@@ -186,3 +182,4 @@ registerAdminPageActionMeta(PAGE_KEY, {
     moveFailedMessage: '未知错误',
   }),
 })
+}

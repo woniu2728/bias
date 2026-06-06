@@ -1,6 +1,6 @@
 import { ExtensionGeneratedPermissionsPage } from '@/admin/registry'
 
-export function bootAdminExtension() {}
+export const extend = []
 
 export function resolvePermissionsPage() {
   return ExtensionGeneratedPermissionsPage

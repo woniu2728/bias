@@ -1,4 +1,7 @@
 import { getExtensionRuntimeErrors, handleExtensionRuntimeError } from './extensionRuntime.js'
+import { ensureExportRegistry } from './exportRegistry.js'
+import ItemList from './itemList.js'
+import { createExtensionRegistry } from './listRegistry.js'
 
 export function createExtensionAppApi({
   application = null,
@@ -11,6 +14,9 @@ export function createExtensionAppApi({
 } = {}) {
   const cache = Object.create(null)
   const extensionId = String(extension?.id || '').trim()
+  const extensionRegistry = application?.extensionRegistry || createExtensionRegistry()
+  const exportRegistry = application?.exportRegistry || ensureExportRegistry()
+  const scopedRegistry = extensionRegistry.scoped(extensionId)
 
   return {
     application,
@@ -21,6 +27,10 @@ export function createExtensionAppApi({
     route: application?.route,
     routes: application?.routes,
     search: application?.search,
+    ItemList,
+    items: scopedRegistry,
+    extensionRegistry: scopedRegistry,
+    exportRegistry,
     notificationComponents: application?.notificationComponents,
     postComponents: application?.postComponents,
     session: session || application?.session || createSessionApi(),

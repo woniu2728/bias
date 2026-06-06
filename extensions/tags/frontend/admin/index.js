@@ -1,9 +1,9 @@
-import { registerAdminRoute } from '@/admin/registry'
+import { Admin } from '@bias/admin'
 import TagsPage from './TagsPage.vue'
-import './tagsPageBootstrap.js'
+import { buildTagsPageExtender } from './tagsPageBootstrap.js'
 
-export function bootAdminExtension() {
-  registerAdminRoute({
+export const extend = [
+  new Admin().route({
     path: '/admin/tags',
     name: 'admin-tags',
     component: TagsPage,
@@ -15,9 +15,11 @@ export function bootAdminExtension() {
     showInNavigation: true,
     showInDashboardActions: true,
     dashboardActionLabel: '管理标签',
-    moduleId: 'tags'
-  })
-}
+    moduleId: 'tags',
+  }),
+
+  buildTagsPageExtender(),
+]
 
 export function resolveSettingsPage() {
   return TagsPage

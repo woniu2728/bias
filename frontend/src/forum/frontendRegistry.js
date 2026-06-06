@@ -33,6 +33,7 @@ const stateBlocks = []
 const uiCopies = []
 
 import { getCurrentExtensionId } from '../common/extensionRuntime.js'
+import ItemList from '../common/itemList.js'
 
 const registryTargets = [
   forumNavItems,
@@ -79,6 +80,15 @@ function upsertByKey(target, key, value) {
 
   target.push(value)
   return value
+}
+
+function orderedRegisteredItems(target) {
+  const items = new ItemList()
+  target.forEach((item, index) => {
+    const key = String(item?.key || item?.name || item?.type || index).trim()
+    items.add(key, item, -(Number(item?.order ?? item?.priority ?? 100) || 100))
+  })
+  return items.toArray()
 }
 
 function normalizeRegisteredItem(item, defaults = {}) {
@@ -199,8 +209,7 @@ export function registerForumNavSection(section) {
 }
 
 export function getForumNavItems(context = {}) {
-  return [...forumNavItems]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(forumNavItems)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -208,8 +217,7 @@ export function getForumNavItems(context = {}) {
 export function getForumNavSections(context = {}) {
   const items = getForumNavItems(context)
   const sectionMap = new Map(
-    [...forumNavSections]
-      .sort((left, right) => (left.order || 100) - (right.order || 100))
+    orderedRegisteredItems(forumNavSections)
       .map(section => [section.key, { ...section, items: [] }])
   )
 
@@ -250,16 +258,14 @@ export function getDiscussionActionHandler(actionKey, context = {}) {
     return null
   }
 
-  return [...discussionActionHandlers]
+  return orderedRegisteredItems(discussionActionHandlers)
     .filter(item => String(item.key || '') === normalizedActionKey)
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
     .map(item => resolveRegisteredItem(item, context))
     .find(item => typeof item?.handle === 'function') || null
 }
 
 export function getDiscussionActions(context = {}) {
-  return [...discussionActionItems]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(discussionActionItems)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -280,16 +286,14 @@ export function getPostActionHandler(actionKey, context = {}) {
     return null
   }
 
-  return [...postActionHandlers]
+  return orderedRegisteredItems(postActionHandlers)
     .filter(item => String(item.key || '') === normalizedActionKey)
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
     .map(item => resolveRegisteredItem(item, context))
     .find(item => typeof item?.handle === 'function') || null
 }
 
 export function getPostActions(context = {}) {
-  return [...postActionItems]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(postActionItems)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -302,9 +306,8 @@ export function registerHeaderItem(item) {
 }
 
 export function getHeaderItems(context = {}, placement = '') {
-  return [...headerItems]
+  return orderedRegisteredItems(headerItems)
     .filter(item => !placement || item.placement === placement)
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -315,8 +318,7 @@ export function registerComposerTool(item) {
 }
 
 export function getComposerTools(context = {}) {
-  return [...composerTools]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(composerTools)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -327,8 +329,7 @@ export function registerComposerNotice(item) {
 }
 
 export function getComposerNotices(context = {}) {
-  return [...composerNotices]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(composerNotices)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -344,8 +345,7 @@ export function registerComposerSecondaryAction(item) {
 }
 
 export function getComposerSecondaryActions(context = {}) {
-  return [...composerSecondaryActions]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(composerSecondaryActions)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -356,8 +356,7 @@ export function registerComposerStatusItem(item) {
 }
 
 export function getComposerStatusItems(context = {}) {
-  return [...composerStatusItems]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(composerStatusItems)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -368,8 +367,7 @@ export function registerComposerDraftMeta(item) {
 }
 
 export function getComposerDraftMeta(context = {}) {
-  return [...composerDraftMetaItems]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(composerDraftMetaItems)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -395,8 +393,7 @@ export function registerProfilePanel(item) {
 }
 
 export function getProfilePanels(context = {}) {
-  return [...profilePanels]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(profilePanels)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -420,8 +417,7 @@ export function registerNotificationRenderer(item) {
 }
 
 export function getNotificationRenderers(context = {}) {
-  return [...notificationRenderers]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(notificationRenderers)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -434,8 +430,7 @@ export function registerSearchSource(item) {
 }
 
 export function getSearchSources(context = {}) {
-  return [...searchSources]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(searchSources)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -446,8 +441,7 @@ export function registerUserBadge(item) {
 }
 
 export function getUserBadges(context = {}) {
-  return [...userBadges]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(userBadges)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -458,8 +452,7 @@ export function registerDiscussionBadge(item) {
 }
 
 export function getDiscussionBadges(context = {}) {
-  return [...discussionBadges]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(discussionBadges)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -470,8 +463,7 @@ export function registerDiscussionStateBadge(item) {
 }
 
 export function getDiscussionStateBadges(context = {}) {
-  return [...discussionStateBadges]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(discussionStateBadges)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -482,8 +474,7 @@ export function registerPostStateBadge(item) {
 }
 
 export function getPostStateBadges(context = {}) {
-  return [...postStateBadges]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(postStateBadges)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -494,8 +485,7 @@ export function registerHeroMeta(item) {
 }
 
 export function getHeroMetaItems(context = {}) {
-  return [...heroMetaItems]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  return orderedRegisteredItems(heroMetaItems)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 }
@@ -506,8 +496,7 @@ export function registerDiscussionReplyState(item) {
 }
 
 export function getDiscussionReplyState(context = {}) {
-  const resolvedItems = [...discussionReplyStates]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const resolvedItems = orderedRegisteredItems(discussionReplyStates)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 
@@ -530,8 +519,7 @@ export function registerPostReviewBanner(item) {
 }
 
 export function getPostReviewBanner(context = {}) {
-  const resolvedItems = [...postReviewBanners]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const resolvedItems = orderedRegisteredItems(postReviewBanners)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 
@@ -554,8 +542,7 @@ export function registerDiscussionReviewBanner(item) {
 }
 
 export function getDiscussionReviewBanner(context = {}) {
-  const resolvedItems = [...discussionReviewBanners]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const resolvedItems = orderedRegisteredItems(discussionReviewBanners)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 
@@ -578,8 +565,7 @@ export function registerPostFlagPanel(item) {
 }
 
 export function getPostFlagPanel(context = {}) {
-  const resolvedItems = [...postFlagPanels]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const resolvedItems = orderedRegisteredItems(postFlagPanels)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 
@@ -602,8 +588,7 @@ export function registerApprovalNote(item) {
 }
 
 export function getApprovalNote(context = {}) {
-  const resolvedItems = [...approvalNotes]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const resolvedItems = orderedRegisteredItems(approvalNotes)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 
@@ -626,8 +611,7 @@ export function registerEmptyState(item) {
 }
 
 export function getEmptyState(context = {}) {
-  const resolvedItems = [...emptyStates]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const resolvedItems = orderedRegisteredItems(emptyStates)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 
@@ -650,8 +634,7 @@ export function registerPageState(item) {
 }
 
 export function getPageState(context = {}) {
-  const resolvedItems = [...pageStates]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const resolvedItems = orderedRegisteredItems(pageStates)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 
@@ -674,8 +657,7 @@ export function registerStateBlock(item) {
 }
 
 export function getStateBlock(context = {}) {
-  const resolvedItems = [...stateBlocks]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const resolvedItems = orderedRegisteredItems(stateBlocks)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 
@@ -698,8 +680,7 @@ export function registerUiCopy(item) {
 }
 
 export function getUiCopy(context = {}) {
-  const resolvedItems = [...uiCopies]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const resolvedItems = orderedRegisteredItems(uiCopies)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 
@@ -717,8 +698,7 @@ export function getUiCopy(context = {}) {
 }
 
 export async function runComposerSubmitGuards(context = {}) {
-  const guards = [...composerSubmitGuards]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const guards = orderedRegisteredItems(composerSubmitGuards)
 
   for (const guard of guards) {
     if (!isRegisteredItemEnabled(guard, context)) {
@@ -754,8 +734,7 @@ export async function runComposerSubmitGuards(context = {}) {
 }
 
 export async function runComposerSubmitSuccess(context = {}) {
-  const handlers = [...composerSubmitSuccessHandlers]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const handlers = orderedRegisteredItems(composerSubmitSuccessHandlers)
 
   for (const handler of handlers) {
     if (!isRegisteredItemEnabled(handler, context)) {
@@ -773,8 +752,7 @@ export async function runComposerSubmitSuccess(context = {}) {
 }
 
 export async function runComposerMentionProviders(context = {}) {
-  const providers = [...composerMentionProviders]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const providers = orderedRegisteredItems(composerMentionProviders)
 
   const items = []
   const seenKeys = new Set()
@@ -815,8 +793,7 @@ export async function runComposerMentionProviders(context = {}) {
 }
 
 export async function runComposerPreviewTransformers(context = {}) {
-  const transformers = [...composerPreviewTransformers]
-    .sort((left, right) => (left.order || 100) - (right.order || 100))
+  const transformers = orderedRegisteredItems(composerPreviewTransformers)
 
   let transformed = {
     ...context,

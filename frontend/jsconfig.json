@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@bias/core": ["src/common/sdk.js"],
+      "@bias/admin": ["src/admin/sdk.js"],
+      "@bias/forum": ["src/forum/sdk.js"]
+    }
+  },
+  "include": ["src/**/*.js", "src/**/*.vue", "../extensions/**/*.js", "../extensions/**/*.vue"]
+}

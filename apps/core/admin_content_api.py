@@ -315,6 +315,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
     operations_pages = _resolve_extension_operations_pages(extension, runtime_view)
     frontend_admin_entry = _resolve_extension_frontend_admin_entry(extension, runtime_view)
     frontend_forum_entry = _resolve_extension_frontend_forum_entry(extension, runtime_view)
+    frontend_outputs = _resolve_extension_frontend_outputs(extension.id)
     frontend_routes = _build_extension_frontend_routes(runtime_view)
     settings_page = next(iter(settings_pages), "")
     permissions_page = next(iter(permissions_pages), "")
@@ -378,11 +379,12 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "backend_entry": extension.manifest.backend_entry,
         "frontend_admin_entry": frontend_admin_entry,
         "frontend_forum_entry": frontend_forum_entry,
+        "frontend_outputs": frontend_outputs,
         "frontend_routes": frontend_routes,
         "settings_pages": list(settings_pages),
         "permissions_pages": list(permissions_pages),
         "operations_pages": list(operations_pages),
-        "operations_profile": dict(extension.manifest.operations_profile or {}),
+        "operations_profile": dict(getattr(extension.manifest, "operations_profile", {}) or {}),
         "settings_schema": serialize_extension_settings_schema(extension.id),
         "settings_values": get_extension_settings(extension.id) if serialize_extension_settings_schema(extension.id) else {},
         "compatibility": {
@@ -558,6 +560,14 @@ def _resolve_extension_frontend_forum_entry(extension, runtime_record=None) -> s
     if runtime_record is not None and str(runtime_record.frontend_forum_entry or "").strip():
         return str(runtime_record.frontend_forum_entry or "").strip()
     return extension.frontend_forum_entry
+
+
+def _resolve_extension_frontend_outputs(extension_id: str) -> dict:
+    from apps.core.extensions.frontend_compiler import inspect_extension_frontend_output_manifest
+
+    output_manifest = inspect_extension_frontend_output_manifest()
+    payload = dict(dict(output_manifest.get("extensions") or {}).get(str(extension_id or "").strip()) or {})
+    return dict(payload.get("outputs") or {})
 
 
 def _build_extension_frontend_routes(runtime_view):
