@@ -668,17 +668,6 @@ async function submitReply() {
         },
       }))
 
-      if (post.approval_status === 'pending') {
-        await modalStore.alert({
-          title: getUiCopy({
-            surface: 'post-composer-edit-pending-title',
-          })?.text || '回复已重新提交审核',
-          message: getUiCopy({
-            surface: 'post-composer-edit-pending-message',
-          })?.text || '管理员通过后，这条回复才会重新显示给其他用户。',
-        })
-      }
-
       await runComposerSubmitSuccess({
         ...buildExtensionContext(),
         data,
@@ -703,17 +692,6 @@ async function submitReply() {
           post,
         },
       }))
-
-      if (post.approval_status === 'pending') {
-        await modalStore.alert({
-          title: getUiCopy({
-            surface: 'post-composer-create-pending-title',
-          })?.text || '回复已进入审核队列',
-          message: getUiCopy({
-            surface: 'post-composer-create-pending-message',
-          })?.text || '管理员通过后，这条回复才会显示给其他用户。',
-        })
-      }
 
       await runComposerSubmitSuccess({
         ...buildExtensionContext(),
@@ -769,8 +747,6 @@ function formatAbsoluteDate(value) {
 
 function buildBaseContext() {
   return {
-    approvalNote: composerStore.current.approvalNote || '',
-    approvalStatus: composerStore.current.approvalStatus || '',
     authStore,
     canSubmit: Boolean(replyContent.value.trim()) && !submitting.value && !uploading.value && !isSuspended.value,
     draftSavedAt: composerDraftSavedAt.value,
@@ -781,6 +757,7 @@ function buildBaseContext() {
     isEditing: isEditing.value,
     mode: isEditing.value ? 'edit' : 'reply',
     modalStore,
+    extensionState: composerStore.current.extensions || {},
     postNumber: composerStore.current.postNumber ?? null,
     route,
     router,

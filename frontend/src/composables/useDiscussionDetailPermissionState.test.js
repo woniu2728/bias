@@ -27,14 +27,12 @@ test('discussion detail permission state exposes edit and menu permissions', () 
       can_edit: true,
       can_reply: true,
       is_locked: false,
-      approval_status: 'approved',
     }),
   })
 
   assert.equal(state.canEditDiscussion.value, true)
   assert.equal(state.canReplyFromMenu.value, true)
   assert.equal(state.canShowDiscussionMenu.value, true)
-  assert.equal(state.canModeratePendingDiscussion.value, false)
 })
 
 test('discussion detail permission state builds suspension notice and blocks post actions', () => {

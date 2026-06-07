@@ -17,6 +17,7 @@ export declare function getDiscussionListContexts(context?: Record<string, any>)
 export declare function getDiscussionListHero(context?: Record<string, any>): any
 export declare function getDiscussionListRequests(context?: Record<string, any>): any[]
 export declare function getEmptyState(context?: Record<string, any>): any
+export declare function getForumRealtimeEvents(context?: Record<string, any>): any[]
 export declare function getNotificationRenderers(context?: Record<string, any>): any[]
 export declare function getSearchModalSections(context?: Record<string, any>): any[]
 export declare function getStateBlock(context?: Record<string, any>): any
@@ -27,6 +28,7 @@ export declare function registerDiscussionListRequest(definition: Record<string,
 export declare function registerEmptyState(definition: Record<string, any>): any
 export declare function registerSearchModalSection(definition: Record<string, any>): any
 export declare function registerForumRuntime(definition: Record<string, any>): any
+export declare function registerForumRealtimeEvent(definition: Record<string, any>): any
 export declare function registerComposerAutocompleteProvider(definition: Record<string, any>): any
 export declare function registerComposerField(definition: Record<string, any>): any
 export declare function registerComposerPayloadContributor(definition: Record<string, any>): any
@@ -51,11 +53,15 @@ export declare function useStartDiscussionAction(options?: Record<string, any>):
 export declare function defineStore(...args: any[]): any
 export declare function formatRelativeTime(value?: any): any
 export declare const FORUM_REALTIME_REFRESH_EVENT_TYPES: Set<string>
+export declare function getForumRealtimeEventPolicy(eventType?: any, context?: Record<string, any>): Record<string, boolean>
 export declare function getTrackedDiscussionIdsFromDiscussionItems(items?: any[]): number[]
 export declare function getTrackedDiscussionIdsFromPostItems(items?: any[]): number[]
 export declare function hasTrackedDiscussionId(targetIds?: any[], discussionId?: any): boolean
 export declare function mergeForumEventPayload(resourceStore?: any, event?: any): void
-export declare function shouldRefreshForumEvent(eventType?: any): boolean
+export declare function shouldAppendForumRealtimePost(eventType?: any, context?: Record<string, any>): boolean
+export declare function shouldMarkForumEventAsNewReply(eventType?: any, context?: Record<string, any>): boolean
+export declare function shouldRefreshForumEvent(eventType?: any, context?: Record<string, any>): boolean
+export declare function shouldUpsertForumRealtimePost(eventType?: any, context?: Record<string, any>): boolean
 export declare function renderTwemojiHtml(html?: any): string
 export declare function renderTwemojiText(text?: any): string
 export declare function setTwemojiBaseUrl(url?: any): void

@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import {
-  getApprovalNote,
+  getFeedbackNote,
   getDiscussionStateBadges,
   getEmptyState,
   getPostStateBadges,
@@ -8,7 +8,7 @@ import {
 } from '../forum/frontendRegistry.js'
 
 export function createProfileContentSectionState({
-  getApproval = getApprovalNote,
+  getFeedback = getFeedbackNote,
   getDiscussionBadges = getDiscussionStateBadges,
   getEmpty = getEmptyState,
   getPostBadges = getPostStateBadges,
@@ -67,13 +67,13 @@ export function createProfileContentSectionState({
         })
   }
 
-  function getApprovalNoteText(item) {
+  function getFeedbackNoteText(item) {
     return isDiscussionKind
-      ? (getApproval({
+      ? (getFeedback({
           discussion: item,
           surface: badgeSurface,
         })?.text || '')
-      : (getApproval({
+      : (getFeedback({
           post: item,
           surface: badgeSurface,
         })?.text || '')
@@ -81,7 +81,7 @@ export function createProfileContentSectionState({
 
   return {
     emptyStateText,
-    getApprovalNoteText,
+    getFeedbackNoteText,
     getStateBadges,
     loadingStateText,
   }

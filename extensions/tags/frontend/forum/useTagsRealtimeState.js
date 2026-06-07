@@ -1,6 +1,6 @@
 import {
-  FORUM_REALTIME_REFRESH_EVENT_TYPES,
   hasTrackedDiscussionId as resolveTrackedDiscussionId,
+  shouldRefreshForumEvent,
 } from '@bias/forum'
 
 export function createTagsRealtimeState({
@@ -16,7 +16,7 @@ export function createTagsRealtimeState({
       return
     }
 
-    if (FORUM_REALTIME_REFRESH_EVENT_TYPES.has(String(detail.event_type || ''))) {
+    if (shouldRefreshForumEvent(detail.event_type)) {
       await loadTags()
       return
     }

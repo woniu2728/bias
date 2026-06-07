@@ -17,7 +17,7 @@
         type="button"
         class="discussion-follow-action"
         :class="{
-          'is-active': discussion.is_subscribed || secondaryAction.active,
+          'is-active': secondaryAction.active,
           'is-standalone': !canShowDiscussionMenu
         }"
         :disabled="secondaryAction.disabled"
@@ -50,17 +50,12 @@
       />
     </div>
 
-    <p v-if="authStore.isAuthenticated && hasActiveComposer" class="discussion-action-copy">
-      {{ activeDraftText }}
-    </p>
-    <p v-else-if="authStore.isAuthenticated && discussion.is_subscribed" class="discussion-action-copy">
-      {{ subscribedText }}
-    </p>
-    <p v-else-if="authStore.isAuthenticated && discussion.is_locked" class="discussion-action-copy">
-      {{ lockedText }}
-    </p>
-    <p v-else-if="authStore.isAuthenticated && isSuspended" class="discussion-action-copy discussion-action-copy--warning">
-      {{ suspensionNotice }}
+    <p
+      v-if="actionNotice"
+      class="discussion-action-copy"
+      :class="{ 'discussion-action-copy--warning': actionNotice.tone === 'warning' }"
+    >
+      {{ actionNotice.text || actionNotice.message }}
     </p>
   </div>
 </template>
@@ -68,7 +63,7 @@
 <script setup>
 import { computed } from 'vue'
 import ForumActionMenu from '@/components/forum/ForumActionMenu.vue'
-import { getUiCopy } from '@/forum/registry'
+import { getStateBlock } from '@/forum/registry'
 
 const props = defineProps({
   discussion: {
@@ -78,6 +73,10 @@ const props = defineProps({
   authStore: {
     type: Object,
     required: true
+  },
+  forumStore: {
+    type: Object,
+    default: null
   },
   isSuspended: {
     type: Boolean,
@@ -107,10 +106,6 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
-  togglingSubscription: {
-    type: Boolean,
-    default: false
-  },
   menuItems: {
     type: Array,
     default: () => []
@@ -129,15 +124,15 @@ defineEmits([
 
 const primaryAction = computed(() => props.sidebarActionItems[0] || null)
 const secondaryAction = computed(() => props.sidebarActionItems[1] || null)
-const activeDraftText = computed(() => getUiCopy({
-  surface: 'discussion-sidebar-active-draft',
-})?.text || '当前讨论已有未发布回复草稿。')
-const subscribedText = computed(() => getUiCopy({
-  surface: 'discussion-sidebar-subscribed',
-})?.text || '你会收到这条讨论后续回复的通知。')
-const lockedText = computed(() => getUiCopy({
-  surface: 'discussion-sidebar-locked',
-})?.text || '当前讨论已锁定，暂时无法继续回复。')
+const actionNotice = computed(() => getStateBlock({
+  surface: 'discussion-sidebar-action-notice',
+  authStore: props.authStore,
+  discussion: props.discussion,
+  forumStore: props.forumStore,
+  hasActiveComposer: props.hasActiveComposer,
+  isSuspended: props.isSuspended,
+  suspensionNotice: props.suspensionNotice,
+}))
 </script>
 
 <style scoped>

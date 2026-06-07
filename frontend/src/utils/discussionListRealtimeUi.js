@@ -1,8 +1,10 @@
+import { shouldMarkForumEventAsNewReply } from './forumRealtime.js'
+
 export function resolveDiscussionNewReplyPatch(discussion, event = {}) {
   if (!discussion) return null
 
   const eventType = String(event.event_type || '')
-  if (!['post.created', 'post.approved', 'post.resubmitted'].includes(eventType)) {
+  if (!shouldMarkForumEventAsNewReply(eventType, { event })) {
     return null
   }
 

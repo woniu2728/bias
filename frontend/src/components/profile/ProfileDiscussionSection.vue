@@ -25,8 +25,8 @@
               :title="badge.title || ''"
             />
           </div>
-          <p v-if="getApprovalNoteText(discussion)" class="approval-note">
-            {{ getApprovalNoteText(discussion) }}
+          <p v-if="getFeedbackNoteText(discussion)" class="feedback-note">
+            {{ getFeedbackNoteText(discussion) }}
           </p>
           <div class="discussion-meta">
             <span>{{ formatDate(discussion.created_at) }}</span>
@@ -74,7 +74,7 @@ const props = defineProps({
 
 const {
   emptyStateText,
-  getApprovalNoteText,
+  getFeedbackNoteText,
   getStateBadges,
   loadingStateText,
 } = useProfileContentSectionState({
@@ -168,7 +168,7 @@ const {
   font-size: 14px;
 }
 
-.approval-note {
+.feedback-note {
   margin: 10px 0 0;
   color: #9a5050;
   font-size: 13px;

@@ -6,6 +6,7 @@ import { useDiscussionPostStreamState } from '@/composables/useDiscussionPostStr
 
 export function useDiscussionDetailState({
   authStore,
+  forumStore,
   route,
   router,
 }) {
@@ -29,6 +30,7 @@ export function useDiscussionDetailState({
     authStore,
     discussion,
     discussionId,
+    forumStore,
     route,
     router,
     patchDiscussion,

@@ -3,6 +3,7 @@
     <DiscussionSidebarActions
       :discussion="discussion"
       :auth-store="authStore"
+      :forum-store="forumStore"
       :is-suspended="isSuspended"
       :suspension-notice="suspensionNotice"
       :has-active-composer="hasActiveComposer"
@@ -10,7 +11,6 @@
       :can-edit-discussion="canEditDiscussion"
       :can-moderate-discussion-settings="canModerateDiscussionSettings"
       :show-discussion-menu="showDiscussionMenu"
-      :toggling-subscription="togglingSubscription"
       :menu-items="menuItems"
       :sidebar-action-items="sidebarActionItems"
       @sidebar-action="$emit('sidebar-action', $event)"
@@ -58,6 +58,10 @@ defineProps({
     type: Object,
     required: true
   },
+  forumStore: {
+    type: Object,
+    default: null
+  },
   isSuspended: {
     type: Boolean,
     default: false
@@ -83,10 +87,6 @@ defineProps({
     default: false
   },
   showDiscussionMenu: {
-    type: Boolean,
-    default: false
-  },
-  togglingSubscription: {
     type: Boolean,
     default: false
   },

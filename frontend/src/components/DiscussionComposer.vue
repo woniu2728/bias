@@ -320,7 +320,7 @@ const composerStatusText = computed(() => {
   })?.text || (draftSavedAt.value
     ? `草稿保存于 ${formatDraftTime(draftSavedAt.value)}`
     : (isEditingDiscussion.value
-        ? '修改后可重新提交审核或直接更新讨论。'
+        ? '修改后将保存讨论内容。'
         : (selectedExtensionLabel.value
             ? `将发布到 ${selectedExtensionLabel.value}`
             : '支持 Markdown，可最小化继续编辑。')))
@@ -703,48 +703,28 @@ async function submitDiscussion() {
           discussion: normalizeDiscussion(data),
         },
       }))
-
-      if (data.approval_status === 'pending') {
-        await modalStore.alert({
-          title: getUiCopy({
-            surface: 'discussion-composer-edit-pending-title',
-          })?.text || '讨论已重新提交审核',
-          message: getUiCopy({
-            surface: 'discussion-composer-edit-pending-message',
-          })?.text || '请根据审核反馈继续完善内容，管理员通过后会重新公开显示。',
-        })
-      } else {
-        await modalStore.alert({
-          title: getUiCopy({
-            surface: 'discussion-composer-updated-title',
-          })?.text || '讨论已更新',
-          message: getUiCopy({
-            surface: 'discussion-composer-updated-message',
-          })?.text || '新的讨论内容已经保存。',
-        })
-      }
     } else {
       data = await api.post('/discussions/', await buildDiscussionResourcePayload())
-
-      if (data.approval_status === 'pending') {
-        await modalStore.alert({
-          title: getUiCopy({
-            surface: 'discussion-composer-create-pending-title',
-          })?.text || '讨论已进入审核队列',
-          message: getUiCopy({
-            surface: 'discussion-composer-create-pending-message',
-          })?.text || '管理员通过后，这条讨论才会显示在论坛列表中。',
-        })
-      }
     }
 
-    await runComposerSubmitSuccess({
+    const submitSuccessHandled = await runComposerSubmitSuccess({
       ...buildExtensionContext(),
       data,
       mode: isEditingDiscussion.value ? 'edit' : 'create',
       submitKind: isEditingDiscussion.value ? 'edit-discussion' : 'discussion',
       type: 'discussion',
     })
+
+    if (isEditingDiscussion.value && !submitSuccessHandled) {
+      await modalStore.alert({
+        title: getUiCopy({
+          surface: 'discussion-composer-updated-title',
+        })?.text || '讨论已更新',
+        message: getUiCopy({
+          surface: 'discussion-composer-updated-message',
+        })?.text || '新的讨论内容已经保存。',
+      })
+    }
 
     resetComposer()
     await router.push(`/d/${data.id}`)
@@ -797,8 +777,6 @@ function formatDraftTime(value) {
 
 function buildBaseContext() {
   return {
-    approvalNote: composerStore.current.approvalNote || '',
-    approvalStatus: composerStore.current.approvalStatus || '',
     authStore,
     canSubmit: canSubmit.value,
     draftSavedAt: draftSavedAt.value,

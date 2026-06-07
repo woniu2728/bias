@@ -27,8 +27,8 @@
           </div>
           <span class="post-time">{{ formatDate(post.created_at) }}</span>
         </div>
-        <p v-if="getApprovalNoteText(post)" class="approval-note">
-          {{ getApprovalNoteText(post) }}
+        <p v-if="getFeedbackNoteText(post)" class="feedback-note">
+          {{ getFeedbackNoteText(post) }}
         </p>
         <div class="post-content" v-html="post.content_html || post.content"></div>
       </div>
@@ -67,7 +67,7 @@ const props = defineProps({
 
 const {
   emptyStateText,
-  getApprovalNoteText,
+  getFeedbackNoteText,
   getStateBadges,
   loadingStateText,
 } = useProfileContentSectionState({
@@ -185,7 +185,7 @@ const {
   overflow-wrap: anywhere;
 }
 
-.approval-note {
+.feedback-note {
   margin: 10px 0 0;
   color: #9a5050;
   font-size: 13px;

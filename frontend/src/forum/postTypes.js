@@ -4,12 +4,6 @@ import DiscussionRenamedPostItem from '@/components/discussion/DiscussionRenamed
 import DiscussionHiddenPostItem from '@/components/discussion/DiscussionHiddenPostItem.vue'
 import DiscussionStickyPostItem from '@/components/discussion/DiscussionStickyPostItem.vue'
 import DiscussionGenericEventPostItem from '@/components/discussion/DiscussionGenericEventPostItem.vue'
-import DiscussionApprovedPostItem from '@/components/discussion/DiscussionApprovedPostItem.vue'
-import DiscussionRejectedPostItem from '@/components/discussion/DiscussionRejectedPostItem.vue'
-import DiscussionResubmittedPostItem from '@/components/discussion/DiscussionResubmittedPostItem.vue'
-import PostApprovedPostItem from '@/components/discussion/PostApprovedPostItem.vue'
-import PostRejectedPostItem from '@/components/discussion/PostRejectedPostItem.vue'
-import PostResubmittedPostItem from '@/components/discussion/PostResubmittedPostItem.vue'
 import PostHiddenPostItem from '@/components/discussion/PostHiddenPostItem.vue'
 
 const postTypeDefinitions = []
@@ -19,12 +13,6 @@ const postTypeComponents = {
   discussionLocked: DiscussionLockedPostItem,
   discussionSticky: DiscussionStickyPostItem,
   discussionHidden: DiscussionHiddenPostItem,
-  discussionApproved: DiscussionApprovedPostItem,
-  discussionRejected: DiscussionRejectedPostItem,
-  discussionResubmitted: DiscussionResubmittedPostItem,
-  postApproved: PostApprovedPostItem,
-  postRejected: PostRejectedPostItem,
-  postResubmitted: PostResubmittedPostItem,
   postHidden: PostHiddenPostItem
 }
 
@@ -112,36 +100,6 @@ syncPostTypes([
     code: 'discussionHidden',
     label: '讨论隐藏状态变更',
     order: 60
-  },
-  {
-    code: 'discussionApproved',
-    label: '讨论审核通过',
-    order: 70
-  },
-  {
-    code: 'discussionRejected',
-    label: '讨论审核拒绝',
-    order: 80
-  },
-  {
-    code: 'discussionResubmitted',
-    label: '讨论重新提交审核',
-    order: 90
-  },
-  {
-    code: 'postApproved',
-    label: '回复审核通过',
-    order: 100
-  },
-  {
-    code: 'postRejected',
-    label: '回复审核拒绝',
-    order: 110
-  },
-  {
-    code: 'postResubmitted',
-    label: '回复重新提交审核',
-    order: 120
   },
   {
     code: 'postHidden',

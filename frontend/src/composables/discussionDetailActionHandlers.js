@@ -46,7 +46,7 @@ export function createPostActionHandlers({
       await deletePost(context.post)
     },
     'edit-post': async (_, context = {}) => {
-      editPost(context.post)
+      await editPost(context.post)
     },
     'toggle-hide-post': async (_, context = {}) => {
       await togglePostHidden(context.post)

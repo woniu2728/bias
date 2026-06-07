@@ -61,22 +61,31 @@ export function useDiscussionDetailUserActions({
     })
   }
 
-  function editPost(post) {
+  async function editPost(post) {
     if (isSuspended.value) {
       showSuspensionAlert()
       return
     }
-    composerStore.openEditPostComposer({
+
+    const initialState = await runComposerInitialStateContributors({
       source: 'discussion-detail',
       discussionId: discussion.value?.id,
       discussionTitle: discussion.value?.title || '',
       postId: post.id,
       postNumber: post.number,
       username: post.user.username,
-      approvalStatus: post.approval_status || '',
-      approvalNote: post.approval_note || '',
-      initialContent: post.content
+      initialContent: post.content,
+      extensions: {},
+    }, {
+      discussion: discussion.value,
+      mode: 'edit',
+      post,
+      source: 'discussion-detail',
+      submitKind: 'edit-post',
+      type: 'post',
     })
+
+    composerStore.openEditPostComposer(initialState)
   }
 
   async function editDiscussion() {
@@ -90,8 +99,6 @@ export function useDiscussionDetailUserActions({
       source: 'discussion-detail',
       discussionId: discussion.value.id,
       discussionTitle: discussion.value.title || '',
-      approvalStatus: discussion.value.approval_status || '',
-      approvalNote: discussion.value.approval_note || '',
       initialTitle: discussion.value.title || '',
       initialContent: discussion.value.first_post?.content || '',
       extensions: {},

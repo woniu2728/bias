@@ -24,13 +24,14 @@ import {
   registerLoadedExtensionModule,
 } from '../common/extensionRuntime.js'
 import { ApplicationRequestError, createRuntimeApplication } from '../common/application.js'
-import { ModelExtender } from '../common/resourceModel.js'
-import extenders, { Exports, Model, Search, ThemeMode, extendAdmin, extendForum } from '../common/extenders.js'
+import { ModelExtender, StoreExtender } from '../common/resourceModel.js'
+import extenders, { Exports, Model, PostTypes, Search, Store, ThemeMode, extendAdmin, extendForum } from '../common/extenders.js'
 import {
   AdminExtender,
   ExportsExtender,
   ForumExtender,
   NotificationExtender,
+  PostTypesExtender,
   RoutesExtender,
   SearchExtender,
   ThemeModeExtender,
@@ -848,9 +849,13 @@ test('frontend dedicated extenders register notification post search and routes'
   const profilePanels = []
   const searchSources = []
   const heroMetaItems = []
+  const userBadges = []
+  const pageStates = []
   const discussionListContexts = []
   const discussionListHeroes = []
   const discussionListRequests = []
+  const composerSubmitSuccessItems = []
+  const forumRealtimeEvents = []
   const dashboardStats = []
   const adminPageCopies = []
   const adminPageConfigs = []
@@ -904,6 +909,12 @@ test('frontend dedicated extenders register notification post search and routes'
       registerHeroMeta(definition) {
         heroMetaItems.push(definition)
       },
+      registerUserBadge(definition) {
+        userBadges.push(definition)
+      },
+      registerPageState(definition) {
+        pageStates.push(definition)
+      },
       registerDiscussionListContext(definition) {
         discussionListContexts.push(definition)
       },
@@ -912,6 +923,12 @@ test('frontend dedicated extenders register notification post search and routes'
       },
       registerDiscussionListRequest(definition) {
         discussionListRequests.push(definition)
+      },
+      registerComposerSubmitSuccess(definition) {
+        composerSubmitSuccessItems.push(definition)
+      },
+      registerForumRealtimeEvent(definition) {
+        forumRealtimeEvents.push(definition)
       },
       registerAdminDashboardStat(definition) {
         dashboardStats.push(definition)
@@ -979,6 +996,7 @@ test('frontend dedicated extenders register notification post search and routes'
     frontend: {
       extend: [
         new NotificationExtender().add('alphaAlert', { label: 'Alpha alert', component: () => null }),
+        new PostTypesExtender().add('gammaEvent', { label: 'Gamma event', component: () => null }),
         new SearchExtender()
           .filter({ key: 'alpha', target: 'discussions', syntax: 'alpha:' })
           .gambit('posts', { key: 'flagged', syntax: 'is:flagged', label: 'Flagged' }),
@@ -988,9 +1006,13 @@ test('frontend dedicated extenders register notification post search and routes'
           .profilePanel({ key: 'alpha-profile-panel', label: 'Alpha panel', order: 16 })
           .searchSource({ key: 'alpha-search-source', type: 'alpha', label: 'Alpha search', order: 17 })
           .heroMeta({ key: 'alpha-hero-meta', text: 'Alpha meta', order: 18 })
+          .userBadge({ key: 'alpha-user-badge', label: 'Alpha badge', order: 19 })
           .discussionListContext({ key: 'alpha-context', order: 20 })
           .discussionListHero({ key: 'alpha-hero', order: 20 })
           .discussionListRequest({ key: 'alpha-request', order: 20 })
+          .pageState({ key: 'alpha-page-state', order: 21 })
+          .composerSubmitSuccess({ key: 'alpha-composer-success', order: 22 })
+          .realtimeEvent({ key: 'alpha-realtime-event', order: 23, eventTypes: ['alpha.event'], refresh: true })
           .postType('alphaEvent', { label: 'Alpha event', component: () => null })
           .postType('betaEvent', { label: 'Beta event', component: () => null }),
         extendAdmin(admin => admin
@@ -1030,11 +1052,14 @@ test('frontend dedicated extenders register notification post search and routes'
   await runtimeApp.runBeforeMount()
 
   assert.equal(notifications[0].type, 'alphaAlert')
-  assert.equal(postTypes[0].type, 'alphaEvent')
-  assert.equal(postTypes[1].type, 'betaEvent')
+  assert.equal(postTypes[0].type, 'gammaEvent')
+  assert.equal(postTypes[1].type, 'alphaEvent')
+  assert.equal(postTypes[2].type, 'betaEvent')
+  assert.equal(postTypes[0].extensionId, 'frontend')
   assert.equal(runtimeApp.notificationComponents.alphaAlert, notifications[0].component)
-  assert.equal(runtimeApp.postComponents.alphaEvent, postTypes[0].component)
-  assert.equal(runtimeApp.postComponents.betaEvent, postTypes[1].component)
+  assert.equal(runtimeApp.postComponents.gammaEvent, postTypes[0].component)
+  assert.equal(runtimeApp.postComponents.alphaEvent, postTypes[1].component)
+  assert.equal(runtimeApp.postComponents.betaEvent, postTypes[2].component)
   assert.equal(searchFilters.some(item => item.key === 'alpha'), true)
   assert.equal(searchFilters.some(item => item.key === 'flagged'), true)
   assert.deepEqual(runtimeApp.search.gambits.gambits.posts, [{ key: 'flagged', syntax: 'is:flagged', label: 'Flagged' }])
@@ -1047,12 +1072,20 @@ test('frontend dedicated extenders register notification post search and routes'
   assert.equal(searchSources[0].extensionId, 'frontend')
   assert.equal(heroMetaItems[0].key, 'alpha-hero-meta')
   assert.equal(heroMetaItems[0].extensionId, 'frontend')
+  assert.equal(userBadges[0].key, 'alpha-user-badge')
+  assert.equal(userBadges[0].extensionId, 'frontend')
   assert.equal(discussionListContexts[0].key, 'alpha-context')
   assert.equal(discussionListContexts[0].extensionId, 'frontend')
   assert.equal(discussionListHeroes[0].key, 'alpha-hero')
   assert.equal(discussionListHeroes[0].extensionId, 'frontend')
   assert.equal(discussionListRequests[0].key, 'alpha-request')
   assert.equal(discussionListRequests[0].extensionId, 'frontend')
+  assert.equal(pageStates[0].key, 'alpha-page-state')
+  assert.equal(pageStates[0].extensionId, 'frontend')
+  assert.equal(composerSubmitSuccessItems[0].key, 'alpha-composer-success')
+  assert.equal(composerSubmitSuccessItems[0].extensionId, 'frontend')
+  assert.equal(forumRealtimeEvents[0].key, 'alpha-realtime-event')
+  assert.equal(forumRealtimeEvents[0].extensionId, 'frontend')
   assert.equal(dashboardStats[0].key, 'alpha-stat')
   assert.equal(dashboardStats[0].moduleId, 'frontend')
   assert.deepEqual(adminPageCopies[0], {
@@ -1077,7 +1110,7 @@ test('frontend dedicated extenders register notification post search and routes'
   assert.equal(runtimeApp.routes.definitions['alpha.page'].path, '/alpha')
   assert.equal(runtimeApp.route.alphaUser(7), '/resolved/user/7')
   assert.deepEqual(runtimeApp.exportRegistry.get('frontend', 'toolbox'), { ready: true })
-  assert.deepEqual(adminRegistryContexts, ['frontend', 'frontend', 'frontend'])
+  assert.deepEqual(adminRegistryContexts, ['frontend', 'frontend', 'frontend', 'frontend'])
   assert.equal(adminPages[0].path, '/admin/alpha')
   assert.equal(adminPages[0].extensionId, 'frontend')
   assert.deepEqual(adminSettings[0], { definition: { key: 'alpha_setting' }, priority: 10 })
@@ -1102,6 +1135,8 @@ test('frontend dedicated extenders register notification post search and routes'
 
 test('common extenders export unified frontend extension entry', () => {
   assert.equal(extenders.Model, ModelExtender)
+  assert.equal(extenders.Store, StoreExtender)
+  assert.equal(extenders.PostTypes, PostTypesExtender)
   assert.equal(extenders.Search, SearchExtender)
   assert.equal(extenders.ThemeMode, ThemeModeExtender)
   assert.equal(extenders.Admin, undefined)
@@ -1115,10 +1150,23 @@ test('common extenders export unified frontend extension entry', () => {
   assert.equal(extenders.extendAdmin, extendAdmin)
   assert.equal(extenders.extendForum, extendForum)
   assert.equal(new Model(UserModel) instanceof ModelExtender, true)
+  assert.equal(new Store().add('users', UserModel) instanceof StoreExtender, true)
+  assert.equal(new PostTypes().add('demo-alias', { label: 'Demo alias' }) instanceof PostTypesExtender, true)
+  assert.equal(new PostTypesExtender().add('demo', { label: 'Demo' }) instanceof PostTypesExtender, true)
   assert.equal(new Search().gambit('users', query => query) instanceof SearchExtender, true)
   assert.equal(new ThemeMode().add('dark', 'Dark') instanceof ThemeModeExtender, true)
   assert.equal(extendAdmin(admin => admin.page({ path: '/admin/demo' })) instanceof AdminExtender, true)
+  assert.equal(new AdminExtender().setting({ key: 'demo_setting' }) instanceof AdminExtender, true)
+  assert.equal(new AdminExtender().customSetting({ key: 'demo_custom_setting' }) instanceof AdminExtender, true)
+  assert.equal(new AdminExtender().replaceSetting('demo_setting', setting => setting) instanceof AdminExtender, true)
+  assert.equal(new AdminExtender().setSettingPriority('demo_setting', 10) instanceof AdminExtender, true)
+  assert.equal(new AdminExtender().removeSetting('demo_setting') instanceof AdminExtender, true)
+  assert.equal(new AdminExtender().permission({ permission: 'demo.use' }) instanceof AdminExtender, true)
   assert.equal(extendAdmin(admin => admin.permissionScope({ key: 'demo' })) instanceof AdminExtender, true)
+  assert.equal(new AdminExtender().replacePermission('demo.use', permission => permission) instanceof AdminExtender, true)
+  assert.equal(new AdminExtender().setPermissionPriority('demo.use', 'moderate', 10) instanceof AdminExtender, true)
+  assert.equal(new AdminExtender().removePermission('demo.use') instanceof AdminExtender, true)
+  assert.equal(new AdminExtender().generalIndexItems('settings', [{ key: 'demo' }]) instanceof AdminExtender, true)
   assert.equal(extendAdmin(admin => admin.dashboardStat({ key: 'demo' })) instanceof AdminExtender, true)
   assert.equal(extendAdmin(admin => admin.pageCopy('demo.page', { key: 'demo' })) instanceof AdminExtender, true)
   assert.equal(new Exports().module('demo', {}) instanceof ExportsExtender, true)
@@ -1126,14 +1174,153 @@ test('common extenders export unified frontend extension entry', () => {
   assert.equal(new ForumExtender().profilePanel({ key: 'demo' }) instanceof ForumExtender, true)
   assert.equal(new ForumExtender().searchSource({ key: 'demo' }) instanceof ForumExtender, true)
   assert.equal(new ForumExtender().heroMeta({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().userBadge({ key: 'demo' }) instanceof ForumExtender, true)
   assert.equal(new ForumExtender().discussionListContext({ key: 'demo' }) instanceof ForumExtender, true)
   assert.equal(new ForumExtender().discussionListHero({ key: 'demo' }) instanceof ForumExtender, true)
   assert.equal(new ForumExtender().discussionListRequest({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().pageState({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().composerSubmitSuccess({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().realtimeEvent({ key: 'demo' }) instanceof ForumExtender, true)
   assert.equal(new ForumExtender().postType('demo', { label: 'Demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().feedbackNote({ key: 'demo' }) instanceof ForumExtender, true)
   assert.equal(extendForum(forum => forum.navItem({ key: 'demo' })) instanceof ForumExtender, true)
   const scopedForum = extendForum('demo-extension', forum => forum.navItem({ key: 'scoped-demo' }))
   assert.equal(scopedForum instanceof ForumExtender, true)
   assert.equal(scopedForum.context, 'demo-extension')
+})
+
+test('approval extension owns pending composer submit alerts', async () => {
+  const {
+    registerApprovalComposerCopy,
+    registerApprovalComposerSubmitSuccess,
+  } = await import('../../../extensions/approval/frontend/forum/approvalComposer.js')
+  const composerSubmitSuccessHandlers = []
+  const copyItems = []
+  const forum = {
+    composerSubmitSuccess(definition) {
+      composerSubmitSuccessHandlers.push(definition)
+      return this
+    },
+    uiCopy(definition) {
+      copyItems.push(definition)
+      return this
+    },
+  }
+
+  registerApprovalComposerCopy(forum)
+  registerApprovalComposerSubmitSuccess(forum)
+
+  const handler = composerSubmitSuccessHandlers.find(item => item.key === 'approval-pending-submit-alert')
+  assert.equal(handler.moduleId, 'approval')
+  assert.equal(copyItems.find(item => item.key === 'discussion-event-approved-label').moduleId, 'approval')
+  assert.equal(copyItems.find(item => item.key === 'post-event-approved-label').resolve({ targetPostNumber: 3 }).text, '通过了第 3 楼回复的审核')
+  assert.equal(handler.isVisible({
+    type: 'discussion',
+    mode: 'create',
+    data: { approval_status: 'pending' },
+  }), true)
+  assert.equal(handler.isVisible({
+    type: 'discussion',
+    mode: 'create',
+    data: { approval_status: 'approved' },
+  }), false)
+
+  const alerts = []
+  await handler.run({
+    type: 'post',
+    mode: 'reply',
+    post: { approval_status: 'pending' },
+    modalStore: {
+      alert(payload) {
+        alerts.push(payload)
+      },
+    },
+  })
+
+  assert.deepEqual(alerts, [{
+    title: '回复已进入审核队列',
+    message: '管理员通过后，这条回复才会显示给其他用户。',
+  }])
+})
+
+test('approval extension owns moderation action handlers', async () => {
+  const { forumApi } = await import('@bias/forum')
+  const { registerApprovalModerationActions } = await import('../../../extensions/approval/frontend/forum/approvalModerationActions.js')
+  const originalPost = forumApi.post
+  const discussionHandlers = []
+  const postHandlers = []
+  const copyItems = []
+  const requests = []
+  const alerts = []
+  const refreshes = []
+  const forum = {
+    discussionActionHandler(definition) {
+      discussionHandlers.push(definition)
+      return this
+    },
+    postActionHandler(definition) {
+      postHandlers.push(definition)
+      return this
+    },
+    uiCopy(definition) {
+      copyItems.push(definition)
+      return this
+    },
+  }
+
+  try {
+    forumApi.post = async (url, payload) => {
+      requests.push([url, payload])
+      return { data: { ok: true } }
+    }
+
+    registerApprovalModerationActions(forum)
+
+    assert.deepEqual(discussionHandlers.map(item => item.key), ['approve', 'reject'])
+    assert.deepEqual(postHandlers.map(item => item.key), ['approve', 'reject'])
+    assert.equal(copyItems.find(item => item.key === 'discussion-detail-moderation-title').moduleId, 'approval')
+
+    await discussionHandlers[0].resolve().handle({
+      discussion: { id: 7, approval_status: 'pending' },
+      modalStore: {
+        async show(_component, props) {
+          await props.submitAction({ note: 'ok' })
+          return { success: true }
+        },
+        async alert(payload) {
+          alerts.push(payload)
+        },
+      },
+      refreshDiscussion() {
+        refreshes.push('discussion')
+      },
+    })
+
+    await postHandlers[1].resolve().handle({
+      post: { id: 9, number: 4, approval_status: 'pending' },
+      modalStore: {
+        async show(_component, props) {
+          await props.submitAction({ note: 'no' })
+          return { success: true }
+        },
+        async alert(payload) {
+          alerts.push(payload)
+        },
+      },
+      refreshDiscussion() {
+        refreshes.push('post')
+      },
+    })
+
+    assert.deepEqual(requests, [
+      ['/admin/approval-queue/discussion/7/approve', { note: 'ok' }],
+      ['/admin/approval-queue/post/9/reject', { note: 'no' }],
+    ])
+    assert.deepEqual(refreshes, ['discussion', 'post'])
+    assert.equal(alerts.length, 2)
+  } finally {
+    forumApi.post = originalPost
+  }
 })
 
 test('search gambits transform store find filter queries', async () => {

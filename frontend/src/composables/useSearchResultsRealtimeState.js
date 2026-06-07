@@ -1,5 +1,4 @@
 import {
-  FORUM_REALTIME_REFRESH_EVENT_TYPES,
   hasTrackedDiscussionId as resolveTrackedDiscussionId,
   shouldRefreshForumEvent,
 } from '../utils/forumRealtime.js'
@@ -42,9 +41,7 @@ export function useSearchResultsRealtimeState({
     mergePayload(payload) {
       resourceStore.mergePayload(payload)
     },
-    shouldRefreshEvent(eventType) {
-      return FORUM_REALTIME_REFRESH_EVENT_TYPES.has(String(eventType || ''))
-    },
+    shouldRefreshEvent: shouldRefreshForumEvent,
     trackedDiscussionIds: () => trackedDiscussionIds.value,
   })
 }

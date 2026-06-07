@@ -35,12 +35,13 @@ const discussionReplyStates = []
 const postReviewBanners = []
 const discussionReviewBanners = []
 const postFlagPanels = []
-const approvalNotes = []
+const feedbackNotes = []
 const emptyStates = []
 const pageStates = []
 const stateBlocks = []
 const uiCopies = []
 const forumRuntimeHooks = []
+const forumRealtimeEvents = []
 
 import { getCurrentExtensionId } from '../common/extensionRuntime.js'
 import ItemList from '../common/itemList.js'
@@ -83,12 +84,13 @@ const registryTargets = [
   postReviewBanners,
   discussionReviewBanners,
   postFlagPanels,
-  approvalNotes,
+  feedbackNotes,
   emptyStates,
   pageStates,
   stateBlocks,
   uiCopies,
   forumRuntimeHooks,
+  forumRealtimeEvents,
 ]
 
 function upsertByKey(target, key, value) {
@@ -697,13 +699,13 @@ export function getPostFlagPanel(context = {}) {
   return surfaceSpecificItem || resolvedItems[0]
 }
 
-export function registerApprovalNote(item) {
+export function registerFeedbackNote(item) {
   const normalizedItem = normalizeRegisteredItem(item)
-  return upsertByKey(approvalNotes, normalizedItem.key, normalizedItem)
+  return upsertByKey(feedbackNotes, normalizedItem.key, normalizedItem)
 }
 
-export function getApprovalNote(context = {}) {
-  const resolvedItems = orderedRegisteredItems(approvalNotes)
+export function getFeedbackNote(context = {}) {
+  const resolvedItems = orderedRegisteredItems(feedbackNotes)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 
@@ -797,6 +799,17 @@ export function registerUiCopy(item) {
 export function registerForumRuntime(item) {
   const normalizedItem = normalizeRegisteredItem(item)
   return upsertByKey(forumRuntimeHooks, normalizedItem.key, normalizedItem)
+}
+
+export function registerForumRealtimeEvent(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(forumRealtimeEvents, normalizedItem.key, normalizedItem)
+}
+
+export function getForumRealtimeEvents(context = {}) {
+  return orderedRegisteredItems(forumRealtimeEvents)
+    .map(item => resolveRegisteredItem(item, context))
+    .filter(Boolean)
 }
 
 export async function runForumRuntimeHook(name, context = {}) {
@@ -940,6 +953,7 @@ export async function runComposerInitialStateContributors(initialState = {}, con
 
 export async function runComposerSubmitSuccess(context = {}) {
   const handlers = orderedRegisteredItems(composerSubmitSuccessHandlers)
+  let handledCount = 0
 
   for (const handler of handlers) {
     if (!isRegisteredItemEnabled(handler, context)) {
@@ -952,8 +966,11 @@ export async function runComposerSubmitSuccess(context = {}) {
 
     if (typeof handler.run === 'function') {
       await handler.run(context)
+      handledCount += 1
     }
   }
+
+  return handledCount
 }
 
 function normalizeComposerInitialState(value) {

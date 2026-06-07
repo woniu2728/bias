@@ -32,9 +32,6 @@ export function useDiscussionDetailPermissionState({
   ))
   const canModerateDiscussionSettings = computed(() => Boolean(authStore.user?.is_staff))
   const canShowDiscussionMenu = computed(() => canEditDiscussion.value || canModerateDiscussionSettings.value)
-  const canModeratePendingDiscussion = computed(() => {
-    return Boolean(authStore.user?.is_staff && discussion.value?.approval_status === 'pending')
-  })
 
   const suspensionNotice = computed(() => {
     if (!isSuspended.value) return ''
@@ -77,17 +74,11 @@ export function useDiscussionDetailPermissionState({
     return post.number > 1
   }
 
-  function canModeratePendingPost(post) {
-    return Boolean(authStore.user?.is_staff && post?.approval_status === 'pending')
-  }
-
   return {
     canDeletePost,
     canEditDiscussion,
     canEditPost,
     canModerateDiscussionSettings,
-    canModeratePendingDiscussion,
-    canModeratePendingPost,
     canModeratePostVisibility,
     canReplyFromMenu,
     canReportPost,

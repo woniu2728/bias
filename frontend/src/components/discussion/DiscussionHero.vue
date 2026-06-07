@@ -77,10 +77,7 @@ const props = defineProps({
     type: Object,
     default: () => ({})
   },
-  canModeratePendingDiscussion: {
-    type: Boolean,
-    default: false
-  },
+  authStore: { type: Object, required: true },
   canEditDiscussion: {
     type: Boolean,
     default: false
@@ -96,8 +93,8 @@ const {
   heroMetaItems,
   presentationItems,
 } = useDiscussionHeroState({
+  authStore: toRef(props, 'authStore'),
   canEditDiscussion: toRef(props, 'canEditDiscussion'),
-  canModeratePendingDiscussion: toRef(props, 'canModeratePendingDiscussion'),
   discussion: toRef(props, 'discussion'),
 })
 

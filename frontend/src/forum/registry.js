@@ -33,6 +33,7 @@ import {
   getForumNavItems,
   getForumNavSections,
   getForumSidebarSections,
+  getForumRealtimeEvents,
   getDiscussionActions,
   getDiscussionActionHandler,
   getPostActions,
@@ -48,7 +49,7 @@ import {
   getDiscussionReplyState,
   getDiscussionReviewBanner,
   getPostFlagPanel,
-  getApprovalNote,
+  getFeedbackNote,
   getEmptyState,
   getPageState,
   getStateBlock,
@@ -64,12 +65,13 @@ import {
   registerDiscussionReviewBanner,
   registerHeroMeta,
   registerPostFlagPanel,
-  registerApprovalNote,
+  registerFeedbackNote,
   registerEmptyState,
   registerPageState,
   registerStateBlock,
   registerUiCopy,
   registerForumRuntime,
+  registerForumRealtimeEvent,
   registerDiscussionStateBadge,
   registerPostStateBadge,
   registerPostReviewBanner,
@@ -116,6 +118,7 @@ export {
   getForumNavItems,
   getForumNavSections,
   getForumSidebarSections,
+  getForumRealtimeEvents,
   getComposerNotices,
   getComposerFields,
   getComposerAutocompleteProviders,
@@ -141,7 +144,7 @@ export {
   getDiscussionReplyState,
   getDiscussionReviewBanner,
   getPostFlagPanel,
-  getApprovalNote,
+  getFeedbackNote,
   getEmptyState,
   getPageState,
   getStateBlock,
@@ -156,12 +159,13 @@ export {
   registerDiscussionReviewBanner,
   registerHeroMeta,
   registerPostFlagPanel,
-  registerApprovalNote,
+  registerFeedbackNote,
   registerEmptyState,
   registerPageState,
   registerStateBlock,
   registerUiCopy,
   registerForumRuntime,
+  registerForumRealtimeEvent,
   registerDiscussionStateBadge,
   registerPostStateBadge,
   registerPostReviewBanner,
@@ -2271,6 +2275,44 @@ registerUiCopy({
   }),
 })
 
+registerStateBlock({
+  key: 'discussion-sidebar-active-draft',
+  moduleId: 'posts',
+  order: 10,
+  surfaces: ['discussion-sidebar-action-notice'],
+  isVisible: ({ authStore, hasActiveComposer }) => Boolean(authStore?.isAuthenticated && hasActiveComposer),
+  resolve: () => ({
+    text: getUiCopy({
+      surface: 'discussion-sidebar-active-draft',
+    })?.text || '当前讨论已有未发布回复草稿。',
+  }),
+})
+
+registerStateBlock({
+  key: 'discussion-sidebar-locked',
+  moduleId: 'discussions',
+  order: 30,
+  surfaces: ['discussion-sidebar-action-notice'],
+  isVisible: ({ authStore, discussion }) => Boolean(authStore?.isAuthenticated && discussion?.is_locked),
+  resolve: () => ({
+    text: getUiCopy({
+      surface: 'discussion-sidebar-locked',
+    })?.text || '当前讨论已锁定，暂时无法继续回复。',
+  }),
+})
+
+registerStateBlock({
+  key: 'discussion-sidebar-suspended',
+  moduleId: 'users',
+  order: 40,
+  surfaces: ['discussion-sidebar-action-notice'],
+  isVisible: ({ authStore, isSuspended }) => Boolean(authStore?.isAuthenticated && isSuspended),
+  resolve: ({ suspensionNotice }) => ({
+    tone: 'warning',
+    text: suspensionNotice || '',
+  }),
+})
+
 registerUiCopy({
   key: 'discussion-sidebar-scrubber-start',
   order: 479,
@@ -2341,110 +2383,6 @@ registerUiCopy({
   resolve: () => ({
     text: '请稍后重试',
   }),
-})
-
-registerUiCopy({
-  key: 'discussion-detail-moderation-title',
-  order: 479,
-  surfaces: ['discussion-detail-moderation-title'],
-  resolve: ({ targetType, action, postNumber }) => {
-    if (targetType === 'post') {
-      return {
-        text: action === 'approve' ? `审核通过 #${postNumber}` : `拒绝 #${postNumber}`,
-      }
-    }
-
-    return {
-      text: action === 'approve' ? '审核通过讨论' : '拒绝讨论',
-    }
-  },
-})
-
-registerUiCopy({
-  key: 'discussion-detail-moderation-description',
-  order: 479,
-  surfaces: ['discussion-detail-moderation-description'],
-  resolve: ({ targetType, action }) => {
-    if (targetType === 'post') {
-      return {
-        text: action === 'approve'
-          ? '通过后，这条回复会立刻出现在讨论流中。'
-          : '拒绝后，回复作者仍可在前台看到你的审核反馈。',
-      }
-    }
-
-    return {
-      text: action === 'approve'
-        ? '通过后，这条讨论会立即对其他用户可见。'
-        : '拒绝后，讨论作者仍可在前台看到你的审核反馈。',
-    }
-  },
-})
-
-registerUiCopy({
-  key: 'discussion-detail-moderation-confirm',
-  order: 479,
-  surfaces: ['discussion-detail-moderation-confirm'],
-  resolve: ({ action }) => ({
-    text: action === 'approve' ? '通过审核' : '确认拒绝',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-detail-moderation-placeholder',
-  order: 479,
-  surfaces: ['discussion-detail-moderation-placeholder'],
-  resolve: ({ targetType, action }) => {
-    if (action === 'approve') {
-      return {
-        text: '例如：内容符合社区规范，已放行',
-      }
-    }
-
-    return {
-      text: targetType === 'post'
-        ? '例如：回复缺少上下文，请补充后重新提交'
-        : '例如：标题与正文需要补充后再发布',
-    }
-  },
-})
-
-registerUiCopy({
-  key: 'discussion-detail-moderation-success-title',
-  order: 479,
-  surfaces: ['discussion-detail-moderation-success-title'],
-  resolve: ({ targetType, action }) => {
-    if (targetType === 'post') {
-      return {
-        text: action === 'approve' ? '回复已通过' : '回复已拒绝',
-      }
-    }
-
-    return {
-      text: action === 'approve' ? '讨论已通过' : '讨论已拒绝',
-    }
-  },
-})
-
-registerUiCopy({
-  key: 'discussion-detail-moderation-success-message',
-  order: 479,
-  surfaces: ['discussion-detail-moderation-success-message'],
-  resolve: ({ targetType, action }) => {
-    if (targetType === 'post') {
-      return {
-        text: action === 'approve'
-          ? '这条回复现在已经加入讨论流。'
-          : '作者现在可以在前台看到你的审核反馈。',
-      }
-    }
-
-    return {
-      text: action === 'approve'
-        ? '这条讨论现在已经对其他用户可见。'
-        : '作者现在可以在前台看到你的审核反馈。',
-    }
-  },
 })
 
 registerUiCopy({
@@ -2662,33 +2600,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'discussion-event-note-prefix',
-  order: 479,
-  surfaces: ['discussion-event-note-prefix'],
-  resolve: () => ({
-    text: '理由：',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-event-approved-label',
-  order: 479,
-  surfaces: ['discussion-event-approved-label'],
-  resolve: () => ({
-    text: '通过了该讨论的审核',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-event-rejected-label',
-  order: 479,
-  surfaces: ['discussion-event-rejected-label'],
-  resolve: () => ({
-    text: '拒绝了该讨论的审核',
-  }),
-})
-
-registerUiCopy({
   key: 'discussion-event-hidden-label',
   order: 479,
   surfaces: ['discussion-event-hidden-label'],
@@ -2703,15 +2614,6 @@ registerUiCopy({
   surfaces: ['discussion-event-locked-label'],
   resolve: ({ isLocked }) => ({
     text: isLocked ? '锁定了该讨论' : '解锁了该讨论',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-event-resubmitted-label',
-  order: 479,
-  surfaces: ['discussion-event-resubmitted-label'],
-  resolve: () => ({
-    text: '修改后重新提交了该讨论的审核',
   }),
 })
 
@@ -2761,38 +2663,11 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'post-event-approved-label',
-  order: 479,
-  surfaces: ['post-event-approved-label'],
-  resolve: ({ targetPostNumber }) => ({
-    text: `通过了第 ${targetPostNumber} 楼回复的审核`,
-  }),
-})
-
-registerUiCopy({
-  key: 'post-event-rejected-label',
-  order: 479,
-  surfaces: ['post-event-rejected-label'],
-  resolve: ({ targetPostNumber }) => ({
-    text: `拒绝了第 ${targetPostNumber} 楼回复的审核`,
-  }),
-})
-
-registerUiCopy({
   key: 'post-event-hidden-label',
   order: 479,
   surfaces: ['post-event-hidden-label'],
   resolve: ({ isHidden, targetPostNumber }) => ({
     text: isHidden ? `隐藏了第 ${targetPostNumber} 楼回复` : `恢复显示第 ${targetPostNumber} 楼回复`,
-  }),
-})
-
-registerUiCopy({
-  key: 'post-event-resubmitted-label',
-  order: 479,
-  surfaces: ['post-event-resubmitted-label'],
-  resolve: ({ targetPostNumber }) => ({
-    text: `修改后重新提交了第 ${targetPostNumber} 楼回复的审核`,
   }),
 })
 
@@ -2946,7 +2821,7 @@ registerUiCopy({
 
     if (isEditingDiscussion) {
       return {
-        text: '修改后可重新提交审核或直接更新讨论。',
+        text: '修改后将保存讨论内容。',
       }
     }
 
@@ -3109,24 +2984,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'discussion-composer-edit-pending-title',
-  order: 627,
-  surfaces: ['discussion-composer-edit-pending-title'],
-  resolve: () => ({
-    text: '讨论已重新提交审核',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-composer-edit-pending-message',
-  order: 628,
-  surfaces: ['discussion-composer-edit-pending-message'],
-  resolve: () => ({
-    text: '请根据审核反馈继续完善内容，管理员通过后会重新公开显示。',
-  }),
-})
-
-registerUiCopy({
   key: 'discussion-composer-updated-title',
   order: 629,
   surfaces: ['discussion-composer-updated-title'],
@@ -3141,24 +2998,6 @@ registerUiCopy({
   surfaces: ['discussion-composer-updated-message'],
   resolve: () => ({
     text: '新的讨论内容已经保存。',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-composer-create-pending-title',
-  order: 631,
-  surfaces: ['discussion-composer-create-pending-title'],
-  resolve: () => ({
-    text: '讨论已进入审核队列',
-  }),
-})
-
-registerUiCopy({
-  key: 'discussion-composer-create-pending-message',
-  order: 632,
-  surfaces: ['discussion-composer-create-pending-message'],
-  resolve: () => ({
-    text: '管理员通过后，这条讨论才会显示在论坛列表中。',
   }),
 })
 
@@ -3328,15 +3167,6 @@ registerUiCopy({
 })
 
 registerUiCopy({
-  key: 'post-composer-edit-pending-title',
-  order: 643,
-  surfaces: ['post-composer-edit-pending-title'],
-  resolve: () => ({
-    text: '回复已重新提交审核',
-  }),
-})
-
-registerUiCopy({
   key: 'forum-realtime-status-reconnecting',
   order: 645,
   surfaces: ['forum-realtime-status-reconnecting'],
@@ -3351,33 +3181,6 @@ registerUiCopy({
   surfaces: ['forum-realtime-status-error'],
   resolve: () => ({
     text: '论坛实时连接暂时不可用，稍后会在下次页面交互时重试。',
-  }),
-})
-
-registerUiCopy({
-  key: 'post-composer-edit-pending-message',
-  order: 644,
-  surfaces: ['post-composer-edit-pending-message'],
-  resolve: () => ({
-    text: '管理员通过后，这条回复才会重新显示给其他用户。',
-  }),
-})
-
-registerUiCopy({
-  key: 'post-composer-create-pending-title',
-  order: 645,
-  surfaces: ['post-composer-create-pending-title'],
-  resolve: () => ({
-    text: '回复已进入审核队列',
-  }),
-})
-
-registerUiCopy({
-  key: 'post-composer-create-pending-message',
-  order: 646,
-  surfaces: ['post-composer-create-pending-message'],
-  resolve: () => ({
-    text: '管理员通过后，这条回复才会显示给其他用户。',
   }),
 })
 

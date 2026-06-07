@@ -1,15 +1,82 @@
 import { extendForum } from '@bias/forum'
+import DiscussionApprovedPostItem from './components/DiscussionApprovedPostItem.vue'
+import DiscussionRejectedPostItem from './components/DiscussionRejectedPostItem.vue'
+import DiscussionResubmittedPostItem from './components/DiscussionResubmittedPostItem.vue'
+import PostApprovedPostItem from './components/PostApprovedPostItem.vue'
+import PostRejectedPostItem from './components/PostRejectedPostItem.vue'
+import PostResubmittedPostItem from './components/PostResubmittedPostItem.vue'
+import {
+  getApprovalComposerState,
+  registerApprovalComposerCopy,
+  registerApprovalComposerInitialState,
+  registerApprovalComposerSubmitSuccess,
+} from './approvalComposer.js'
+import { registerApprovalModerationActions } from './approvalModerationActions.js'
 
 export const extend = [
   extendForum(registerApprovalForum),
 ]
 
 function registerApprovalForum(forum) {
+  registerApprovalPostTypes(forum)
   registerApprovalNotificationRenderers(forum)
   registerApprovalBadges(forum)
   registerApprovalReviewBanners(forum)
+  registerApprovalModerationActions(forum)
   registerApprovalFeedback(forum)
   registerApprovalComposerNotices(forum)
+  registerApprovalRealtimeEvents(forum)
+  registerApprovalComposerCopy(forum)
+  registerApprovalComposerInitialState(forum)
+  registerApprovalComposerSubmitSuccess(forum)
+}
+
+function registerApprovalPostTypes(forum) {
+  for (const item of [
+    {
+      type: 'discussionApproved',
+      label: '讨论审核通过',
+      component: DiscussionApprovedPostItem,
+      order: 70,
+    },
+    {
+      type: 'discussionRejected',
+      label: '讨论审核拒绝',
+      component: DiscussionRejectedPostItem,
+      order: 80,
+    },
+    {
+      type: 'discussionResubmitted',
+      label: '讨论重新提交审核',
+      component: DiscussionResubmittedPostItem,
+      order: 90,
+    },
+    {
+      type: 'postApproved',
+      label: '回复审核通过',
+      component: PostApprovedPostItem,
+      order: 100,
+    },
+    {
+      type: 'postRejected',
+      label: '回复审核拒绝',
+      component: PostRejectedPostItem,
+      order: 110,
+    },
+    {
+      type: 'postResubmitted',
+      label: '回复重新提交审核',
+      component: PostResubmittedPostItem,
+      order: 120,
+    },
+  ]) {
+    forum.postType(item.type, {
+      label: item.label,
+      component: item.component,
+      order: item.order,
+      moduleId: 'approval',
+    })
+  }
 }
 
 function registerApprovalNotificationRenderers(forum) {
@@ -175,11 +242,11 @@ function registerApprovalReviewBanners(forum) {
     order: 10,
     surfaces: ['discussion-hero'],
     isVisible: ({ discussion }) => discussion?.approval_status === 'pending',
-    resolve: ({ canModeratePendingDiscussion }) => ({
+    resolve: context => ({
       title: '讨论正在审核中',
       tone: 'warning',
       message: '这条讨论当前仅你和管理员可见，审核通过后才会出现在论坛列表中。',
-      actions: canModeratePendingDiscussion
+      actions: canModerateDiscussion(context)
         ? [
             { key: 'approve', label: '审核通过', tone: 'approve', action: 'approve' },
             { key: 'reject', label: '拒绝讨论', tone: 'reject', action: 'reject' },
@@ -194,16 +261,16 @@ function registerApprovalReviewBanners(forum) {
     order: 20,
     surfaces: ['discussion-hero'],
     isVisible: ({ discussion }) => discussion?.approval_status === 'rejected',
-    resolve: ({ discussion, canModeratePendingDiscussion, canEditDiscussion }) => ({
+    resolve: context => ({
       title: '讨论审核未通过',
       tone: 'danger',
-      message: discussion.approval_note || '管理员拒绝了这条讨论，请根据反馈调整后重新发布。',
-      actions: canModeratePendingDiscussion
+      message: context.discussion.approval_note || '管理员拒绝了这条讨论，请根据反馈调整后重新发布。',
+      actions: canModerateDiscussion(context)
         ? [
             { key: 'approve', label: '审核通过', tone: 'approve', action: 'approve' },
             { key: 'reject', label: '拒绝讨论', tone: 'reject', action: 'reject' },
           ]
-        : (canEditDiscussion
+        : (context.canEditDiscussion
             ? [{ key: 'edit', label: '修改后重新提交', tone: 'approve', action: 'edit' }]
             : []),
     }),
@@ -215,10 +282,10 @@ function registerApprovalReviewBanners(forum) {
     order: 10,
     surfaces: ['discussion-post'],
     isVisible: ({ post }) => post?.approval_status === 'pending',
-    resolve: ({ post, canModeratePendingPost }) => ({
+    resolve: context => ({
       tone: 'warning',
       message: '这条回复正在审核中，目前仅你和管理员可见。',
-      actions: canModeratePendingPost(post)
+      actions: canModeratePost(context)
         ? [
             { key: 'approve', label: '审核通过', tone: 'approve', action: 'approve' },
             { key: 'reject', label: '拒绝回复', tone: 'reject', action: 'reject' },
@@ -233,23 +300,31 @@ function registerApprovalReviewBanners(forum) {
     order: 20,
     surfaces: ['discussion-post'],
     isVisible: ({ post }) => post?.approval_status === 'rejected',
-    resolve: ({ post, canModeratePendingPost, canEditPost }) => ({
+    resolve: context => ({
       tone: 'danger',
-      message: post.approval_note || '这条回复未通过审核，请根据管理员反馈调整内容。',
-      actions: canModeratePendingPost(post)
+      message: context.post.approval_note || '这条回复未通过审核，请根据管理员反馈调整内容。',
+      actions: canModeratePost(context)
         ? [
             { key: 'approve', label: '审核通过', tone: 'approve', action: 'approve' },
             { key: 'reject', label: '拒绝回复', tone: 'reject', action: 'reject' },
           ]
-        : (canEditPost(post)
+        : (context.canEditPost(context.post)
             ? [{ key: 'edit', label: '修改后重新提交', tone: 'approve', action: 'edit' }]
             : []),
     }),
   })
 }
 
+function canModerateDiscussion(context = {}) {
+  return Boolean(context.authStore?.user?.is_staff && context.discussion?.approval_status === 'pending')
+}
+
+function canModeratePost(context = {}) {
+  return Boolean(context.authStore?.user?.is_staff && context.post?.approval_status === 'pending')
+}
+
 function registerApprovalFeedback(forum) {
-  forum.approvalNote({
+  forum.feedbackNote({
     key: 'rejected-discussion-list',
     moduleId: 'approval',
     order: 10,
@@ -260,7 +335,7 @@ function registerApprovalFeedback(forum) {
     }),
   })
 
-  forum.approvalNote({
+  forum.feedbackNote({
     key: 'rejected-profile-post',
     moduleId: 'approval',
     order: 20,
@@ -278,16 +353,49 @@ function registerApprovalComposerNotices(forum) {
     moduleId: 'approval',
     order: 20,
     isVisible: ({ isEditing, composerStore }) => {
+      const approvalState = getApprovalComposerState(composerStore?.current)
       return Boolean(
         isEditing
-        && composerStore?.current?.approvalStatus === 'rejected'
-        && composerStore?.current?.approvalNote
+        && approvalState.status === 'rejected'
+        && approvalState.note
       )
     },
     resolve: ({ type, composerStore }) => ({
       label: type === 'discussion' ? '讨论审核反馈' : '回复审核反馈',
       tone: 'warning',
-      message: composerStore.current.approvalNote,
+      message: getApprovalComposerState(composerStore?.current).note,
     }),
+  })
+}
+
+function registerApprovalRealtimeEvents(forum) {
+  forum.realtimeEvent({
+    key: 'approval-refresh-events',
+    moduleId: 'approval',
+    order: 10,
+    eventTypes: [
+      'discussion.rejected',
+      'discussion.resubmitted',
+      'post.rejected',
+      'post.resubmitted',
+    ],
+    refresh: true,
+  })
+
+  forum.realtimeEvent({
+    key: 'approval-approved-post-events',
+    moduleId: 'approval',
+    order: 20,
+    eventTypes: ['post.approved'],
+    appendPost: true,
+    newReply: true,
+  })
+
+  forum.realtimeEvent({
+    key: 'approval-discussion-event-posts',
+    moduleId: 'approval',
+    order: 30,
+    eventTypes: ['discussion.approved'],
+    upsertPost: true,
   })
 }

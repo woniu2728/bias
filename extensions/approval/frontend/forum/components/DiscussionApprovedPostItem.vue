@@ -2,43 +2,38 @@
   <DiscussionEventPostBase
     :post="post"
     :is-target="isTarget"
-    icon="fas fa-comment-slash"
-    variant="alert"
-    :target-post-number="targetPostNumber"
+    icon="fas fa-check-circle"
+    variant="default"
     :format-absolute-date="formatAbsoluteDate"
     :format-date="formatDate"
     @jump-to-post="$emit('jump-to-post', $event)"
   >
     <template #line>
       <strong>{{ actorName }}</strong>
-      <span>{{ rejectedText }}</span>
+      <span>{{ approvalText }}</span>
       <span v-if="note">{{ notePrefixText }}{{ note }}</span>
     </template>
   </DiscussionEventPostBase>
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import DiscussionEventPostBase from '@/components/discussion/DiscussionEventPostBase.vue'
-import { getUiCopy } from '@/forum/registry'
+import { computed, DiscussionEventPostBase, getUiCopy } from '@bias/forum'
 
 const props = defineProps({
   post: { type: Object, required: true },
   isTarget: { type: Boolean, default: false },
   getUserDisplayName: { type: Function, required: true },
   formatAbsoluteDate: { type: Function, required: true },
-  formatDate: { type: Function, required: true }
+  formatDate: { type: Function, required: true },
 })
 
 defineEmits(['jump-to-post'])
 
 const actorName = computed(() => props.getUserDisplayName(props.post.user))
 const note = computed(() => String(props.post.event_data?.note || '').trim())
-const targetPostNumber = computed(() => props.post.event_data?.target_post_number || '?')
-const rejectedText = computed(() => getUiCopy({
-  surface: 'post-event-rejected-label',
-  targetPostNumber: targetPostNumber.value,
-})?.text || `拒绝了第 ${targetPostNumber.value} 楼回复的审核`)
+const approvalText = computed(() => getUiCopy({
+  surface: 'discussion-event-approved-label',
+})?.text || '通过了该讨论的审核')
 const notePrefixText = computed(() => getUiCopy({
   surface: 'discussion-event-note-prefix',
 })?.text || '理由：')

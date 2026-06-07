@@ -20,6 +20,7 @@ export function useDiscussionDetailViewModel({
   const pageState = useDiscussionDetailPage({
     authStore,
     composerStore,
+    forumStore,
     route,
     router,
   })
@@ -69,6 +70,7 @@ export function useDiscussionDetailViewModel({
     ...presentationState,
     authStore,
     buildUserPath,
+    forumStore,
     getUserAvatarColor,
     getUserDisplayName,
     getUserInitial,

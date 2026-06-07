@@ -13,6 +13,8 @@ export const extend = [
 function registerTagsForum(forum) {
   registerResourceNormalizer('tags', normalizeTag)
   registerResourceNormalizer('tag', normalizeTag)
+  registerResourceNormalizer('discussions', normalizeTaggedDiscussion)
+  registerResourceNormalizer('discussion', normalizeTaggedDiscussion)
 
   forum.postType('discussionTagged', {
     label: '讨论标签变更',
@@ -691,6 +693,16 @@ function registerTagsForum(forum) {
       value: getTagsComposerState(context).selectedTagLabel,
     }),
   })
+}
+
+function normalizeTaggedDiscussion(discussion = {}) {
+  if (!('tags' in discussion)) {
+    return discussion
+  }
+  return {
+    ...discussion,
+    tags: unwrapTagList(discussion.tags).map(normalizeTag),
+  }
 }
 
 function getTagsComposerState(context = {}) {

@@ -147,7 +147,7 @@
               class="post-flag-button"
               :class="{ 'post-flag-button--primary': actionItem.tone === 'primary' }"
               :disabled="actionItem.disabled"
-              @click="handleFlagPanelAction(actionItem.status)"
+              @click="handleFlagPanelAction(actionItem)"
             >
               {{ actionItem.label }}
             </button>
@@ -197,11 +197,9 @@ const props = defineProps({
   isTarget: { type: Boolean, default: false },
   isSuspended: { type: Boolean, default: false },
   isPostMenuOpen: { type: Boolean, default: false },
-  flagPending: { type: Boolean, default: false },
   canEditPost: { type: Function, required: true },
   canDeletePost: { type: Function, required: true },
   canReportPost: { type: Function, required: true },
-  canModeratePendingPost: { type: Function, required: true },
   hasPostControls: { type: Function, required: true },
   buildUserPath: { type: Function, required: true },
   getUserDisplayName: { type: Function, required: true },
@@ -224,14 +222,13 @@ const postStateBadges = computed(() => getPostStateBadges({
 
 const postReviewBanner = computed(() => getPostReviewBanner({
   post: props.post,
-  canModeratePendingPost: props.canModeratePendingPost,
+  authStore: props.authStore,
   canEditPost: props.canEditPost,
   surface: 'discussion-post',
 }))
 
 const postFlagPanel = computed(() => getPostFlagPanel({
   post: props.post,
-  flagPending: props.flagPending,
   surface: 'discussion-post',
 }))
 
@@ -257,7 +254,6 @@ const emit = defineEmits([
   'delete-post',
   'open-report-modal',
   'moderate-post',
-  'resolve-post-flags',
   'close-post-menu',
 ])
 
@@ -284,8 +280,14 @@ function handleReviewAction(action) {
   emit('moderate-post', { post: props.post, action })
 }
 
-function handleFlagPanelAction(status) {
-  emit('resolve-post-flags', { post: props.post, status })
+function handleFlagPanelAction(actionItem) {
+  if (!actionItem || actionItem.disabled) return
+  emit('post-action', {
+    post: props.post,
+    action: actionItem.action || actionItem.key,
+    status: actionItem.status,
+    surface: 'post-flag-panel',
+  })
 }
 </script>
 

@@ -31,6 +31,40 @@ export class NotificationExtender {
   }
 }
 
+export class PostTypesExtender {
+  constructor() {
+    this.items = []
+  }
+
+  add(type, definitionOrComponent = {}) {
+    const normalizedType = normalizeKey(type)
+    if (normalizedType) {
+      this.items.push(normalizeComponentDefinition(normalizedType, definitionOrComponent))
+    }
+    return this
+  }
+
+  extend(app, extension = {}) {
+    const targetApp = resolveApplication(app)
+    const registry = resolveRegistry(app)
+    const extensionId = normalizeKey(extension.name || app?.extension?.id || app?.application?.extension?.id)
+    const scopedRegistry = typeof registry?.for === 'function'
+      ? (registry.for(extensionId) || registry)
+      : registry
+    targetApp.postComponents ||= Object.create(null)
+
+    for (const definition of this.items) {
+      const registeredDefinition = withExtensionId(definition, extensionId)
+      if (registeredDefinition.component) {
+        targetApp.postComponents[registeredDefinition.type] = registeredDefinition.component
+      }
+      if (typeof scopedRegistry?.registerPostType === 'function') {
+        scopedRegistry.registerPostType(registeredDefinition)
+      }
+    }
+  }
+}
+
 export class SearchExtender {
   constructor() {
     this.filters = []
@@ -219,14 +253,18 @@ export class ForumExtender {
   composerSecondaryAction(definition) { return this.register('registerComposerSecondaryAction', definition) }
   composerStatusItem(definition) { return this.register('registerComposerStatusItem', definition) }
   composerDraftMeta(definition) { return this.register('registerComposerDraftMeta', definition) }
+  composerSubmitSuccess(definition) { return this.register('registerComposerSubmitSuccess', definition) }
   composerAutocompleteProvider(definition) { return this.register('registerComposerAutocompleteProvider', definition) }
   composerPreviewTransformer(definition) { return this.register('registerComposerPreviewTransformer', definition) }
   notificationRenderer(definition) { return this.register('registerNotificationRenderer', definition) }
   searchModalSection(definition) { return this.register('registerSearchModalSection', definition) }
+  userBadge(definition) { return this.register('registerUserBadge', definition) }
   emptyState(definition) { return this.register('registerEmptyState', definition) }
+  pageState(definition) { return this.register('registerPageState', definition) }
   stateBlock(definition) { return this.register('registerStateBlock', definition) }
   uiCopy(definition) { return this.register('registerUiCopy', definition) }
-  approvalNote(definition) { return this.register('registerApprovalNote', definition) }
+  feedbackNote(definition) { return this.register('registerFeedbackNote', definition) }
+  realtimeEvent(definition) { return this.register('registerForumRealtimeEvent', definition) }
   runtime(definition) { return this.register('registerForumRuntime', definition) }
 
   extend(app, extension = {}) {

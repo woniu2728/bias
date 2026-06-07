@@ -22,8 +22,8 @@
       />
     </div>
 
-    <p v-if="approvalNote" class="approval-note">
-      {{ approvalNote.text }}
+    <p v-if="feedbackNote" class="feedback-note">
+      {{ feedbackNote.text }}
     </p>
 
     <ul class="discussion-list-item-info">
@@ -90,9 +90,9 @@ const props = defineProps({
 })
 
 const {
-  approvalNote,
   createdAtText,
   discussionStateBadges,
+  feedbackNote,
   lastPostedAtText,
   presentationItems,
 } = useDiscussionListItemMetaState({
@@ -179,7 +179,7 @@ const {
   max-width: 100%;
 }
 
-.approval-note {
+.feedback-note {
   margin: 0 0 6px;
   color: #9a5050;
   font-size: 12px;
@@ -227,7 +227,7 @@ const {
     word-break: break-word;
   }
 
-  .approval-note {
+  .feedback-note {
     margin-bottom: 8px;
     font-size: 11px;
   }

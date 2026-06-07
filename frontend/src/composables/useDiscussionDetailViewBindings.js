@@ -8,8 +8,6 @@ export function createDiscussionDetailViewBindings({
   canEditDiscussion,
   canEditPost,
   canModerateDiscussionSettings,
-  canModeratePendingDiscussion,
-  canModeratePendingPost,
   canReportPost,
   canReplyFromMenu,
   canShowDiscussionMenu,
@@ -25,6 +23,7 @@ export function createDiscussionDetailViewBindings({
   editDiscussion,
   formatAbsoluteDate,
   formatDate,
+  forumStore,
   getPostFeedbackActions,
   getPostMenuOptions,
   getPostPrimaryActions,
@@ -81,7 +80,6 @@ export function createDiscussionDetailViewBindings({
   suspensionNotice,
   toggleDiscussionMenu,
   togglePostMenu,
-  togglingSubscription,
   unreadCount,
   unreadDividerText,
   unreadHeightPercent,
@@ -97,10 +95,10 @@ export function createDiscussionDetailViewBindings({
   }))
 
   const heroBindings = computed(() => ({
+    authStore,
     discussion: discussion.value,
     discussionBadges: discussionBadges.value,
     discussionHeaderStyle: discussionHeaderStyle.value,
-    canModeratePendingDiscussion: canModeratePendingDiscussion.value,
     canEditDiscussion: canEditDiscussion.value,
   }))
 
@@ -113,6 +111,7 @@ export function createDiscussionDetailViewBindings({
     discussionMobileNavRef,
     discussion: discussion.value,
     authStore,
+    forumStore,
     isSuspended: isSuspended.value,
     showDiscussionMenu: showDiscussionMenu.value,
     canReplyFromMenu: canReplyFromMenu.value,
@@ -153,7 +152,6 @@ export function createDiscussionDetailViewBindings({
     canEditPost,
     canDeletePost,
     canReportPost,
-    canModeratePendingPost,
     unreadDividerText: unreadDividerText.value,
     hasPendingNewReplies: hasPendingNewReplies(),
     hasMore: hasMore.value,
@@ -184,9 +182,6 @@ export function createDiscussionDetailViewBindings({
     isPostMenuOpen(post) {
       return activePostMenuId.value === post.id
     },
-    isFlagPending(post) {
-      return Boolean(post?.is_flag_pending)
-    },
   }))
 
   const postStreamEvents = {
@@ -198,8 +193,8 @@ export function createDiscussionDetailViewBindings({
     openComposer,
     replyToPost,
     togglePostMenu,
-    postAction({ post, action, surface }) {
-      return runPostActionSelection(post, action, { surface })
+    postAction({ post, action, ...context }) {
+      return runPostActionSelection(post, action, context)
     },
     editPost(post) {
       return handlePostMenuSelection(post, 'edit-post')
@@ -216,9 +211,6 @@ export function createDiscussionDetailViewBindings({
     moderatePost({ post, action }) {
       return moderatePost(post, action)
     },
-    resolvePostFlags({ post, status }) {
-      return handlePostMenuSelection(post, 'resolve-post-flags', { status })
-    },
   }
 
   const sidebarBindings = computed(() => ({
@@ -232,7 +224,6 @@ export function createDiscussionDetailViewBindings({
     canEditDiscussion: canEditDiscussion.value,
     canModerateDiscussionSettings: canModerateDiscussionSettings.value,
     showDiscussionMenu: showDiscussionMenu.value,
-    togglingSubscription: togglingSubscription.value,
     menuItems: discussionMenuItems.value,
     sidebarActionItems: discussionSidebarActionItems.value,
     scrubberScrollbarStyle: scrubberScrollbarStyle.value,

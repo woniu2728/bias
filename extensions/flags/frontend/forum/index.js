@@ -70,32 +70,37 @@ function registerFlagsForum(forum) {
     order: 10,
     surfaces: ['discussion-post'],
     isVisible: ({ post }) => Boolean(post?.can_moderate_flags && Number(post?.open_flag_count || 0) > 0),
-    resolve: ({ post, flagPending }) => ({
-      title: '前台举报处理',
-      description: '版主可直接在这里查看原因并关闭举报。',
-      items: (post.open_flags || []).map(flag => ({
-        key: flag.id,
-        reason: flag.reason,
-        userLabel: flag.user?.display_name || flag.user?.username || '匿名用户',
-        message: flag.message || '举报人未填写补充说明。',
-      })),
-      actions: [
-        {
-          key: 'resolved',
-          label: flagPending ? '处理中...' : '标记已处理',
-          tone: 'primary',
-          status: 'resolved',
-          disabled: Boolean(flagPending),
-        },
-        {
-          key: 'ignored',
-          label: '忽略举报',
-          tone: 'secondary',
-          status: 'ignored',
-          disabled: Boolean(flagPending),
-        },
-      ],
-    }),
+    resolve: ({ post }) => {
+      const flagPending = Boolean(post?.is_flag_pending)
+      return {
+        title: '前台举报处理',
+        description: '版主可直接在这里查看原因并关闭举报。',
+        items: (post.open_flags || []).map(flag => ({
+          key: flag.id,
+          reason: flag.reason,
+          userLabel: flag.user?.display_name || flag.user?.username || '匿名用户',
+          message: flag.message || '举报人未填写补充说明。',
+        })),
+        actions: [
+          {
+            key: 'resolved',
+            action: 'resolve-post-flags',
+            label: flagPending ? '处理中...' : '标记已处理',
+            tone: 'primary',
+            status: 'resolved',
+            disabled: Boolean(flagPending),
+          },
+          {
+            key: 'ignored',
+            action: 'resolve-post-flags',
+            label: '忽略举报',
+            tone: 'secondary',
+            status: 'ignored',
+            disabled: Boolean(flagPending),
+          },
+        ],
+      }
+    },
   })
 
   registerFlagsUiCopy(forum)

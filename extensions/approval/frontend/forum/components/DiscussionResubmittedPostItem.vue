@@ -16,16 +16,14 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import DiscussionEventPostBase from '@/components/discussion/DiscussionEventPostBase.vue'
-import { getUiCopy } from '@/forum/registry'
+import { computed, DiscussionEventPostBase, getUiCopy } from '@bias/forum'
 
 const props = defineProps({
   post: { type: Object, required: true },
   isTarget: { type: Boolean, default: false },
   getUserDisplayName: { type: Function, required: true },
   formatAbsoluteDate: { type: Function, required: true },
-  formatDate: { type: Function, required: true }
+  formatDate: { type: Function, required: true },
 })
 
 defineEmits(['jump-to-post'])

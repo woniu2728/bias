@@ -7,8 +7,6 @@ const EMPTY_STATE = {
   extensions: {},
   discussionId: null,
   discussionTitle: '',
-  approvalStatus: '',
-  approvalNote: '',
   initialTitle: '',
   postId: null,
   postNumber: null,
@@ -50,10 +48,9 @@ export const useComposerStore = defineStore('composer', () => {
     openComposerState({
       type: 'edit-discussion',
       source: options.source || '',
+      extensions: options.extensions || options.extensionState || {},
       discussionId: options.discussionId ?? null,
       discussionTitle: options.discussionTitle || '',
-      approvalStatus: options.approvalStatus || '',
-      approvalNote: options.approvalNote || '',
       initialTitle: options.initialTitle || '',
       initialContent: options.initialContent || ''
     }, options)
@@ -63,13 +60,12 @@ export const useComposerStore = defineStore('composer', () => {
     openComposerState({
       type: 'reply',
       source: options.source || '',
+      extensions: options.extensions || options.extensionState || {},
       discussionId: options.discussionId ?? null,
       discussionTitle: options.discussionTitle || '',
       postId: options.postId ?? null,
       postNumber: options.postNumber ?? null,
       username: options.username || '',
-      approvalStatus: options.approvalStatus || '',
-      approvalNote: options.approvalNote || '',
       initialContent: options.initialContent || ''
     }, options)
   }
@@ -78,6 +74,7 @@ export const useComposerStore = defineStore('composer', () => {
     openComposerState({
       type: 'edit',
       source: options.source || '',
+      extensions: options.extensions || options.extensionState || {},
       discussionId: options.discussionId ?? null,
       discussionTitle: options.discussionTitle || '',
       postId: options.postId ?? null,

@@ -13,8 +13,6 @@ function createBindings(overrides = {}) {
     canEditDiscussion: ref(true),
     canEditPost: () => true,
     canModerateDiscussionSettings: ref(true),
-    canModeratePendingDiscussion: ref(false),
-    canModeratePendingPost: () => false,
     canReportPost: () => true,
     canReplyFromMenu: ref(true),
     canShowDiscussionMenu: ref(true),
@@ -69,7 +67,7 @@ function createBindings(overrides = {}) {
     openComposer() {},
     pendingNewReplyCount: ref(3),
     shareDiscussion() {},
-    posts: ref([{ id: 8, number: 3 }, { id: 9, number: 4, is_flag_pending: true }]),
+    posts: ref([{ id: 8, number: 3 }, { id: 9, number: 4 }]),
     previousTrigger: ref(null),
     replyToPost() {},
     resolvePostComponent: () => 'PostItem',
@@ -85,7 +83,6 @@ function createBindings(overrides = {}) {
     suspensionNotice: ref('账号已停用'),
     toggleDiscussionMenu() {},
     togglePostMenu() {},
-    togglingSubscription: ref(false),
     unreadCount: ref(2),
     unreadDividerText: ref('从这里开始是未读回复'),
     unreadHeightPercent: ref(20),
@@ -106,7 +103,6 @@ test('discussion detail view bindings expose grouped bindings', () => {
   assert.equal(bindings.postStreamBindings.value.isTargetPost({ number: 3 }), true)
   assert.equal(bindings.postStreamBindings.value.getPostPrimaryActions({ id: 8 })[0].key, 'primary-8')
   assert.equal(bindings.postStreamBindings.value.getPostFeedbackActions({ id: 8 })[0].key, 'feedback-8')
-  assert.equal(bindings.postStreamBindings.value.isFlagPending({ id: 9, is_flag_pending: true }), true)
   assert.equal(bindings.postStreamBindings.value.hasPendingNewReplies, true)
   assert.equal(bindings.postStreamBindings.value.pendingNewReplyCount, 3)
   assert.equal(bindings.sidebarBindings.value.maxPostNumber, 20)
@@ -183,6 +179,7 @@ test('discussion detail view bindings expose stable event handlers', () => {
   bindings.postStreamEvents.loadPreviousPosts()
   bindings.postStreamEvents.jumpToPost(12)
   bindings.postStreamEvents.postAction({ post: { id: 3 }, action: 'toggle-post-like', surface: 'discussion-post-primary' })
+  bindings.postStreamEvents.postAction({ post: { id: 11 }, action: 'resolve-post-flags', surface: 'post-flag-panel', status: 'resolved' })
   bindings.postStreamEvents.replyToPost({ id: 4 })
   bindings.postStreamEvents.togglePostMenu({ id: 5 })
   bindings.postStreamEvents.editPost({ id: 6 })
@@ -190,7 +187,6 @@ test('discussion detail view bindings expose stable event handlers', () => {
   bindings.postStreamEvents.toggleHidePost({ id: 8 })
   bindings.postStreamEvents.openReportModal({ id: 9 })
   bindings.postStreamEvents.moderatePost({ post: { id: 10 }, action: 'approve' })
-  bindings.postStreamEvents.resolvePostFlags({ post: { id: 11 }, status: 'resolved' })
   bindings.postStreamEvents.closePostMenu()
   bindings.postStreamEvents.loadPendingNewReplies()
   bindings.postStreamEvents.loadMorePosts()
@@ -215,6 +211,7 @@ test('discussion detail view bindings expose stable event handlers', () => {
     'load-previous',
     ['jump', 12],
     ['post-action', 3, 'toggle-post-like', 'discussion-post-primary'],
+    ['post-action', 11, 'resolve-post-flags', 'post-flag-panel'],
     ['reply', 4],
     ['toggle-post-menu', 5],
     ['post-menu', 6, 'edit-post', undefined],
@@ -222,7 +219,6 @@ test('discussion detail view bindings expose stable event handlers', () => {
     ['post-menu', 8, 'toggle-hide-post', undefined],
     ['post-menu', 9, 'open-report-modal', undefined],
     ['moderate-post', 10, 'approve'],
-    ['post-menu', 11, 'resolve-post-flags', 'resolved'],
     'close-post-menu',
     'load-pending',
     'load-more',

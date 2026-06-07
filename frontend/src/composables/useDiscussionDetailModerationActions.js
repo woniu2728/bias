@@ -1,11 +1,9 @@
 import { ref } from 'vue'
 import api from '@/api'
-import ModerationActionModal from '@/components/modals/ModerationActionModal.vue'
 import { useDiscussionDetailPostModerationActions } from '@/composables/useDiscussionDetailPostModerationActions'
+import { runDiscussionAction } from '@/forum/registry'
 
 export function useDiscussionDetailModerationActions({
-  canModeratePendingDiscussion,
-  canModeratePendingPost,
   canModeratePostVisibility,
   discussion,
   modalStore,
@@ -14,11 +12,9 @@ export function useDiscussionDetailModerationActions({
   router,
   showActionError,
   uiText,
-  upsertPost,
 }) {
-  const togglingSubscription = ref(false)
+  const pendingDiscussionActions = ref({})
   const postModerationActions = useDiscussionDetailPostModerationActions({
-    canModeratePendingPost,
     canModeratePostVisibility,
     modalStore,
     refreshDiscussion,
@@ -27,56 +23,18 @@ export function useDiscussionDetailModerationActions({
   })
 
   async function moderateDiscussion(action) {
-    if (!discussion.value || !canModeratePendingDiscussion.value) return
+    if (!discussion.value) return
 
-    const isApprove = action === 'approve'
-    const result = await modalStore.show(
-      ModerationActionModal,
-      {
-        title: uiText(
-          'discussion-detail-moderation-title',
-          isApprove ? '审核通过讨论' : '拒绝讨论',
-          { action, targetType: 'discussion' }
-        ),
-        description: uiText(
-          'discussion-detail-moderation-description',
-          isApprove ? '通过后，这条讨论会立即对其他用户可见。' : '拒绝后，讨论作者仍可在前台看到你的审核反馈。',
-          { action, targetType: 'discussion' }
-        ),
-        confirmText: uiText(
-          'discussion-detail-moderation-confirm',
-          isApprove ? '通过审核' : '确认拒绝',
-          { action, targetType: 'discussion' }
-        ),
-        confirmTone: isApprove ? 'primary' : 'danger',
-        placeholder: uiText(
-          'discussion-detail-moderation-placeholder',
-          isApprove ? '例如：内容符合社区规范，已放行' : '例如：标题与正文需要补充后再发布',
-          { action, targetType: 'discussion' }
-        ),
-        submitAction: ({ note }) => api.post(
-          `/admin/approval-queue/discussion/${discussion.value.id}/${action}`,
-          { note }
-        )
-      },
-      {
-        size: 'small'
-      }
-    )
-
-    if (!result) return
-    await refreshDiscussion()
-    await modalStore.alert({
-      title: uiText(
-        'discussion-detail-moderation-success-title',
-        isApprove ? '讨论已通过' : '讨论已拒绝',
-        { action, targetType: 'discussion' }
-      ),
-      message: uiText(
-        'discussion-detail-moderation-success-message',
-        isApprove ? '这条讨论现在已经对其他用户可见。' : '作者现在可以在前台看到你的审核反馈。',
-        { action, targetType: 'discussion' }
-      )
+    return runDiscussionAction({
+      key: action,
+      action,
+    }, {
+      action,
+      discussion: discussion.value,
+      modalStore,
+      refreshDiscussion,
+      showActionError,
+      uiText,
     })
   }
 
@@ -126,8 +84,21 @@ export function useDiscussionDetailModerationActions({
     }
   }
 
-  function setTogglingSubscription(value) {
-    togglingSubscription.value = Boolean(value)
+  function setDiscussionActionPending(action, value) {
+    const key = String(action || '').trim()
+    if (!key) return
+
+    const nextPendingActions = { ...pendingDiscussionActions.value }
+    if (value) {
+      nextPendingActions[key] = true
+    } else {
+      delete nextPendingActions[key]
+    }
+    pendingDiscussionActions.value = nextPendingActions
+  }
+
+  function isDiscussionActionPending(action) {
+    return Boolean(pendingDiscussionActions.value[String(action || '').trim()])
   }
 
   return {
@@ -136,8 +107,9 @@ export function useDiscussionDetailModerationActions({
     toggleHide,
     toggleLock,
     togglePin,
-    setTogglingSubscription,
-    togglingSubscription,
+    isDiscussionActionPending,
+    pendingDiscussionActions,
+    setDiscussionActionPending,
     ...postModerationActions,
   }
 }

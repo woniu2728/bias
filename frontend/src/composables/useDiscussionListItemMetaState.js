@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import {
-  getApprovalNote,
+  getFeedbackNote,
   getDiscussionPresentationItems,
   getDiscussionStateBadges,
   getUiCopy,
@@ -9,7 +9,7 @@ import {
 export function createDiscussionListItemMetaState({
   discussion,
   formatRelativeTime,
-  getDiscussionApprovalNote = getApprovalNote,
+  getDiscussionFeedbackNote = getFeedbackNote,
   getDiscussionBadges = getDiscussionStateBadges,
   getDiscussionPresentation = getDiscussionPresentationItems,
   getText = getUiCopy,
@@ -19,7 +19,7 @@ export function createDiscussionListItemMetaState({
     surface: 'discussion-list-item',
   }))
 
-  const approvalNote = computed(() => getDiscussionApprovalNote({
+  const feedbackNote = computed(() => getDiscussionFeedbackNote({
     discussion: discussion.value,
     surface: 'discussion-list-item',
   }))
@@ -50,9 +50,9 @@ export function createDiscussionListItemMetaState({
   })
 
   return {
-    approvalNote,
     createdAtText,
     discussionStateBadges,
+    feedbackNote,
     lastPostedAtText,
     presentationItems,
   }

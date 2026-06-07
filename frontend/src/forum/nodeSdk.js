@@ -22,12 +22,15 @@ export {
 export {
   getComposerAutocompleteProviders,
   getEmptyState,
+  getForumRealtimeEvents,
   getNotificationRenderers,
   getStateBlock,
   getUiCopy,
   registerComposerAutocompleteProvider,
   registerEmptyState,
+  registerForumRealtimeEvent,
 } from './frontendRegistry.js'
+export const ModerationActionModal = null
 export { defineStore } from 'pinia'
 export { registerResourceNormalizer, useResourceStore } from '../stores/resource.js'
 export {
@@ -47,11 +50,15 @@ export {
 } from '../utils/forum.js'
 export {
   FORUM_REALTIME_REFRESH_EVENT_TYPES,
+  getForumRealtimeEventPolicy,
   getTrackedDiscussionIdsFromDiscussionItems,
   getTrackedDiscussionIdsFromPostItems,
   hasTrackedDiscussionId,
   mergeForumEventPayload,
+  shouldAppendForumRealtimePost,
+  shouldMarkForumEventAsNewReply,
   shouldRefreshForumEvent,
+  shouldUpsertForumRealtimePost,
 } from '../utils/forumRealtime.js'
 export {
   renderTwemojiHtml,

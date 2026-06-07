@@ -192,10 +192,10 @@ import {
   unwrapList
 } from '@/utils/forum'
 import {
-  FORUM_REALTIME_REFRESH_EVENT_TYPES,
   getTrackedDiscussionIdsFromDiscussionItems,
   getTrackedDiscussionIdsFromPostItems,
   hasTrackedDiscussionId,
+  shouldRefreshForumEvent,
 } from '@/utils/forumRealtime'
 
 const RECENT_SEARCH_STORAGE_KEY = 'bias:search:recent'
@@ -585,7 +585,7 @@ async function handleForumEvent(event) {
     return
   }
 
-  if (FORUM_REALTIME_REFRESH_EVENT_TYPES.has(detail.event_type)) {
+  if (shouldRefreshForumEvent(detail.event_type)) {
     await fetchResults()
     return
   }

@@ -9,6 +9,9 @@ test('node test runtime resolves public Bias SDK package aliases', async () => {
 
   assert.equal(typeof forum.extendForum, 'function')
   assert.equal(typeof forum.ForumExtender, 'function')
+  assert.equal(typeof forum.PostTypes, 'function')
+  assert.equal(typeof forum.Store, 'function')
+  assert.equal(forum.ModerationActionModal, null)
   assert.equal(typeof forum.Forum, 'undefined')
   assert.equal(typeof forum.ref, 'function')
   assert.equal(typeof admin.extendAdmin, 'function')
@@ -29,6 +32,8 @@ test('node test runtime resolves public Bias SDK package aliases', async () => {
   assert.equal(typeof core.createExtensionPatcher, 'function')
   assert.equal(typeof core.ExportRegistry, 'function')
   assert.equal(typeof core.ResourceModel, 'function')
+  assert.equal(typeof core.PostTypes, 'function')
+  assert.equal(typeof core.Store, 'function')
   assert.equal(typeof core.normalizeExtensionFrontendEntry, 'function')
   assert.equal(typeof core.resolveExtensionRouteComponentKeys, 'function')
   assert.equal(typeof core.registerExtensionFrontendOutput, 'function')

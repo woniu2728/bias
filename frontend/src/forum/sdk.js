@@ -17,6 +17,7 @@ export {
   getDiscussionListHero,
   getDiscussionListRequests,
   getEmptyState,
+  getForumRealtimeEvents,
   getNotificationRenderers,
   getSearchModalSections,
   getStateBlock,
@@ -29,6 +30,7 @@ export {
   registerDiscussionListHero,
   registerDiscussionListRequest,
   registerEmptyState,
+  registerForumRealtimeEvent,
   registerSearchModalSection,
   runComposerInitialStateContributors,
   runComposerPayloadContributors,
@@ -36,6 +38,7 @@ export {
 export * from './runtimeSdk.js'
 export { default as DiscussionListSidebarStartButton } from '../components/discussion/DiscussionListSidebarStartButton.vue'
 export { default as DiscussionEventPostBase } from '../components/discussion/DiscussionEventPostBase.vue'
+export { default as ModerationActionModal } from '../components/modals/ModerationActionModal.vue'
 export { buildDiscussionHeroColorStyle } from '../composables/useDiscussionDetailPresentation.js'
 export { default as ForumHeroPanel } from '../components/forum/ForumHeroPanel.vue'
 export { default as ForumInlineMessage } from '../components/forum/ForumInlineMessage.vue'
@@ -68,11 +71,15 @@ export {
 } from '../utils/forum.js'
 export {
   FORUM_REALTIME_REFRESH_EVENT_TYPES,
+  getForumRealtimeEventPolicy,
   getTrackedDiscussionIdsFromDiscussionItems,
   getTrackedDiscussionIdsFromPostItems,
   hasTrackedDiscussionId,
   mergeForumEventPayload,
+  shouldAppendForumRealtimePost,
+  shouldMarkForumEventAsNewReply,
   shouldRefreshForumEvent,
+  shouldUpsertForumRealtimePost,
 } from '../utils/forumRealtime.js'
 export {
   renderTwemojiHtml,

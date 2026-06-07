@@ -6,16 +6,16 @@ import {
 } from '../forum/frontendRegistry.js'
 
 export function createDiscussionHeroState({
+  authStore,
   canEditDiscussion,
-  canModeratePendingDiscussion,
   discussion,
   getHeroMeta = getHeroMetaItems,
   getPresentationItems = getDiscussionPresentationItems,
   getReviewBanner = getDiscussionReviewBanner,
 }) {
   const discussionReviewBanner = computed(() => getReviewBanner({
+    authStore: authStore?.value ?? authStore,
     discussion: discussion.value,
-    canModeratePendingDiscussion: canModeratePendingDiscussion.value,
     canEditDiscussion: canEditDiscussion.value,
     surface: 'discussion-hero',
   }))

@@ -95,27 +95,31 @@ function registerSubscriptionsForum(forum) {
     order: 20,
     surfaces: ['discussion-sidebar', 'discussion-menu', 'discussion-mobile-primary'],
     isVisible: ({ authStore, isSuspended }) => Boolean(authStore?.isAuthenticated) && !isSuspended,
-    resolve: ({ togglingSubscription, discussion }) => ({
-      key: 'toggle-subscription',
-      label: getUiCopy({
-        surface: 'discussion-action-toggle-subscription-label',
-        togglingSubscription,
-        isSubscribed: discussion.is_subscribed,
-      })?.text || (togglingSubscription ? '提交中...' : (discussion.is_subscribed ? '取消关注' : '关注讨论')),
-      icon: discussion.is_subscribed ? 'fas fa-bell-slash' : 'far fa-star',
-      description: getUiCopy({
-        surface: 'discussion-action-toggle-subscription-description',
-        isSubscribed: discussion.is_subscribed,
-      })?.text || (discussion.is_subscribed ? '停止接收这条讨论后续回复通知。' : '接收这条讨论后续回复通知。'),
-      disabled: togglingSubscription,
-      disabledReason: togglingSubscription
-        ? (getUiCopy({
-            surface: 'discussion-action-toggle-subscription-disabled',
-          })?.text || '正在提交关注状态，请稍候。')
-        : '',
-      active: Boolean(discussion.is_subscribed),
-      order: 20,
-    }),
+    resolve: ({ pendingDiscussionActions, discussion }) => {
+      const actionPending = Boolean(pendingDiscussionActions?.['toggle-subscription'])
+      const isSubscribed = Boolean(discussion?.is_subscribed)
+      return {
+        key: 'toggle-subscription',
+        label: getUiCopy({
+          surface: 'discussion-action-toggle-subscription-label',
+          actionPending,
+          isSubscribed,
+        })?.text || (actionPending ? '提交中...' : (isSubscribed ? '取消关注' : '关注讨论')),
+        icon: isSubscribed ? 'fas fa-bell-slash' : 'far fa-star',
+        description: getUiCopy({
+          surface: 'discussion-action-toggle-subscription-description',
+          isSubscribed,
+        })?.text || (isSubscribed ? '停止接收这条讨论后续回复通知。' : '接收这条讨论后续回复通知。'),
+        disabled: actionPending,
+        disabledReason: actionPending
+          ? (getUiCopy({
+              surface: 'discussion-action-toggle-subscription-disabled',
+            })?.text || '正在提交关注状态，请稍候。')
+          : '',
+        active: isSubscribed,
+        order: 20,
+      }
+    },
   })
 
   forum.discussionActionHandler({
@@ -142,8 +146,8 @@ function registerSubscriptionsForum(forum) {
     moduleId: 'subscriptions',
     order: 479,
     surfaces: ['discussion-action-toggle-subscription-label'],
-    resolve: ({ togglingSubscription, isSubscribed }) => ({
-      text: togglingSubscription ? '提交中...' : (isSubscribed ? '取消关注' : '关注讨论'),
+    resolve: ({ actionPending, isSubscribed }) => ({
+      text: actionPending ? '提交中...' : (isSubscribed ? '取消关注' : '关注讨论'),
     }),
   })
 
@@ -167,21 +171,38 @@ function registerSubscriptionsForum(forum) {
     }),
   })
 
-  forum.uiCopy({
+  forum.stateBlock({
     key: 'discussion-sidebar-subscribed',
     moduleId: 'subscriptions',
-    order: 479,
-    surfaces: ['discussion-sidebar-subscribed'],
+    order: 20,
+    surfaces: ['discussion-sidebar-action-notice'],
+    isVisible: ({ authStore, discussion }) => Boolean(authStore?.isAuthenticated && discussion?.is_subscribed),
     resolve: () => ({
       text: '你会收到这条讨论后续回复的通知。',
     }),
+  })
+
+  forum.runtime({
+    key: 'follow-after-reply',
+    moduleId: 'subscriptions',
+    order: 10,
+    onReplyCreated({ authStore }) {
+      if (!authStore?.user?.preferences?.follow_after_reply) {
+        return null
+      }
+      return {
+        discussionPatch: {
+          is_subscribed: true,
+        },
+      }
+    },
   })
 }
 
 async function handleToggleSubscription({
   discussion,
   patchDiscussion,
-  setTogglingSubscription,
+  setDiscussionActionPending,
   showActionError,
 }) {
   if (!discussion?.id) {
@@ -189,7 +210,7 @@ async function handleToggleSubscription({
   }
 
   const isSubscribed = Boolean(discussion.is_subscribed)
-  setTogglingSubscription?.(true)
+  setDiscussionActionPending?.('toggle-subscription', true)
   try {
     if (isSubscribed) {
       await forumApi.delete(`/discussions/${discussion.id}/subscribe`)
@@ -202,6 +223,6 @@ async function handleToggleSubscription({
     console.error('更新关注状态失败:', error)
     await showActionError?.('更新关注', error)
   } finally {
-    setTogglingSubscription?.(false)
+    setDiscussionActionPending?.('toggle-subscription', false)
   }
 }

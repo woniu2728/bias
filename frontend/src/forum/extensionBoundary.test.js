@@ -57,10 +57,21 @@ function readExtensionForumSource(extensionId) {
   return readFileSync(resolve(extensionRoot, `${extensionId}/frontend/forum/index.js`), 'utf8')
 }
 
+function readExtensionForumFileSource(extensionId, file) {
+  return readFileSync(resolve(extensionRoot, `${extensionId}/frontend/forum/${file}`), 'utf8')
+}
+
 function assertCoreRegistryDoesNotOwn(keys) {
   const forumRegistrySource = readFileSync(resolve(repoRoot, 'frontend/src/forum/registry.js'), 'utf8')
   for (const key of keys) {
     assert.equal(forumRegistrySource.includes(key), false, key)
+  }
+}
+
+function assertCorePostTypesDoesNotOwn(keys) {
+  const postTypesSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/postTypes.js'), 'utf8')
+  for (const key of keys) {
+    assert.equal(postTypesSource.includes(key), false, key)
   }
 }
 
@@ -191,20 +202,63 @@ test('tags and notifications extensions own navigational forum contributions', (
 
 test('approval flags subscriptions and likes own interaction contributions', () => {
   const approvalForumSource = readExtensionForumSource('approval')
+  const approvalComposerSource = readExtensionForumFileSource('approval', 'approvalComposer.js')
+  const approvalModerationSource = readExtensionForumFileSource('approval', 'approvalModerationActions.js')
   const flagsForumSource = readExtensionForumSource('flags')
   const subscriptionsForumSource = readExtensionForumSource('subscriptions')
   const likesForumSource = readExtensionForumSource('likes')
 
   assertCoreRegistryDoesNotOwn([
     'discussionApproved',
+    'discussionRejected',
+    'discussionResubmitted',
+    'postApproved',
+    'postRejected',
+    'postResubmitted',
+    'discussion-event-note-prefix',
+    'discussion-event-approved-label',
+    'discussion-event-rejected-label',
+    'discussion-event-resubmitted-label',
+    'post-event-approved-label',
+    'post-event-rejected-label',
+    'post-event-resubmitted-label',
+    'discussion-detail-moderation-title',
+    'discussion-detail-moderation-description',
+    'discussion-detail-moderation-confirm',
+    'discussion-detail-moderation-placeholder',
+    'discussion-detail-moderation-success-title',
+    'discussion-detail-moderation-success-message',
     'open-report-modal',
     'toggle-subscription',
     'postLiked',
     'discussion-detail-like-summary',
     'discussion-post-like-action',
+    'discussion-composer-edit-pending-title',
+    'discussion-composer-create-pending-title',
+    'post-composer-edit-pending-title',
+    'post-composer-create-pending-title',
+  ])
+  assertCorePostTypesDoesNotOwn([
+    'discussionApproved',
+    'discussionRejected',
+    'discussionResubmitted',
+    'postApproved',
+    'postRejected',
+    'postResubmitted',
   ])
   assert.equal(approvalForumSource.includes('extendForum(registerApprovalForum)'), true)
-  assert.equal(approvalForumSource.includes('forum.approvalNote'), true)
+  assert.equal(approvalForumSource.includes('forum.postType'), true)
+  assert.equal(approvalForumSource.includes("type: 'discussionApproved'"), true)
+  assert.equal(approvalForumSource.includes("type: 'postResubmitted'"), true)
+  assert.equal(approvalForumSource.includes('forum.feedbackNote'), true)
+  assert.equal(approvalForumSource.includes('forum.realtimeEvent'), true)
+  assert.equal(approvalComposerSource.includes('forum.composerSubmitSuccess'), true)
+  assert.equal(approvalComposerSource.includes('forum.composerInitialState'), true)
+  assert.equal(approvalComposerSource.includes('forum.uiCopy'), true)
+  assert.equal(approvalModerationSource.includes('forum.discussionActionHandler'), true)
+  assert.equal(approvalModerationSource.includes('forum.postActionHandler'), true)
+  assert.equal(approvalModerationSource.includes('forum.uiCopy'), true)
+  assert.equal(approvalModerationSource.includes("moduleId: 'approval'"), true)
   assert.equal(approvalForumSource.includes('forum.discussionReviewBanner'), true)
   assert.equal(approvalForumSource.includes("moduleId: 'approval'"), true)
   assert.equal(flagsForumSource.includes('extendForum(registerFlagsForum)'), true)
@@ -213,6 +267,8 @@ test('approval flags subscriptions and likes own interaction contributions', () 
   assert.equal(flagsForumSource.includes("moduleId: 'flags'"), true)
   assert.equal(subscriptionsForumSource.includes('extendForum(registerSubscriptionsForum)'), true)
   assert.equal(subscriptionsForumSource.includes('forum.discussionActionHandler'), true)
+  assert.equal(subscriptionsForumSource.includes('forum.stateBlock'), true)
+  assert.equal(subscriptionsForumSource.includes('forum.runtime'), true)
   assert.equal(subscriptionsForumSource.includes('forum.notificationRenderer'), true)
   assert.equal(subscriptionsForumSource.includes("moduleId: 'subscriptions'"), true)
   assert.equal(likesForumSource.includes('extendForum(registerLikesForum)'), true)

@@ -8,12 +8,12 @@ import {
 } from '../utils/forum.js'
 
 const NORMALIZERS = {
-  users: normalizeUser,
-  user: normalizeUser,
-  discussions: normalizeDiscussion,
-  discussion: normalizeDiscussion,
-  posts: normalizePost,
-  post: normalizePost,
+  users: [normalizeUser],
+  user: [normalizeUser],
+  discussions: [normalizeDiscussion],
+  discussion: [normalizeDiscussion],
+  posts: [normalizePost],
+  post: [normalizePost],
 }
 
 export function registerResourceNormalizer(type, normalizer) {
@@ -21,7 +21,8 @@ export function registerResourceNormalizer(type, normalizer) {
   if (!normalizedType || typeof normalizer !== 'function') {
     return null
   }
-  NORMALIZERS[normalizedType] = normalizer
+  NORMALIZERS[normalizedType] ||= []
+  NORMALIZERS[normalizedType].push(normalizer)
   return normalizer
 }
 
@@ -29,14 +30,14 @@ function inferTypeFromCollectionKey(key) {
   const normalized = normalizeResourceType(key)
   if (!normalized) return ''
 
-  if (NORMALIZERS[normalized]) return normalized
+  if (hasResourceNormalizers(normalized)) return normalized
   if (normalized.endsWith('ies')) {
     const singular = `${normalized.slice(0, -3)}y`
-    if (NORMALIZERS[singular]) return singular
+    if (hasResourceNormalizers(singular)) return singular
   }
   if (normalized.endsWith('s')) {
     const singular = normalized.slice(0, -1)
-    if (NORMALIZERS[singular]) return singular
+    if (hasResourceNormalizers(singular)) return singular
   }
   return ''
 }
@@ -45,9 +46,15 @@ function normalizeResourceType(type) {
   return String(type || '').trim().toLowerCase()
 }
 
+function hasResourceNormalizers(type) {
+  return Array.isArray(NORMALIZERS[type]) && NORMALIZERS[type].length > 0
+}
+
 function normalizeItem(type, item) {
-  const normalizer = NORMALIZERS[normalizeResourceType(type)]
-  return typeof normalizer === 'function' ? normalizer(item) : { ...(item || {}) }
+  const normalizers = NORMALIZERS[normalizeResourceType(type)] || []
+  return normalizers.reduce((currentItem, normalizer) => {
+    return normalizer(currentItem)
+  }, { ...(item || {}) })
 }
 
 function getEntityId(item) {

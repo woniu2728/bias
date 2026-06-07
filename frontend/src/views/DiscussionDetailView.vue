@@ -8,9 +8,9 @@
         <main class="main-content">
           <DiscussionHero
             :discussion="heroBindings.discussion"
+            :auth-store="heroBindings.authStore"
             :discussion-badges="heroBindings.discussionBadges"
             :discussion-header-style="heroBindings.discussionHeaderStyle"
-            :can-moderate-pending-discussion="heroBindings.canModeratePendingDiscussion"
             :can-edit-discussion="heroBindings.canEditDiscussion"
             @moderate-discussion="heroEvents.moderateDiscussion"
             @edit-discussion="heroEvents.editDiscussion"
@@ -65,11 +65,9 @@
                 :is-target="postStreamBindings.isTargetPost(post)"
                 :is-suspended="postStreamBindings.isSuspended"
                 :is-post-menu-open="postStreamBindings.isPostMenuOpen(post)"
-                :flag-pending="postStreamBindings.isFlagPending(post)"
                 :can-edit-post="postStreamBindings.canEditPost"
                 :can-delete-post="postStreamBindings.canDeletePost"
                 :can-report-post="postStreamBindings.canReportPost"
-                :can-moderate-pending-post="postStreamBindings.canModeratePendingPost"
                 :has-post-controls="postStreamBindings.hasPostControls"
                 :build-user-path="postStreamBindings.buildUserPath"
                 :get-user-display-name="postStreamBindings.getUserDisplayName"
@@ -92,7 +90,6 @@
                 @toggle-hide-post="postStreamEvents.toggleHidePost"
                 @open-report-modal="postStreamEvents.openReportModal"
                 @moderate-post="postStreamEvents.moderatePost"
-                @resolve-post-flags="postStreamEvents.resolvePostFlags"
                 @close-post-menu="postStreamEvents.closePostMenu"
               />
             </template>
@@ -135,6 +132,7 @@
           :ref="sidebarBindings.discussionSidebarRef"
           :discussion="sidebarBindings.discussion"
           :auth-store="sidebarBindings.authStore"
+          :forum-store="sidebarBindings.forumStore"
           :is-suspended="sidebarBindings.isSuspended"
           :suspension-notice="sidebarBindings.suspensionNotice"
           :has-active-composer="sidebarBindings.hasActiveComposer"
@@ -142,7 +140,6 @@
           :can-edit-discussion="sidebarBindings.canEditDiscussion"
           :can-moderate-discussion-settings="sidebarBindings.canModerateDiscussionSettings"
           :show-discussion-menu="sidebarBindings.showDiscussionMenu"
-          :toggling-subscription="sidebarBindings.togglingSubscription"
           :menu-items="sidebarBindings.menuItems"
           :sidebar-action-items="sidebarBindings.sidebarActionItems"
           :scrubber-scrollbar-style="sidebarBindings.scrubberScrollbarStyle"

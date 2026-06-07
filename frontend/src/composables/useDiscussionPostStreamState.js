@@ -7,9 +7,10 @@ import {
   unwrapList,
 } from '@/utils/forum'
 import {
+  getForumRealtimeEventPolicy,
   mergeForumEventPayload,
-  shouldRefreshForumEvent,
 } from '@/utils/forumRealtime'
+import { runForumRuntimeHook } from '@/forum/registry'
 import { shouldAppendRealtimePostImmediately } from '@/utils/discussionPostStream'
 import { useDiscussionNearRouteState } from './useDiscussionNearRouteState'
 
@@ -17,6 +18,7 @@ export function useDiscussionPostStreamState({
   authStore,
   discussion,
   discussionId,
+  forumStore,
   route,
   router,
   patchDiscussion,
@@ -372,6 +374,7 @@ export function useDiscussionPostStreamState({
     syncPendingNewReplyCount()
 
     const lastPostNumber = Math.max(discussion.value.last_post_number || 0, newPostNumber)
+    const extensionDiscussionPatch = await collectReplyCreatedDiscussionPatch(newPost)
     if (!shouldAppendImmediately) {
       const pendingUnreadCount = Math.max(Number(discussion.value.unread_count || 0), pendingNewReplyCount.value)
       patchDiscussion({
@@ -381,7 +384,7 @@ export function useDiscussionPostStreamState({
         last_posted_at: newPost.created_at || discussion.value.last_posted_at,
         unread_count: pendingUnreadCount,
         is_unread: pendingUnreadCount > 0,
-        ...(authStore.user?.preferences?.follow_after_reply ? { is_subscribed: true } : {}),
+        ...extensionDiscussionPatch,
       })
       return
     }
@@ -398,7 +401,7 @@ export function useDiscussionPostStreamState({
       last_read_at: newPost.created_at || discussion.value.last_read_at,
       unread_count: unreadCountValue,
       is_unread: unreadCountValue > 0,
-      ...(authStore.user?.preferences?.follow_after_reply ? { is_subscribed: true } : {}),
+      ...extensionDiscussionPatch,
     })
 
     window.dispatchEvent(new CustomEvent('bias:discussion-read-state-updated', {
@@ -413,10 +416,46 @@ export function useDiscussionPostStreamState({
     await scrollToPost(newPost.number)
   }
 
+  async function collectReplyCreatedDiscussionPatch(post) {
+    const results = await runForumRuntimeHook('onReplyCreated', {
+      authStore,
+      discussion: discussion.value,
+      forumStore,
+      post,
+    })
+
+    return results.reduce((patch, result) => {
+      if (!result || typeof result !== 'object' || result.error) {
+        return patch
+      }
+      if (result.discussionPatch && typeof result.discussionPatch === 'object') {
+        return {
+          ...patch,
+          ...result.discussionPatch,
+        }
+      }
+      if (result.patch && typeof result.patch === 'object') {
+        return {
+          ...patch,
+          ...result.patch,
+        }
+      }
+      return {
+        ...patch,
+        ...result,
+      }
+    }, {})
+  }
+
   function applyRealtimeEvent(event) {
     if (!event || Number(event.discussion_id) !== Number(route.params.id)) return
 
-    if (shouldRefreshForumEvent(event.event_type)) {
+    const realtimePolicy = getForumRealtimeEventPolicy(event.event_type, {
+      discussion: discussion.value,
+      event,
+    })
+
+    if (realtimePolicy.refresh) {
       refreshDiscussion().catch(error => {
         console.error('刷新讨论详情失败:', error)
       })
@@ -432,34 +471,30 @@ export function useDiscussionPostStreamState({
         ? resourceStore.get('posts', postId) || normalizePost(payload.post)
         : normalizePost(payload.post)
       const normalizedPostNumber = Number(normalizedPost?.number || 0)
-      switch (event.event_type) {
-        case 'post.created':
-        case 'post.approved':
-        case 'post.resubmitted':
-          totalPosts.value = Math.max(totalPosts.value, normalizedPostNumber)
-          if (shouldAppendRealtimePostImmediately({
-            currentVisiblePostNumber: currentVisiblePostNumber.value,
-            lastLoadedPostNumber: lastLoadedPostNumber.value,
-            postIds: postIds.value,
-            postId: normalizedPost.id,
-            postNumber: normalizedPostNumber,
-          })) {
-            upsertPost(normalizedPost)
-            sortPostIds()
-            lastLoadedPostNumber.value = Math.max(lastLoadedPostNumber.value, normalizedPostNumber)
-          }
-          syncPendingNewReplyCount()
-          break
-        case 'discussion.created':
-        case 'discussion.approved':
-        case 'discussion.rejected':
-        case 'discussion.resubmitted':
+      if (realtimePolicy.appendPost) {
+        totalPosts.value = Math.max(totalPosts.value, normalizedPostNumber)
+        if (shouldAppendRealtimePostImmediately({
+          currentVisiblePostNumber: currentVisiblePostNumber.value,
+          lastLoadedPostNumber: lastLoadedPostNumber.value,
+          postIds: postIds.value,
+          postId: normalizedPost.id,
+          postNumber: normalizedPostNumber,
+        })) {
           upsertPost(normalizedPost)
           sortPostIds()
-          break
-        default:
-          upsertPost(normalizedPost)
+          lastLoadedPostNumber.value = Math.max(lastLoadedPostNumber.value, normalizedPostNumber)
+        }
+        syncPendingNewReplyCount()
+        return
       }
+
+      if (realtimePolicy.upsertPost) {
+        upsertPost(normalizedPost)
+        sortPostIds()
+        return
+      }
+
+      upsertPost(normalizedPost)
     }
   }
 

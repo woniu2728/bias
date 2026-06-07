@@ -8,18 +8,27 @@
 
 - `registerHeaderItem`
 - `registerDiscussionAction`
+- `registerDiscussionActionHandler`
 - `registerPostAction`
+- `registerPostActionHandler`
 - `registerComposerTool`
 - `registerComposerSecondaryAction`
 - `registerComposerStatusItem`
+- `registerComposerInitialState`
+- `registerComposerPayloadContributor`
+- `registerComposerSubmitSuccess`
 - `registerUiCopy`
 - `registerStateBlock`
+- `registerPageState`
+- `registerFeedbackNote`
+- `registerForumRealtimeEvent`
 - `registerNotificationRenderer`
 - `registerForumNavItem`
 - `registerForumNavSection`
 - `registerProfilePanel`
 - `registerSearchSource`
 - `registerHeroMeta`
+- `registerUserBadge`
 - `registerDiscussionListContext`
 - `registerDiscussionListRequest`
 - `registerDiscussionListHero`
@@ -37,7 +46,7 @@
 扩展入口可以使用公共 SDK：
 
 - `@bias/forum`
-  前台扩展入口。包含 `extendForum`、`ForumExtender`、`Routes`、`Search`、`Notification`、`Exports`、Vue runtime helper、路由 helper、资源 store helper 和通用组件导出。
+  前台扩展入口。包含 `extendForum`、`ForumExtender`、`Routes`、`Search`、`Notification`、`PostTypes`、`Exports`、Vue runtime helper、路由 helper、资源 store helper、`ModerationActionModal` 等通用组件导出。
 - `@bias/admin`
   后台扩展入口。包含 `extendAdmin`、`AdminExtender`、`Routes`、`Exports`、后台 runtime registry 和通用扩展能力。
 - `@bias/admin/components`
@@ -46,6 +55,21 @@
   前后台共享扩展运行时。包含 `ItemList`、`extend`、`override`、`resetPatches`、`createExtensionInitializers`、`createExtensionPatcher`、`ExportRegistry`、`ResourceModel`、`Model`、`Store` 等底层能力。
 
 优先使用 `extendForum(...)` / `extendAdmin(...)` 声明注入点。只有当现有注入点无法表达“扩展一个核心对象方法”时，才使用 `extend()` 或 `override()`。
+
+后台扩展也应只走公共 SDK：
+
+- `extendAdmin(admin => admin.page(...))`
+  声明后台页面和路由。
+- `admin.setting(...)` / `admin.customSetting(...)`
+  声明设置项；用 `admin.replaceSetting(...)`、`admin.setSettingPriority(...)`、`admin.removeSetting(...)` 调整已有设置。
+- `admin.permission(...)` / `admin.permissionScope(...)`
+  声明权限项和权限分组；用 `admin.replacePermission(...)`、`admin.setPermissionPriority(...)`、`admin.removePermission(...)` 调整已有权限。
+- `admin.generalIndexItems(...)`
+  向后台通用索引页注入扩展拥有的条目。
+- `admin.dashboardStat(...)`、`admin.dashboardAction(...)`、`admin.dashboardConfig(...)`、`admin.dashboardCopy(...)`
+  声明 dashboard 展示和交互入口。
+- `admin.pageCopy(...)`、`admin.pageConfig(...)`、`admin.pageActionMeta(...)`、`admin.pageNoteTemplate(...)`
+  声明后台页面级文案、配置、动作元信息和模板。
 
 ## 方法扩展和列表组合
 
@@ -81,11 +105,17 @@ export const extend = [{
 - `header`
   使用 `registerHeaderItem`
 - `discussion actions`
-  使用 `registerDiscussionAction`
+  使用 `registerDiscussionAction` 声明动作项；使用 `registerDiscussionActionHandler` / `forum.discussionActionHandler(...)` 声明动作执行逻辑。
 - `post actions`
-  使用 `registerPostAction`
+  使用 `registerPostAction` 声明动作项；使用 `registerPostActionHandler` / `forum.postActionHandler(...)` 声明动作执行逻辑。
+- `post types`
+  使用 `extendForum(forum => forum.postType(...))` 或 `new PostTypes().add(...)` 声明事件帖渲染类型。
 - `composer extension`
-  使用 `registerComposerTool`、`registerComposerSecondaryAction`、`registerComposerStatusItem`
+  使用 `extendForum(forum => forum.composerTool(...))`、`forum.composerSecondaryAction(...)`、`forum.composerStatusItem(...)`、`forum.composerInitialState(...)`、`forum.composerPayloadContributor(...)`、`forum.composerSubmitSuccess(...)`
+- `feedback notes`
+  使用 `extendForum(forum => forum.feedbackNote(...))` 声明列表、资料页等位置的反馈提示，避免核心认识具体业务字段。
+- `realtime events`
+  使用 `extendForum(forum => forum.realtimeEvent(...))` 声明扩展事件的前台语义，例如 `refresh`、`newReply`、`appendPost` 或 `upsertPost`。
 - `admin navigation`
   后台导航走 `frontend/src/admin/registry/routes.js` 的 `registerAdminRoute`
 - `notification renderer`
@@ -100,6 +130,10 @@ export const extend = [{
   使用 `extendForum(forum => forum.searchSource(...))` 声明搜索来源，避免扩展直接修改搜索页状态。
 - `hero meta`
   使用 `extendForum(forum => forum.heroMeta(...))` 声明讨论、个人资料等 hero 区域的补充元信息。
+- `user badges`
+  使用 `extendForum(forum => forum.userBadge(...))` 声明用户徽章。
+- `page state`
+  使用 `extendForum(forum => forum.pageState(...))` 声明页面级空态、加载态或异常态的补充展示。
 - `extension route document`
   后端 `FrontendExtender.route(..., preloads=(...))` 可为扩展路由声明页面级资源预取，前端路由切换时会交给 document runtime 应用。
 

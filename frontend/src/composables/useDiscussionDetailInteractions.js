@@ -5,8 +5,6 @@ import { useDiscussionDetailUserActions } from '@/composables/useDiscussionDetai
 export function useDiscussionDetailInteractions({
   authStore,
   canEditDiscussion,
-  canModeratePendingDiscussion,
-  canModeratePendingPost,
   canModeratePostVisibility,
   composerStore,
   discussion,
@@ -41,8 +39,6 @@ export function useDiscussionDetailInteractions({
   })
 
   const moderationActions = useDiscussionDetailModerationActions({
-    canModeratePendingDiscussion,
-    canModeratePendingPost,
     canModeratePostVisibility,
     discussion,
     modalStore,
@@ -51,7 +47,6 @@ export function useDiscussionDetailInteractions({
     router,
     showActionError: userActions.showActionError,
     uiText: userActions.uiText,
-    upsertPost,
   })
   const discussionActionHandlers = createDiscussionActionHandlers({
     deleteDiscussion: moderationActions.deleteDiscussion,

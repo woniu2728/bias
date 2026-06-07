@@ -5,7 +5,7 @@ import { createProfileContentSectionState } from './useProfileContentSectionStat
 
 test('profile content section state resolves discussion section copy and badges', () => {
   const state = createProfileContentSectionState({
-    getApproval: () => ({ text: 'approval-note' }),
+    getFeedback: () => ({ text: 'feedback-note' }),
     getDiscussionBadges: () => [{ key: 'locked' }],
     getEmpty: () => ({ text: 'empty-copy' }),
     getState: () => ({ text: 'loading-copy' }),
@@ -18,12 +18,12 @@ test('profile content section state resolves discussion section copy and badges'
   assert.equal(state.loadingStateText.value, 'loading-copy')
   assert.equal(state.emptyStateText.value, 'empty-copy')
   assert.deepEqual(state.getStateBadges({ id: 1 }), [{ key: 'locked' }])
-  assert.equal(state.getApprovalNoteText({ id: 1 }), 'approval-note')
+  assert.equal(state.getFeedbackNoteText({ id: 1 }), 'feedback-note')
 })
 
 test('profile content section state resolves post section defaults', () => {
   const state = createProfileContentSectionState({
-    getApproval: () => null,
+    getFeedback: () => null,
     getEmpty: () => null,
     getPostBadges: () => [{ key: 'pending' }],
     getState: () => null,
@@ -36,5 +36,5 @@ test('profile content section state resolves post section defaults', () => {
   assert.equal(state.loadingStateText.value, '加载中...')
   assert.equal(state.emptyStateText.value, '暂无回复')
   assert.deepEqual(state.getStateBadges({ id: 2 }), [{ key: 'pending' }])
-  assert.equal(state.getApprovalNoteText({ id: 2 }), '')
+  assert.equal(state.getFeedbackNoteText({ id: 2 }), '')
 })

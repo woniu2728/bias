@@ -170,8 +170,15 @@ export declare class AdminExtender {
   page(page: Record<string, any>): this
   setting(setting: Record<string, any> | (() => any), priority?: number): this
   customSetting(setting: Record<string, any> | (() => any), priority?: number): this
+  replaceSetting(setting: string, replacement: (setting: Record<string, any>) => Record<string, any>): this
+  setSettingPriority(setting: string, priority?: number): this
+  removeSetting(setting: string): this
   permission(permission: Record<string, any>, type?: string, priority?: number): this
   permissionScope(definition: Record<string, any>): this
+  replacePermission(permission: string, replacement: (permission: Record<string, any>) => Record<string, any>, type?: string): this
+  setPermissionPriority(permission: string, type?: string, priority?: number): this
+  removePermission(permission: string, type?: string): this
+  generalIndexItems(type: string, items: Record<string, any>[] | (() => Record<string, any>[])): this
   dashboardStat(definition: Record<string, any>): this
   dashboardAction(definition: Record<string, any>): this
   dashboardActionMeta(definition: Record<string, any>): this
@@ -227,14 +234,18 @@ export declare class ForumExtender {
   composerSecondaryAction(definition: Record<string, any>): this
   composerStatusItem(definition: Record<string, any>): this
   composerDraftMeta(definition: Record<string, any>): this
+  composerSubmitSuccess(definition: Record<string, any>): this
   composerAutocompleteProvider(definition: Record<string, any>): this
   composerPreviewTransformer(definition: Record<string, any>): this
   notificationRenderer(definition: Record<string, any>): this
   searchModalSection(definition: Record<string, any>): this
+  userBadge(definition: Record<string, any>): this
   emptyState(definition: Record<string, any>): this
+  pageState(definition: Record<string, any>): this
   stateBlock(definition: Record<string, any>): this
   uiCopy(definition: Record<string, any>): this
-  approvalNote(definition: Record<string, any>): this
+  feedbackNote(definition: Record<string, any>): this
+  realtimeEvent(definition: Record<string, any>): this
   runtime(definition: Record<string, any>): this
   extend(app: any, extension?: { name?: string; id?: string }): void
 }
@@ -260,6 +271,11 @@ export declare class Notification {
   extend(app: any): void
 }
 
+export declare class PostTypes {
+  add(type: string, definitionOrComponent?: any): this
+  extend(app: any, extension?: { name?: string; id?: string }): void
+}
+
 export declare class Search {
   filter(item: Record<string, any>): this
   gambit(modelType: string, gambit: Record<string, any>): this
@@ -274,7 +290,9 @@ export declare class ThemeMode {
 export declare const ModelExtender: typeof Model
 export declare const StoreExtender: typeof Store
 export declare const NotificationExtender: typeof Notification
+export declare const PostTypesExtender: typeof PostTypes
 export declare const RoutesExtender: typeof Routes
 export declare const SearchExtender: typeof Search
 export declare const ThemeModeExtender: typeof ThemeMode
 export declare const ExportsExtender: typeof Exports
+export declare const ModerationActionModal: any

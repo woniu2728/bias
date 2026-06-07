@@ -15,15 +15,16 @@ export function useDiscussionDetailMenus({
   discussion,
   forumStore,
   hasActiveComposer,
+  isDiscussionActionPending = () => false,
   isSuspended,
+  pendingDiscussionActions = { value: {} },
   showDiscussionMenu,
-  togglingSubscription,
   discussionActionHandlers,
   postActionHandlers,
   modalStore,
   patchDiscussion,
   router,
-  setTogglingSubscription,
+  setDiscussionActionPending = () => {},
   showActionError,
   showSuspensionAlert,
   uiText,
@@ -47,9 +48,12 @@ export function useDiscussionDetailMenus({
       discussion: discussion.value || {},
       discussionActionHandlers,
       forumStore,
+      isDiscussionActionPending,
       modalStore,
+      pendingDiscussionActions: pendingDiscussionActions.value,
       patchDiscussion,
-      setTogglingSubscription,
+      setActionPending: setDiscussionActionPending,
+      setDiscussionActionPending,
       showActionError,
     })
     if (ran) {
@@ -65,9 +69,10 @@ export function useDiscussionDetailMenus({
     discussion: discussion.value || {},
     forumStore,
     hasActiveComposer: hasActiveComposer.value,
+    isDiscussionActionPending,
     isSuspended: isSuspended.value,
+    pendingDiscussionActions: pendingDiscussionActions.value,
     surface: 'discussion-menu',
-    togglingSubscription: togglingSubscription.value
   }))
 
   const discussionSidebarActionItems = computed(() => getDiscussionMenuItems({
@@ -78,9 +83,10 @@ export function useDiscussionDetailMenus({
     discussion: discussion.value || {},
     forumStore,
     hasActiveComposer: hasActiveComposer.value,
+    isDiscussionActionPending,
     isSuspended: isSuspended.value,
+    pendingDiscussionActions: pendingDiscussionActions.value,
     surface: 'discussion-sidebar',
-    togglingSubscription: togglingSubscription.value
   }))
 
   const discussionMobileActionItems = computed(() => getDiscussionMenuItems({
@@ -91,9 +97,10 @@ export function useDiscussionDetailMenus({
     discussion: discussion.value || {},
     forumStore,
     hasActiveComposer: hasActiveComposer.value,
+    isDiscussionActionPending,
     isSuspended: isSuspended.value,
+    pendingDiscussionActions: pendingDiscussionActions.value,
     surface: 'discussion-mobile-primary',
-    togglingSubscription: togglingSubscription.value
   }))
 
   function hasPostControls(post) {

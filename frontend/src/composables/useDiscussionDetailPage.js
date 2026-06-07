@@ -8,11 +8,13 @@ import { useDiscussionDetailUiState } from '@/composables/useDiscussionDetailUiS
 export function useDiscussionDetailPage({
   authStore,
   composerStore,
+  forumStore,
   route,
   router
 }) {
   const detailState = useDiscussionDetailState({
     authStore,
+    forumStore,
     route,
     router,
   })

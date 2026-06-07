@@ -23,16 +23,12 @@ export function normalizeDiscussion(discussion = {}) {
   const unreadCount = Number(discussion.unread_count || 0)
   return {
     ...discussion,
-    approval_status: discussion.approval_status || 'approved',
-    approval_note: discussion.approval_note || '',
     is_sticky: Boolean(discussion.is_sticky ?? discussion.is_pinned),
-    is_subscribed: Boolean(discussion.is_subscribed),
     is_unread: Boolean(discussion.is_unread || unreadCount > 0),
     unread_count: unreadCount,
     last_read_post_number: Number(discussion.last_read_post_number || 0),
     user: discussion.user ? normalizeUser(discussion.user) : null,
     last_post: discussion.last_post ? normalizePost(discussion.last_post) : null,
-    tags: unwrapList(discussion.tags)
   }
 }
 
@@ -40,9 +36,6 @@ export function normalizePost(post = {}) {
   return {
     ...post,
     content_html: renderTwemojiHtml(post.content_html || ''),
-    approval_status: post.approval_status || 'approved',
-    approval_note: post.approval_note || '',
-    like_count: post.like_count ?? post.likes_count ?? 0,
     user: post.user ? normalizeUser(post.user) : null,
     discussion: post.discussion || (post.discussion_id ? {
       id: post.discussion_id,

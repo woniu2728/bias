@@ -9,11 +9,12 @@ import {
   getComposerAutocompleteProviders,
   getComposerDraftMeta,
   getComposerFields,
-  getApprovalNote,
+  getFeedbackNote,
   getDiscussionReplyState,
   getDiscussionReviewBanner,
   getEmptyState,
   getForumNavItems,
+  getForumRealtimeEvents,
   getHeaderItems,
   getHeroMetaItems,
   getNotificationRenderers,
@@ -35,13 +36,14 @@ import {
   registerComposerPayloadContributor,
   registerComposerPreviewTransformer,
   registerComposerSubmitSuccess,
-  registerApprovalNote,
+  registerFeedbackNote,
   registerDiscussionAction,
   registerDiscussionActionHandler,
   registerDiscussionListContext,
   registerDiscussionListHero,
   registerDiscussionListRequest,
   registerForumNavItem,
+  registerForumRealtimeEvent,
   registerForumRuntime,
   registerHeaderItem,
   registerDiscussionReplyState,
@@ -66,6 +68,7 @@ import {
   runComposerSubmitSuccess,
   runForumRuntimeHook,
 } from './frontendRegistry.js'
+import { getForumRealtimeEventPolicy } from '../utils/forumRealtime.js'
 import {
   resolveDiscussionAction,
   runDiscussionAction,
@@ -425,6 +428,53 @@ test('registered items with module id are filtered by forum runtime state', () =
   assert.equal(getPostActions(context).some(item => item.key === postActionKey), false)
 })
 
+test('forum realtime events resolve extension policy by module state', () => {
+  const enabledKey = uniqueKey('realtime-enabled')
+  const disabledKey = uniqueKey('realtime-disabled')
+  const enabledEventType = `${enabledKey}.event`
+  const disabledEventType = `${disabledKey}.event`
+  const context = {
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId === 'enabled-module'
+      },
+    },
+  }
+
+  registerForumRealtimeEvent({
+    key: enabledKey,
+    moduleId: 'enabled-module',
+    order: 10,
+    eventTypes: [enabledEventType],
+    appendPost: true,
+    newReply: true,
+  })
+
+  registerForumRealtimeEvent({
+    key: disabledKey,
+    moduleId: 'disabled-module',
+    order: 5,
+    eventTypes: [disabledEventType],
+    refresh: true,
+  })
+
+  assert.equal(getForumRealtimeEvents({
+    ...context,
+    eventType: enabledEventType,
+  }).some(item => item.key === enabledKey), true)
+  assert.equal(getForumRealtimeEvents({
+    ...context,
+    eventType: disabledEventType,
+  }).some(item => item.key === disabledKey), false)
+  assert.deepEqual(getForumRealtimeEventPolicy(enabledEventType, context), {
+    appendPost: true,
+    newReply: true,
+    refresh: false,
+    upsertPost: false,
+  })
+  assert.equal(getForumRealtimeEventPolicy(disabledEventType, context).refresh, false)
+})
+
 test('search modal sections resolve by order, surface and module state', () => {
   const earlyKey = uniqueKey('search-modal-section-early')
   const lateKey = uniqueKey('search-modal-section-late')
@@ -746,11 +796,11 @@ test('post flag panel prefers matching surface-specific item', () => {
   assert.equal(fallbackResult.description, 'fallback description')
 })
 
-test('approval note registry prefers matching surface-specific item', () => {
+test('feedback note registry prefers matching surface-specific item', () => {
   const fallbackKey = uniqueKey('review-note-fallback')
   const scopedKey = uniqueKey('review-note-scoped')
 
-  registerApprovalNote({
+  registerFeedbackNote({
     key: fallbackKey,
     order: 30,
     isVisible: () => true,
@@ -759,7 +809,7 @@ test('approval note registry prefers matching surface-specific item', () => {
     }),
   })
 
-  registerApprovalNote({
+  registerFeedbackNote({
     key: scopedKey,
     order: 40,
     surfaces: ['profile-post'],
@@ -769,11 +819,11 @@ test('approval note registry prefers matching surface-specific item', () => {
     }),
   })
 
-  const surfaceResult = getApprovalNote({
+  const surfaceResult = getFeedbackNote({
     post: { review_note: 'detail' },
     surface: 'profile-post',
   })
-  const fallbackResult = getApprovalNote({
+  const fallbackResult = getFeedbackNote({
     post: { review_note: 'detail' },
     surface: 'other-surface',
   })
@@ -2294,18 +2344,20 @@ test('composer submit success handlers run in order and respect visibility', asy
     },
   })
 
-  await runComposerSubmitSuccess({
+  const handledCount = await runComposerSubmitSuccess({
     type: 'discussion',
     mode: 'create',
     data: { id: 7 },
   })
 
-  await runComposerSubmitSuccess({
+  const skippedCount = await runComposerSubmitSuccess({
     type: 'post',
     mode: 'edit',
     data: { id: 9 },
   })
 
+  assert.equal(handledCount, 2)
+  assert.equal(skippedCount, 0)
   assert.deepEqual(calls, ['first:7', 'second:7'])
 })
 
