@@ -1118,23 +1118,39 @@ def _build_extension_model_definitions(runtime_view):
 def _build_extension_owned_models(runtime_view):
     if runtime_view is None:
         return []
-    return [
-        {
+    items = []
+    for item in getattr(runtime_view, "model_definitions", ()) or ():
+        if item.kind != "owner":
+            continue
+        model = item.model
+        current_app_label = _model_app_label(model)
+        target_app_label = _extension_app_label(runtime_view.extension_id)
+        package_migration_required = _model_package_migration_required(model, runtime_view.extension_id)
+        app_label_migration_required = _model_app_label_migration_required(model, runtime_view.extension_id)
+        items.append({
             "module_id": runtime_view.extension_id,
-            "model": getattr(item.model, "__name__", str(item.model)),
-            "model_label": _model_label(item.model),
-            "model_module": _model_module(item.model),
-            "app_label": _model_app_label(item.model),
-            "db_table": _model_db_table(item.model),
-            "storage_origin": _model_storage_origin(item.model, runtime_view.extension_id),
-            "package_migration_required": _model_package_migration_required(item.model, runtime_view.extension_id),
-            "app_label_migration_required": _model_app_label_migration_required(item.model, runtime_view.extension_id),
+            "model": getattr(model, "__name__", str(model)),
+            "model_label": _model_label(model),
+            "model_module": _model_module(model),
+            "app_label": current_app_label,
+            "current_app_label": current_app_label,
+            "target_app_label": target_app_label,
+            "db_table": _model_db_table(model),
+            "storage_origin": _model_storage_origin(model, runtime_view.extension_id),
+            "package_migration_required": package_migration_required,
+            "app_label_migration_required": app_label_migration_required,
+            "migration_risk": _model_migration_risk(
+                package_migration_required=package_migration_required,
+                app_label_migration_required=app_label_migration_required,
+            ),
+            "recommended_steps": _model_migration_recommended_steps(
+                package_migration_required=package_migration_required,
+                app_label_migration_required=app_label_migration_required,
+            ),
             "key": item.key,
             "description": item.description,
-        }
-        for item in getattr(runtime_view, "model_definitions", ()) or ()
-        if item.kind == "owner"
-    ]
+        })
+    return items
 
 
 def _build_extension_model_ownership_audit(runtime_view):
@@ -1155,6 +1171,16 @@ def _build_extension_model_ownership_audit(runtime_view):
         "django_app_count": sum(1 for item in items if item["storage_origin"] == "django_app"),
         "package_migration_required_count": sum(1 for item in items if item["package_migration_required"]),
         "app_label_migration_required_count": sum(1 for item in items if item["app_label_migration_required"]),
+        "app_label_migration_plan_required_count": sum(
+            1
+            for item in items
+            if item["app_label_migration_required"] and item["target_app_label"]
+        ),
+        "app_label_migration_items": [
+            _build_model_app_label_migration_item(item)
+            for item in items
+            if item["app_label_migration_required"]
+        ],
         "items": items,
     }
 
@@ -1210,6 +1236,10 @@ def _model_app_label(model) -> str:
     return str(getattr(meta, "app_label", "") or "").strip()
 
 
+def _extension_app_label(extension_id: str) -> str:
+    return str(extension_id or "").replace("-", "_").strip()
+
+
 def _model_db_table(model) -> str:
     meta = getattr(model, "_meta", None)
     return str(getattr(meta, "db_table", "") or "").strip()
@@ -1233,8 +1263,46 @@ def _model_package_migration_required(model, extension_id: str) -> bool:
 
 def _model_app_label_migration_required(model, extension_id: str) -> bool:
     app_label = _model_app_label(model)
-    expected = str(extension_id or "").replace("-", "_").strip()
+    expected = _extension_app_label(extension_id)
     return bool(app_label and expected and app_label != expected)
+
+
+def _model_migration_risk(*, package_migration_required: bool, app_label_migration_required: bool) -> str:
+    if app_label_migration_required:
+        return "high"
+    if package_migration_required:
+        return "medium"
+    return "none"
+
+
+def _model_migration_recommended_steps(
+    *,
+    package_migration_required: bool,
+    app_label_migration_required: bool,
+) -> list[str]:
+    steps = []
+    if package_migration_required:
+        steps.append("将模型定义迁入扩展 backend/models.py，并从核心 Django app model 文件移除实体定义。")
+    if app_label_migration_required:
+        steps.extend([
+            "新增目标扩展 app label 的状态迁移，使用 SeparateDatabaseAndState 保留现有数据表。",
+            "将模型 Meta.app_label 切换为目标扩展 app label，并明确 ContentType/Permission 迁移策略。",
+            "运行 makemigrations --check、扩展安装迁移和卸载回滚测试，确认不会生成删表建表操作。",
+        ])
+    return steps
+
+
+def _build_model_app_label_migration_item(item: dict) -> dict:
+    return {
+        "module_id": item.get("module_id") or "",
+        "model": item.get("model") or "",
+        "model_label": item.get("model_label") or "",
+        "current_app_label": item.get("current_app_label") or item.get("app_label") or "",
+        "target_app_label": item.get("target_app_label") or "",
+        "db_table": item.get("db_table") or "",
+        "migration_risk": item.get("migration_risk") or "high",
+        "recommended_steps": list(item.get("recommended_steps") or ()),
+    }
 
 
 def _build_extension_search_drivers(runtime_view):

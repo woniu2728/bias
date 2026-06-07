@@ -4661,8 +4661,20 @@ class ExtensionManagementCommandTests(TestCase):
             self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
             self.assertEqual(audit["extension_native_count"], 1)
             self.assertEqual(audit["app_label_migration_required_count"], 1)
+            self.assertEqual(audit["app_label_migration_plan_required_count"], 1)
             self.assertTrue(all(item["storage_origin"] == "extension" for item in audit["items"]))
             self.assertTrue(all(item["model_module"].startswith(f"extensions.{extension_id}") for item in audit["items"]))
+            self.assertEqual(len(audit["app_label_migration_items"]), 1)
+            migration_item = audit["app_label_migration_items"][0]
+            owned_item = audit["items"][0]
+            self.assertEqual(owned_item["current_app_label"], "posts")
+            self.assertEqual(owned_item["target_app_label"], extension_id)
+            self.assertEqual(owned_item["migration_risk"], "high")
+            self.assertEqual(migration_item["current_app_label"], "posts")
+            self.assertEqual(migration_item["target_app_label"], extension_id)
+            self.assertEqual(migration_item["db_table"], owned_item["db_table"])
+            self.assertEqual(migration_item["migration_risk"], "high")
+            self.assertTrue(migration_item["recommended_steps"])
 
     def test_inspect_extensions_reports_approval_migration_marker(self):
         stdout = StringIO()
