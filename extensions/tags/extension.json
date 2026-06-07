@@ -19,6 +19,7 @@
     "tag-stats-refresh"
   ],
   "backend_entry": "extensions.tags.backend.ext",
+  "migration_namespace": "extensions.tags.backend.migrations",
   "compatibility": {
     "bias_version": "^1.0.0",
     "api_version": "1.0",

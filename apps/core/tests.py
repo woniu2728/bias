@@ -4643,6 +4643,45 @@ class ExtensionManagementCommandTests(TestCase):
         self.assertTrue(any(item["model_module"].startswith("extensions.tags") for item in audit["items"]))
         self.assertIn("model_package_migration_required_count", extension["capability_summary"])
 
+    def test_inspect_extensions_reports_extension_model_app_label_gap(self):
+        for extension_id in ("likes", "flags", "mentions"):
+            stdout = StringIO()
+            call_command(
+                "inspect_extensions",
+                "--extension-id",
+                extension_id,
+                stdout=stdout,
+            )
+            payload = json.loads(stdout.getvalue())
+            extension = payload["extensions"][0]
+            audit = extension["model_ownership_audit"]
+            manifest = ExtensionRegistry(extensions_path=Path.cwd() / "extensions").get_extension(extension_id).manifest
+
+            self.assertEqual(manifest.migration_namespace, f"extensions.{extension_id}.backend.migrations")
+            self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+            self.assertEqual(audit["extension_native_count"], 1)
+            self.assertEqual(audit["app_label_migration_required_count"], 1)
+            self.assertTrue(all(item["storage_origin"] == "extension" for item in audit["items"]))
+            self.assertTrue(all(item["model_module"].startswith(f"extensions.{extension_id}") for item in audit["items"]))
+
+    def test_inspect_extensions_reports_approval_migration_marker(self):
+        stdout = StringIO()
+        call_command(
+            "inspect_extensions",
+            "--extension-id",
+            "approval",
+            stdout=stdout,
+        )
+        payload = json.loads(stdout.getvalue())
+        extension = payload["extensions"][0]
+        manifest = ExtensionRegistry(extensions_path=Path.cwd() / "extensions").get_extension("approval").manifest
+
+        self.assertEqual(manifest.migration_namespace, "extensions.approval.backend.migrations")
+        self.assertIn(
+            "0001_record_core_hosted_approval_storage.py",
+            extension["migration_plan"]["pending_files"],
+        )
+
     def test_inspect_extensions_command_can_filter_attention_only(self):
         ExtensionInstallation.objects.create(
             extension_id="sample-hello",
@@ -11546,6 +11585,24 @@ class TestRunnerTests(TestCase):
             source = path.read_text(encoding="utf-8")
             for pattern in forbidden_patterns:
                 self.assertNotIn(pattern, source, f"{relative_path} still contains migrated extension test behavior")
+
+    def test_extension_owned_models_are_not_redefined_in_core_model_modules(self):
+        checks = {
+            "apps/posts/models.py": [
+                "class PostLike",
+                "class PostFlag",
+                "class PostMentionsUser",
+            ],
+            "apps/tags/models.py": [
+                "class Tag",
+                "class DiscussionTag",
+            ],
+        }
+
+        for relative_path, forbidden_patterns in checks.items():
+            source = (Path(settings.BASE_DIR) / relative_path).read_text(encoding="utf-8")
+            for pattern in forbidden_patterns:
+                self.assertNotIn(pattern, source, f"{relative_path} redefines extension-owned model")
 
 
 @override_settings(CACHES={

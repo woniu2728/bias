@@ -14,6 +14,7 @@
     "post-likes"
   ],
   "backend_entry": "extensions.likes.backend.ext",
+  "migration_namespace": "extensions.likes.backend.migrations",
   "frontend_forum_entry": "extensions/likes/frontend/forum/index.js",
   "compatibility": {
     "bias_version": "^1.0.0",

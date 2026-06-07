@@ -774,3 +774,23 @@ def uninstall(context):
         "status_label": "已卸载",
         "message": "Tags 扩展已卸载。",
     }
+
+
+def run_migrations(context):
+    return _migration_hook_result(context, "run_migrations", "Tags 扩展迁移已执行。")
+
+
+def rollback_migrations(context):
+    return _migration_hook_result(context, "rollback_migrations", "Tags 扩展迁移已回滚。")
+
+
+def _migration_hook_result(context, hook: str, message: str):
+    return {
+        "hook": hook,
+        "status": "ok",
+        "status_label": "已执行",
+        "message": message,
+        "details": {
+            "migration_namespace": context.migration_namespace,
+        },
+    }
