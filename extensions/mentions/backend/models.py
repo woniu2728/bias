@@ -14,7 +14,7 @@ class PostMentionsUser(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        app_label = "posts"
+        app_label = "mentions"
         db_table = "post_mentions_user"
         unique_together = [["post", "mentions_user"]]
         indexes = [

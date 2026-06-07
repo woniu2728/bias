@@ -14,7 +14,7 @@ class PostLike(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        app_label = "posts"
+        app_label = "likes"
         db_table = "post_likes"
         unique_together = [["post", "user"]]
         indexes = [

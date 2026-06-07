@@ -99,8 +99,3 @@ class Post(models.Model):
     @property
     def is_pending_approval(self):
         return self.approval_status == self.APPROVAL_PENDING
-
-
-from extensions.flags.backend.models import PostFlag  # noqa: E402,F401
-from extensions.likes.backend.models import PostLike  # noqa: E402,F401
-from extensions.mentions.backend.models import PostMentionsUser  # noqa: E402,F401

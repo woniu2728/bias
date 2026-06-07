@@ -35,7 +35,7 @@ class PostFlag(models.Model):
     resolution_note = models.TextField(blank=True)
 
     class Meta:
-        app_label = "posts"
+        app_label = "flags"
         db_table = "post_flags"
         ordering = ["-created_at"]
         indexes = [
