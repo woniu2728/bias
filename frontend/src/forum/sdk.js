@@ -82,6 +82,9 @@ export {
   shouldUpsertForumRealtimePost,
 } from '../utils/forumRealtime.js'
 export {
+  highlightSearchText,
+} from '../utils/search.js'
+export {
   renderTwemojiHtml,
   renderTwemojiText,
   setTwemojiBaseUrl,

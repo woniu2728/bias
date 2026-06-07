@@ -24,8 +24,15 @@ from apps.core.extensions.events import (
 from apps.core.extensions.runtime_event_listeners import bootstrap_extension_runtime_event_listeners
 from apps.core.extensions.lifecycle import reset_extension_runtime_state
 from apps.core.extensions.manifest import ExtensionManifestLoader
+from apps.core.extensions.migration_repository import ExtensionMigrationRepository
 from apps.core.extensions.migrations import run_extension_migrations as run_filesystem_extension_migrations
-from apps.core.extensions.product import is_extension_auto_enabled, is_extension_auto_installed, is_product_visible_extension
+from apps.core.extensions.product import (
+    get_extension_protected_reason,
+    is_extension_auto_enabled,
+    is_extension_auto_installed,
+    is_extension_protected,
+    is_product_visible_extension,
+)
 from apps.core.extensions.recovery import is_extension_allowed_in_safe_mode
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
 from apps.core.extensions.validation import resolve_bias_version_compatibility
@@ -43,26 +50,37 @@ EXTENSION_PACKAGE_LOCK_SETTING = "extensions.package_lock"
 
 class ExtensionManager:
     def __init__(self, *, extensions_path: Path | None = None):
+        self._uses_default_extensions_path = extensions_path is None
         self.extensions_path = Path(extensions_path or Path(settings.BASE_DIR) / "extensions")
         self._extensions: dict[str, Extension] = {}
         self._loaded = False
+        self._loading = False
 
     def invalidate(self) -> None:
+        if self._uses_default_extensions_path:
+            self.extensions_path = Path(settings.BASE_DIR) / "extensions"
         self._extensions = {}
         self._loaded = False
 
     def load(self, *, force: bool = False) -> None:
         if self._loaded and not force:
             return
+        if self._loading:
+            return
 
-        self._extensions = {}
+        self._loading = True
         loader = ExtensionManifestLoader(self.extensions_path)
+        extensions: dict[str, Extension] = {}
 
-        for manifest in loader.discover_manifests():
-            extension = Extension.from_manifest(manifest)
-            self._extensions[extension.id] = self._apply_installation_state(extension)
+        try:
+            for manifest in loader.discover_manifests():
+                extension = Extension.from_manifest(manifest)
+                extensions[extension.id] = self._apply_installation_state(extension)
 
-        self._loaded = True
+            self._extensions = extensions
+            self._loaded = True
+        finally:
+            self._loading = False
 
     def get_extensions(self) -> list[Extension]:
         self.load()
@@ -104,15 +122,14 @@ class ExtensionManager:
         self._validate_bias_compatibility(extension, action="install")
         self._dispatch_extension_lifecycle_event(ExtensionEnablingEvent(extension_id=extension.id))
         migration_result = self._run_install_migrations_if_declared(extension)
-        applied_files = list((migration_result or {}).get("details", {}).get("migration_files") or [])
+        migration_meta = self._build_migration_meta_updates(extension.id, migration_result)
         self._write_installation_state(
             extension,
             installed=True,
             enabled=False,
             booted=False,
             meta_updates={
-                "migration_execution": dict(migration_result or {}),
-                "applied_migration_files": applied_files,
+                **migration_meta,
             },
         )
         install_result = self._run_lifecycle_extenders(
@@ -127,8 +144,7 @@ class ExtensionManager:
             enabled=True,
             booted=True,
             meta_updates={
-                "migration_execution": dict(migration_result or {}),
-                "applied_migration_files": applied_files,
+                **migration_meta,
             },
         )
         enable_result = self._run_lifecycle_extenders(
@@ -157,8 +173,7 @@ class ExtensionManager:
             ),
             meta_updates={
                 "backend_hooks": backend_hooks,
-                "migration_execution": dict(migration_result or {}),
-                "applied_migration_files": applied_files,
+                **migration_meta,
             },
         )
 
@@ -185,14 +200,14 @@ class ExtensionManager:
             disable_asset_result = dict(extension.runtime.backend_hooks.get("unpublish_assets") or {})
 
         migration_result = self._run_uninstall_migrations_if_declared(extension)
+        migration_meta = self._build_migration_meta_updates(extension.id, migration_result, direction="down")
         self._write_installation_state(
             extension,
             installed=False,
             enabled=False,
             booted=False,
             meta_updates={
-                "migration_execution": dict(migration_result or {}),
-                "applied_migration_files": [],
+                **migration_meta,
             },
         )
         uninstall_result = self._run_lifecycle_extenders(
@@ -217,8 +232,7 @@ class ExtensionManager:
             lifecycle_event=ExtensionUninstalledEvent(extension_id=extension.id),
             meta_updates={
                 "backend_hooks": backend_hooks,
-                "migration_execution": dict(migration_result or {}),
-                "applied_migration_files": [],
+                **migration_meta,
             },
         )
 
@@ -254,13 +268,9 @@ class ExtensionManager:
             }
             meta_updates = {"backend_hooks": backend_hooks}
             if migration_result is not None:
-                installation = ExtensionInstallation.objects.filter(extension_id=extension.id).first()
-                existing_applied_files = list(dict((installation.meta or {}) if installation is not None else {}).get("applied_migration_files") or [])
-                latest_applied_files = list(migration_result.get("details", {}).get("migration_files") or [])
                 backend_hooks["run_migrations"] = migration_result
                 meta_updates.update({
-                    "migration_execution": dict(migration_result or {}),
-                    "applied_migration_files": list(dict.fromkeys([*existing_applied_files, *latest_applied_files])),
+                    **self._build_migration_meta_updates(extension.id, migration_result),
                 })
             return self._persist_installation_state(
                 extension,
@@ -371,9 +381,6 @@ class ExtensionManager:
             extension,
             action="migrate",
         )
-        installation = ExtensionInstallation.objects.filter(extension_id=extension.id).first()
-        existing_applied_files = list(dict((installation.meta or {}) if installation is not None else {}).get("applied_migration_files") or [])
-        latest_applied_files = list(hook_result.get("details", {}).get("migration_files") or [])
         return self._persist_installation_state(
             extension,
             installed=extension.runtime.installed,
@@ -381,8 +388,7 @@ class ExtensionManager:
             booted=extension.runtime.booted,
             meta_updates={
                 "backend_hooks": {"run_migrations": hook_result},
-                "migration_execution": dict(hook_result or {}),
-                "applied_migration_files": list(dict.fromkeys([*existing_applied_files, *latest_applied_files])),
+                **self._build_migration_meta_updates(extension.id, hook_result),
             },
             invalidate_frontend_assets=False,
         )
@@ -541,6 +547,7 @@ class ExtensionManager:
         }
         discovered_ids = set(discovered.keys())
         installed_ids = set(installations.keys())
+        dependency_resolution = _build_dependency_resolution_payload(list(discovered.values()))
         return {
             "schema": 1,
             "packages": packages,
@@ -560,6 +567,7 @@ class ExtensionManager:
                 "source_drift_count": len(source_drift),
                 "unmanaged_discovered_count": len(unmanaged),
             },
+            "dependency_resolution": dependency_resolution,
             "missing": missing,
             "version_drift": version_drift,
             "source_drift": source_drift,
@@ -868,6 +876,16 @@ class ExtensionManager:
             )
 
     def _validate_disable(self, extension, extensions, *, uninstalling: bool = False) -> None:
+        if is_extension_protected(extension):
+            raise ExtensionStateError(
+                f"无法{'卸载' if uninstalling else '停用'}受保护扩展 {extension.id}",
+                code="extension_uninstall_protected_blocked" if uninstalling else "extension_disable_protected_blocked",
+                details={
+                    "extension_id": extension.id,
+                    "protected_reason": get_extension_protected_reason(extension),
+                },
+            )
+
         if extension.manifest.category == "core":
             raise ExtensionStateError(
                 f"无法{'卸载' if uninstalling else '停用'}核心扩展 {extension.id}",
@@ -926,14 +944,11 @@ class ExtensionManager:
         )
 
     def _run_declared_extension_migrations(self, extension, *, action: str, direction: str = "up") -> dict:
-        installation = ExtensionInstallation.objects.filter(extension_id=extension.id).first()
-        installation_meta = dict((installation.meta or {}) if installation is not None else {})
-        previous_execution = dict(installation_meta.get("migration_execution") or {})
-        previous_details = dict(previous_execution.get("details") or {})
+        migration_record = ExtensionMigrationRepository().get_record(extension.id)
         base_result = run_filesystem_extension_migrations(
             extension,
-            applied_steps=list(previous_details.get("applied_steps") or []),
-            applied_migration_files=list(installation_meta.get("applied_migration_files") or []),
+            applied_steps=list(migration_record.applied_steps),
+            applied_migration_files=list(migration_record.applied_files),
             direction=direction,
         )
         hook_name = "rollback_migrations" if direction == "down" else "run_migrations"
@@ -950,6 +965,21 @@ class ExtensionManager:
             "executed_at": hook_result.get("executed_at") or base_result.get("executed_at"),
             "details": merged_details,
         }
+
+    def _build_migration_meta_updates(
+        self,
+        extension_id: str,
+        migration_result: dict | None,
+        *,
+        direction: str = "up",
+    ) -> dict:
+        if migration_result is None:
+            return {}
+        return ExtensionMigrationRepository().build_execution_meta(
+            extension_id,
+            migration_result,
+            direction=direction,
+        )
 
     def _persist_installation_state(
         self,
@@ -1247,8 +1277,42 @@ def resolve_extension_order(extensions: list[Extension], *, satisfied_dependency
 
     return {
         "valid": [extension_map[extension_id] for extension_id in valid_ids],
+        "order": valid_ids,
+        "graph": graph,
         "missing_dependencies": missing_dependencies,
         "circular_dependencies": circular_dependencies,
+    }
+
+
+def _build_dependency_resolution_payload(extensions: list[Extension]) -> dict:
+    resolved = resolve_extension_order(
+        extensions,
+        satisfied_dependency_ids=_get_core_satisfied_dependency_ids(),
+    )
+    dependents: dict[str, list[str]] = {extension.id: [] for extension in extensions}
+    for dependency_id, dependent_ids in dict(resolved.get("graph") or {}).items():
+        for dependent_id in dependent_ids:
+            dependents.setdefault(dependency_id, [])
+            if dependent_id not in dependents[dependency_id]:
+                dependents[dependency_id].append(dependent_id)
+    extension_map = {extension.id: extension for extension in extensions}
+    graph = {}
+    for extension in sorted(extensions, key=lambda item: item.id):
+        optional_dependencies = [
+            dependency_id
+            for dependency_id in extension.manifest.optional_dependencies
+            if dependency_id in extension_map
+        ]
+        graph[extension.id] = {
+            "dependencies": list(extension.manifest.dependencies),
+            "optional_dependencies": optional_dependencies,
+            "dependents": sorted(dependents.get(extension.id, [])),
+        }
+    return {
+        "boot_order": list(resolved.get("order") or []),
+        "graph": graph,
+        "missing_dependencies": dict(resolved.get("missing_dependencies") or {}),
+        "circular_dependencies": list(resolved.get("circular_dependencies") or []),
     }
 
 
@@ -1284,6 +1348,7 @@ def _build_extension_status_label(installed: bool, enabled: bool) -> str:
 def _build_runtime_actions(extension: Extension) -> tuple[ExtensionRuntimeActionDefinition, ...]:
     manifest_actions = _build_manifest_runtime_actions(extension)
     migration_action = _build_migration_runtime_action(extension)
+    protected = is_extension_protected(extension)
     action_prefix = []
     if migration_action is not None:
         action_prefix.append(migration_action)
@@ -1307,18 +1372,19 @@ def _build_runtime_actions(extension: Extension) -> tuple[ExtensionRuntimeAction
 
     actions = list(action_prefix)
     if extension.runtime.enabled:
-        actions.append(ExtensionRuntimeActionDefinition(
-            key="disable",
-            label="停用扩展",
-            action="disable",
-            tone="danger",
-            confirm_title="停用扩展",
-            confirm_message=f"确定停用 {extension.name} 吗？相关后台入口和运行能力会立即隐藏。",
-            confirm_text="停用",
-            success_message="扩展已停用。",
-            requires_installed=True,
-            order=20,
-        ))
+        if not protected:
+            actions.append(ExtensionRuntimeActionDefinition(
+                key="disable",
+                label="停用扩展",
+                action="disable",
+                tone="danger",
+                confirm_title="停用扩展",
+                confirm_message=f"确定停用 {extension.name} 吗？相关后台入口和运行能力会立即隐藏。",
+                confirm_text="停用",
+                success_message="扩展已停用。",
+                requires_installed=True,
+                order=20,
+            ))
     else:
         actions.append(ExtensionRuntimeActionDefinition(
             key="enable",
@@ -1332,18 +1398,19 @@ def _build_runtime_actions(extension: Extension) -> tuple[ExtensionRuntimeAction
             requires_installed=True,
             order=10,
         ))
-        actions.append(ExtensionRuntimeActionDefinition(
-            key="uninstall",
-            label="卸载扩展",
-            action="uninstall",
-            tone="danger",
-            confirm_title="卸载扩展",
-            confirm_message=_build_uninstall_confirm_message(extension),
-            confirm_text="卸载",
-            success_message="扩展已卸载。",
-            requires_installed=True,
-            order=30,
-        ))
+        if not protected:
+            actions.append(ExtensionRuntimeActionDefinition(
+                key="uninstall",
+                label="卸载扩展",
+                action="uninstall",
+                tone="danger",
+                confirm_title="卸载扩展",
+                confirm_message=_build_uninstall_confirm_message(extension),
+                confirm_text="卸载",
+                success_message="扩展已卸载。",
+                requires_installed=True,
+                order=30,
+            ))
 
     return tuple(actions)
 

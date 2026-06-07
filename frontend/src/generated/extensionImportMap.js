@@ -9,12 +9,16 @@ function loadExtensionModule(moduleImporter, cssImporters = []) {
 export const generatedAdminExtensionModules = {
   "../../../extensions/approval/frontend/admin/index.js": () => import("../../../extensions/approval/frontend/admin/index.js"),
   "approval": () => import("../../../extensions/approval/frontend/admin/index.js"),
+  "../../../extensions/discussions/frontend/admin/index.js": () => import("../../../extensions/discussions/frontend/admin/index.js"),
+  "discussions": () => import("../../../extensions/discussions/frontend/admin/index.js"),
   "../../../extensions/flags/frontend/admin/index.js": () => import("../../../extensions/flags/frontend/admin/index.js"),
   "flags": () => import("../../../extensions/flags/frontend/admin/index.js"),
   "../../../extensions/mentions/frontend/admin/index.js": () => import("../../../extensions/mentions/frontend/admin/index.js"),
   "mentions": () => import("../../../extensions/mentions/frontend/admin/index.js"),
   "../../../extensions/tags/frontend/admin/index.js": () => import("../../../extensions/tags/frontend/admin/index.js"),
   "tags": () => import("../../../extensions/tags/frontend/admin/index.js"),
+  "../../../extensions/users/frontend/admin/index.js": () => import("../../../extensions/users/frontend/admin/index.js"),
+  "users": () => import("../../../extensions/users/frontend/admin/index.js"),
 }
 
 export const generatedForumExtensionModules = {
@@ -34,6 +38,8 @@ export const generatedForumExtensionModules = {
   "../../../extensions/notifications/frontend/forum/NotificationView.vue": () => import("../../../extensions/notifications/frontend/forum/NotificationView.vue"),
   "notifications:./NotificationView.vue": () => import("../../../extensions/notifications/frontend/forum/NotificationView.vue"),
   "notifications:extensions/notifications/frontend/forum/NotificationView.vue": () => import("../../../extensions/notifications/frontend/forum/NotificationView.vue"),
+  "../../../extensions/search/frontend/forum/index.js": () => import("../../../extensions/search/frontend/forum/index.js"),
+  "search": () => import("../../../extensions/search/frontend/forum/index.js"),
   "../../../extensions/subscriptions/frontend/forum/index.js": () => import("../../../extensions/subscriptions/frontend/forum/index.js"),
   "subscriptions": () => import("../../../extensions/subscriptions/frontend/forum/index.js"),
   "../../../extensions/tags/frontend/forum/index.js": () => import("../../../extensions/tags/frontend/forum/index.js"),

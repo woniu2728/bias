@@ -43,8 +43,7 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
    `GET /api/admin/extensions`
 5. 后台扩展中心页面
    `frontend/src/admin/views/ExtensionsPage.vue`
-6. 真实示例扩展目录
-   `extensions/sample-hello/extension.json`
+6. 扩展脚手架与测试 fixture 已覆盖文件系统扩展发现链路
 
 当前已经收敛到扩展中心作为后台主入口，旧模块管理页面和接口已移除。
 
@@ -119,7 +118,7 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 2. 扩展详情页已可加载扩展自定义详情组件
 3. 扩展后台宿主页与详情页已共用入口解析器
 4. `create_extension` 脚手架会生成 `DetailPage.vue`
-5. 示例扩展 `sample-hello` 已提供自定义详情卡片
+5. 扩展后台入口协议已有测试 fixture 覆盖自定义详情组件加载链路
 
 ### 已完成：阶段 5 的安装状态与运行操作协议首版
 
@@ -156,7 +155,7 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
    - `docs/README.md`
    - `locale/zh-CN.json`
    - `migration_namespace`
-4. 示例扩展 `sample-hello` 已补齐交付样板目录
+4. 扩展脚手架已补齐交付样板目录
    - 仪表盘快捷入口
    - 后台路由可访问性守卫
    - 扩展启停后的前端状态同步
@@ -169,7 +168,7 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 6. 论坛应用启动时已在挂载前动态加载已启用扩展的前台入口：
    - `frontend_forum_entry` 不再只是 manifest 字段
    - 已进入真实运行协议
-7. `sample-hello` 已补齐 `frontend/forum/index.js` 样板，验证前台扩展注入链路可用
+7. 前台入口协议已由测试 fixture 覆盖，验证前台扩展注入链路可用
 5. 论坛前台静态注册中心已按扩展启停状态过滤：
    - 论坛导航
    - 头部菜单
@@ -203,10 +202,10 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 
 补充：当前代码已进入“真实后台页面宿主”阶段。
 
-1. `sample-hello` 已通过 `frontend_admin_entry` 加载独立设置页 / 操作页组件
+1. 文件系统扩展已通过 `frontend_admin_entry` 加载独立设置页 / 操作页组件
 2. `tags` 已作为第一条内置模块迁移样板，通过扩展宿主页承载原有 `TagsPage`
-3. `approval`、`flags`、`users` 已通过内置扩展宿主页承载原有操作页组件
-4. `tags`、`approval`、`flags`、`users` 后台入口以扩展宿主页为准
+3. `approval`、`flags` 已通过内置扩展宿主页承载原有操作页组件
+4. `tags`、`approval`、`flags`、`users` 后台入口已由各自扩展的 `frontend_admin_entry` 注册
 5. 扩展宿主页现在支持设置页自动回退：
    - 若扩展未导出自定义 `resolveSettingsPage`
    - 但已声明 `settings_schema`
@@ -875,24 +874,27 @@ extensions/
 2. `flags`
 3. `notifications`
 4. `tags`
+5. `emoji`
+6. `likes`
+7. `mentions`
+8. `subscriptions`
+9. `realtime`
+10. `search`
+11. `users`
+12. `discussions`
+13. `posts`
 
 ### 第二批
 
 再迁移“强依赖核心模型但边界仍可整理”的功能：
 
-1. `search`
-2. `mentions`
-3. `subscriptions`
-4. `realtime`
+当前第二批已清空，后续如果从核心模块中拆出新的非基础能力，再进入这一批。
 
 ### 第三批
 
 最后处理平台核心：
 
 1. `core`
-2. `users`
-3. `discussions`
-4. `posts`
 
 原因：
 
@@ -917,12 +919,9 @@ extensions/
 
 ## 下一步
 
-扩展系统的第一个实际开发动作建议是：
+接下来优先继续迁移边界较清晰的运行时能力，并同步清理旧模块注册代码：
 
-1. 新增 `apps/core/extensions/` 目录
-2. 冻结 manifest 和 runtime state 类型
-3. 建立 `ExtensionRegistry`
-4. 让当前内置模块先通过适配器显示为扩展
-5. 以后新增能力直接接入扩展中心接口和扩展详情页
-
-这一步做完，Bias 才真正从“模块化论坛”进入“可扩展论坛平台”阶段。
+1. 检查 `core` 中可拆出的非基础能力
+2. 继续减少 `BuiltinModuleExtensionAdapter` 承载范围
+3. 优先把仍留在 core 的非基础注册贡献抽成扩展
+4. 保持每个迁移批次都覆盖扩展启停、依赖图、运行时过滤和交付诊断测试

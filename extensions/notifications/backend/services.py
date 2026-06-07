@@ -2,11 +2,12 @@
 通知系统业务逻辑层
 """
 from typing import Optional, List, Tuple
-from django.db import transaction
 from django.db.models import Q, Count
 from django.core.cache import cache
 from django.utils import timezone
 from apps.users.models import User
+from apps.core.domain_events import dispatch_forum_event_after_commit
+from apps.core.forum_events import NotificationCreatedEvent
 from apps.users.preferences import get_user_preference_value
 from apps.discussions.models import DiscussionUser
 from extensions.notifications.backend.models import Notification
@@ -145,17 +146,9 @@ class NotificationService:
         if not notification_ids:
             return
 
-        def enqueue():
-            from apps.core.queue_service import QueueService
-            from extensions.notifications.backend.tasks import dispatch_notification_batch
-
-            QueueService.dispatch_celery_task(
-                dispatch_notification_batch,
-                notification_ids,
-                fallback=lambda: NotificationService._send_notifications_batch(notification_ids),
-            )
-
-        transaction.on_commit(enqueue)
+        dispatch_forum_event_after_commit(
+            NotificationCreatedEvent(notification_ids=tuple(int(item) for item in notification_ids if item)),
+        )
 
     @staticmethod
     def _collect_type_counts(queryset) -> dict:

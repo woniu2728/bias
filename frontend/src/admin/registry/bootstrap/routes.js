@@ -6,7 +6,6 @@ import AppearancePage from '../../views/AppearancePage.vue'
 import MailPage from '../../views/MailPage.vue'
 import AdvancedPage from '../../views/AdvancedPage.vue'
 import DeveloperDocsPage from '../../views/DeveloperDocsPage.vue'
-import UsersPage from '../../views/UsersPage.vue'
 import ExtensionDetailPage from '../../views/ExtensionDetailPage.vue'
 import ExtensionHostPage from '../../views/ExtensionHostPage.vue'
 import { registerAdminRoute } from '../routes.js'
@@ -118,20 +117,6 @@ registerAdminRoute({
   showInDashboardActions: true,
   dashboardActionLabel: '自定义外观',
   moduleId: 'core'
-})
-
-registerAdminRoute({
-  path: '/admin/users',
-  name: 'admin-users',
-  component: UsersPage,
-  icon: 'fas fa-users',
-  label: '用户管理',
-  navDescription: '管理论坛用户账号、状态和用户组。',
-  navSection: 'core',
-  navOrder: 80,
-  showInDashboardActions: true,
-  dashboardActionLabel: '管理用户',
-  moduleId: 'users'
 })
 
 registerAdminRoute({

@@ -200,6 +200,24 @@ test('tags and notifications extensions own navigational forum contributions', (
   assert.equal(notificationsForumSource.includes("moduleId: 'notifications'"), true)
 })
 
+test('search extension owns default forum search sources', () => {
+  const searchForumSource = readExtensionForumSource('search')
+
+  assertCoreRegistryDoesNotOwn([
+    "type: 'discussions'",
+    "type: 'posts'",
+    "type: 'users'",
+    "filterTarget: 'discussion'",
+    "filterTarget: 'post'",
+  ])
+  assert.equal(searchForumSource.includes('extendForum(registerSearchForum)'), true)
+  assert.equal(searchForumSource.includes('forum.searchSource'), true)
+  assert.equal(searchForumSource.includes("key: 'discussions'"), true)
+  assert.equal(searchForumSource.includes("key: 'posts'"), true)
+  assert.equal(searchForumSource.includes("key: 'users'"), true)
+  assert.equal(searchForumSource.includes("moduleId: 'search'"), true)
+})
+
 test('approval flags subscriptions and likes own interaction contributions', () => {
   const approvalForumSource = readExtensionForumSource('approval')
   const approvalComposerSource = readExtensionForumFileSource('approval', 'approvalComposer.js')

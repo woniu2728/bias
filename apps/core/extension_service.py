@@ -7,9 +7,6 @@ from apps.core.extensions.lifecycle import reset_extension_runtime_state
 from apps.core.extensions.validation import resolve_bias_version_compatibility
 
 
-CORE_MODULE_IDS = {"core", "users", "discussions", "posts", "realtime"}
-
-
 class ExtensionService:
     @staticmethod
     def _validate_bias_compatibility(extension, *, action: str) -> None:
@@ -88,9 +85,9 @@ class ExtensionService:
     @staticmethod
     def set_extension_enabled(extension_id: str, enabled: bool, *, actor=None, request=None):
         normalized_extension_id = str(extension_id or "").strip()
-        if not enabled and normalized_extension_id in CORE_MODULE_IDS:
+        if not enabled and normalized_extension_id == "core":
             raise ExtensionStateError(
-                f"无法停用核心扩展 {normalized_extension_id}",
+                "无法停用核心扩展 core",
                 code="extension_disable_core_blocked",
                 details={"extension_id": normalized_extension_id},
             )

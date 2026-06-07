@@ -1,0 +1,140 @@
+from apps.core.extensions import ForumCapabilitiesExtender, LifecycleExtender
+from apps.core.forum_registry_types import SearchFilterDefinition
+from extensions.search.backend.filters import (
+    apply_discussion_author_search_filter,
+    apply_discussion_created_month_search_filter,
+    apply_discussion_locked_search_filter,
+    apply_discussion_sticky_search_filter,
+    apply_discussion_unread_search_filter,
+    apply_post_author_search_filter,
+    apply_post_created_month_search_filter,
+    parse_author_search_filter,
+    parse_created_month_search_filter,
+    parse_locked_search_filter,
+    parse_sticky_search_filter,
+    parse_unread_search_filter,
+)
+
+
+EXTENSION_ID = "search"
+
+
+def extend():
+    return [
+        ForumCapabilitiesExtender(
+            search_filters=search_filter_definitions(),
+        ),
+        LifecycleExtender(
+            install=install,
+            enable=enable,
+            disable=disable,
+            uninstall=uninstall,
+        ),
+    ]
+
+
+def search_filter_definitions():
+    return (
+        SearchFilterDefinition(
+            code="author",
+            label="按作者过滤",
+            module_id=EXTENSION_ID,
+            target="discussion",
+            parser=parse_author_search_filter,
+            applier=apply_discussion_author_search_filter,
+            syntax="author:<username>",
+            description="按讨论作者用户名过滤搜索结果。",
+        ),
+        SearchFilterDefinition(
+            code="author",
+            label="按作者过滤",
+            module_id=EXTENSION_ID,
+            target="post",
+            parser=parse_author_search_filter,
+            applier=apply_post_author_search_filter,
+            syntax="author:<username>",
+            description="按回复作者用户名过滤搜索结果。",
+        ),
+        SearchFilterDefinition(
+            code="is_sticky",
+            label="仅置顶讨论",
+            module_id=EXTENSION_ID,
+            target="discussion",
+            parser=parse_sticky_search_filter,
+            applier=apply_discussion_sticky_search_filter,
+            syntax="is:sticky",
+            description="仅返回已置顶的讨论。",
+        ),
+        SearchFilterDefinition(
+            code="is_locked",
+            label="仅锁定讨论",
+            module_id=EXTENSION_ID,
+            target="discussion",
+            parser=parse_locked_search_filter,
+            applier=apply_discussion_locked_search_filter,
+            syntax="is:locked",
+            description="仅返回已锁定的讨论。",
+        ),
+        SearchFilterDefinition(
+            code="is_unread",
+            label="仅未读讨论",
+            module_id=EXTENSION_ID,
+            target="discussion",
+            parser=parse_unread_search_filter,
+            applier=apply_discussion_unread_search_filter,
+            syntax="is:unread",
+            description="仅返回当前用户还有未读回复的讨论。",
+        ),
+        SearchFilterDefinition(
+            code="created",
+            label="按创建月份过滤",
+            module_id=EXTENSION_ID,
+            target="discussion",
+            parser=parse_created_month_search_filter,
+            applier=apply_discussion_created_month_search_filter,
+            syntax="created:YYYY-MM",
+            description="按讨论创建月份过滤搜索结果。",
+        ),
+        SearchFilterDefinition(
+            code="created",
+            label="按创建月份过滤",
+            module_id=EXTENSION_ID,
+            target="post",
+            parser=parse_created_month_search_filter,
+            applier=apply_post_created_month_search_filter,
+            syntax="created:YYYY-MM",
+            description="按回复创建月份过滤搜索结果。",
+        ),
+    )
+
+
+def install(context):
+    return {
+        "status": "ok",
+        "status_label": "已安装",
+        "message": "Search 扩展已安装。",
+    }
+
+
+def enable(context):
+    return {
+        "status": "ok",
+        "status_label": "已启用",
+        "message": "Search 扩展已启用。",
+    }
+
+
+def disable(context):
+    return {
+        "status": "ok",
+        "status_label": "已停用",
+        "message": "Search 扩展已停用。",
+    }
+
+
+def uninstall(context):
+    return {
+        "status": "ok",
+        "status_label": "已卸载",
+        "message": "Search 扩展已卸载。",
+    }

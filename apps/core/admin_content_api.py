@@ -21,7 +21,7 @@ from apps.core.extension_diagnostics import (
 )
 from apps.core.extension_service import ExtensionService
 from apps.core.extension_settings_service import get_extension_settings, serialize_extension_settings_schema, save_extension_settings
-from apps.core.extensions.product import is_product_visible_extension
+from apps.core.extensions.product import get_extension_protected_reason, is_extension_protected, is_product_visible_extension
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
 from apps.core.extensions.recovery import (
     advance_extension_bisect,
@@ -458,6 +458,8 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "backend_hooks": _serialize_extension_backend_hooks(extension),
         "source": extension.source,
         "product_visible": is_product_visible_extension(extension),
+        "protected": is_extension_protected(extension),
+        "protected_reason": get_extension_protected_reason(extension),
         "module_ids": list(extension.module_ids),
         "admin_pages": list(extension.admin_pages),
         "admin_page_details": admin_page_details,
@@ -1370,10 +1372,19 @@ def _build_extension_delivery_assets(extension):
         },
     ]
     if str(extension.manifest.distribution.signature_url or "").strip():
+        signature_path = str(extension.manifest.distribution.signature_url or "").strip()
+        if not signature_path.startswith(("http://", "https://")):
+            root = root_path if root_path else None
+            if signature_path.startswith("file://"):
+                signature_path = signature_path[7:]
+            candidate = Path(signature_path)
+            if not candidate.is_absolute() and root is not None:
+                candidate = root / candidate
+            signature_path = candidate
         asset_specs.append({
             "key": "signature",
             "label": "签名文件",
-            "path": extension.manifest.distribution.signature_url,
+            "path": signature_path,
             "kind": "signature",
         })
 

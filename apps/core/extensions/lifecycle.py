@@ -20,13 +20,7 @@ _runtime_version_check_interval_seconds = 1.0
 def mark_extension_runtime_requires_rebuild(reason: str, *, extension_id: str = "") -> None:
     from apps.core.models import Setting
 
-    version = f"{timezone.now().isoformat()}:{uuid.uuid4().hex}"
-    payload = {
-        "reason": reason,
-        "extension_id": extension_id,
-        "urlconf": settings.ROOT_URLCONF,
-        "version": version,
-    }
+    payload = _build_runtime_version_payload(reason, extension_id=extension_id)
     Setting.objects.update_or_create(
         key=RUNTIME_REBUILD_MARKER_KEY,
         defaults={"value": json.dumps(payload, ensure_ascii=False)},
@@ -35,6 +29,27 @@ def mark_extension_runtime_requires_rebuild(reason: str, *, extension_id: str = 
         key=RUNTIME_VERSION_KEY,
         defaults={"value": json.dumps(payload, ensure_ascii=False)},
     )
+
+
+def mark_extension_runtime_version_changed(reason: str, *, extension_id: str = "") -> dict:
+    from apps.core.models import Setting
+
+    payload = _build_runtime_version_payload(reason, extension_id=extension_id)
+    Setting.objects.update_or_create(
+        key=RUNTIME_VERSION_KEY,
+        defaults={"value": json.dumps(payload, ensure_ascii=False)},
+    )
+    return payload
+
+
+def _build_runtime_version_payload(reason: str, *, extension_id: str = "") -> dict:
+    version = f"{timezone.now().isoformat()}:{uuid.uuid4().hex}"
+    return {
+        "reason": reason,
+        "extension_id": extension_id,
+        "urlconf": settings.ROOT_URLCONF,
+        "version": version,
+    }
 
 
 def invalidate_extension_frontend_assets(
@@ -53,12 +68,16 @@ def invalidate_extension_frontend_assets(
         for extension in manager.get_extensions()
         if extension.runtime.installed and extension.runtime.enabled
     ]
+    auto_rebuild = bool(getattr(settings, "BIAS_EXTENSION_AUTO_FRONTEND_REBUILD", False))
+    auto_publish = bool(getattr(settings, "BIAS_EXTENSION_AUTO_FRONTEND_PUBLISH", False))
     result = recompile_extension_frontend_assets(
         extensions,
-        run_build=False,
-        clear_marker=False,
-        publish_dist=False,
+        run_build=auto_rebuild,
+        clear_marker=auto_rebuild,
+        publish_dist=auto_publish,
     ).to_dict()
+    result["auto_rebuild"] = auto_rebuild
+    result["auto_publish"] = auto_publish
     if include_published:
         import shutil
 
@@ -75,7 +94,10 @@ def invalidate_extension_frontend_assets(
             "removed": removed,
             "target": str(published_root),
         }
-    mark_extension_runtime_requires_rebuild(reason, extension_id=extension_id)
+    if auto_rebuild and result.get("status") == "ok":
+        mark_extension_runtime_version_changed(reason, extension_id=extension_id)
+    else:
+        mark_extension_runtime_requires_rebuild(reason, extension_id=extension_id)
     return result
 
 

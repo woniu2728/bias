@@ -12,17 +12,6 @@ import {
 } from '../dashboard.js'
 
 registerAdminDashboardStat({
-  key: 'users',
-  order: 10,
-  icon: 'fas fa-users',
-  moduleId: 'users',
-  resolve: ({ stats, copy }) => ({
-    label: copy?.usersStatLabel || '用户总数',
-    value: stats?.totalUsers || 0,
-  }),
-})
-
-registerAdminDashboardStat({
   key: 'discussions',
   order: 20,
   icon: 'fas fa-comments',
@@ -250,7 +239,6 @@ registerAdminDashboardCopy({
     redisUnavailableText: 'Redis 已配置但不可用',
     queueWorkerUndetectedText: '队列未检测',
     authSecretStatusLabel: '认证密钥',
-    usersStatLabel: '用户总数',
     discussionsStatLabel: '讨论总数',
     postsStatLabel: '帖子总数',
     pendingApprovalsStatLabel: '待审核内容',

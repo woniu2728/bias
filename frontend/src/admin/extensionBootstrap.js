@@ -46,7 +46,6 @@ const adminRouteComponents = {
   ExtensionHostPage: () => import('./views/ExtensionHostPage.vue'),
   MailPage: () => import('./views/MailPage.vue'),
   PermissionsPage: () => import('./views/PermissionsPage.vue'),
-  UsersPage: () => import('./views/UsersPage.vue'),
 }
 
 export async function bootstrapEnabledAdminExtensions({

@@ -62,7 +62,7 @@ test('admin routes can match dynamic paths for route guards', () => {
     showInNavigation: false,
   })
 
-  const route = findAdminRouteByPath(detailPath.replace('/:extensionId', '/sample-hello'))
+  const route = findAdminRouteByPath(detailPath.replace('/:extensionId', '/alpha-tools'))
 
   assert.equal(route?.path, detailPath)
 })
@@ -79,7 +79,7 @@ test('admin routes can match extension settings child paths', () => {
     showInNavigation: false,
   })
 
-  const route = findAdminRouteByPath(settingsPath.replace('/:extensionId', '/sample-hello'))
+  const route = findAdminRouteByPath(settingsPath.replace('/:extensionId', '/alpha-tools'))
 
   assert.equal(route?.path, settingsPath)
 })
@@ -96,7 +96,7 @@ test('admin routes can match extension permissions child paths', () => {
     showInNavigation: false,
   })
 
-  const route = findAdminRouteByPath(permissionsPath.replace('/:extensionId', '/sample-hello'))
+  const route = findAdminRouteByPath(permissionsPath.replace('/:extensionId', '/alpha-tools'))
 
   assert.equal(route?.path, permissionsPath)
 })

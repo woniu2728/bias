@@ -15,15 +15,28 @@ DomainEventHandler = Callable[[EventT], None]
 class DomainEventBus:
     def __init__(self):
         self._listeners: DefaultDict[type[DomainEvent], List[DomainEventHandler]] = defaultdict(list)
+        self._listener_keys: DefaultDict[type[DomainEvent], set[str]] = defaultdict(set)
         self._bootstrapping_extensions = False
 
-    def register(self, event_type: type[EventT], handler: DomainEventHandler[EventT]) -> None:
+    def register(
+        self,
+        event_type: type[EventT],
+        handler: DomainEventHandler[EventT],
+        *,
+        listener_key: object = None,
+    ) -> None:
         listeners = self._listeners[event_type]
+        if listener_key is not None:
+            normalized_key = str(listener_key)
+            if normalized_key in self._listener_keys[event_type]:
+                return
+            self._listener_keys[event_type].add(normalized_key)
         if handler not in listeners:
             listeners.append(handler)
 
     def clear(self) -> None:
         self._listeners.clear()
+        self._listener_keys.clear()
 
     def dispatch(self, event: DomainEvent) -> None:
         self._ensure_extension_listeners_bootstrapped()

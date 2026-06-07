@@ -34,7 +34,7 @@ test('resolveExtensionEntryTypeLabel maps entry kinds to readable labels', () =>
 test('resolveExtensionForumEntryState detects forum entry health', () => {
   assert.equal(resolveExtensionForumEntryState({}), '未声明')
   assert.equal(resolveExtensionForumEntryState({
-    frontend_forum_entry: 'extensions/sample-hello/frontend/forum/index.js',
+    frontend_forum_entry: 'extensions/alpha-tools/frontend/forum/index.js',
     debug_info: {
       frontend_forum_entry: {
         exists: false,
@@ -42,7 +42,7 @@ test('resolveExtensionForumEntryState detects forum entry health', () => {
     },
   }), '缺失')
   assert.equal(resolveExtensionForumEntryState({
-    frontend_forum_entry: 'extensions/sample-hello/frontend/forum/index.js',
+    frontend_forum_entry: 'extensions/alpha-tools/frontend/forum/index.js',
     debug_info: {
       frontend_forum_entry: {
         exists: true,
@@ -120,9 +120,9 @@ test('resolveExtensionDiagnosticsBadges and preview build concise UI payloads', 
 test('resolveExtensionAdminSurfaceCards builds readable admin host summaries', () => {
   const cards = resolveExtensionAdminSurfaceCards({
     action_links: {
-      settings_page: '/admin/extensions/sample-hello/settings',
-      permissions_page: '/admin/extensions/sample-hello/permissions',
-      operations_page: '/admin/extensions/sample-hello/operations',
+      settings_page: '/admin/extensions/alpha-tools/settings',
+      permissions_page: '/admin/extensions/alpha-tools/permissions',
+      operations_page: '/admin/extensions/alpha-tools/operations',
     },
     settings_schema: [{ key: 'welcome_message' }, { key: 'card_tone' }],
     permission_summary: {

@@ -41,9 +41,6 @@ INSTALLED_APPS = [
 
     # Local apps
     'apps.core',
-    'apps.users',
-    'apps.discussions',
-    'apps.posts',
     *discover_extension_django_apps(BASE_DIR),
 ]
 
@@ -160,6 +157,18 @@ STATIC_URL = BOOTSTRAP.static_url or '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
 BIAS_EXTENSION_PACKAGE_DISCOVERY = True
+BIAS_EXTENSION_AUTO_FRONTEND_REBUILD = str(os.getenv("BIAS_EXTENSION_AUTO_FRONTEND_REBUILD", "")).strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+BIAS_EXTENSION_AUTO_FRONTEND_PUBLISH = str(os.getenv("BIAS_EXTENSION_AUTO_FRONTEND_PUBLISH", "")).strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 # Media files
 MEDIA_URL = BOOTSTRAP.media_url or '/media/'

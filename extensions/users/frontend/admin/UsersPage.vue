@@ -316,18 +316,18 @@
 
 <script setup>
 import { computed, ref, onMounted } from 'vue'
-import AdminMultiSelectMenu from '../components/AdminMultiSelectMenu.vue'
-import AdminPage from '../components/AdminPage.vue'
-import AdminPagination from '../components/AdminPagination.vue'
-import AdminStateBlock from '../components/AdminStateBlock.vue'
-import api from '../../api'
-import { useAuthStore } from '../../stores/auth'
-import { useModalStore } from '../../stores/modal'
 import {
+  adminApi,
+  AdminMultiSelectMenu,
+  AdminPage,
+  AdminPagination,
+  AdminStateBlock,
   getAdminUsersPageActionMeta,
   getAdminUsersPageConfig,
   getAdminUsersPageCopy,
-} from '../registry'
+  useAuthStore,
+  useModalStore,
+} from '@bias/admin/components'
 
 const authStore = useAuthStore()
 const modalStore = useModalStore()
@@ -374,7 +374,7 @@ async function loadUsers() {
   loading.value = true
   loadError.value = ''
   try {
-    const data = await api.get('/admin/users', {
+    const data = await adminApi.get('/admin/users', {
       params: {
         page: page.value,
         limit: limit.value,
@@ -406,7 +406,7 @@ function changePage(newPage) {
 
 async function loadGroups() {
   try {
-    availableGroups.value = await api.get('/admin/groups')
+    availableGroups.value = await adminApi.get('/admin/groups')
   } catch (error) {
     console.error('加载用户组失败:', error)
     await modalStore.alert({
@@ -425,7 +425,7 @@ async function editUser(user) {
   originalUserRiskSnapshot.value = null
 
   try {
-    const detail = await api.get(`/admin/users/${user.id}`)
+    const detail = await adminApi.get(`/admin/users/${user.id}`)
     formData.value = {
       username: detail.username || '',
       email: detail.email || '',
@@ -472,7 +472,7 @@ async function saveUser() {
   saving.value = true
   savingDetails.value = true
   try {
-    await api.put(`/admin/users/${editingUserId.value}`, {
+    await adminApi.put(`/admin/users/${editingUserId.value}`, {
       ...formData.value,
       suspended_until: formData.value.suspended_until || null,
     })
@@ -514,7 +514,7 @@ async function deleteUser() {
   savingDetails.value = true
   try {
     const deletedUsername = formData.value.username || editingUserId.value
-    await api.delete(`/admin/users/${editingUserId.value}`)
+    await adminApi.delete(`/admin/users/${editingUserId.value}`)
     closeModal()
     await loadUsers()
     await modalStore.alert({

@@ -33,7 +33,7 @@ def classify_extension_diagnostics(item: dict) -> dict:
 
     if item.get("migration_state") == "attention":
         blocking_reasons.append("迁移状态异常")
-    elif item.get("migration_state") in {"pending"} or pending_migration_files:
+    elif pending_migration_files:
         warning_reasons.append("迁移状态待完善")
 
     model_ownership_audit = item.get("model_ownership_audit") or {}

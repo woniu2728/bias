@@ -72,6 +72,7 @@ export declare function buildUserPath(value?: any): string
 export declare function getUserAvatarColor(user?: any): any
 export declare function getUserDisplayName(user?: any): any
 export declare function getUserInitial(user?: any): any
+export declare function highlightSearchText(value?: any, query?: any, maxLength?: any): string
 export declare function normalizeDiscussion(discussion?: any): any
 export declare function normalizePost(post?: any): any
 export declare function normalizeUser(user?: any): any

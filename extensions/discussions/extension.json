@@ -1,0 +1,48 @@
+{
+  "id": "discussions",
+  "name": "Discussions",
+  "version": "0.1.0",
+  "description": "提供讨论列表、讨论详情、发帖权限、讨论排序和内容管理能力。",
+  "icon": "far fa-comments",
+  "category": "feature",
+  "authors": [
+    "Bias"
+  ],
+  "dependencies": [
+    "core",
+    "posts",
+    "users"
+  ],
+  "provides": [
+    "discussion-list",
+    "discussion-detail",
+    "composer",
+    "moderation"
+  ],
+  "django_app_config": "extensions.discussions.backend.apps.DiscussionsExtensionConfig",
+  "django_app_label": "discussions",
+  "django_migration_module": "apps.discussions.migrations",
+  "backend_entry": "extensions.discussions.backend.ext",
+  "frontend_admin_entry": "extensions/discussions/frontend/admin/index.js",
+  "compatibility": {
+    "bias_version": "^1.0.0",
+    "api_version": "1.0",
+    "api_stability": "experimental",
+    "api_stability_label": "实验性",
+    "breaking_change_policy": "扩展协议调整会随 Bias 主版本升级同步说明。"
+  },
+  "security": {
+    "support_email": "",
+    "capabilities_notice": "该扩展承载讨论权限、讨论列表排序过滤和讨论系统事件帖子类型；Django AppConfig 由扩展声明，迁移模块复用历史路径以保持数据库连续性。"
+  },
+  "distribution": {
+    "channel": "private",
+    "channel_label": "私有分发"
+  },
+  "extra": {
+    "auto_install": true,
+    "auto_enable": true,
+    "protected": true,
+    "protected_reason": "该扩展承载讨论、发帖和内容管理基础域，不能在后台停用或卸载。"
+  }
+}

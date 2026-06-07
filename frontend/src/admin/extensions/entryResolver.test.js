@@ -12,8 +12,8 @@ import {
 
 test('normalizeExtensionAdminEntry rewrites extension paths', () => {
   assert.equal(
-    normalizeExtensionAdminEntry('extensions/sample-hello/frontend/admin/index.js'),
-    '../../../../extensions/sample-hello/frontend/admin/index.js',
+    normalizeExtensionAdminEntry('extensions/alpha-tools/frontend/admin/index.js'),
+    '../../../../extensions/alpha-tools/frontend/admin/index.js',
   )
 })
 
@@ -50,9 +50,9 @@ test('resolveAdminEntryFactory exposes extension host surface exports', () => {
 })
 
 test('loadExtensionAdminEntryModule loads filesystem importer entries', async () => {
-  const loaded = await loadExtensionAdminEntryModule('../../../../extensions/sample-hello/frontend/admin/index.js', {
+  const loaded = await loadExtensionAdminEntryModule('../../../../extensions/alpha-tools/frontend/admin/index.js', {
     importers: {
-      '../../../../extensions/sample-hello/frontend/admin/index.js': async () => ({
+      '../../../../extensions/alpha-tools/frontend/admin/index.js': async () => ({
         resolveDetailPage: () => null,
       }),
     },

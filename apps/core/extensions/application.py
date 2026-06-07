@@ -1841,7 +1841,11 @@ class ApplicationEventService:
         view = self._host._get_or_create_runtime_view(normalized_extension_id)
         view.event_listeners = tuple([*view.event_listeners, definition])
         self._host.forum.register_event_listener(self._build_forum_event_listener_definition(normalized_extension_id, definition))
-        self._event_bus.register(definition.event_type, definition.handler)
+        self._event_bus.register(
+            definition.event_type,
+            definition.handler,
+            listener_key=self._build_event_bus_listener_key(normalized_extension_id, definition),
+        )
 
     @staticmethod
     def _build_forum_event_listener_definition(extension_id: str, definition) -> EventListenerDefinition:
@@ -1855,6 +1859,28 @@ class ApplicationEventService:
             module_id=extension_id,
             description=str(getattr(definition, "description", "") or "").strip(),
         )
+
+    @staticmethod
+    def _build_event_bus_listener_key(extension_id: str, definition) -> tuple[str, str, str]:
+        event_type = getattr(definition, "event_type", None)
+        handler = getattr(definition, "handler", None)
+        event_key = ":".join(
+            item
+            for item in (
+                str(getattr(event_type, "__module__", "") or "").strip(),
+                str(getattr(event_type, "__qualname__", "") or "").strip(),
+            )
+            if item
+        ) or str(event_type)
+        handler_key = ":".join(
+            item
+            for item in (
+                str(getattr(handler, "__module__", "") or "").strip(),
+                str(getattr(handler, "__qualname__", "") or "").strip(),
+            )
+            if item
+        ) or str(handler)
+        return (extension_id, event_key, handler_key)
 
     def get_listeners(self, *, extension_id: str | None = None) -> list[ExtensionEventListenerDefinition]:
         if extension_id is not None:

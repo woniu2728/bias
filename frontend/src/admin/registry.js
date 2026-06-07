@@ -18,7 +18,9 @@ export { default as AdminActionNoteModal } from './components/AdminActionNoteMod
 export { default as AdminColorField } from './components/AdminColorField.vue'
 export { default as AdminFilterTabs } from './components/AdminFilterTabs.vue'
 export { default as AdminInlineMessage } from './components/AdminInlineMessage.vue'
+export { default as AdminMultiSelectMenu } from './components/AdminMultiSelectMenu.vue'
 export { default as AdminPage } from './components/AdminPage.vue'
+export { default as AdminPagination } from './components/AdminPagination.vue'
 export { default as AdminSelectMenu } from './components/AdminSelectMenu.vue'
 export { default as AdminStateBlock } from './components/AdminStateBlock.vue'
 export { default as AdminSummaryGrid } from './components/AdminSummaryGrid.vue'
@@ -30,6 +32,7 @@ export {
   resolveApprovalTemplateOptions,
 } from './composables/approvalQueueTemplates.js'
 export { useModalStore } from '../stores/modal.js'
+export { useAuthStore } from '../stores/auth.js'
 export { default as adminApi } from '../api/index.js'
 export {
   getAdminDashboardAction,
@@ -116,7 +119,6 @@ import './registry/bootstrap/mailPage.js'
 import './registry/bootstrap/advancedPage.js'
 import './registry/bootstrap/auditLogsPage.js'
 import './registry/bootstrap/permissionsPage.js'
-import './registry/bootstrap/usersPage.js'
 
 export const forContext = context => adminRuntimeRegistry.for(context)
 export { forContext as for }

@@ -169,3 +169,8 @@ class UserSuspendedEvent(DomainEvent):
 class UserUnsuspendedEvent(DomainEvent):
     user_id: int
     actor_user_id: int | None
+
+
+@dataclass(frozen=True)
+class NotificationCreatedEvent(DomainEvent):
+    notification_ids: tuple[int, ...]

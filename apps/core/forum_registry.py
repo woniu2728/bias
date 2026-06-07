@@ -337,7 +337,7 @@ class ForumRegistry:
         for definition in self.get_post_types():
             if definition.is_default:
                 return definition.code
-        return "comment"
+        return ""
 
     def get_stream_post_type_codes(self) -> Tuple[str, ...]:
         return tuple(

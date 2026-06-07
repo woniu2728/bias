@@ -506,6 +506,7 @@ def _validate_single_manifest(
 
     if base_path is not None:
         _validate_extension_source_contracts(collector, manifest, base_path)
+        _validate_distribution_signature(collector, manifest, base_path)
         _validate_frontend_admin_entry(collector, manifest, base_path)
         _validate_frontend_forum_entry(collector, manifest, base_path)
         _validate_backend_entry(
@@ -552,6 +553,41 @@ def _validate_django_app_config(collector: ExtensionValidationCollector, manifes
             extension_id=manifest.id,
             field="django_migration_module",
         )
+
+
+def _validate_distribution_signature(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+    base_path: Path,
+) -> None:
+    signature_url = str(manifest.distribution.signature_url or "").strip()
+    if not signature_url or _is_remote_url(signature_url):
+        return
+
+    signature_path = _resolve_extension_local_path(signature_url, manifest=manifest, base_path=base_path)
+    if not signature_path.exists() or not signature_path.is_file():
+        collector.add_warning(
+            "missing_distribution_signature_file",
+            f"distribution.signature_url 指向的本地签名文件不存在: {signature_url}",
+            extension_id=manifest.id,
+            field="distribution.signature_url",
+        )
+
+
+def _is_remote_url(value: str) -> bool:
+    normalized = str(value or "").strip().lower()
+    return normalized.startswith(("http://", "https://"))
+
+
+def _resolve_extension_local_path(value: str, *, manifest: ExtensionManifest, base_path: Path) -> Path:
+    normalized = str(value or "").strip()
+    if normalized.startswith("file://"):
+        normalized = normalized[7:]
+    path = Path(normalized)
+    if path.is_absolute():
+        return path
+    root_path = Path(manifest.path) if str(manifest.path or "").strip() else Path(base_path) / manifest.id
+    return root_path / path
 
 
 def _validate_extension_source_contracts(
