@@ -19,6 +19,7 @@
     "flag-resolution"
   ],
   "backend_entry": "extensions.flags.backend.ext",
+  "django_app_config": "extensions.flags.backend.apps.FlagsExtensionConfig",
   "migration_namespace": "extensions.flags.backend.migrations",
   "frontend_admin_entry": "extensions/flags/frontend/admin/index.js",
   "frontend_forum_entry": "extensions/flags/frontend/forum/index.js",

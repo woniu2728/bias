@@ -135,6 +135,7 @@ class ExtensionManifestLoader:
             runtime_actions=tuple(self._build_runtime_action(item) for item in payload.get("runtime_actions", []) if isinstance(item, dict)),
             settings_schema=tuple(self._build_settings_field(item) for item in payload.get("settings_schema", []) if isinstance(item, dict)),
             migration_namespace=str(payload.get("migration_namespace") or "").strip(),
+            django_app_config=str(payload.get("django_app_config") or "").strip(),
             source="filesystem",
             path=str(manifest_path.parent),
             extra=dict(payload.get("extra") or {}),

@@ -551,6 +551,7 @@ class ExtensionManifest:
     runtime_actions: Tuple[ExtensionManifestRuntimeActionDefinition, ...] = ()
     settings_schema: Tuple[ExtensionManifestSettingFieldDefinition, ...] = ()
     migration_namespace: str = ""
+    django_app_config: str = ""
     source: str = "filesystem"
     path: str = ""
     extra: dict[str, Any] = field(default_factory=dict)

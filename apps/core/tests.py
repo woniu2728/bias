@@ -83,6 +83,7 @@ from apps.core.extensions.validation import (
     validate_extension_manifests_with_available_ids,
 )
 from apps.core.extension_diagnostics import classify_extension_diagnostics, summarize_extension_delivery
+from apps.core.extension_django_apps import discover_extension_django_apps, discover_extension_django_migration_modules
 from apps.core.extension_service import ExtensionService
 from apps.core.middleware import ExtensionRequestMiddleware
 from apps.core.api_runtime import build_api_application
@@ -232,6 +233,29 @@ class DomainEventBusTests(TestCase):
 
 @override_settings(BIAS_EXTENSION_PACKAGE_DISCOVERY=False)
 class ExtensionManifestLoaderTests(TestCase):
+    def test_discovers_declared_extension_django_apps_and_migration_modules(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "django_app_config": "extensions.alpha_tools.backend.apps.AlphaToolsConfig",
+            }, ensure_ascii=False), encoding="utf-8")
+
+            self.assertEqual(
+                discover_extension_django_apps(temp_dir),
+                ["extensions.alpha_tools.backend.apps.AlphaToolsConfig"],
+            )
+            self.assertEqual(
+                discover_extension_django_migration_modules(temp_dir),
+                {"alpha_tools": "extensions.alpha_tools.backend.django_migrations"},
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_loader_reads_extension_manifest_from_extensions_directory(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -306,6 +330,7 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(results[0].manifest.runtime_actions[0].hook, "run_rebuild_cache")
             self.assertEqual(results[0].manifest.settings_schema[0].key, "theme")
             self.assertEqual(results[0].manifest.migration_namespace, "")
+            self.assertEqual(results[0].manifest.django_app_config, "")
             self.assertEqual(results[0].manifest.compatibility.api_version, "1.0")
             self.assertEqual(results[0].manifest.compatibility.api_stability, "experimental")
             self.assertEqual(results[0].manifest.distribution.channel, "private")
@@ -3915,6 +3940,27 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
             self.assertFalse(result.ok)
             self.assertTrue(any(item.code == "invalid_backend_entry_namespace" for item in result.issues))
             self.assertTrue(any(item.code == "invalid_migration_namespace" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extension_manifests_reports_invalid_django_app_config_namespace(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "django_app_config": "apps.posts.apps.PostsConfig",
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = loader.discover_manifests()
+            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "invalid_django_app_config_namespace" for item in result.issues))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

@@ -7,6 +7,7 @@ import os
 from datetime import timedelta
 
 from apps.core.bootstrap_config import load_site_bootstrap
+from apps.core.extension_django_apps import discover_extension_django_apps, discover_extension_django_migration_modules
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 BOOTSTRAP = load_site_bootstrap(BASE_DIR)
@@ -45,7 +46,10 @@ INSTALLED_APPS = [
     'apps.posts',
     'apps.notifications',
     'apps.tags',
+    *discover_extension_django_apps(BASE_DIR),
 ]
+
+MIGRATION_MODULES = discover_extension_django_migration_modules(BASE_DIR)
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

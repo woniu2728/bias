@@ -488,6 +488,7 @@ def _validate_single_manifest(
     _validate_ecosystem_metadata(collector, manifest)
     _validate_runtime_actions(collector, manifest)
     _validate_settings_schema(collector, manifest)
+    _validate_django_app_config(collector, manifest)
 
     for field_name, pages in (
         ("settings_pages", manifest.settings_pages),
@@ -517,6 +518,20 @@ def _validate_single_manifest(
             collector,
             manifest,
             base_path,
+        )
+
+
+def _validate_django_app_config(collector: ExtensionValidationCollector, manifest: ExtensionManifest) -> None:
+    app_config = str(getattr(manifest, "django_app_config", "") or "").strip()
+    if not app_config:
+        return
+    expected_prefix = f"extensions.{manifest.id.replace('-', '_')}.backend.apps."
+    if not app_config.startswith(expected_prefix):
+        collector.add_error(
+            "invalid_django_app_config_namespace",
+            f"django_app_config 必须归属当前扩展命名空间，建议使用 {expected_prefix}...AppConfig",
+            extension_id=manifest.id,
+            field="django_app_config",
         )
 
 
