@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.tags.models import Tag
+from extensions.tags.backend.models import Tag
 
 
 def serialize_tag_base(tag, context: dict) -> dict:

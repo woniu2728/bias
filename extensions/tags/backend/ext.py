@@ -38,7 +38,7 @@ from apps.core.forum_registry_types import AdminPageDefinition, DiscussionListQu
 from apps.core.resource_registry import ResourceDefinition, ResourceEndpointDefinition, ResourceFieldDefinition, ResourceRelationshipDefinition
 from apps.discussions.models import Discussion
 from apps.posts.models import Post
-from apps.tags.models import DiscussionTag, Tag
+from extensions.tags.backend.models import DiscussionTag, Tag
 from extensions.tags.backend.handlers import (
     dispatch_tag_create,
     dispatch_tag_delete,

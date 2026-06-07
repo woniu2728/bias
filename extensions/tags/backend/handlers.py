@@ -6,7 +6,7 @@ from django.db.models import Prefetch
 from apps.core.api_errors import api_error
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
 from apps.core.resource_api import ResourceQueryOptions, parse_resource_query_options
-from apps.tags.models import Tag
+from extensions.tags.backend.models import Tag
 from extensions.tags.backend.schemas import TagCreateSchema, TagUpdateSchema
 from extensions.tags.backend.services import TagService
 

@@ -14,12 +14,12 @@ from apps.core.extensions.backend import _build_setting_field_definition
 from apps.core.extensions.types import ExtensionEventListenerDefinition, ExtensionModelVisibilityDefinition
 from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
 from apps.core.forum_registry_types import AdminPageDefinition, PermissionDefinition
-from apps.posts.models import PostFlag
 from apps.core.resource_registry import (
     ResourceEndpointDefinition,
     ResourceFieldDefinition,
     ResourceRelationshipDefinition,
 )
+from extensions.flags.backend.models import PostFlag
 from extensions.flags.backend.handlers import (
     dispatch_post_delete_flags,
     dispatch_post_report,

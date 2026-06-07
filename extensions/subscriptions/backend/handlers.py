@@ -3,16 +3,16 @@ from __future__ import annotations
 from django.core.exceptions import PermissionDenied
 
 from apps.core.api_errors import api_error
-from apps.discussions import discussion_tracking
 from apps.discussions.models import Discussion
 from apps.users.services import UserService
+from extensions.subscriptions.backend.services import set_subscription_state
 
 
 def dispatch_discussion_subscribe(context):
     discussion_id = _discussion_object_id(context)
     try:
         UserService.ensure_not_suspended(context["user"], "关注讨论")
-        discussion_tracking.set_subscription_state(discussion_id, context["user"], True)
+        set_subscription_state(discussion_id, context["user"], True)
         return {"message": "已关注讨论", "is_subscribed": True}
     except Discussion.DoesNotExist:
         return api_error("讨论不存在", status=404)
@@ -24,7 +24,7 @@ def dispatch_discussion_unsubscribe(context):
     discussion_id = _discussion_object_id(context)
     try:
         UserService.ensure_not_suspended(context["user"], "关注讨论")
-        discussion_tracking.set_subscription_state(discussion_id, context["user"], False)
+        set_subscription_state(discussion_id, context["user"], False)
         return {"message": "已取消关注", "is_subscribed": False}
     except Discussion.DoesNotExist:
         return api_error("讨论不存在", status=404)

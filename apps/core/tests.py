@@ -158,9 +158,9 @@ from apps.discussions.services import DiscussionService
 from apps.notifications.models import Notification
 from apps.posts.models import Post
 from apps.posts.services import PostService
-from apps.tags.models import Tag
 from extensions.likes.backend.services import can_like_post
 from extensions.tags.backend.events import DiscussionTagStatsRefreshEvent, TagStatsRefreshRequestedEvent
+from extensions.tags.backend.models import Tag
 from apps.users.models import Group, Permission, User
 from apps.users.services import UserService
 
@@ -4638,9 +4638,9 @@ class ExtensionManagementCommandTests(TestCase):
 
         self.assertEqual(extension["id"], "tags")
         self.assertGreaterEqual(audit["owned_model_count"], 1)
-        self.assertGreaterEqual(audit["django_app_count"], 1)
-        self.assertTrue(any(item["storage_origin"] == "django_app" for item in audit["items"]))
-        self.assertTrue(any(item["model_module"].startswith("apps.tags") for item in audit["items"]))
+        self.assertEqual(audit["django_app_count"], 0)
+        self.assertTrue(any(item["storage_origin"] == "extension" for item in audit["items"]))
+        self.assertTrue(any(item["model_module"].startswith("extensions.tags") for item in audit["items"]))
         self.assertIn("model_package_migration_required_count", extension["capability_summary"])
 
     def test_inspect_extensions_command_can_filter_attention_only(self):
@@ -11540,7 +11540,10 @@ class TestRunnerTests(TestCase):
         }
 
         for relative_path, forbidden_patterns in checks.items():
-            source = (Path(settings.BASE_DIR) / relative_path).read_text(encoding="utf-8")
+            path = Path(settings.BASE_DIR) / relative_path
+            if not path.exists():
+                continue
+            source = path.read_text(encoding="utf-8")
             for pattern in forbidden_patterns:
                 self.assertNotIn(pattern, source, f"{relative_path} still contains migrated extension test behavior")
 

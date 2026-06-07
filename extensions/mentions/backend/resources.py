@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.db.models import Prefetch
 
-from apps.posts.models import PostMentionsUser
+from extensions.mentions.backend.models import PostMentionsUser
 
 
 def post_mentions_preload_resolver(context: dict):

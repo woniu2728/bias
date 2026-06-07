@@ -4,8 +4,9 @@ from django.db.models import Subquery
 from django.db.models import Prefetch
 
 from apps.core.visibility import apply_related_model_visibility_subquery
-from apps.posts.models import Post, PostFlag
+from apps.posts.models import Post
 from apps.users.services import UserService
+from extensions.flags.backend.models import PostFlag
 
 
 def post_flag_preload_resolver(context: dict):

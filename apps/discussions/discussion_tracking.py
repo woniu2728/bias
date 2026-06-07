@@ -278,31 +278,3 @@ def update_read_state(discussion_id: int, user: User, last_read_post_number: int
         state.save(update_fields=update_fields)
 
     return state
-
-
-def get_subscription_state(discussion: Discussion, user: Optional[User]) -> bool:
-    if not user or not user.is_authenticated:
-        return False
-
-    return DiscussionUser.objects.filter(
-        discussion=discussion,
-        user=user,
-        is_subscribed=True,
-    ).exists()
-
-
-def set_subscription_state(discussion_id: int, user: User, subscribed: bool) -> bool:
-    discussion = Discussion.objects.get(id=discussion_id)
-    state, _ = DiscussionUser.objects.get_or_create(
-        discussion=discussion,
-        user=user,
-        defaults={
-            "last_read_at": timezone.now(),
-            "last_read_post_number": discussion.last_post_number or 0,
-        },
-    )
-    if state.is_subscribed == subscribed:
-        return False
-    state.is_subscribed = subscribed
-    state.save(update_fields=["is_subscribed"])
-    return True

@@ -12,8 +12,8 @@ from apps.core.models import AuditLog
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.posts.models import Post
-from apps.tags.models import DiscussionTag, Tag
 from extensions.tags.backend.events import DiscussionTaggedEvent, TagStatsRefreshRequestedEvent
+from extensions.tags.backend.models import DiscussionTag, Tag
 from extensions.tags.backend.services import TagService
 from apps.users.models import User
 from apps.users.models import Group, Permission

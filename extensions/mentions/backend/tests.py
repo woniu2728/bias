@@ -4,10 +4,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from apps.discussions.services import DiscussionService
-from apps.posts.models import PostMentionsUser
 from apps.posts.services import PostService
-from apps.tags.models import Tag
 from apps.users.models import Group, Permission, User
+from extensions.mentions.backend.models import PostMentionsUser
+from extensions.tags.backend.models import Tag
 
 
 class MentionsExtensionTests(TestCase):

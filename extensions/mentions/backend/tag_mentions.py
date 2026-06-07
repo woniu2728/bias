@@ -12,7 +12,7 @@ def render_tag_mentions_html(html: str) -> str:
     if not slugs:
         return html
 
-    from apps.tags.models import Tag
+    from extensions.tags.backend.models import Tag
 
     tag_map = {
         item["slug"]: item

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.db.models import Prefetch
 
-from apps.posts.models import PostLike
+from extensions.likes.backend.models import PostLike
 from apps.core.forum_resources_users import serialize_user_payload
 
 

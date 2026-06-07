@@ -5,9 +5,9 @@ from django.db.models import Q, QuerySet
 from django.core.exceptions import PermissionDenied
 from django.utils.text import slugify
 from apps.core.extensions.runtime_access import generate_runtime_model_slug
-from apps.tags.models import Tag, DiscussionTag
 from apps.users.models import User
 from apps.discussions.models import Discussion
+from extensions.tags.backend.models import DiscussionTag, Tag
 
 
 class TagService:

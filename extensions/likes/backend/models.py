@@ -1,0 +1,26 @@
+from django.db import models
+
+from apps.posts.models import Post
+from apps.users.models import User
+
+
+class PostLike(models.Model):
+    """
+    帖子点赞记录，由 likes 扩展拥有。
+    """
+
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="likes")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="post_likes")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = "posts"
+        db_table = "post_likes"
+        unique_together = [["post", "user"]]
+        indexes = [
+            models.Index(fields=["post"], name="post_likes_post_id_c6421f_idx"),
+            models.Index(fields=["user"], name="post_likes_user_id_7d46ab_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} likes Post #{self.post.number}"

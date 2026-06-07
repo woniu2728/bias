@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
 from apps.core.jwt_auth import AccessTokenAuth
-from apps.tags.models import Tag
+from extensions.tags.backend.models import Tag
 from extensions.tags.backend.services import TagService
 
 

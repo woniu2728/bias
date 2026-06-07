@@ -29,7 +29,7 @@ def enrich_realtime_tags_included_payload(*, discussion=None, post_payload=None,
         tag_ids = tags_context.get("tag_ids") or []
         if not tag_ids:
             return {}
-        from apps.tags.models import Tag
+        from extensions.tags.backend.models import Tag
 
         for tag in Tag.objects.select_related("last_posted_discussion").filter(id__in=tag_ids):
             _merge_tag_payload(tags, tag)
