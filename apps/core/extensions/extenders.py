@@ -755,6 +755,30 @@ class ApiResourceExtender:
     ) -> "ApiResourceExtender":
         return self._relationship_mutators_with_operation("after", anchor, *definitions)
 
+    def remove_relationships(
+        self,
+        *relationships: str,
+        condition: Callable[[dict], bool] | None = None,
+    ) -> "ApiResourceExtender":
+        definitions = tuple(
+            ExtensionResourceFieldMutatorDefinition(
+                resource=self.resource_name,
+                field=relationship,
+                module_id="",
+                operation="remove",
+                mutator=lambda current: current,
+                condition=condition,
+                kind="relationship",
+            )
+            for relationship in relationships
+        )
+        return self.field(*definitions)
+
+    def relationship(self, *definitions) -> "ApiResourceExtender":
+        if self._is_named_mutator_call(definitions):
+            definitions = self._named_relationship_mutators(definitions[0], definitions[1])
+        return self.field(*definitions)
+
     def endpoints(self, endpoints: Any = None, *definitions: ExtensionResourceEndpointDefinition) -> "ApiResourceExtender":
         if endpoints is None:
             items = definitions
@@ -912,6 +936,15 @@ class ApiResourceExtender:
     def filters_with(self, *definitions: Any) -> "ApiResourceExtender":
         return self.filter(*definitions)
 
+    def filters_before(self, anchor: str, *definitions: ExtensionResourceFilterDefinition) -> "ApiResourceExtender":
+        return self._filters_with_operation("before", anchor, *definitions)
+
+    def filters_after(self, anchor: str, *definitions: ExtensionResourceFilterDefinition) -> "ApiResourceExtender":
+        return self._filters_with_operation("after", anchor, *definitions)
+
+    def filters_before_all(self, *definitions: ExtensionResourceFilterDefinition) -> "ApiResourceExtender":
+        return self._filters_with_operation("before_all", "", *definitions)
+
     def remove_filters(self, *filters: str, condition: Callable[[dict], bool] | None = None) -> "ApiResourceExtender":
         definitions = tuple(
             ExtensionResourceFilterDefinition(
@@ -1008,6 +1041,19 @@ class ApiResourceExtender:
             for filter_name in self._normalize_names(filters)
         )
 
+    def _named_relationship_mutators(self, relationships, mutator: Callable[[Any], Any]):
+        return tuple(
+            ExtensionResourceFieldMutatorDefinition(
+                resource=self.resource_name,
+                field=relationship,
+                module_id="",
+                operation="mutate",
+                mutator=mutator,
+                kind="relationship",
+            )
+            for relationship in self._normalize_names(relationships)
+        )
+
     def _relationship_mutators_with_operation(
         self,
         operation: str,
@@ -1051,6 +1097,18 @@ class ApiResourceExtender:
             for definition in definitions
         )
         return self.sort(*sorts)
+
+    def _filters_with_operation(
+        self,
+        operation: str,
+        anchor: str,
+        *definitions: ExtensionResourceFilterDefinition,
+    ) -> "ApiResourceExtender":
+        filters = tuple(
+            replace(definition, operation=operation, anchor=anchor)
+            for definition in definitions
+        )
+        return self.filter(*filters)
 
     @staticmethod
     def _is_named_mutator_call(definitions) -> bool:

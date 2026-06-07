@@ -38,6 +38,24 @@ FORBIDDEN_EXTENSION_SOURCE_PATTERNS = (
         "扩展前端贡献不能声明为 core 模块；请使用当前扩展 ID 作为 moduleId，或省略 moduleId 由扩展运行域归属。",
     ),
     (
+        "forbidden_legacy_forum_frontend_extender",
+        re.compile(r"\bnew\s+Forum(?:Extender)?\s*\("),
+        "扩展前台入口不能使用旧 Forum 构造器；请使用 extendForum(...) 声明前台贡献。",
+    ),
+    (
+        "forbidden_legacy_admin_frontend_extender",
+        re.compile(r"\bnew\s+Admin(?:(?:Dashboard|Page)?Extender|Dashboard|Page)?\s*\("),
+        "扩展后台入口不能使用旧 Admin 构造器；请使用 extendAdmin(...) 声明后台贡献。",
+    ),
+    (
+        "forbidden_legacy_admin_frontend_import",
+        re.compile(
+            r"import\s*\{[^}]*\bAdmin(?:DashboardExtender|PageExtender|Dashboard|Page|Extender)?\b[^}]*\}\s*from\s*['\"]@bias/admin['\"]",
+            re.MULTILINE | re.DOTALL,
+        ),
+        "扩展后台入口不能导入旧 Admin 构造器；请从 @bias/admin 导入 extendAdmin。",
+    ),
+    (
         "forbidden_django_app_entry_import",
         re.compile(r"^\s*(?:from|import)\s+apps\.[A-Za-z0-9_]+(?:\.(?:admin|views|tasks|signals)\b|\s+import\s+(?:admin|views|tasks|signals)\b)", re.MULTILINE),
         "扩展后端不能直接导入 Django app 的 admin/views/tasks/signals 入口；请把运行入口声明到扩展 backend 下。",

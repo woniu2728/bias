@@ -1,10 +1,10 @@
-import { AdminPage } from '@bias/admin'
+import { extendAdmin } from '@bias/admin'
 
 const PAGE_KEY = 'flags.index'
 
 export function buildFlagsPageExtender() {
-  return new AdminPage(PAGE_KEY)
-    .copy({
+  return extendAdmin(admin => admin
+    .pageCopy(PAGE_KEY, {
   key: 'flags-page-copy',
   order: 10,
   resolve: () => ({
@@ -36,7 +36,7 @@ export function buildFlagsPageExtender() {
     ignoreNotePlaceholder: '例如：举报理由不足，暂不处理',
   }),
 })
-    .config({
+    .pageConfig(PAGE_KEY, {
   key: 'flags-page-config',
   order: 10,
   resolve: () => ({
@@ -47,7 +47,7 @@ export function buildFlagsPageExtender() {
     ],
   }),
 })
-    .actionMeta({
+    .pageActionMeta(PAGE_KEY, {
   key: 'flags-page-actions-meta',
   order: 10,
   resolve: () => ({
@@ -59,5 +59,5 @@ export function buildFlagsPageExtender() {
     resolveFailedTitle: '处理失败',
     resolveFailedMessage: '未知错误',
   }),
-})
+}))
 }

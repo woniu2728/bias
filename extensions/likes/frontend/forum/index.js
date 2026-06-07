@@ -1,21 +1,15 @@
 import {
-  Forum,
+  extendForum,
   forumApi,
   getUiCopy,
   ref,
 } from '@bias/forum'
 
 export const extend = [
-  buildLikesForumExtender(),
+  extendForum(registerLikesForum),
 ]
 
 const pendingPostIds = ref([])
-
-function buildLikesForumExtender() {
-  const forum = new Forum()
-  registerLikesForum(forum)
-  return forum
-}
 
 function registerLikesForum(forum) {
   forum.postAction({

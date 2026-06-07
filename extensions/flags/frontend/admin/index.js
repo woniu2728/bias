@@ -1,22 +1,10 @@
-import { Admin, AdminDashboard } from '@bias/admin'
+import { extendAdmin } from '@bias/admin'
 import { ExtensionGeneratedPermissionsPage } from '@bias/admin/components'
 import FlagsPage from './FlagsPage.vue'
 import { buildFlagsPageExtender } from './flagsPageBootstrap.js'
 
 export const extend = [
-  new AdminDashboard().stat({
-    key: 'open-flags',
-    order: 50,
-    icon: 'fas fa-flag',
-    iconClass: 'StatsWidget-icon--warning',
-    moduleId: 'flags',
-    resolve: ({ stats, copy }) => ({
-      label: copy?.openFlagsStatLabel || '待处理举报',
-      value: stats?.openFlags || 0,
-    }),
-  }),
-
-  new Admin().route({
+  extendAdmin(admin => admin.route({
     path: '/admin/flags',
     name: 'admin-flags',
     component: FlagsPage,
@@ -29,7 +17,17 @@ export const extend = [
     showInDashboardActions: true,
     dashboardActionLabel: '处理举报',
     moduleId: 'flags',
-  }),
+  }).dashboardStat({
+    key: 'open-flags',
+    order: 50,
+    icon: 'fas fa-flag',
+    iconClass: 'StatsWidget-icon--warning',
+    moduleId: 'flags',
+    resolve: ({ stats, copy }) => ({
+      label: copy?.openFlagsStatLabel || '待处理举报',
+      value: stats?.openFlags || 0,
+    }),
+  })),
 
   buildFlagsPageExtender(),
 ]

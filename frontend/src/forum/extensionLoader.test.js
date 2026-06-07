@@ -25,15 +25,12 @@ import {
 } from '../common/extensionRuntime.js'
 import { ApplicationRequestError, createRuntimeApplication } from '../common/application.js'
 import { ModelExtender } from '../common/resourceModel.js'
-import extenders, { Admin, AdminDashboard, AdminPage, Exports, Forum, Model, Search, ThemeMode } from '../common/extenders.js'
+import extenders, { Exports, Model, Search, ThemeMode, extendAdmin, extendForum } from '../common/extenders.js'
 import {
-  AdminDashboardExtender,
   AdminExtender,
-  AdminPageExtender,
   ExportsExtender,
   ForumExtender,
   NotificationExtender,
-  PostTypesExtender,
   RoutesExtender,
   SearchExtender,
   ThemeModeExtender,
@@ -848,6 +845,9 @@ test('frontend dedicated extenders register notification post search and routes'
   const searchFilters = []
   const themeModes = []
   const forumNavItems = []
+  const profilePanels = []
+  const searchSources = []
+  const heroMetaItems = []
   const discussionListContexts = []
   const discussionListHeroes = []
   const discussionListRequests = []
@@ -894,6 +894,15 @@ test('frontend dedicated extenders register notification post search and routes'
       },
       registerForumNavItem(definition) {
         forumNavItems.push(definition)
+      },
+      registerProfilePanel(definition) {
+        profilePanels.push(definition)
+      },
+      registerSearchSource(definition) {
+        searchSources.push(definition)
+      },
+      registerHeroMeta(definition) {
+        heroMetaItems.push(definition)
       },
       registerDiscussionListContext(definition) {
         discussionListContexts.push(definition)
@@ -970,22 +979,26 @@ test('frontend dedicated extenders register notification post search and routes'
     frontend: {
       extend: [
         new NotificationExtender().add('alphaAlert', { label: 'Alpha alert', component: () => null }),
-        new PostTypesExtender().add('alphaEvent', { label: 'Alpha event', component: () => null }),
         new SearchExtender()
           .filter({ key: 'alpha', target: 'discussions', syntax: 'alpha:' })
           .gambit('posts', { key: 'flagged', syntax: 'is:flagged', label: 'Flagged' }),
         new ThemeModeExtender().add('sepia', 'Sepia'),
         new ForumExtender()
           .navItem({ key: 'alpha-nav', label: 'Alpha nav', order: 15 })
+          .profilePanel({ key: 'alpha-profile-panel', label: 'Alpha panel', order: 16 })
+          .searchSource({ key: 'alpha-search-source', type: 'alpha', label: 'Alpha search', order: 17 })
+          .heroMeta({ key: 'alpha-hero-meta', text: 'Alpha meta', order: 18 })
           .discussionListContext({ key: 'alpha-context', order: 20 })
           .discussionListHero({ key: 'alpha-hero', order: 20 })
-          .discussionListRequest({ key: 'alpha-request', order: 20 }),
-        new AdminDashboardExtender().stat({ key: 'alpha-stat', label: 'Alpha stat', order: 15 }),
-        new AdminPageExtender('alpha.page')
-          .copy({ key: 'alpha-copy', label: 'Alpha copy' })
-          .config({ key: 'alpha-config', value: true })
-          .actionMeta({ key: 'alpha-action-meta', title: 'Alpha action' })
-          .noteTemplate({ key: 'alpha-note', value: 'Alpha note' }),
+          .discussionListRequest({ key: 'alpha-request', order: 20 })
+          .postType('alphaEvent', { label: 'Alpha event', component: () => null })
+          .postType('betaEvent', { label: 'Beta event', component: () => null }),
+        extendAdmin(admin => admin
+          .dashboardStat({ key: 'alpha-stat', label: 'Alpha stat', order: 15 })
+          .pageCopy('alpha.page', { key: 'alpha-copy', label: 'Alpha copy' })
+          .pageConfig('alpha.page', { key: 'alpha-config', value: true })
+          .pageActionMeta('alpha.page', { key: 'alpha-action-meta', title: 'Alpha action' })
+          .pageNoteTemplate('alpha.page', { key: 'alpha-note', value: 'Alpha note' })),
         new RoutesExtender()
           .add('alpha.page', '/alpha', () => null, { meta: { title: 'Alpha' } })
           .helper('alphaUser', (app, id) => app.route('user', { id })),
@@ -1018,14 +1031,22 @@ test('frontend dedicated extenders register notification post search and routes'
 
   assert.equal(notifications[0].type, 'alphaAlert')
   assert.equal(postTypes[0].type, 'alphaEvent')
+  assert.equal(postTypes[1].type, 'betaEvent')
   assert.equal(runtimeApp.notificationComponents.alphaAlert, notifications[0].component)
   assert.equal(runtimeApp.postComponents.alphaEvent, postTypes[0].component)
+  assert.equal(runtimeApp.postComponents.betaEvent, postTypes[1].component)
   assert.equal(searchFilters.some(item => item.key === 'alpha'), true)
   assert.equal(searchFilters.some(item => item.key === 'flagged'), true)
   assert.deepEqual(runtimeApp.search.gambits.gambits.posts, [{ key: 'flagged', syntax: 'is:flagged', label: 'Flagged' }])
   assert.deepEqual(themeModes[0], { id: 'sepia', mode: 'sepia', label: 'Sepia' })
   assert.equal(forumNavItems[0].key, 'alpha-nav')
   assert.equal(forumNavItems[0].extensionId, 'frontend')
+  assert.equal(profilePanels[0].key, 'alpha-profile-panel')
+  assert.equal(profilePanels[0].extensionId, 'frontend')
+  assert.equal(searchSources[0].key, 'alpha-search-source')
+  assert.equal(searchSources[0].extensionId, 'frontend')
+  assert.equal(heroMetaItems[0].key, 'alpha-hero-meta')
+  assert.equal(heroMetaItems[0].extensionId, 'frontend')
   assert.equal(discussionListContexts[0].key, 'alpha-context')
   assert.equal(discussionListContexts[0].extensionId, 'frontend')
   assert.equal(discussionListHeroes[0].key, 'alpha-hero')
@@ -1083,23 +1104,36 @@ test('common extenders export unified frontend extension entry', () => {
   assert.equal(extenders.Model, ModelExtender)
   assert.equal(extenders.Search, SearchExtender)
   assert.equal(extenders.ThemeMode, ThemeModeExtender)
-  assert.equal(extenders.Admin, AdminExtender)
-  assert.equal(extenders.AdminDashboard, AdminDashboardExtender)
-  assert.equal(extenders.AdminPage, AdminPageExtender)
+  assert.equal(extenders.Admin, undefined)
+  assert.equal(extenders.AdminExtender, AdminExtender)
+  assert.equal(extenders.AdminDashboard, undefined)
+  assert.equal(extenders.AdminPage, undefined)
+  assert.equal(extenders.AdminDashboardExtender, undefined)
+  assert.equal(extenders.AdminPageExtender, undefined)
   assert.equal(extenders.Exports, ExportsExtender)
-  assert.equal(extenders.Forum, ForumExtender)
+  assert.equal(extenders.ForumExtender, ForumExtender)
+  assert.equal(extenders.extendAdmin, extendAdmin)
+  assert.equal(extenders.extendForum, extendForum)
   assert.equal(new Model(UserModel) instanceof ModelExtender, true)
   assert.equal(new Search().gambit('users', query => query) instanceof SearchExtender, true)
   assert.equal(new ThemeMode().add('dark', 'Dark') instanceof ThemeModeExtender, true)
-  assert.equal(new Admin().page({ path: '/admin/demo' }) instanceof AdminExtender, true)
-  assert.equal(new Admin().permissionScope({ key: 'demo' }) instanceof AdminExtender, true)
-  assert.equal(new AdminDashboard().stat({ key: 'demo' }) instanceof AdminDashboardExtender, true)
-  assert.equal(new AdminPage('demo.page').copy({ key: 'demo' }) instanceof AdminPageExtender, true)
+  assert.equal(extendAdmin(admin => admin.page({ path: '/admin/demo' })) instanceof AdminExtender, true)
+  assert.equal(extendAdmin(admin => admin.permissionScope({ key: 'demo' })) instanceof AdminExtender, true)
+  assert.equal(extendAdmin(admin => admin.dashboardStat({ key: 'demo' })) instanceof AdminExtender, true)
+  assert.equal(extendAdmin(admin => admin.pageCopy('demo.page', { key: 'demo' })) instanceof AdminExtender, true)
   assert.equal(new Exports().module('demo', {}) instanceof ExportsExtender, true)
-  assert.equal(new Forum().navItem({ key: 'demo' }) instanceof ForumExtender, true)
-  assert.equal(new Forum().discussionListContext({ key: 'demo' }) instanceof ForumExtender, true)
-  assert.equal(new Forum().discussionListHero({ key: 'demo' }) instanceof ForumExtender, true)
-  assert.equal(new Forum().discussionListRequest({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().navItem({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().profilePanel({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().searchSource({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().heroMeta({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().discussionListContext({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().discussionListHero({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().discussionListRequest({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().postType('demo', { label: 'Demo' }) instanceof ForumExtender, true)
+  assert.equal(extendForum(forum => forum.navItem({ key: 'demo' })) instanceof ForumExtender, true)
+  const scopedForum = extendForum('demo-extension', forum => forum.navItem({ key: 'scoped-demo' }))
+  assert.equal(scopedForum instanceof ForumExtender, true)
+  assert.equal(scopedForum.context, 'demo-extension')
 })
 
 test('search gambits transform store find filter queries', async () => {

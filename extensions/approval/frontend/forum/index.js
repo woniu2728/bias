@@ -1,17 +1,15 @@
-import { Forum } from '@bias/forum'
+import { extendForum } from '@bias/forum'
 
 export const extend = [
-  buildApprovalForumExtender(),
+  extendForum(registerApprovalForum),
 ]
 
-function buildApprovalForumExtender() {
-  const forum = new Forum()
+function registerApprovalForum(forum) {
   registerApprovalNotificationRenderers(forum)
   registerApprovalBadges(forum)
   registerApprovalReviewBanners(forum)
   registerApprovalFeedback(forum)
   registerApprovalComposerNotices(forum)
-  return forum
 }
 
 function registerApprovalNotificationRenderers(forum) {

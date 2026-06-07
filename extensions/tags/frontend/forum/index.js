@@ -1,4 +1,4 @@
-import { Forum, PostTypes, buildDiscussionHeroColorStyle, forumApi, getUiCopy, registerResourceNormalizer } from '@bias/forum'
+import { buildDiscussionHeroColorStyle, extendForum, forumApi, getUiCopy, registerResourceNormalizer } from '@bias/forum'
 import DiscussionTagLabels from './DiscussionTagLabels.vue'
 import DiscussionTaggedPostItem from './DiscussionTaggedPostItem.vue'
 import DiscussionComposerTagFields from './DiscussionComposerTagFields.vue'
@@ -7,23 +7,18 @@ import TagDiscussionModal from './TagDiscussionModal.vue'
 import { buildTagPath, flattenTags, normalizeTag, unwrapTagList } from './tagUtils.js'
 
 export const extend = [
-  new PostTypes().add('discussionTagged', {
-    label: '讨论标签变更',
-    component: DiscussionTaggedPostItem,
-    order: 50,
-  }),
-  buildTagsForumExtender(),
+  extendForum(registerTagsForum),
 ]
-
-function buildTagsForumExtender() {
-  const forum = new Forum()
-  registerTagsForum(forum)
-  return forum
-}
 
 function registerTagsForum(forum) {
   registerResourceNormalizer('tags', normalizeTag)
   registerResourceNormalizer('tag', normalizeTag)
+
+  forum.postType('discussionTagged', {
+    label: '讨论标签变更',
+    component: DiscussionTaggedPostItem,
+    order: 50,
+  })
 
   forum.navItem({
     key: 'tags',

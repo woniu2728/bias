@@ -1,4 +1,4 @@
-import { Forum } from '@bias/forum'
+import { extendForum } from '@bias/forum'
 
 function buildHelloLabel(context = {}) {
   const settings = context.forumStore?.settings || {}
@@ -9,35 +9,25 @@ function buildHelloLabel(context = {}) {
 }
 
 export const extend = [
-  buildSampleHelloForumExtender(),
+  extendForum(forum => forum
+    .navItem({
+      key: 'sample-hello-nav',
+      moduleId: 'sample-hello',
+      section: 'primary',
+      order: 35,
+      icon: 'fas fa-hand-sparkles',
+      label: context => buildHelloLabel(context),
+      to: '/',
+      description: '示例扩展前台入口已成功加载。',
+    })
+    .headerItem({
+      key: 'sample-hello-header',
+      placement: 'after-search',
+      moduleId: 'sample-hello',
+      order: 35,
+      icon: 'fas fa-plug',
+      label: context => buildHelloLabel(context),
+      to: '/',
+      isVisible: ({ authStore }) => !authStore?.user,
+    })),
 ]
-
-function buildSampleHelloForumExtender() {
-  const forum = new Forum()
-  registerSampleHelloForum(forum)
-  return forum
-}
-
-function registerSampleHelloForum(forum) {
-  forum.navItem({
-    key: 'sample-hello-nav',
-    moduleId: 'sample-hello',
-    section: 'primary',
-    order: 35,
-    icon: 'fas fa-hand-sparkles',
-    label: context => buildHelloLabel(context),
-    to: '/',
-    description: '示例扩展前台入口已成功加载。',
-  })
-
-  forum.headerItem({
-    key: 'sample-hello-header',
-    placement: 'after-search',
-    moduleId: 'sample-hello',
-    order: 35,
-    icon: 'fas fa-plug',
-    label: context => buildHelloLabel(context),
-    to: '/',
-    isVisible: ({ authStore }) => !authStore?.user,
-  })
-}

@@ -42,6 +42,17 @@ function extractImports(source) {
   return imports
 }
 
+function extractNamedImports(source, packageName) {
+  const names = []
+  const pattern = new RegExp(`import\\s*\\{([^}]+)\\}\\s*from\\s*['"]${packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`, 'g')
+  let match = pattern.exec(source)
+  while (match) {
+    names.push(...match[1].split(',').map(item => item.trim().split(/\s+as\s+/i)[0].trim()).filter(Boolean))
+    match = pattern.exec(source)
+  }
+  return names
+}
+
 function readExtensionForumSource(extensionId) {
   return readFileSync(resolve(extensionRoot, `${extensionId}/frontend/forum/index.js`), 'utf8')
 }
@@ -74,6 +85,29 @@ test('extension frontend imports only public app APIs', () => {
   assert.deepEqual(offenders, [])
 })
 
+test('extension admin frontends do not import legacy admin constructors', () => {
+  const forbiddenNames = new Set([
+    'Admin',
+    'AdminExtender',
+    'AdminDashboard',
+    'AdminDashboardExtender',
+    'AdminPage',
+    'AdminPageExtender',
+  ])
+  const offenders = []
+
+  for (const path of listFrontendFiles(extensionRoot)) {
+    const source = readFileSync(path, 'utf8')
+    for (const name of extractNamedImports(source, '@bias/admin')) {
+      if (forbiddenNames.has(name)) {
+        offenders.push(`${relative(repoRoot, path)} imports ${name} from @bias/admin`)
+      }
+    }
+  }
+
+  assert.deepEqual(offenders, [])
+})
+
 test('mentions extension owns composer autocomplete provider and toolbar tool registration', () => {
   const composerSource = readFileSync(resolve(repoRoot, 'frontend/src/utils/composer.js'), 'utf8')
   const runtimeSource = readFileSync(resolve(repoRoot, 'frontend/src/composables/useComposerRuntime.js'), 'utf8')
@@ -88,7 +122,7 @@ test('mentions extension owns composer autocomplete provider and toolbar tool re
   assert.equal(composerSource.includes("key: 'mention'"), false)
   assert.equal(runtimeSource.includes('runComposerMentionProviders'), false)
   assert.equal(runtimeSource.includes('detectMentionQuery'), false)
-  assert.equal(mentionsForumSource.includes('new Forum()'), true)
+  assert.equal(mentionsForumSource.includes('extendForum(registerMentionsForum)'), true)
   assert.equal(mentionsForumSource.includes('forum.composerMentionProvider'), false)
   assert.equal(mentionsForumSource.includes('forum.composerAutocompleteProvider'), true)
   assert.equal(mentionsForumSource.includes('detectMentionQuery'), true)
@@ -115,7 +149,7 @@ test('emoji extension owns composer emoji tool and picker copy registration', ()
   ])
   assert.equal(runtimeSource.includes('detectEmojiQuery'), false)
   assert.equal(runtimeSource.includes('searchEmojiItems'), false)
-  assert.equal(emojiForumSource.includes('new Forum()'), true)
+  assert.equal(emojiForumSource.includes('extendForum(registerEmojiForum)'), true)
   assert.equal(emojiForumSource.includes('forum.composerAutocompleteProvider'), true)
   assert.equal(emojiForumSource.includes('detectEmojiQuery'), true)
   assert.equal(emojiForumSource.includes('searchEmojiItems'), true)
@@ -141,14 +175,14 @@ test('tags and notifications extensions own navigational forum contributions', (
     'notifications-page-empty',
     'notifications-menu-empty',
   ])
-  assert.equal(tagsForumSource.includes('new Forum()'), true)
-  assert.equal(tagsForumSource.includes('new PostTypes()'), true)
-  assert.equal(tagsForumSource.includes("add('discussionTagged'"), true)
+  assert.equal(tagsForumSource.includes('extendForum(registerTagsForum)'), true)
+  assert.equal(tagsForumSource.includes('forum.postType'), true)
+  assert.equal(tagsForumSource.includes("postType('discussionTagged'"), true)
   assert.equal(tagsForumSource.includes('forum.navItem'), true)
   assert.equal(tagsForumSource.includes('forum.emptyState'), true)
   assert.equal(tagsForumSource.includes('forum.composerSubmitGuard'), true)
   assert.equal(tagsForumSource.includes("moduleId: 'tags'"), true)
-  assert.equal(notificationsForumSource.includes('new Forum()'), true)
+  assert.equal(notificationsForumSource.includes('extendForum(registerNotificationsForum)'), true)
   assert.equal(notificationsForumSource.includes('forum.navItem'), true)
   assert.equal(notificationsForumSource.includes('forum.headerItem'), true)
   assert.equal(notificationsForumSource.includes('forum.notificationRenderer'), true)
@@ -169,19 +203,19 @@ test('approval flags subscriptions and likes own interaction contributions', () 
     'discussion-detail-like-summary',
     'discussion-post-like-action',
   ])
-  assert.equal(approvalForumSource.includes('new Forum()'), true)
+  assert.equal(approvalForumSource.includes('extendForum(registerApprovalForum)'), true)
   assert.equal(approvalForumSource.includes('forum.approvalNote'), true)
   assert.equal(approvalForumSource.includes('forum.discussionReviewBanner'), true)
   assert.equal(approvalForumSource.includes("moduleId: 'approval'"), true)
-  assert.equal(flagsForumSource.includes('new Forum()'), true)
+  assert.equal(flagsForumSource.includes('extendForum(registerFlagsForum)'), true)
   assert.equal(flagsForumSource.includes('forum.postActionHandler'), true)
   assert.equal(flagsForumSource.includes('forum.postFlagPanel'), true)
   assert.equal(flagsForumSource.includes("moduleId: 'flags'"), true)
-  assert.equal(subscriptionsForumSource.includes('new Forum()'), true)
+  assert.equal(subscriptionsForumSource.includes('extendForum(registerSubscriptionsForum)'), true)
   assert.equal(subscriptionsForumSource.includes('forum.discussionActionHandler'), true)
   assert.equal(subscriptionsForumSource.includes('forum.notificationRenderer'), true)
   assert.equal(subscriptionsForumSource.includes("moduleId: 'subscriptions'"), true)
-  assert.equal(likesForumSource.includes('new Forum()'), true)
+  assert.equal(likesForumSource.includes('extendForum(registerLikesForum)'), true)
   assert.equal(likesForumSource.includes('forum.postAction'), true)
   assert.equal(likesForumSource.includes('forum.postActionHandler'), true)
   assert.equal(likesForumSource.includes('forum.uiCopy'), true)

@@ -1,22 +1,10 @@
-import { Admin, AdminDashboard } from '@bias/admin'
+import { extendAdmin } from '@bias/admin'
 import { ExtensionGeneratedPermissionsPage } from '@bias/admin/components'
 import ApprovalQueuePage from './ApprovalQueuePage.vue'
 import { buildApprovalQueuePageExtender } from './approvalQueuePageBootstrap.js'
 
 export const extend = [
-  new AdminDashboard().stat({
-    key: 'pending-approvals',
-    order: 40,
-    icon: 'fas fa-user-check',
-    iconClass: 'StatsWidget-icon--info',
-    moduleId: 'approval',
-    resolve: ({ stats, copy }) => ({
-      label: copy?.pendingApprovalsStatLabel || '待审核内容',
-      value: stats?.pendingApprovals || 0,
-    }),
-  }),
-
-  new Admin().route({
+  extendAdmin(admin => admin.route({
     path: '/admin/approval',
     name: 'admin-approval',
     component: ApprovalQueuePage,
@@ -29,7 +17,17 @@ export const extend = [
     showInDashboardActions: true,
     dashboardActionLabel: '处理审核',
     moduleId: 'approval',
-  }),
+  }).dashboardStat({
+    key: 'pending-approvals',
+    order: 40,
+    icon: 'fas fa-user-check',
+    iconClass: 'StatsWidget-icon--info',
+    moduleId: 'approval',
+    resolve: ({ stats, copy }) => ({
+      label: copy?.pendingApprovalsStatLabel || '待审核内容',
+      value: stats?.pendingApprovals || 0,
+    }),
+  })),
 
   buildApprovalQueuePageExtender(),
 ]

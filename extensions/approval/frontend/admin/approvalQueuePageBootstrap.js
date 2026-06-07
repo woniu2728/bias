@@ -1,10 +1,10 @@
-import { AdminPage } from '@bias/admin'
+import { extendAdmin } from '@bias/admin'
 
 const PAGE_KEY = 'approval.queue'
 
 export function buildApprovalQueuePageExtender() {
-  return new AdminPage(PAGE_KEY)
-    .copy({
+  return extendAdmin(admin => admin
+    .pageCopy(PAGE_KEY, {
   key: 'core-approval-queue-page-copy',
   order: 10,
   resolve: () => ({
@@ -49,7 +49,7 @@ export function buildApprovalQueuePageExtender() {
     unknownTimeText: '未知时间',
   }),
 })
-    .config({
+    .pageConfig(PAGE_KEY, {
   key: 'core-approval-queue-page-config',
   order: 10,
   resolve: () => ({
@@ -60,7 +60,7 @@ export function buildApprovalQueuePageExtender() {
     ],
   }),
 })
-    .actionMeta({
+    .pageActionMeta(PAGE_KEY, {
   key: 'core-approval-queue-page-actions-meta',
   order: 10,
   resolve: () => ({
@@ -77,7 +77,7 @@ export function buildApprovalQueuePageExtender() {
     submitFailedMessage: '未知错误',
   }),
 })
-    .noteTemplate({
+    .pageNoteTemplate(PAGE_KEY, {
   key: 'approval-approve-compliant',
   order: 10,
   resolve: () => ({
@@ -87,7 +87,7 @@ export function buildApprovalQueuePageExtender() {
     actions: ['approve'],
   }),
 })
-    .noteTemplate({
+    .pageNoteTemplate(PAGE_KEY, {
   key: 'approval-approve-context-complete',
   order: 20,
   resolve: () => ({
@@ -97,7 +97,7 @@ export function buildApprovalQueuePageExtender() {
     actions: ['approve'],
   }),
 })
-    .noteTemplate({
+    .pageNoteTemplate(PAGE_KEY, {
   key: 'approval-reject-quality',
   order: 30,
   resolve: () => ({
@@ -107,7 +107,7 @@ export function buildApprovalQueuePageExtender() {
     actions: ['reject'],
   }),
 })
-    .noteTemplate({
+    .pageNoteTemplate(PAGE_KEY, {
   key: 'approval-reject-duplicate',
   order: 40,
   resolve: () => ({
@@ -118,7 +118,7 @@ export function buildApprovalQueuePageExtender() {
     itemTypes: ['discussion', 'post'],
   }),
 })
-    .noteTemplate({
+    .pageNoteTemplate(PAGE_KEY, {
   key: 'approval-reject-format',
   order: 50,
   resolve: () => ({
@@ -127,5 +127,5 @@ export function buildApprovalQueuePageExtender() {
     description: '适用于语义不清、缺少上下文的场景。',
     actions: ['reject'],
   }),
-})
+}))
 }

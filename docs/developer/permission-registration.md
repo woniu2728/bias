@@ -13,7 +13,7 @@
 
 ## 权限范围入口
 
-如果扩展需要像标签权限那样维护分域访问范围，不要把控件写进核心权限页。前端使用 `new Admin().permissionScope({ ... })` 注册入口，权限页会在布尔权限矩阵上方渲染对应 scope panel。
+如果扩展需要像标签权限那样维护分域访问范围，不要把控件写进核心权限页。前端使用 `extendAdmin(admin => admin.permissionScope({ ... }))` 注册入口，权限页会在布尔权限矩阵上方渲染对应 scope panel。
 
 常用字段：
 

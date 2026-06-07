@@ -1,18 +1,12 @@
 import {
-  Forum,
+  extendForum,
   forumApi,
 } from '@bias/forum'
 import ComposerMentionAutocomplete from './ComposerMentionAutocomplete.vue'
 
 export const extend = [
-  buildMentionsForumExtender(),
+  extendForum(registerMentionsForum),
 ]
-
-function buildMentionsForumExtender() {
-  const forum = new Forum()
-  registerMentionsForum(forum)
-  return forum
-}
 
 function detectMentionQuery(content, cursorPosition) {
   const safeContent = String(content || '')

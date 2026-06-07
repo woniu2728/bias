@@ -1,10 +1,10 @@
-import { AdminPage } from '@bias/admin'
+import { extendAdmin } from '@bias/admin'
 
 const PAGE_KEY = 'tags.index'
 
 export function buildTagsPageExtender() {
-  return new AdminPage(PAGE_KEY)
-    .copy({
+  return extendAdmin(admin => admin
+    .pageCopy(PAGE_KEY, {
   key: 'tags-page-copy',
   order: 10,
   resolve: () => ({
@@ -92,7 +92,7 @@ export function buildTagsPageExtender() {
     configPostingLabel: '发帖 / 回帖',
   }),
 })
-    .config({
+    .pageConfig(PAGE_KEY, {
   key: 'tags-page-config',
   order: 10,
   resolve: () => ({
@@ -155,7 +155,7 @@ export function buildTagsPageExtender() {
     ],
   }),
 })
-    .actionMeta({
+    .pageActionMeta(PAGE_KEY, {
   key: 'tags-page-actions-meta',
   order: 10,
   resolve: () => ({
@@ -181,5 +181,5 @@ export function buildTagsPageExtender() {
     moveFailedTitle: '调整排序失败',
     moveFailedMessage: '未知错误',
   }),
-})
+}))
 }

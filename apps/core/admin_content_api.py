@@ -342,6 +342,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
     resource_filters = _build_extension_resource_filters(extension)
     model_definitions = _build_extension_model_definitions(runtime_view)
     owned_models = _build_extension_owned_models(runtime_view)
+    model_ownership_audit = _build_extension_model_ownership_audit(runtime_view)
     model_relations = _build_extension_model_relations(runtime_view)
     model_visibility = _build_extension_model_visibility(runtime_view)
     search_drivers = _build_extension_search_drivers(runtime_view)
@@ -362,6 +363,8 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         resource_endpoints=resource_endpoints,
         resource_sorts=resource_sorts,
         resource_filters=resource_filters,
+        owned_models=owned_models,
+        model_ownership_audit=model_ownership_audit,
         model_relations=model_relations,
         language_packs=language_packs,
     )
@@ -480,6 +483,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "resource_filters": resource_filters,
         "model_definitions": model_definitions,
         "owned_models": owned_models,
+        "model_ownership_audit": model_ownership_audit,
         "model_relations": model_relations,
         "model_visibility": model_visibility,
         "search_drivers": search_drivers,
@@ -1119,12 +1123,40 @@ def _build_extension_owned_models(runtime_view):
             "module_id": runtime_view.extension_id,
             "model": getattr(item.model, "__name__", str(item.model)),
             "model_label": _model_label(item.model),
+            "model_module": _model_module(item.model),
+            "app_label": _model_app_label(item.model),
+            "db_table": _model_db_table(item.model),
+            "storage_origin": _model_storage_origin(item.model, runtime_view.extension_id),
+            "package_migration_required": _model_package_migration_required(item.model, runtime_view.extension_id),
+            "app_label_migration_required": _model_app_label_migration_required(item.model, runtime_view.extension_id),
             "key": item.key,
             "description": item.description,
         }
         for item in getattr(runtime_view, "model_definitions", ()) or ()
         if item.kind == "owner"
     ]
+
+
+def _build_extension_model_ownership_audit(runtime_view):
+    if runtime_view is None:
+        return {
+            "owned_model_count": 0,
+            "extension_native_count": 0,
+            "django_app_count": 0,
+            "package_migration_required_count": 0,
+            "app_label_migration_required_count": 0,
+            "items": [],
+        }
+
+    items = _build_extension_owned_models(runtime_view)
+    return {
+        "owned_model_count": len(items),
+        "extension_native_count": sum(1 for item in items if item["storage_origin"] == "extension"),
+        "django_app_count": sum(1 for item in items if item["storage_origin"] == "django_app"),
+        "package_migration_required_count": sum(1 for item in items if item["package_migration_required"]),
+        "app_label_migration_required_count": sum(1 for item in items if item["app_label_migration_required"]),
+        "items": items,
+    }
 
 
 def _build_extension_model_relations(runtime_view):
@@ -1167,6 +1199,42 @@ def _model_label(model) -> str:
     module = str(getattr(model, "__module__", "") or "").strip()
     name = str(getattr(model, "__name__", "") or getattr(model, "__qualname__", "") or "").strip()
     return ".".join(item for item in (module, name) if item) or str(model)
+
+
+def _model_module(model) -> str:
+    return str(getattr(model, "__module__", "") or "").strip()
+
+
+def _model_app_label(model) -> str:
+    meta = getattr(model, "_meta", None)
+    return str(getattr(meta, "app_label", "") or "").strip()
+
+
+def _model_db_table(model) -> str:
+    meta = getattr(model, "_meta", None)
+    return str(getattr(meta, "db_table", "") or "").strip()
+
+
+def _model_storage_origin(model, extension_id: str) -> str:
+    module = _model_module(model)
+    extension_module = f"extensions.{str(extension_id or '').replace('-', '_')}."
+    if module.startswith(extension_module):
+        return "extension"
+    if module.startswith("extensions."):
+        return "extension-other"
+    if module.startswith("apps."):
+        return "django_app"
+    return "external"
+
+
+def _model_package_migration_required(model, extension_id: str) -> bool:
+    return _model_storage_origin(model, extension_id) == "django_app"
+
+
+def _model_app_label_migration_required(model, extension_id: str) -> bool:
+    app_label = _model_app_label(model)
+    expected = str(extension_id or "").replace("-", "_").strip()
+    return bool(app_label and expected and app_label != expected)
 
 
 def _build_extension_search_drivers(runtime_view):
@@ -1302,6 +1370,8 @@ def _build_extension_capability_summary(
     resource_endpoints,
     resource_sorts,
     resource_filters,
+    owned_models,
+    model_ownership_audit,
     model_relations,
     language_packs,
 ):
@@ -1320,6 +1390,13 @@ def _build_extension_capability_summary(
         "resource_endpoint_count": len(resource_endpoints),
         "resource_sort_count": len(resource_sorts),
         "resource_filter_count": len(resource_filters),
+        "owned_model_count": len(owned_models),
+        "model_package_migration_required_count": int(
+            (model_ownership_audit or {}).get("package_migration_required_count") or 0
+        ),
+        "model_app_label_migration_required_count": int(
+            (model_ownership_audit or {}).get("app_label_migration_required_count") or 0
+        ),
         "model_relation_count": len(model_relations),
         "language_pack_count": len(language_packs),
     }

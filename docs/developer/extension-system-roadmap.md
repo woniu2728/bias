@@ -243,6 +243,11 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 4. 已新增扩展校验命令：
    - `python manage.py validate_extensions`
    - 支持 `--strict`
+5. 扩展巡检现在会输出模型归属审计：
+   - `python manage.py inspect_extensions --extension-id <id>`
+   - `owned_models` 会包含模型模块、Django app label、数据库表名和存储来源
+   - `model_ownership_audit.package_migration_required_count` 表示扩展声明拥有模型，但模型文件仍在 `apps.*` 壳下
+   - `model_ownership_audit.app_label_migration_required_count` 表示模型 app label 仍未归属当前扩展
 
 当前阶段 6 仍未完成 manifest 与前端导出约束的更细粒度校验，也还没有把脚手架接入 CI 自动检查，但“新建扩展”和“本地自检”已经进入主链路。
 

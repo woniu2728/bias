@@ -4213,8 +4213,11 @@ class ExtensionManagementCommandTests(TestCase):
                 forum_source = (extension_dir / "frontend" / "forum" / "index.js").read_text(encoding="utf-8")
                 self.assertIn("from '@bias/admin'", admin_source)
                 self.assertIn("export const extend", admin_source)
+                self.assertIn("extendAdmin(admin => admin", admin_source)
+                self.assertIn(".page({", admin_source)
                 self.assertIn("from '@bias/forum'", forum_source)
-                self.assertIn("new Forum().navItem", forum_source)
+                self.assertIn("extendForum(forum => forum", forum_source)
+                self.assertIn(".navItem({", forum_source)
                 migration_source = (extension_dir / "backend" / "migrations" / "0001_initial.py").read_text(encoding="utf-8")
                 self.assertIn("def apply():", migration_source)
                 readme_source = (extension_dir / "docs" / "README.md").read_text(encoding="utf-8")
@@ -4233,9 +4236,12 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertIn("import DetailPage from './DetailPage.vue'", entry_source)
                 self.assertIn("import PermissionsPage from './PermissionsPage.vue'", entry_source)
                 self.assertIn("export function resolvePermissionsPage()", entry_source)
+                self.assertIn("extendAdmin(admin => admin", entry_source)
+                self.assertIn(".page({", entry_source)
                 forum_entry_source = (Path(temp_dir) / "extensions" / "alpha-tools" / "frontend" / "forum" / "index.js").read_text(encoding="utf-8")
                 self.assertIn("export const extend", forum_entry_source)
-                self.assertIn("new Forum().navItem", forum_entry_source)
+                self.assertIn("extendForum(forum => forum", forum_entry_source)
+                self.assertIn(".navItem({", forum_entry_source)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -4314,6 +4320,100 @@ class ExtensionManagementCommandTests(TestCase):
                 backend_path.write_text(
                     backend_path.read_text(encoding="utf-8")
                     + f"\n# {external_project_name} naming residue must not enter Bias extensions\n",
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
+                    call_command(
+                        "validate_extensions",
+                        "--extensions-path",
+                        str(Path(temp_dir) / "extensions"),
+                    )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_rejects_legacy_forum_frontend_extender(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command("create_extension", "alpha-tools")
+                forum_path = Path(temp_dir) / "extensions" / "alpha-tools" / "frontend" / "forum" / "index.js"
+                forum_path.write_text(
+                    "import { Forum } from '@bias/forum'\n\n"
+                    "export const extend = [\n"
+                    "  new Forum().navItem({ key: 'legacy-entry' }),\n"
+                    "]\n",
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
+                    call_command(
+                        "validate_extensions",
+                        "--extensions-path",
+                        str(Path(temp_dir) / "extensions"),
+                    )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_rejects_legacy_admin_frontend_extender(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command("create_extension", "alpha-tools")
+                admin_path = Path(temp_dir) / "extensions" / "alpha-tools" / "frontend" / "admin" / "index.js"
+                admin_path.write_text(
+                    "export const extend = [\n"
+                    "  new Admin().page({ path: '/admin/legacy' }),\n"
+                    "]\n"
+                    "export function resolveDetailPage() { return null }\n",
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
+                    call_command(
+                        "validate_extensions",
+                        "--extensions-path",
+                        str(Path(temp_dir) / "extensions"),
+                    )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_rejects_direct_admin_frontend_extender(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command("create_extension", "alpha-tools")
+                admin_path = Path(temp_dir) / "extensions" / "alpha-tools" / "frontend" / "admin" / "index.js"
+                admin_path.write_text(
+                    "export const extend = [\n"
+                    "  new AdminExtender().page({ path: '/admin/direct' }),\n"
+                    "]\n"
+                    "export function resolveDetailPage() { return null }\n",
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
+                    call_command(
+                        "validate_extensions",
+                        "--extensions-path",
+                        str(Path(temp_dir) / "extensions"),
+                    )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_rejects_legacy_admin_frontend_import(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                call_command("create_extension", "alpha-tools")
+                admin_path = Path(temp_dir) / "extensions" / "alpha-tools" / "frontend" / "admin" / "index.js"
+                admin_path.write_text(
+                    "import { AdminPage } from '@bias/admin'\n"
+                    "import { extendAdmin } from '@bias/admin'\n\n"
+                    "export const extend = [\n"
+                    "  extendAdmin(admin => admin.page({ path: '/admin/current' })),\n"
+                    "]\n"
+                    "export function resolveDetailPage() { return null }\n",
                     encoding="utf-8",
                 )
 
@@ -4524,6 +4624,25 @@ class ExtensionManagementCommandTests(TestCase):
         self.assertIn("summary", payload["package_lock"])
         self.assertIn("packages", payload["package_lock"])
 
+    def test_inspect_extensions_command_reports_model_ownership_audit(self):
+        stdout = StringIO()
+        call_command(
+            "inspect_extensions",
+            "--extension-id",
+            "tags",
+            stdout=stdout,
+        )
+        payload = json.loads(stdout.getvalue())
+        extension = payload["extensions"][0]
+        audit = extension["model_ownership_audit"]
+
+        self.assertEqual(extension["id"], "tags")
+        self.assertGreaterEqual(audit["owned_model_count"], 1)
+        self.assertGreaterEqual(audit["django_app_count"], 1)
+        self.assertTrue(any(item["storage_origin"] == "django_app" for item in audit["items"]))
+        self.assertTrue(any(item["model_module"].startswith("apps.tags") for item in audit["items"]))
+        self.assertIn("model_package_migration_required_count", extension["capability_summary"])
+
     def test_inspect_extensions_command_can_filter_attention_only(self):
         ExtensionInstallation.objects.create(
             extension_id="sample-hello",
@@ -4592,6 +4711,22 @@ class ExtensionDiagnosticsTests(TestCase):
         self.assertFalse(diagnostics["blocking"])
         self.assertTrue(diagnostics["warning"])
         self.assertIn("迁移状态待完善", diagnostics["warning_reasons"])
+
+    def test_classify_extension_diagnostics_marks_model_ownership_audit_as_warning(self):
+        diagnostics = classify_extension_diagnostics({
+            "healthy": True,
+            "runtime_issues": [],
+            "dependency_state": "healthy",
+            "model_ownership_audit": {
+                "package_migration_required_count": 2,
+                "app_label_migration_required_count": 1,
+            },
+        })
+
+        self.assertFalse(diagnostics["blocking"])
+        self.assertTrue(diagnostics["warning"])
+        self.assertIn("扩展模型仍依赖 Django app 模块壳", diagnostics["warning_reasons"])
+        self.assertIn("扩展模型 app label 尚未完全归属扩展", diagnostics["warning_reasons"])
 
     def test_summarize_extension_delivery_counts_frontend_migration_and_signed_assets(self):
         summary = summarize_extension_delivery([
@@ -7853,10 +7988,17 @@ class ResourceRegistryTests(TestCase):
                 return "bias_api_items"
 
             def fields(self):
-                return [ResourceField("title", resolver=lambda instance, context: instance.title)]
+                return [
+                    ResourceField("title", resolver=lambda instance, context: instance.title),
+                    ResourceRelationship("owner", resolver=lambda instance, context: instance.owner),
+                    ResourceRelationship("legacy_owner", resolver=lambda instance, context: instance.owner),
+                ]
 
             def endpoints(self):
                 return [ResourceEndpoint.show()]
+
+            def filters(self):
+                return [ResourceFilter("state", handler=lambda queryset, value, context: queryset)]
 
             def sorts(self):
                 return [ResourceSort("created", handler="created_at")]
@@ -7864,7 +8006,44 @@ class ResourceRegistryTests(TestCase):
         extender = (
             ApiResourceExtender.from_resource(ItemResource)
             .fields(lambda: [ResourceField("slug", resolver=lambda instance, context: instance.slug)])
+            .relationship(
+                "owner",
+                lambda relationship: ResourceRelationshipDefinition(
+                    resource=relationship.resource,
+                    relationship=relationship.relationship,
+                    module_id=relationship.module_id,
+                    resolver=relationship.resolver,
+                    description="mutated owner",
+                ),
+            )
+            .relationships_after(
+                "owner",
+                ResourceRelationshipDefinition(
+                    resource="bias_api_items",
+                    relationship="last_editor",
+                    module_id="bias-api",
+                    resolver=lambda instance, context: None,
+                ),
+            )
+            .remove_relationships("legacy_owner")
             .endpoints(lambda: [ResourceEndpoint.index()])
+            .filters_before_all(
+                ResourceFilterDefinition(
+                    resource="bias_api_items",
+                    filter="first",
+                    module_id="bias-api",
+                    handler=lambda queryset, value, context: queryset,
+                ),
+            )
+            .filters_after(
+                "state",
+                ResourceFilterDefinition(
+                    resource="bias_api_items",
+                    filter="after_state",
+                    module_id="bias-api",
+                    handler=lambda queryset, value, context: queryset,
+                ),
+            )
             .sorts(lambda: [ResourceSort("hot", handler="score")])
         )
         extender.extend(app, extension)
@@ -7877,6 +8056,14 @@ class ResourceRegistryTests(TestCase):
         self.assertEqual(
             [endpoint.endpoint for endpoint in registry.get_dispatch_endpoints("bias_api_items")],
             ["show", "index"],
+        )
+        self.assertEqual(
+            [(relationship.relationship, relationship.description) for relationship in registry.get_effective_relationships("bias_api_items")],
+            [("owner", "mutated owner"), ("last_editor", "")],
+        )
+        self.assertEqual(
+            [item.filter for item in registry.get_effective_filters("bias_api_items")],
+            ["first", "state", "after_state"],
         )
         self.assertEqual(
             [sort.sort for sort in registry.get_effective_sorts("bias_api_items")],

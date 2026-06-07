@@ -1,19 +1,13 @@
 import {
-  Forum,
+  extendForum,
   forumApi,
   getUiCopy,
 } from '@bias/forum'
 import PostReportModal from './PostReportModal.vue'
 
 export const extend = [
-  buildFlagsForumExtender(),
+  extendForum(registerFlagsForum),
 ]
-
-function buildFlagsForumExtender() {
-  const forum = new Forum()
-  registerFlagsForum(forum)
-  return forum
-}
 
 function registerFlagsForum(forum) {
   forum.postAction({

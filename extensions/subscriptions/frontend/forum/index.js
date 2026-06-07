@@ -1,18 +1,12 @@
 import {
-  Forum,
+  extendForum,
   getUiCopy,
   forumApi,
 } from '@bias/forum'
 
 export const extend = [
-  buildSubscriptionsForumExtender(),
+  extendForum(registerSubscriptionsForum),
 ]
-
-function buildSubscriptionsForumExtender() {
-  const forum = new Forum()
-  registerSubscriptionsForum(forum)
-  return forum
-}
 
 function registerSubscriptionsForum(forum) {
   forum.navItem({

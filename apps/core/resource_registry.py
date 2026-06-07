@@ -2753,8 +2753,8 @@ class ResourceRegistry:
         if isinstance(item, str):
             return item
         if isinstance(item, dict):
-            return str(item.get("name") or item.get("field") or item.get("relationship") or item.get("sort") or item.get("endpoint") or item.get("code") or "")
-        return str(getattr(item, "name", "") or getattr(item, "field", "") or getattr(item, "relationship", "") or getattr(item, "sort", "") or getattr(item, "endpoint", "") or getattr(item, "code", "") or item)
+            return str(item.get("name") or item.get("field") or item.get("relationship") or item.get("sort") or item.get("filter") or item.get("endpoint") or item.get("code") or "")
+        return str(getattr(item, "name", "") or getattr(item, "field", "") or getattr(item, "relationship", "") or getattr(item, "sort", "") or getattr(item, "filter", "") or getattr(item, "endpoint", "") or getattr(item, "code", "") or item)
 
     def _insert_before(self, items: list[Any], anchor: str, value: Any) -> None:
         index = self._find_item_index(items, anchor)

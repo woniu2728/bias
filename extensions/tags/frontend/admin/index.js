@@ -1,9 +1,9 @@
-import { Admin } from '@bias/admin'
+import { extendAdmin } from '@bias/admin'
 import TagsPage from './TagsPage.vue'
 import { buildTagsPageExtender } from './tagsPageBootstrap.js'
 
 export const extend = [
-  new Admin().route({
+  extendAdmin(admin => admin.route({
     path: '/admin/tags',
     name: 'admin-tags',
     component: TagsPage,
@@ -24,7 +24,7 @@ export const extend = [
     description: '按标签配置查看、发起讨论和回复的访问范围。',
     actionLabel: '管理标签权限',
     to: '/admin/tags',
-  }),
+  })),
 
   buildTagsPageExtender(),
 ]

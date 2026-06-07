@@ -164,7 +164,7 @@ export declare class Model {
   extend(app?: any): void
 }
 
-export declare class Admin {
+export declare class AdminExtender {
   constructor(context?: string)
   route(route: Record<string, any>): this
   page(page: Record<string, any>): this
@@ -172,39 +172,35 @@ export declare class Admin {
   customSetting(setting: Record<string, any> | (() => any), priority?: number): this
   permission(permission: Record<string, any>, type?: string, priority?: number): this
   permissionScope(definition: Record<string, any>): this
+  dashboardStat(definition: Record<string, any>): this
+  dashboardAction(definition: Record<string, any>): this
+  dashboardActionMeta(definition: Record<string, any>): this
+  dashboardAlert(definition: Record<string, any>): this
+  dashboardConfig(definition: Record<string, any>): this
+  dashboardCopy(definition: Record<string, any>): this
+  dashboardQueueMetric(definition: Record<string, any>): this
+  dashboardStatusBadge(definition: Record<string, any>): this
+  dashboardStatusItem(definition: Record<string, any>): this
+  dashboardStatusSummary(definition: Record<string, any>): this
+  pageCopy(pageKey: string, definition: Record<string, any>): this
+  pageConfig(pageKey: string, definition: Record<string, any>): this
+  pageActionMeta(pageKey: string, definition: Record<string, any>): this
+  pageNoteTemplate(pageKey: string, definition: Record<string, any>): this
   extend(app: any, extension?: { name?: string; id?: string }): void
 }
 
-export declare class AdminDashboard {
-  constructor(context?: string)
-  stat(definition: Record<string, any>): this
-  action(definition: Record<string, any>): this
-  actionMeta(definition: Record<string, any>): this
-  alert(definition: Record<string, any>): this
-  config(definition: Record<string, any>): this
-  copy(definition: Record<string, any>): this
-  queueMetric(definition: Record<string, any>): this
-  statusBadge(definition: Record<string, any>): this
-  statusItem(definition: Record<string, any>): this
-  statusSummary(definition: Record<string, any>): this
-  extend(app: any, extension?: { name?: string; id?: string }): void
-}
+export declare function extendAdmin(callback: (admin: AdminExtender) => AdminExtender | void): AdminExtender
+export declare function extendAdmin(context: string, callback?: (admin: AdminExtender) => AdminExtender | void): AdminExtender
 
-export declare class AdminPage {
-  constructor(pageKey?: string, context?: string)
-  copy(definition: Record<string, any>): this
-  config(definition: Record<string, any>): this
-  actionMeta(definition: Record<string, any>): this
-  noteTemplate(definition: Record<string, any>): this
-  extend(app: any, extension?: { name?: string; id?: string }): void
-}
-
-export declare class Forum {
+export declare class ForumExtender {
   constructor(context?: string)
   register(method: string, definition: Record<string, any>): this
   navItem(definition: Record<string, any>): this
   navSection(definition: Record<string, any>): this
   sidebarSection(definition: Record<string, any>): this
+  profilePanel(definition: Record<string, any>): this
+  searchSource(definition: Record<string, any>): this
+  heroMeta(definition: Record<string, any>): this
   discussionListContext(definition: Record<string, any>): this
   discussionListHero(definition: Record<string, any>): this
   discussionListRequest(definition: Record<string, any>): this
@@ -216,6 +212,7 @@ export declare class Forum {
   discussionPresentation(definition: Record<string, any>): this
   discussionReplyState(definition: Record<string, any>): this
   discussionReviewBanner(definition: Record<string, any>): this
+  postType(type: string, definitionOrComponent?: any): this
   postAction(definition: Record<string, any>): this
   postActionHandler(definition: Record<string, any>): this
   postStateBadge(definition: Record<string, any>): this
@@ -242,6 +239,9 @@ export declare class Forum {
   extend(app: any, extension?: { name?: string; id?: string }): void
 }
 
+export declare function extendForum(callback: (forum: ForumExtender) => ForumExtender | void): ForumExtender
+export declare function extendForum(context: string, callback?: (forum: ForumExtender) => ForumExtender | void): ForumExtender
+
 export declare class Exports {
   constructor(namespace?: string)
   module(id: string, value: any): this
@@ -260,11 +260,6 @@ export declare class Notification {
   extend(app: any): void
 }
 
-export declare class PostTypes {
-  add(type: string, definitionOrComponent?: any): this
-  extend(app: any): void
-}
-
 export declare class Search {
   filter(item: Record<string, any>): this
   gambit(modelType: string, gambit: Record<string, any>): this
@@ -279,12 +274,7 @@ export declare class ThemeMode {
 export declare const ModelExtender: typeof Model
 export declare const StoreExtender: typeof Store
 export declare const NotificationExtender: typeof Notification
-export declare const PostTypesExtender: typeof PostTypes
 export declare const RoutesExtender: typeof Routes
 export declare const SearchExtender: typeof Search
 export declare const ThemeModeExtender: typeof ThemeMode
-export declare const AdminExtender: typeof Admin
-export declare const AdminDashboardExtender: typeof AdminDashboard
-export declare const AdminPageExtender: typeof AdminPage
 export declare const ExportsExtender: typeof Exports
-export declare const ForumExtender: typeof Forum

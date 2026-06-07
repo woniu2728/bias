@@ -1,19 +1,17 @@
-import { Forum, normalizeUser, registerResourceNormalizer } from '@bias/forum'
+import { extendForum, normalizeUser, registerResourceNormalizer } from '@bias/forum'
 import NotificationHeaderItem from './NotificationHeaderItem.vue'
 import { useNotificationStore } from './store.js'
 
 export const extend = [
-  buildNotificationsForumExtender(),
+  extendForum(registerNotificationsForum),
 ]
 
-function buildNotificationsForumExtender() {
-  const forum = new Forum()
+function registerNotificationsForum(forum) {
   registerNavigation(forum)
   registerRuntime(forum)
   registerNotificationRenderers(forum)
   registerNotificationStates(forum)
   registerNotificationCopy(forum)
-  return forum
 }
 
 function registerRuntime(forum) {

@@ -36,6 +36,12 @@ def classify_extension_diagnostics(item: dict) -> dict:
     elif item.get("migration_state") in {"pending"} or pending_migration_files:
         warning_reasons.append("迁移状态待完善")
 
+    model_ownership_audit = item.get("model_ownership_audit") or {}
+    if model_ownership_audit.get("package_migration_required_count"):
+        warning_reasons.append("扩展模型仍依赖 Django app 模块壳")
+    if model_ownership_audit.get("app_label_migration_required_count"):
+        warning_reasons.append("扩展模型 app label 尚未完全归属扩展")
+
     return {
         "blocking": bool(blocking_reasons),
         "warning": bool(warning_reasons),

@@ -1,5 +1,5 @@
 import {
-  Forum,
+  extendForum,
   renderTwemojiHtml,
   setTwemojiBaseUrl,
   setTwemojiEnabled,
@@ -16,7 +16,7 @@ function resolveEmojiSettings(context = {}) {
 }
 
 export const extend = [
-  buildEmojiForumExtender(),
+  extendForum(registerEmojiForum),
   new EmojiSettingsExtender(),
 ]
 
@@ -33,12 +33,6 @@ function applyEmojiSettings(app = {}) {
   if (emojiSettings.cdnUrl) {
     setTwemojiBaseUrl(emojiSettings.cdnUrl)
   }
-}
-
-function buildEmojiForumExtender() {
-  const forum = new Forum()
-  registerEmojiForum(forum)
-  return forum
 }
 
 function registerEmojiForum(forum) {
