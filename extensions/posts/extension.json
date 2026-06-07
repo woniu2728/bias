@@ -20,6 +20,7 @@
   "django_app_config": "extensions.posts.backend.apps.PostsExtensionConfig",
   "django_app_label": "posts",
   "django_migration_module": "apps.posts.migrations",
+  "migration_namespace": "extensions.posts.backend.migrations",
   "backend_entry": "extensions.posts.backend.ext",
   "compatibility": {
     "bias_version": "^1.0.0",

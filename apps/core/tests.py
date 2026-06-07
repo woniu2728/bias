@@ -6109,11 +6109,17 @@ class AdminExtensionsApiTests(TestCase):
         self.assertTrue(users_extension["protected"])
         self.assertIn("认证基础域", users_extension["protected_reason"])
         self.assertFalse(any(action["action"] == "disable" for action in users_extension["runtime_actions"]))
+        self.assertEqual(users_extension["model_ownership_audit"]["owned_model_count"], 6)
+        self.assertEqual(users_extension["model_ownership_audit"]["app_label_migration_required_count"], 0)
+        self.assertIn("0001_record_model_ownership.py", users_extension["migration_plan"]["pending_files"])
         self.assertIn("/admin/extensions/users/permissions", users_extension["permissions_pages"])
 
         discussions_extension = next(item for item in payload["extensions"] if item["id"] == "discussions")
         self.assertEqual(discussions_extension["source"], "filesystem")
         self.assertTrue(discussions_extension["product_visible"])
+        self.assertEqual(discussions_extension["model_ownership_audit"]["owned_model_count"], 2)
+        self.assertEqual(discussions_extension["model_ownership_audit"]["app_label_migration_required_count"], 0)
+        self.assertIn("0001_record_model_ownership.py", discussions_extension["migration_plan"]["pending_files"])
         self.assertEqual(
             discussions_extension["frontend_admin_entry"],
             "extensions/discussions/frontend/admin/index.js",
@@ -6125,6 +6131,9 @@ class AdminExtensionsApiTests(TestCase):
         self.assertTrue(posts_extension["product_visible"])
         self.assertTrue(posts_extension["protected"])
         self.assertFalse(any(action["action"] == "disable" for action in posts_extension["runtime_actions"]))
+        self.assertEqual(posts_extension["model_ownership_audit"]["owned_model_count"], 1)
+        self.assertEqual(posts_extension["model_ownership_audit"]["app_label_migration_required_count"], 0)
+        self.assertIn("0001_record_model_ownership.py", posts_extension["migration_plan"]["pending_files"])
         self.assertIn("post-types", posts_extension["provides"])
 
         realtime_extension = next(item for item in payload["extensions"] if item["id"] == "realtime")

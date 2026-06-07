@@ -22,6 +22,7 @@
   "django_app_config": "extensions.discussions.backend.apps.DiscussionsExtensionConfig",
   "django_app_label": "discussions",
   "django_migration_module": "apps.discussions.migrations",
+  "migration_namespace": "extensions.discussions.backend.migrations",
   "backend_entry": "extensions.discussions.backend.ext",
   "frontend_admin_entry": "extensions/discussions/frontend/admin/index.js",
   "compatibility": {

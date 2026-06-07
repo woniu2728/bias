@@ -19,6 +19,7 @@
   "django_app_config": "extensions.users.backend.apps.UsersExtensionConfig",
   "django_app_label": "users",
   "django_migration_module": "apps.users.migrations",
+  "migration_namespace": "extensions.users.backend.migrations",
   "backend_entry": "extensions.users.backend.ext",
   "frontend_admin_entry": "extensions/users/frontend/admin/index.js",
   "compatibility": {

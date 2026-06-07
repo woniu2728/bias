@@ -1,5 +1,6 @@
-from apps.core.extensions import ForumCapabilitiesExtender, LifecycleExtender
+from apps.core.extensions import ForumCapabilitiesExtender, LifecycleExtender, ModelExtender
 from apps.core.forum_registry_types import PostTypeDefinition
+from apps.posts.models import Post
 
 
 EXTENSION_ID = "posts"
@@ -9,6 +10,10 @@ def extend():
     return [
         ForumCapabilitiesExtender(
             post_types=post_type_definitions(),
+        ),
+        ModelExtender().owns(
+            Post,
+            description="帖子流与回复记录由 posts 扩展拥有。",
         ),
         LifecycleExtender(
             install=install,
@@ -80,4 +85,24 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Posts 扩展已卸载。",
+    }
+
+
+def run_migrations(context):
+    return _migration_hook_result(context, "run_migrations", "Posts 扩展迁移已执行。")
+
+
+def rollback_migrations(context):
+    return _migration_hook_result(context, "rollback_migrations", "Posts 扩展迁移已回滚。")
+
+
+def _migration_hook_result(context, hook: str, message: str):
+    return {
+        "hook": hook,
+        "status": "ok",
+        "status_label": "已执行",
+        "message": message,
+        "details": {
+            "migration_namespace": context.migration_namespace,
+        },
     }

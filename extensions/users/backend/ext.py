@@ -1,5 +1,6 @@
-from apps.core.extensions import AdminSurfaceExtender, FrontendExtender, LifecycleExtender
+from apps.core.extensions import AdminSurfaceExtender, FrontendExtender, LifecycleExtender, ModelExtender
 from apps.core.forum_registry_types import AdminPageDefinition, PermissionDefinition
+from apps.users.models import AccessToken, EmailToken, Group, PasswordToken, Permission, User
 
 
 EXTENSION_ID = "users"
@@ -15,6 +16,13 @@ def extend():
             admin_pages=admin_page_definitions(),
             permissions_pages=("/admin/extensions/users/permissions",),
         ),
+        ModelExtender()
+        .owns(User, description="用户账号由 users 扩展拥有。")
+        .owns(Group, description="用户组由 users 扩展拥有。")
+        .owns(Permission, description="用户组权限由 users 扩展拥有。")
+        .owns(AccessToken, description="用户访问令牌由 users 扩展拥有。")
+        .owns(EmailToken, description="邮箱验证令牌由 users 扩展拥有。")
+        .owns(PasswordToken, description="密码重置令牌由 users 扩展拥有。"),
         LifecycleExtender(
             install=install,
             enable=enable,
@@ -110,4 +118,24 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Users 扩展已卸载。",
+    }
+
+
+def run_migrations(context):
+    return _migration_hook_result(context, "run_migrations", "Users 扩展迁移已执行。")
+
+
+def rollback_migrations(context):
+    return _migration_hook_result(context, "rollback_migrations", "Users 扩展迁移已回滚。")
+
+
+def _migration_hook_result(context, hook: str, message: str):
+    return {
+        "hook": hook,
+        "status": "ok",
+        "status_label": "已执行",
+        "message": message,
+        "details": {
+            "migration_namespace": context.migration_namespace,
+        },
     }

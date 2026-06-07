@@ -1,4 +1,10 @@
-from apps.core.extensions import AdminSurfaceExtender, ForumCapabilitiesExtender, FrontendExtender, LifecycleExtender
+from apps.core.extensions import (
+    AdminSurfaceExtender,
+    ForumCapabilitiesExtender,
+    FrontendExtender,
+    LifecycleExtender,
+    ModelExtender,
+)
 from apps.core.forum_registry_types import (
     DiscussionListFilterDefinition,
     DiscussionSortDefinition,
@@ -15,6 +21,7 @@ from extensions.discussions.backend.registry import (
     apply_my_discussions_list_filter,
     apply_unread_discussions_list_filter,
 )
+from apps.discussions.models import Discussion, DiscussionUser
 
 
 EXTENSION_ID = "discussions"
@@ -35,6 +42,9 @@ def extend():
             discussion_sorts=discussion_sort_definitions(),
             discussion_list_filters=discussion_list_filter_definitions(),
         ),
+        ModelExtender()
+        .owns(Discussion, description="讨论主题由 discussions 扩展拥有。")
+        .owns(DiscussionUser, description="讨论用户阅读和订阅状态由 discussions 扩展拥有。"),
         LifecycleExtender(
             install=install,
             enable=enable,
@@ -364,4 +374,24 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Discussions 扩展已卸载。",
+    }
+
+
+def run_migrations(context):
+    return _migration_hook_result(context, "run_migrations", "Discussions 扩展迁移已执行。")
+
+
+def rollback_migrations(context):
+    return _migration_hook_result(context, "rollback_migrations", "Discussions 扩展迁移已回滚。")
+
+
+def _migration_hook_result(context, hook: str, message: str):
+    return {
+        "hook": hook,
+        "status": "ok",
+        "status_label": "已执行",
+        "message": message,
+        "details": {
+            "migration_namespace": context.migration_namespace,
+        },
     }
