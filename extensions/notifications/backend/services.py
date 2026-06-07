@@ -424,7 +424,7 @@ class NotificationService:
             from_user: 回复者
         """
         from apps.discussions.models import Discussion
-        from apps.posts.models import Post
+        from extensions.posts.backend.models import Post
 
         try:
             discussion = Discussion.objects.select_related('user').get(id=discussion_id)
@@ -488,7 +488,7 @@ class NotificationService:
             post_id: 新回复帖子ID
             from_user: 回复者
         """
-        from apps.posts.models import Post
+        from extensions.posts.backend.models import Post
 
         try:
             reply_to_post = Post.objects.select_related('user', 'discussion__user').get(id=reply_to_post_id)
@@ -527,7 +527,7 @@ class NotificationService:
             post_id: 帖子ID
             from_user: 点赞者
         """
-        from apps.posts.models import Post
+        from extensions.posts.backend.models import Post
 
         try:
             post = Post.objects.select_related('user', 'discussion').get(id=post_id)
@@ -560,7 +560,7 @@ class NotificationService:
             mentioned_user: 被提及的用户
             from_user: 提及者
         """
-        from apps.posts.models import Post
+        from extensions.posts.backend.models import Post
 
         try:
             post = Post.objects.select_related('discussion').get(id=post_id)

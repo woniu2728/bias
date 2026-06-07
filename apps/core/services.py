@@ -10,7 +10,7 @@ from django.db import connection
 from django.db.models import OuterRef, Q, Subquery
 
 from apps.discussions.models import Discussion
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.core.forum_registry import get_forum_registry
 from apps.users.models import User
 from apps.core.visibility import apply_discussion_visibility_scope, apply_post_visibility_scope

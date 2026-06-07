@@ -17,7 +17,7 @@ from apps.discussions.schemas import (
     DiscussionUpdateSchema,
 )
 from apps.discussions.services import DiscussionService
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 
 
 def get_resource_registry():

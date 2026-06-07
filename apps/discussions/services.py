@@ -15,7 +15,7 @@ from apps.core.extensions.runtime_access import (
 from apps.core.forum_registry import get_forum_registry
 from apps.discussions import discussion_tracking, service_lifecycle
 from apps.discussions.models import Discussion, DiscussionUser
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.core.services import PaginationService, SearchService
 from apps.users.models import User
 from apps.users.services import UserService

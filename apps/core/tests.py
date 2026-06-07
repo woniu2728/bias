@@ -157,7 +157,7 @@ from apps.core.websocket_auth import (
 )
 from apps.discussions.models import Discussion
 from apps.discussions.services import DiscussionService
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.posts.services import PostService
 from extensions.likes.backend.services import can_like_post
 from extensions.notifications.backend.models import Notification
@@ -12293,12 +12293,8 @@ class TestRunnerTests(TestCase):
                 self.assertNotIn(pattern, source, f"{relative_path} still contains migrated extension test behavior")
 
     def test_extension_owned_models_are_not_redefined_in_core_model_modules(self):
+        self.assertFalse((Path(settings.BASE_DIR) / "apps/posts/models.py").exists())
         checks = {
-            "apps/posts/models.py": [
-                "class PostLike",
-                "class PostFlag",
-                "class PostMentionsUser",
-            ],
             "apps/tags/models.py": [
                 "class Tag",
                 "class DiscussionTag",

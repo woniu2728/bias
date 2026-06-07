@@ -9,7 +9,7 @@ from apps.core.extensions.policy_runtime_service import evaluate_extension_polic
 from apps.core.forum_registry import get_forum_registry
 from apps.discussions.models import Discussion
 from apps.posts import post_query_service, service_lifecycle, service_moderation
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.users.models import User
 from apps.users.services import UserService
 

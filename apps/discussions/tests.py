@@ -25,7 +25,7 @@ from apps.core.visibility import build_discussion_visibility_q, build_post_visib
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.discussions.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
 from apps.discussions.services import DiscussionService
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.posts.services import PostService
 from apps.users.models import Group, Permission, User
 

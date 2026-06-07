@@ -52,7 +52,7 @@ from apps.core.settings_service import (
     sync_mail_settings_to_site_config,
 )
 from apps.discussions.models import Discussion
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.users.models import User
 
 

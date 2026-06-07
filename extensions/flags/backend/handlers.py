@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, validator
 
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.posts.services import PostService
 from extensions.flags.backend.services import delete_post_flags, report_post, resolve_post_flags
 

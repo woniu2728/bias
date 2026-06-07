@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.core.exceptions import PermissionDenied
 
 from apps.core.api_errors import api_error
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from extensions.likes.backend.services import like_post, unlike_post
 
 

@@ -1,6 +1,6 @@
 from apps.core.extensions import ForumCapabilitiesExtender, LifecycleExtender, ModelExtender
 from apps.core.forum_registry_types import PostTypeDefinition
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 
 
 EXTENSION_ID = "posts"

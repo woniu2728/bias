@@ -12,7 +12,7 @@ from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegi
 from apps.core.visibility import build_post_visibility_q
 from apps.discussions.models import Discussion, DiscussionUser
 from apps.discussions.services import DiscussionService
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.posts.services import PostService
 from apps.users.models import Group, Permission, User
 

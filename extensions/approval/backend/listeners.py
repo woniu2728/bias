@@ -88,7 +88,7 @@ def handle_discussion_resubmitted(event: DiscussionResubmittedEvent) -> None:
 
 def handle_post_approved(event: PostApprovedEvent) -> None:
     from extensions.notifications.backend.services import NotificationService
-    from apps.posts.models import Post
+    from extensions.posts.backend.models import Post
     from apps.users.models import User
 
     try:
@@ -110,7 +110,7 @@ def handle_post_approved(event: PostApprovedEvent) -> None:
 
 def handle_post_rejected(event: PostRejectedEvent) -> None:
     from extensions.notifications.backend.services import NotificationService
-    from apps.posts.models import Post
+    from extensions.posts.backend.models import Post
     from apps.users.models import User
 
     try:
@@ -131,7 +131,7 @@ def handle_post_rejected(event: PostRejectedEvent) -> None:
 
 
 def handle_post_resubmitted(event: PostResubmittedEvent) -> None:
-    from apps.posts.models import Post
+    from extensions.posts.backend.models import Post
 
     try:
         post = Post.objects.get(id=event.post_id)

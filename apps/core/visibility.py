@@ -12,7 +12,7 @@ from apps.core.extensions.runtime_access import (
     has_runtime_model_visibility,
 )
 from apps.discussions.models import Discussion
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 
 
 @dataclass(frozen=True)

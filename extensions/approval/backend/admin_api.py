@@ -11,7 +11,7 @@ from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.services import PaginationService
 from apps.discussions.models import Discussion
 from apps.discussions.services import DiscussionService
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.posts.services import PostService
 from apps.users.services import UserService
 

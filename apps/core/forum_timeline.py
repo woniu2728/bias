@@ -6,7 +6,7 @@ from typing import Callable
 from django.utils import timezone
 
 from apps.discussions.models import Discussion
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.users.models import User
 
 

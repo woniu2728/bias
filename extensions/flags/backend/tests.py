@@ -10,7 +10,7 @@ from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent
 from apps.core.models import AuditLog, Setting
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.discussions.services import DiscussionService
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.posts.services import PostService
 from apps.users.models import Group, Permission, User
 from extensions.flags.backend.models import PostFlag

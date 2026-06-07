@@ -15,7 +15,7 @@ from apps.core.extensions.types import ExtensionEventListenerDefinition
 from apps.core.forum_events import UserMentionedEvent
 from apps.core.forum_registry_types import NotificationTypeDefinition, PermissionDefinition, SearchFilterDefinition, UserPreferenceDefinition
 from apps.core.resource_registry import ResourceFieldDefinition
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.users.services import UserService
 from apps.users.models import User
 from extensions.mentions.backend.models import PostMentionsUser

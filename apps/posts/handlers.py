@@ -14,7 +14,7 @@ from apps.core.resource_api import (
 from apps.core.resource_errors import BadJsonApiRequest
 from apps.core.resource_registry import ResourceEndpointDefinition
 from apps.core.services import PaginationService
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.posts.schemas import PostCreateSchema, PostUpdateSchema
 from apps.posts.services import PostService
 

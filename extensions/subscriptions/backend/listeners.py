@@ -98,7 +98,7 @@ def _follow_discussion_if_enabled(
     last_read_post_number: int | None = None,
 ) -> None:
     from apps.discussions.models import DiscussionUser
-    from apps.posts.models import Post
+    from extensions.posts.backend.models import Post
     from apps.users.models import User
     from apps.users.preferences import get_user_preference_value
 

@@ -14,7 +14,7 @@ from apps.core.extensions.types import ExtensionModelRelationDefinition, Extensi
 from apps.core.forum_registry_types import NotificationTypeDefinition, UserPreferenceDefinition
 from apps.core.forum_registry_types import SearchFilterDefinition
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceFieldDefinition, ResourceFilterDefinition, ResourceRelationshipDefinition
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.users.models import User
 from extensions.likes.backend.models import PostLike
 from extensions.likes.backend.handlers import dispatch_post_like_mutation

@@ -11,7 +11,7 @@ from apps.core.extensions.lifecycle import rebuild_runtime_urlconf, reset_extens
 from apps.core.models import AuditLog
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from extensions.tags.backend.events import DiscussionTaggedEvent, TagStatsRefreshRequestedEvent
 from extensions.tags.backend.models import DiscussionTag, Tag
 from extensions.tags.backend.services import TagService

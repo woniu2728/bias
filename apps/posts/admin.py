@@ -2,7 +2,7 @@
 帖子系统Django Admin配置
 """
 from django.contrib import admin
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 
 
 @admin.register(Post)

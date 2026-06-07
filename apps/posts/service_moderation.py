@@ -9,7 +9,7 @@ from apps.core.forum_events import (
     PostRejectedEvent,
 )
 from apps.discussions.models import Discussion, DiscussionUser
-from apps.posts.models import Post
+from extensions.posts.backend.models import Post
 from apps.users.models import User
 
 
