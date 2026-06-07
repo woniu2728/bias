@@ -18,6 +18,7 @@
     "notification-websocket"
   ],
   "backend_entry": "extensions.notifications.backend.ext",
+  "migration_namespace": "extensions.notifications.backend.migrations",
   "frontend_forum_entry": "extensions/notifications/frontend/forum/index.js",
   "compatibility": {
     "bias_version": "^1.0.0",

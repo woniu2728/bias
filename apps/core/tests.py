@@ -155,10 +155,10 @@ from apps.core.websocket_auth import (
 )
 from apps.discussions.models import Discussion
 from apps.discussions.services import DiscussionService
-from apps.notifications.models import Notification
 from apps.posts.models import Post
 from apps.posts.services import PostService
 from extensions.likes.backend.services import can_like_post
+from extensions.notifications.backend.models import Notification
 from extensions.tags.backend.events import DiscussionTagStatsRefreshEvent, TagStatsRefreshRequestedEvent
 from extensions.tags.backend.models import Tag
 from apps.users.models import Group, Permission, User
@@ -4642,6 +4642,32 @@ class ExtensionManagementCommandTests(TestCase):
         self.assertTrue(any(item["storage_origin"] == "extension" for item in audit["items"]))
         self.assertTrue(any(item["model_module"].startswith("extensions.tags") for item in audit["items"]))
         self.assertIn("model_package_migration_required_count", extension["capability_summary"])
+
+    def test_inspect_extensions_reports_notifications_as_extension_native_model(self):
+        stdout = StringIO()
+        call_command(
+            "inspect_extensions",
+            "--extension-id",
+            "notifications",
+            stdout=stdout,
+        )
+        payload = json.loads(stdout.getvalue())
+        extension = payload["extensions"][0]
+        audit = extension["model_ownership_audit"]
+        item = audit["items"][0]
+
+        self.assertEqual(extension["id"], "notifications")
+        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+        self.assertEqual(audit["owned_model_count"], 1)
+        self.assertEqual(audit["extension_native_count"], 1)
+        self.assertEqual(audit["django_app_count"], 0)
+        self.assertEqual(audit["package_migration_required_count"], 0)
+        self.assertEqual(audit["app_label_migration_required_count"], 0)
+        self.assertEqual(item["model"], "Notification")
+        self.assertEqual(item["model_module"], "extensions.notifications.backend.models")
+        self.assertEqual(item["current_app_label"], "notifications")
+        self.assertEqual(item["target_app_label"], "notifications")
+        self.assertEqual(item["migration_risk"], "none")
 
     def test_inspect_extensions_reports_extension_model_app_label_gap(self):
         for extension_id in ("likes", "flags", "mentions"):
@@ -11609,10 +11635,14 @@ class TestRunnerTests(TestCase):
                 "class Tag",
                 "class DiscussionTag",
             ],
+            "apps/notifications/models.py": [
+                "class Notification",
+            ],
         }
 
         for relative_path, forbidden_patterns in checks.items():
-            source = (Path(settings.BASE_DIR) / relative_path).read_text(encoding="utf-8")
+            path = Path(settings.BASE_DIR) / relative_path
+            source = path.read_text(encoding="utf-8") if path.exists() else ""
             for pattern in forbidden_patterns:
                 self.assertNotIn(pattern, source, f"{relative_path} redefines extension-owned model")
 

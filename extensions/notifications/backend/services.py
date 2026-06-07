@@ -6,10 +6,10 @@ from django.db import transaction
 from django.db.models import Q, Count
 from django.core.cache import cache
 from django.utils import timezone
-from apps.notifications.models import Notification
 from apps.users.models import User
 from apps.users.preferences import get_user_preference_value
 from apps.discussions.models import DiscussionUser
+from extensions.notifications.backend.models import Notification
 
 
 UNREAD_COUNT_CACHE_KEY = "notifications.unread_count.{user_id}"

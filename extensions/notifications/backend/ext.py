@@ -18,7 +18,6 @@ from apps.core.forum_events import (
 )
 from apps.core.forum_registry_types import NotificationTypeDefinition, UserPreferenceDefinition
 from apps.core.resource_registry import ResourceEndpointDefinition
-from apps.notifications.models import Notification
 from extensions.notifications.backend.handlers import (
     dispatch_notification_delete,
     dispatch_notification_delete_all_read,
@@ -30,6 +29,7 @@ from extensions.notifications.backend.handlers import (
     dispatch_notification_show,
     dispatch_notification_stats,
 )
+from extensions.notifications.backend.models import Notification
 from extensions.notifications.backend.listeners import (
     handle_post_created_direct_reply_notification,
     handle_post_liked_notification,
@@ -314,4 +314,24 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Notifications 扩展已卸载。",
+    }
+
+
+def run_migrations(context):
+    return _migration_hook_result(context, "run_migrations", "Notifications 扩展迁移已执行。")
+
+
+def rollback_migrations(context):
+    return _migration_hook_result(context, "rollback_migrations", "Notifications 扩展迁移已回滚。")
+
+
+def _migration_hook_result(context, hook: str, message: str):
+    return {
+        "hook": hook,
+        "status": "ok",
+        "status_label": "已执行",
+        "message": message,
+        "details": {
+            "migration_namespace": context.migration_namespace,
+        },
     }

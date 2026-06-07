@@ -3,9 +3,9 @@ from ninja_jwt.tokens import RefreshToken
 
 from apps.discussions.models import DiscussionUser
 from apps.discussions.services import DiscussionService
-from apps.notifications.models import Notification
 from apps.posts.services import PostService
 from apps.users.models import User
+from extensions.notifications.backend.models import Notification
 
 
 class SubscriptionsExtensionTests(TestCase):

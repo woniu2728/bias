@@ -10,12 +10,12 @@ from apps.core.models import Setting
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.discussions.services import DiscussionService
-from apps.notifications.models import Notification
 from extensions.notifications.backend.services import NotificationService
 from apps.posts.services import PostService
 from apps.users.models import User
 from extensions.likes.backend.services import like_post
 from extensions.notifications.backend.ext import notification_resource_endpoints
+from extensions.notifications.backend.models import Notification
 
 
 class NotificationServiceTests(TestCase):

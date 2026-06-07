@@ -122,7 +122,7 @@ def _follow_discussion_if_enabled(
 
 
 def _delete_discussion_reply_notifications_for_post(post_id: int) -> None:
-    from apps.notifications.models import Notification
+    from extensions.notifications.backend.models import Notification
     from extensions.notifications.backend.services import NotificationService
 
     Notification.objects.filter(
