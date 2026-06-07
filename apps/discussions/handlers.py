@@ -9,7 +9,7 @@ from apps.core.forum_resources import serialize_user_summary
 from apps.core.resource_api import ResourceQueryOptions, merge_resource_includes, parse_resource_query_options
 from apps.core.resource_registry import ResourceEndpointDefinition
 from apps.core.services import PaginationService
-from apps.discussions.models import Discussion
+from extensions.discussions.backend.models import Discussion
 from apps.discussions.schemas import (
     DiscussionCreateSchema,
     DiscussionOutSchema,

@@ -51,7 +51,7 @@ from apps.core.settings_service import (
     save_setting_group,
     sync_mail_settings_to_site_config,
 )
-from apps.discussions.models import Discussion
+from extensions.discussions.backend.models import Discussion
 from extensions.posts.backend.models import Post
 from apps.users.models import User
 

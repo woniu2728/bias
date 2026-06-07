@@ -2,7 +2,7 @@
 讨论系统Django Admin配置
 """
 from django.contrib import admin
-from apps.discussions.models import Discussion, DiscussionUser
+from extensions.discussions.backend.models import Discussion, DiscussionUser
 
 
 @admin.register(Discussion)

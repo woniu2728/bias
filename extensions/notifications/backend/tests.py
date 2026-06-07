@@ -5,7 +5,7 @@ from django.db import connection
 from ninja_jwt.tokens import RefreshToken
 from unittest.mock import patch
 
-from apps.discussions.models import DiscussionUser
+from extensions.discussions.backend.models import DiscussionUser
 from apps.core.models import Setting
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches

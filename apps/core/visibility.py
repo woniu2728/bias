@@ -11,7 +11,7 @@ from apps.core.extensions.runtime_access import (
     evaluate_runtime_query_model_policy,
     has_runtime_model_visibility,
 )
-from apps.discussions.models import Discussion
+from extensions.discussions.backend.models import Discussion
 from extensions.posts.backend.models import Post
 
 

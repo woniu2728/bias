@@ -1,7 +1,7 @@
 from django.test import TestCase
 from ninja_jwt.tokens import RefreshToken
 
-from apps.discussions.models import DiscussionUser
+from extensions.discussions.backend.models import DiscussionUser
 from apps.discussions.services import DiscussionService
 from apps.posts.services import PostService
 from apps.users.models import User

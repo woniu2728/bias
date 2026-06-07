@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from ninja_jwt.tokens import RefreshToken
 
-from apps.discussions.models import Discussion
+from extensions.discussions.backend.models import Discussion
 from apps.discussions.services import DiscussionService
 from extensions.posts.backend.models import Post
 from apps.posts.services import PostService

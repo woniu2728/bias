@@ -82,7 +82,7 @@ def broadcast_discussion_event(
 
 
 def load_discussion_for_realtime(discussion_id: int):
-    from apps.discussions.models import Discussion
+    from extensions.discussions.backend.models import Discussion
     from apps.discussions.handlers import apply_discussion_resource_preloads
 
     return (

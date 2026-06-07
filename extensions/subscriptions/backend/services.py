@@ -4,7 +4,7 @@ from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 
 from apps.core.visibility import can_view_model_instance
-from apps.discussions.models import Discussion, DiscussionUser
+from extensions.discussions.backend.models import Discussion, DiscussionUser
 from apps.users.models import User
 
 

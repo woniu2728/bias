@@ -9,7 +9,7 @@ from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from django.db import connection
 from django.db.models import OuterRef, Q, Subquery
 
-from apps.discussions.models import Discussion
+from extensions.discussions.backend.models import Discussion
 from extensions.posts.backend.models import Post
 from apps.core.forum_registry import get_forum_registry
 from apps.users.models import User

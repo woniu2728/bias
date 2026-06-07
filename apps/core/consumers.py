@@ -8,7 +8,7 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 
-from apps.discussions.models import Discussion
+from extensions.discussions.backend.models import Discussion
 from apps.discussions.services import DiscussionService
 from apps.core.online_service import OnlineUserService
 from apps.core.settings_service import get_advanced_settings
@@ -314,7 +314,7 @@ class DiscussionConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def can_view_discussion(self):
-        from apps.discussions.models import Discussion
+        from extensions.discussions.backend.models import Discussion
 
         user = self.user
         if isinstance(user, AnonymousUser):

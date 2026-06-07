@@ -1,6 +1,6 @@
 from django.db import models
 from apps.users.models import User
-from apps.discussions.models import Discussion
+from extensions.discussions.backend.models import Discussion
 
 
 class Post(models.Model):

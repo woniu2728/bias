@@ -22,7 +22,7 @@ from apps.core.resource_registry import (
     ResourceSortDefinition,
 )
 from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
-from apps.discussions.models import Discussion, DiscussionUser
+from extensions.discussions.backend.models import Discussion, DiscussionUser
 from apps.discussions.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
 from apps.discussions.services import DiscussionService
 from extensions.posts.backend.models import Post

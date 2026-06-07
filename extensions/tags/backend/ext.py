@@ -36,7 +36,7 @@ from apps.core.forum_events import (
 )
 from apps.core.forum_registry_types import AdminPageDefinition, DiscussionListQueryDefinition, PostTypeDefinition, SearchFilterDefinition
 from apps.core.resource_registry import ResourceDefinition, ResourceEndpointDefinition, ResourceFieldDefinition, ResourceRelationshipDefinition
-from apps.discussions.models import Discussion
+from extensions.discussions.backend.models import Discussion
 from extensions.posts.backend.models import Post
 from extensions.tags.backend.models import DiscussionTag, Tag
 from extensions.tags.backend.handlers import (

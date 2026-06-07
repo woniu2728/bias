@@ -6,7 +6,7 @@ from django.db.models import F
 from django.utils import timezone
 
 from apps.core.visibility import apply_discussion_visibility_scope, can_view_model_instance
-from apps.discussions.models import Discussion, DiscussionUser
+from extensions.discussions.backend.models import Discussion, DiscussionUser
 from apps.users.models import User
 
 

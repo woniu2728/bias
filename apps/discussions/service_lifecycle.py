@@ -22,7 +22,7 @@ from apps.core.extensions.runtime_access import (
     get_runtime_resource_registry,
     refresh_runtime_model_private,
 )
-from apps.discussions.models import Discussion, DiscussionUser
+from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.posts.backend.models import Post
 from apps.users.models import User
 from apps.users.services import UserService

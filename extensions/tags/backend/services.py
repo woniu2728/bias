@@ -6,7 +6,7 @@ from django.core.exceptions import PermissionDenied
 from django.utils.text import slugify
 from apps.core.extensions.runtime_access import generate_runtime_model_slug
 from apps.users.models import User
-from apps.discussions.models import Discussion
+from extensions.discussions.backend.models import Discussion
 from extensions.tags.backend.models import DiscussionTag, Tag
 
 

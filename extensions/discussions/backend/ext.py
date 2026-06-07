@@ -21,7 +21,7 @@ from extensions.discussions.backend.registry import (
     apply_my_discussions_list_filter,
     apply_unread_discussions_list_filter,
 )
-from apps.discussions.models import Discussion, DiscussionUser
+from extensions.discussions.backend.models import Discussion, DiscussionUser
 
 
 EXTENSION_ID = "discussions"

@@ -20,7 +20,7 @@ from apps.core.forum_timeline import (
 
 
 def handle_discussion_approved(event: DiscussionApprovedEvent) -> None:
-    from apps.discussions.models import Discussion
+    from extensions.discussions.backend.models import Discussion
     from extensions.notifications.backend.services import NotificationService
     from apps.users.models import User
 
@@ -51,7 +51,7 @@ def handle_discussion_approved(event: DiscussionApprovedEvent) -> None:
 
 
 def handle_discussion_rejected(event: DiscussionRejectedEvent) -> None:
-    from apps.discussions.models import Discussion
+    from extensions.discussions.backend.models import Discussion
     from extensions.notifications.backend.services import NotificationService
     from apps.users.models import User
 

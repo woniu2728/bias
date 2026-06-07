@@ -9,7 +9,7 @@ from apps.users.models import User
 from apps.core.domain_events import dispatch_forum_event_after_commit
 from apps.core.forum_events import NotificationCreatedEvent
 from apps.users.preferences import get_user_preference_value
-from apps.discussions.models import DiscussionUser
+from extensions.discussions.backend.models import DiscussionUser
 from extensions.notifications.backend.models import Notification
 
 
@@ -423,7 +423,7 @@ class NotificationService:
             post_id: 帖子ID
             from_user: 回复者
         """
-        from apps.discussions.models import Discussion
+        from extensions.discussions.backend.models import Discussion
         from extensions.posts.backend.models import Post
 
         try:

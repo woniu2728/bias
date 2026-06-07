@@ -9,7 +9,7 @@ from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.services import PaginationService
-from apps.discussions.models import Discussion
+from extensions.discussions.backend.models import Discussion
 from apps.discussions.services import DiscussionService
 from extensions.posts.backend.models import Post
 from apps.posts.services import PostService

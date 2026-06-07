@@ -155,7 +155,7 @@ from apps.core.websocket_auth import (
     resolve_user_from_refresh_token,
     resolve_user_from_token,
 )
-from apps.discussions.models import Discussion
+from extensions.discussions.backend.models import Discussion
 from apps.discussions.services import DiscussionService
 from extensions.posts.backend.models import Post
 from apps.posts.services import PostService
@@ -1868,7 +1868,7 @@ class ExtensionManifestLoaderTests(TestCase):
 
     def test_model_visibility_query_policy_deny_returns_empty_queryset(self):
         from apps.core.visibility import apply_model_visibility_scope
-        from apps.discussions.models import Discussion
+        from extensions.discussions.backend.models import Discussion
 
         app = ExtensionApplication()
         app.policies.query_model_policy(
@@ -11525,7 +11525,7 @@ class ChineseSearchTests(TestCase):
             user=other_user,
         )
 
-        from apps.discussions.models import DiscussionUser
+        from extensions.discussions.backend.models import DiscussionUser
         DiscussionUser.objects.update_or_create(
             discussion=unread_discussion,
             user=self.user,
@@ -11957,7 +11957,7 @@ class SearchApiTests(ChineseSearchTests):
             user=self.user,
         )
 
-        from apps.discussions.models import DiscussionUser
+        from extensions.discussions.backend.models import DiscussionUser
         DiscussionUser.objects.update_or_create(
             discussion=read_discussion,
             user=self.user,
@@ -12294,6 +12294,7 @@ class TestRunnerTests(TestCase):
 
     def test_extension_owned_models_are_not_redefined_in_core_model_modules(self):
         self.assertFalse((Path(settings.BASE_DIR) / "apps/posts/models.py").exists())
+        self.assertFalse((Path(settings.BASE_DIR) / "apps/discussions/models.py").exists())
         checks = {
             "apps/tags/models.py": [
                 "class Tag",
