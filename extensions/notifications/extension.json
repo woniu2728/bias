@@ -18,6 +18,8 @@
     "notification-websocket"
   ],
   "backend_entry": "extensions.notifications.backend.ext",
+  "django_app_config": "extensions.notifications.backend.apps.NotificationsExtensionConfig",
+  "django_migration_module": "apps.notifications.migrations",
   "migration_namespace": "extensions.notifications.backend.migrations",
   "frontend_forum_entry": "extensions/notifications/frontend/forum/index.js",
   "compatibility": {

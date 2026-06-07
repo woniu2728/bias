@@ -523,7 +523,15 @@ def _validate_single_manifest(
 
 def _validate_django_app_config(collector: ExtensionValidationCollector, manifest: ExtensionManifest) -> None:
     app_config = str(getattr(manifest, "django_app_config", "") or "").strip()
+    migration_module = str(getattr(manifest, "django_migration_module", "") or "").strip()
     if not app_config:
+        if migration_module:
+            collector.add_error(
+                "django_migration_module_without_app_config",
+                "声明 django_migration_module 时必须同时声明 django_app_config",
+                extension_id=manifest.id,
+                field="django_migration_module",
+            )
         return
     expected_prefix = f"extensions.{manifest.id.replace('-', '_')}.backend.apps."
     if not app_config.startswith(expected_prefix):
@@ -532,6 +540,17 @@ def _validate_django_app_config(collector: ExtensionValidationCollector, manifes
             f"django_app_config 必须归属当前扩展命名空间，建议使用 {expected_prefix}...AppConfig",
             extension_id=manifest.id,
             field="django_app_config",
+        )
+    if not migration_module:
+        return
+    expected_extension_module = f"extensions.{manifest.id.replace('-', '_')}.backend.django_migrations"
+    expected_legacy_module = f"apps.{manifest.id.replace('-', '_')}.migrations"
+    if migration_module not in {expected_extension_module, expected_legacy_module}:
+        collector.add_error(
+            "invalid_django_migration_module_namespace",
+            f"django_migration_module 必须指向 {expected_extension_module} 或历史迁移模块 {expected_legacy_module}",
+            extension_id=manifest.id,
+            field="django_migration_module",
         )
 
 

@@ -44,8 +44,6 @@ INSTALLED_APPS = [
     'apps.users',
     'apps.discussions',
     'apps.posts',
-    'apps.notifications',
-    'apps.tags',
     *discover_extension_django_apps(BASE_DIR),
 ]
 

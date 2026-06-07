@@ -19,6 +19,8 @@
     "tag-stats-refresh"
   ],
   "backend_entry": "extensions.tags.backend.ext",
+  "django_app_config": "extensions.tags.backend.apps.TagsExtensionConfig",
+  "django_migration_module": "apps.tags.migrations",
   "migration_namespace": "extensions.tags.backend.migrations",
   "compatibility": {
     "bias_version": "^1.0.0",

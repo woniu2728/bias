@@ -38,6 +38,7 @@ def resolve_extension_discovery_result(manifest: ExtensionManifest) -> Extension
         settings_schema=tuple(record.settings_schema) or manifest.settings_schema,
         migration_namespace=manifest.migration_namespace,
         django_app_config=manifest.django_app_config,
+        django_migration_module=manifest.django_migration_module,
         source=manifest.source,
         path=manifest.path,
         extra=manifest.extra,
