@@ -10,13 +10,13 @@ from apps.core.resource_api import ResourceQueryOptions, merge_resource_includes
 from apps.core.resource_registry import ResourceEndpointDefinition
 from apps.core.services import PaginationService
 from extensions.discussions.backend.models import Discussion
-from apps.discussions.schemas import (
+from extensions.discussions.backend.schemas import (
     DiscussionCreateSchema,
     DiscussionOutSchema,
     DiscussionReadStateSchema,
     DiscussionUpdateSchema,
 )
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.models import Post
 
 

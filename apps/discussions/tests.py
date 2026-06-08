@@ -23,8 +23,8 @@ from apps.core.resource_registry import (
 )
 from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
 from extensions.discussions.backend.models import Discussion, DiscussionUser
-from apps.discussions.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
+from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import Group, Permission, User
@@ -367,7 +367,7 @@ class DiscussionApiTests(TestCase):
             return original_create(*args, **kwargs)
 
         with patch("apps.core.db.time.sleep", return_value=None):
-            with patch("apps.discussions.services.Discussion.objects.create", side_effect=flaky_create):
+            with patch("extensions.discussions.backend.services.Discussion.objects.create", side_effect=flaky_create):
                 discussion = DiscussionService.create_discussion(
                     title="Retry discussion",
                     content="Retry body",
@@ -504,7 +504,7 @@ class DiscussionApiTests(TestCase):
             )
         )
 
-        with patch("apps.discussions.handlers.get_runtime_resource_registry", return_value=registry):
+        with patch("extensions.discussions.backend.handlers.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
                 response = self.client.get("/api/discussions/")
 
@@ -537,7 +537,7 @@ class DiscussionApiTests(TestCase):
             )
         )
 
-        with patch("apps.discussions.handlers.get_runtime_resource_registry", return_value=registry):
+        with patch("extensions.discussions.backend.handlers.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
                 response = self.client.get("/api/discussions/")
 
@@ -563,7 +563,7 @@ class DiscussionApiTests(TestCase):
             )
         )
 
-        with patch("apps.discussions.services.get_runtime_resource_registry", return_value=registry):
+        with patch("extensions.discussions.backend.services.get_runtime_resource_registry", return_value=registry):
             response = self.client.get("/api/discussions/")
 
         self.assertEqual(response.status_code, 200, response.content)
@@ -602,7 +602,7 @@ class DiscussionApiTests(TestCase):
             )
         )
 
-        with patch("apps.discussions.handlers.get_runtime_resource_registry", return_value=registry):
+        with patch("extensions.discussions.backend.handlers.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
                 response = self.client.get(f"/api/discussions/{discussion.id}")
 
@@ -635,7 +635,7 @@ class DiscussionApiTests(TestCase):
             )
         )
 
-        with patch("apps.discussions.handlers.get_runtime_resource_registry", return_value=registry):
+        with patch("extensions.discussions.backend.handlers.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
                 response = self.client.get(f"/api/discussions/{discussion.id}")
 
@@ -720,7 +720,7 @@ class DiscussionApiTests(TestCase):
 
     @override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "discussion-view-count-queue-test"}})
     def test_view_count_is_queued_when_queue_enabled(self):
-        from apps.discussions.tasks import flush_discussion_view_count_task
+        from extensions.discussions.backend.tasks import flush_discussion_view_count_task
 
         cache.clear()
         discussion = DiscussionService.create_discussion(

@@ -13,7 +13,7 @@ from apps.core.extensions.runtime_access import (
     get_runtime_resource_registry,
 )
 from apps.core.forum_registry import get_forum_registry
-from apps.discussions import discussion_tracking, service_lifecycle
+from extensions.discussions.backend import discussion_tracking, service_lifecycle
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.posts.backend.models import Post
 from apps.core.services import PaginationService, SearchService

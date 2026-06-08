@@ -101,7 +101,7 @@ def dispatch_view_count_flush(
     flush_delay_seconds: int,
 ):
     from apps.core.queue_service import QueueService
-    from apps.discussions.tasks import flush_discussion_view_count_task
+    from extensions.discussions.backend.tasks import flush_discussion_view_count_task
 
     def fallback():
         return flush_pending_view_count(

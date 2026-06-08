@@ -148,21 +148,21 @@ def _serialize_search_post_base(post, context: dict) -> dict:
 
 
 def _resolve_discussion_can_edit(discussion, context: dict) -> bool:
-    from apps.discussions.services import DiscussionService
+    from extensions.discussions.backend.services import DiscussionService
 
     user = context.get("user")
     return bool(user and DiscussionService.can_edit_discussion(discussion, user))
 
 
 def _resolve_discussion_can_delete(discussion, context: dict) -> bool:
-    from apps.discussions.services import DiscussionService
+    from extensions.discussions.backend.services import DiscussionService
 
     user = context.get("user")
     return bool(user and DiscussionService.can_delete_discussion(discussion, user))
 
 
 def _resolve_discussion_can_reply(discussion, context: dict) -> bool:
-    from apps.discussions.services import DiscussionService
+    from extensions.discussions.backend.services import DiscussionService
 
     user = context.get("user")
     return bool(user and DiscussionService.can_reply_discussion(discussion, user))

@@ -9,7 +9,7 @@ from ninja_jwt.tokens import RefreshToken
 from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent
 from apps.core.models import AuditLog, Setting
 from apps.core.settings_service import clear_runtime_setting_caches
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import Group, Permission, User

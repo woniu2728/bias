@@ -10,7 +10,7 @@ from apps.core.audit import log_admin_action
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.services import PaginationService
 from extensions.discussions.backend.models import Discussion
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.services import PostService
 from apps.users.services import UserService

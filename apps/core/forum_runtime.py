@@ -83,7 +83,7 @@ def broadcast_discussion_event(
 
 def load_discussion_for_realtime(discussion_id: int):
     from extensions.discussions.backend.models import Discussion
-    from apps.discussions.handlers import apply_discussion_resource_preloads
+    from extensions.discussions.backend.handlers import apply_discussion_resource_preloads
 
     return (
         apply_discussion_resource_preloads(Discussion.objects.all(), user=None)
@@ -93,7 +93,7 @@ def load_discussion_for_realtime(discussion_id: int):
 
 
 def serialize_discussion_for_realtime(discussion):
-    from apps.discussions.handlers import serialize_discussion_payload
+    from extensions.discussions.backend.handlers import serialize_discussion_payload
 
     return serialize_discussion_payload(discussion, user=None)
 

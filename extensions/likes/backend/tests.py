@@ -4,7 +4,7 @@ from django.test import TestCase
 from ninja_jwt.tokens import RefreshToken
 
 from apps.core.extension_settings_service import save_extension_settings
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import User
 from extensions.likes.backend.services import like_post

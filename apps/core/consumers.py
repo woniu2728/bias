@@ -9,7 +9,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 
 from extensions.discussions.backend.models import Discussion
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 from apps.core.online_service import OnlineUserService
 from apps.core.settings_service import get_advanced_settings
 from apps.users.services import UserService

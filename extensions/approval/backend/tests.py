@@ -6,7 +6,7 @@ from django.test import TestCase
 from ninja_jwt.tokens import RefreshToken
 
 from extensions.discussions.backend.models import Discussion
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import Group, Permission, User

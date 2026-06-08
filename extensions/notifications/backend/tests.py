@@ -9,7 +9,7 @@ from extensions.discussions.backend.models import DiscussionUser
 from apps.core.models import Setting
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 from extensions.notifications.backend.services import NotificationService
 from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import User

@@ -156,7 +156,7 @@ from apps.core.websocket_auth import (
     resolve_user_from_token,
 )
 from extensions.discussions.backend.models import Discussion
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.services import PostService
 from extensions.likes.backend.services import can_like_post

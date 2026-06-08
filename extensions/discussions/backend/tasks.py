@@ -1,6 +1,6 @@
 from celery import shared_task
 
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 
 
 @shared_task(ignore_result=True)

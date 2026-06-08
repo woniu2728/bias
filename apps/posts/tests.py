@@ -11,7 +11,7 @@ from apps.core.models import AuditLog
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.visibility import build_post_visibility_q
 from extensions.discussions.backend.models import Discussion, DiscussionUser
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import Group, Permission, User

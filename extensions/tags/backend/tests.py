@@ -6,7 +6,7 @@ from ninja_jwt.tokens import RefreshToken
 from io import StringIO
 from unittest.mock import Mock, patch
 
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 from apps.core.extensions.lifecycle import rebuild_runtime_urlconf, reset_extension_runtime_state
 from apps.core.models import AuditLog
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry

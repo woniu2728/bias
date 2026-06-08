@@ -3,7 +3,7 @@ from ninja_jwt.tokens import RefreshToken
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import Group, Permission, User
 from extensions.mentions.backend.models import PostMentionsUser

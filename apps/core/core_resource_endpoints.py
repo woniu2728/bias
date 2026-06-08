@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from apps.core.resource_registry import ResourceRegistry, get_resource_registry
-from apps.discussions.handlers import register_discussion_core_resource_endpoints
+from extensions.discussions.backend.handlers import register_discussion_core_resource_endpoints
 from extensions.posts.backend.handlers import register_post_core_resource_endpoints
 from apps.users.handlers import register_user_core_resource_endpoints
 

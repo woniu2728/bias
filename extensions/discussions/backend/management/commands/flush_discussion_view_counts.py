@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand
 
-from apps.discussions.services import DiscussionService
+from extensions.discussions.backend.services import DiscussionService
 
 
 class Command(BaseCommand):
