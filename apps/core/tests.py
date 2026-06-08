@@ -2671,9 +2671,9 @@ class ExtensionManifestLoaderTests(TestCase):
 
     def test_application_bootstrap_collects_extension_realtime_included_enrichers(self):
         from apps.core.forum_runtime import (
-            build_realtime_included_payload,
             clear_realtime_included_enrichers,
         )
+        from extensions.discussions.backend.realtime import build_realtime_included_payload
 
         temp_dir = make_workspace_temp_dir()
         try:

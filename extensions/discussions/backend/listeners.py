@@ -9,7 +9,7 @@ from apps.core.forum_events import (
     PostCreatedEvent,
     PostHiddenEvent,
 )
-from apps.core.forum_runtime import broadcast_discussion_event
+from extensions.discussions.backend.realtime import broadcast_discussion_event
 from extensions.discussions.backend.timeline import (
     build_discussion_hidden_content,
     build_discussion_locked_content,

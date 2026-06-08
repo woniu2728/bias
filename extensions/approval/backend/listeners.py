@@ -1,6 +1,3 @@
-from apps.core.forum_runtime import (
-    broadcast_discussion_event,
-)
 from apps.core.forum_events import (
     DiscussionApprovedEvent,
     DiscussionRejectedEvent,
@@ -9,6 +6,7 @@ from apps.core.forum_events import (
     PostRejectedEvent,
     PostResubmittedEvent,
 )
+from extensions.discussions.backend.realtime import broadcast_discussion_event
 from extensions.discussions.backend.timeline import (
     build_discussion_resubmitted_content,
     build_discussion_review_content,

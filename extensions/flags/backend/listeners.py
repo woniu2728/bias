@@ -1,4 +1,4 @@
-from apps.core.forum_runtime import broadcast_discussion_event
+from extensions.discussions.backend.realtime import broadcast_discussion_event
 from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
 
 
