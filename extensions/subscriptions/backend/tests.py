@@ -3,7 +3,7 @@ from ninja_jwt.tokens import RefreshToken
 
 from extensions.discussions.backend.models import DiscussionUser
 from apps.discussions.services import DiscussionService
-from apps.posts.services import PostService
+from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import User
 from extensions.notifications.backend.models import Notification
 

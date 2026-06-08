@@ -11,7 +11,7 @@ from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegi
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.discussions.services import DiscussionService
 from extensions.notifications.backend.services import NotificationService
-from apps.posts.services import PostService
+from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import User
 from extensions.likes.backend.services import like_post
 from extensions.notifications.backend.ext import notification_resource_endpoints

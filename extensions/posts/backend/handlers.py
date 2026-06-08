@@ -15,8 +15,8 @@ from apps.core.resource_errors import BadJsonApiRequest
 from apps.core.resource_registry import ResourceEndpointDefinition
 from apps.core.services import PaginationService
 from extensions.posts.backend.models import Post
-from apps.posts.schemas import PostCreateSchema, PostUpdateSchema
-from apps.posts.services import PostService
+from extensions.posts.backend.schemas import PostCreateSchema, PostUpdateSchema
+from extensions.posts.backend.services import PostService
 
 
 def get_resource_registry():

@@ -5,7 +5,7 @@ from apps.core.domain_events import dispatch_forum_event_after_commit
 from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
 from apps.core.extension_settings_service import get_extension_settings
 from apps.core.forum_events import PostLikedEvent
-from apps.posts import post_query_service
+from extensions.posts.backend import post_query_service
 from extensions.posts.backend.models import Post
 from extensions.users.backend.models import User
 from apps.users.services import UserService

@@ -158,7 +158,7 @@ from apps.core.websocket_auth import (
 from extensions.discussions.backend.models import Discussion
 from apps.discussions.services import DiscussionService
 from extensions.posts.backend.models import Post
-from apps.posts.services import PostService
+from extensions.posts.backend.services import PostService
 from extensions.likes.backend.services import can_like_post
 from extensions.notifications.backend.models import Notification
 from extensions.tags.backend.events import DiscussionTagStatsRefreshEvent, TagStatsRefreshRequestedEvent

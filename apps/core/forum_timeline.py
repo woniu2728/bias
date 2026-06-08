@@ -28,7 +28,7 @@ def create_timeline_event_post(
     content: str,
     update_discussion_last_post: bool = True,
 ) -> Post | None:
-    from apps.posts.services import PostService
+    from extensions.posts.backend.services import PostService
 
     try:
         actor = User.objects.get(id=actor_user_id)

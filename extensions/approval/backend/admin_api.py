@@ -12,7 +12,7 @@ from apps.core.services import PaginationService
 from extensions.discussions.backend.models import Discussion
 from apps.discussions.services import DiscussionService
 from extensions.posts.backend.models import Post
-from apps.posts.services import PostService
+from extensions.posts.backend.services import PostService
 from apps.users.services import UserService
 
 

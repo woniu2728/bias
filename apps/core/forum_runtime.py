@@ -99,7 +99,7 @@ def serialize_discussion_for_realtime(discussion):
 
 
 def serialize_post_for_realtime(post_id: int):
-    from apps.posts.handlers import apply_post_resource_preloads, serialize_post
+    from extensions.posts.backend.handlers import apply_post_resource_preloads, serialize_post
     from extensions.posts.backend.models import Post
 
     post = (

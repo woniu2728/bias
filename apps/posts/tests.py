@@ -13,7 +13,7 @@ from apps.core.visibility import build_post_visibility_q
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from apps.discussions.services import DiscussionService
 from extensions.posts.backend.models import Post
-from apps.posts.services import PostService
+from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import Group, Permission, User
 
 
@@ -111,7 +111,7 @@ class PostPaginationTests(TestCase):
             return original_create(*args, **kwargs)
 
         with patch("apps.core.db.time.sleep", return_value=None):
-            with patch("apps.posts.services.Post.objects.create", side_effect=flaky_create):
+            with patch("extensions.posts.backend.services.Post.objects.create", side_effect=flaky_create):
                 post = PostService.create_post(
                     discussion_id=discussion.id,
                     content="Retry reply",
@@ -310,7 +310,7 @@ class PostPaginationTests(TestCase):
         )
 
         with patch(
-            "apps.posts.services.PostService._lock_discussion_for_post_number",
+            "extensions.posts.backend.services.PostService._lock_discussion_for_post_number",
             wraps=PostService._lock_discussion_for_post_number,
         ) as lock_discussion_mock:
             PostService.create_post(
@@ -458,7 +458,7 @@ class PostApiTests(TestCase):
             )
         )
 
-        with patch("apps.posts.handlers.get_runtime_resource_registry", return_value=registry):
+        with patch("extensions.posts.backend.handlers.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
                 response = self.client.get(f"/api/posts/{self.post.id}")
 

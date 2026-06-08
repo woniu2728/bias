@@ -176,7 +176,7 @@ class TagStatsTests(TestCase):
         self.tag.refresh_from_db()
         initial_last_posted_at = self.tag.last_posted_at
 
-        from apps.posts.services import PostService
+        from extensions.posts.backend.services import PostService
         with self.captureOnCommitCallbacks(execute=True):
             PostService.create_post(
                 discussion_id=discussion.id,

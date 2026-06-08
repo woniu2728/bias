@@ -169,14 +169,14 @@ def _resolve_discussion_can_reply(discussion, context: dict) -> bool:
 
 
 def _resolve_post_can_edit(post, context: dict) -> bool:
-    from apps.posts.services import PostService
+    from extensions.posts.backend.services import PostService
 
     user = context.get("user")
     return bool(user and PostService.can_edit_post(post, user))
 
 
 def _resolve_post_can_delete(post, context: dict) -> bool:
-    from apps.posts.services import PostService
+    from extensions.posts.backend.services import PostService
 
     user = context.get("user")
     return bool(user and PostService.can_delete_post(post, user))

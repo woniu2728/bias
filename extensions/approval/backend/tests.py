@@ -8,7 +8,7 @@ from ninja_jwt.tokens import RefreshToken
 from extensions.discussions.backend.models import Discussion
 from apps.discussions.services import DiscussionService
 from extensions.posts.backend.models import Post
-from apps.posts.services import PostService
+from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import Group, Permission, User
 from extensions.approval.backend.resources import resolve_approval_event_data
 from extensions.notifications.backend.models import Notification

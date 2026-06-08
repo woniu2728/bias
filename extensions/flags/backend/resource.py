@@ -5,7 +5,7 @@ from django.db.models import Max
 
 from apps.core.resource_errors import JsonApiForbidden, JsonApiValidationError
 from apps.core.resource_objects import DatabaseResource, ResourceEndpoint, ResourceField, ResourceRelationship, ResourceSort
-from apps.posts import post_query_service
+from extensions.posts.backend import post_query_service
 from extensions.posts.backend.models import Post
 from extensions.flags.backend.models import PostFlag
 from extensions.flags.backend.services import report_post

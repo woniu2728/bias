@@ -26,7 +26,7 @@ from extensions.discussions.backend.models import Discussion, DiscussionUser
 from apps.discussions.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
 from apps.discussions.services import DiscussionService
 from extensions.posts.backend.models import Post
-from apps.posts.services import PostService
+from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import Group, Permission, User
 
 

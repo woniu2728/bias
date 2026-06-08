@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, validator
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
 from extensions.posts.backend.models import Post
-from apps.posts.services import PostService
+from extensions.posts.backend.services import PostService
 from extensions.flags.backend.services import delete_post_flags, report_post, resolve_post_flags
 
 
@@ -119,7 +119,7 @@ def dispatch_post_resolve_flags(context):
         post = PostService.get_post_by_id(post_id, context["user"])
         if not post:
             return api_error("帖子不存在", status=404)
-        from apps.posts.handlers import serialize_post
+        from extensions.posts.backend.handlers import serialize_post
 
         return {
             "message": "举报已处理",
