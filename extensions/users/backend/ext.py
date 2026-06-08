@@ -3,6 +3,11 @@ from apps.core.forum_registry_types import AdminPageDefinition, PermissionDefini
 from extensions.users.backend.admin_api import router as admin_users_router
 from extensions.users.backend.handlers import user_resource_endpoints
 from extensions.users.backend.models import AccessToken, EmailToken, Group, PasswordToken, Permission, User
+from extensions.users.backend.resources import (
+    user_resource_definitions,
+    user_resource_field_definitions,
+    user_resource_relationship_definitions,
+)
 
 
 EXTENSION_ID = "users"
@@ -22,7 +27,14 @@ def extend():
             mounts=(("/admin", admin_users_router),),
             tags=("Admin", "Users"),
         ),
-        ApiResourceExtender("user_detail").endpoints_with(*user_resource_endpoints()),
+        ApiResourceExtender("user_detail")
+        .endpoints_with(*user_resource_endpoints())
+        .fields(user_resource_field_definitions)
+        .relationships(user_resource_relationship_definitions),
+        *[
+            ApiResourceExtender(definition)
+            for definition in user_resource_definitions()
+        ],
         ModelExtender()
         .owns(User, description="用户账号由 users 扩展拥有。")
         .owns(Group, description="用户组由 users 扩展拥有。")

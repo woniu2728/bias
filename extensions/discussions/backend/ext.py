@@ -24,6 +24,10 @@ from extensions.discussions.backend.registry import (
 )
 from extensions.discussions.backend.handlers import discussion_resource_endpoints
 from extensions.discussions.backend.models import Discussion, DiscussionUser
+from extensions.discussions.backend.resources import (
+    discussion_resource_definitions,
+    discussion_resource_field_definitions,
+)
 
 
 EXTENSION_ID = "discussions"
@@ -44,7 +48,13 @@ def extend():
             discussion_sorts=discussion_sort_definitions(),
             discussion_list_filters=discussion_list_filter_definitions(),
         ),
-        ApiResourceExtender("discussion").endpoints_with(*discussion_resource_endpoints()),
+        ApiResourceExtender("discussion")
+        .endpoints_with(*discussion_resource_endpoints())
+        .fields(discussion_resource_field_definitions),
+        *[
+            ApiResourceExtender(definition)
+            for definition in discussion_resource_definitions()
+        ],
         ModelExtender()
         .owns(Discussion, description="讨论主题由 discussions 扩展拥有。")
         .owns(DiscussionUser, description="讨论用户阅读和订阅状态由 discussions 扩展拥有。"),

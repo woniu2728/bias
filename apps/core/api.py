@@ -22,7 +22,7 @@ from apps.core.schemas import (
 from apps.core.auth import AuthBearer
 from apps.core.auth import get_optional_user
 from apps.core.file_service import FileUploadService
-from apps.core.forum_resources import serialize_user_payload
+from extensions.users.backend.resources import serialize_user_payload
 from apps.core.markdown_service import MarkdownService
 from apps.core.runtime_state import get_runtime_status
 from apps.core.settings_service import get_public_forum_settings

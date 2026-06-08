@@ -93,8 +93,8 @@ from apps.core.forum_events import (
     UserSuspendedEvent,
     UserUnsuspendedEvent,
 )
-from apps.core.forum_resources_post_events import resolve_post_event_data
-from apps.core.forum_resources_users import serialize_user_payload, serialize_user_summary
+from extensions.posts.backend.resources import resolve_post_event_data
+from extensions.users.backend.resources import serialize_user_payload, serialize_user_summary
 from apps.core.forum_registry import (
     ForumRegistry,
     get_forum_registry,

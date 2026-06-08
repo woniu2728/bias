@@ -1,27 +1,76 @@
 from __future__ import annotations
 
-from apps.core.resource_registry import ResourceFieldDefinition
+from apps.core.resource_registry import ResourceDefinition, ResourceFieldDefinition
 
 
-def register_forum_post_event_resource_fields(registry) -> None:
-    registry.register_field(
+def post_resource_definitions():
+    return (
+        ResourceDefinition(
+            resource="search_post",
+            module_id="posts",
+            resolver=serialize_search_post_base,
+            description="搜索帖子结果资源。",
+        ),
+    )
+
+
+def post_resource_field_definitions():
+    return (
+        ResourceFieldDefinition(
+            resource="post",
+            field="can_edit",
+            module_id="posts",
+            resolver=resolve_post_can_edit,
+            description="当前用户是否可以编辑该回复。",
+        ),
+        ResourceFieldDefinition(
+            resource="post",
+            field="can_delete",
+            module_id="posts",
+            resolver=resolve_post_can_delete,
+            description="当前用户是否可以删除该回复。",
+        ),
         ResourceFieldDefinition(
             resource="post",
             field="post_type",
             module_id="posts",
             resolver=resolve_post_type_definition,
             description="当前帖子的类型定义元数据。",
-        )
-    )
-    registry.register_field(
+        ),
         ResourceFieldDefinition(
             resource="post",
             field="event_data",
             module_id="posts",
             resolver=resolve_post_event_data,
             description="系统事件帖的结构化元数据。",
-        )
+        ),
     )
+
+
+def serialize_search_post_base(post, context: dict) -> dict:
+    return {
+        "id": post.id,
+        "discussion_id": post.discussion_id,
+        "discussion_title": post.discussion_title,
+        "number": post.number,
+        "content": post.content,
+        "created_at": post.created_at,
+        "excerpt": post.excerpt,
+    }
+
+
+def resolve_post_can_edit(post, context: dict) -> bool:
+    from extensions.posts.backend.services import PostService
+
+    user = context.get("user")
+    return bool(user and PostService.can_edit_post(post, user))
+
+
+def resolve_post_can_delete(post, context: dict) -> bool:
+    from extensions.posts.backend.services import PostService
+
+    user = context.get("user")
+    return bool(user and PostService.can_delete_post(post, user))
 
 
 def resolve_post_type_definition(post, context: dict) -> dict | None:

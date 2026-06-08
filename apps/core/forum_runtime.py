@@ -153,7 +153,7 @@ def build_realtime_included_payload(
 
 
 def collect_discussion_users(target: OrderedDict, discussion) -> None:
-    from apps.core.forum_resources import serialize_user_payload
+    from extensions.users.backend.resources import serialize_user_payload
 
     for user in (
         getattr(discussion, "user", None),

@@ -5,7 +5,6 @@ from django.core.exceptions import PermissionDenied
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
-from apps.core.forum_resources import serialize_user_summary
 from apps.core.resource_api import ResourceQueryOptions, merge_resource_includes, parse_resource_query_options
 from apps.core.resource_registry import ResourceEndpointDefinition
 from apps.core.services import PaginationService
@@ -18,6 +17,7 @@ from extensions.discussions.backend.schemas import (
 )
 from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.models import Post
+from extensions.users.backend.resources import serialize_user_summary
 
 
 def get_resource_registry():

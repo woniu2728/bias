@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.core.forum_resources_users import serialize_user_summary
+from extensions.users.backend.resources import serialize_user_summary
 from apps.core.resource_registry import (
     ResourceDefinition,
     ResourceFieldDefinition,

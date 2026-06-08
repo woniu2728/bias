@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.db.models import Prefetch
 
 from extensions.likes.backend.models import PostLike
-from apps.core.forum_resources_users import serialize_user_payload
+from extensions.users.backend.resources import serialize_user_payload
 
 
 def post_like_preload_resolver(context: dict):

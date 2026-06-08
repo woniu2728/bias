@@ -4,121 +4,100 @@ from apps.core.resource_registry import (
     ResourceDefinition,
     ResourceFieldDefinition,
     ResourceRelationshipDefinition,
-    get_resource_registry,
 )
 
 
-def register_forum_user_resources(registry) -> None:
-    registry.register_resource(
+def user_resource_definitions():
+    return (
         ResourceDefinition(
             resource="user_summary",
             module_id="users",
             resolver=_serialize_user_summary_base,
             description="论坛内通用用户摘要资源。",
-        )
-    )
-    registry.register_resource(
+        ),
         ResourceDefinition(
             resource="user_detail",
             module_id="users",
             resolver=_serialize_user_detail_base,
             description="论坛内通用用户详情资源。",
-        )
-    )
-    registry.register_resource(
+        ),
         ResourceDefinition(
             resource="discussion_user",
             module_id="users",
             resolver=_serialize_user_summary_base,
             description="讨论作者摘要资源。",
-        )
-    )
-    registry.register_resource(
+        ),
         ResourceDefinition(
             resource="post_user",
             module_id="users",
             resolver=_serialize_user_summary_base,
             description="帖子作者摘要资源。",
-        )
-    )
-    registry.register_resource(
+        ),
         ResourceDefinition(
             resource="search_user",
             module_id="users",
             resolver=_serialize_user_search_base,
             description="搜索用户结果资源。",
-        )
+        ),
     )
 
 
-def register_forum_user_relationships(registry) -> None:
-    registry.register_relationship(
+def user_resource_relationship_definitions():
+    return (
         ResourceRelationshipDefinition(
             resource="discussion",
             relationship="user",
-            module_id="discussions",
+            module_id="users",
             resolver=_resolve_discussion_user,
             description="讨论作者摘要。",
             select_related=("user",),
             prefetch_related=("user__user_groups",),
-        )
-    )
-    registry.register_relationship(
+        ),
         ResourceRelationshipDefinition(
             resource="discussion",
             relationship="last_posted_user",
-            module_id="discussions",
+            module_id="users",
             resolver=_resolve_discussion_last_posted_user,
             description="讨论最后回复用户摘要。",
             select_related=("last_posted_user",),
             prefetch_related=("last_posted_user__user_groups",),
-        )
-    )
-    registry.register_relationship(
+        ),
         ResourceRelationshipDefinition(
             resource="post",
             relationship="user",
-            module_id="posts",
+            module_id="users",
             resolver=_resolve_post_user,
             description="帖子作者摘要。",
             select_related=("user",),
             prefetch_related=("user__user_groups",),
-        )
-    )
-    registry.register_relationship(
+        ),
         ResourceRelationshipDefinition(
             resource="post",
             relationship="edited_user",
-            module_id="posts",
+            module_id="users",
             resolver=_resolve_post_edited_user,
             description="帖子编辑者摘要。",
             select_related=("edited_user",),
             prefetch_related=("edited_user__user_groups",),
-        )
-    )
-    registry.register_relationship(
+        ),
         ResourceRelationshipDefinition(
             resource="search_discussion",
             relationship="user",
-            module_id="discussions",
+            module_id="users",
             resolver=_resolve_search_discussion_user,
             description="搜索结果中的讨论作者摘要。",
             select_related=("user",),
             prefetch_related=("user__user_groups",),
-        )
-    )
-    registry.register_relationship(
+        ),
         ResourceRelationshipDefinition(
             resource="search_post",
             relationship="user",
-            module_id="posts",
+            module_id="users",
             resolver=_resolve_search_post_user,
             description="搜索结果中的回复作者摘要。",
             select_related=("user",),
             prefetch_related=("user__user_groups",),
-        )
-    )
-    registry.register_relationship(
+        ),
         ResourceRelationshipDefinition(
             resource="user_detail",
             relationship="groups",
@@ -126,73 +105,61 @@ def register_forum_user_relationships(registry) -> None:
             resolver=_resolve_user_groups,
             description="用户详情中的用户组列表。",
             prefetch_related=("user_groups",),
-        )
+        ),
     )
 
 
-def register_forum_user_fields(registry) -> None:
-    registry.register_field(
+def user_resource_field_definitions():
+    return (
         ResourceFieldDefinition(
             resource="search_discussion",
             field="user",
-            module_id="discussions",
+            module_id="users",
             resolver=_resolve_search_discussion_user,
             description="搜索结果中的讨论作者摘要。",
-        )
-    )
-    registry.register_field(
+        ),
         ResourceFieldDefinition(
             resource="search_post",
             field="user",
-            module_id="posts",
+            module_id="users",
             resolver=_resolve_search_post_user,
             description="搜索结果中的回复作者摘要。",
-        )
-    )
-    registry.register_field(
+        ),
         ResourceFieldDefinition(
             resource="user_summary",
             field="primary_group",
             module_id="users",
             resolver=_resolve_user_primary_group,
             description="用户摘要中的主用户组徽章。",
-        )
-    )
-    registry.register_field(
+        ),
         ResourceFieldDefinition(
             resource="user_detail",
             field="primary_group",
             module_id="users",
             resolver=_resolve_user_primary_group,
             description="用户详情中的主用户组徽章。",
-        )
-    )
-    registry.register_field(
+        ),
         ResourceFieldDefinition(
             resource="search_user",
             field="primary_group",
             module_id="users",
             resolver=_resolve_user_primary_group,
             description="搜索用户结果中的主用户组徽章。",
-        )
-    )
-    registry.register_field(
+        ),
         ResourceFieldDefinition(
             resource="discussion_user",
             field="primary_group",
             module_id="users",
             resolver=_resolve_user_primary_group,
             description="讨论作者摘要中的主用户组徽章。",
-        )
-    )
-    registry.register_field(
+        ),
         ResourceFieldDefinition(
             resource="post_user",
             field="primary_group",
             module_id="users",
             resolver=_resolve_user_primary_group,
             description="帖子作者摘要中的主用户组徽章。",
-        )
+        ),
     )
 
 
