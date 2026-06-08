@@ -78,13 +78,17 @@ def serialize_user_groups_for_schema(user):
     ]
 
 
-def register_user_core_resource_endpoints(registry=None):
-    registry = registry or get_resource_registry()
-    registry.register_core_endpoint(
+def user_resource_endpoints():
+    endpoints = []
+
+    def add(definition):
+        endpoints.append(definition)
+
+    add(
         ResourceEndpointDefinition(
             resource="user_detail",
             endpoint="current",
-            module_id="core",
+            module_id="users",
             handler=dispatch_current_user,
             methods=("GET",),
             path="users/me",
@@ -92,44 +96,44 @@ def register_user_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="user_detail",
             endpoint="index",
-            module_id="core",
+            module_id="users",
             handler=dispatch_user_index,
             methods=("GET",),
             path="users",
             absolute_path=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="user_detail",
             endpoint="by-username",
-            module_id="core",
+            module_id="users",
             handler=dispatch_user_by_username,
             methods=("GET",),
             path="users/by-username/{object_id}",
             absolute_path=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="user_detail",
             endpoint="show",
-            module_id="core",
+            module_id="users",
             handler=dispatch_user_show,
             methods=("GET",),
             path="users/{object_id}",
             absolute_path=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="user_detail",
             endpoint="update",
-            module_id="core",
+            module_id="users",
             handler=dispatch_user_update,
             methods=("PATCH",),
             path="users/{object_id}",
@@ -137,11 +141,11 @@ def register_user_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="user_detail",
             endpoint="password",
-            module_id="core",
+            module_id="users",
             handler=dispatch_user_change_password,
             methods=("POST",),
             path="users/{object_id}/password",
@@ -149,11 +153,11 @@ def register_user_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="user_detail",
             endpoint="avatar.upload",
-            module_id="core",
+            module_id="users",
             handler=dispatch_user_upload_avatar,
             methods=("POST",),
             path="users/{object_id}/avatar",
@@ -161,6 +165,7 @@ def register_user_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
+    return tuple(endpoints)
 
 
 def _user_query_value(context, key: str, default=None):

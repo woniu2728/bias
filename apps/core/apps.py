@@ -12,14 +12,12 @@ class CoreConfig(AppConfig):
         from apps.core.forum_event_listeners import bootstrap_forum_event_listeners
         from apps.core.forum_registry import get_forum_registry
         from apps.core.forum_resources import bootstrap_forum_resource_fields
-        from apps.core.core_resource_endpoints import bootstrap_core_resource_endpoints
 
         # Ensure core modules are registered during app startup.
         get_forum_registry()
         bootstrap_forum_event_listeners()
         bootstrap_extension_runtime_event_listeners()
         bootstrap_forum_resource_fields()
-        bootstrap_core_resource_endpoints()
         bootstrap_extension_signal_proxies()
 
         connection_created.connect(

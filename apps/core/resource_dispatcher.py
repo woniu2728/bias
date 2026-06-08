@@ -47,9 +47,6 @@ def dispatch_resource_endpoint(
     object_id: str | None = None,
 ):
     registry = get_runtime_resource_registry()
-    from apps.core.core_resource_endpoints import bootstrap_core_resource_endpoints
-
-    bootstrap_core_resource_endpoints(registry)
     user = get_optional_user(request)
     if user is not None and getattr(user, "is_authenticated", False):
         request.auth = user

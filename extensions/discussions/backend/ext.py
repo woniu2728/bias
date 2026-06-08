@@ -1,5 +1,6 @@
 from apps.core.extensions import (
     AdminSurfaceExtender,
+    ApiResourceExtender,
     ForumCapabilitiesExtender,
     FrontendExtender,
     LifecycleExtender,
@@ -21,6 +22,7 @@ from extensions.discussions.backend.registry import (
     apply_my_discussions_list_filter,
     apply_unread_discussions_list_filter,
 )
+from extensions.discussions.backend.handlers import discussion_resource_endpoints
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 
 
@@ -42,6 +44,7 @@ def extend():
             discussion_sorts=discussion_sort_definitions(),
             discussion_list_filters=discussion_list_filter_definitions(),
         ),
+        ApiResourceExtender("discussion").endpoints_with(*discussion_resource_endpoints()),
         ModelExtender()
         .owns(Discussion, description="讨论主题由 discussions 扩展拥有。")
         .owns(DiscussionUser, description="讨论用户阅读和订阅状态由 discussions 扩展拥有。"),

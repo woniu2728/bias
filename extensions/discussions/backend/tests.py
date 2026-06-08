@@ -22,6 +22,7 @@ from apps.core.resource_registry import (
     ResourceSortDefinition,
 )
 from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
+from extensions.discussions.backend.handlers import discussion_resource_endpoints
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.discussions.backend.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
 from extensions.discussions.backend.services import DiscussionService
@@ -494,6 +495,8 @@ class DiscussionApiTests(TestCase):
             )
 
         registry = ResourceRegistry()
+        for endpoint in discussion_resource_endpoints():
+            registry.register_endpoint(endpoint)
         registry.register_endpoint(
             ResourceEndpointDefinition(
                 resource="discussion",
@@ -519,6 +522,8 @@ class DiscussionApiTests(TestCase):
         )
 
         registry = ResourceRegistry()
+        for endpoint in discussion_resource_endpoints():
+            registry.register_endpoint(endpoint)
         registry.register_relationship(
             ResourceRelationshipDefinition(
                 resource="discussion",
@@ -592,6 +597,8 @@ class DiscussionApiTests(TestCase):
             )
 
         registry = ResourceRegistry()
+        for endpoint in discussion_resource_endpoints():
+            registry.register_endpoint(endpoint)
         registry.register_endpoint(
             ResourceEndpointDefinition(
                 resource="discussion",
@@ -617,6 +624,8 @@ class DiscussionApiTests(TestCase):
         )
 
         registry = ResourceRegistry()
+        for endpoint in discussion_resource_endpoints():
+            registry.register_endpoint(endpoint)
         registry.register_relationship(
             ResourceRelationshipDefinition(
                 resource="discussion",

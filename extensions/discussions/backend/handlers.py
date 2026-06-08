@@ -84,13 +84,17 @@ def serialize_discussion_list_filter(definition):
     }
 
 
-def register_discussion_core_resource_endpoints(registry=None):
-    registry = registry or get_resource_registry()
-    registry.register_core_endpoint(
+def discussion_resource_endpoints():
+    endpoints = []
+
+    def add(definition):
+        endpoints.append(definition)
+
+    add(
         ResourceEndpointDefinition(
             resource="discussion",
             endpoint="create",
-            module_id="core",
+            module_id="discussions",
             handler=dispatch_discussion_create,
             methods=("POST",),
             path="discussions/",
@@ -98,22 +102,22 @@ def register_discussion_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="discussion",
             endpoint="index",
-            module_id="core",
+            module_id="discussions",
             handler=dispatch_discussion_index,
             methods=("GET",),
             path="discussions/",
             absolute_path=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="discussion",
             endpoint="read-all",
-            module_id="core",
+            module_id="discussions",
             handler=dispatch_discussion_mark_all_read,
             methods=("POST",),
             path="discussions/read-all",
@@ -121,11 +125,11 @@ def register_discussion_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="discussion",
             endpoint="read",
-            module_id="core",
+            module_id="discussions",
             handler=dispatch_discussion_update_read_state,
             methods=("POST",),
             path="discussions/{object_id}/read",
@@ -133,22 +137,22 @@ def register_discussion_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="discussion",
             endpoint="show",
-            module_id="core",
+            module_id="discussions",
             handler=dispatch_discussion_show,
             methods=("GET",),
             path="discussions/{object_id}",
             absolute_path=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="discussion",
             endpoint="update",
-            module_id="core",
+            module_id="discussions",
             handler=dispatch_discussion_update,
             methods=("PATCH",),
             path="discussions/{object_id}",
@@ -156,11 +160,11 @@ def register_discussion_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="discussion",
             endpoint="delete",
-            module_id="core",
+            module_id="discussions",
             handler=dispatch_discussion_delete,
             methods=("DELETE",),
             path="discussions/{object_id}",
@@ -168,11 +172,11 @@ def register_discussion_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="discussion",
             endpoint="pin",
-            module_id="core",
+            module_id="discussions",
             handler=dispatch_discussion_toggle_pin,
             methods=("POST",),
             path="discussions/{object_id}/pin",
@@ -180,11 +184,11 @@ def register_discussion_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="discussion",
             endpoint="lock",
-            module_id="core",
+            module_id="discussions",
             handler=dispatch_discussion_toggle_lock,
             methods=("POST",),
             path="discussions/{object_id}/lock",
@@ -192,11 +196,11 @@ def register_discussion_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="discussion",
             endpoint="hide",
-            module_id="core",
+            module_id="discussions",
             handler=dispatch_discussion_toggle_hide,
             methods=("POST",),
             path="discussions/{object_id}/hide",
@@ -204,6 +208,7 @@ def register_discussion_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
+    return tuple(endpoints)
 
 
 def _discussion_object_id(context) -> int:

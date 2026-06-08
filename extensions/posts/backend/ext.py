@@ -1,5 +1,6 @@
-from apps.core.extensions import ForumCapabilitiesExtender, LifecycleExtender, ModelExtender
+from apps.core.extensions import ApiResourceExtender, ForumCapabilitiesExtender, LifecycleExtender, ModelExtender
 from apps.core.forum_registry_types import PostTypeDefinition
+from extensions.posts.backend.handlers import post_resource_endpoints
 from extensions.posts.backend.models import Post
 
 
@@ -11,6 +12,7 @@ def extend():
         ForumCapabilitiesExtender(
             post_types=post_type_definitions(),
         ),
+        ApiResourceExtender("post").endpoints_with(*post_resource_endpoints()),
         ModelExtender().owns(
             Post,
             description="帖子流与回复记录由 posts 扩展拥有。",

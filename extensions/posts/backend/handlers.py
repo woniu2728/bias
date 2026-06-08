@@ -71,24 +71,28 @@ def apply_post_resource_preloads(queryset, user=None, resource_options=None, def
     )
 
 
-def register_post_core_resource_endpoints(registry=None):
-    registry = registry or get_resource_registry()
-    registry.register_core_endpoint(
+def post_resource_endpoints():
+    endpoints = []
+
+    def add(definition):
+        endpoints.append(definition)
+
+    add(
         ResourceEndpointDefinition(
             resource="post",
             endpoint="global-index",
-            module_id="core",
+            module_id="posts",
             handler=dispatch_post_global_index,
             methods=("GET",),
             path="posts",
             absolute_path=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="post",
             endpoint="create",
-            module_id="core",
+            module_id="posts",
             handler=dispatch_post_create,
             methods=("POST",),
             path="discussions/{object_id}/posts",
@@ -96,33 +100,33 @@ def register_post_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="post",
             endpoint="index",
-            module_id="core",
+            module_id="posts",
             handler=dispatch_post_index,
             methods=("GET",),
             path="discussions/{object_id}/posts",
             absolute_path=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="post",
             endpoint="show",
-            module_id="core",
+            module_id="posts",
             handler=dispatch_post_show,
             methods=("GET",),
             path="posts/{object_id}",
             absolute_path=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="post",
             endpoint="update",
-            module_id="core",
+            module_id="posts",
             handler=dispatch_post_update,
             methods=("PATCH",),
             path="posts/{object_id}",
@@ -130,11 +134,11 @@ def register_post_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="post",
             endpoint="delete",
-            module_id="core",
+            module_id="posts",
             handler=dispatch_post_delete,
             methods=("DELETE",),
             path="posts/{object_id}",
@@ -142,11 +146,11 @@ def register_post_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
-    registry.register_core_endpoint(
+    add(
         ResourceEndpointDefinition(
             resource="post",
             endpoint="hide",
-            module_id="core",
+            module_id="posts",
             handler=dispatch_post_toggle_hide,
             methods=("POST",),
             path="posts/{object_id}/hide",
@@ -154,6 +158,7 @@ def register_post_core_resource_endpoints(registry=None):
             auth_required=True,
         )
     )
+    return tuple(endpoints)
 
 
 def _post_query_value(context, key: str, default=None):

@@ -56,10 +56,8 @@ def _register_extension_routes(api: NinjaAPI, *, extension_host=None) -> None:
         registry = get_resource_registry()
     else:
         registry = host.resources
-    from apps.core.core_resource_endpoints import bootstrap_core_resource_endpoints
     from apps.core.resource_routes import build_resource_endpoint_router
 
-    bootstrap_core_resource_endpoints(registry)
     _add_router_once(api, "", build_resource_endpoint_router(registry), tags=["Resources"])
     if host is None:
         return

@@ -12,6 +12,7 @@ from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegi
 from apps.core.visibility import build_post_visibility_q
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.discussions.backend.services import DiscussionService
+from extensions.posts.backend.handlers import post_resource_endpoints
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import Group, Permission, User
@@ -448,6 +449,8 @@ class PostApiTests(TestCase):
             )
 
         registry = ResourceRegistry()
+        for endpoint in post_resource_endpoints():
+            registry.register_endpoint(endpoint)
         registry.register_endpoint(
             ResourceEndpointDefinition(
                 resource="post",

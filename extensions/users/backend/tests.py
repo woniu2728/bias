@@ -20,6 +20,7 @@ from apps.core.jwt_auth import ACCESS_TOKEN_COOKIE_NAME
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
 from extensions.notifications.backend.models import Notification
+from extensions.users.backend.handlers import user_resource_endpoints
 from extensions.users.backend.models import Group
 from extensions.users.backend.models import EmailToken, PasswordToken, Permission, User
 from extensions.users.backend.services import UserService
@@ -289,6 +290,8 @@ class UserProfileApiTests(TestCase):
             )
 
         registry = ResourceRegistry()
+        for endpoint in user_resource_endpoints():
+            registry.register_endpoint(endpoint)
         registry.register_endpoint(
             ResourceEndpointDefinition(
                 resource="user_detail",
