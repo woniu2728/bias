@@ -47,6 +47,24 @@ def post_resource_field_definitions():
     )
 
 
+def admin_stats_resource_field_definitions():
+    return (
+        ResourceFieldDefinition(
+            resource="admin_stats",
+            field="totalPosts",
+            module_id="posts",
+            resolver=resolve_admin_total_posts,
+            description="后台统计中的帖子总数。",
+        ),
+    )
+
+
+def resolve_admin_total_posts(stats, context: dict) -> int:
+    from extensions.posts.backend.models import Post
+
+    return Post.objects.count()
+
+
 def serialize_search_post_base(post, context: dict) -> dict:
     return {
         "id": post.id,

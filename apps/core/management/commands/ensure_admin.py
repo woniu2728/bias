@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.core.management import BaseCommand, CommandError
 from django.core.management.base import CommandParser
 
-from extensions.users.backend.models import Group, User
+from apps.core.user_runtime import ensure_runtime_admin_user
 
 
 class Command(BaseCommand):
@@ -22,28 +22,12 @@ class Command(BaseCommand):
         if not username or not email or not password:
             raise CommandError("必须同时提供 --username、--email 和 --password")
 
-        user, created = User.objects.get_or_create(
-            username=username,
-            defaults={
-                "email": email,
-                "is_staff": True,
-                "is_superuser": True,
-                "is_email_confirmed": True,
-            },
-        )
+        try:
+            result = ensure_runtime_admin_user(username=username, email=email, password=password)
+        except RuntimeError as exc:
+            raise CommandError(str(exc)) from exc
 
-        user.email = email
-        user.is_staff = True
-        user.is_superuser = True
-        user.is_email_confirmed = True
-        user.set_password(password)
-        user.save()
-
-        admin_group = Group.objects.filter(name="Admin").first()
-        if admin_group is not None:
-            user.user_groups.add(admin_group)
-
-        if created:
-            self.stdout.write(self.style.SUCCESS(f"[OK] 已创建管理员账号: {user.username}"))
+        if result.get("created"):
+            self.stdout.write(self.style.SUCCESS(f"[OK] 已创建管理员账号: {result.get('username') or username}"))
         else:
-            self.stdout.write(self.style.SUCCESS(f"[OK] 已更新管理员账号: {user.username}"))
+            self.stdout.write(self.style.SUCCESS(f"[OK] 已更新管理员账号: {result.get('username') or username}"))

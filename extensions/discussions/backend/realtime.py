@@ -2,8 +2,41 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
+from django.contrib.auth.models import AnonymousUser
+
 from apps.core.forum_runtime import iter_realtime_included_enrichers
 from apps.core.websocket_service import WebSocketService
+
+
+def resolve_visible_discussion_ids(discussion_ids, user) -> list[int]:
+    from extensions.discussions.backend.models import Discussion
+    from extensions.discussions.backend.services import DiscussionService
+
+    normalized_ids = []
+    seen = set()
+    for raw_id in discussion_ids or []:
+        try:
+            discussion_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if discussion_id <= 0 or discussion_id in seen:
+            continue
+        seen.add(discussion_id)
+        normalized_ids.append(discussion_id)
+
+    if isinstance(user, AnonymousUser):
+        user = None
+
+    discussions = {
+        discussion.id: discussion
+        for discussion in Discussion.objects.filter(id__in=normalized_ids)
+    }
+    return [
+        discussion_id
+        for discussion_id in normalized_ids
+        if discussions.get(discussion_id) is not None
+        and DiscussionService._can_view_discussion(discussions[discussion_id], user)
+    ]
 
 
 def broadcast_discussion_event(

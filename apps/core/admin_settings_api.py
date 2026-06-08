@@ -50,9 +50,6 @@ from apps.core.settings_service import (
     save_setting_group,
     sync_mail_settings_to_site_config,
 )
-from extensions.discussions.backend.models import Discussion
-from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
 
 
 router = Router()
@@ -216,17 +213,10 @@ def get_stats(request):
         "maintenanceMode": bool(advanced_settings.get("maintenance_mode", False)),
         "maintenanceModeKey": advanced_settings.get("maintenance_mode_key", "none"),
         "maintenanceModeLabel": advanced_settings.get("maintenance_mode_label", "未启用"),
-        "totalUsers": User.objects.count(),
-        "totalDiscussions": Discussion.objects.count(),
-        "totalPosts": Post.objects.count(),
-        "pendingApprovals": (
-            Discussion.objects.filter(approval_status=Discussion.APPROVAL_PENDING).count()
-            + Post.objects.filter(approval_status=Post.APPROVAL_PENDING).exclude(
-                id__in=Discussion.objects.filter(
-                    approval_status=Discussion.APPROVAL_PENDING
-                ).values_list("first_post_id", flat=True)
-            ).count()
-        ),
+        "totalUsers": 0,
+        "totalDiscussions": 0,
+        "totalPosts": 0,
+        "pendingApprovals": 0,
     }
     return get_runtime_resource_registry().serialize(
         "admin_stats",

@@ -2672,6 +2672,8 @@ class ExtensionManifestLoaderTests(TestCase):
     def test_application_bootstrap_collects_extension_realtime_included_enrichers(self):
         from apps.core.forum_runtime import (
             clear_realtime_included_enrichers,
+            clear_realtime_discussion_visibility_resolvers,
+            resolve_realtime_visible_discussion_ids,
         )
         from extensions.discussions.backend.realtime import build_realtime_included_payload
 
@@ -2694,9 +2696,14 @@ class ExtensionManifestLoaderTests(TestCase):
                 "def enrich_alpha(**kwargs):\n"
                 "    return {'alpha': [{'id': '1', 'value': 'ok'}]}\n"
                 "\n"
+                "def visible_discussions(discussion_ids, user):\n"
+                "    return [int(item) for item in discussion_ids if int(item) == 2]\n"
+                "\n"
                 "def extend():\n"
                 "    return [\n"
-                "        RealtimeExtender().included_payload('alpha', enrich_alpha, description='Alpha included payload'),\n"
+                "        RealtimeExtender()\n"
+                "            .included_payload('alpha', enrich_alpha, description='Alpha included payload')\n"
+                "            .discussion_visibility(visible_discussions, description='Alpha discussion visibility'),\n"
                 "    ]\n",
                 encoding="utf-8",
             )
@@ -2711,6 +2718,7 @@ class ExtensionManifestLoaderTests(TestCase):
             )
 
             clear_realtime_included_enrichers()
+            clear_realtime_discussion_visibility_resolvers()
             registry = ExtensionRegistry(extensions_path=extensions_dir)
             application = build_extension_application(manager=registry, force=True)
             runtime_view = application.get_runtime_view("alpha-tools")
@@ -2718,10 +2726,71 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertIsNotNone(runtime_view)
             self.assertEqual(len(runtime_view.realtime_included), 1)
             self.assertEqual(runtime_view.realtime_included[0].key, "alpha")
+            self.assertEqual(len(runtime_view.realtime_discussion_visibility), 1)
             self.assertEqual(application.realtime.get_included_enrichers(extension_id="alpha-tools")[0].description, "Alpha included payload")
+            self.assertEqual(
+                application.realtime.get_discussion_visibility_resolvers(extension_id="alpha-tools")[0].description,
+                "Alpha discussion visibility",
+            )
             self.assertEqual(build_realtime_included_payload()["alpha"][0]["value"], "ok")
+            self.assertEqual(resolve_realtime_visible_discussion_ids([1, 2], Mock()), [2])
         finally:
             clear_realtime_included_enrichers()
+            clear_realtime_discussion_visibility_resolvers()
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_application_bootstrap_collects_extension_forum_permission_checkers(self):
+        from apps.core.forum_permissions import clear_forum_permission_checkers, has_forum_permission
+
+        temp_dir = make_workspace_temp_dir()
+        try:
+            extensions_dir = Path(temp_dir) / "extensions"
+            manifest_dir = extensions_dir / "alpha-tools"
+            backend_dir = manifest_dir / "backend"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            backend_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "from apps.core.extensions import ForumPermissionExtender\n"
+                "\n"
+                "def can_use_alpha(user, permission_names):\n"
+                "    return 'alpha.use' in permission_names\n"
+                "\n"
+                "def extend():\n"
+                "    return [\n"
+                "        ForumPermissionExtender().checker('alpha', can_use_alpha, description='Alpha permission checker'),\n"
+                "    ]\n",
+                encoding="utf-8",
+            )
+
+            ExtensionInstallation.objects.create(
+                extension_id="alpha-tools",
+                version="1.0.0",
+                source="filesystem",
+                enabled=True,
+                installed=True,
+                booted=True,
+            )
+
+            clear_forum_permission_checkers()
+            registry = ExtensionRegistry(extensions_path=extensions_dir)
+            application = build_extension_application(manager=registry, force=True)
+            runtime_view = application.get_runtime_view("alpha-tools")
+            user = Mock(is_authenticated=True)
+
+            self.assertIsNotNone(runtime_view)
+            self.assertEqual(len(runtime_view.forum_permission_checkers), 1)
+            self.assertEqual(runtime_view.forum_permission_checkers[0].key, "alpha")
+            self.assertEqual(application.forum_permissions.get_checkers(extension_id="alpha-tools")[0].description, "Alpha permission checker")
+            self.assertTrue(has_forum_permission(user, "alpha.use"))
+            self.assertFalse(has_forum_permission(user, "alpha.missing"))
+        finally:
+            clear_forum_permission_checkers()
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     def test_application_bootstrap_collects_extension_discussion_lifecycle_handlers(self):
@@ -3098,6 +3167,12 @@ class ExtensionManifestLoaderTests(TestCase):
                 self.assertEqual(text_query, "body")
                 self.assertEqual(parsed_filters["discussion"][0][0].code, "alpha")
                 self.assertTrue(any(item.code == "alpha" for item in SearchService.get_public_search_filters(targets=("discussion",))))
+                runtime_text_query, runtime_filters = application.search.extract_filter_tokens(
+                    "alpha:1 body",
+                    targets=("discussion",),
+                )
+                self.assertEqual(runtime_text_query, "body")
+                self.assertEqual(runtime_filters["discussion"][0][0].code, "alpha")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -10556,9 +10631,9 @@ class ResourceRegistryTests(TestCase):
 
         with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_optional_user", return_value=user):
-                with patch("extensions.users.backend.services.UserService.has_forum_permission", return_value=False):
+                with patch("apps.core.resource_dispatcher.has_forum_permission", return_value=False):
                     denied = dispatch_resource_endpoint(request, resource="secure", endpoint="show")
-                with patch("extensions.users.backend.services.UserService.has_forum_permission", return_value=True):
+                with patch("apps.core.resource_dispatcher.has_forum_permission", return_value=True):
                     allowed = dispatch_resource_endpoint(request, resource="secure", endpoint="show")
 
         self.assertEqual(denied.status_code, 403)

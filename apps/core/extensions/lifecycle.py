@@ -195,7 +195,11 @@ def reset_extension_runtime_state() -> None:
         reset_extension_signal_proxy_bootstrap,
     )
     from apps.core.extensions.signal_runtime import disconnect_runtime_signal_receivers
-    from apps.core.forum_runtime import clear_realtime_included_enrichers
+    from apps.core.forum_permissions import clear_forum_permission_checkers
+    from apps.core.forum_runtime import (
+        clear_realtime_discussion_visibility_resolvers,
+        clear_realtime_included_enrichers,
+    )
     from apps.core.forum_registry import get_forum_registry
     from apps.core.resource_registry import get_resource_registry
     from apps.core.settings_service import clear_runtime_setting_caches
@@ -222,6 +226,8 @@ def reset_extension_runtime_state() -> None:
     event_bus.clear()
     reset_extension_runtime_event_listener_bootstrap()
     clear_realtime_included_enrichers()
+    clear_realtime_discussion_visibility_resolvers()
+    clear_forum_permission_checkers()
     bootstrap_extension_runtime_event_listeners()
 
     clear_runtime_setting_caches()

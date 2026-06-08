@@ -40,6 +40,24 @@ def discussion_resource_field_definitions():
     )
 
 
+def admin_stats_resource_field_definitions():
+    return (
+        ResourceFieldDefinition(
+            resource="admin_stats",
+            field="totalDiscussions",
+            module_id="discussions",
+            resolver=resolve_admin_total_discussions,
+            description="后台统计中的讨论总数。",
+        ),
+    )
+
+
+def resolve_admin_total_discussions(stats, context: dict) -> int:
+    from extensions.discussions.backend.models import Discussion
+
+    return Discussion.objects.count()
+
+
 def serialize_search_discussion_base(discussion, context: dict) -> dict:
     return {
         "id": discussion.id,

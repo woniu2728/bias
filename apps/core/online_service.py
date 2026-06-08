@@ -6,7 +6,7 @@ from typing import Dict, List
 from django.conf import settings
 from django.core.cache import cache
 
-from extensions.users.backend.models import User
+from apps.core.user_runtime import serialize_runtime_users_by_ids
 
 try:
     from django_redis import get_redis_connection
@@ -47,24 +47,7 @@ class OnlineUserService:
         if not user_ids:
             return []
 
-        users = User.objects.filter(id__in=user_ids, is_active=True).only(
-            "id",
-            "username",
-            "display_name",
-            "avatar_url",
-        )
-        users_by_id = {user.id: user for user in users}
-
-        return [
-            {
-                "id": users_by_id[user_id].id,
-                "username": users_by_id[user_id].username,
-                "display_name": users_by_id[user_id].display_name,
-                "avatar_url": users_by_id[user_id].avatar_url,
-            }
-            for user_id in user_ids
-            if user_id in users_by_id
-        ]
+        return serialize_runtime_users_by_ids(user_ids, limit=limit)
 
     @staticmethod
     def get_online_user_ids(limit: int = 50) -> List[int]:

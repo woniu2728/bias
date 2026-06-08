@@ -1,14 +1,26 @@
-from apps.core.extensions import ApiResourceExtender, ApiRoutesExtender, AdminSurfaceExtender, FrontendExtender, LifecycleExtender, ModelExtender
+from apps.core.extensions import (
+    ApiResourceExtender,
+    ApiRoutesExtender,
+    AdminSurfaceExtender,
+    ForumPermissionExtender,
+    FrontendExtender,
+    LifecycleExtender,
+    ModelExtender,
+    UserExtender,
+)
 from apps.core.forum_registry_types import AdminPageDefinition, PermissionDefinition
 from extensions.users.backend.admin_api import router as admin_users_router
 from extensions.users.backend.api import router as users_router
 from extensions.users.backend.handlers import user_resource_endpoints
 from extensions.users.backend.models import AccessToken, EmailToken, Group, PasswordToken, Permission, User
 from extensions.users.backend.resources import (
+    admin_stats_resource_field_definitions,
     user_resource_definitions,
     user_resource_field_definitions,
     user_resource_relationship_definitions,
 )
+from extensions.users.backend.runtime import user_model_provider
+from extensions.users.backend.services import UserService
 
 
 EXTENSION_ID = "users"
@@ -32,6 +44,7 @@ def extend():
         .endpoints_with(*user_resource_endpoints())
         .fields(user_resource_field_definitions)
         .relationships(user_resource_relationship_definitions),
+        ApiResourceExtender("admin_stats").fields(admin_stats_resource_field_definitions),
         *[
             ApiResourceExtender(definition)
             for definition in user_resource_definitions()
@@ -48,6 +61,15 @@ def extend():
             enable=enable,
             disable=disable,
             uninstall=uninstall,
+        ),
+        ForumPermissionExtender().checker(
+            "users.forum-permissions",
+            UserService.has_forum_permission,
+            description="基于用户组、后台权限与扩展策略判断论坛权限。",
+        ),
+        UserExtender().model_provider(
+            user_model_provider,
+            description="提供 core 运行时需要的用户模型查询、在线用户序列化与管理员账号管理能力。",
         ),
     ]
 

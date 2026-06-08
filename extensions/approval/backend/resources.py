@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from django.db.models import Subquery
+
+from apps.core.resource_registry import ResourceFieldDefinition
+
 
 APPROVAL_POST_EVENT_TYPES = (
     "discussionApproved",
@@ -9,6 +13,29 @@ APPROVAL_POST_EVENT_TYPES = (
     "postRejected",
     "postResubmitted",
 )
+
+
+def admin_stats_resource_field_definitions():
+    return (
+        ResourceFieldDefinition(
+            resource="admin_stats",
+            field="pendingApprovals",
+            module_id="approval",
+            resolver=resolve_admin_pending_approvals,
+            description="后台统计中的待审核内容数量。",
+        ),
+    )
+
+
+def resolve_admin_pending_approvals(stats, context: dict) -> int:
+    from extensions.discussions.backend.models import Discussion
+    from extensions.posts.backend.models import Post
+
+    pending_discussions = Discussion.objects.filter(approval_status=Discussion.APPROVAL_PENDING)
+    pending_posts = Post.objects.filter(approval_status=Post.APPROVAL_PENDING).exclude(
+        id__in=Subquery(pending_discussions.values("first_post_id"))
+    )
+    return pending_discussions.count() + pending_posts.count()
 
 
 def resolve_approval_event_data(post, context: dict) -> dict | None:

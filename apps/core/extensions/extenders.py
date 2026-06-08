@@ -1914,6 +1914,7 @@ class SignalExtender:
 @dataclass(frozen=True)
 class RealtimeExtender:
     included: tuple[ExtensionRealtimeIncludedDefinition, ...] = ()
+    discussion_visibility_resolvers: tuple[ExtensionSystemHookDefinition, ...] = ()
 
     def included_payload(self, key: str, handler: Any, *, description: str = "") -> "RealtimeExtender":
         return RealtimeExtender(
@@ -1925,10 +1926,32 @@ class RealtimeExtender:
                     description=str(description or "").strip(),
                 ),
             ]),
+            discussion_visibility_resolvers=self.discussion_visibility_resolvers,
+        )
+
+    def discussion_visibility(
+        self,
+        handler: Any,
+        *,
+        key: str = "discussion.visibility",
+        description: str = "",
+        order: int = 100,
+    ) -> "RealtimeExtender":
+        return RealtimeExtender(
+            included=self.included,
+            discussion_visibility_resolvers=tuple([
+                *self.discussion_visibility_resolvers,
+                ExtensionSystemHookDefinition(
+                    key=str(key or "").strip(),
+                    callback=handler,
+                    description=str(description or "").strip(),
+                    order=int(order),
+                ),
+            ]),
         )
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
-        if not self.included:
+        if not self.included and not self.discussion_visibility_resolvers:
             return
 
         extension_id = extension.extension_id
@@ -1940,9 +1963,61 @@ class RealtimeExtender:
                     handler = wrap_callback(handler, host)
                     definition = replace(definition, handler=handler)
                 realtime.register_included_enricher(extension_id, definition)
+            for definition in sorted(self.discussion_visibility_resolvers, key=lambda item: int(item.order or 100)):
+                handler = definition.callback
+                if isinstance(handler, str) or isinstance(handler, type):
+                    handler = wrap_callback(handler, host)
+                    definition = replace(definition, callback=handler)
+                realtime.register_discussion_visibility_resolver(extension_id, definition)
             return realtime
 
         app.resolving("realtime", apply)
+
+
+@dataclass(frozen=True)
+class ForumPermissionExtender:
+    checkers: tuple[ExtensionSystemHookDefinition, ...] = ()
+
+    def checker(
+        self,
+        key: str,
+        handler: Any,
+        *,
+        description: str = "",
+        order: int = 100,
+    ) -> "ForumPermissionExtender":
+        return ForumPermissionExtender(
+            checkers=tuple([
+                *self.checkers,
+                ExtensionSystemHookDefinition(
+                    key=str(key or "").strip(),
+                    callback=handler,
+                    description=str(description or "").strip(),
+                    order=int(order),
+                ),
+            ]),
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.checkers:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(forum_permissions, host: "ExtensionHost"):
+            for definition in sorted(self.checkers, key=lambda item: int(item.order or 100)):
+                handler = definition.callback
+                if isinstance(handler, str) or isinstance(handler, type):
+                    handler = wrap_callback(handler, host)
+                forum_permissions.register_checker(
+                    extension_id,
+                    definition.key,
+                    handler,
+                    description=definition.description,
+                )
+            return forum_permissions
+
+        app.resolving("forum.permissions", apply)
 
 
 @dataclass(frozen=True)
@@ -2366,6 +2441,12 @@ class UserExtender:
     def permission_groups(self, callback: Any, *, description: str = "", order: int = 100) -> "UserExtender":
         return self._with_definition("permission_groups", {
             "callback": callback,
+            "description": str(description or "").strip(),
+        }, order=order)
+
+    def model_provider(self, provider: Any, *, description: str = "", order: int = 100) -> "UserExtender":
+        return self._with_definition("model_provider", {
+            "provider": provider,
             "description": str(description or "").strip(),
         }, order=order)
 

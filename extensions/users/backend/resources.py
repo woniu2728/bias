@@ -163,6 +163,24 @@ def user_resource_field_definitions():
     )
 
 
+def admin_stats_resource_field_definitions():
+    return (
+        ResourceFieldDefinition(
+            resource="admin_stats",
+            field="totalUsers",
+            module_id="users",
+            resolver=resolve_admin_total_users,
+            description="后台统计中的用户总数。",
+        ),
+    )
+
+
+def resolve_admin_total_users(stats, context: dict) -> int:
+    from extensions.users.backend.models import User
+
+    return User.objects.count()
+
+
 def serialize_user_summary(user) -> dict | None:
     if not user:
         return None

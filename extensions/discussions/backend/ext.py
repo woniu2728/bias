@@ -7,6 +7,7 @@ from apps.core.extensions import (
     LifecycleExtender,
     ModelExtender,
     ModelVisibilityExtender,
+    RealtimeExtender,
 )
 from apps.core.forum_registry_types import (
     DiscussionListFilterDefinition,
@@ -46,9 +47,11 @@ from extensions.discussions.backend.registry import (
 from extensions.discussions.backend.handlers import discussion_resource_endpoints
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.discussions.backend.resources import (
+    admin_stats_resource_field_definitions,
     discussion_resource_definitions,
     discussion_resource_field_definitions,
 )
+from extensions.discussions.backend.realtime import resolve_visible_discussion_ids
 from extensions.discussions.backend.visibility import scope_discussion_view, scope_post_view
 from extensions.posts.backend.models import Post
 
@@ -74,9 +77,14 @@ def extend():
         EventListenersExtender(
             listeners=event_listener_definitions(),
         ),
+        RealtimeExtender().discussion_visibility(
+            resolve_visible_discussion_ids,
+            description="根据讨论可见性规则解析实时订阅可见讨论。",
+        ),
         ApiResourceExtender("discussion")
         .endpoints_with(*discussion_resource_endpoints())
         .fields(discussion_resource_field_definitions),
+        ApiResourceExtender("admin_stats").fields(admin_stats_resource_field_definitions),
         *[
             ApiResourceExtender(definition)
             for definition in discussion_resource_definitions()

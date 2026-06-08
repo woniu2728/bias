@@ -1,5 +1,6 @@
 from apps.core.extensions import (
     AdminSurfaceExtender,
+    ApiResourceExtender,
     ApiRoutesExtender,
     EventListenersExtender,
     FrontendExtender,
@@ -33,7 +34,11 @@ from extensions.approval.backend.listeners import (
     handle_post_rejected,
     handle_post_resubmitted,
 )
-from extensions.approval.backend.resources import APPROVAL_POST_EVENT_TYPES, resolve_approval_event_data
+from extensions.approval.backend.resources import (
+    APPROVAL_POST_EVENT_TYPES,
+    admin_stats_resource_field_definitions,
+    resolve_approval_event_data,
+)
 
 
 EXTENSION_ID = "approval"
@@ -55,6 +60,7 @@ def extend():
             mounts=(("/admin", approval_admin_router),),
             tags=("Admin",),
         ),
+        ApiResourceExtender("admin_stats").fields(admin_stats_resource_field_definitions),
         ForumCapabilitiesExtender(
             post_types=post_type_definitions(),
         ),

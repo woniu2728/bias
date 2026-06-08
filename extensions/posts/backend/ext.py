@@ -2,7 +2,11 @@ from apps.core.extensions import ApiResourceExtender, ForumCapabilitiesExtender,
 from apps.core.forum_registry_types import PostTypeDefinition
 from extensions.posts.backend.handlers import post_resource_endpoints
 from extensions.posts.backend.models import Post
-from extensions.posts.backend.resources import post_resource_definitions, post_resource_field_definitions
+from extensions.posts.backend.resources import (
+    admin_stats_resource_field_definitions,
+    post_resource_definitions,
+    post_resource_field_definitions,
+)
 
 
 EXTENSION_ID = "posts"
@@ -16,6 +20,7 @@ def extend():
         ApiResourceExtender("post")
         .endpoints_with(*post_resource_endpoints())
         .fields(post_resource_field_definitions),
+        ApiResourceExtender("admin_stats").fields(admin_stats_resource_field_definitions),
         *[
             ApiResourceExtender(definition)
             for definition in post_resource_definitions()

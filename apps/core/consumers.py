@@ -2,45 +2,18 @@
 WebSocket消费者
 """
 import json
-from typing import Optional
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 
-from extensions.discussions.backend.models import Discussion
-from extensions.discussions.backend.services import DiscussionService
+from apps.core.forum_permissions import has_forum_permission
+from apps.core.forum_runtime import (
+    can_view_realtime_discussion,
+    resolve_realtime_visible_discussion_ids,
+)
 from apps.core.online_service import OnlineUserService
 from apps.core.settings_service import get_advanced_settings
-from extensions.users.backend.services import UserService
-
-
-def resolve_visible_discussion_ids(discussion_ids, user) -> list[int]:
-    normalized_ids = []
-    seen = set()
-    for raw_id in discussion_ids or []:
-        try:
-            discussion_id = int(raw_id)
-        except (TypeError, ValueError):
-            continue
-        if discussion_id <= 0 or discussion_id in seen:
-            continue
-        seen.add(discussion_id)
-        normalized_ids.append(discussion_id)
-
-    if isinstance(user, AnonymousUser):
-        user = None
-
-    discussions = {
-        discussion.id: discussion
-        for discussion in Discussion.objects.filter(id__in=normalized_ids)
-    }
-    return [
-        discussion_id
-        for discussion_id in normalized_ids
-        if discussions.get(discussion_id) is not None
-        and DiscussionService._can_view_discussion(discussions[discussion_id], user)
-    ]
 
 
 class NotificationConsumer(AsyncWebsocketConsumer):
@@ -314,23 +287,15 @@ class DiscussionConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def can_view_discussion(self):
-        from extensions.discussions.backend.models import Discussion
-
-        user = self.user
-        if isinstance(user, AnonymousUser):
-            user = None
-        discussion = Discussion.objects.filter(id=self.discussion_id).first()
-        if discussion is None:
-            return False
-        return DiscussionService._can_view_discussion(discussion, user)
+        return can_view_realtime_discussion(self.discussion_id, self.user)
 
     @database_sync_to_async
     def can_send_typing_indicator(self, discussion_id: int) -> bool:
         if not bool(get_advanced_settings().get("realtime_typing_enabled", True)):
             return False
-        if not UserService.has_forum_permission(self.user, "discussion.typing"):
+        if not has_forum_permission(self.user, "discussion.typing"):
             return False
-        visible_ids = resolve_visible_discussion_ids([discussion_id], self.user)
+        visible_ids = resolve_realtime_visible_discussion_ids([discussion_id], self.user)
         return discussion_id in visible_ids
 
 
@@ -431,7 +396,7 @@ class ForumRealtimeConsumer(AsyncWebsocketConsumer):
 
     async def unsubscribe_discussions(self, discussion_ids):
         removed_ids = []
-        for discussion_id in resolve_visible_discussion_ids(discussion_ids, self.user):
+        for discussion_id in await self.get_visible_discussion_ids(discussion_ids):
             group_name = f"discussion_{discussion_id}"
             if group_name not in self.discussion_group_names:
                 continue
@@ -442,13 +407,13 @@ class ForumRealtimeConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def get_visible_discussion_ids(self, discussion_ids):
-        return resolve_visible_discussion_ids(discussion_ids, self.user)
+        return resolve_realtime_visible_discussion_ids(discussion_ids, self.user)
 
     @database_sync_to_async
     def can_send_typing_indicator(self, discussion_id: int) -> bool:
         if not bool(get_advanced_settings().get("realtime_typing_enabled", True)):
             return False
-        if not UserService.has_forum_permission(self.user, "discussion.typing"):
+        if not has_forum_permission(self.user, "discussion.typing"):
             return False
-        visible_ids = resolve_visible_discussion_ids([discussion_id], self.user)
+        visible_ids = resolve_realtime_visible_discussion_ids([discussion_id], self.user)
         return discussion_id in visible_ids

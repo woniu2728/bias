@@ -9,6 +9,7 @@ from django.http import HttpResponse, JsonResponse
 
 from apps.core.auth import get_optional_user
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
+from apps.core.forum_permissions import has_forum_permission
 from apps.core.resource_api import parse_resource_query_options
 from apps.core.resource_errors import JsonApiError, jsonapi_error_response
 
@@ -78,9 +79,7 @@ def dispatch_resource_endpoint(
     if forum_permission:
         if user is None or not getattr(user, "is_authenticated", False):
             return jsonapi_error_response("请先登录", status=401)
-        from extensions.users.backend.services import UserService
-
-        if not UserService.has_forum_permission(user, forum_permission):
+        if not has_forum_permission(user, forum_permission):
             return jsonapi_error_response("无权限", status=403)
 
     try:

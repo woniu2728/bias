@@ -104,6 +104,14 @@ class ApplicationPolicyMount:
     query_policy: bool = False
 
 
+@dataclass(frozen=True)
+class ApplicationForumPermissionChecker:
+    key: str
+    handler: Any
+    description: str = ""
+    module_id: str = ""
+
+
 class ApplicationValidatorService:
     def __init__(self, host: "ExtensionHost") -> None:
         self._host = host
@@ -863,9 +871,7 @@ class ApplicationSearchService:
         ]
 
     def apply_filters(self, target: str, queryset, query: str, context: dict | None = None):
-        from extensions.search.backend.services import SearchService
-
-        text_query, parsed_filters = SearchService.extract_filter_tokens(query, targets=(target,))
+        text_query, parsed_filters = self.extract_filter_tokens(query, targets=(target,))
         output = queryset
         resolved_context = {
             **dict(context or {}),
@@ -876,6 +882,43 @@ class ApplicationSearchService:
         for definition, parsed_value in parsed_filters.get(target, []):
             output = definition.applier(output, parsed_value, resolved_context)
         return output
+
+    def extract_filter_tokens(
+        self,
+        query: str,
+        targets: tuple[str, ...] | None = None,
+    ) -> tuple[str, dict[str, list]]:
+        text_tokens: list[str] = []
+        filters: dict[str, list] = {}
+        allowed_targets = set(targets or ())
+
+        for raw_token in (query or "").split():
+            matched = False
+            for definition in self.get_available_filters(targets=targets):
+                if allowed_targets and definition.target not in allowed_targets:
+                    continue
+                parsed_value = definition.parser(raw_token)
+                if parsed_value is None:
+                    continue
+                filters.setdefault(definition.target, []).append((definition, parsed_value))
+                matched = True
+                break
+
+            if not matched:
+                text_tokens.append(raw_token)
+
+        return " ".join(text_tokens).strip(), filters
+
+    def get_available_filters(self, *, targets: tuple[str, ...] | None = None):
+        allowed_targets = set(targets or ())
+        definitions = list(self._host.forum_registry.get_search_filters())
+        for driver in self.get_drivers():
+            if allowed_targets and driver.target not in allowed_targets:
+                continue
+            definitions.extend(driver.filters)
+        if targets is not None:
+            definitions = [item for item in definitions if item.target in allowed_targets]
+        return definitions
 
     def apply_mutators(self, target: str, queryset, context: dict | None = None):
         output = queryset
@@ -1920,6 +1963,28 @@ class ApplicationRealtimeService:
 
         register_realtime_included_enricher(f"{normalized_extension_id}:{normalized_key}", handler)
 
+    def register_discussion_visibility_resolver(self, extension_id: str, definition: ExtensionSystemHookDefinition) -> None:
+        normalized_extension_id = str(extension_id or "").strip()
+        normalized_key = str(getattr(definition, "key", "") or "").strip()
+        handler = getattr(definition, "callback", None)
+        if not normalized_extension_id or not normalized_key or not callable(handler):
+            return
+
+        definition = replace(definition, module_id=definition.module_id or normalized_extension_id)
+        view = self._host._get_or_create_runtime_view(normalized_extension_id)
+        view.realtime_discussion_visibility = tuple([
+            *(
+                item
+                for item in view.realtime_discussion_visibility
+                if str(getattr(item, "key", "") or "").strip() != normalized_key
+            ),
+            definition,
+        ])
+
+        from apps.core.forum_runtime import register_realtime_discussion_visibility_resolver
+
+        register_realtime_discussion_visibility_resolver(f"{normalized_extension_id}:{normalized_key}", handler)
+
     def get_included_enrichers(self, *, extension_id: str | None = None) -> list[ExtensionRealtimeIncludedDefinition]:
         if extension_id is not None:
             view = self._host.get_runtime_view(extension_id)
@@ -1930,6 +1995,68 @@ class ApplicationRealtimeService:
         definitions: list[ExtensionRealtimeIncludedDefinition] = []
         for view in self._host.get_runtime_views():
             definitions.extend(view.realtime_included)
+        return definitions
+
+    def get_discussion_visibility_resolvers(self, *, extension_id: str | None = None) -> list[ExtensionSystemHookDefinition]:
+        if extension_id is not None:
+            view = self._host.get_runtime_view(extension_id)
+            if view is None:
+                return []
+            return list(view.realtime_discussion_visibility)
+
+        definitions: list[ExtensionSystemHookDefinition] = []
+        for view in self._host.get_runtime_views():
+            definitions.extend(view.realtime_discussion_visibility)
+        return definitions
+
+
+class ApplicationForumPermissionService:
+    def __init__(self, host: "ExtensionHost") -> None:
+        self._host = host
+
+    def register_checker(
+        self,
+        extension_id: str,
+        key: str,
+        handler,
+        *,
+        description: str = "",
+    ) -> None:
+        normalized_extension_id = str(extension_id or "").strip()
+        normalized_key = str(key or "").strip()
+        if not normalized_extension_id or not normalized_key or not callable(handler):
+            return
+
+        definition = ApplicationForumPermissionChecker(
+            key=normalized_key,
+            handler=handler,
+            description=str(description or "").strip(),
+            module_id=normalized_extension_id,
+        )
+        view = self._host._get_or_create_runtime_view(normalized_extension_id)
+        view.forum_permission_checkers = tuple([
+            *(
+                item
+                for item in view.forum_permission_checkers
+                if str(getattr(item, "key", "") or "").strip() != normalized_key
+            ),
+            definition,
+        ])
+
+        from apps.core.forum_permissions import register_forum_permission_checker
+
+        register_forum_permission_checker(f"{normalized_extension_id}:{normalized_key}", handler)
+
+    def get_checkers(self, *, extension_id: str | None = None) -> list[ApplicationForumPermissionChecker]:
+        if extension_id is not None:
+            view = self._host.get_runtime_view(extension_id)
+            if view is None:
+                return []
+            return list(view.forum_permission_checkers)
+
+        definitions: list[ApplicationForumPermissionChecker] = []
+        for view in self._host.get_runtime_views():
+            definitions.extend(view.forum_permission_checkers)
         return definitions
 
 
@@ -2251,6 +2378,8 @@ class ExtensionApplicationRecord:
     signal_handlers: list[ExtensionSignalDefinition] = field(default_factory=list)
     event_listeners: list[ExtensionEventListenerDefinition] = field(default_factory=list)
     realtime_included: list[ExtensionRealtimeIncludedDefinition] = field(default_factory=list)
+    realtime_discussion_visibility: list[ExtensionSystemHookDefinition] = field(default_factory=list)
+    forum_permission_checkers: list[ApplicationForumPermissionChecker] = field(default_factory=list)
     discussion_lifecycle: list[ExtensionDiscussionLifecycleDefinition] = field(default_factory=list)
     post_lifecycle: list[ExtensionPostLifecycleDefinition] = field(default_factory=list)
     runtime_actions: list[ExtensionManifestRuntimeActionDefinition] = field(default_factory=list)
@@ -2343,6 +2472,8 @@ class ExtensionRuntimeView:
     signal_handlers: tuple[ExtensionSignalDefinition, ...] = ()
     event_listeners: tuple[ExtensionEventListenerDefinition, ...] = ()
     realtime_included: tuple[ExtensionRealtimeIncludedDefinition, ...] = ()
+    realtime_discussion_visibility: tuple[ExtensionSystemHookDefinition, ...] = ()
+    forum_permission_checkers: tuple[ApplicationForumPermissionChecker, ...] = ()
     discussion_lifecycle: tuple[ExtensionDiscussionLifecycleDefinition, ...] = ()
     post_lifecycle: tuple[ExtensionPostLifecycleDefinition, ...] = ()
     runtime_actions: tuple[ExtensionManifestRuntimeActionDefinition, ...] = ()
@@ -2433,6 +2564,7 @@ class ExtensionApplication:
         self.policies = ApplicationPolicyService(self)
         self.events = ApplicationEventService(self, self.event_bus)
         self.realtime = ApplicationRealtimeService(self)
+        self.forum_permissions = ApplicationForumPermissionService(self)
         self.discussion_lifecycle = ApplicationDiscussionLifecycleService(self)
         self.post_lifecycle = ApplicationPostLifecycleService(self)
         self.post_events = ApplicationPostEventDataService(self)
@@ -2499,6 +2631,8 @@ class ExtensionApplication:
         self.instance("extensions.events", self.events)
         self.instance("realtime", self.realtime)
         self.instance("extensions.realtime", self.realtime)
+        self.instance("forum.permissions", self.forum_permissions)
+        self.instance("extensions.forum.permissions", self.forum_permissions)
         self.instance("discussion.lifecycle", self.discussion_lifecycle)
         self.instance("extensions.discussion.lifecycle", self.discussion_lifecycle)
         self.instance("post.lifecycle", self.post_lifecycle)
@@ -3260,6 +3394,8 @@ class ExtensionApplication:
             signal_handlers=list(view.signal_handlers),
             event_listeners=list(view.event_listeners),
             realtime_included=list(view.realtime_included),
+            realtime_discussion_visibility=list(view.realtime_discussion_visibility),
+            forum_permission_checkers=list(view.forum_permission_checkers),
             discussion_lifecycle=list(view.discussion_lifecycle),
             post_lifecycle=list(view.post_lifecycle),
             runtime_actions=list(view.runtime_actions),
