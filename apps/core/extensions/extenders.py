@@ -1508,6 +1508,30 @@ class ModelExtender:
 class ModelVisibilityExtender:
     definitions: tuple[ExtensionModelVisibilityDefinition, ...] = ()
 
+    def scope(
+        self,
+        model: Any,
+        callback: Callable[[Any, dict], Any],
+        *,
+        ability: str = "view",
+        description: str = "",
+        order: int = 100,
+    ) -> "ModelVisibilityExtender":
+        if model is None or callback is None:
+            return self
+        return ModelVisibilityExtender(
+            definitions=tuple([
+                *self.definitions,
+                ExtensionModelVisibilityDefinition(
+                    model=model,
+                    scope=callback,
+                    ability=str(ability or "view"),
+                    description=str(description or "").strip(),
+                    order=int(order or 100),
+                ),
+            ])
+        )
+
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
         ModelExtender(visibility=self.definitions).extend(app, extension)
 

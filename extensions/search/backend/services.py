@@ -9,7 +9,7 @@ from django.db.models import OuterRef, Q, Subquery
 
 from apps.core.forum_registry import get_forum_registry
 from apps.core.services import PaginationService
-from apps.core.visibility import apply_discussion_visibility_scope, apply_post_visibility_scope
+from extensions.discussions.backend.visibility import apply_discussion_visibility_scope, apply_post_visibility_scope
 from extensions.discussions.backend.models import Discussion
 from extensions.posts.backend.models import Post
 from extensions.users.backend.models import User

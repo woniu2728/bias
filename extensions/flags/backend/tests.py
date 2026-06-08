@@ -9,7 +9,9 @@ from ninja_jwt.tokens import RefreshToken
 from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent
 from apps.core.models import AuditLog, Setting
 from apps.core.settings_service import clear_runtime_setting_caches
+from extensions.discussions.backend.models import Discussion
 from extensions.discussions.backend.services import DiscussionService
+from extensions.discussions.backend.visibility import scope_discussion_view, scope_post_view
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.services import PostService
 from extensions.users.backend.models import Group, Permission, User
@@ -324,6 +326,22 @@ class FlagsExtensionTests(TestCase):
         Post.objects.filter(id__in=[self.post.id, denied_post.id]).update(is_private=True)
 
         app = ExtensionApplication()
+        app.models.register_visibility(
+            "discussions",
+            ExtensionModelVisibilityDefinition(
+                model=Discussion,
+                ability="view",
+                scope=scope_discussion_view,
+            ),
+        )
+        app.models.register_visibility(
+            "discussions",
+            ExtensionModelVisibilityDefinition(
+                model=Post,
+                ability="view",
+                scope=scope_post_view,
+            ),
+        )
         app.models.register_visibility(
             "private-runtime",
             ExtensionModelVisibilityDefinition(

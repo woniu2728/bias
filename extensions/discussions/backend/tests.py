@@ -21,7 +21,11 @@ from apps.core.resource_registry import (
     ResourceRegistry,
     ResourceSortDefinition,
 )
-from apps.core.visibility import build_discussion_visibility_q, build_post_visibility_q
+from extensions.discussions.backend.visibility import (
+    build_discussion_visibility_q,
+    build_post_visibility_q,
+    scope_discussion_view,
+)
 from extensions.discussions.backend.handlers import discussion_resource_endpoints
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.discussions.backend.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
@@ -162,6 +166,14 @@ class DiscussionApiTests(TestCase):
 
         app = ExtensionApplication()
         app.models.register_visibility(
+            "discussions",
+            ExtensionModelVisibilityDefinition(
+                model=Discussion,
+                ability="view",
+                scope=scope_discussion_view,
+            ),
+        )
+        app.models.register_visibility(
             "private-runtime",
             ExtensionModelVisibilityDefinition(
                 model=Discussion,
@@ -226,6 +238,14 @@ class DiscussionApiTests(TestCase):
         Discussion.objects.filter(id__in=[allowed.id, denied.id]).update(hidden_at=timezone.now())
 
         app = ExtensionApplication()
+        app.models.register_visibility(
+            "discussions",
+            ExtensionModelVisibilityDefinition(
+                model=Discussion,
+                ability="view",
+                scope=scope_discussion_view,
+            ),
+        )
         app.models.register_visibility(
             "hidden-runtime",
             ExtensionModelVisibilityDefinition(

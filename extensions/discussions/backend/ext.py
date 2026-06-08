@@ -5,6 +5,7 @@ from apps.core.extensions import (
     FrontendExtender,
     LifecycleExtender,
     ModelExtender,
+    ModelVisibilityExtender,
 )
 from apps.core.forum_registry_types import (
     DiscussionListFilterDefinition,
@@ -28,6 +29,8 @@ from extensions.discussions.backend.resources import (
     discussion_resource_definitions,
     discussion_resource_field_definitions,
 )
+from extensions.discussions.backend.visibility import scope_discussion_view, scope_post_view
+from extensions.posts.backend.models import Post
 
 
 EXTENSION_ID = "discussions"
@@ -58,6 +61,17 @@ def extend():
         ModelExtender()
         .owns(Discussion, description="讨论主题由 discussions 扩展拥有。")
         .owns(DiscussionUser, description="讨论用户阅读和订阅状态由 discussions 扩展拥有。"),
+        ModelVisibilityExtender()
+        .scope(
+            Discussion,
+            scope_discussion_view,
+            description="限制当前用户只能查看有权限访问的讨论。",
+        )
+        .scope(
+            Post,
+            scope_post_view,
+            description="限制当前用户只能查看有权限访问的讨论帖子。",
+        ),
         LifecycleExtender(
             install=install,
             enable=enable,

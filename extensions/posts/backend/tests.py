@@ -9,7 +9,11 @@ from unittest.mock import Mock, patch
 
 from apps.core.models import AuditLog
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
-from apps.core.visibility import build_post_visibility_q
+from extensions.discussions.backend.visibility import (
+    build_post_visibility_q,
+    scope_discussion_view,
+    scope_post_view,
+)
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.handlers import post_resource_endpoints
@@ -203,6 +207,22 @@ class PostPaginationTests(TestCase):
 
         app = ExtensionApplication()
         app.models.register_visibility(
+            "discussions",
+            ExtensionModelVisibilityDefinition(
+                model=Discussion,
+                ability="view",
+                scope=scope_discussion_view,
+            ),
+        )
+        app.models.register_visibility(
+            "discussions",
+            ExtensionModelVisibilityDefinition(
+                model=Post,
+                ability="view",
+                scope=scope_post_view,
+            ),
+        )
+        app.models.register_visibility(
             "private-runtime",
             ExtensionModelVisibilityDefinition(
                 model=Post,
@@ -255,6 +275,22 @@ class PostPaginationTests(TestCase):
         Post.objects.filter(id__in=[allowed.id, denied.id]).update(hidden_at=timezone.now())
 
         app = ExtensionApplication()
+        app.models.register_visibility(
+            "discussions",
+            ExtensionModelVisibilityDefinition(
+                model=Discussion,
+                ability="view",
+                scope=scope_discussion_view,
+            ),
+        )
+        app.models.register_visibility(
+            "discussions",
+            ExtensionModelVisibilityDefinition(
+                model=Post,
+                ability="view",
+                scope=scope_post_view,
+            ),
+        )
         app.models.register_visibility(
             "hidden-runtime",
             ExtensionModelVisibilityDefinition(
