@@ -1,9 +1,10 @@
 import json
 from io import BytesIO
 import httpx
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.core import mail
+from django.core.management import call_command
 from django.db import connection
 from django.test import Client, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -13,10 +14,12 @@ from datetime import timedelta
 from PIL import Image
 from ninja_jwt.tokens import RefreshToken
 
-from apps.core.models import Setting
+from apps.core.forum_events import UserSuspendedEvent, UserUnsuspendedEvent
+from apps.core.models import AuditLog, Setting
 from apps.core.jwt_auth import ACCESS_TOKEN_COOKIE_NAME
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
+from extensions.notifications.backend.models import Notification
 from extensions.users.backend.models import Group
 from extensions.users.backend.models import EmailToken, PasswordToken, Permission, User
 from extensions.users.backend.services import UserService
@@ -983,3 +986,288 @@ class EmailVerificationApiTests(TestCase):
 
         self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(response.json()["error"], "当前邮箱已经验证")
+
+class AdminUserManagementApiTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="admin-user-mgr",
+            email="admin-user-mgr@example.com",
+            password="password123",
+        )
+        self.member_group = Group.objects.create(
+            name="Member",
+            name_singular="Member",
+            name_plural="Members",
+            color="#4d698e",
+        )
+        self.moderator_group = Group.objects.create(
+            name="Moderator",
+            name_singular="Moderator",
+            name_plural="Moderators",
+            color="#80349E",
+        )
+        self.user = User.objects.create_user(
+            username="managed-user",
+            email="managed@example.com",
+            password="password123",
+        )
+        self.user.user_groups.add(self.member_group)
+
+    def auth_header(self):
+        token = RefreshToken.for_user(self.admin).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_admin_can_get_and_update_user(self):
+        response = self.client.get(
+            f"/api/admin/users/{self.user.id}",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["username"], "managed-user")
+        self.assertEqual(len(response.json()["groups"]), 1)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.put(
+                f"/api/admin/users/{self.user.id}",
+                data=json.dumps({
+                    "username": "managed-user-updated",
+                    "email": "managed-updated@example.com",
+                    "display_name": "运营同学",
+                    "bio": "负责社区运营",
+                    "is_staff": True,
+                    "is_email_confirmed": True,
+                    "group_ids": [self.member_group.id, self.moderator_group.id],
+                    "suspended_until": "2030-01-02T03:04:05Z",
+                    "suspend_reason": "spam",
+                    "suspend_message": "请联系管理员处理",
+                }),
+                content_type="application/json",
+                **self.auth_header(),
+            )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["username"], "managed-user-updated")
+        self.assertTrue(payload["is_staff"])
+        self.assertTrue(payload["is_email_confirmed"])
+        self.assertEqual(len(payload["groups"]), 2)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, "managed-user-updated")
+        self.assertEqual(self.user.email, "managed-updated@example.com")
+        self.assertEqual(self.user.display_name, "运营同学")
+        self.assertEqual(self.user.bio, "负责社区运营")
+        self.assertTrue(self.user.is_staff)
+        self.assertTrue(self.user.is_email_confirmed)
+        self.assertEqual(self.user.suspend_reason, "spam")
+        self.assertEqual(self.user.suspend_message, "请联系管理员处理")
+        self.assertIsNotNone(self.user.suspended_until)
+        self.assertGreater(self.user.suspended_until, timezone.now())
+        self.assertEqual(
+            set(self.user.user_groups.values_list("id", flat=True)),
+            {self.member_group.id, self.moderator_group.id},
+        )
+
+        suspended_notification = Notification.objects.get(
+            user=self.user,
+            type="userSuspended",
+            subject_id=self.user.id,
+        )
+        self.assertEqual(suspended_notification.from_user_id, self.admin.id)
+        self.assertEqual(suspended_notification.data["suspend_reason"], "spam")
+        self.assertEqual(suspended_notification.data["suspend_message"], "请联系管理员处理")
+
+        audit_log = AuditLog.objects.get(action="admin.user.update", target_id=self.user.id)
+        self.assertEqual(audit_log.user_id, self.admin.id)
+        self.assertEqual(audit_log.target_type, "user")
+        self.assertIn("is_staff", audit_log.data["changed_fields"])
+        self.assertTrue(audit_log.data["groups_changed"])
+
+    def test_admin_unsuspending_user_creates_recovery_notification(self):
+        self.user.suspended_until = timezone.now() + timedelta(days=2)
+        self.user.suspend_reason = "temporary"
+        self.user.suspend_message = "请等待处理"
+        self.user.save(update_fields=["suspended_until", "suspend_reason", "suspend_message"])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.put(
+                f"/api/admin/users/{self.user.id}",
+                data=json.dumps({
+                    "suspended_until": None,
+                    "suspend_reason": "",
+                    "suspend_message": "",
+                }),
+                content_type="application/json",
+                **self.auth_header(),
+            )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_suspended)
+
+        unsuspended_notification = Notification.objects.get(
+            user=self.user,
+            type="userUnsuspended",
+            subject_id=self.user.id,
+        )
+        self.assertEqual(unsuspended_notification.from_user_id, self.admin.id)
+
+    def test_admin_suspension_event_dispatches_after_commit(self):
+        mocked_bus = Mock()
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                response = self.client.put(
+                    f"/api/admin/users/{self.user.id}",
+                    data=json.dumps({
+                        "suspended_until": "2030-01-02T03:04:05Z",
+                        "suspend_reason": "spam",
+                        "suspend_message": "请联系管理员处理",
+                    }),
+                    content_type="application/json",
+                    **self.auth_header(),
+                )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(len(callbacks), 1)
+        event = mocked_bus.dispatch.call_args.args[0]
+        self.assertIsInstance(event, UserSuspendedEvent)
+        self.assertEqual(event.user_id, self.user.id)
+        self.assertEqual(event.actor_user_id, self.admin.id)
+
+    def test_admin_unsuspension_event_dispatches_after_commit(self):
+        self.user.suspended_until = timezone.now() + timedelta(days=2)
+        self.user.suspend_reason = "temporary"
+        self.user.suspend_message = "请等待处理"
+        self.user.save(update_fields=["suspended_until", "suspend_reason", "suspend_message"])
+
+        mocked_bus = Mock()
+        with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                response = self.client.put(
+                    f"/api/admin/users/{self.user.id}",
+                    data=json.dumps({
+                        "suspended_until": None,
+                        "suspend_reason": "",
+                        "suspend_message": "",
+                    }),
+                    content_type="application/json",
+                    **self.auth_header(),
+                )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(len(callbacks), 1)
+        event = mocked_bus.dispatch.call_args.args[0]
+        self.assertIsInstance(event, UserUnsuspendedEvent)
+        self.assertEqual(event.user_id, self.user.id)
+        self.assertEqual(event.actor_user_id, self.admin.id)
+
+    def test_admin_can_delete_user(self):
+        response = self.client.delete(
+            f"/api/admin/users/{self.user.id}",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(User.objects.filter(id=self.user.id).exists())
+        audit_log = AuditLog.objects.get(action="admin.user.delete", target_id=self.user.id)
+        self.assertEqual(audit_log.user_id, self.admin.id)
+        self.assertEqual(audit_log.data["username"], "managed-user")
+
+    def test_admin_cannot_delete_self(self):
+        response = self.client.delete(
+            f"/api/admin/users/{self.admin.id}",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(response.json()["error"], "不能删除当前登录的管理员账号")
+        self.assertTrue(User.objects.filter(id=self.admin.id).exists())
+
+class AdminGroupManagementApiTests(TestCase):
+    def setUp(self):
+        call_command("init_groups")
+        self.admin = User.objects.create_superuser(
+            username="admin-group-mgr",
+            email="admin-group-mgr@example.com",
+            password="password123",
+        )
+
+    def auth_header(self):
+        token = RefreshToken.for_user(self.admin).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_admin_can_create_and_update_group(self):
+        response = self.client.post(
+            "/api/admin/groups",
+            data=json.dumps({
+                "name": "Helpers",
+                "color": "#27ae60",
+                "icon": "fas fa-life-ring",
+                "is_hidden": False,
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        group_id = response.json()["id"]
+        self.assertTrue(Group.objects.filter(id=group_id, name="Helpers").exists())
+
+        response = self.client.put(
+            f"/api/admin/groups/{group_id}",
+            data=json.dumps({
+                "name": "Support",
+                "color": "#8e44ad",
+                "icon": "fas fa-headset",
+                "is_hidden": True,
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["name"], "Support")
+        self.assertTrue(payload["is_hidden"])
+
+        group = Group.objects.get(id=group_id)
+        self.assertEqual(group.name, "Support")
+        self.assertEqual(group.name_singular, "Support")
+        self.assertEqual(group.name_plural, "Support")
+        self.assertEqual(group.color, "#8e44ad")
+        self.assertEqual(group.icon, "fas fa-headset")
+        self.assertTrue(group.is_hidden)
+
+    def test_admin_can_delete_custom_group(self):
+        group = Group.objects.create(
+            name="Helpers",
+            name_singular="Helper",
+            name_plural="Helpers",
+            color="#27ae60",
+        )
+        Permission.objects.create(group=group, permission="discussion.reply")
+
+        response = self.client.delete(
+            f"/api/admin/groups/{group.id}",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(Group.objects.filter(id=group.id).exists())
+        self.assertFalse(Permission.objects.filter(group_id=group.id).exists())
+        audit_log = AuditLog.objects.get(action="admin.group.delete", target_id=group.id)
+        self.assertEqual(audit_log.user_id, self.admin.id)
+        self.assertEqual(audit_log.target_type, "group")
+        self.assertEqual(audit_log.data["name"], "Helpers")
+
+    def test_admin_cannot_delete_builtin_group(self):
+        response = self.client.delete(
+            "/api/admin/groups/1",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(response.json()["error"], "系统默认用户组不允许删除")
+        self.assertTrue(Group.objects.filter(id=1, name="Admin").exists())
+

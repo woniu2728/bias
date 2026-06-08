@@ -8,7 +8,7 @@ from apps.core.audit import log_admin_action
 from apps.core.domain_events import dispatch_forum_event_after_commit
 from apps.core.forum_events import UserSuspendedEvent, UserUnsuspendedEvent
 from apps.core.forum_registry import get_forum_registry
-from apps.core.admin_user_helpers import (
+from extensions.users.backend.admin_user_helpers import (
     is_builtin_group,
     normalize_permission_code,
     parse_optional_datetime,
