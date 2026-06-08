@@ -12796,7 +12796,7 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(payload["code"], "invalid_runtime_configuration")
         self.assertIn("当前仅允许使用 Redis 队列驱动", payload["message"])
 
-    @patch("apps.core.admin_settings_api.SearchIndexService.rebuild_postgres_indexes")
+    @patch("extensions.search.backend.admin_api.SearchIndexService.rebuild_postgres_indexes")
     def test_admin_can_rebuild_search_indexes(self, rebuild_indexes):
         rebuild_indexes.return_value = {
             "message": "搜索全文索引已重建",
@@ -12818,7 +12818,7 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(audit_log.target_type, "search_index")
         self.assertEqual(audit_log.data["indexes"], ["discussions_title_slug_fts_idx", "posts_content_fts_idx"])
 
-    @patch("apps.core.admin_settings_api.SearchIndexService.rebuild_postgres_indexes")
+    @patch("extensions.search.backend.admin_api.SearchIndexService.rebuild_postgres_indexes")
     def test_search_index_rebuild_reports_unsupported_database(self, rebuild_indexes):
         rebuild_indexes.side_effect = RuntimeError("当前数据库不是 PostgreSQL，全文索引无需重建")
 
@@ -12831,8 +12831,8 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(response.json()["error"], "当前数据库不是 PostgreSQL，全文索引无需重建")
         self.assertFalse(AuditLog.objects.filter(action="admin.search_indexes.rebuild").exists())
 
-    @patch("apps.core.admin_settings_api.QueueService.get_worker_status")
-    @patch("apps.core.admin_settings_api.SearchIndexService.get_status")
+    @patch("extensions.search.backend.admin_api.QueueService.get_worker_status")
+    @patch("extensions.search.backend.admin_api.SearchIndexService.get_status")
     def test_search_index_status_returns_runtime_snapshot(self, get_status, get_worker_status):
         get_status.return_value = {
             "supported": True,
