@@ -146,7 +146,8 @@ from apps.core.online_service import OnlineUserService
 from apps.core.release import build_git_command, ensure_release_versions_aligned
 from apps.core.search_index_service import get_search_index_definitions
 from apps.core.settings_service import clear_runtime_setting_caches, get_public_forum_settings, get_setting_group
-from apps.core.services import PaginationService, SearchService
+from apps.core.services import PaginationService
+from extensions.search.backend.services import SearchService
 from apps.core.test_runner import BiasDiscoverRunner
 from apps.core.websocket_service import WebSocketService
 from apps.core.websocket_auth import (
@@ -12081,7 +12082,7 @@ class SearchApiTests(ChineseSearchTests):
             user=self.user,
         )
 
-        with patch("apps.core.services.Post.objects.get", side_effect=AssertionError("不应逐条 get 首帖")):
+        with patch("extensions.search.backend.services.Post.objects.get", side_effect=AssertionError("不应逐条 get 首帖")):
             discussions, total = SearchService.search_discussions("搜索摘要优化", user=self.user)
 
         self.assertEqual(total, 2)
@@ -12100,7 +12101,7 @@ class SearchApiTests(ChineseSearchTests):
             user=self.user,
         )
 
-        with patch("apps.core.services.Post.objects.in_bulk", side_effect=AssertionError("不应额外批量查询首帖")):
+        with patch("extensions.search.backend.services.Post.objects.in_bulk", side_effect=AssertionError("不应额外批量查询首帖")):
             discussions, total = SearchService.search_discussions("子查询摘要优化", user=self.user)
 
         self.assertEqual(total, 2)

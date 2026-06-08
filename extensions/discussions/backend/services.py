@@ -16,9 +16,10 @@ from apps.core.forum_registry import get_forum_registry
 from extensions.discussions.backend import discussion_tracking, service_lifecycle
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.posts.backend.models import Post
-from apps.core.services import PaginationService, SearchService
+from apps.core.services import PaginationService
 from extensions.users.backend.models import User
 from extensions.users.backend.services import UserService
+from extensions.search.backend.services import SearchService
 
 
 def _get_forum_registry():

@@ -863,7 +863,7 @@ class ApplicationSearchService:
         ]
 
     def apply_filters(self, target: str, queryset, query: str, context: dict | None = None):
-        from apps.core.services import SearchService
+        from extensions.search.backend.services import SearchService
 
         text_query, parsed_filters = SearchService.extract_filter_tokens(query, targets=(target,))
         output = queryset

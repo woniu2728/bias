@@ -7,8 +7,8 @@ from apps.core.api_errors import api_error
 from apps.core.auth import get_optional_user
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
 from apps.core.resource_api import ResourceQueryOptions, apply_resource_preloads, parse_resource_query_options
-from apps.core.services import SearchService
 from extensions.search.backend.schemas import SearchFilterCatalogSchema, SearchSuggestionSchema
+from extensions.search.backend.services import SearchService
 from extensions.users.backend.services import UserService
 
 
