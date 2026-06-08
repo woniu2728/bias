@@ -7,7 +7,7 @@ from apps.core.audit import log_admin_action
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.services import PaginationService
 from extensions.flags.backend.models import PostFlag
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 from extensions.flags.backend.services import get_flag_list, resolve_flag
 from extensions.flags.backend.handlers import serialize_flag
 

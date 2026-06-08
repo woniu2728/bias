@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from apps.core.forum_registry import get_forum_registry
-from apps.users.group_utils import get_primary_group, serialize_group_badge
+from extensions.users.backend.group_utils import get_primary_group, serialize_group_badge
 from extensions.users.backend.models import Group, User
 
 

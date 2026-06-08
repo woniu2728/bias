@@ -263,7 +263,7 @@ def _resolve_post_edited_user(post, context: dict) -> dict | None:
 
 
 def _resolve_user_primary_group(user, context: dict) -> dict | None:
-    from apps.users.group_utils import get_primary_group, serialize_group_badge
+    from extensions.users.backend.group_utils import get_primary_group, serialize_group_badge
 
     return serialize_group_badge(get_primary_group(user))
 

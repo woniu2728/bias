@@ -12,7 +12,7 @@ from extensions.discussions.backend.models import Discussion
 from extensions.discussions.backend.services import DiscussionService
 from apps.core.online_service import OnlineUserService
 from apps.core.settings_service import get_advanced_settings
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 
 
 def resolve_visible_discussion_ids(discussion_ids, user) -> list[int]:

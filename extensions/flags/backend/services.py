@@ -10,7 +10,7 @@ from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent, 
 from extensions.posts.backend import post_query_service
 from extensions.posts.backend.models import Post
 from extensions.users.backend.models import User
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 from extensions.flags.backend.models import PostFlag
 
 

@@ -15,8 +15,8 @@ from apps.core.jwt_auth import (
     access_token_max_age,
     refresh_token_max_age,
 )
-from apps.users.preferences import normalize_user_preferences, normalize_user_ui_preferences, serialize_user_preferences
-from apps.users.schemas import (
+from extensions.users.backend.preferences import normalize_user_preferences, normalize_user_ui_preferences, serialize_user_preferences
+from extensions.users.backend.schemas import (
     EmailVerifySchema,
     PasswordResetRequestSchema,
     PasswordResetSchema,
@@ -27,7 +27,7 @@ from apps.users.schemas import (
     UserPreferencesUpdateSchema,
     UserRegisterSchema,
 )
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 
 
 router = Router()

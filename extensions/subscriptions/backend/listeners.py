@@ -100,7 +100,7 @@ def _follow_discussion_if_enabled(
     from extensions.discussions.backend.models import DiscussionUser
     from extensions.posts.backend.models import Post
     from extensions.users.backend.models import User
-    from apps.users.preferences import get_user_preference_value
+    from extensions.users.backend.preferences import get_user_preference_value
 
     user = User.objects.filter(id=user_id).first()
     if user is None or not get_user_preference_value(user, preference_key, fallback=False):

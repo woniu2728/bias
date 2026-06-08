@@ -8,7 +8,7 @@ from django.utils import timezone
 from extensions.users.backend.models import User
 from apps.core.domain_events import dispatch_forum_event_after_commit
 from apps.core.forum_events import NotificationCreatedEvent
-from apps.users.preferences import get_user_preference_value
+from extensions.users.backend.preferences import get_user_preference_value
 from extensions.discussions.backend.models import DiscussionUser
 from extensions.notifications.backend.models import Notification
 

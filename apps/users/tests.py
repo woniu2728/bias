@@ -19,7 +19,7 @@ from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegi
 from apps.core.settings_service import clear_runtime_setting_caches
 from extensions.users.backend.models import Group
 from extensions.users.backend.models import EmailToken, PasswordToken, Permission, User
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 
 
 @override_settings(
@@ -154,8 +154,8 @@ class AvatarUploadApiTests(TestCase):
         )
         self.token = str(RefreshToken.for_user(self.user).access_token)
 
-    @patch("apps.users.handlers.FileUploadService.delete_file")
-    @patch("apps.users.handlers.FileUploadService.upload_avatar")
+    @patch("extensions.users.backend.handlers.FileUploadService.delete_file")
+    @patch("extensions.users.backend.handlers.FileUploadService.upload_avatar")
     def test_upload_avatar_updates_user_avatar_url(self, upload_avatar, delete_file):
         upload_avatar.return_value = (f"/media/avatars/{self.user.id}/new-avatar.png", {})
 
@@ -175,7 +175,7 @@ class AvatarUploadApiTests(TestCase):
         upload_avatar.assert_called_once()
         delete_file.assert_not_called()
 
-    @patch("apps.users.handlers.FileUploadService.upload_avatar")
+    @patch("extensions.users.backend.handlers.FileUploadService.upload_avatar")
     def test_upload_avatar_for_other_user_is_forbidden(self, upload_avatar):
         response = self.client.post(
             f"/api/users/{self.other_user.id}/avatar",
@@ -296,7 +296,7 @@ class UserProfileApiTests(TestCase):
             )
         )
 
-        with patch("apps.users.handlers.get_runtime_resource_registry", return_value=registry):
+        with patch("extensions.users.backend.handlers.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
                 response = self.client.get(f"/api/users/{user.id}")
 

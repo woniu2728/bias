@@ -36,7 +36,7 @@ def _register_core_routes(api: NinjaAPI) -> None:
     from apps.core.admin_api import router as admin_router
     from apps.core.api import router as core_router
     from apps.core.resource_runtime_api import router as resource_runtime_router
-    from apps.users.api import router as users_router
+    from extensions.users.backend.api import router as users_router
 
     _add_router_once(api, "/users", users_router, tags=["Users"])
     _add_router_once(api, "", core_router, tags=["Search"])

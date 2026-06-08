@@ -19,7 +19,7 @@ from apps.core.admin_user_helpers import (
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.services import PaginationService
 from extensions.users.backend.models import Group, Permission, User
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 
 
 router = Router()

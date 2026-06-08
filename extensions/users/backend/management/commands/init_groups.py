@@ -3,7 +3,7 @@
 """
 from django.core.management.base import BaseCommand
 from extensions.users.backend.models import Group, Permission
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 
 
 class Command(BaseCommand):

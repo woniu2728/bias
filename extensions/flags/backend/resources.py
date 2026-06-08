@@ -5,7 +5,7 @@ from django.db.models import Prefetch
 
 from apps.core.visibility import apply_related_model_visibility_subquery
 from extensions.posts.backend.models import Post
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 from extensions.flags.backend.models import PostFlag
 
 

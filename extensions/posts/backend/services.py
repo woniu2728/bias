@@ -11,7 +11,7 @@ from extensions.discussions.backend.models import Discussion
 from extensions.posts.backend import post_query_service, service_lifecycle, service_moderation
 from extensions.posts.backend.models import Post
 from extensions.users.backend.models import User
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 
 
 def _get_forum_registry():

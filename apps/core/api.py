@@ -34,7 +34,7 @@ from apps.core.resource_api import (
 )
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
 from apps.core.services import SearchService
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 
 router = Router()
 

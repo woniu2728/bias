@@ -384,7 +384,7 @@ def _is_staff_user(user) -> bool:
 
 def _has_forum_permission(user, permission_names) -> bool:
     try:
-        from apps.users.services import UserService
+        from extensions.users.backend.services import UserService
 
         return UserService.has_forum_permission(user, permission_names)
     except Exception:

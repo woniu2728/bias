@@ -4,7 +4,7 @@ from django.core.exceptions import PermissionDenied
 
 from apps.core.api_errors import api_error
 from extensions.discussions.backend.models import Discussion
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 from extensions.subscriptions.backend.services import set_subscription_state
 
 

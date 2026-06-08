@@ -13,7 +13,7 @@ from extensions.discussions.backend.models import Discussion
 from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.services import PostService
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 
 
 router = Router()

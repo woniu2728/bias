@@ -25,7 +25,7 @@ from apps.core.extensions.runtime_access import (
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.posts.backend.models import Post
 from extensions.users.backend.models import User
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 
 
 def _prepare_discussion_create_extensions(discussion_lifecycle, *, user, payload: dict) -> dict:

@@ -81,7 +81,7 @@ def dispatch_resource_endpoint(
     if forum_permission:
         if user is None or not getattr(user, "is_authenticated", False):
             return jsonapi_error_response("请先登录", status=401)
-        from apps.users.services import UserService
+        from extensions.users.backend.services import UserService
 
         if not UserService.has_forum_permission(user, forum_permission):
             return jsonapi_error_response("无权限", status=403)

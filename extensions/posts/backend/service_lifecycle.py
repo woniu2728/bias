@@ -18,7 +18,7 @@ from apps.core.forum_events import (
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.posts.backend.models import Post
 from extensions.users.backend.models import User
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 
 
 def create_post(

@@ -9,8 +9,8 @@ from apps.core.resource_api import ResourceQueryOptions, apply_resource_preloads
 from apps.core.resource_registry import ResourceEndpointDefinition
 from apps.core.services import PaginationService
 from extensions.users.backend.models import User
-from apps.users.schemas import PasswordChangeSchema, UserUpdateSchema
-from apps.users.services import UserService
+from extensions.users.backend.schemas import PasswordChangeSchema, UserUpdateSchema
+from extensions.users.backend.services import UserService
 
 
 def get_resource_registry():

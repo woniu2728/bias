@@ -164,7 +164,7 @@ from extensions.notifications.backend.models import Notification
 from extensions.tags.backend.events import DiscussionTagStatsRefreshEvent, TagStatsRefreshRequestedEvent
 from extensions.tags.backend.models import Tag
 from extensions.users.backend.models import Group, Permission, User
-from apps.users.services import UserService
+from extensions.users.backend.services import UserService
 
 
 def discussion_tags_payload(tag_ids):
@@ -10552,9 +10552,9 @@ class ResourceRegistryTests(TestCase):
 
         with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
             with patch("apps.core.resource_dispatcher.get_optional_user", return_value=user):
-                with patch("apps.users.services.UserService.has_forum_permission", return_value=False):
+                with patch("extensions.users.backend.services.UserService.has_forum_permission", return_value=False):
                     denied = dispatch_resource_endpoint(request, resource="secure", endpoint="show")
-                with patch("apps.users.services.UserService.has_forum_permission", return_value=True):
+                with patch("extensions.users.backend.services.UserService.has_forum_permission", return_value=True):
                     allowed = dispatch_resource_endpoint(request, resource="secure", endpoint="show")
 
         self.assertEqual(denied.status_code, 403)
