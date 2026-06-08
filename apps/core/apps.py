@@ -9,13 +9,11 @@ class CoreConfig(AppConfig):
         from django.db.backends.signals import connection_created
         from apps.core.extensions.runtime_event_listeners import bootstrap_extension_runtime_event_listeners
         from apps.core.extensions.signal_bootstrap import bootstrap_extension_signal_proxies
-        from apps.core.forum_event_listeners import bootstrap_forum_event_listeners
         from apps.core.forum_registry import get_forum_registry
         from apps.core.forum_resources import bootstrap_forum_resource_fields
 
         # Ensure core modules are registered during app startup.
         get_forum_registry()
-        bootstrap_forum_event_listeners()
         bootstrap_extension_runtime_event_listeners()
         bootstrap_forum_resource_fields()
         bootstrap_extension_signal_proxies()

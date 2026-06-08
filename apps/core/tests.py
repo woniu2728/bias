@@ -6785,7 +6785,9 @@ class ExtensionServiceTests(TestCase):
 
 
 class DomainEventRegistryTests(TestCase):
-    def test_runtime_reset_clears_extension_event_listeners_and_restores_core_listeners(self):
+    def test_runtime_reset_clears_extension_event_listeners_and_restores_runtime_listeners(self):
+        from apps.core.extensions.bootstrap import get_extension_host
+
         bus = get_forum_event_bus()
         bus.clear()
 
@@ -6798,6 +6800,7 @@ class DomainEventRegistryTests(TestCase):
         reset_extension_runtime_state()
 
         self.assertNotIn(handle_tag_refresh, bus._listeners.get(TagStatsRefreshRequestedEvent, []))
+        get_extension_host()
         self.assertIn(DiscussionCreatedEvent, bus._listeners)
 
     def test_dispatches_handlers_for_tag_stats_events(self):

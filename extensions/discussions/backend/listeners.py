@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from apps.core.domain_events import get_forum_event_bus
 from apps.core.forum_events import (
     DiscussionCreatedEvent,
     DiscussionHiddenEvent,
@@ -10,6 +9,7 @@ from apps.core.forum_events import (
     PostCreatedEvent,
     PostHiddenEvent,
 )
+from apps.core.forum_runtime import broadcast_discussion_event
 from extensions.discussions.backend.timeline import (
     build_discussion_hidden_content,
     build_discussion_locked_content,
@@ -19,26 +19,6 @@ from extensions.discussions.backend.timeline import (
     create_timeline_from_builder,
     make_timeline_context,
 )
-from apps.core.forum_runtime import broadcast_discussion_event
-
-
-_listeners_bootstrapped = False
-
-
-def bootstrap_forum_event_listeners() -> None:
-    global _listeners_bootstrapped
-    if _listeners_bootstrapped:
-        return
-
-    event_bus = get_forum_event_bus()
-    event_bus.register(DiscussionCreatedEvent, handle_discussion_created)
-    event_bus.register(DiscussionRenamedEvent, handle_discussion_renamed)
-    event_bus.register(DiscussionLockedEvent, handle_discussion_locked)
-    event_bus.register(DiscussionStickyChangedEvent, handle_discussion_sticky_changed)
-    event_bus.register(DiscussionHiddenEvent, handle_discussion_hidden)
-    event_bus.register(PostCreatedEvent, handle_post_created)
-    event_bus.register(PostHiddenEvent, handle_post_hidden)
-    _listeners_bootstrapped = True
 
 
 def handle_discussion_created(event: DiscussionCreatedEvent) -> None:
@@ -50,6 +30,7 @@ def handle_discussion_created(event: DiscussionCreatedEvent) -> None:
             include_post=True,
             post_id_getter=lambda discussion: discussion.first_post_id,
         )
+
 
 def handle_discussion_renamed(event: DiscussionRenamedEvent) -> None:
     broadcast_discussion_event(event.discussion_id, "discussion.renamed", include_discussion=True)
@@ -92,6 +73,7 @@ def handle_post_created(event: PostCreatedEvent) -> None:
             include_post=True,
             post_id=event.post_id,
         )
+
 
 def handle_post_hidden(event: PostHiddenEvent) -> None:
     broadcast_discussion_event(event.discussion_id, "post.hidden")

@@ -1,5 +1,6 @@
 from apps.core.extensions import (
     AdminSurfaceExtender,
+    EventListenersExtender,
     ApiResourceExtender,
     ForumCapabilitiesExtender,
     FrontendExtender,
@@ -12,6 +13,25 @@ from apps.core.forum_registry_types import (
     DiscussionSortDefinition,
     PermissionDefinition,
     PostTypeDefinition,
+)
+from apps.core.extensions.types import ExtensionEventListenerDefinition
+from apps.core.forum_events import (
+    DiscussionCreatedEvent,
+    DiscussionHiddenEvent,
+    DiscussionLockedEvent,
+    DiscussionRenamedEvent,
+    DiscussionStickyChangedEvent,
+    PostCreatedEvent,
+    PostHiddenEvent,
+)
+from extensions.discussions.backend.listeners import (
+    handle_discussion_created,
+    handle_discussion_hidden,
+    handle_discussion_locked,
+    handle_discussion_renamed,
+    handle_discussion_sticky_changed,
+    handle_post_created,
+    handle_post_hidden,
 )
 from extensions.discussions.backend.registry import (
     apply_all_discussion_list_filter,
@@ -50,6 +70,9 @@ def extend():
             post_types=post_type_definitions(),
             discussion_sorts=discussion_sort_definitions(),
             discussion_list_filters=discussion_list_filter_definitions(),
+        ),
+        EventListenersExtender(
+            listeners=event_listener_definitions(),
         ),
         ApiResourceExtender("discussion")
         .endpoints_with(*discussion_resource_endpoints())
@@ -365,6 +388,46 @@ def discussion_list_filter_definitions():
             requires_authenticated_user=True,
             order=40,
             sidebar_visible=False,
+        ),
+    )
+
+
+def event_listener_definitions():
+    return (
+        ExtensionEventListenerDefinition(
+            event_type=DiscussionCreatedEvent,
+            handler=handle_discussion_created,
+            description="讨论创建后广播实时讨论和首帖资源。",
+        ),
+        ExtensionEventListenerDefinition(
+            event_type=DiscussionRenamedEvent,
+            handler=handle_discussion_renamed,
+            description="讨论重命名后广播实时事件并写入时间线事件帖。",
+        ),
+        ExtensionEventListenerDefinition(
+            event_type=DiscussionLockedEvent,
+            handler=handle_discussion_locked,
+            description="讨论锁定状态变化后广播实时事件并写入时间线事件帖。",
+        ),
+        ExtensionEventListenerDefinition(
+            event_type=DiscussionStickyChangedEvent,
+            handler=handle_discussion_sticky_changed,
+            description="讨论置顶状态变化后广播实时事件并写入时间线事件帖。",
+        ),
+        ExtensionEventListenerDefinition(
+            event_type=DiscussionHiddenEvent,
+            handler=handle_discussion_hidden,
+            description="讨论隐藏状态变化后广播实时事件并写入时间线事件帖。",
+        ),
+        ExtensionEventListenerDefinition(
+            event_type=PostCreatedEvent,
+            handler=handle_post_created,
+            description="可见回复创建后广播实时讨论和帖子资源。",
+        ),
+        ExtensionEventListenerDefinition(
+            event_type=PostHiddenEvent,
+            handler=handle_post_hidden,
+            description="回复隐藏状态变化后广播实时事件并写入时间线事件帖。",
         ),
     )
 
