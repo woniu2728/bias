@@ -36,9 +36,7 @@ def _register_core_routes(api: NinjaAPI) -> None:
     from apps.core.admin_api import router as admin_router
     from apps.core.api import router as core_router
     from apps.core.resource_runtime_api import router as resource_runtime_router
-    from extensions.users.backend.api import router as users_router
 
-    _add_router_once(api, "/users", users_router, tags=["Users"])
     _add_router_once(api, "", core_router, tags=["Search"])
     _add_router_once(api, "", resource_runtime_router, tags=["Resources"])
     _add_router_once(api, "/admin", admin_router, tags=["Admin"])
@@ -54,21 +52,22 @@ def _register_extension_routes(api: NinjaAPI, *, extension_host=None) -> None:
         from apps.core.resource_registry import get_resource_registry
 
         registry = get_resource_registry()
-    else:
-        registry = host.resources
-    from apps.core.resource_routes import build_resource_endpoint_router
+        from apps.core.resource_routes import build_resource_endpoint_router
 
-    _add_router_once(api, "", build_resource_endpoint_router(registry), tags=["Resources"])
-    if host is None:
+        _add_router_once(api, "", build_resource_endpoint_router(registry), tags=["Resources"])
         return
+
     routes = host.make("routes")
     for mount in routes.get_mounts():
         _add_router_once(api, mount.prefix, mount.router, tags=list(mount.tags))
     get_named_routes = getattr(routes, "get_routes", None)
-    if not callable(get_named_routes):
-        return
-    for route in get_named_routes(app_name="api"):
-        _add_named_route(api, route)
+    if callable(get_named_routes):
+        for route in get_named_routes(app_name="api"):
+            _add_named_route(api, route)
+
+    from apps.core.resource_routes import build_resource_endpoint_router
+
+    _add_router_once(api, "", build_resource_endpoint_router(host.resources), tags=["Resources"])
 
 
 def _register_health_route(api: NinjaAPI) -> None:

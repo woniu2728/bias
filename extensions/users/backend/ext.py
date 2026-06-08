@@ -1,6 +1,7 @@
 from apps.core.extensions import ApiResourceExtender, ApiRoutesExtender, AdminSurfaceExtender, FrontendExtender, LifecycleExtender, ModelExtender
 from apps.core.forum_registry_types import AdminPageDefinition, PermissionDefinition
 from extensions.users.backend.admin_api import router as admin_users_router
+from extensions.users.backend.api import router as users_router
 from extensions.users.backend.handlers import user_resource_endpoints
 from extensions.users.backend.models import AccessToken, EmailToken, Group, PasswordToken, Permission, User
 from extensions.users.backend.resources import (
@@ -24,8 +25,8 @@ def extend():
             permissions_pages=("/admin/extensions/users/permissions",),
         ),
         ApiRoutesExtender(
-            mounts=(("/admin", admin_users_router),),
-            tags=("Admin", "Users"),
+            mounts=(("/users", users_router), ("/admin", admin_users_router)),
+            tags=("Users",),
         ),
         ApiResourceExtender("user_detail")
         .endpoints_with(*user_resource_endpoints())
