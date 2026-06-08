@@ -10,7 +10,7 @@ from django.conf import settings
 from datetime import timedelta, datetime
 import secrets
 
-from .models import User, Group, Permission, EmailToken, PasswordToken
+from extensions.users.backend.models import User, Group, Permission, EmailToken, PasswordToken
 from apps.core.models import AuditLog
 from apps.core.email_service import EmailService
 from apps.core.extensions.policy_runtime_service import evaluate_extension_policy

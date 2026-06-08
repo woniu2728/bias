@@ -9,7 +9,7 @@ from apps.core.extensions.runtime_access import apply_runtime_model_visibility
 from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
 from apps.posts import post_query_service
 from extensions.posts.backend.models import Post
-from apps.users.models import User
+from extensions.users.backend.models import User
 from apps.users.services import UserService
 from extensions.flags.backend.models import PostFlag
 

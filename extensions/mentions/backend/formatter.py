@@ -1,4 +1,4 @@
-from apps.users.models import User
+from extensions.users.backend.models import User
 from extensions.mentions.backend.parser import MENTION_RE, extract_mentioned_usernames
 
 

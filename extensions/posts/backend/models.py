@@ -1,5 +1,5 @@
 from django.db import models
-from apps.users.models import User
+from extensions.users.backend.models import User
 from extensions.discussions.backend.models import Discussion
 
 

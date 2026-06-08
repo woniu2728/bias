@@ -17,8 +17,8 @@ from apps.core.models import Setting
 from apps.core.jwt_auth import ACCESS_TOKEN_COOKIE_NAME
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
-from apps.users.models import Group
-from apps.users.models import EmailToken, PasswordToken, Permission, User
+from extensions.users.backend.models import Group
+from extensions.users.backend.models import EmailToken, PasswordToken, Permission, User
 from apps.users.services import UserService
 
 

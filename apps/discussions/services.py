@@ -17,7 +17,7 @@ from apps.discussions import discussion_tracking, service_lifecycle
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.posts.backend.models import Post
 from apps.core.services import PaginationService, SearchService
-from apps.users.models import User
+from extensions.users.backend.models import User
 from apps.users.services import UserService
 
 

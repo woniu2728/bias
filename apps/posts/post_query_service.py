@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from apps.core.visibility import apply_post_visibility_scope, can_view_model_instance
 from extensions.posts.backend.models import Post
-from apps.users.models import User
+from extensions.users.backend.models import User
 
 
 @dataclass

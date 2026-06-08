@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional
 
-from apps.users.models import Group, User
+from extensions.users.backend.models import Group, User
 
 
 DEFAULT_GROUP_ICONS = {

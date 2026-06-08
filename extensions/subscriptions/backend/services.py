@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from apps.core.visibility import can_view_model_instance
 from extensions.discussions.backend.models import Discussion, DiscussionUser
-from apps.users.models import User
+from extensions.users.backend.models import User
 
 
 def get_subscription_state(discussion: Discussion, user: Optional[User]) -> bool:

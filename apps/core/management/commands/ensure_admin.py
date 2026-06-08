@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.core.management import BaseCommand, CommandError
 from django.core.management.base import CommandParser
 
-from apps.users.models import Group, User
+from extensions.users.backend.models import Group, User
 
 
 class Command(BaseCommand):

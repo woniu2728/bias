@@ -1,7 +1,7 @@
 from django.db import models
 
 from extensions.posts.backend.models import Post
-from apps.users.models import User
+from extensions.users.backend.models import User
 
 
 class PostFlag(models.Model):

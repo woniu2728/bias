@@ -15,8 +15,8 @@ from extensions.posts.backend.models import Post
 from extensions.tags.backend.events import DiscussionTaggedEvent, TagStatsRefreshRequestedEvent
 from extensions.tags.backend.models import DiscussionTag, Tag
 from extensions.tags.backend.services import TagService
-from apps.users.models import User
-from apps.users.models import Group, Permission
+from extensions.users.backend.models import User
+from extensions.users.backend.models import Group, Permission
 from extensions.tags.backend.ext import tag_resource_endpoints
 
 

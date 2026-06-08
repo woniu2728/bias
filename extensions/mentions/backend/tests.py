@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from apps.discussions.services import DiscussionService
 from apps.posts.services import PostService
-from apps.users.models import Group, Permission, User
+from extensions.users.backend.models import Group, Permission, User
 from extensions.mentions.backend.models import PostMentionsUser
 from extensions.tags.backend.models import Tag
 

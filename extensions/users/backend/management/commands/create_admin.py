@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from apps.users.models import User
+from extensions.users.backend.models import User
 from django.contrib.auth.hashers import make_password
 
 

@@ -6,7 +6,7 @@ from typing import Dict, List
 from django.conf import settings
 from django.core.cache import cache
 
-from apps.users.models import User
+from extensions.users.backend.models import User
 
 try:
     from django_redis import get_redis_connection

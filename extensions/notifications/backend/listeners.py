@@ -11,7 +11,7 @@ def handle_post_created_direct_reply_notification(event: PostCreatedEvent) -> No
         return
 
     from extensions.notifications.backend.services import NotificationService
-    from apps.users.models import User
+    from extensions.users.backend.models import User
 
     if not event.reply_to_post_id:
         return
@@ -30,7 +30,7 @@ def handle_post_created_direct_reply_notification(event: PostCreatedEvent) -> No
 
 def handle_post_liked_notification(event: PostLikedEvent) -> None:
     from extensions.notifications.backend.services import NotificationService
-    from apps.users.models import User
+    from extensions.users.backend.models import User
 
     try:
         from_user = User.objects.get(id=event.actor_user_id)
@@ -42,7 +42,7 @@ def handle_post_liked_notification(event: PostLikedEvent) -> None:
 
 def handle_user_suspended_notification(event: UserSuspendedEvent) -> None:
     from extensions.notifications.backend.services import NotificationService
-    from apps.users.models import User
+    from extensions.users.backend.models import User
 
     user = User.objects.filter(id=event.user_id).first()
     if user is None:
@@ -57,7 +57,7 @@ def handle_user_suspended_notification(event: UserSuspendedEvent) -> None:
 
 def handle_user_unsuspended_notification(event: UserUnsuspendedEvent) -> None:
     from extensions.notifications.backend.services import NotificationService
-    from apps.users.models import User
+    from extensions.users.backend.models import User
 
     user = User.objects.filter(id=event.user_id).first()
     if user is None:

@@ -6,7 +6,7 @@ from ninja_jwt.tokens import RefreshToken
 from apps.core.extension_settings_service import save_extension_settings
 from apps.discussions.services import DiscussionService
 from apps.posts.services import PostService
-from apps.users.models import User
+from extensions.users.backend.models import User
 from extensions.likes.backend.services import like_post
 
 

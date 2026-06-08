@@ -2,7 +2,7 @@
 创建初始数据：默认用户组和权限
 """
 from django.core.management.base import BaseCommand
-from apps.users.models import Group, Permission
+from extensions.users.backend.models import Group, Permission
 from apps.users.services import UserService
 
 

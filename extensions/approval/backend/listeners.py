@@ -22,7 +22,7 @@ from apps.core.forum_timeline import (
 def handle_discussion_approved(event: DiscussionApprovedEvent) -> None:
     from extensions.discussions.backend.models import Discussion
     from extensions.notifications.backend.services import NotificationService
-    from apps.users.models import User
+    from extensions.users.backend.models import User
 
     try:
         discussion = Discussion.objects.select_related("user").get(id=event.discussion_id)
@@ -53,7 +53,7 @@ def handle_discussion_approved(event: DiscussionApprovedEvent) -> None:
 def handle_discussion_rejected(event: DiscussionRejectedEvent) -> None:
     from extensions.discussions.backend.models import Discussion
     from extensions.notifications.backend.services import NotificationService
-    from apps.users.models import User
+    from extensions.users.backend.models import User
 
     try:
         discussion = Discussion.objects.select_related("user").get(id=event.discussion_id)
@@ -89,7 +89,7 @@ def handle_discussion_resubmitted(event: DiscussionResubmittedEvent) -> None:
 def handle_post_approved(event: PostApprovedEvent) -> None:
     from extensions.notifications.backend.services import NotificationService
     from extensions.posts.backend.models import Post
-    from apps.users.models import User
+    from extensions.users.backend.models import User
 
     try:
         post = Post.objects.select_related("user", "discussion").get(id=event.post_id)
@@ -111,7 +111,7 @@ def handle_post_approved(event: PostApprovedEvent) -> None:
 def handle_post_rejected(event: PostRejectedEvent) -> None:
     from extensions.notifications.backend.services import NotificationService
     from extensions.posts.backend.models import Post
-    from apps.users.models import User
+    from extensions.users.backend.models import User
 
     try:
         post = Post.objects.select_related("discussion", "user").get(id=event.post_id)

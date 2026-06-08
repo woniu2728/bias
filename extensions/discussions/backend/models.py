@@ -1,6 +1,6 @@
 from django.db import models
 from django.utils.text import slugify
-from apps.users.models import User
+from extensions.users.backend.models import User
 
 
 class Discussion(models.Model):

@@ -6,7 +6,7 @@ from django.contrib.auth.models import AnonymousUser
 from ninja_jwt.tokens import RefreshToken
 
 from apps.core.jwt_auth import ACCESS_TOKEN_COOKIE_NAME, resolve_user_from_access_token
-from apps.users.models import User
+from extensions.users.backend.models import User
 
 
 REFRESH_TOKEN_COOKIE_NAME = "bias_refresh_token"

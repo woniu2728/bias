@@ -1,6 +1,6 @@
 from apps.core.extensions import AdminSurfaceExtender, FrontendExtender, LifecycleExtender, ModelExtender
 from apps.core.forum_registry_types import AdminPageDefinition, PermissionDefinition
-from apps.users.models import AccessToken, EmailToken, Group, PasswordToken, Permission, User
+from extensions.users.backend.models import AccessToken, EmailToken, Group, PasswordToken, Permission, User
 
 
 EXTENSION_ID = "users"

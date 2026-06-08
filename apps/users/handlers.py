@@ -8,7 +8,7 @@ from apps.core.file_service import FileUploadService
 from apps.core.resource_api import ResourceQueryOptions, apply_resource_preloads, parse_resource_query_options
 from apps.core.resource_registry import ResourceEndpointDefinition
 from apps.core.services import PaginationService
-from apps.users.models import User
+from extensions.users.backend.models import User
 from apps.users.schemas import PasswordChangeSchema, UserUpdateSchema
 from apps.users.services import UserService
 

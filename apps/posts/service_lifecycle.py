@@ -17,7 +17,7 @@ from apps.core.forum_events import (
 )
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.posts.backend.models import Post
-from apps.users.models import User
+from extensions.users.backend.models import User
 from apps.users.services import UserService
 
 

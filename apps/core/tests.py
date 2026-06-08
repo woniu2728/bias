@@ -163,7 +163,7 @@ from extensions.likes.backend.services import can_like_post
 from extensions.notifications.backend.models import Notification
 from extensions.tags.backend.events import DiscussionTagStatsRefreshEvent, TagStatsRefreshRequestedEvent
 from extensions.tags.backend.models import Tag
-from apps.users.models import Group, Permission, User
+from extensions.users.backend.models import Group, Permission, User
 from apps.users.services import UserService
 
 
@@ -12293,6 +12293,7 @@ class TestRunnerTests(TestCase):
                 self.assertNotIn(pattern, source, f"{relative_path} still contains migrated extension test behavior")
 
     def test_extension_owned_models_are_not_redefined_in_core_model_modules(self):
+        self.assertFalse((Path(settings.BASE_DIR) / "apps/users/models.py").exists())
         self.assertFalse((Path(settings.BASE_DIR) / "apps/posts/models.py").exists())
         self.assertFalse((Path(settings.BASE_DIR) / "apps/discussions/models.py").exists())
         checks = {

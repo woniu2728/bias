@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from apps.core.visibility import apply_discussion_visibility_scope, can_view_model_instance
 from extensions.discussions.backend.models import Discussion, DiscussionUser
-from apps.users.models import User
+from extensions.users.backend.models import User
 
 
 def viewer_cache_identity(user: Optional[User]) -> str:

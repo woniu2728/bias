@@ -7,7 +7,7 @@ from apps.core.extension_settings_service import get_extension_settings
 from apps.core.forum_events import PostLikedEvent
 from apps.posts import post_query_service
 from extensions.posts.backend.models import Post
-from apps.users.models import User
+from extensions.users.backend.models import User
 from apps.users.services import UserService
 from extensions.likes.backend.models import PostLike
 

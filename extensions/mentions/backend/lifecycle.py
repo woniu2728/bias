@@ -1,7 +1,7 @@
 from apps.core.domain_events import dispatch_forum_event_after_commit
 from apps.core.forum_events import UserMentionedEvent
 from extensions.mentions.backend.models import PostMentionsUser
-from apps.users.models import User
+from extensions.users.backend.models import User
 from extensions.mentions.backend.parser import extract_mentioned_usernames
 
 

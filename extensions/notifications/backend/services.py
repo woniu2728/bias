@@ -5,7 +5,7 @@ from typing import Optional, List, Tuple
 from django.db.models import Q, Count
 from django.core.cache import cache
 from django.utils import timezone
-from apps.users.models import User
+from extensions.users.backend.models import User
 from apps.core.domain_events import dispatch_forum_event_after_commit
 from apps.core.forum_events import NotificationCreatedEvent
 from apps.users.preferences import get_user_preference_value

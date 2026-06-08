@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.users.models import User
+from extensions.users.backend.models import User
 
 
 def parse_liked_by_search_filter(token: str) -> str | None:

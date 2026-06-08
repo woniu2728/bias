@@ -3,7 +3,7 @@ from apps.core.forum_events import UserMentionedEvent
 
 def handle_user_mentioned_notification(event: UserMentionedEvent) -> None:
     from extensions.notifications.backend.services import NotificationService
-    from apps.users.models import User
+    from extensions.users.backend.models import User
 
     try:
         mentioned_user = User.objects.get(id=event.mentioned_user_id)

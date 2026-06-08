@@ -10,7 +10,7 @@ from apps.core.forum_registry import get_forum_registry
 from extensions.discussions.backend.models import Discussion
 from apps.posts import post_query_service, service_lifecycle, service_moderation
 from extensions.posts.backend.models import Post
-from apps.users.models import User
+from extensions.users.backend.models import User
 from apps.users.services import UserService
 
 

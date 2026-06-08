@@ -27,7 +27,7 @@ from apps.discussions.schemas import DiscussionCreateSchema, DiscussionUpdateSch
 from apps.discussions.services import DiscussionService
 from extensions.posts.backend.models import Post
 from apps.posts.services import PostService
-from apps.users.models import Group, Permission, User
+from extensions.users.backend.models import Group, Permission, User
 
 
 def discussion_resource_payload(*, title=None, content=None):

@@ -53,7 +53,7 @@ from apps.core.settings_service import (
 )
 from extensions.discussions.backend.models import Discussion
 from extensions.posts.backend.models import Post
-from apps.users.models import User
+from extensions.users.backend.models import User
 
 
 router = Router()
