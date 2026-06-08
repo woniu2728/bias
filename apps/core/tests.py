@@ -12140,7 +12140,7 @@ class SearchApiTests(ChineseSearchTests):
             user=self.user,
         )
 
-        with patch("apps.core.api.SearchService.build_search_context", wraps=SearchService.build_search_context) as build_context:
+        with patch("extensions.search.backend.api.SearchService.build_search_context", wraps=SearchService.build_search_context) as build_context:
             response = self.client.get(
                 "/api/search",
                 {"q": "上下文复用", "type": "all"},

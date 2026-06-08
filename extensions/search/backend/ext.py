@@ -1,5 +1,6 @@
-from apps.core.extensions import ForumCapabilitiesExtender, LifecycleExtender
+from apps.core.extensions import ApiRoutesExtender, ForumCapabilitiesExtender, LifecycleExtender
 from apps.core.forum_registry_types import SearchFilterDefinition
+from extensions.search.backend.api import router as search_router
 from extensions.search.backend.filters import (
     apply_discussion_author_search_filter,
     apply_discussion_created_month_search_filter,
@@ -21,6 +22,10 @@ EXTENSION_ID = "search"
 
 def extend():
     return [
+        ApiRoutesExtender(
+            mounts=(("", search_router),),
+            tags=("Search",),
+        ),
         ForumCapabilitiesExtender(
             search_filters=search_filter_definitions(),
         ),
