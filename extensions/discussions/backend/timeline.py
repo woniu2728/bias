@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Callable
 
 from django.utils import timezone
@@ -18,6 +19,27 @@ class TimelineEventDefinition:
     event_type: type
     post_type: str
     build_content: TimelineContentBuilder
+
+
+def make_timeline_context(event, **extra):
+    payload = dict(getattr(event, "__dict__", {}))
+    payload.update(extra)
+    return SimpleNamespace(**payload)
+
+
+def create_timeline_from_builder(event, builder, *, update_discussion_last_post: bool = True) -> None:
+    built = builder(event)
+    if not built:
+        return
+
+    post_type, content = built
+    create_timeline_event_post(
+        discussion_id=event.discussion_id,
+        actor_user_id=event.actor_user_id,
+        post_type=post_type,
+        content=content,
+        update_discussion_last_post=update_discussion_last_post,
+    )
 
 
 def create_timeline_event_post(

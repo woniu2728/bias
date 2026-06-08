@@ -1,7 +1,5 @@
 from apps.core.forum_runtime import (
     broadcast_discussion_event,
-    create_timeline_from_builder,
-    make_timeline_context,
 )
 from apps.core.forum_events import (
     DiscussionApprovedEvent,
@@ -11,7 +9,11 @@ from apps.core.forum_events import (
     PostHiddenEvent,
     PostRejectedEvent,
 )
-from apps.core.forum_timeline import build_discussion_tagged_content
+from extensions.discussions.backend.timeline import (
+    build_discussion_tagged_content,
+    create_timeline_from_builder,
+    make_timeline_context,
+)
 from extensions.tags.backend.events import (
     DiscussionTaggedEvent,
     DiscussionTagStatsRefreshEvent,

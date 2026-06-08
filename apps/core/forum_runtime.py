@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from types import SimpleNamespace
 
-from apps.core.forum_timeline import create_timeline_event_post
 from apps.core.websocket_service import WebSocketService
 
 
@@ -19,27 +17,6 @@ def register_realtime_included_enricher(key: str, handler) -> None:
 
 def clear_realtime_included_enrichers() -> None:
     _realtime_included_enrichers.clear()
-
-
-def create_timeline_from_builder(event, builder, *, update_discussion_last_post: bool = True) -> None:
-    built = builder(event)
-    if not built:
-        return
-
-    post_type, content = built
-    create_timeline_event_post(
-        discussion_id=event.discussion_id,
-        actor_user_id=event.actor_user_id,
-        post_type=post_type,
-        content=content,
-        update_discussion_last_post=update_discussion_last_post,
-    )
-
-
-def make_timeline_context(event, **extra):
-    payload = dict(getattr(event, "__dict__", {}))
-    payload.update(extra)
-    return SimpleNamespace(**payload)
 
 
 def broadcast_discussion_event(

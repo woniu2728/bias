@@ -1,7 +1,5 @@
 from apps.core.forum_runtime import (
     broadcast_discussion_event,
-    create_timeline_from_builder,
-    make_timeline_context,
 )
 from apps.core.forum_events import (
     DiscussionApprovedEvent,
@@ -11,11 +9,13 @@ from apps.core.forum_events import (
     PostRejectedEvent,
     PostResubmittedEvent,
 )
-from apps.core.forum_timeline import (
+from extensions.discussions.backend.timeline import (
     build_discussion_resubmitted_content,
     build_discussion_review_content,
     build_post_resubmitted_content,
     build_post_review_content,
+    create_timeline_from_builder,
+    make_timeline_context,
 )
 
 

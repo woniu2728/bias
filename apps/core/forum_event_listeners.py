@@ -10,18 +10,16 @@ from apps.core.forum_events import (
     PostCreatedEvent,
     PostHiddenEvent,
 )
-from apps.core.forum_timeline import (
+from extensions.discussions.backend.timeline import (
     build_discussion_hidden_content,
     build_discussion_locked_content,
     build_discussion_renamed_content,
     build_discussion_sticky_content,
     build_post_hidden_content,
-)
-from apps.core.forum_runtime import (
-    broadcast_discussion_event,
     create_timeline_from_builder,
     make_timeline_context,
 )
+from apps.core.forum_runtime import broadcast_discussion_event
 
 
 _listeners_bootstrapped = False
