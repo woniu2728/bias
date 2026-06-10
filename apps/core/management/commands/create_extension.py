@@ -35,44 +35,30 @@ class Command(BaseCommand):
         category = str(options.get("category") or "feature").strip() or "feature"
         version = str(options.get("extension_version") or "0.1.0").strip() or "0.1.0"
         force = bool(options.get("force"))
+        extension_package = self._build_extension_package(extension_id)
+        app_config_class = self._build_app_config_class(extension_package)
 
-        extension_dir = Path(settings.BASE_DIR) / "extensions" / extension_id
+        extension_dir = Path(settings.BASE_DIR) / "extensions" / extension_package
         if extension_dir.exists() and not force:
             raise CommandError(f"扩展目录已存在: {extension_dir}。如需覆盖，请传 --force")
 
         frontend_admin_dir = extension_dir / "frontend" / "admin"
         frontend_forum_dir = extension_dir / "frontend" / "forum"
         backend_dir = extension_dir / "backend"
-        migrations_dir = backend_dir / "migrations"
+        django_migrations_dir = backend_dir / "django_migrations"
         docs_dir = extension_dir / "docs"
         locale_dir = extension_dir / "locale"
 
-        for path in (frontend_admin_dir, frontend_forum_dir, backend_dir, migrations_dir, docs_dir, locale_dir):
+        for path in (frontend_admin_dir, frontend_forum_dir, backend_dir, django_migrations_dir, docs_dir, locale_dir):
             path.mkdir(parents=True, exist_ok=True)
 
         self._write_json(
             extension_dir / "extension.json",
-            self._build_manifest(extension_id, name, description, author, category, version),
+            self._build_manifest(extension_id, extension_package, app_config_class, name, description, author, category, version),
         )
         self._write_text(
             frontend_admin_dir / "index.js",
             self._build_admin_index_source(extension_id),
-        )
-        self._write_text(
-            frontend_admin_dir / "DetailPage.vue",
-            self._build_detail_page_source(name),
-        )
-        self._write_text(
-            frontend_admin_dir / "SettingsPage.vue",
-            self._build_settings_page_source(name),
-        )
-        self._write_text(
-            frontend_admin_dir / "PermissionsPage.vue",
-            self._build_permissions_page_source(name),
-        )
-        self._write_text(
-            frontend_admin_dir / "OperationsPage.vue",
-            self._build_operations_page_source(name),
         )
         self._write_text(
             frontend_forum_dir / "index.js",
@@ -83,16 +69,20 @@ class Command(BaseCommand):
             "",
         )
         self._write_text(
-            migrations_dir / "__init__.py",
-            "",
-        )
-        self._write_text(
-            migrations_dir / "0001_initial.py",
-            self._build_migration_stub_source(),
+            backend_dir / "apps.py",
+            self._build_app_config_source(extension_package, app_config_class, name),
         )
         self._write_text(
             backend_dir / "ext.py",
-            self._build_backend_entry_source(extension_id, name),
+            self._build_backend_entry_source(extension_id, extension_package, name),
+        )
+        self._write_text(
+            django_migrations_dir / "__init__.py",
+            "",
+        )
+        self._write_text(
+            extension_dir / "README.md",
+            self._build_readme_source(extension_id, name),
         )
         self._write_text(
             docs_dir / "README.md",
@@ -112,13 +102,23 @@ class Command(BaseCommand):
         self.stdout.write(f"- manifest: {extension_dir / 'extension.json'}")
         self.stdout.write(f"- 前端后台入口: {frontend_admin_dir / 'index.js'}")
         self.stdout.write(f"- 前台入口: {frontend_forum_dir / 'index.js'}")
+        self.stdout.write("- 校验扩展: python manage.py validate_extensions --strict")
+        self.stdout.write("- 生成前端资源: python manage.py build_extension_frontend --rebuild")
 
     def _build_default_name(self, extension_id: str) -> str:
         return " ".join(part.capitalize() for part in extension_id.split("-"))
 
+    def _build_extension_package(self, extension_id: str) -> str:
+        return extension_id.replace("-", "_")
+
+    def _build_app_config_class(self, extension_package: str) -> str:
+        return "".join(part.capitalize() for part in extension_package.split("_") if part) + "ExtensionConfig"
+
     def _build_manifest(
         self,
         extension_id: str,
+        extension_package: str,
+        app_config_class: str,
         name: str,
         description: str,
         author: str,
@@ -136,7 +136,9 @@ class Command(BaseCommand):
             "documentation_url": f"/admin.html#/admin/docs?guide=extension-system-roadmap&extension={extension_id}",
             "dependencies": ["core"],
             "provides": [f"{extension_id}-panel"],
-            "backend_entry": f"extensions.{extension_id.replace('-', '_')}.backend.ext",
+            "backend_entry": f"extensions.{extension_package}.backend.ext",
+            "django_app_config": f"extensions.{extension_package}.backend.apps.{app_config_class}",
+            "django_app_label": extension_package,
             "compatibility": {
                 "bias_version": f"^{APP_VERSION}",
                 "api_version": "1.0",
@@ -154,7 +156,6 @@ class Command(BaseCommand):
                 "signing_key_id": "",
                 "signature_url": "",
             },
-            "migration_namespace": f"extensions.{extension_id.replace('-', '_')}.backend.migrations",
             "extra": {
                 "display_order": 1000,
                 "experimental": True,
@@ -164,394 +165,63 @@ class Command(BaseCommand):
     def _build_admin_index_source(self, extension_id: str) -> str:
         return (
             "import { extendAdmin } from '@bias/admin'\n"
-            "import DetailPage from './DetailPage.vue'\n"
-            "import OperationsPage from './OperationsPage.vue'\n"
-            "import PermissionsPage from './PermissionsPage.vue'\n"
-            "import SettingsPage from './SettingsPage.vue'\n\n"
+            "\n"
             "export const extend = [\n"
-            "  extendAdmin(admin => admin\n"
-            "    .page({\n"
-            f"      path: '/admin/extensions/{extension_id}',\n"
-            f"      name: 'admin-{extension_id}',\n"
-            "      component: DetailPage,\n"
-            "      icon: 'fas fa-puzzle-piece',\n"
-            f"      label: '{extension_id}',\n"
-            "      navDescription: '扩展后台入口已成功注册。',\n"
-            "      navSection: 'feature',\n"
-            "      navOrder: 1000,\n"
-            "      showInNavigation: false,\n"
-            "    })\n"
-            "    .permissionScope({\n"
-            f"      key: '{extension_id}-permission-scope',\n"
-            f"      moduleId: '{extension_id}',\n"
-            "      icon: 'fas fa-puzzle-piece',\n"
-            f"      label: '{extension_id} 权限范围',\n"
-            "      description: '脚手架示例权限范围入口，可替换为扩展自己的分域权限配置。',\n"
-            "      actionLabel: '查看扩展权限',\n"
-            f"      to: '/admin/extensions/{extension_id}/permissions',\n"
-            "    })),\n"
+            "  extendAdmin(admin => admin),\n"
             "]\n\n"
             "export function resolveDetailPage() {\n"
-            "  return DetailPage\n"
-            "}\n\n"
-            "export function resolveSettingsPage() {\n"
-            "  return SettingsPage\n"
-            "}\n\n"
-            "export function resolvePermissionsPage() {\n"
-            "  return PermissionsPage\n"
-            "}\n\n"
-            "export function resolveOperationsPage() {\n"
-            "  return OperationsPage\n"
+            "  return null\n"
             "}\n"
-        )
-
-    def _build_detail_page_source(self, name: str) -> str:
-        return (
-            "<template>\n"
-            "  <section class=\"ExtensionScaffoldCard\">\n"
-            "    <header>\n"
-            f"      <h2>{name} 详情</h2>\n"
-            "      <p>这里承载扩展自己的详情摘要、诊断信息和平台之外的补充说明。</p>\n"
-            "    </header>\n"
-            "  </section>\n"
-            "</template>\n\n"
-            "<script setup>\n"
-            "defineProps({\n"
-            "  extension: {\n"
-            "    type: Object,\n"
-            "    default: () => ({}),\n"
-            "  },\n"
-            "  surface: {\n"
-            "    type: String,\n"
-            "    default: 'detail',\n"
-            "  },\n"
-            "})\n"
-            "</script>\n\n"
-            "<style scoped>\n"
-            ".ExtensionScaffoldCard {\n"
-            "  padding: 24px;\n"
-            "  border: 1px solid var(--forum-border-color);\n"
-            "  border-radius: var(--forum-radius-md);\n"
-            "  background: var(--forum-bg-elevated);\n"
-            "}\n"
-            ".ExtensionScaffoldCard h2 {\n"
-            "  margin: 0 0 8px;\n"
-            "}\n"
-            ".ExtensionScaffoldCard p {\n"
-            "  margin: 0;\n"
-            "  color: var(--forum-text-soft);\n"
-            "}\n"
-            "</style>\n"
         )
 
     def _build_forum_index_source(self, extension_id: str, name: str) -> str:
         return (
             "import { extendForum } from '@bias/forum'\n\n"
             "export const extend = [\n"
-            "  extendForum(forum => forum\n"
-            "    .navItem({\n"
-            f"      key: '{extension_id}-entry',\n"
-            f"      moduleId: '{extension_id}',\n"
-            "      section: 'primary',\n"
-            "      order: 90,\n"
-            "      icon: 'fas fa-puzzle-piece',\n"
-            f"      label: '{name}',\n"
-            "      to: '/',\n"
-            "      description: '扩展前台入口已成功注册。',\n"
-            "    })\n"
-            "    .discussionListHero({\n"
-            f"      key: '{extension_id}-discussion-list-hero',\n"
-            f"      moduleId: '{extension_id}',\n"
-            "      surfaces: ['discussion-list-hero'],\n"
-            "      order: 900,\n"
-            "      isVisible: ({ activeFilterCode }) => activeFilterCode === 'all',\n"
-            "      resolve: () => ({\n"
-            f"        pill: '{name}',\n"
-            "        title: '扩展 Hero 已注册',\n"
-            "        description: '这是脚手架生成的讨论列表展示扩展点示例。',\n"
-            "        icon: 'fas fa-puzzle-piece',\n"
-            "      }),\n"
-            "    })),\n"
+            "  extendForum(forum => forum),\n"
             "]\n"
         )
 
-    def _build_settings_page_source(self, name: str) -> str:
-        return (
-            "<template>\n"
-            "  <section class=\"ExtensionScaffoldCard\">\n"
-            "    <header>\n"
-            f"      <h2>{name} 设置</h2>\n"
-            "      <p>这里承载扩展自己的设置表单，后续可继续接入真实保存逻辑。</p>\n"
-            "    </header>\n"
-            "  </section>\n"
-            "</template>\n\n"
-            "<script setup>\n"
-            "defineProps({\n"
-            "  extension: {\n"
-            "    type: Object,\n"
-            "    default: () => ({}),\n"
-            "  },\n"
-            "  hostKind: {\n"
-            "    type: String,\n"
-            "    default: 'settings',\n"
-            "  },\n"
-            "})\n"
-            "</script>\n\n"
-            "<style scoped>\n"
-            ".ExtensionScaffoldCard {\n"
-            "  padding: 24px;\n"
-            "  border: 1px solid var(--forum-border-color);\n"
-            "  border-radius: var(--forum-radius-md);\n"
-            "  background: var(--forum-bg-elevated);\n"
-            "}\n"
-            ".ExtensionScaffoldCard h2 {\n"
-            "  margin: 0 0 8px;\n"
-            "}\n"
-            ".ExtensionScaffoldCard p {\n"
-            "  margin: 0;\n"
-            "  color: var(--forum-text-soft);\n"
-            "}\n"
-            "</style>\n"
-        )
-
-    def _build_operations_page_source(self, name: str) -> str:
-        return (
-            "<template>\n"
-            "  <section class=\"ExtensionScaffoldCard\">\n"
-            "    <header>\n"
-            f"      <h2>{name} 操作</h2>\n"
-            "      <p>这里承载扩展自己的运维动作、诊断信息或批处理工具。</p>\n"
-            "    </header>\n"
-            "  </section>\n"
-            "</template>\n\n"
-            "<script setup>\n"
-            "defineProps({\n"
-            "  extension: {\n"
-            "    type: Object,\n"
-            "    default: () => ({}),\n"
-            "  },\n"
-            "  hostKind: {\n"
-            "    type: String,\n"
-            "    default: 'operations',\n"
-            "  },\n"
-            "})\n"
-            "</script>\n\n"
-            "<style scoped>\n"
-            ".ExtensionScaffoldCard {\n"
-            "  padding: 24px;\n"
-            "  border: 1px solid var(--forum-border-color);\n"
-            "  border-radius: var(--forum-radius-md);\n"
-            "  background: var(--forum-bg-elevated);\n"
-            "}\n"
-            ".ExtensionScaffoldCard h2 {\n"
-            "  margin: 0 0 8px;\n"
-            "}\n"
-            ".ExtensionScaffoldCard p {\n"
-            "  margin: 0;\n"
-            "  color: var(--forum-text-soft);\n"
-            "}\n"
-            "</style>\n"
-        )
-
-    def _build_permissions_page_source(self, name: str) -> str:
-        return (
-            "<template>\n"
-            "  <section class=\"ExtensionScaffoldCard\">\n"
-            "    <header>\n"
-            f"      <h2>{name} 权限</h2>\n"
-            "      <p>这里承载扩展自己的授权说明、权限分组摘要或更细粒度的授权向导。</p>\n"
-            "    </header>\n"
-            "  </section>\n"
-            "</template>\n\n"
-            "<script setup>\n"
-            "defineProps({\n"
-            "  extension: {\n"
-            "    type: Object,\n"
-            "    default: () => ({}),\n"
-            "  },\n"
-            "  hostKind: {\n"
-            "    type: String,\n"
-            "    default: 'permissions',\n"
-            "  },\n"
-            "})\n"
-            "</script>\n\n"
-            "<style scoped>\n"
-            ".ExtensionScaffoldCard {\n"
-            "  padding: 24px;\n"
-            "  border: 1px solid var(--forum-border-color);\n"
-            "  border-radius: var(--forum-radius-md);\n"
-            "  background: var(--forum-bg-elevated);\n"
-            "}\n"
-            ".ExtensionScaffoldCard h2 {\n"
-            "  margin: 0 0 8px;\n"
-            "}\n"
-            ".ExtensionScaffoldCard p {\n"
-            "  margin: 0;\n"
-            "  color: var(--forum-text-soft);\n"
-            "}\n"
-            "</style>\n"
-        )
-
-    def _build_backend_entry_source(self, extension_id: str, name: str) -> str:
+    def _build_backend_entry_source(self, extension_id: str, extension_package: str, name: str) -> str:
         return (
             "from __future__ import annotations\n\n"
-            "from apps.core.extensions import AdminNavigationExtender, ApiResourceExtender, ForumCapabilitiesExtender, FrontendExtender, LifecycleExtender, RuntimeActionsExtender, SettingsExtender\n"
-            "from apps.core.extensions.backend import _build_runtime_action_definition, _build_setting_field_definition\n\n"
-            "from apps.core.forum_registry_types import DiscussionListQueryDefinition\n"
-            "from apps.core.resource_registry import ResourceFieldDefinition\n\n"
+            "from apps.core.extensions import FrontendExtender\n\n"
             f"EXTENSION_ID = '{extension_id}'\n"
             f"EXTENSION_NAME = '{name}'\n\n"
             "\n"
             "def extend():\n"
             "    return [\n"
-            "        FrontendExtender(\n"
-            f"            admin_entry='extensions/{extension_id}/frontend/admin/index.js',\n"
-            f"            forum_entry='extensions/{extension_id}/frontend/forum/index.js',\n"
-            "        ),\n"
-            "        ForumCapabilitiesExtender(discussion_list_queries=(\n"
-            "            DiscussionListQueryDefinition(\n"
-            "                key='scaffold',\n"
-            "                module_id=EXTENSION_ID,\n"
-            "                applier=apply_scaffold_discussion_list_query,\n"
-            "                description='脚手架示例讨论列表查询扩展点。',\n"
-            "            ),\n"
-            "        )),\n"
-            "        SettingsExtender(fields=(\n"
-            "            _build_setting_field_definition({\n"
-            "                'key': 'welcome_message',\n"
-            "                'label': '欢迎语',\n"
-            "                'type': 'text',\n"
-            f"                'default': '欢迎使用 {name}',\n"
-            "                'placeholder': '输入展示给管理员或用户的欢迎语',\n"
-            "                'help_text': '示例设置项，用于验证扩展设置协议已经打通。',\n"
-            "                'order': 10,\n"
-            "            }),\n"
-            "            _build_setting_field_definition({\n"
-            "                'key': 'feature_enabled',\n"
-            "                'label': '启用功能开关',\n"
-            "                'type': 'boolean',\n"
-            "                'default': True,\n"
-            "                'help_text': '示例布尔型设置项。',\n"
-            "                'order': 20,\n"
-            "            }),\n"
-            "        )),\n"
-            "        ApiResourceExtender('forum').fields(forum_resource_field_definitions),\n"
-            "        RuntimeActionsExtender(actions=(\n"
-            "            _build_runtime_action_definition({\n"
-            "                'key': 'rebuild-cache',\n"
-            "                'label': '刷新缓存',\n"
-            "                'hook': 'run_rebuild_cache',\n"
-            "                'tone': 'subtle',\n"
-            "                'confirm_title': '刷新扩展缓存',\n"
-            f"                'confirm_message': '确定执行 {name} 的缓存刷新操作吗？',\n"
-            "                'confirm_text': '刷新',\n"
-            "                'success_message': '扩展缓存已刷新。',\n"
-            "                'requires_enabled': True,\n"
-            "                'requires_installed': True,\n"
-            "                'order': 5,\n"
-            "            }),\n"
-            "        ), generated_page=True),\n"
-            "        AdminNavigationExtender(generated_permissions_page=True),\n"
-            "        LifecycleExtender(\n"
-            "            install=install,\n"
-            "            enable=enable,\n"
-            "            disable=disable,\n"
-            "            uninstall=uninstall,\n"
-            "        ),\n"
+            "        (FrontendExtender()\n"
+            f"            .admin('extensions/{extension_package}/frontend/admin/index.js')\n"
+            f"            .forum('extensions/{extension_package}/frontend/forum/index.js')),\n"
             "    ]\n\n"
-            "\n"
-            "def forum_resource_field_definitions():\n"
-            "    return (\n"
-            "        ResourceFieldDefinition(\n"
-            "            resource='forum',\n"
-            "            field='scaffold_status',\n"
-            "            module_id=EXTENSION_ID,\n"
-            "            resolver=resolve_forum_scaffold_status,\n"
-            "            description='脚手架示例字段，用于验证 ApiResourceExtender 已接入。',\n"
-            "        ),\n"
-            "    )\n\n"
-            "\n"
-            "def resolve_forum_scaffold_status(forum, context):\n"
-            "    return {\n"
-            "        'extension_id': EXTENSION_ID,\n"
-            "        'extension_name': EXTENSION_NAME,\n"
-            "        'ready': True,\n"
-            "    }\n\n"
-            "\n"
-            "def apply_scaffold_discussion_list_query(queryset, context):\n"
-            "    params = context.get('params') or {}\n"
-            "    if str(params.get('scaffold') or '').strip() != '1':\n"
-            "        return queryset\n"
-            "    return queryset.filter(title__icontains=EXTENSION_NAME)\n\n"
-            "\n"
-            "def install(context):\n"
-            "    return {\n"
-            "        'status': 'ok',\n"
-            "        'status_label': '已完成',\n"
-            "        'message': f'{context.extension_name} 安装生命周期已执行。',\n"
-            "        'details': {\n"
-            "            'extension_id': context.extension_id,\n"
-            "            'migration_namespace': context.migration_namespace,\n"
-            "        },\n"
-            "    }\n\n"
-            "\n"
-            "def enable(context):\n"
-            "    return {\n"
-            "        'status': 'ok',\n"
-            "        'status_label': '已启用',\n"
-            "        'message': f'{context.extension_name} 启用生命周期已执行。',\n"
-            "    }\n\n"
-            "\n"
-            "def disable(context):\n"
-            "    return {\n"
-            "        'status': 'ok',\n"
-            "        'status_label': '已停用',\n"
-            "        'message': f'{context.extension_name} 停用生命周期已执行。',\n"
-            "    }\n\n"
-            "\n"
-            "def uninstall(context):\n"
-            "    return {\n"
-            "        'status': 'ok',\n"
-            "        'status_label': '已完成',\n"
-            "        'message': f'{context.extension_name} 卸载生命周期已执行。',\n"
-            "    }\n\n"
-            "\n"
-            "def run_rebuild_cache(context):\n"
-            "    return {\n"
-            "        'status': 'ok',\n"
-            "        'status_label': '已刷新',\n"
-            "        'message': f'{context.extension_name} 的运行缓存已刷新。',\n"
-            "    }\n\n"
-            "\n"
-            "def run_migrations(context):\n"
-            "    return {\n"
-            "        'status': 'ok',\n"
-            "        'status_label': '已执行',\n"
-            "        'message': f'{context.extension_name} 的扩展迁移钩子已执行。',\n"
-            "        'details': {\n"
-            "            'migration_namespace': context.migration_namespace,\n"
-            "            'hook': 'run_migrations',\n"
-            "        },\n"
-            "    }\n"
         )
 
-    def _build_migration_stub_source(self) -> str:
+    def _build_app_config_source(self, extension_package: str, app_config_class: str, name: str) -> str:
+        verbose_name = name.replace('"', '\\"')
         return (
-            "from __future__ import annotations\n\n"
-            "\n"
-            "def apply():\n"
-            "    return 'initial'\n"
+            "from django.apps import AppConfig\n\n\n"
+            f"class {app_config_class}(AppConfig):\n"
+            "    default_auto_field = \"django.db.models.BigAutoField\"\n"
+            f"    label = \"{extension_package}\"\n"
+            f"    name = \"extensions.{extension_package}.backend\"\n"
+            f"    verbose_name = \"Bias {verbose_name} Extension\"\n"
         )
 
     def _build_readme_source(self, extension_id: str, name: str) -> str:
         return (
             f"# {name}\n\n"
             f"- 扩展 ID: `{extension_id}`\n"
-            "- 用途：通过脚手架生成的 Bias 扩展样板。\n"
-            "- 迁移目录：`backend/migrations`\n"
-            "- API 资源：默认通过 `ApiResourceExtender(\"forum\")` 注册 `scaffold_status` 示例字段。\n"
+            "- 用途：通过脚手架生成的 Bias 最小扩展样板。\n"
+            "- 后端入口：`backend/ext.py` 的 `extend()` 返回扩展器列表，是扩展接入 Bias 运行时的主入口。\n"
+            "- Django AppConfig：`backend/apps.py` 绑定扩展 app label，确保模型与迁移归属能被审计。\n"
+            "- 前端入口：`frontend/admin/index.js` 与 `frontend/forum/index.js` 导出 `extend`，由 Bias 前端扩展注册中心加载。\n"
+            "- API 资源：如需扩展 JSON:API 资源，请在 `backend/ext.py` 中加入 `ApiResourceExtender(...)`。\n"
+            "- 迁移：如需扩展迁移，请添加到 `backend/django_migrations`；Bias 会按扩展 app label 注册迁移命名空间。\n"
             "- 模型归属：如需拥有模型，请在 `backend/ext.py` 中使用 `ModelExtender().owns(...)` 声明，并通过 `python manage.py inspect_extensions --extension-id "
             f"{extension_id}` 查看模型归属审计。\n"
+            "- 校验命令：`python manage.py validate_extensions --strict`\n"
+            "- 前端资源：`python manage.py build_extension_frontend --rebuild`\n"
             "- 后续可在 `frontend/admin`、`backend`、`locale` 中继续扩展能力。\n"
         )
 

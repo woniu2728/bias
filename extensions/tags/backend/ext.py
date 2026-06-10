@@ -2,6 +2,7 @@ from apps.core.extensions import (
     AdminSurfaceExtender,
     ApiResourceExtender,
     ApiRoutesExtender,
+    AuthorizationPolicy,
     ConsoleExtender,
     ConditionalExtender,
     DiscussionLifecycleExtender,
@@ -15,7 +16,9 @@ from apps.core.extensions import (
     PolicyExtender,
     PostEventExtender,
     RealtimeExtender,
+    RuntimeModel,
     SearchDriverExtender,
+    ServiceProviderExtender,
     SettingsExtender,
 )
 from apps.core.extensions.backend import _build_setting_field_definition
@@ -26,18 +29,8 @@ from apps.core.extensions.types import (
     ExtensionModelVisibilityDefinition,
     ExtensionSearchDriverDefinition,
 )
-from apps.core.forum_events import (
-    DiscussionApprovedEvent,
-    PostApprovedEvent,
-    PostCreatedEvent,
-    PostDeletedEvent,
-    PostHiddenEvent,
-    PostRejectedEvent,
-)
 from apps.core.forum_registry_types import AdminPageDefinition, DiscussionListQueryDefinition, PostTypeDefinition, SearchFilterDefinition
 from apps.core.resource_registry import ResourceDefinition, ResourceEndpointDefinition, ResourceFieldDefinition, ResourceRelationshipDefinition
-from extensions.discussions.backend.models import Discussion
-from extensions.posts.backend.models import Post
 from extensions.tags.backend.models import DiscussionTag, Tag
 from extensions.tags.backend.handlers import (
     dispatch_tag_create,
@@ -74,6 +67,7 @@ from extensions.tags.backend.discussion_lifecycle import (
     prepare_discussion_delete,
 )
 from extensions.tags.backend.discussion_relationships import set_discussion_tags_relationship
+from extensions.tags.backend.tag_relationships import get_discussion_tags
 from extensions.tags.backend.resources import (
     resolve_discussion_tags,
     resolve_discussion_tagged_event_data,
@@ -92,10 +86,13 @@ from extensions.tags.backend.search import (
 )
 from extensions.tags.backend.services import TagService
 from extensions.tags.backend.slug import TagSlugDriver
+from extensions.tags.backend.runtime import tag_service_provider
 from extensions.tags.backend import tasks as tag_tasks  # noqa: F401
 
 
 EXTENSION_ID = "tags"
+DISCUSSION_MODEL = RuntimeModel("discussions.service", description="discussions 扩展提供的讨论模型。")
+POST_MODEL = RuntimeModel("posts.service", description="posts 扩展提供的帖子模型。")
 
 
 def extend():
@@ -122,7 +119,7 @@ def extend():
         .route(
             "/t/:slug",
             "tag-detail",
-            "DiscussionListView",
+            "extensions/discussions/frontend/forum/DiscussionListView.vue",
             title="标签讨论",
             description="查看该标签下的论坛讨论。",
             preloads=(
@@ -195,9 +192,9 @@ def extend():
             drivers=search_driver_definitions(),
         ),
         PolicyExtender()
-        .model_policy(Discussion, discussion_policy)
-        .model_policy(Post, post_policy)
-        .model_policy(Tag, tag_policy),
+        .policy(DISCUSSION_MODEL, DiscussionPolicy)
+        .policy(POST_MODEL, PostPolicy)
+        .policy(Tag, TagPolicy),
         ApiResourceExtender("discussion")
         .fields(discussion_resource_field_definitions)
         .relationships(discussion_resource_relationship_definitions)
@@ -234,6 +231,16 @@ def extend():
             "tags",
             enrich_realtime_tags_included_payload,
             description="实时讨论事件 payload 中补充讨论关联标签。",
+        ).broadcast_discussion_event(
+            DiscussionTaggedEvent,
+            "discussion.tagged",
+            include_discussion=True,
+            extension_context=lambda event: {"tags": {"tag_ids": list(event.tag_ids)}} if event.tag_ids else None,
+            description="讨论标签变更后向讨论实时流广播标签状态变更。",
+        ),
+        ServiceProviderExtender(
+            key="tags.service",
+            provider=tag_service_provider,
         ),
         LifecycleExtender(
             install=install,
@@ -341,14 +348,14 @@ def discussion_list_query_definitions():
 def model_definitions():
     return (
         ExtensionModelDefinition(
-            model=Discussion,
+            model=DISCUSSION_MODEL,
             key="tags",
             handler=DiscussionTag,
             kind="manyToMany",
             description="讨论关联标签。",
         ),
         ExtensionModelDefinition(
-            model=Post,
+            model=POST_MODEL,
             key="eventPostMentionsTags",
             handler=Tag,
             kind="relationship",
@@ -360,12 +367,9 @@ def model_definitions():
 def model_relation_definitions():
     return (
         ExtensionModelRelationDefinition(
-            model=Discussion,
+            model=DISCUSSION_MODEL,
             name="tags",
-            resolver=lambda discussion: [
-                discussion_tag.tag
-                for discussion_tag in discussion.discussion_tags.select_related("tag").all()
-            ],
+            resolver=get_discussion_tags,
             relation_type="belongsToMany",
             related_model=Tag,
             description="讨论关联标签。",
@@ -388,7 +392,7 @@ def model_relation_definitions():
             description="标签子级。",
         ),
         ExtensionModelRelationDefinition(
-            model=Post,
+            model=POST_MODEL,
             name="eventPostMentionsTags",
             resolver=resolve_post_event_mentions_tags,
             relation_type="relationship",
@@ -401,7 +405,7 @@ def model_relation_definitions():
 def model_visibility_definitions():
     return (
         ExtensionModelVisibilityDefinition(
-            model=Discussion,
+            model=DISCUSSION_MODEL,
             ability="view",
             scope=lambda queryset, context: TagService.filter_discussions_for_user(
                 queryset,
@@ -410,7 +414,7 @@ def model_visibility_definitions():
             description="隐藏当前用户不可查看标签下的讨论。",
         ),
         ExtensionModelVisibilityDefinition(
-            model=Post,
+            model=POST_MODEL,
             ability="view",
             scope=lambda queryset, context: TagService.filter_posts_for_user(
                 queryset,
@@ -520,31 +524,31 @@ def forum_resource_relationship_definitions():
     )
 
 
-def discussion_policy(*, user=None, ability="", model=None, **context):
-    if ability == "view":
+class DiscussionPolicy(AuthorizationPolicy):
+    def view(self, user, model, **context):
         return TagService.can_view_discussion_tags(model, user)
-    if ability == "reply":
+
+    def reply(self, user, model, **context):
         return TagService.can_reply_in_discussion(model, user)
-    return None
 
 
-def post_policy(*, user=None, ability="", model=None, **context):
-    if ability != "view":
-        return None
-    discussion = getattr(model, "discussion", None)
-    if discussion is None:
-        return None
-    return TagService.can_view_discussion_tags(discussion, user)
+class PostPolicy(AuthorizationPolicy):
+    def view(self, user, model, **context):
+        discussion = getattr(model, "discussion", None)
+        if discussion is None:
+            return None
+        return TagService.can_view_discussion_tags(discussion, user)
 
 
-def tag_policy(*, user=None, ability="", model=None, **context):
-    if ability == "view":
+class TagPolicy(AuthorizationPolicy):
+    def view(self, user, model, **context):
         return TagService.can_view_tag(model, user)
-    if ability == "start_discussion":
+
+    def start_discussion(self, user, model, **context):
         return TagService.can_start_discussion_in_tag(model, user)
-    if ability == "reply":
+
+    def reply(self, user, model, **context):
         return TagService.can_reply_in_tag(model, user)
-    return None
 
 
 def tag_resource_field_definitions():
@@ -694,37 +698,37 @@ def refresh_tag_stats_console_command(options: dict | None = None) -> dict:
 def tag_event_listener_definitions():
     return (
         ExtensionEventListenerDefinition(
-            event_type=DiscussionApprovedEvent,
+            event_type="extensions.discussions.backend.events.DiscussionApprovedEvent",
             handler=handle_discussion_approved_tag_stats,
             description="讨论审核通过后刷新关联标签统计。",
         ),
         ExtensionEventListenerDefinition(
             event_type=DiscussionTaggedEvent,
             handler=handle_discussion_tagged,
-            description="刷新标签统计、广播讨论标签变更并写入标签变更事件帖。",
+            description="刷新标签统计并写入标签变更事件帖。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostCreatedEvent,
+            event_type="extensions.posts.backend.events.PostCreatedEvent",
             handler=handle_post_created_tag_stats,
             description="回复发布后刷新讨论关联标签统计。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostApprovedEvent,
+            event_type="extensions.posts.backend.events.PostApprovedEvent",
             handler=handle_post_approved_tag_stats,
             description="回复审核通过后刷新讨论关联标签统计。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostDeletedEvent,
+            event_type="extensions.posts.backend.events.PostDeletedEvent",
             handler=handle_post_deleted_tag_stats,
             description="回复删除后刷新讨论关联标签统计。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostHiddenEvent,
+            event_type="extensions.posts.backend.events.PostHiddenEvent",
             handler=handle_post_hidden_tag_stats,
             description="回复隐藏状态变更后刷新讨论关联标签统计。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostRejectedEvent,
+            event_type="extensions.posts.backend.events.PostRejectedEvent",
             handler=handle_post_rejected_tag_stats,
             description="回复审核拒绝后刷新讨论关联标签统计。",
         ),
@@ -773,24 +777,4 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Tags 扩展已卸载。",
-    }
-
-
-def run_migrations(context):
-    return _migration_hook_result(context, "run_migrations", "Tags 扩展迁移已执行。")
-
-
-def rollback_migrations(context):
-    return _migration_hook_result(context, "rollback_migrations", "Tags 扩展迁移已回滚。")
-
-
-def _migration_hook_result(context, hook: str, message: str):
-    return {
-        "hook": hook,
-        "status": "ok",
-        "status_label": "已执行",
-        "message": message,
-        "details": {
-            "migration_namespace": context.migration_namespace,
-        },
     }

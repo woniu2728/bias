@@ -5,13 +5,12 @@ from extensions.tags.backend.events import (
     DiscussionTagStatsRefreshEvent,
     TagStatsRefreshRequestedEvent,
 )
+from extensions.tags.backend.tag_relationships import get_discussion_tag_ids
 
 
 def prepare_discussion_delete(*, discussion, user, context: dict | None = None, **kwargs) -> dict:
     return {
-        "tag_ids": tuple(
-            discussion.discussion_tags.order_by("tag_id").values_list("tag_id", flat=True)
-        ),
+        "tag_ids": get_discussion_tag_ids(discussion),
     }
 
 

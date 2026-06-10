@@ -10,7 +10,13 @@
   ],
   "dependencies": [
     "core",
-    "discussions"
+    "discussions",
+    "posts",
+    "realtime",
+    "users"
+  ],
+  "optional_dependencies": [
+    "flags"
   ],
   "provides": [
     "tagging",
@@ -20,8 +26,7 @@
   ],
   "backend_entry": "extensions.tags.backend.ext",
   "django_app_config": "extensions.tags.backend.apps.TagsExtensionConfig",
-  "django_migration_module": "apps.tags.migrations",
-  "migration_namespace": "extensions.tags.backend.migrations",
+  "django_app_label": "tags",
   "compatibility": {
     "bias_version": "^1.0.0",
     "api_version": "1.0",

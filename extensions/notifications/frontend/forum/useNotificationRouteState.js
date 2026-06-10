@@ -1,4 +1,4 @@
-import { useRouteListState } from '@bias/forum'
+import { useRouteListState } from '@bias/core'
 
 function normalizePage(value) {
   const parsed = Number(value)

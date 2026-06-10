@@ -1,7 +1,6 @@
-import {
-  useForumRealtimeStore,
-  useResourceStore,
-} from '@bias/forum'
+import { useResourceStore } from '@bias/core'
+
+import { useForumRealtimeStore } from '@bias/realtime'
 import { useTagsLoadState } from './useTagsLoadState.js'
 import { useTagsPageLifecycle } from './useTagsPageLifecycle.js'
 import { useTagsRealtimeState } from './useTagsRealtimeState.js'

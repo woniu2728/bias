@@ -49,10 +49,8 @@
 </template>
 
 <script setup>
-import {
-  computed,
-  getUiCopy,
-} from '@bias/forum'
+import { computed } from '@bias/core'
+import { getUiCopy } from '@bias/forum'
 import { buildTagPath } from './tagUtils.js'
 import {
   buildDiscussionListPrimaryTagItems,

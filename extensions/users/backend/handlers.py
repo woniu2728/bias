@@ -4,10 +4,10 @@ from django.db.models import Q
 
 from apps.core.api_errors import api_error
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
-from apps.core.file_service import FileUploadService
 from apps.core.resource_api import ResourceQueryOptions, apply_resource_preloads, parse_resource_query_options
 from apps.core.resource_registry import ResourceEndpointDefinition
 from apps.core.services import PaginationService
+from extensions.users.backend.avatar_upload import UserAvatarUploadService
 from extensions.users.backend.models import User
 from extensions.users.backend.schemas import PasswordChangeSchema, UserUpdateSchema
 from extensions.users.backend.services import UserService
@@ -316,14 +316,15 @@ def dispatch_user_upload_avatar(context):
 
     try:
         previous_avatar = user.avatar_url
-        avatar_url, _ = FileUploadService.upload_avatar(avatar, user.id)
+        avatar_url, _ = UserAvatarUploadService.upload_avatar(avatar, user.id)
         user.avatar_url = avatar_url
         user.save(update_fields=["avatar_url"])
 
         if previous_avatar and previous_avatar != avatar_url:
-            FileUploadService.delete_file(previous_avatar)
+            UserAvatarUploadService.delete_avatar(previous_avatar)
 
         user = User.objects.prefetch_related("user_groups").get(id=user.id)
         return serialize_user_detail_payload(user)
     except ValueError as e:
         return api_error(str(e), status=400)
+

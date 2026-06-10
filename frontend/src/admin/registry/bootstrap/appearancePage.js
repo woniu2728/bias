@@ -23,8 +23,6 @@ registerAdminAppearancePageCopy({
     logoEmptyText: '暂无 Logo',
     logoCardTitle: '站点 Logo',
     logoHelpText: '建议上传透明背景 PNG、SVG 或 WebP，Header 会优先展示这里的资源。',
-    logoUploadLabel: '上传本地 Logo',
-    logoUploadingLabel: '上传中...',
     clearAssetLabel: '清空',
     logoUrlLabel: 'Logo URL',
     logoUrlHelpText: '论坛 Logo 的 URL 地址',
@@ -32,8 +30,6 @@ registerAdminAppearancePageCopy({
     faviconEmptyText: '暂无 Favicon',
     faviconCardTitle: '浏览器图标',
     faviconHelpText: '建议上传 `.ico`、PNG 或 SVG，小尺寸图标在浏览器标签页里更清晰。',
-    faviconUploadLabel: '上传本地 Favicon',
-    faviconUploadingLabel: '上传中...',
     faviconUrlLabel: 'Favicon URL',
     faviconUrlHelpText: '浏览器标签页图标的 URL 地址',
     customStyleSectionTitle: '自定义样式',
@@ -68,10 +64,6 @@ registerAdminAppearancePageConfig({
       customHead: '<!-- 在这里添加 head 注入或统计代码 -->',
       customFooter: '<p>在页脚展示备案号、版权说明或联系信息</p>',
     },
-    uploads: {
-      logoAccept: '.png,.jpg,.jpeg,.gif,.webp,.svg',
-      faviconAccept: '.ico,.png,.svg,.webp',
-    },
   }),
 })
 
@@ -80,7 +72,5 @@ registerAdminAppearancePageActionMeta({
   order: 10,
   resolve: () => ({
     loadErrorText: '加载外观设置失败，请稍后重试',
-    uploadFailedTitle: '上传失败',
-    uploadUnknownErrorText: '未知错误',
   }),
 })

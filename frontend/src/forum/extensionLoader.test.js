@@ -24,8 +24,8 @@ import {
   registerLoadedExtensionModule,
 } from '../common/extensionRuntime.js'
 import { ApplicationRequestError, createRuntimeApplication } from '../common/application.js'
-import { ModelExtender, StoreExtender } from '../common/resourceModel.js'
-import extenders, { Exports, Model, PostTypes, Search, Store, ThemeMode, extendAdmin, extendForum } from '../common/extenders.js'
+import { ModelExtender, ResourceModel, StoreExtender } from '../common/resourceModel.js'
+import extenders, { Exports, Model, PostTypes, ResourceModelExtender, Search, Store, ThemeMode, extendAdmin, extendForum } from '../common/extenders.js'
 import {
   AdminExtender,
   ExportsExtender,
@@ -83,12 +83,52 @@ test('loadExtensionForumEntryModule loads filesystem importer entries', async ()
   assert.equal(loaded.boot, true)
 })
 
-test('validateForumExtensionModule rejects modules without extend', () => {
-  assert.throws(
-    () => validateForumExtensionModule({}),
-    /extend/,
-  )
+test('validateForumExtensionModule allows initializer-only modules', () => {
+  assert.doesNotThrow(() => validateForumExtensionModule({}))
   assert.doesNotThrow(() => validateForumExtensionModule({ extend: [] }))
+})
+
+test('runtime application normalizes extension module export shapes', async () => {
+  const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+  const calls = []
+
+  await runtimeApp.bootExtensions({
+    named: {
+      extend: {
+        extend(app, extension) {
+          calls.push(['named', app.kind, extension.name])
+        },
+      },
+    },
+    defaultArray: {
+      default: [{
+        extend(app, extension) {
+          calls.push(['default-array', app.kind, extension.name])
+        },
+      }],
+    },
+    defaultModule: {
+      default: {
+        extend: [{
+          extend(app, extension) {
+            calls.push(['default-module', app.kind, extension.name])
+          },
+        }],
+      },
+    },
+    functionExtender: {
+      extend(app, extension) {
+        calls.push(['function', app.kind, extension.name])
+      },
+    },
+  })
+
+  assert.deepEqual(calls, [
+    ['named', 'forum', 'named'],
+    ['default-array', 'forum', 'defaultArray'],
+    ['default-module', 'forum', 'defaultModule'],
+    ['function', 'forum', 'functionExtender'],
+  ])
 })
 
 test('normalizeExtensionDocumentPayload extracts document runtime contracts', () => {
@@ -212,6 +252,41 @@ test('loadEnabledForumExtensions loads enabled extension entries once and applie
   assert.equal(result.loadedExtensionIds.has('alpha'), true)
   assert.equal(forumStore.applied, payload)
   assert.deepEqual(result.extensionDocument.preloads, ['/assets/alpha.css'])
+})
+
+test('loadEnabledForumExtensions runs initializer-only entry modules', async () => {
+  const calls = []
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
+  const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+
+  try {
+    await loadEnabledForumExtensions({
+      app: runtimeApp,
+      fetchPayload: async () => ({
+        enabled_extensions: [{
+          id: 'initializer-only',
+          frontend_forum_entry: 'extensions/initializer-only/frontend/forum/index.js',
+        }],
+      }),
+      importers: {
+        '../../../extensions/initializer-only/frontend/forum/index.js': async () => {
+          getForumInitializers().add('initializer-only', extensionApp => {
+            calls.push(extensionApp.extension.id)
+            calls.push(extensionApp.application.kind)
+          })
+          return { ready: true }
+        },
+      },
+    })
+
+    assert.deepEqual(calls, ['initializer-only', 'forum'])
+    assert.equal(runtimeApp.extensions['initializer-only'].modules.forum.ready, true)
+    assert.equal(globalThis.bias.extensions['initializer-only'], runtimeApp.extensions['initializer-only'])
+  } finally {
+    getForumInitializers().clear('initializer-only')
+    globalThis.bias = previousBias
+  }
 })
 
 test('loadEnabledForumExtensions passes public extension app object', async () => {
@@ -734,6 +809,23 @@ test('runtime application exposes route helper and resource store adapter', asyn
   assert.equal(routeUrl, '/route/user/2?near=7#profile')
 })
 
+test('runtime application resolves registered route definitions and helpers', () => {
+  const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+  runtimeApp.routes.definitions['discussion.near'] = {
+    path: '/d/:id/:near',
+    name: 'discussion.near',
+  }
+  runtimeApp.routes.helpers.discussion = params => runtimeApp.route('discussion.near', params)
+  runtimeApp.route.discussion = runtimeApp.routes.helpers.discussion
+
+  assert.equal(
+    runtimeApp.route('discussion.near', { id: 12, near: 5, query: { sort: 'old' }, hash: '#reply' }),
+    '/d/12/5?sort=old#reply'
+  )
+  assert.equal(runtimeApp.route('discussion', { id: 12, near: 5 }), '/d/12/5')
+  assert.equal(runtimeApp.route.discussion({ id: 12, near: 5 }), '/d/12/5')
+})
+
 test('runtime application store supports extension model registration and relationships', async () => {
   const requests = []
   const runtimeApp = createRuntimeApplication({
@@ -838,6 +930,60 @@ test('runtime application registers default resource models', () => {
   assert.equal(discussion.title(), 'Default models')
   assert.equal(discussion.user().displayName(), 'Author')
   assert.equal(discussion.posts()[0].contentHtml(), '<p>Hello</p>')
+})
+
+test('store extender registers extension resource models through the runtime app store', async () => {
+  class DemoModel extends ResourceModel {
+    title() {
+      return this.attribute('title')
+    }
+  }
+
+  const runtimeApp = createRuntimeApplication({
+    kind: 'forum',
+    resourceStore: createTestResourceStore(),
+  })
+
+  await runtimeApp.bootExtensions({
+    demo: {
+      extend: [
+        new Store().add('demo-records', DemoModel),
+      ],
+    },
+  })
+
+  const record = runtimeApp.store.pushPayload({
+    data: {
+      type: 'demo-records',
+      id: '1',
+      attributes: { title: 'Registered by extender' },
+    },
+  })
+
+  assert.equal(record instanceof DemoModel, true)
+  assert.equal(record.title(), 'Registered by extender')
+  assert.equal(runtimeApp.store.getById('demo-records', '1'), record)
+})
+
+test('store extender rejects duplicate extension model registrations', () => {
+  class DemoModel extends ResourceModel {}
+  class OtherModel extends ResourceModel {}
+
+  assert.throws(
+    () => new Store().add('demo-records', DemoModel).add('demo-records', OtherModel),
+    /already been registered with this extender/,
+  )
+
+  const runtimeApp = createRuntimeApplication({
+    kind: 'forum',
+    resourceStore: createTestResourceStore(),
+  })
+  new Store().add('demo-records', DemoModel).extend(runtimeApp)
+
+  assert.throws(
+    () => new Store().add('demo-records', OtherModel).extend(runtimeApp),
+    /already been registered with the class "DemoModel"/,
+  )
 })
 
 test('frontend dedicated extenders register notification post search and routes', async () => {
@@ -1139,17 +1285,13 @@ test('common extenders export unified frontend extension entry', () => {
   assert.equal(extenders.PostTypes, PostTypesExtender)
   assert.equal(extenders.Search, SearchExtender)
   assert.equal(extenders.ThemeMode, ThemeModeExtender)
-  assert.equal(extenders.Admin, undefined)
   assert.equal(extenders.AdminExtender, AdminExtender)
-  assert.equal(extenders.AdminDashboard, undefined)
-  assert.equal(extenders.AdminPage, undefined)
-  assert.equal(extenders.AdminDashboardExtender, undefined)
-  assert.equal(extenders.AdminPageExtender, undefined)
   assert.equal(extenders.Exports, ExportsExtender)
   assert.equal(extenders.ForumExtender, ForumExtender)
   assert.equal(extenders.extendAdmin, extendAdmin)
   assert.equal(extenders.extendForum, extendForum)
   assert.equal(new Model(UserModel) instanceof ModelExtender, true)
+  assert.equal(new ResourceModelExtender(UserModel) instanceof ModelExtender, true)
   assert.equal(new Store().add('users', UserModel) instanceof StoreExtender, true)
   assert.equal(new PostTypes().add('demo-alias', { label: 'Demo alias' }) instanceof PostTypesExtender, true)
   assert.equal(new PostTypesExtender().add('demo', { label: 'Demo' }) instanceof PostTypesExtender, true)
@@ -1244,9 +1386,9 @@ test('approval extension owns pending composer submit alerts', async () => {
 })
 
 test('approval extension owns moderation action handlers', async () => {
-  const { forumApi } = await import('@bias/forum')
+  const { api } = await import('@bias/core')
   const { registerApprovalModerationActions } = await import('../../../extensions/approval/frontend/forum/approvalModerationActions.js')
-  const originalPost = forumApi.post
+  const originalPost = api.post
   const discussionHandlers = []
   const postHandlers = []
   const copyItems = []
@@ -1269,7 +1411,7 @@ test('approval extension owns moderation action handlers', async () => {
   }
 
   try {
-    forumApi.post = async (url, payload) => {
+    api.post = async (url, payload) => {
       requests.push([url, payload])
       return { data: { ok: true } }
     }
@@ -1319,7 +1461,7 @@ test('approval extension owns moderation action handlers', async () => {
     assert.deepEqual(refreshes, ['discussion', 'post'])
     assert.equal(alerts.length, 2)
   } finally {
-    forumApi.post = originalPost
+    api.post = originalPost
   }
 })
 
@@ -1481,6 +1623,7 @@ test('resetForumExtensionRuntimeContributions removes scoped registry items', ()
 
 test('registerExtensionForumRoutes registers declarative forum routes', () => {
   const routes = []
+  const runtimeApp = createRuntimeApplication({ kind: 'forum' })
   const router = {
     existing: new Set(),
     hasRoute(name) {
@@ -1511,6 +1654,7 @@ test('registerExtensionForumRoutes registers declarative forum routes', () => {
       },
     ],
   }, {
+    app: runtimeApp,
     components: {
       RouteDemoView: async () => ({ default: 'RouteDemoView' }),
     },
@@ -1520,6 +1664,9 @@ test('registerExtensionForumRoutes registers declarative forum routes', () => {
   assert.equal(routes.length, 1)
   assert.equal(routes[0].meta.extensionId, 'route-demo')
   assert.equal(routes[0].meta.moduleId, 'route-demo')
+  assert.equal(runtimeApp.routes.definitions['route-demo'].path, '/route-demo')
+  assert.equal(runtimeApp.routes.definitions['route-demo'].moduleId, 'route-demo')
+  assert.equal(runtimeApp.routes.definitions['route-demo'].title, 'Route demo')
 })
 
 test('registerExtensionForumRoutes resolves extension-owned route components from generated importers', async () => {
@@ -1565,6 +1712,11 @@ test('registerExtensionForumRoutes resolves extension-owned route components fro
 
 test('registerExtensionForumRoutes removes declared forum routes', () => {
   const removed = []
+  const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+  runtimeApp.routes.definitions['route-demo'] = {
+    path: '/route-demo',
+    name: 'route-demo',
+  }
   const router = {
     existing: new Set(['route-demo']),
     hasRoute(name) {
@@ -1588,10 +1740,11 @@ test('registerExtensionForumRoutes removes declared forum routes', () => {
         removed: true,
       },
     ],
-  })
+  }, { app: runtimeApp })
 
   assert.deepEqual(registered, ['route-demo'])
   assert.deepEqual(removed, ['route-demo'])
+  assert.equal(runtimeApp.routes.definitions['route-demo'], undefined)
 })
 
 test('resetLoadedExtensionsWhenRuntimeChanges clears loaded ids on stamp change', () => {

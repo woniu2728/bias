@@ -1,13 +1,84 @@
+import json
+from io import StringIO
 from django.test import TestCase
+from django.core.management import call_command
 from ninja_jwt.tokens import RefreshToken
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from extensions.discussions.backend.services import DiscussionService
-from extensions.posts.backend.services import PostService
-from extensions.users.backend.models import Group, Permission, User
+from apps.core.forum_registry import get_forum_registry
+from apps.core.extensions.runtime_access import (
+    create_runtime_discussion,
+)
+from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.mentions.backend.models import PostMentionsUser
-from extensions.tags.backend.models import Tag
+from apps.core.extensions.runtime_access import get_runtime_tag_model
+from apps.core.extensions.runtime_access import (
+    create_runtime_post,
+    set_runtime_post_hidden_state,
+    update_runtime_post,
+)
+from apps.core.extensions.runtime_access import (
+    get_runtime_group_model,
+    get_runtime_permission_model,
+    get_runtime_user_model,
+)
+
+
+class RuntimeModelProxy:
+    def __init__(self, resolver):
+        self._resolver = resolver
+
+    def __getattr__(self, name):
+        return getattr(self._resolver(), name)
+
+
+User = RuntimeModelProxy(get_runtime_user_model)
+Group = RuntimeModelProxy(get_runtime_group_model)
+Permission = RuntimeModelProxy(get_runtime_permission_model)
+Tag = RuntimeModelProxy(get_runtime_tag_model)
+
+
+class MentionsExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
+    def test_mentions_extension_registers_runtime_service_provider(self):
+        application = self.bootstrap_extensions("mentions")
+        service = application.get_service("mentions.service")
+
+        self.assertIn("mentions.service", application.get_service_provider_keys(extension_id="mentions"))
+        self.assertIs(service["model"], PostMentionsUser)
+
+    def test_mentions_capabilities_are_filtered_when_extension_disabled(self):
+        self.disable_extension_for_test("mentions")
+
+        registry = get_forum_registry()
+
+        self.assertFalse(any(item.module_id == "mentions" for item in registry.get_search_filters()))
+        self.assertFalse(any(item.module_id == "mentions" for item in registry.get_notification_types()))
+
+    def test_inspect_reports_mentions_model_as_extension_native(self):
+        stdout = StringIO()
+        call_command(
+            "inspect_extensions",
+            "--extension-id",
+            "mentions",
+            stdout=stdout,
+        )
+        payload = json.loads(stdout.getvalue())
+        extension = payload["extensions"][0]
+        audit = extension["model_ownership_audit"]
+        owned_item = audit["items"][0]
+
+        self.assertEqual(extension["id"], "mentions")
+        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+        self.assertEqual(audit["extension_native_count"], 1)
+        self.assertEqual(audit["app_label_migration_required_count"], 0)
+        self.assertEqual(audit["app_label_migration_plan_required_count"], 0)
+        self.assertTrue(all(item["storage_origin"] == "extension" for item in audit["items"]))
+        self.assertTrue(all(item["model_module"].startswith("extensions.mentions") for item in audit["items"]))
+        self.assertEqual(audit["app_label_migration_items"], [])
+        self.assertEqual(owned_item["current_app_label"], "mentions")
+        self.assertEqual(owned_item["target_app_label"], "mentions")
+        self.assertEqual(owned_item["migration_risk"], "none")
 
 
 class MentionsExtensionTests(TestCase):
@@ -23,12 +94,12 @@ class MentionsExtensionTests(TestCase):
             email="mention-admin@example.com",
             password="password123",
         )
-        self.discussion = DiscussionService.create_discussion(
+        self.discussion = create_runtime_discussion(
             title="Mention discussion",
             content="First post",
             user=self.author,
         )
-        self.post = PostService.create_post(
+        self.post = create_runtime_post(
             discussion_id=self.discussion.id,
             content="需要提及的内容",
             user=self.author,
@@ -96,8 +167,20 @@ class MentionsExtensionTests(TestCase):
             )
         )
 
+    def test_markdown_preview_keeps_username_route_for_unknown_mentions(self):
+        response = self.client.post(
+            "/api/preview",
+            data=json.dumps({
+                "content": "你好 @ghost"
+            }),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIn('href="/u/ghost"', response.json()["html"])
+
     def test_mentions_extension_conditionally_renders_tag_mentions_when_tags_enabled(self):
-        from apps.core.extensions import ConditionalExtender
+        from apps.core.extensions import ConditionalExtender, ServiceProviderExtender
         from apps.core.extensions.application import ExtensionApplication
         from apps.core.extensions.formatter_service import apply_extension_formatter_render, clear_extension_formatter_cache
         from extensions.mentions.backend.ext import tag_mentions_extenders
@@ -108,6 +191,11 @@ class MentionsExtensionTests(TestCase):
             runtime=SimpleNamespace(installed=True, enabled=True),
         )
         app = ExtensionApplication(extensions_to_boot=(tags_extension,))
+        ServiceProviderExtender(
+            "tags.service",
+            "extensions.tags.backend.runtime.tag_service_provider",
+        ).extend(app, SimpleNamespace(extension_id="tags"))
+        app.make("providers")
         extension = SimpleNamespace(extension_id="mentions")
         ConditionalExtender().when_extension_enabled("tags", tag_mentions_extenders).extend(app, extension)
         app.make("formatters")
@@ -128,7 +216,7 @@ class MentionsExtensionTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        reply = PostService.create_post(
+        reply = create_runtime_post(
             discussion_id=self.discussion.id,
             content=f"hello @{mentioned.username}",
             user=self.author,
@@ -188,17 +276,17 @@ class MentionsExtensionTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="提及过滤讨论",
             content="首帖内容",
             user=self.author,
         )
-        matched_post = PostService.create_post(
+        matched_post = create_runtime_post(
             discussion_id=discussion.id,
             content=f"Hello @{mentioned_user.username} 提及过滤关键字",
             user=self.author,
         )
-        PostService.create_post(
+        create_runtime_post(
             discussion_id=discussion.id,
             content=f"Hello @{other_user.username} 提及过滤关键字",
             user=self.author,
@@ -222,7 +310,7 @@ class MentionsExtensionTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="首帖提及过滤讨论",
             content=f"Hello @{mentioned_user.username} 首帖提及过滤关键字",
             user=self.author,
@@ -252,15 +340,16 @@ class MentionsExtensionTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        self.post.content = f"hello @{mentioned.username}"
-        self.post.content_html = PostService._render_markdown(self.post.content)
-        self.post.save(update_fields=["content", "content_html"])
-        PostMentionsUser.objects.create(post=self.post, mentions_user=mentioned)
+        update_runtime_post(self.post.id, self.author, f"hello @{mentioned.username}")
+        self.post.refresh_from_db()
+        self.assertTrue(PostMentionsUser.objects.filter(post=self.post, mentions_user=mentioned).exists())
 
-        PostService.set_hidden_state(self.post, self.admin, True)
+        set_runtime_post_hidden_state(self.post, self.admin, True)
 
         self.assertFalse(PostMentionsUser.objects.filter(post=self.post).exists())
 
-        PostService.set_hidden_state(self.post, self.admin, False)
+        set_runtime_post_hidden_state(self.post, self.admin, False)
 
         self.assertTrue(PostMentionsUser.objects.filter(post=self.post, mentions_user=mentioned).exists())
+
+

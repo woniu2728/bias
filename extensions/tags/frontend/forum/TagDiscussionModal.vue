@@ -72,15 +72,17 @@
 
 <script setup>
 import {
-  forumApi,
-  getUiCopy,
-  normalizeDiscussion,
+  api,
+  ref,
+  computed,
   onMounted,
   reactive,
-  computed,
-  ref,
-  useModalStore,
+  useModalStore
+} from '@bias/core'
+import {
+  getUiCopy
 } from '@bias/forum'
+import { normalizeDiscussion } from '@bias/discussions'
 import { flattenTags, normalizeTag, unwrapTagList } from './tagUtils.js'
 
 const props = defineProps({
@@ -169,7 +171,7 @@ async function loadTags() {
   errorMessage.value = ''
 
   try {
-    const response = await forumApi.get('/tags', {
+    const response = await api.get('/tags', {
       params: {
         include_children: true,
         purpose: 'start_discussion',
@@ -207,7 +209,7 @@ async function submit() {
   errorMessage.value = ''
 
   try {
-    const result = await forumApi.patch(
+    const result = await api.patch(
       `/discussions/${props.discussion.id}`,
       {
         data: {

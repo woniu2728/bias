@@ -2,17 +2,18 @@ from apps.core.extensions import (
     AdminSurfaceExtender,
     ApiResourceExtender,
     ApiRoutesExtender,
-    EventListenersExtender,
     FrontendExtender,
     LifecycleExtender,
     ModelExtender,
     ModelVisibilityExtender,
     PostLifecycleExtender,
+    RealtimeExtender,
     SettingsExtender,
+    ServiceProviderExtender,
 )
 from apps.core.extensions.backend import _build_setting_field_definition
-from apps.core.extensions.types import ExtensionEventListenerDefinition, ExtensionModelVisibilityDefinition
-from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
+from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+from extensions.flags.backend.events import PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
 from apps.core.forum_registry_types import AdminPageDefinition, PermissionDefinition
 from apps.core.resource_registry import (
     ResourceEndpointDefinition,
@@ -26,13 +27,9 @@ from extensions.flags.backend.handlers import (
     dispatch_post_resolve_flags,
 )
 from extensions.flags.backend.admin_api import router as flags_admin_router
-from extensions.flags.backend.listeners import (
-    handle_post_flag_created,
-    handle_post_flags_deleted,
-    handle_post_flags_resolved,
-)
 from extensions.flags.backend.lifecycle import prepare_post_delete_flags
 from extensions.flags.backend.resource import FlagResource
+from extensions.flags.backend.runtime import flag_service_provider
 from extensions.flags.backend.resources import (
     resolve_admin_open_flags,
     resolve_forum_can_view_flags,
@@ -73,6 +70,10 @@ def extend():
             mounts=(("/admin", flags_admin_router),),
             tags=("Admin",),
         ),
+        ServiceProviderExtender(
+            key="flags.service",
+            provider=flag_service_provider,
+        ),
         ApiResourceExtender(FlagResource),
         ApiResourceExtender("forum").fields(forum_resource_field_definitions),
         ApiResourceExtender("admin_stats").fields(admin_stats_resource_field_definitions),
@@ -89,8 +90,30 @@ def extend():
         ModelVisibilityExtender(
             definitions=flag_model_visibility_definitions(),
         ),
-        EventListenersExtender(
-            listeners=flag_event_listener_definitions(),
+        RealtimeExtender()
+        .broadcast_discussion_event(
+            PostFlagCreatedEvent,
+            "post.flagged",
+            include_discussion=True,
+            include_post=True,
+            post_id="post_id",
+            description="帖子被举报后向讨论实时流广播举报状态变更。",
+        )
+        .broadcast_discussion_event(
+            PostFlagsResolvedEvent,
+            "post.flags_resolved",
+            include_discussion=True,
+            include_post=True,
+            post_id="post_id",
+            description="帖子举报被处理后向讨论实时流广播举报状态变更。",
+        )
+        .broadcast_discussion_event(
+            PostFlagsDeletedEvent,
+            "post.flags_deleted",
+            include_discussion=True,
+            include_post=True,
+            post_id="post_id",
+            description="帖子举报被删除后向讨论实时流广播举报状态变更。",
         ),
         PostLifecycleExtender().handler(
             "flags",
@@ -319,26 +342,6 @@ def post_resource_endpoint_definitions():
     )
 
 
-def flag_event_listener_definitions():
-    return (
-        ExtensionEventListenerDefinition(
-            event_type=PostFlagCreatedEvent,
-            handler=handle_post_flag_created,
-            description="帖子被举报后向讨论实时流广播举报状态变更。",
-        ),
-        ExtensionEventListenerDefinition(
-            event_type=PostFlagsResolvedEvent,
-            handler=handle_post_flags_resolved,
-            description="帖子举报被处理后向讨论实时流广播举报状态变更。",
-        ),
-        ExtensionEventListenerDefinition(
-            event_type=PostFlagsDeletedEvent,
-            handler=handle_post_flags_deleted,
-            description="帖子举报被删除后向讨论实时流广播举报状态变更。",
-        ),
-    )
-
-
 def flag_model_visibility_definitions():
     return (
         ExtensionModelVisibilityDefinition(
@@ -395,24 +398,4 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Flags 扩展已卸载。",
-    }
-
-
-def run_migrations(context):
-    return _migration_hook_result(context, "run_migrations", "Flags 扩展迁移已执行。")
-
-
-def rollback_migrations(context):
-    return _migration_hook_result(context, "rollback_migrations", "Flags 扩展迁移已回滚。")
-
-
-def _migration_hook_result(context, hook: str, message: str):
-    return {
-        "hook": hook,
-        "status": "ok",
-        "status_label": "已执行",
-        "message": message,
-        "details": {
-            "migration_namespace": context.migration_namespace,
-        },
     }

@@ -10,15 +10,15 @@ from apps.core.extensions import (
     ModelExtender,
     NotificationsExtender,
     PostLifecycleExtender,
+    RuntimeModel,
+    ServiceProviderExtender,
 )
 from apps.core.extensions.types import ExtensionEventListenerDefinition
-from apps.core.forum_events import UserMentionedEvent
+from extensions.mentions.backend.events import UserMentionedEvent
 from apps.core.forum_registry_types import NotificationTypeDefinition, PermissionDefinition, SearchFilterDefinition, UserPreferenceDefinition
 from apps.core.resource_registry import ResourceFieldDefinition
-from extensions.posts.backend.models import Post
-from extensions.users.backend.services import UserService
-from extensions.users.backend.models import User
 from extensions.mentions.backend.models import PostMentionsUser
+from apps.core.extensions.runtime_access import has_runtime_forum_permission
 from extensions.mentions.backend.formatter import render_mentions_html
 from extensions.mentions.backend.lifecycle import (
     apply_post_approved_mentions,
@@ -32,14 +32,16 @@ from extensions.mentions.backend.resources import (
     post_mentions_preload_resolver,
     resolve_post_mentions_user_models,
 )
+from extensions.mentions.backend.runtime import mention_service_provider
 from extensions.mentions.backend.search import (
     apply_post_mentioned_me_search_filter,
     parse_mentioned_me_search_filter,
 )
-from extensions.mentions.backend.tag_mentions import render_tag_mentions_html
 
 
 EXTENSION_ID = "mentions"
+POST_MODEL = RuntimeModel("posts.service", description="posts 扩展提供的帖子模型。")
+USER_MODEL = RuntimeModel("users.service", description="users 扩展提供的用户模型。")
 
 
 def extend():
@@ -62,15 +64,19 @@ def extend():
         EventListenersExtender(
             listeners=mention_event_listener_definitions(),
         ),
+        ServiceProviderExtender(
+            key="mentions.service",
+            provider=mention_service_provider,
+        ),
         FormatterExtender(transforms=(
             render_mentions_html,
         )),
-        ModelExtender(model=Post).owns(
+        ModelExtender(model=POST_MODEL).owns(
             PostMentionsUser,
             description="帖子提及用户关系由 mentions 扩展拥有。",
         ).belongs_to_many(
             "mentionsUsers",
-            User,
+            USER_MODEL,
             resolver=resolve_post_mentions_user_models,
             description="帖子中被提及的用户模型关系。",
         ),
@@ -185,7 +191,7 @@ def user_detail_resource_field_definitions():
 
 def resolve_user_can_mention_groups(user, context: dict) -> bool:
     actor = context.get("user")
-    return bool(actor and UserService.has_forum_permission(actor, "mentionGroups"))
+    return bool(actor and has_runtime_forum_permission(actor, "mentionGroups"))
 
 
 def _visible_to_self(user, context: dict) -> bool:
@@ -194,6 +200,8 @@ def _visible_to_self(user, context: dict) -> bool:
 
 
 def tag_mentions_extenders():
+    from extensions.mentions.backend.tag_mentions import render_tag_mentions_html
+
     return [
         FormatterExtender().render(render_tag_mentions_html),
     ]
@@ -231,24 +239,4 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Mentions 扩展已卸载。",
-    }
-
-
-def run_migrations(context):
-    return _migration_hook_result(context, "run_migrations", "Mentions 扩展迁移已执行。")
-
-
-def rollback_migrations(context):
-    return _migration_hook_result(context, "rollback_migrations", "Mentions 扩展迁移已回滚。")
-
-
-def _migration_hook_result(context, hook: str, message: str):
-    return {
-        "hook": hook,
-        "status": "ok",
-        "status_label": "已执行",
-        "message": message,
-        "details": {
-            "migration_namespace": context.migration_namespace,
-        },
     }

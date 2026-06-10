@@ -9,8 +9,7 @@
     "Bias"
   ],
   "dependencies": [
-    "core",
-    "notifications"
+    "core"
   ],
   "provides": [
     "websocket",
@@ -18,6 +17,8 @@
     "typing"
   ],
   "backend_entry": "extensions.realtime.backend.ext",
+  "frontend_admin_entry": "extensions/realtime/frontend/admin/index.js",
+  "frontend_forum_entry": "extensions/realtime/frontend/forum/index.js",
   "compatibility": {
     "bias_version": "^1.0.0",
     "api_version": "1.0",

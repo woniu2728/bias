@@ -6,9 +6,12 @@ import {
   getDiscussionListContexts,
   getDiscussionListHero,
   getDiscussionListRequests,
+  getAuthModalProvider,
   getComposerAutocompleteProviders,
   getComposerDraftMeta,
   getComposerFields,
+  getComposerHosts,
+  getComposerUploadHandler,
   getFeedbackNote,
   getDiscussionReplyState,
   getDiscussionReviewBanner,
@@ -22,8 +25,10 @@ import {
   getProfilePanels,
   getPostActions,
   getPostActionHandler,
+  getSearchModalProvider,
   getSearchModalSections,
   getSearchSources,
+  getStartDiscussionProvider,
   getStateBlock,
   getUiCopy,
   getPostFlagPanel,
@@ -32,6 +37,8 @@ import {
   registerComposerAutocompleteProvider,
   registerComposerDraftMeta,
   registerComposerField,
+  registerComposerHost,
+  registerComposerUploadHandler,
   registerComposerInitialState,
   registerComposerPayloadContributor,
   registerComposerPreviewTransformer,
@@ -59,16 +66,19 @@ import {
   registerPostActionHandler,
   registerPostFlagPanel,
   registerPostReviewBanner,
+  registerAuthModalProvider,
   registerPostStateBadge,
+  registerSearchModalProvider,
   registerSearchModalSection,
   registerSearchSource,
+  registerStartDiscussionProvider,
   runComposerInitialStateContributors,
   runComposerPayloadContributors,
   runComposerPreviewTransformers,
   runComposerSubmitSuccess,
   runForumRuntimeHook,
 } from './frontendRegistry.js'
-import { getForumRealtimeEventPolicy } from '../utils/forumRealtime.js'
+import { getForumRealtimeEventPolicy } from '../../../extensions/realtime/frontend/forum/forumRealtime.js'
 import {
   resolveDiscussionAction,
   runDiscussionAction,
@@ -233,6 +243,82 @@ test('header items preserve custom component registrations', () => {
   assert.equal(item.key, key)
   assert.equal(item.component, 'NotificationMenuComponent')
   assert.deepEqual(item.componentProps, { unread: 5 })
+})
+
+test('auth modal provider resolves extension-owned opener by module state', async () => {
+  const hiddenKey = uniqueKey('auth-provider-hidden')
+  const visibleKey = uniqueKey('auth-provider-visible')
+  const calls = []
+
+  registerAuthModalProvider({
+    key: hiddenKey,
+    moduleId: 'disabled-auth',
+    order: 5,
+    open() {
+      calls.push('hidden')
+    },
+  })
+
+  registerAuthModalProvider({
+    key: visibleKey,
+    moduleId: 'users',
+    order: 10,
+    open(payload) {
+      calls.push(payload.mode)
+      return 'opened'
+    },
+  })
+
+  const provider = getAuthModalProvider({
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId !== 'disabled-auth'
+      },
+    },
+  })
+
+  assert.equal(provider.key, visibleKey)
+  assert.equal(await provider.open({ mode: 'login' }), 'opened')
+  assert.deepEqual(calls, ['login'])
+})
+
+test('search modal provider resolves extension-owned opener by module state', async () => {
+  const hiddenKey = uniqueKey('search-provider-hidden')
+  const visibleKey = uniqueKey('search-provider-visible')
+  const calls = []
+
+  registerSearchModalProvider({
+    key: hiddenKey,
+    moduleId: 'disabled-search',
+    order: 5,
+    open() {
+      calls.push('hidden')
+    },
+  })
+
+  registerSearchModalProvider({
+    key: visibleKey,
+    moduleId: 'search',
+    order: 10,
+    component: 'SearchModalComponent',
+    open(payload) {
+      calls.push(payload.initialQuery)
+      return 'opened'
+    },
+  })
+
+  const provider = getSearchModalProvider({
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId !== 'disabled-search'
+      },
+    },
+  })
+
+  assert.equal(provider.key, visibleKey)
+  assert.equal(provider.component, 'SearchModalComponent')
+  assert.equal(await provider.open({ initialQuery: 'bias' }), 'opened')
+  assert.deepEqual(calls, ['bias'])
 })
 
 test('resolved items preserve top-level dynamic fields when resolve omits them', () => {
@@ -529,6 +615,42 @@ test('search modal sections resolve by order, surface and module state', () => {
     ...context,
     surface: 'other-surface',
   }).filter(item => [earlyKey, lateKey].includes(item.key)), [])
+})
+
+test('start discussion provider resolves extension-owned handler by module state', () => {
+  const enabledKey = uniqueKey('start-discussion-enabled')
+  const disabledKey = uniqueKey('start-discussion-disabled')
+  const calls = []
+
+  registerStartDiscussionProvider({
+    key: disabledKey,
+    moduleId: 'disabled-module',
+    order: 5,
+    start: () => calls.push('disabled'),
+  })
+
+  registerStartDiscussionProvider({
+    key: enabledKey,
+    moduleId: 'discussions',
+    order: 10,
+    start: ({ source }) => {
+      calls.push(source)
+      return true
+    },
+  })
+
+  const provider = getStartDiscussionProvider({
+    source: 'test-start',
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId === 'discussions'
+      },
+    },
+  })
+
+  assert.equal(provider.key, enabledKey)
+  assert.equal(provider.start({ source: 'test-start' }), true)
+  assert.deepEqual(calls, ['test-start'])
 })
 
 test('forum runtime hooks run in order and respect module state', async () => {
@@ -2119,6 +2241,47 @@ test('ui copy resolves discussion composer copy', () => {
   assert.equal(pendingResult.text, 'discussion pending')
 })
 
+test('composer hosts resolve extension-owned components by order and module state', () => {
+  const firstKey = uniqueKey('composer-host-first')
+  const hiddenKey = uniqueKey('composer-host-hidden')
+  const secondKey = uniqueKey('composer-host-second')
+
+  registerComposerHost({
+    key: secondKey,
+    moduleId: 'posts',
+    order: 20,
+    component: 'PostComposerHost',
+  })
+  registerComposerHost({
+    key: firstKey,
+    moduleId: 'discussions',
+    order: 10,
+    component: 'DiscussionComposerHost',
+    componentProps: ({ requestId }) => ({ requestId }),
+  })
+  registerComposerHost({
+    key: hiddenKey,
+    moduleId: 'disabled-composer',
+    order: 5,
+    component: 'HiddenComposerHost',
+  })
+
+  const hosts = getComposerHosts({
+    requestId: 42,
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId !== 'disabled-composer'
+      },
+    },
+  })
+
+  assert.equal(hosts.some(item => item.key === hiddenKey), false)
+  assert.equal(hosts[0].key, firstKey)
+  assert.equal(hosts[0].component, 'DiscussionComposerHost')
+  assert.deepEqual(hosts[0].componentProps, { requestId: 42 })
+  assert.equal(hosts[1].key, secondKey)
+})
+
 test('composer draft meta returns ordered visible items', () => {
   const discussionKey = uniqueKey('composer-draft-discussion')
   const postKey = uniqueKey('composer-draft-post')
@@ -2414,6 +2577,40 @@ test('composer autocomplete providers resolve by order, surface and module state
   assert.deepEqual(getComposerAutocompleteProviders({
     surface: 'other-surface',
   }).filter(item => [firstKey, secondKey, hiddenKey].includes(item.key)), [])
+})
+
+test('composer upload handler resolves extension-owned uploader by module state', () => {
+  const handlerKey = uniqueKey('composer-upload-handler')
+  const hiddenKey = uniqueKey('composer-upload-hidden')
+
+  registerComposerUploadHandler({
+    key: hiddenKey,
+    moduleId: 'disabled-uploads',
+    order: 5,
+    upload: () => ({ markdown: 'hidden' }),
+  })
+
+  registerComposerUploadHandler({
+    key: handlerKey,
+    moduleId: 'uploads',
+    order: 10,
+    upload: ({ fileName }) => ({ markdown: `[${fileName}](/file)` }),
+  })
+
+  const handler = getComposerUploadHandler({
+    fileName: 'report.pdf',
+    forumStore: {
+      isModuleEnabled(moduleId) {
+        return moduleId !== 'disabled-uploads'
+      },
+    },
+  })
+
+  assert.equal(handler.key, handlerKey)
+  assert.deepEqual(handler.upload({ fileName: 'report.pdf' }), { markdown: '[report.pdf](/file)' })
+  assert.equal(getComposerUploadHandler({
+    forumStore: { isModuleEnabled: () => false },
+  })?.key === handlerKey, false)
 })
 
 test('composer preview transformers run in order and pass transformed html forward', async () => {

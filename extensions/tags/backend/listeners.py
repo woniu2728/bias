@@ -1,21 +1,15 @@
-from apps.core.forum_events import (
-    DiscussionApprovedEvent,
-    PostApprovedEvent,
-    PostCreatedEvent,
-    PostDeletedEvent,
-    PostHiddenEvent,
-    PostRejectedEvent,
-)
-from extensions.discussions.backend.realtime import broadcast_discussion_event
-from extensions.discussions.backend.timeline import (
-    build_discussion_tagged_content,
-    create_timeline_from_builder,
-    make_timeline_context,
+from apps.core.extensions.runtime_access import (
+    create_runtime_timeline_from_builder,
 )
 from extensions.tags.backend.events import (
     DiscussionTaggedEvent,
     DiscussionTagStatsRefreshEvent,
     TagStatsRefreshRequestedEvent,
+)
+from apps.core.extensions.runtime_access import (
+    dispatch_runtime_tag_stats_refresh,
+    refresh_runtime_discussion_tag_stats,
+    refresh_runtime_tag_stats,
 )
 
 
@@ -39,15 +33,9 @@ def enrich_realtime_tags_included_payload(*, discussion=None, post_payload=None,
 
 
 def _iter_discussion_tags(discussion):
-    links = getattr(discussion, "discussion_tags", None)
-    if links is None:
-        return []
-    resolved = []
-    for link in links.all() if hasattr(links, "all") else links:
-        tag = getattr(link, "tag", None)
-        if tag is not None:
-            resolved.append(tag)
-    return resolved
+    from extensions.tags.backend.tag_relationships import get_discussion_tags
+
+    return get_discussion_tags(discussion)
 
 
 def _merge_tag_payload(target: dict, tag, *, fallback_discussion=None) -> None:
@@ -67,74 +55,52 @@ def _merge_tag_payload(target: dict, tag, *, fallback_discussion=None) -> None:
     target[int(payload["id"])] = payload
 
 
-def handle_discussion_approved_tag_stats(event: DiscussionApprovedEvent) -> None:
-    from extensions.tags.backend.services import TagService
-
-    TagService.refresh_discussion_tag_stats(event.discussion_id)
+def handle_discussion_approved_tag_stats(event) -> None:
+    refresh_runtime_discussion_tag_stats(event.discussion_id)
 
 
 def handle_discussion_tagged(event: DiscussionTaggedEvent) -> None:
-    from extensions.tags.backend.services import TagService
-
     if event.tag_ids:
-        TagService.refresh_tag_stats(list(event.tag_ids))
+        refresh_runtime_tag_stats(list(event.tag_ids))
     else:
-        TagService.refresh_discussion_tag_stats(event.discussion_id)
-    broadcast_discussion_event(
-        event.discussion_id,
-        "discussion.tagged",
-        include_discussion=True,
-        extension_context={"tags": {"tag_ids": list(event.tag_ids)}} if event.tag_ids else None,
-    )
-    create_timeline_from_builder(
-        make_timeline_context(event, post_type="discussionTagged"),
-        build_discussion_tagged_content,
+        refresh_runtime_discussion_tag_stats(event.discussion_id)
+    create_runtime_timeline_from_builder(
+        event,
+        "discussion_tagged",
+        extra={"post_type": "discussionTagged"},
     )
 
 
-def handle_post_created_tag_stats(event: PostCreatedEvent) -> None:
+def handle_post_created_tag_stats(event) -> None:
     if not event.is_approved:
         return
 
-    from extensions.tags.backend.services import TagService
-
-    TagService.refresh_discussion_tag_stats(event.discussion_id)
+    refresh_runtime_discussion_tag_stats(event.discussion_id)
 
 
-def handle_post_approved_tag_stats(event: PostApprovedEvent) -> None:
-    from extensions.tags.backend.services import TagService
-
-    TagService.refresh_discussion_tag_stats(event.discussion_id)
+def handle_post_approved_tag_stats(event) -> None:
+    refresh_runtime_discussion_tag_stats(event.discussion_id)
 
 
-def handle_post_deleted_tag_stats(event: PostDeletedEvent) -> None:
-    from extensions.tags.backend.services import TagService
-
-    TagService.refresh_discussion_tag_stats(event.discussion_id)
+def handle_post_deleted_tag_stats(event) -> None:
+    refresh_runtime_discussion_tag_stats(event.discussion_id)
 
 
-def handle_post_hidden_tag_stats(event: PostHiddenEvent) -> None:
-    from extensions.tags.backend.services import TagService
-
-    TagService.refresh_discussion_tag_stats(event.discussion_id)
+def handle_post_hidden_tag_stats(event) -> None:
+    refresh_runtime_discussion_tag_stats(event.discussion_id)
 
 
-def handle_post_rejected_tag_stats(event: PostRejectedEvent) -> None:
-    from extensions.tags.backend.services import TagService
-
-    TagService.refresh_discussion_tag_stats(event.discussion_id)
+def handle_post_rejected_tag_stats(event) -> None:
+    refresh_runtime_discussion_tag_stats(event.discussion_id)
 
 
 def handle_discussion_tag_stats_refresh(event: DiscussionTagStatsRefreshEvent) -> None:
-    from extensions.tags.backend.services import TagService
-
-    TagService.refresh_discussion_tag_stats(event.discussion_id)
+    refresh_runtime_discussion_tag_stats(event.discussion_id)
 
 
 def handle_tag_stats_refresh_requested(event: TagStatsRefreshRequestedEvent) -> None:
     if not event.tag_ids:
         return
 
-    from extensions.tags.backend.services import TagService
+    dispatch_runtime_tag_stats_refresh(list(event.tag_ids))
 
-    TagService.dispatch_refresh_tag_stats(list(event.tag_ids))

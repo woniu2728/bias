@@ -1,7 +1,7 @@
 """搜索扩展业务逻辑层。"""
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from django.db import connection
@@ -9,10 +9,6 @@ from django.db.models import OuterRef, Q, Subquery
 
 from apps.core.forum_registry import get_forum_registry
 from apps.core.services import PaginationService
-from extensions.discussions.backend.visibility import apply_discussion_visibility_scope, apply_post_visibility_scope
-from extensions.discussions.backend.models import Discussion
-from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
 
 try:
     import jieba
@@ -32,6 +28,40 @@ def _get_forum_registry():
 
 def _get_searchable_post_type_codes() -> tuple[str, ...]:
     return _get_forum_registry().get_searchable_post_type_codes()
+
+
+def _get_search_target(target: str) -> dict[str, Any]:
+    normalized = str(target or "").strip()
+    try:
+        from apps.core.extensions.runtime_access import get_extension_host_service
+
+        provider = get_extension_host_service(f"search.target.{normalized}")
+    except Exception:
+        provider = None
+    if callable(provider):
+        provider = provider()
+    if isinstance(provider, dict):
+        return provider
+    raise RuntimeError(f"搜索目标未注册: search.target.{normalized}")
+
+
+def _get_search_target_model(target: str):
+    model = _get_search_target(target).get("model")
+    if model is None:
+        raise RuntimeError(f"搜索目标缺少模型: search.target.{target}")
+    return model
+
+
+def _get_discussion_first_post_model():
+    provider = _get_search_target("discussion")
+    return provider.get("first_post_model") or _get_search_target_model("post")
+
+
+def _apply_search_target_visibility(target: str, queryset, *, user=None):
+    handler = _get_search_target(target).get("apply_visibility")
+    if callable(handler):
+        return handler(queryset, user)
+    return queryset
 
 
 @dataclass
@@ -186,9 +216,11 @@ class SearchService:
                 queryset = SearchService._apply_postgres_discussion_search(queryset, text_query, user=user)
             else:
                 searchable_post_types = _get_searchable_post_type_codes()
+                post_model = _get_search_target_model("post")
                 title_match_q = SearchService.build_text_query(['title', 'slug'], text_query)
-                visible_post_discussion_ids = apply_post_visibility_scope(
-                    Post.objects.filter(type__in=searchable_post_types).filter(
+                visible_post_discussion_ids = _apply_search_target_visibility(
+                    "post",
+                    post_model.objects.filter(type__in=searchable_post_types).filter(
                         SearchService.build_text_query(["content"], text_query),
                     ),
                     user=user,
@@ -388,7 +420,7 @@ class SearchService:
         user=None,
         context: SearchContext | None = None,
         preload=None,
-    ) -> Tuple[List[Discussion], int]:
+    ) -> Tuple[List[Any], int]:
         context = context or SearchService.build_search_context(query, user=user, include_users=False)
         queryset = context.discussion_queryset
         if preload is not None:
@@ -402,7 +434,7 @@ class SearchService:
         page: int = 1,
         limit: int = 20,
         user=None,
-    ) -> List[Discussion]:
+    ) -> List[Any]:
         queryset = SearchService._discussion_queryset(query, user=user)
         return SearchService._search_discussions_queryset(queryset, query, page, limit)
 
@@ -414,7 +446,7 @@ class SearchService:
         user=None,
         context: SearchContext | None = None,
         preload=None,
-    ) -> Tuple[List[Post], int]:
+    ) -> Tuple[List[Any], int]:
         context = context or SearchService.build_search_context(query, user=user, include_users=False)
         queryset = context.post_queryset
         if preload is not None:
@@ -428,7 +460,7 @@ class SearchService:
         page: int = 1,
         limit: int = 20,
         user=None,
-    ) -> List[Post]:
+    ) -> List[Any]:
         queryset = SearchService._post_queryset(query, user=user)
         return SearchService._search_posts_queryset(queryset, query, page, limit)
 
@@ -439,7 +471,7 @@ class SearchService:
         limit: int = 20,
         context: SearchContext | None = None,
         preload=None,
-    ) -> Tuple[List[User], int]:
+    ) -> Tuple[List[Any], int]:
         context = context or SearchService.build_search_context(query, include_users=True)
         queryset = context.user_queryset
         if preload is not None:
@@ -452,12 +484,12 @@ class SearchService:
         query: str,
         page: int = 1,
         limit: int = 20,
-    ) -> List[User]:
+    ) -> List[Any]:
         queryset = SearchService._user_queryset(query)
         return SearchService._search_users_queryset(queryset, page, limit)
 
     @staticmethod
-    def _search_users_queryset(queryset, page: int = 1, limit: int = 20) -> List[User]:
+    def _search_users_queryset(queryset, page: int = 1, limit: int = 20) -> List[Any]:
         if SearchService._queryset_has_annotation(queryset, "search_rank"):
             queryset = queryset.order_by('-search_rank', '-discussion_count', '-comment_count')
         else:
@@ -493,26 +525,30 @@ class SearchService:
 
     @staticmethod
     def _discussion_queryset(query: str, user=None):
-        queryset = SearchService.apply_discussion_search(Discussion.objects.all(), query, user=user).distinct()
-        return apply_discussion_visibility_scope(queryset, user)
+        discussion_model = _get_search_target_model("discussion")
+        queryset = SearchService.apply_discussion_search(discussion_model.objects.all(), query, user=user).distinct()
+        return _apply_search_target_visibility("discussion", queryset, user=user)
 
     @staticmethod
     def _post_queryset(query: str, user=None):
         searchable_post_types = _get_searchable_post_type_codes()
+        post_model = _get_search_target_model("post")
         queryset = SearchService.apply_post_search(
-            Post.objects.filter(type__in=searchable_post_types),
+            post_model.objects.filter(type__in=searchable_post_types),
             query,
             user=user,
         )
-        return apply_post_visibility_scope(queryset, user)
+        return _apply_search_target_visibility("post", queryset, user=user)
 
     @staticmethod
     def _user_queryset(query: str):
-        return SearchService.apply_user_search(User.objects.all(), query)
+        user_model = _get_search_target_model("user")
+        return SearchService.apply_user_search(user_model.objects.all(), query)
 
     @staticmethod
-    def _search_discussions_queryset(queryset, query: str, page: int, limit: int) -> List[Discussion]:
-        first_post_content = Post.objects.filter(
+    def _search_discussions_queryset(queryset, query: str, page: int, limit: int) -> List[Any]:
+        first_post_model = _get_discussion_first_post_model()
+        first_post_content = first_post_model.objects.filter(
             id=OuterRef("first_post_id"),
         ).values("content")[:1]
         queryset = queryset.select_related('user', 'last_posted_user').annotate(
@@ -537,7 +573,7 @@ class SearchService:
         return discussions
 
     @staticmethod
-    def _search_posts_queryset(queryset, query: str, page: int, limit: int) -> List[Post]:
+    def _search_posts_queryset(queryset, query: str, page: int, limit: int) -> List[Any]:
         queryset = queryset.select_related('user', 'discussion')
         if SearchService._queryset_has_annotation(queryset, "search_rank"):
             queryset = queryset.order_by('-search_rank', '-created_at')
@@ -579,12 +615,14 @@ class SearchService:
             + SearchVector('slug', weight='B', config=POSTGRES_FULL_TEXT_CONFIG)
         )
         searchable_post_types = _get_searchable_post_type_codes()
+        post_model = _get_search_target_model("post")
         visible_post_discussion_ids = SearchService.apply_post_search(
-            Post.objects.filter(type__in=searchable_post_types),
+            post_model.objects.filter(type__in=searchable_post_types),
             query,
             user=user,
         )
-        visible_post_discussion_ids = apply_post_visibility_scope(
+        visible_post_discussion_ids = _apply_search_target_visibility(
+            "post",
             visible_post_discussion_ids,
             user=user,
         ).values("discussion_id")
@@ -603,3 +641,4 @@ class SearchService:
     @staticmethod
     def _queryset_has_annotation(queryset, name: str) -> bool:
         return name in getattr(getattr(queryset, "query", None), "annotations", {})
+

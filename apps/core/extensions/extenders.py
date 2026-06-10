@@ -22,6 +22,7 @@ from apps.core.extensions.types import (
     ExtensionSettingResetDefinition,
     ExtensionSettingThemeVariableDefinition,
     ExtensionModelDefinition,
+    ExtensionModelReference,
     ExtensionModelRelationDefinition,
     ExtensionModelSlugDriverDefinition,
     ExtensionModelVisibilityDefinition,
@@ -34,8 +35,11 @@ from apps.core.extensions.types import (
     ExtensionResourceObjectDefinition,
     ExtensionResourceRelationshipDefinition,
     ExtensionResourceSortDefinition,
+    ExtensionRealtimeDiscussionBroadcastDefinition,
+    ExtensionRealtimeDiscussionTransportDefinition,
     ExtensionRealtimeIncludedDefinition,
     ExtensionSearchDriverDefinition,
+    ExtensionSearchIndexDefinition,
     ExtensionSignalDefinition,
     ExtensionSystemHookDefinition,
     ExtensionValidatorDefinition,
@@ -125,6 +129,23 @@ class FrontendExtender:
     title_driver: Any = None
     routes: tuple[ExtensionFrontendRouteDefinition, ...] = ()
 
+    def admin(self, path: str) -> "FrontendExtender":
+        return replace(self, admin_entry=str(path or "").strip())
+
+    def forum(self, path: str) -> "FrontendExtender":
+        return replace(self, forum_entry=str(path or "").strip())
+
+    def common(self, path: str) -> "FrontendExtender":
+        return replace(self, common_entry=str(path or "").strip())
+
+    def js(self, path: str, *, frontend: str = "forum") -> "FrontendExtender":
+        target = str(frontend or "forum").strip().lower() or "forum"
+        if target == "admin":
+            return self.admin(path)
+        if target == "common":
+            return self.common(path)
+        return self.forum(path)
+
     def css(self, path: str) -> "FrontendExtender":
         return FrontendExtender(
             admin_entry=self.admin_entry,
@@ -138,6 +159,9 @@ class FrontendExtender:
             title_driver=self.title_driver,
             routes=self.routes,
         )
+
+    def jsDirectory(self, path: str) -> "FrontendExtender":
+        return self.js_directory(path)
 
     def js_directory(self, path: str) -> "FrontendExtender":
         return FrontendExtender(
@@ -154,13 +178,16 @@ class FrontendExtender:
         )
 
     def preload(self, *items: Any) -> "FrontendExtender":
+        normalized_items = items
+        if len(items) == 1 and isinstance(items[0], (list, tuple)):
+            normalized_items = tuple(items[0])
         return FrontendExtender(
             admin_entry=self.admin_entry,
             forum_entry=self.forum_entry,
             common_entry=self.common_entry,
             css_files=self.css_files,
             js_directories=self.js_directories,
-            preloads=tuple([*self.preloads, *items]),
+            preloads=tuple([*self.preloads, *normalized_items]),
             content_callbacks=self.content_callbacks,
             document_attributes=self.document_attributes,
             title_driver=self.title_driver,
@@ -187,6 +214,9 @@ class FrontendExtender:
             routes=self.routes,
         )
 
+    def extraDocumentAttributes(self, attributes: Any) -> "FrontendExtender":
+        return self.extra_document_attributes(attributes)
+
     def extra_document_attributes(self, attributes: Any) -> "FrontendExtender":
         return FrontendExtender(
             admin_entry=self.admin_entry,
@@ -200,6 +230,9 @@ class FrontendExtender:
             title_driver=self.title_driver,
             routes=self.routes,
         )
+
+    def extraDocumentClasses(self, classes: Any) -> "FrontendExtender":
+        return self.extra_document_classes(classes)
 
     def extra_document_classes(self, classes: Any) -> "FrontendExtender":
         return self.extra_document_attributes({"class": classes})
@@ -217,6 +250,9 @@ class FrontendExtender:
             title_driver=driver,
             routes=self.routes,
         )
+
+    def removeRoute(self, name: str, *, frontend: str = "forum") -> "FrontendExtender":
+        return self.remove_route(name, frontend=frontend)
 
     def remove_route(self, name: str, *, frontend: str = "forum") -> "FrontendExtender":
         normalized = str(name or "").strip()
@@ -1504,6 +1540,14 @@ class ModelExtender:
         app.resolving("models", apply)
 
 
+def RuntimeModel(service_key: str, attribute: str = "model", *, description: str = "") -> ExtensionModelReference:
+    return ExtensionModelReference(
+        service_key=str(service_key or "").strip(),
+        attribute=str(attribute or "model").strip() or "model",
+        description=str(description or "").strip(),
+    )
+
+
 @dataclass(frozen=True)
 class ModelVisibilityExtender:
     definitions: tuple[ExtensionModelVisibilityDefinition, ...] = ()
@@ -1705,14 +1749,39 @@ class SearchDriverExtender:
 @dataclass(frozen=True)
 class SearchIndexExtender:
     indexers: tuple[tuple[Any, Any], ...] = ()
+    indexes: tuple[ExtensionSearchIndexDefinition, ...] = ()
 
     def indexer(self, model: Any, indexer: Any) -> "SearchIndexExtender":
         if model is None or indexer is None:
             return self
-        return SearchIndexExtender(indexers=tuple([*self.indexers, (model, indexer)]))
+        return SearchIndexExtender(
+            indexers=tuple([*self.indexers, (model, indexer)]),
+            indexes=self.indexes,
+        )
+
+    def postgres_index(
+        self,
+        name: str,
+        *,
+        drop: str,
+        create: str | Callable[[], str],
+        description: str = "",
+    ) -> "SearchIndexExtender":
+        normalized = str(name or "").strip()
+        if not normalized:
+            return self
+        return SearchIndexExtender(
+            indexers=self.indexers,
+            indexes=tuple([*self.indexes, ExtensionSearchIndexDefinition(
+                name=normalized,
+                drop=str(drop or "").strip(),
+                create=create,
+                description=str(description or "").strip(),
+            )]),
+        )
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
-        if not self.indexers:
+        if not self.indexers and not self.indexes:
             return
         extension_id = extension.extension_id
 
@@ -1726,6 +1795,8 @@ class SearchIndexExtender:
                     model=model,
                     indexers=(indexer,),
                 )])
+            for definition in self.indexes:
+                search.register_index_definition(extension_id, definition)
             return search
 
         app.resolving("search", apply)
@@ -1915,6 +1986,8 @@ class SignalExtender:
 class RealtimeExtender:
     included: tuple[ExtensionRealtimeIncludedDefinition, ...] = ()
     discussion_visibility_resolvers: tuple[ExtensionSystemHookDefinition, ...] = ()
+    discussion_transports: tuple[ExtensionRealtimeDiscussionTransportDefinition, ...] = ()
+    discussion_broadcasts: tuple[ExtensionRealtimeDiscussionBroadcastDefinition, ...] = ()
 
     def included_payload(self, key: str, handler: Any, *, description: str = "") -> "RealtimeExtender":
         return RealtimeExtender(
@@ -1927,6 +2000,8 @@ class RealtimeExtender:
                 ),
             ]),
             discussion_visibility_resolvers=self.discussion_visibility_resolvers,
+            discussion_transports=self.discussion_transports,
+            discussion_broadcasts=self.discussion_broadcasts,
         )
 
     def discussion_visibility(
@@ -1948,10 +2023,67 @@ class RealtimeExtender:
                     order=int(order),
                 ),
             ]),
+            discussion_transports=self.discussion_transports,
+            discussion_broadcasts=self.discussion_broadcasts,
+        )
+
+    def discussion_transport(self, key: str, handler: Any, *, description: str = "") -> "RealtimeExtender":
+        return RealtimeExtender(
+            included=self.included,
+            discussion_visibility_resolvers=self.discussion_visibility_resolvers,
+            discussion_transports=tuple([
+                *self.discussion_transports,
+                ExtensionRealtimeDiscussionTransportDefinition(
+                    key=str(key or "").strip(),
+                    handler=handler,
+                    description=str(description or "").strip(),
+                ),
+            ]),
+            discussion_broadcasts=self.discussion_broadcasts,
+        )
+
+    def broadcast_discussion_event(
+        self,
+        event_type: Any,
+        event_name: Any,
+        *,
+        discussion_id: Any = "discussion_id",
+        include_discussion: bool = False,
+        include_post: bool = False,
+        post_id: Any = None,
+        post_id_getter: Any = None,
+        extension_context: Any = None,
+        condition: Any = None,
+        description: str = "",
+    ) -> "RealtimeExtender":
+        return RealtimeExtender(
+            included=self.included,
+            discussion_visibility_resolvers=self.discussion_visibility_resolvers,
+            discussion_transports=self.discussion_transports,
+            discussion_broadcasts=tuple([
+                *self.discussion_broadcasts,
+                ExtensionRealtimeDiscussionBroadcastDefinition(
+                    event_type=event_type,
+                    event_name=event_name,
+                    discussion_id=discussion_id,
+                    include_discussion=bool(include_discussion),
+                    include_post=bool(include_post),
+                    post_id=post_id,
+                    post_id_getter=post_id_getter,
+                    extension_context=extension_context,
+                    condition=condition,
+                    description=str(description or "").strip(),
+                ),
+            ]),
         )
 
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
-        if not self.included and not self.discussion_visibility_resolvers:
+        if (
+            not self.included
+            and not self.discussion_visibility_resolvers
+            and not self.discussion_transports
+            and not self.discussion_broadcasts
+        ):
             return
 
         extension_id = extension.extension_id
@@ -1969,6 +2101,14 @@ class RealtimeExtender:
                     handler = wrap_callback(handler, host)
                     definition = replace(definition, callback=handler)
                 realtime.register_discussion_visibility_resolver(extension_id, definition)
+            for definition in self.discussion_transports:
+                handler = definition.handler
+                if isinstance(handler, str) or isinstance(handler, type):
+                    handler = wrap_callback(handler, host)
+                    definition = replace(definition, handler=handler)
+                realtime.register_discussion_transport(extension_id, definition)
+            for definition in self.discussion_broadcasts:
+                realtime.register_discussion_broadcast(extension_id, definition)
             return realtime
 
         app.resolving("realtime", apply)
@@ -2248,21 +2388,28 @@ class SettingsExtender:
     def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
         extension_id = extension.extension_id
 
+        def normalize_settings_callback(callback):
+            if isinstance(callback, str):
+                return wrap_callback(callback, app)
+            if isinstance(callback, type) and getattr(callback, "__module__", "") != "builtins":
+                return wrap_callback(callback, app)
+            return callback
+
         def apply(settings, host: "ExtensionHost"):
             reset_rules = tuple(
-                replace(definition, callback=wrap_callback(definition.callback, host))
+                replace(definition, callback=normalize_settings_callback(definition.callback))
                 if isinstance(definition.callback, (str, type))
                 else definition
                 for definition in self.reset_rules
             )
             theme_variables = tuple(
-                replace(definition, callback=wrap_callback(definition.callback, host))
+                replace(definition, callback=normalize_settings_callback(definition.callback))
                 if isinstance(definition.callback, (str, type))
                 else definition
                 for definition in self.theme_variables
             )
             forum_serializations = tuple(
-                replace(definition, callback=wrap_callback(definition.callback, host))
+                replace(definition, callback=normalize_settings_callback(definition.callback))
                 if isinstance(definition.callback, (str, type))
                 else definition
                 for definition in self.forum_serializations
@@ -3088,6 +3235,31 @@ class ApiRoutesExtender:
 
 
 @dataclass(frozen=True)
+class WebSocketRoutesExtender:
+    routes: tuple[tuple[str, str, Any], ...] = ()
+
+    def route(self, path: str, name: str, consumer: Any) -> "WebSocketRoutesExtender":
+        return WebSocketRoutesExtender(
+            routes=tuple([*self.routes, (path, name, consumer)]),
+        )
+
+    def extend(self, app: "ExtensionHost", extension: "ExtensionRuntimeView") -> None:
+        if not self.routes:
+            return
+
+        extension_id = extension.extension_id
+
+        def apply(routes, host: "ExtensionHost"):
+            routes.remove_routes(extension_id)
+            for path, name, consumer in self.routes:
+                resolved_consumer = resolve_container_value(consumer, host) if isinstance(consumer, (str, type)) else consumer
+                routes.add_route(extension_id, path, name, resolved_consumer)
+            return routes
+
+        app.resolving("websocket.routes", apply)
+
+
+@dataclass(frozen=True)
 class MiddlewareExtender:
     mounts: tuple[tuple[str, Any, int], ...] = ()
 
@@ -3109,10 +3281,10 @@ class MiddlewareExtender:
 
 @dataclass(frozen=True)
 class PolicyExtender:
-    mounts: tuple[tuple[str, Callable[..., bool]], ...] = ()
-    global_policies: tuple[Callable[..., bool], ...] = ()
-    model_policies: tuple[tuple[Any, Callable[..., bool]], ...] = ()
-    query_model_policies: tuple[tuple[Any, Callable[..., bool]], ...] = ()
+    mounts: tuple[tuple[str, Any], ...] = ()
+    global_policies: tuple[Any, ...] = ()
+    model_policies: tuple[tuple[Any, Any], ...] = ()
+    query_model_policies: tuple[tuple[Any, Any], ...] = ()
 
     def global_policy(self, handler: Callable[..., bool]) -> "PolicyExtender":
         return PolicyExtender(
@@ -3122,7 +3294,10 @@ class PolicyExtender:
             query_model_policies=self.query_model_policies,
         )
 
-    def model_policy(self, model: Any, handler: Callable[..., bool]) -> "PolicyExtender":
+    def policy(self, model: Any, handler: Any) -> "PolicyExtender":
+        return self.model_policy(model, handler)
+
+    def model_policy(self, model: Any, handler: Any) -> "PolicyExtender":
         return PolicyExtender(
             mounts=self.mounts,
             global_policies=self.global_policies,
@@ -3130,7 +3305,7 @@ class PolicyExtender:
             query_model_policies=self.query_model_policies,
         )
 
-    def query_model_policy(self, model: Any, handler: Callable[..., bool]) -> "PolicyExtender":
+    def query_model_policy(self, model: Any, handler: Any) -> "PolicyExtender":
         return PolicyExtender(
             mounts=self.mounts,
             global_policies=self.global_policies,
@@ -3146,16 +3321,59 @@ class PolicyExtender:
 
         def apply(policies, host: "ExtensionHost"):
             for key, handler in self.mounts:
-                policies.mount(extension_id, key, handler)
+                policies.mount(extension_id, key, _wrap_policy_handler(handler, host))
             for handler in self.global_policies:
-                policies.global_policy(extension_id, handler)
+                policies.global_policy(extension_id, _wrap_policy_handler(handler, host))
             for model, handler in self.model_policies:
-                policies.model_policy(extension_id, model, handler)
+                policies.model_policy(extension_id, model, _wrap_policy_handler(handler, host))
             for model, handler in self.query_model_policies:
-                policies.query_model_policy(extension_id, model, handler)
+                policies.query_model_policy(extension_id, model, _wrap_policy_handler(handler, host))
             return policies
 
         app.resolving("policies", apply)
+
+
+def _wrap_policy_handler(handler: Any, host: "ExtensionHost"):
+    if not isinstance(handler, (str, type)) and not callable(getattr(handler, "check_ability", None)):
+        return handler
+
+    resolved_cache = {
+        "ready": False,
+        "value": None,
+    }
+
+    def resolve_handler():
+        if resolved_cache["ready"]:
+            return resolved_cache["value"]
+        resolved = resolve_container_value(handler, host) if isinstance(handler, (str, type)) else handler
+        resolved_cache["value"] = resolved
+        resolved_cache["ready"] = True
+        return resolved
+
+    def invoke(**context):
+        resolved = resolve_handler()
+        check_ability = getattr(resolved, "check_ability", None)
+        if callable(check_ability):
+            extra_context = {
+                key: value
+                for key, value in context.items()
+                if key not in {"user", "ability", "model"}
+            }
+            return check_ability(
+                context.get("user"),
+                str(context.get("ability") or "").strip(),
+                context.get("model"),
+                **extra_context,
+            )
+        if callable(resolved):
+            try:
+                return resolved(**context)
+            except TypeError:
+                return resolved(context.get("user"), context.get("ability"), context.get("model"))
+        return None
+
+    invoke._bias_policy_cache = resolved_cache
+    return invoke
 
 
 @dataclass(frozen=True)

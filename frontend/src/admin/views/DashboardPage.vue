@@ -60,7 +60,7 @@
             </div>
           </div>
 
-          <div class="QueueMetrics">
+          <div v-if="showQueueMetrics" class="QueueMetrics">
             <div
               v-for="item in dashboardQueueMetrics"
               :key="item.key"
@@ -171,9 +171,12 @@ const queueMetricsMessage = ref('')
 const queueMetricsMessageTone = ref('success')
 const modalStore = useModalStore()
 const adminRegistryStore = useAdminRegistryStore()
-const dashboardActionMeta = computed(() => getAdminDashboardActionMeta())
-const dashboardCopy = computed(() => getAdminDashboardCopy())
-const dashboardConfig = computed(() => getAdminDashboardConfig())
+const dashboardContext = computed(() => ({
+  isModuleEnabled: moduleId => adminRegistryStore.isModuleEnabled(moduleId),
+}))
+const dashboardActionMeta = computed(() => getAdminDashboardActionMeta(dashboardContext.value))
+const dashboardCopy = computed(() => getAdminDashboardCopy(dashboardContext.value))
+const dashboardConfig = computed(() => getAdminDashboardConfig(dashboardContext.value))
 const dashboardAlerts = computed(() => getAdminDashboardAlerts({
   stats: stats.value,
   copy: dashboardCopy.value,
@@ -189,6 +192,7 @@ const dashboardStats = computed(() => getAdminDashboardStats({
 const dashboardQueueMetrics = computed(() => getAdminDashboardQueueMetrics({
   stats: stats.value,
   copy: dashboardCopy.value,
+  ...dashboardContext.value,
 }))
 const dashboardStatusSummaries = computed(() => getAdminDashboardStatusSummaries({
   stats: stats.value,
@@ -209,6 +213,7 @@ const queueResetAction = computed(() => getAdminDashboardAction({
   modalStore,
   stats: stats.value,
   copy: dashboardActionMeta.value,
+  ...dashboardContext.value,
   setStats: value => {
     stats.value = value
   },
@@ -222,6 +227,7 @@ const queueResetAction = computed(() => getAdminDashboardAction({
     resettingQueueMetrics.value = value
   },
 }, 'reset-queue-metrics'))
+const showQueueMetrics = computed(() => dashboardQueueMetrics.value.length > 0 || Boolean(queueResetAction.value?.run))
 
 async function loadStats() {
   try {

@@ -1,30 +1,35 @@
+from __future__ import annotations
+
 from django.core.exceptions import PermissionDenied
+
 from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
 from apps.core.domain_events import dispatch_forum_event_after_commit
 from apps.core.extensions.runtime_access import (
-    evaluate_runtime_model_policy,
+    ensure_runtime_forum_permission,
+    ensure_runtime_user_email_confirmed,
+    ensure_runtime_user_not_suspended,
     get_runtime_post_lifecycle_service,
+    increment_runtime_user_comment_count,
+    mark_runtime_discussion_read,
     refresh_runtime_model_private,
+    requires_runtime_content_approval,
 )
-from apps.core.forum_events import (
+from extensions.posts.backend.events import (
     PostCreatedEvent,
     PostDeletedEvent,
     PostHiddenEvent,
     PostResubmittedEvent,
 )
-from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
-from extensions.users.backend.services import UserService
 
 
 def create_post(
     discussion_id: int,
     content: str,
-    user: User,
+    user,
     *,
     reply_to_post_id=None,
     default_post_type,
@@ -33,10 +38,10 @@ def create_post(
     lock_discussion_for_post_number_cb,
     create_post_with_sequential_number_cb,
 ) -> Post:
-    UserService.ensure_not_suspended(user, "回复讨论")
-    UserService.ensure_email_confirmed(user, "回复讨论")
-    UserService.ensure_forum_permission(user, "discussion.reply", "没有权限回复讨论")
-    requires_approval = UserService.requires_content_approval(user, "replyWithoutApproval")
+    ensure_runtime_user_not_suspended(user, "回复讨论")
+    ensure_runtime_user_email_confirmed(user, "回复讨论")
+    ensure_runtime_forum_permission(user, "discussion.reply", "没有权限回复讨论")
+    requires_approval = requires_runtime_content_approval(user, "replyWithoutApproval")
 
     discussion = can_reply_in_discussion(discussion_id, user)
 
@@ -71,17 +76,12 @@ def create_post(
             discussion.last_post_number = post.number
             discussion.save()
 
-            user.comment_count = F("comment_count") + 1
-            user.save(update_fields=["comment_count"])
+            increment_runtime_user_comment_count(user.id, 1)
 
-            state_defaults = {
-                "last_read_at": timezone.now(),
-                "last_read_post_number": post.number,
-            }
-            DiscussionUser.objects.update_or_create(
-                discussion=discussion,
+            mark_runtime_discussion_read(
+                discussion_id=discussion.id,
                 user=user,
-                defaults=state_defaults,
+                last_read_post_number=post.number,
             )
 
             _apply_post_created_extensions(
@@ -105,35 +105,6 @@ def create_post(
             )
 
         return post
-
-
-def validate_replyable_discussion(
-    discussion_id: int,
-    user: User,
-    *,
-    discussion=None,
-) -> Discussion:
-    if discussion is None:
-        try:
-            discussion = Discussion.objects.get(id=discussion_id)
-        except Discussion.DoesNotExist:
-            raise ValueError("讨论不存在")
-
-    if discussion.approval_status != Discussion.APPROVAL_APPROVED and not user.is_staff:
-        raise ValueError("讨论正在审核中，暂时无法回复")
-
-    if discussion.is_locked and not user.is_staff:
-        raise ValueError("讨论已锁定，无法回复")
-
-    if evaluate_runtime_model_policy(
-        "reply",
-        user=user,
-        model=discussion,
-        default=True,
-        discussion=discussion,
-    ) is False:
-        raise PermissionDenied("没有权限回复此讨论")
-    return discussion
 
 
 def get_post_list(
@@ -183,13 +154,13 @@ def get_post_by_id(
 
 def update_post(
     post_id: int,
-    user: User,
+    user,
     content: str,
     *,
     can_edit_post_cb,
     render_markdown_cb,
 ) -> Post:
-    UserService.ensure_not_suspended(user, "编辑帖子")
+    ensure_runtime_user_not_suspended(user, "编辑帖子")
     post = Post.objects.get(id=post_id)
 
     if not can_edit_post_cb(post, user):
@@ -252,14 +223,14 @@ def update_post(
 
 def delete_post(
     post_id: int,
-    user: User,
+    user,
     *,
     can_delete_post_cb,
     discussion_counted_post_types,
     user_counted_post_types,
     refresh_discussion_approved_stats_cb,
 ) -> bool:
-    UserService.ensure_not_suspended(user, "删除帖子")
+    ensure_runtime_user_not_suspended(user, "删除帖子")
     post = Post.objects.select_related("discussion").get(id=post_id)
 
     if not can_delete_post_cb(post, user):
@@ -303,8 +274,7 @@ def delete_post(
         if counted_post:
             refresh_discussion_approved_stats_cb(discussion)
             if post.user and post.type in user_counted_post_types:
-                post.user.comment_count = F("comment_count") - 1
-                post.user.save(update_fields=["comment_count"])
+                increment_runtime_user_comment_count(post.user_id, -1)
 
         dispatch_forum_event_after_commit(
             PostDeletedEvent(
@@ -320,7 +290,7 @@ def delete_post(
 
 def set_hidden_state(
     post: Post,
-    admin_user: User,
+    admin_user,
     is_hidden: bool,
     *,
     discussion_counted_post_types,
@@ -361,8 +331,7 @@ def set_hidden_state(
             refresh_discussion_approved_stats_cb(post.discussion)
             if post.user and post.type in user_counted_post_types:
                 delta = -1 if is_hidden else 1
-                post.user.comment_count = F("comment_count") + delta
-                post.user.save(update_fields=["comment_count"])
+                increment_runtime_user_comment_count(post.user_id, delta)
 
         dispatch_forum_event_after_commit(
             PostHiddenEvent(
@@ -376,43 +345,6 @@ def set_hidden_state(
 
     post.refresh_from_db()
     return post
-
-
-def refresh_discussion_approved_stats(
-    discussion: Discussion,
-    *,
-    discussion_counted_post_types,
-):
-    approved_posts = Post.objects.filter(
-        discussion=discussion,
-        type__in=discussion_counted_post_types,
-        approval_status=Post.APPROVAL_APPROVED,
-        hidden_at__isnull=True,
-    ).order_by("number")
-
-    approved_count = approved_posts.count()
-    last_post = approved_posts.order_by("-number").select_related("user").first()
-
-    discussion.comment_count = approved_count
-    if last_post:
-        discussion.last_post_id = last_post.id
-        discussion.last_post_number = last_post.number
-        discussion.last_posted_at = last_post.created_at
-        discussion.last_posted_user = last_post.user
-    else:
-        discussion.last_post_id = None
-        discussion.last_post_number = None
-        discussion.last_posted_at = None
-        discussion.last_posted_user = None
-
-    discussion.save(update_fields=[
-        "comment_count",
-        "last_post_id",
-        "last_post_number",
-        "last_posted_at",
-        "last_posted_user",
-    ])
-    return discussion
 
 
 def _apply_post_created_extensions(post: Post, *, context: dict) -> dict:
@@ -479,3 +411,5 @@ def create_post_with_sequential_number(*, attempts: int, allocate_next_post_numb
     if last_error:
         raise last_error
     raise IntegrityError("帖子楼层分配失败")
+
+

@@ -53,16 +53,49 @@
           <AdminFilterTabs v-model="sourceFilter" :options="sourceOptions" />
           <AdminFilterTabs v-model="statusFilter" :options="statusOptions" />
         </div>
-        <label class="ExtensionsPage-search">
-          <span class="sr-only">搜索扩展</span>
-          <input
-            v-model.trim="searchQuery"
-            class="FormControl"
-            type="search"
-            placeholder="搜索扩展名、ID、能力或依赖"
-          />
-        </label>
+        <div class="ExtensionsPage-toolbarActions">
+          <button
+            type="button"
+            class="ExtensionAction ExtensionAction--subtle"
+            :disabled="syncLoading"
+            @click="syncExtensionPackages"
+          >
+            <i class="fas fa-rotate"></i>
+            <span>{{ syncLoading ? '同步中...' : '同步扩展' }}</span>
+          </button>
+          <button
+            type="button"
+            class="ExtensionAction ExtensionAction--subtle"
+            :disabled="orderSyncLoading"
+            @click="syncEnabledOrder"
+          >
+            <i class="fas fa-arrow-down-short-wide"></i>
+            <span>{{ orderSyncLoading ? '排序中...' : '同步顺序' }}</span>
+          </button>
+          <button
+            type="button"
+            class="ExtensionAction ExtensionAction--subtle"
+            :disabled="frontendRebuildLoading"
+            @click="rebuildFrontendAssets"
+          >
+            <i class="fas fa-screwdriver-wrench"></i>
+            <span>{{ frontendRebuildLoading ? '重建中...' : '重建前端' }}</span>
+          </button>
+          <label class="ExtensionsPage-search">
+            <span class="sr-only">搜索扩展</span>
+            <input
+              v-model.trim="searchQuery"
+              class="FormControl"
+              type="search"
+              placeholder="搜索扩展名、ID、能力或依赖"
+            />
+          </label>
+        </div>
       </AdminToolbar>
+
+      <AdminStateBlock v-if="packageLockNotice" :tone="packageLockNotice.tone">
+        {{ packageLockNotice.text }}
+      </AdminStateBlock>
 
       <div v-if="filteredExtensions.length" class="ExtensionsPage-list">
         <article
@@ -82,6 +115,12 @@
                 <span class="ExtensionBadge">{{ extension.id }}</span>
                 <span class="ExtensionStatus" :class="resolveRuntimeStatusClass(extension)">
                   {{ extension.runtime_status?.label || (extension.enabled ? '已启用' : '未启用') }}
+                </span>
+                <span
+                  v-if="extension.distribution?.abandoned"
+                  class="ExtensionStatus is-warning"
+                >
+                  已废弃
                 </span>
                 <span
                   v-if="hasMigrationPlan(extension)"
@@ -241,6 +280,63 @@ const sourceFilter = ref('all')
 const statusFilter = ref('all')
 const searchQuery = ref('')
 const actionLoadingId = ref('')
+const syncLoading = ref(false)
+const orderSyncLoading = ref(false)
+const frontendRebuildLoading = ref(false)
+
+const packageLock = computed(() => runtime.value?.package_lock || {})
+
+const frontendAssetSummary = computed(() => {
+  const states = extensions.value
+    .map(item => item?.frontend_asset_state || {})
+    .filter(state => state.has_frontend)
+  return {
+    total: states.length,
+    requiresRebuild: states.filter(state => state.requires_rebuild).length,
+    missing: states.filter(state => !state.manifest_exists || !state.compiled).length,
+  }
+})
+
+const packageLockNotice = computed(() => {
+  const summary = packageLock.value?.summary || {}
+  const missing = Number(summary.missing_count || 0)
+  const versionDrift = Number(summary.version_drift_count || 0)
+  const sourceDrift = Number(summary.source_drift_count || 0)
+  const unmanaged = Number(summary.unmanaged_discovered_count || 0)
+  const locked = Number(summary.locked_count || 0)
+  const enabledOrder = packageLock.value?.enabled_order || {}
+  const orderDrift = Boolean(enabledOrder.drift)
+  const staleOrderCount = Array.isArray(enabledOrder.stale) ? enabledOrder.stale.length : 0
+  if (missing || versionDrift || sourceDrift || unmanaged || orderDrift) {
+    const parts = []
+    if (missing) parts.push(`缺失 ${missing}`)
+    if (versionDrift) parts.push(`版本漂移 ${versionDrift}`)
+    if (sourceDrift) parts.push(`来源漂移 ${sourceDrift}`)
+    if (unmanaged) parts.push(`未安装发现 ${unmanaged}`)
+    if (orderDrift) parts.push(staleOrderCount ? `启用顺序漂移 ${staleOrderCount} 个过期项` : '启用顺序漂移')
+    return {
+      tone: 'warning',
+      text: `扩展包状态需要关注：${parts.join('、')}。`,
+    }
+  }
+  const frontend = frontendAssetSummary.value
+  if (frontend.requiresRebuild || frontend.missing) {
+    const parts = []
+    if (frontend.requiresRebuild) parts.push(`待重建 ${frontend.requiresRebuild}`)
+    if (frontend.missing) parts.push(`未生成 ${frontend.missing}`)
+    return {
+      tone: 'warning',
+      text: `扩展前端资源需要处理：${parts.join('、')}。`,
+    }
+  }
+  if (locked) {
+    return {
+      tone: 'subtle',
+      text: `扩展包锁定已同步，共 ${locked} 个包记录。`,
+    }
+  }
+  return null
+})
 
 const recoveryNotice = computed(() => {
   const recovery = runtime.value?.recovery || {}
@@ -297,6 +393,8 @@ const filteredExtensions = computed(() => {
         item.id,
         item.name,
         item.description,
+        item.distribution?.abandoned ? '已废弃 abandoned deprecated' : '',
+        item.distribution?.replacement,
         ...(item.dependencies || []),
         ...(item.provides || []),
         ...(item.module_ids || []),
@@ -386,6 +484,55 @@ async function runRuntimeAction(extension, action) {
     errorMessage.value = error.response?.data?.error || '切换扩展状态失败，请稍后重试'
   } finally {
     actionLoadingId.value = ''
+  }
+}
+
+async function syncExtensionPackages() {
+  syncLoading.value = true
+  errorMessage.value = ''
+
+  try {
+    const data = await api.post('/admin/extensions/sync', { prune_missing: true })
+    applyPayload(data)
+  } catch (error) {
+    console.error('同步扩展包状态失败:', error)
+    errorMessage.value = error.response?.data?.error || '同步扩展包状态失败，请稍后重试'
+  } finally {
+    syncLoading.value = false
+  }
+}
+
+async function syncEnabledOrder() {
+  orderSyncLoading.value = true
+  errorMessage.value = ''
+
+  try {
+    const data = await api.post('/admin/extensions/sync-order')
+    applyPayload(data)
+  } catch (error) {
+    console.error('同步扩展启用顺序失败:', error)
+    errorMessage.value = error.response?.data?.error || '同步扩展启用顺序失败，请稍后重试'
+  } finally {
+    orderSyncLoading.value = false
+  }
+}
+
+async function rebuildFrontendAssets() {
+  frontendRebuildLoading.value = true
+  errorMessage.value = ''
+
+  try {
+    const data = await api.post('/admin/extensions/rebuild-frontend', {
+      run_build: true,
+      include_disabled: false,
+      publish: false,
+    })
+    applyPayload(data)
+  } catch (error) {
+    console.error('重建扩展前端资源失败:', error)
+    errorMessage.value = error.response?.data?.error || '重建扩展前端资源失败，请稍后重试'
+  } finally {
+    frontendRebuildLoading.value = false
   }
 }
 
@@ -562,6 +709,14 @@ function resolveAdminPageLinks(extension) {
 .ExtensionsPage-toolbarGroup {
   display: flex;
   flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ExtensionsPage-toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 12px;
 }
 

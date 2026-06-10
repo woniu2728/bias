@@ -1,11 +1,9 @@
 from dataclasses import dataclass
 from math import ceil
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from apps.core.visibility import can_view_model_instance
-from extensions.discussions.backend.visibility import apply_post_visibility_scope
+from apps.core.visibility import apply_model_visibility_scope, can_view_model_instance
 from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
 
 
 @dataclass
@@ -20,19 +18,19 @@ class PostStreamWindow:
     has_more: bool
 
 
-def can_view_post(post: Post, user: Optional[User]) -> bool:
+def can_view_post(post: Post, user: Optional[Any]) -> bool:
     return can_view_model_instance(Post, post, user=user, ability="view")
 
 
-def apply_visibility_filters(queryset, user: Optional[User] = None):
-    return apply_post_visibility_scope(queryset, user)
+def apply_visibility_filters(queryset, user: Optional[Any] = None):
+    return apply_model_visibility_scope(Post, queryset, user=user, ability="view")
 
 
 def build_visible_post_queryset(
     discussion_id: int,
     *,
     stream_post_types,
-    user: Optional[User] = None,
+    user: Optional[Any] = None,
     preload=None,
 ):
     queryset = Post.objects.filter(
@@ -54,7 +52,7 @@ def get_post_window(
     near: Optional[int] = None,
     before: Optional[int] = None,
     after: Optional[int] = None,
-    user: Optional[User] = None,
+    user: Optional[Any] = None,
     preload=None,
 ) -> PostStreamWindow:
     queryset = build_visible_post_queryset(
@@ -128,7 +126,7 @@ def get_page_for_near_post(
     *,
     stream_post_types,
     limit: int = 20,
-    user: Optional[User] = None,
+    user: Optional[Any] = None,
 ) -> int:
     queryset = Post.objects.filter(
         discussion_id=discussion_id,

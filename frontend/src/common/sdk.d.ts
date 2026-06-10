@@ -7,7 +7,8 @@ export interface Extender {
 }
 
 export interface ExtensionModule {
-  extend?: Extender | Extender[] | Array<Extender | Extender[] | null | undefined>
+  extend?: Extender | ExtensionCallback | Extender[] | Array<Extender | ExtensionCallback | Extender[] | null | undefined>
+  default?: Extender | ExtensionCallback | Extender[] | ExtensionModule | Array<Extender | ExtensionCallback | Extender[] | null | undefined>
 }
 
 export interface ExtensionInitializer {
@@ -99,6 +100,23 @@ export declare class ItemList<T = any> {
 }
 
 export declare function createRuntimeApplication(options?: Record<string, any>): RuntimeApplication
+export declare function computed(...args: any[]): any
+export declare function nextTick(...args: any[]): any
+export declare function onBeforeUnmount(...args: any[]): any
+export declare function onMounted(...args: any[]): any
+export declare function reactive(...args: any[]): any
+export declare function ref(...args: any[]): any
+export declare function toRef(...args: any[]): any
+export declare function watch(...args: any[]): any
+export declare function useRoute(...args: any[]): any
+export declare function useRouter(...args: any[]): any
+export declare function createPinia(...args: any[]): any
+export declare function defineStore(...args: any[]): any
+export declare function setActivePinia(...args: any[]): any
+export declare const api: any
+export declare const coreApi: any
+export declare function normalizeExtensionExtenders(module?: ExtensionModule | Extender | ExtensionCallback | Array<any>): Extender[]
+export declare function hasExtensionExtenders(module?: ExtensionModule | Extender | ExtensionCallback | Array<any>): boolean
 export declare function createExtensionAppApi(options?: Record<string, any>): any
 export declare function createExtensionInitializers(): ExtensionInitializers
 export declare function createExtensionPatcher(): ExtensionPatcher
@@ -127,7 +145,25 @@ export declare function ensureExportRegistry(target?: any): ExportRegistry
 export declare function createExtensionRegistry(): any
 export declare function createListItemRegistry(defaults?: Record<string, any>): any
 export declare function createSingleItemRegistry(defaults?: Record<string, any>): any
+export declare function upsertByKey(target: any[], key: string, value: any): any
+export declare function orderedRegisteredItems(target: any[]): any[]
+export declare function normalizeRegisteredItem(item: Record<string, any>, defaults?: Record<string, any>): any
+export declare function clearRegistryExtensions(targets: any[][], extensionId?: string): void
+export declare function getFrontendRegistrySlot(name: string): any[]
+export declare function getFrontendRegistrySlots(names?: string[]): any[][]
+export declare function isRegisteredItemEnabled(item: Record<string, any>, context?: Record<string, any>): boolean
+export declare function resolveRegisteredItem(item: Record<string, any>, context?: Record<string, any>): any
+export declare function getFirstSurfaceAwareItem(target: any[], context?: Record<string, any>): any
 export declare function itemContentValue(content: any): any
+export declare function formatRelativeTime(value?: any): any
+export declare function formatMonth(value?: any): any
+export declare function unwrapList(payload?: any): any[]
+export declare function usePaginatedListState(options?: Record<string, any>): any
+export declare function useRequestedPaginatedListState(options?: Record<string, any>): any
+export declare function useRouteListState(options?: Record<string, any>): any
+export declare function useRoutePagination(options?: Record<string, any>): any
+export declare function useModalStore(...args: any[]): any
+export declare function useResourceStore(...args: any[]): any
 
 export declare class ResourceModel {
   constructor(data?: Record<string, any>, store?: any)
@@ -154,6 +190,11 @@ export declare class ResourceModel {
 export declare class Store {
   add(type: string, model: any): this
   extend(app: any): void
+}
+
+export declare class ResourceNormalizer {
+  add(type: string, normalizer: (...args: any[]) => any): this
+  extend(app: any, extension?: { name?: string; id?: string }): void
 }
 
 export declare class Model {
@@ -191,6 +232,7 @@ export declare class AdminExtender {
   dashboardStatusSummary(definition: Record<string, any>): this
   pageCopy(pageKey: string, definition: Record<string, any>): this
   pageConfig(pageKey: string, definition: Record<string, any>): this
+  pageAction(pageKey: string, definition: Record<string, any>): this
   pageActionMeta(pageKey: string, definition: Record<string, any>): this
   pageNoteTemplate(pageKey: string, definition: Record<string, any>): this
   extend(app: any, extension?: { name?: string; id?: string }): void
@@ -237,7 +279,10 @@ export declare class ForumExtender {
   composerSubmitSuccess(definition: Record<string, any>): this
   composerAutocompleteProvider(definition: Record<string, any>): this
   composerPreviewTransformer(definition: Record<string, any>): this
+  composerHost(definition: Record<string, any>): this
+  composerUploadHandler(definition: Record<string, any>): this
   notificationRenderer(definition: Record<string, any>): this
+  searchModalProvider(definition: Record<string, any>): this
   searchModalSection(definition: Record<string, any>): this
   userBadge(definition: Record<string, any>): this
   emptyState(definition: Record<string, any>): this
@@ -288,6 +333,8 @@ export declare class ThemeMode {
 }
 
 export declare const ModelExtender: typeof Model
+export declare const ResourceModelExtender: typeof Model
+export declare const ResourceNormalizerExtender: typeof ResourceNormalizer
 export declare const StoreExtender: typeof Store
 export declare const NotificationExtender: typeof Notification
 export declare const PostTypesExtender: typeof PostTypes

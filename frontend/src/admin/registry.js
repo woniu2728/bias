@@ -32,7 +32,6 @@ export {
   resolveApprovalTemplateOptions,
 } from './composables/approvalQueueTemplates.js'
 export { useModalStore } from '../stores/modal.js'
-export { useAuthStore } from '../stores/auth.js'
 export { default as adminApi } from '../api/index.js'
 export {
   getAdminDashboardAction,
@@ -61,6 +60,8 @@ export {
   getAdminAdvancedPageConfig,
   getAdminAdvancedPageCopy,
   getAdminAppearancePageActionMeta,
+  getAdminAppearancePageAction,
+  getAdminAppearancePageActions,
   getAdminAppearancePageConfig,
   getAdminAppearancePageCopy,
   getAdminAuditLogsPageConfig,
@@ -69,8 +70,12 @@ export {
   getAdminBasicsPageConfig,
   getAdminBasicsPageCopy,
   getAdminMailPageActionMeta,
+  getAdminMailPageAction,
+  getAdminMailPageActions,
   getAdminMailPageConfig,
   getAdminMailPageCopy,
+  getAdminPageAction,
+  getAdminPageActions,
   getAdminPageActionMeta,
   getAdminPageConfig,
   getAdminPageCopy,
@@ -85,6 +90,7 @@ export {
   registerAdminAdvancedPageConfig,
   registerAdminAdvancedPageCopy,
   registerAdminAppearancePageActionMeta,
+  registerAdminAppearancePageAction,
   registerAdminAppearancePageConfig,
   registerAdminAppearancePageCopy,
   registerAdminAuditLogsPageConfig,
@@ -93,8 +99,10 @@ export {
   registerAdminBasicsPageConfig,
   registerAdminBasicsPageCopy,
   registerAdminMailPageActionMeta,
+  registerAdminMailPageAction,
   registerAdminMailPageConfig,
   registerAdminMailPageCopy,
+  registerAdminPageAction,
   registerAdminPageActionMeta,
   registerAdminPageConfig,
   registerAdminPageCopy,

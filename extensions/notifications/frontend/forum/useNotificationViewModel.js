@@ -1,19 +1,16 @@
-import { getUiCopy } from '@bias/forum'
 import {
-  formatRelativeTime,
-  getUserAvatarColor,
-  getUserDisplayName,
-  getUserInitial,
+  watch,
+  computed,
+  formatRelativeTime } from '@bias/core'
+import { useStartDiscussionAction } from '@bias/discussions'
+import { getUiCopy
 } from '@bias/forum'
+import { getUserAvatarColor, getUserDisplayName, getUserInitial } from '@bias/users'
 import {
   getNotificationIconClass,
   getNotificationPresentationModel,
   getNotificationTextHtml,
 } from './notificationRuntime.js'
-import {
-  useStartDiscussionAction,
-} from '@bias/forum'
-import { computed, watch } from '@bias/forum'
 import { resolveNotificationMetaPayload } from './notificationMeta.js'
 import { useNotificationPage } from './useNotificationPage.js'
 import { useNotificationViewBindings } from './useNotificationViewBindings.js'

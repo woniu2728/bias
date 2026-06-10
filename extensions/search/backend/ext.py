@@ -1,4 +1,4 @@
-from apps.core.extensions import ApiRoutesExtender, ForumCapabilitiesExtender, LifecycleExtender
+from apps.core.extensions import ApiRoutesExtender, ForumCapabilitiesExtender, FrontendExtender, LifecycleExtender, ServiceProviderExtender
 from apps.core.forum_registry_types import SearchFilterDefinition
 from extensions.search.backend.admin_api import router as search_admin_router
 from extensions.search.backend.api import router as search_router
@@ -16,6 +16,7 @@ from extensions.search.backend.filters import (
     parse_sticky_search_filter,
     parse_unread_search_filter,
 )
+from extensions.search.backend.runtime import search_service_provider
 
 
 EXTENSION_ID = "search"
@@ -23,12 +24,26 @@ EXTENSION_ID = "search"
 
 def extend():
     return [
+        FrontendExtender(
+            forum_entry="extensions/search/frontend/forum/index.js",
+        ).route(
+            "/search",
+            "search",
+            "./SearchResultsView.vue",
+            title="搜索",
+            description="搜索论坛中的讨论、回复和用户。",
+            order=40,
+        ),
         ApiRoutesExtender(
             mounts=(("", search_router), ("/admin", search_admin_router)),
             tags=("Search",),
         ),
         ForumCapabilitiesExtender(
             search_filters=search_filter_definitions(),
+        ),
+        ServiceProviderExtender(
+            key="search.service",
+            provider=search_service_provider,
         ),
         LifecycleExtender(
             install=install,

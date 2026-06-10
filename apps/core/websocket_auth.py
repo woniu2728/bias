@@ -6,7 +6,7 @@ from django.contrib.auth.models import AnonymousUser
 from ninja_jwt.tokens import RefreshToken
 
 from apps.core.jwt_auth import ACCESS_TOKEN_COOKIE_NAME, resolve_user_from_access_token
-from apps.core.user_runtime import resolve_runtime_user_by_id
+from apps.core.extensions.runtime_access import get_runtime_user_by_id
 
 
 REFRESH_TOKEN_COOKIE_NAME = "bias_refresh_token"
@@ -25,7 +25,7 @@ def resolve_user_from_refresh_token(token: str):
         user_id = refresh.payload.get("user_id")
         if not user_id:
             return AnonymousUser()
-        return resolve_runtime_user_by_id(user_id) or AnonymousUser()
+        return get_runtime_user_by_id(user_id) or AnonymousUser()
     except Exception:
         return AnonymousUser()
 

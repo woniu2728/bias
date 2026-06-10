@@ -11,7 +11,8 @@
 </template>
 
 <script setup>
-import { computed } from '@bias/forum'
+
+import { computed } from '@bias/core'
 import { buildTagPath } from './tagUtils.js'
 
 const props = defineProps({

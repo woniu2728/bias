@@ -1,7 +1,5 @@
-import {
-  extendForum,
-  forumApi,
-} from '@bias/forum'
+import { api } from '@bias/core'
+import { extendForum } from '@bias/forum'
 import ComposerMentionAutocomplete from './ComposerMentionAutocomplete.vue'
 
 export const extend = [
@@ -97,10 +95,10 @@ function registerMentionsForum(forum) {
       return detectMentionQuery(content, cursorPosition)
     },
     async search({ query = '', limit = 5 }) {
-      if (typeof forumApi?.get !== 'function') {
+      if (typeof api?.get !== 'function') {
         return []
       }
-      const users = await forumApi.get('/users', {
+      const users = await api.get('/users', {
         params: {
           q: query,
           limit,

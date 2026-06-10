@@ -307,3 +307,4 @@ def dispatch_tag_delete(context):
         return api_error(str(e), status=403)
     except ValueError as e:
         return api_error(str(e), status=400)
+

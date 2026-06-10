@@ -170,15 +170,27 @@ export class StoreExtender {
 
   add(type, model) {
     const normalizedType = normalizeType(type)
-    if (normalizedType && typeof model === 'function') {
-      this.models[normalizedType] = model
+    if (!normalizedType || typeof model !== 'function') {
+      return this
     }
+    if (this.models[normalizedType] && this.models[normalizedType] !== model) {
+      throw new Error(`The model type "${normalizedType}" has already been registered with this extender`)
+    }
+    this.models[normalizedType] = model
     return this
   }
 
   extend(app) {
+    const store = app?.store
+    if (!store || typeof store.add !== 'function') {
+      throw new Error('Application resource store is not configured')
+    }
     for (const [type, model] of Object.entries(this.models)) {
-      app.store?.add?.(type, model)
+      const existing = store.models?.[type]
+      if (existing && existing !== model) {
+        throw new Error(`The model type "${type}" has already been registered with the class "${existing.name || 'anonymous'}"`)
+      }
+      store.add(type, model)
     }
   }
 }

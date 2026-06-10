@@ -18,7 +18,9 @@
 </template>
 
 <script setup>
-import { computed, DiscussionEventPostBase, getUiCopy } from '@bias/forum'
+import { computed } from '@bias/core'
+import { getUiCopy } from '@bias/forum'
+import { DiscussionEventPostBase } from '@bias/discussions'
 
 const props = defineProps({
   post: { type: Object, required: true },

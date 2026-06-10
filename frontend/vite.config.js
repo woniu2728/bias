@@ -1,17 +1,22 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
+import { createViteSdkAliases } from './extensionSdkAliases.mjs'
 
 export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
+      'vue': fileURLToPath(new URL('./node_modules/vue/dist/vue.esm-bundler.js', import.meta.url)),
+      'vue-router': fileURLToPath(new URL('./node_modules/vue-router/dist/vue-router.esm-bundler.js', import.meta.url)),
+      'pinia': fileURLToPath(new URL('./node_modules/pinia/dist/pinia.mjs', import.meta.url)),
+      'axios': fileURLToPath(new URL('./node_modules/axios/index.js', import.meta.url)),
+      'dayjs': fileURLToPath(new URL('./node_modules/dayjs/dayjs.min.js', import.meta.url)),
+      '@twemoji/api': fileURLToPath(new URL('./node_modules/@twemoji/api/dist/twemoji.esm.js', import.meta.url)),
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@bias/core': fileURLToPath(new URL('./src/common/sdk.js', import.meta.url)),
-      '@bias/admin/components': fileURLToPath(new URL('./src/admin/componentsSdk.js', import.meta.url)),
-      '@bias/admin': fileURLToPath(new URL('./src/admin/sdk.js', import.meta.url)),
-      '@bias/forum': fileURLToPath(new URL('./src/forum/sdk.js', import.meta.url))
-    }
+      ...createViteSdkAliases()
+    },
+    dedupe: ['vue', 'vue-router', 'pinia', 'axios', 'dayjs']
   },
   server: {
     port: 3000,

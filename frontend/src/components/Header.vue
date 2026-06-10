@@ -29,22 +29,22 @@
       </div>
 
       <div class="header-right">
-        <HeaderSearchBox
-          :current-search-query="currentSearchQuery"
-          :search-preview-text="searchPreviewText"
-          @open-search="openSearchModal"
-          @clear-search="clearSearch"
+        <component
+          :is="item.component"
+          v-for="item in searchHeaderItems"
+          :key="item.key"
+          v-bind="item.componentProps || {}"
         />
 
         <button
-          v-if="showMobileRightAction"
+          v-if="effectiveShowMobileRightAction"
           type="button"
           class="mobile-primary-action"
-          :class="{ 'discussion-actions-scope': mobileRightActionType === 'discussion-menu' }"
-          :aria-label="mobileRightActionLabel"
+          :class="{ 'discussion-actions-scope': effectiveMobileRightActionType === 'discussion-menu' }"
+          :aria-label="effectiveMobileRightActionLabel"
           @click="handleMobileRightAction"
         >
-          <i :class="mobileRightActionIcon"></i>
+          <i :class="effectiveMobileRightActionIcon"></i>
         </button>
 
         <div
@@ -76,15 +76,11 @@
               <span v-if="item.label">{{ item.label }}</span>
             </component>
 
-            <!-- 用户菜单 -->
-            <HeaderUserMenu
-              :auth-store="authStore"
-              :show-user-menu="showUserMenu"
-              :items="userMenuItems"
-              :get-user-avatar-color="getUserAvatarColor"
-              :get-user-initial="getUserInitial"
-              @toggle="toggleUserMenu"
-              @item-click="handleUserMenuItemClick"
+            <component
+              :is="item.component"
+              v-for="item in userMenuHostItems"
+              :key="item.key"
+              v-bind="item.componentProps || {}"
             />
           </template>
         </div>
@@ -107,17 +103,13 @@
       :show-mobile-drawer="showMobileDrawer"
       :auth-store="authStore"
       :forum-store="forumStore"
-      :current-search-query="currentSearchQuery"
       :is-mobile-nav-active="isMobileNavActive"
-      :profile-path="profilePath"
+      :action-items="mobileDrawerActionItems"
+      :user-card-items="mobileDrawerUserCardItems"
       :guest-items="mobileDrawerGuestItems"
       :personal-items="mobileDrawerPersonalItems"
       :user-items="mobileDrawerUserItems"
-      :get-user-avatar-color="getUserAvatarColor"
-      :get-user-initial="getUserInitial"
       @close="closeMobileDrawer"
-      @open-search="openSearchFromDrawer"
-      @start-discussion="startDiscussionFromDrawer"
       @item-click="handleMobileDrawerItemClick"
     />
   </header>
@@ -126,21 +118,18 @@
 <script setup>
 import { computed } from 'vue'
 import HeaderMobileDrawer from '@/components/header/HeaderMobileDrawer.vue'
-import HeaderSearchBox from '@/components/header/HeaderSearchBox.vue'
-import HeaderUserMenu from '@/components/header/HeaderUserMenu.vue'
 import { useHeaderActions } from '@/composables/useHeaderActions'
 import { useHeaderMobileState } from '@/composables/useHeaderMobileState'
 import { useHeaderUiState } from '@/composables/useHeaderUiState'
 import { getHeaderItems } from '@/forum/frontendRegistry'
-import { useStartDiscussionAction } from '@/composables/useStartDiscussionAction'
-import { useAuthStore } from '@/stores/auth'
+import { useStartDiscussionAction } from '@/forum/startDiscussionRuntime'
+import { useAuthStore } from '@bias/users'
 import { useComposerStore } from '@/stores/composer'
 import { useForumStore } from '@/stores/forum'
 import { useForumUiStore } from '@/stores/forumUi'
 import { useModalStore } from '@/stores/modal'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  buildUserPath,
   getUserAvatarColor,
   getUserInitial
 } from '@/utils/forum'
@@ -193,7 +182,7 @@ const {
 })
 const currentSearchQuery = computed(() => String(route.query.q ?? route.query.search ?? '').trim())
 const searchPreviewText = computed(() => currentSearchQuery.value || '')
-function buildHeaderExtensionContext() {
+function buildHeaderExtensionContext(extra = {}) {
   return {
     authStore,
     forumStore,
@@ -201,20 +190,45 @@ function buildHeaderExtensionContext() {
     route,
     router,
     handleLogout,
+    openSearchModal,
+    clearSearch,
     openLogin,
     openRegister,
-    profilePath,
+    startDiscussion: startDiscussionFromHeader,
+    currentSearchQuery: currentSearchQuery.value,
+    searchPreviewText: searchPreviewText.value,
+    showUserMenu: showUserMenu.value,
+    toggleUserMenu,
+    handleUserMenuItemClick,
+    getUserAvatarColor,
+    getUserInitial,
+    ...extra,
   }
 }
 
 const afterSearchHeaderItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'after-search'))
+const searchHeaderItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'search'))
 const headerComponentItems = computed(() => afterSearchHeaderItems.value.filter(item => item.component))
 const headerActionItems = computed(() => afterSearchHeaderItems.value.filter(item => !item.component))
 const guestActionItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'guest-actions'))
 const userMenuItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'user-menu'))
+const userMenuHostItems = computed(() => getHeaderItems(buildHeaderExtensionContext({
+  userMenuItems: userMenuItems.value,
+}), 'user-menu-host'))
 const mobileDrawerGuestItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'mobile-drawer-auth'))
+const mobileDrawerActionItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'mobile-drawer-actions'))
+const mobileDrawerUserCardItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'mobile-drawer-user-card'))
 const mobileDrawerPersonalItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'mobile-drawer-personal'))
 const mobileDrawerUserItems = computed(() => getHeaderItems(buildHeaderExtensionContext(), 'mobile-drawer-user'))
+const mobileHeaderRightItems = computed(() => {
+  if (mobileHeaderOverride.value?.rightAction) return []
+  return getHeaderItems(buildHeaderExtensionContext(), 'mobile-header-right-action')
+})
+const mobileHeaderRightItem = computed(() => mobileHeaderRightItems.value[0] || null)
+const effectiveMobileRightActionType = computed(() => mobileHeaderRightItem.value?.actionType || mobileRightActionType.value)
+const effectiveShowMobileRightAction = computed(() => showMobileRightAction.value || Boolean(mobileHeaderRightItem.value))
+const effectiveMobileRightActionIcon = computed(() => mobileHeaderRightItem.value?.icon || mobileRightActionIcon.value)
+const effectiveMobileRightActionLabel = computed(() => mobileHeaderRightItem.value?.label || mobileRightActionLabel.value)
 const showAuthenticatedUi = computed(() => authStore.isAuthenticated && Boolean(authStore.user) && !authStore.isRestoringSession)
 const showSessionPlaceholder = computed(() => authStore.isRestoringSession && authStore.isAuthenticated && !authStore.user)
 const {
@@ -239,10 +253,6 @@ function closeHeaderOverlays(detail = {}) {
   }))
 }
 
-function profilePath() {
-  return authStore.user ? buildUserPath(authStore.user) : '/profile'
-}
-
 function toggleMobileDrawer() {
   showUserMenu.value = false
   closeHeaderOverlays({ source: 'mobile-drawer' })
@@ -264,17 +274,18 @@ function handleMobileLeftAction() {
 }
 
 function handleMobileRightAction() {
+  if (mobileHeaderRightItem.value && !mobileHeaderOverride.value?.rightAction) {
+    invokeHeaderItem(mobileHeaderRightItem.value)
+    return
+  }
+
   switch (mobileRightActionType.value) {
     case 'discussion-menu':
       window.dispatchEvent(new CustomEvent('bias:mobile-header-action', {
         detail: { action: 'discussion-menu' }
       }))
       return
-    case 'login':
-      openLogin()
-      return
     default:
-      startDiscussionFromHeader()
   }
 }
 
@@ -319,15 +330,6 @@ function startDiscussionFromHeader() {
   })
 }
 
-function startDiscussionFromDrawer() {
-  closeMobileDrawer()
-  startDiscussionFromHeader()
-}
-
-function openSearchFromDrawer() {
-  closeMobileDrawer()
-  openSearchModal()
-}
 </script>
 
 <style scoped>

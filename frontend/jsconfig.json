@@ -2,12 +2,48 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@bias/core": ["src/common/sdk.js"],
-      "@bias/admin/components": ["src/admin/componentsSdk.js"],
-      "@bias/admin": ["src/admin/sdk.js"],
-      "@bias/forum": ["src/forum/sdk.js"]
+      "@/*": [
+        "src/*"
+      ],
+      "@bias/core": [
+        "src/common/sdk.js"
+      ],
+      "@bias/admin/components": [
+        "src/admin/componentsSdk.js"
+      ],
+      "@bias/admin": [
+        "src/admin/sdk.js"
+      ],
+      "@bias/forum": [
+        "src/forum/sdk.js"
+      ],
+      "@bias/discussions": [
+        "../extensions/discussions/frontend/forum/sdk.js"
+      ],
+      "@bias/emoji": [
+        "../extensions/emoji/frontend/forum/sdk.js"
+      ],
+      "@bias/notifications": [
+        "../extensions/notifications/frontend/forum/sdk.js"
+      ],
+      "@bias/posts": [
+        "../extensions/posts/frontend/forum/sdk.js"
+      ],
+      "@bias/realtime": [
+        "../extensions/realtime/frontend/forum/sdk.js"
+      ],
+      "@bias/search": [
+        "../extensions/search/frontend/forum/sdk.js"
+      ],
+      "@bias/users": [
+        "../extensions/users/frontend/forum/sdk.js"
+      ]
     }
   },
-  "include": ["src/**/*.js", "src/**/*.vue", "../extensions/**/*.js", "../extensions/**/*.vue"]
+  "include": [
+    "src/**/*.js",
+    "src/**/*.vue",
+    "../extensions/**/*.js",
+    "../extensions/**/*.vue"
+  ]
 }

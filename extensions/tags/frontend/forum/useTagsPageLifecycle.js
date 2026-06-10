@@ -1,4 +1,5 @@
-import { onBeforeUnmount, onMounted, watch } from '@bias/forum'
+import { onBeforeUnmount, onMounted, watch } from '@bias/core'
+
 
 export function createTagsPageLifecycle({
   addForumEventListener,

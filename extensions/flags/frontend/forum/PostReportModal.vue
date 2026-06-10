@@ -69,11 +69,12 @@
 
 <script setup>
 import {
-  computed,
-  getUiCopy,
-  reactive,
   ref,
-  useModalStore,
+  computed,
+  reactive,
+  useModalStore
+} from '@bias/core'
+import { getUiCopy
 } from '@bias/forum'
 
 const props = defineProps({

@@ -1,15 +1,17 @@
-from django.utils import timezone
-
-from apps.core.forum_events import (
-    DiscussionCreatedEvent,
-    PostApprovedEvent,
-    PostCreatedEvent,
-    PostDeletedEvent,
-    PostHiddenEvent,
+from apps.core.extensions.runtime_access import (
+    follow_runtime_discussion,
+)
+from apps.core.extensions import runtime_access
+from apps.core.extensions.runtime_access import (
+    get_runtime_post_number,
+)
+from apps.core.extensions.runtime_access import (
+    get_runtime_user_by_id,
+    get_runtime_user_preference,
 )
 
 
-def handle_post_created_discussion_reply_notification(event: PostCreatedEvent) -> None:
+def handle_post_created_discussion_reply_notification(event) -> None:
     if not event.is_approved:
         return
 
@@ -20,7 +22,7 @@ def handle_post_created_discussion_reply_notification(event: PostCreatedEvent) -
     )
 
 
-def handle_post_approved_discussion_reply_notification(event: PostApprovedEvent) -> None:
+def handle_post_approved_discussion_reply_notification(event) -> None:
     if not event.actor_user_id:
         return
 
@@ -31,7 +33,7 @@ def handle_post_approved_discussion_reply_notification(event: PostApprovedEvent)
     )
 
 
-def handle_discussion_created_follow_after_create(event: DiscussionCreatedEvent) -> None:
+def handle_discussion_created_follow_after_create(event) -> None:
     _follow_discussion_if_enabled(
         discussion_id=event.discussion_id,
         user_id=event.actor_user_id,
@@ -40,7 +42,7 @@ def handle_discussion_created_follow_after_create(event: DiscussionCreatedEvent)
     )
 
 
-def handle_post_created_follow_after_reply(event: PostCreatedEvent) -> None:
+def handle_post_created_follow_after_reply(event) -> None:
     if not event.is_approved:
         return
 
@@ -52,7 +54,7 @@ def handle_post_created_follow_after_reply(event: PostCreatedEvent) -> None:
     )
 
 
-def handle_post_approved_follow_after_reply(event: PostApprovedEvent) -> None:
+def handle_post_approved_follow_after_reply(event) -> None:
     if not event.actor_user_id:
         return
 
@@ -64,25 +66,22 @@ def handle_post_approved_follow_after_reply(event: PostApprovedEvent) -> None:
     )
 
 
-def handle_post_hidden_discussion_reply_notifications(event: PostHiddenEvent) -> None:
+def handle_post_hidden_discussion_reply_notifications(event) -> None:
     if event.is_hidden:
         _delete_discussion_reply_notifications_for_post(event.post_id)
 
 
-def handle_post_deleted_discussion_reply_notifications(event: PostDeletedEvent) -> None:
+def handle_post_deleted_discussion_reply_notifications(event) -> None:
     _delete_discussion_reply_notifications_for_post(event.post_id)
 
 
 def _notify_discussion_reply(*, discussion_id: int, post_id: int, actor_user_id: int) -> None:
-    from extensions.notifications.backend.services import NotificationService
-    from extensions.users.backend.models import User
-
-    try:
-        from_user = User.objects.get(id=actor_user_id)
-    except User.DoesNotExist:
+    from_user = _resolve_user_or_none(actor_user_id)
+    if from_user is None:
         return
 
-    NotificationService.notify_discussion_reply(
+    runtime_access.notify_runtime_notification(
+        "notify_discussion_reply",
         discussion_id=discussion_id,
         post_id=post_id,
         from_user=from_user,
@@ -97,35 +96,29 @@ def _follow_discussion_if_enabled(
     post_id: int | None = None,
     last_read_post_number: int | None = None,
 ) -> None:
-    from extensions.discussions.backend.models import DiscussionUser
-    from extensions.posts.backend.models import Post
-    from extensions.users.backend.models import User
-    from extensions.users.backend.preferences import get_user_preference_value
-
-    user = User.objects.filter(id=user_id).first()
-    if user is None or not get_user_preference_value(user, preference_key, fallback=False):
+    user = _resolve_user_or_none(user_id)
+    if user is None or not get_runtime_user_preference(user, preference_key, fallback=False):
         return
 
     if last_read_post_number is None and post_id is not None:
-        last_read_post_number = Post.objects.filter(id=post_id).values_list("number", flat=True).first()
+        last_read_post_number = get_runtime_post_number(post_id)
 
-    defaults = {"is_subscribed": True}
-    if last_read_post_number:
-        defaults["last_read_at"] = timezone.now()
-        defaults["last_read_post_number"] = last_read_post_number
-
-    DiscussionUser.objects.update_or_create(
+    follow_runtime_discussion(
         discussion_id=discussion_id,
         user_id=user_id,
-        defaults=defaults,
+        last_read_post_number=last_read_post_number,
     )
 
 
-def _delete_discussion_reply_notifications_for_post(post_id: int) -> None:
-    from extensions.notifications.backend.models import Notification
-    from extensions.notifications.backend.services import NotificationService
+def _resolve_user_or_none(user_id: int):
+    try:
+        return get_runtime_user_by_id(user_id)
+    except Exception:
+        return None
 
-    Notification.objects.filter(
-        type=NotificationService.TYPE_DISCUSSION_REPLY,
-        data__post_id=post_id,
-    ).delete()
+
+def _delete_discussion_reply_notifications_for_post(post_id: int) -> None:
+    runtime_access.delete_runtime_discussion_reply_notifications_for_post(post_id)
+
+
+

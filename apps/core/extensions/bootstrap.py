@@ -74,21 +74,26 @@ def build_extension_host(
     force: bool = False,
 ):
     from apps.core.domain_events import get_forum_event_bus
+    from apps.core.forum_resources import bootstrap_forum_resource_fields
     from apps.core.forum_registry import get_forum_registry
     from apps.core.resource_registry import get_resource_registry
     from apps.core.extensions.application import ExtensionApplication
 
     resolved_manager = manager or get_extension_registry()
     resolved_manager.load(force=force)
+    extensions_to_catalog = tuple(resolved_manager.get_extensions())
     extensions_to_boot = tuple(resolved_manager.get_enabled_extensions())
     site_extension = build_site_extension(load_site_extenders())
     if site_extension is not None:
         extensions_to_boot = (*extensions_to_boot, site_extension)
+    resolved_resource_registry = resource_registry or get_resource_registry()
+    bootstrap_forum_resource_fields(resolved_resource_registry)
     return ExtensionApplication(
         extensions_to_boot=extensions_to_boot,
+        extensions_to_catalog=extensions_to_catalog,
         forum_registry=forum_registry or get_forum_registry(),
         event_bus=event_bus or get_forum_event_bus(),
-        resource_registry=resource_registry or get_resource_registry(),
+        resource_registry=resolved_resource_registry,
     ).boot()
 
 

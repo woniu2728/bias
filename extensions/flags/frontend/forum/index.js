@@ -1,7 +1,8 @@
 import {
+  api } from '@bias/core'
+import {
   extendForum,
-  forumApi,
-  getUiCopy,
+  getUiCopy
 } from '@bias/forum'
 import PostReportModal from './PostReportModal.vue'
 
@@ -126,7 +127,7 @@ async function handleOpenReportModal({
       PostReportModal,
       {
         post,
-        submitReport: payload => forumApi.post(`/posts/${post.id}/report`, payload),
+        submitReport: payload => api.post(`/posts/${post.id}/report`, payload),
       },
       { size: 'small' }
     )
@@ -184,7 +185,7 @@ async function handleResolvePostFlags({
 
   patchPost?.(post.id, { is_flag_pending: true })
   try {
-    const response = await forumApi.post(`/posts/${post.id}/flags/resolve`, { status })
+    const response = await api.post(`/posts/${post.id}/flags/resolve`, { status })
     if (response?.post) {
       upsertPost?.({
         ...response.post,
@@ -299,6 +300,14 @@ function registerFlagsUiCopy(forum) {
     resolve: ({ isIgnoring }) => ({
       text: isIgnoring ? '这条回复的待处理举报已关闭。' : '这条回复的待处理举报已标记为已处理。',
     }),
+  })
+
+  forum.uiCopy({
+    key: 'post-report-close-label',
+    moduleId: 'flags',
+    order: 835,
+    surfaces: ['post-report-close-label'],
+    resolve: () => ({ text: '关闭' }),
   })
 
   forum.uiCopy({

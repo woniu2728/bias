@@ -6,7 +6,7 @@ from typing import Dict, List
 from django.conf import settings
 from django.core.cache import cache
 
-from apps.core.user_runtime import serialize_runtime_users_by_ids
+from apps.core.extensions.runtime_access import serialize_runtime_users_by_ids
 
 try:
     from django_redis import get_redis_connection

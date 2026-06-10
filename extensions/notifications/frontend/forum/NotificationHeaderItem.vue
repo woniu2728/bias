@@ -27,22 +27,24 @@
 </template>
 
 <script setup>
-import HeaderNotificationsMenu from './HeaderNotificationsMenu.vue'
 import {
+  useAuthStore } from '@bias/users'
+import { watch,
+  useRoute,
+  useRouter,
+  onBeforeUnmount,
+  onMounted,
   formatRelativeTime,
-} from '@bias/forum'
+  useModalStore
+} from '@bias/core'
+import HeaderNotificationsMenu from './HeaderNotificationsMenu.vue'
 import {
   getNotificationIconClass,
   getNotificationTextHtml,
-} from './notificationRuntime.js'
-import {
-  useForumStore,
-  useModalStore,
-  useAuthStore,
-  useRoute,
-  useRouter,
+  } from './notificationRuntime.js'
+import { useForumStore
 } from '@bias/forum'
-import { onBeforeUnmount, onMounted, watch } from '@bias/forum'
+
 import { useHeaderNotifications } from './useHeaderNotifications.js'
 import { useNotificationStore } from './store.js'
 

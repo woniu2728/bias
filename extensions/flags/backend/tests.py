@@ -1,22 +1,125 @@
 import json
 from datetime import timedelta
+from io import StringIO
 from unittest.mock import Mock, patch
 
+from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 from ninja_jwt.tokens import RefreshToken
 
-from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent
+from apps.core.forum_registry import (
+    get_registry_permission_codes_by_prefix,
+    get_registry_staff_managed_admin_permission_codes,
+)
+from apps.core.extensions.bootstrap import bootstrap_extension_host, reset_extension_application_bootstrap_state
+from apps.core.resource_registry import get_resource_registry
+from extensions.flags.backend.events import PostFlagCreatedEvent, PostFlagsDeletedEvent
+from apps.core.extensions.runtime_access import (
+    create_runtime_discussion,
+    get_runtime_discussion_model,
+)
 from apps.core.models import AuditLog, Setting
 from apps.core.settings_service import clear_runtime_setting_caches
-from extensions.discussions.backend.models import Discussion
-from extensions.discussions.backend.services import DiscussionService
+from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.discussions.backend.visibility import scope_discussion_view, scope_post_view
-from extensions.posts.backend.models import Post
-from extensions.posts.backend.services import PostService
-from extensions.users.backend.models import Group, Permission, User
 from extensions.flags.backend.models import PostFlag
-from extensions.flags.backend.services import report_post
+from apps.core.extensions.runtime_access import (
+    create_runtime_post,
+    delete_runtime_post,
+    get_runtime_post_model,
+    report_runtime_post_flag,
+)
+from apps.core.extensions.runtime_access import (
+    get_runtime_group_model,
+    get_runtime_permission_model,
+    get_runtime_user_model,
+)
+
+
+class RuntimeModelProxy:
+    def __init__(self, resolver):
+        self._resolver = resolver
+
+    def __getattr__(self, name):
+        return getattr(self._resolver(), name)
+
+
+User = RuntimeModelProxy(get_runtime_user_model)
+Group = RuntimeModelProxy(get_runtime_group_model)
+Permission = RuntimeModelProxy(get_runtime_permission_model)
+
+
+class FlagsPermissionRegistryTests(TestCase):
+    def test_flags_admin_permissions_are_registered_by_extension(self):
+        permissions = {
+            "admin.flag.view",
+            "admin.flag.resolve",
+        }
+
+        self.assertEqual(set(get_registry_permission_codes_by_prefix("admin.flag.")), permissions)
+        self.assertTrue(permissions.issubset(set(get_registry_staff_managed_admin_permission_codes())))
+
+
+class FlagsExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
+    def test_flags_extension_registers_runtime_service_provider(self):
+        application = self.bootstrap_extensions("flags")
+        service = application.get_service("flags.service")
+
+        self.assertIn("flags.service", application.get_service_provider_keys(extension_id="flags"))
+        self.assertIs(service["model"], PostFlag)
+        self.assertEqual(service["status_open"], PostFlag.STATUS_OPEN)
+        self.assertEqual(service["status_resolved"], PostFlag.STATUS_RESOLVED)
+        self.assertEqual(service["status_ignored"], PostFlag.STATUS_IGNORED)
+        for key in ("report_post", "get_flag_list", "resolve_flag", "resolve_post_flags", "delete_post_flags"):
+            self.assertTrue(callable(service[key]), key)
+
+    def test_flags_resource_capabilities_are_filtered_when_extension_disabled(self):
+        self.disable_extension_for_test("flags")
+
+        resource_registry = get_resource_registry()
+
+        self.assertFalse(any(item.module_id == "flags" for item in resource_registry.get_fields("post")))
+        self.assertFalse(any(item.module_id == "flags" for item in resource_registry.get_fields("admin_stats")))
+        self.assertFalse(any(item.module_id == "flags" for item in resource_registry.get_fields("user_detail")))
+        self.assertIsNone(resource_registry.get_dispatch_endpoint("post", "report", "POST", {}))
+        self.assertIsNone(resource_registry.get_dispatch_endpoint("post", "flags/resolve", "POST", {}))
+
+    def test_flags_runtime_event_and_post_lifecycle_are_omitted_when_extension_disabled(self):
+        self.disable_extension_for_test("flags")
+
+        try:
+            application = bootstrap_extension_host(force=True)
+
+            self.assertEqual(application.post_lifecycle.get_definitions(extension_id="flags"), [])
+            self.assertEqual(application.events.get_listeners(extension_id="flags"), [])
+        finally:
+            reset_extension_application_bootstrap_state()
+
+    def test_inspect_reports_flags_model_as_extension_native(self):
+        stdout = StringIO()
+        call_command(
+            "inspect_extensions",
+            "--extension-id",
+            "flags",
+            stdout=stdout,
+        )
+        payload = json.loads(stdout.getvalue())
+        extension = payload["extensions"][0]
+        audit = extension["model_ownership_audit"]
+        owned_item = audit["items"][0]
+
+        self.assertEqual(extension["id"], "flags")
+        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+        self.assertEqual(audit["extension_native_count"], 1)
+        self.assertEqual(audit["app_label_migration_required_count"], 0)
+        self.assertEqual(audit["app_label_migration_plan_required_count"], 0)
+        self.assertTrue(all(item["storage_origin"] == "extension" for item in audit["items"]))
+        self.assertTrue(all(item["model_module"].startswith("extensions.flags") for item in audit["items"]))
+        self.assertEqual(audit["app_label_migration_items"], [])
+        self.assertEqual(owned_item["current_app_label"], "flags")
+        self.assertEqual(owned_item["target_app_label"], "flags")
+        self.assertEqual(owned_item["migration_risk"], "none")
 
 
 class FlagsExtensionTests(TestCase):
@@ -39,12 +142,12 @@ class FlagsExtensionTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        self.discussion = DiscussionService.create_discussion(
+        self.discussion = create_runtime_discussion(
             title="Flag discussion",
             content="First post",
             user=self.author,
         )
-        self.post = PostService.create_post(
+        self.post = create_runtime_post(
             discussion_id=self.discussion.id,
             content="需要举报的内容",
             user=self.author,
@@ -138,16 +241,18 @@ class FlagsExtensionTests(TestCase):
             any(
                 item["module_id"] == "flags"
                 and item["event"] == "PostFlagCreatedEvent"
+                and item["event_name"] == "post.flagged"
                 and item.get("source") == "runtime"
-                for item in payload["event_listeners"]
+                for item in payload["realtime_broadcasts"]
             )
         )
         self.assertTrue(
             any(
                 item["module_id"] == "flags"
                 and item["event"] == "PostFlagsDeletedEvent"
+                and item["event_name"] == "post.flags_deleted"
                 and item.get("source") == "runtime"
-                for item in payload["event_listeners"]
+                for item in payload["realtime_broadcasts"]
             )
         )
         self.assertTrue(
@@ -246,7 +351,7 @@ class FlagsExtensionTests(TestCase):
         self.assertEqual(payload["flag_count"], 1)
 
     def test_flag_resource_index_lists_latest_visible_open_flags_for_staff(self):
-        report_post(
+        report_runtime_post_flag(
             self.post.id,
             self.reporter,
             reason="第一次举报",
@@ -258,7 +363,7 @@ class FlagsExtensionTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        latest_flag = report_post(
+        latest_flag = report_runtime_post_flag(
             self.post.id,
             second_reporter,
             reason="第二次举报",
@@ -291,13 +396,13 @@ class FlagsExtensionTests(TestCase):
         from apps.core.extensions.types import ExtensionModelVisibilityDefinition
         from extensions.flags.backend.resources import scope_flag_visibility
 
-        allowed_flag = report_post(
+        allowed_flag = report_runtime_post_flag(
             self.post.id,
             self.reporter,
             reason="允许查看的私有帖举报",
             message="允许查看",
         )
-        denied_post = PostService.create_post(
+        denied_post = create_runtime_post(
             discussion_id=self.discussion.id,
             content="另一个私有帖",
             user=self.author,
@@ -308,7 +413,7 @@ class FlagsExtensionTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        denied_flag = report_post(
+        denied_flag = report_runtime_post_flag(
             denied_post.id,
             second_reporter,
             reason="不允许查看的私有帖举报",
@@ -323,13 +428,15 @@ class FlagsExtensionTests(TestCase):
         flag_group = Group.objects.create(name="PrivateFlagViewer", color="#4d698e")
         Permission.objects.create(group=flag_group, permission="admin.flag.view")
         viewer.user_groups.add(flag_group)
-        Post.objects.filter(id__in=[self.post.id, denied_post.id]).update(is_private=True)
+        PostModel = get_runtime_post_model()
+        DiscussionModel = get_runtime_discussion_model()
+        PostModel.objects.filter(id__in=[self.post.id, denied_post.id]).update(is_private=True)
 
         app = ExtensionApplication()
         app.models.register_visibility(
             "discussions",
             ExtensionModelVisibilityDefinition(
-                model=Discussion,
+                model=DiscussionModel,
                 ability="view",
                 scope=scope_discussion_view,
             ),
@@ -337,7 +444,7 @@ class FlagsExtensionTests(TestCase):
         app.models.register_visibility(
             "discussions",
             ExtensionModelVisibilityDefinition(
-                model=Post,
+                model=PostModel,
                 ability="view",
                 scope=scope_post_view,
             ),
@@ -345,7 +452,7 @@ class FlagsExtensionTests(TestCase):
         app.models.register_visibility(
             "private-runtime",
             ExtensionModelVisibilityDefinition(
-                model=Post,
+                model=PostModel,
                 ability="viewPrivate",
                 scope=lambda queryset, context: queryset.filter(id=self.post.id),
             ),
@@ -452,7 +559,7 @@ class FlagsExtensionTests(TestCase):
         mocked_bus = Mock()
         with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
             with self.captureOnCommitCallbacks(execute=True):
-                deleted = PostService.delete_post(self.post.id, self.admin)
+                deleted = delete_runtime_post(self.post.id, self.admin)
 
         self.assertTrue(deleted)
         self.assertFalse(PostFlag.objects.filter(post_id=self.post.id).exists())
@@ -623,12 +730,12 @@ class AdminFlagManagementApiTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Flag target",
             content="First",
             user=self.author,
         )
-        post = PostService.create_post(
+        post = create_runtime_post(
             discussion_id=discussion.id,
             content="这是一条被举报的帖子",
             user=self.author,
@@ -675,7 +782,7 @@ class AdminFlagManagementApiTests(TestCase):
         self.assertEqual(audit_log.data["status"], "resolved")
 
     def test_admin_without_flag_permission_is_denied(self):
-        with patch("extensions.flags.backend.admin_api.UserService.has_forum_permission", return_value=False):
+        with patch("extensions.flags.backend.admin_api.has_runtime_forum_permission", return_value=False):
             list_response = self.client.get(
                 "/api/admin/flags",
                 **self.auth_header(),
@@ -692,3 +799,5 @@ class AdminFlagManagementApiTests(TestCase):
                 **self.auth_header(),
             )
             self.assertEqual(resolve_response.status_code, 403, resolve_response.content)
+
+

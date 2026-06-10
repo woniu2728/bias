@@ -33,6 +33,8 @@ class Command(BaseCommand):
             return
 
         self.stdout.write(f"已发现扩展: {len(result['discovered'])}")
+        if result.get("created"):
+            self.stdout.write(f"已创建安装记录: {', '.join(result['created'])}")
         if result["updated"]:
             self.stdout.write(f"已更新安装记录: {', '.join(result['updated'])}")
         if result["pruned"]:

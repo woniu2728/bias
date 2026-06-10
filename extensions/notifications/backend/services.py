@@ -1,16 +1,23 @@
 """
 通知系统业务逻辑层
 """
-from typing import Optional, List, Tuple
+from typing import Any, Optional, List, Tuple
 from django.db.models import Q, Count
 from django.core.cache import cache
 from django.utils import timezone
-from extensions.users.backend.models import User
 from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.forum_events import NotificationCreatedEvent
-from extensions.users.backend.preferences import get_user_preference_value
-from extensions.discussions.backend.models import DiscussionUser
+from apps.core.extensions.runtime_access import (
+    get_runtime_discussion_reply_notification_context,
+)
+from extensions.notifications.backend.events import NotificationCreatedEvent
 from extensions.notifications.backend.models import Notification
+from apps.core.extensions.runtime_access import (
+    get_runtime_post_notification_context,
+    get_runtime_post_reply_notification_context,
+)
+from apps.core.extensions.runtime_access import (
+    get_runtime_user_preference,
+)
 
 
 UNREAD_COUNT_CACHE_KEY = "notifications.unread_count.{user_id}"
@@ -33,7 +40,7 @@ class NotificationService:
     TYPE_USER_UNSUSPENDED = 'userUnsuspended'
 
     @staticmethod
-    def is_notification_enabled(user: User | None, type_code: str) -> bool:
+    def is_notification_enabled(user: Any | None, type_code: str) -> bool:
         if not user:
             return False
 
@@ -43,7 +50,7 @@ class NotificationService:
         if not definition or not definition.preference_key:
             return True
 
-        return get_user_preference_value(
+        return get_runtime_user_preference(
             user,
             definition.preference_key,
             fallback=definition.preference_default_enabled,
@@ -69,9 +76,9 @@ class NotificationService:
 
     @staticmethod
     def create_notification(
-        user: User,
+        user: Any,
         type: str,
-        from_user: Optional[User] = None,
+        from_user: Optional[Any] = None,
         subject_type: Optional[str] = None,
         subject_id: Optional[int] = None,
         data: Optional[dict] = None,
@@ -159,7 +166,7 @@ class NotificationService:
 
     @staticmethod
     def _build_filtered_queryset(
-        user: User,
+        user: Any,
         is_read: Optional[bool] = None,
         type: Optional[str] = None,
         discussion_id: Optional[int] = None,
@@ -182,7 +189,7 @@ class NotificationService:
 
     @staticmethod
     def get_notification_list(
-        user: User,
+        user: Any,
         is_read: Optional[bool] = None,
         type: Optional[str] = None,
         page: int = 1,
@@ -228,7 +235,7 @@ class NotificationService:
         return notifications, total, unread_count, type_counts, unread_type_counts
 
     @staticmethod
-    def get_notification_by_id(notification_id: int, user: User, preload=None) -> Optional[Notification]:
+    def get_notification_by_id(notification_id: int, user: Any, preload=None) -> Optional[Notification]:
         """
         获取通知详情
 
@@ -249,7 +256,7 @@ class NotificationService:
             return None
 
     @staticmethod
-    def mark_as_read(notification_id: int, user: User) -> bool:
+    def mark_as_read(notification_id: int, user: Any) -> bool:
         """
         标记通知为已读
 
@@ -271,7 +278,7 @@ class NotificationService:
             return False
 
     @staticmethod
-    def mark_all_as_read(user: User) -> int:
+    def mark_all_as_read(user: Any) -> int:
         """
         标记所有通知为已读
 
@@ -286,7 +293,7 @@ class NotificationService:
 
     @staticmethod
     def mark_filtered_as_read(
-        user: User,
+        user: Any,
         type: Optional[str] = None,
         discussion_id: Optional[int] = None,
     ) -> Tuple[int, dict]:
@@ -310,7 +317,7 @@ class NotificationService:
         return count, type_counts
 
     @staticmethod
-    def delete_notification(notification_id: int, user: User) -> bool:
+    def delete_notification(notification_id: int, user: Any) -> bool:
         """
         删除通知
 
@@ -332,7 +339,7 @@ class NotificationService:
             return False
 
     @staticmethod
-    def delete_all_read(user: User) -> int:
+    def delete_all_read(user: Any) -> int:
         """
         删除所有已读通知
 
@@ -347,7 +354,7 @@ class NotificationService:
 
     @staticmethod
     def delete_filtered_read(
-        user: User,
+        user: Any,
         type: Optional[str] = None,
         discussion_id: Optional[int] = None,
     ) -> Tuple[int, dict]:
@@ -366,7 +373,7 @@ class NotificationService:
         return count, type_counts
 
     @staticmethod
-    def get_unread_count(user: User) -> int:
+    def get_unread_count(user: Any) -> int:
         """
         获取未读通知数量
 
@@ -393,7 +400,7 @@ class NotificationService:
         return unread_count
 
     @staticmethod
-    def get_stats(user: User) -> dict:
+    def get_stats(user: Any) -> dict:
         """
         获取通知统计
 
@@ -414,7 +421,7 @@ class NotificationService:
         }
 
     @staticmethod
-    def notify_discussion_reply(discussion_id: int, post_id: int, from_user: User):
+    def notify_discussion_reply(discussion_id: int, post_id: int, from_user: Any):
         """
         通知讨论有新回复
 
@@ -423,24 +430,30 @@ class NotificationService:
             post_id: 帖子ID
             from_user: 回复者
         """
-        from extensions.discussions.backend.models import Discussion
-        from extensions.posts.backend.models import Post
+        context = get_runtime_discussion_reply_notification_context(discussion_id, post_id, from_user)
+        if not context:
+            return
 
-        try:
-            discussion = Discussion.objects.select_related('user').get(id=discussion_id)
-            post = Post.objects.only('id', 'number').get(id=post_id)
-            payload = {
-                'discussion_id': discussion_id,
-                'discussion_title': discussion.title,
-                'post_id': post_id,
-                'post_number': post.number,
-            }
-            notifications = []
+        payload = dict(context.get("payload") or {})
+        notifications = []
+        discussion_author = context.get("discussion_author")
+        if discussion_author and discussion_author.id != getattr(from_user, "id", None):
+            notifications.append(
+                Notification(
+                    user=discussion_author,
+                    from_user=from_user,
+                    type=NotificationService.TYPE_DISCUSSION_REPLY,
+                    subject_type='discussion',
+                    subject_id=discussion_id,
+                    data=payload,
+                )
+            )
 
-            if discussion.user and discussion.user.id != from_user.id:
+        for subscriber in context.get("subscribers") or ():
+            if NotificationService.is_notification_enabled(subscriber, NotificationService.TYPE_DISCUSSION_REPLY):
                 notifications.append(
                     Notification(
-                        user=discussion.user,
+                        user=subscriber,
                         from_user=from_user,
                         type=NotificationService.TYPE_DISCUSSION_REPLY,
                         subject_type='discussion',
@@ -448,38 +461,10 @@ class NotificationService:
                         data=payload,
                     )
                 )
-
-            subscribed_user_ids = list(
-                DiscussionUser.objects.filter(
-                    discussion_id=discussion_id,
-                    is_subscribed=True,
-                ).exclude(
-                    user_id=from_user.id
-                ).exclude(
-                    user_id=getattr(discussion.user, 'id', None)
-                ).values_list('user_id', flat=True)
-            )
-
-            if subscribed_user_ids:
-                subscribed_users = User.objects.filter(id__in=subscribed_user_ids)
-                for subscriber in subscribed_users:
-                    if NotificationService.is_notification_enabled(subscriber, NotificationService.TYPE_DISCUSSION_REPLY):
-                        notifications.append(
-                            Notification(
-                                user=subscriber,
-                                from_user=from_user,
-                                type=NotificationService.TYPE_DISCUSSION_REPLY,
-                                subject_type='discussion',
-                                subject_id=discussion_id,
-                                data=payload,
-                            )
-                        )
-            NotificationService.create_notifications_bulk(notifications)
-        except (Discussion.DoesNotExist, Post.DoesNotExist):
-            pass
+        NotificationService.create_notifications_bulk(notifications)
 
     @staticmethod
-    def notify_post_reply(reply_to_post_id: int, post_id: int, from_user: User):
+    def notify_post_reply(reply_to_post_id: int, post_id: int, from_user: Any):
         """
         通知某条帖子被回复
 
@@ -488,38 +473,22 @@ class NotificationService:
             post_id: 新回复帖子ID
             from_user: 回复者
         """
-        from extensions.posts.backend.models import Post
+        context = get_runtime_post_reply_notification_context(reply_to_post_id, post_id, from_user)
+        if not context:
+            return
 
-        try:
-            reply_to_post = Post.objects.select_related('user', 'discussion__user').get(id=reply_to_post_id)
-            post = Post.objects.only('id', 'number').get(id=post_id)
-
-            if (
-                reply_to_post.user
-                and reply_to_post.user.id != from_user.id
-                and reply_to_post.user.id != getattr(reply_to_post.discussion.user, 'id', None)
-            ):
-                NotificationService.create_notification(
-                    user=reply_to_post.user,
-                    type=NotificationService.TYPE_POST_REPLY,
-                    from_user=from_user,
-                    subject_type='post',
-                    subject_id=reply_to_post_id,
-                    allow_merge=False,
-                    data={
-                        'post_id': post_id,
-                        'post_number': post.number,
-                        'discussion_id': reply_to_post.discussion_id,
-                        'discussion_title': reply_to_post.discussion.title,
-                        'reply_to_post_id': reply_to_post_id,
-                        'reply_to_post_number': reply_to_post.number,
-                    }
-                )
-        except Post.DoesNotExist:
-            pass
+        NotificationService.create_notification(
+            user=context["recipient"],
+            type=NotificationService.TYPE_POST_REPLY,
+            from_user=from_user,
+            subject_type='post',
+            subject_id=reply_to_post_id,
+            allow_merge=False,
+            data=dict(context.get("payload") or {}),
+        )
 
     @staticmethod
-    def notify_post_liked(post_id: int, from_user: User):
+    def notify_post_liked(post_id: int, from_user: Any):
         """
         通知帖子被点赞
 
@@ -527,31 +496,23 @@ class NotificationService:
             post_id: 帖子ID
             from_user: 点赞者
         """
-        from extensions.posts.backend.models import Post
+        context = get_runtime_post_notification_context(post_id)
+        if not context:
+            return
 
-        try:
-            post = Post.objects.select_related('user', 'discussion').get(id=post_id)
-
-            # 通知帖子作者
-            if post.user and post.user.id != from_user.id:
-                NotificationService.create_notification(
-                    user=post.user,
-                    type=NotificationService.TYPE_POST_LIKED,
-                    from_user=from_user,
-                    subject_type='post',
-                    subject_id=post_id,
-                    data={
-                        'post_id': post_id,
-                        'post_number': post.number,
-                        'discussion_id': post.discussion_id,
-                        'discussion_title': post.discussion.title,
-                    }
-                )
-        except Post.DoesNotExist:
-            pass
+        author = context.get("author")
+        if author and author.id != getattr(from_user, "id", None):
+            NotificationService.create_notification(
+                user=author,
+                type=NotificationService.TYPE_POST_LIKED,
+                from_user=from_user,
+                subject_type='post',
+                subject_id=post_id,
+                data=dict(context.get("payload") or {}),
+            )
 
     @staticmethod
-    def notify_user_mentioned(post_id: int, mentioned_user: User, from_user: User):
+    def notify_user_mentioned(post_id: int, mentioned_user: Any, from_user: Any):
         """
         通知用户被@提及
 
@@ -560,29 +521,21 @@ class NotificationService:
             mentioned_user: 被提及的用户
             from_user: 提及者
         """
-        from extensions.posts.backend.models import Post
+        context = get_runtime_post_notification_context(post_id)
+        if not context:
+            return
 
-        try:
-            post = Post.objects.select_related('discussion').get(id=post_id)
-
-            NotificationService.create_notification(
-                user=mentioned_user,
-                type=NotificationService.TYPE_USER_MENTIONED,
-                from_user=from_user,
-                subject_type='post',
-                subject_id=post_id,
-                data={
-                    'post_id': post_id,
-                    'post_number': post.number,
-                    'discussion_id': post.discussion_id,
-                    'discussion_title': post.discussion.title,
-                }
-            )
-        except Post.DoesNotExist:
-            pass
+        NotificationService.create_notification(
+            user=mentioned_user,
+            type=NotificationService.TYPE_USER_MENTIONED,
+            from_user=from_user,
+            subject_type='post',
+            subject_id=post_id,
+            data=dict(context.get("payload") or {}),
+        )
 
     @staticmethod
-    def notify_discussion_approved(discussion, admin_user: User, note: str = ""):
+    def notify_discussion_approved(discussion, admin_user: Any, note: str = ""):
         if not getattr(discussion, "user", None):
             return
 
@@ -600,7 +553,7 @@ class NotificationService:
         )
 
     @staticmethod
-    def notify_discussion_rejected(discussion, admin_user: User, note: str = ""):
+    def notify_discussion_rejected(discussion, admin_user: Any, note: str = ""):
         if not getattr(discussion, "user", None):
             return
 
@@ -618,7 +571,7 @@ class NotificationService:
         )
 
     @staticmethod
-    def notify_post_approved(post, admin_user: User, note: str = ""):
+    def notify_post_approved(post, admin_user: Any, note: str = ""):
         if not getattr(post, "user", None):
             return
 
@@ -638,7 +591,7 @@ class NotificationService:
         )
 
     @staticmethod
-    def notify_post_rejected(post, admin_user: User, note: str = ""):
+    def notify_post_rejected(post, admin_user: Any, note: str = ""):
         if not getattr(post, "user", None):
             return
 
@@ -658,7 +611,7 @@ class NotificationService:
         )
 
     @staticmethod
-    def notify_user_suspended(user: User, admin_user: Optional[User] = None):
+    def notify_user_suspended(user: Any, admin_user: Optional[Any] = None):
         NotificationService.create_notification(
             user=user,
             type=NotificationService.TYPE_USER_SUSPENDED,
@@ -673,7 +626,7 @@ class NotificationService:
         )
 
     @staticmethod
-    def notify_user_unsuspended(user: User, admin_user: Optional[User] = None):
+    def notify_user_unsuspended(user: Any, admin_user: Optional[Any] = None):
         NotificationService.create_notification(
             user=user,
             type=NotificationService.TYPE_USER_UNSUSPENDED,
@@ -684,49 +637,19 @@ class NotificationService:
         )
 
     @staticmethod
-    def _send_websocket_notification(notification):
-        """
-        发送WebSocket实时通知
-
-        Args:
-            notification: 通知对象
-        """
-        try:
-            from apps.core.websocket_service import WebSocketService
-
-            notification_data = {
-                'id': notification.id,
-                'type': notification.type,
-                'from_user': {
-                    'id': notification.from_user.id,
-                    'username': notification.from_user.username,
-                    'display_name': notification.from_user.display_name,
-                    'avatar_url': notification.from_user.avatar_url,
-                } if notification.from_user else None,
-                'data': notification.data,
-                'is_read': notification.is_read,
-                'created_at': notification.created_at.isoformat(),
-            }
-
-            WebSocketService.send_notification_to_user(
-                user_id=notification.user_id,
-                notification_data=notification_data
-            )
-        except Exception:
-            # WebSocket发送失败不影响主流程
-            pass
-
     @staticmethod
-    def _send_notifications_batch(notification_ids: List[int]):
+    def load_notifications_for_realtime(notification_ids: List[int]):
         if not notification_ids:
-            return
+            return []
 
         notifications = list(
             Notification.objects.filter(id__in=notification_ids).select_related('from_user')
         )
         notification_map = {notification.id: notification for notification in notifications}
+        return [
+            notification_map[notification_id]
+            for notification_id in notification_ids
+            if notification_id in notification_map
+        ]
 
-        for notification_id in notification_ids:
-            notification = notification_map.get(notification_id)
-            if notification is not None:
-                NotificationService._send_websocket_notification(notification)
+

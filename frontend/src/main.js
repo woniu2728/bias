@@ -19,7 +19,6 @@ const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
-app.use(router)
 
 primeCsrfProtection().catch(() => {})
 const forumStore = useForumStore(pinia)
@@ -58,6 +57,7 @@ async function bootstrap() {
     }
   })
 
+  app.use(router)
   app.mount('#app')
 }
 

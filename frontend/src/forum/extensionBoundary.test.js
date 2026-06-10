@@ -1,15 +1,23 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { resolve, relative } from 'node:path'
+import { dirname, resolve, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const repoRoot = resolve(process.cwd(), '..')
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const extensionRoot = resolve(repoRoot, 'extensions')
 const allowedPublicPackageImports = new Set([
   '@bias/forum',
   '@bias/admin',
   '@bias/admin/components',
   '@bias/core',
+  '@bias/discussions',
+  '@bias/emoji',
+  '@bias/notifications',
+  '@bias/posts',
+  '@bias/realtime',
+  '@bias/search',
+  '@bias/users',
 ])
 
 function listFrontendFiles(directory) {
@@ -42,17 +50,6 @@ function extractImports(source) {
   return imports
 }
 
-function extractNamedImports(source, packageName) {
-  const names = []
-  const pattern = new RegExp(`import\\s*\\{([^}]+)\\}\\s*from\\s*['"]${packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`, 'g')
-  let match = pattern.exec(source)
-  while (match) {
-    names.push(...match[1].split(',').map(item => item.trim().split(/\s+as\s+/i)[0].trim()).filter(Boolean))
-    match = pattern.exec(source)
-  }
-  return names
-}
-
 function readExtensionForumSource(extensionId) {
   return readFileSync(resolve(extensionRoot, `${extensionId}/frontend/forum/index.js`), 'utf8')
 }
@@ -83,6 +80,9 @@ test('extension frontend imports only public app APIs', () => {
       if (allowedPublicPackageImports.has(importPath)) {
         continue
       }
+      if (importPath === 'vue' || importPath === 'vue-router') {
+        offenders.push(`${relative(repoRoot, path)} imports ${importPath}`)
+      }
       if (
         importPath.startsWith('@/')
         || importPath.includes('frontend/src/')
@@ -96,27 +96,396 @@ test('extension frontend imports only public app APIs', () => {
   assert.deepEqual(offenders, [])
 })
 
-test('extension admin frontends do not import legacy admin constructors', () => {
-  const forbiddenNames = new Set([
-    'Admin',
-    'AdminExtender',
-    'AdminDashboard',
-    'AdminDashboardExtender',
-    'AdminPage',
-    'AdminPageExtender',
-  ])
+test('forum runtime does not import extension source modules directly', () => {
+  const forumRoot = resolve(repoRoot, 'frontend/src/forum')
   const offenders = []
-
-  for (const path of listFrontendFiles(extensionRoot)) {
+  for (const path of listFrontendFiles(forumRoot)) {
+    if (/\.test\.(js|ts)$/.test(path)) {
+      continue
+    }
     const source = readFileSync(path, 'utf8')
-    for (const name of extractNamedImports(source, '@bias/admin')) {
-      if (forbiddenNames.has(name)) {
-        offenders.push(`${relative(repoRoot, path)} imports ${name} from @bias/admin`)
+    for (const specifier of extractImports(source)) {
+      if (specifier.includes('/extensions/') || specifier.startsWith('../../../extensions')) {
+        offenders.push(`${relative(repoRoot, path)} imports ${specifier}`)
       }
     }
   }
 
   assert.deepEqual(offenders, [])
+})
+
+test('forum sdk does not expose core runtime facade', () => {
+  const forumSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8')
+  const forumNodeSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/nodeSdk.js'), 'utf8')
+  const forumTypesSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.d.ts'), 'utf8')
+
+  for (const source of [forumSdkSource, forumNodeSdkSource, forumTypesSource]) {
+    assert.equal(source.includes("export * from '../common/sdk"), false)
+    assert.equal(source.includes("export * from './runtimeSdk"), false)
+    assert.equal(source.includes("export * from './vueRuntime"), false)
+    assert.equal(source.includes("from './runtimeSdk"), false)
+    assert.equal(source.includes("from './vueRuntime"), false)
+    assert.equal(source.includes("from 'vue'"), false)
+    assert.equal(source.includes("from 'vue-router'"), false)
+    assert.equal(source.includes("from 'pinia'"), false)
+    assert.equal(source.includes('function computed'), false)
+    assert.equal(source.includes('function ref'), false)
+    assert.equal(source.includes('function useRouter'), false)
+    assert.equal(source.includes('function defineStore'), false)
+    assert.equal(source.includes('forumApi'), false)
+    assert.equal(source.includes('useModalStore'), false)
+    assert.equal(source.includes('useResourceStore'), false)
+  }
+})
+
+test('admin sdk does not expose core runtime facade', () => {
+  const adminSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/admin/sdk.js'), 'utf8')
+  const adminTypesSource = readFileSync(resolve(repoRoot, 'frontend/src/admin/sdk.d.ts'), 'utf8')
+
+  assert.equal(adminSdkSource.includes("export * from '../common/sdk"), false)
+  for (const source of [adminSdkSource, adminTypesSource]) {
+    assert.equal(source.includes("from 'vue'"), false)
+    assert.equal(source.includes("from 'vue-router'"), false)
+    assert.equal(source.includes("from 'pinia'"), false)
+    assert.equal(source.includes('function computed'), false)
+    assert.equal(source.includes('function ref'), false)
+    assert.equal(source.includes('function useRouter'), false)
+  }
+})
+
+test('users auth APIs are owned by users sdk instead of forum or admin facades', () => {
+  const usersSdkSource = readFileSync(resolve(repoRoot, 'extensions/users/frontend/forum/sdk.js'), 'utf8')
+  const forumSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8')
+  const forumNodeSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/nodeSdk.js'), 'utf8')
+  const forumTypesSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.d.ts'), 'utf8')
+  const adminComponentsSource = readFileSync(resolve(repoRoot, 'frontend/src/admin/componentsSdk.js'), 'utf8')
+  const adminComponentsTypesSource = readFileSync(resolve(repoRoot, 'frontend/src/admin/componentsSdk.d.ts'), 'utf8')
+
+  for (const symbol of [
+    'useAuthStore',
+    'useOnlineUsersStore',
+    'openLoginModal',
+    'openRegisterModal',
+    'openForgotPasswordModal',
+    'getAuthModalProvider',
+    'registerAuthModalProvider',
+  ]) {
+    assert.equal(usersSdkSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+    assert.equal(forumNodeSdkSource.includes(symbol), false, symbol)
+    assert.equal(forumTypesSource.includes(symbol), false, symbol)
+    assert.equal(adminComponentsSource.includes(symbol), false, symbol)
+    assert.equal(adminComponentsTypesSource.includes(symbol), false, symbol)
+  }
+})
+
+test('realtime APIs are owned by realtime sdk instead of forum facade', () => {
+  const realtimeSdkSource = readFileSync(resolve(repoRoot, 'extensions/realtime/frontend/forum/sdk.js'), 'utf8')
+  const forumSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8')
+  const forumNodeSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/nodeSdk.js'), 'utf8')
+  const forumTypesSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.d.ts'), 'utf8')
+
+  for (const symbol of [
+    'useForumRealtimeStore',
+    'getForumRealtimeEventPolicy',
+    'getTrackedDiscussionIdsFromDiscussionItems',
+    'mergeForumEventPayload',
+    'shouldRefreshForumEvent',
+  ]) {
+    assert.equal(realtimeSdkSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+    assert.equal(forumNodeSdkSource.includes(symbol), false, symbol)
+    assert.equal(forumTypesSource.includes(symbol), false, symbol)
+  }
+})
+
+test('emoji rendering APIs are owned by emoji sdk instead of forum facade', () => {
+  const emojiSdkSource = readFileSync(resolve(repoRoot, 'extensions/emoji/frontend/forum/sdk.js'), 'utf8')
+  const forumSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8')
+  const forumNodeSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/nodeSdk.js'), 'utf8')
+  const forumTypesSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.d.ts'), 'utf8')
+
+  for (const symbol of [
+    'renderTwemojiHtml',
+    'renderTwemojiText',
+    'setTwemojiBaseUrl',
+    'setTwemojiEnabled',
+  ]) {
+    assert.equal(emojiSdkSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+    assert.equal(forumNodeSdkSource.includes(symbol), false, symbol)
+    assert.equal(forumTypesSource.includes(symbol), false, symbol)
+  }
+})
+
+test('extensions import core runtime primitives from core sdk', () => {
+  const coreRuntimeNames = new Set([
+    'computed',
+    'nextTick',
+    'onBeforeUnmount',
+    'onMounted',
+    'reactive',
+    'ref',
+    'toRef',
+    'watch',
+    'useRoute',
+    'useRouter',
+    'createPinia',
+    'defineStore',
+    'setActivePinia',
+    'forumApi',
+    'useModalStore',
+    'useResourceStore',
+  ])
+  const offenders = []
+  const importPattern = /import\s*\{([^{}]*)\}\s*from\s*['"]@bias\/forum['"];?/g
+
+  for (const path of listFrontendFiles(extensionRoot)) {
+    const source = readFileSync(path, 'utf8')
+    let match = importPattern.exec(source)
+    while (match) {
+      for (const specifier of match[1].split(',').map(item => item.trim()).filter(Boolean)) {
+        const importedName = specifier.match(/^([^\s]+)\s+as\s+[^\s]+$/)?.[1] || specifier
+        if (coreRuntimeNames.has(importedName)) {
+          offenders.push(`${relative(repoRoot, path)} imports ${specifier} from @bias/forum`)
+        }
+      }
+      match = importPattern.exec(source)
+    }
+  }
+
+  assert.deepEqual(offenders, [])
+})
+
+test('extensions import discussion and post runtime APIs from owning extension sdks', () => {
+  const forumOwnedRuntimeNames = new Set([
+    'getDiscussionBadges',
+    'getDiscussionListContexts',
+    'getDiscussionListHero',
+    'getDiscussionListRequests',
+    'getDiscussionMenuItems',
+    'getDiscussionPresentationItems',
+    'getDiscussionReplyState',
+    'getDiscussionReviewBanner',
+    'getDiscussionStateBadges',
+    'getPostFlagPanel',
+    'getPostMenuItems',
+    'getPostReviewBanner',
+    'getPostStateBadges',
+    'getPostTypeDefinition',
+    'registerDiscussionAction',
+    'registerDiscussionActionHandler',
+    'registerDiscussionListContext',
+    'registerDiscussionListHero',
+    'registerDiscussionListRequest',
+    'registerDiscussionPresentation',
+    'registerDiscussionReplyState',
+    'registerDiscussionReviewBanner',
+    'registerPostAction',
+    'registerPostActionHandler',
+    'registerPostFlagPanel',
+    'registerPostReviewBanner',
+    'registerPostStateBadge',
+    'runDiscussionAction',
+    'runPostAction',
+  ])
+  const offenders = []
+  const importPattern = /import\s*\{([^{}]*)\}\s*from\s*['"]@bias\/forum['"];?/g
+
+  for (const path of listFrontendFiles(extensionRoot)) {
+    const source = readFileSync(path, 'utf8')
+    let match = importPattern.exec(source)
+    while (match) {
+      for (const specifier of match[1].split(',').map(item => item.trim()).filter(Boolean)) {
+        const importedName = specifier.match(/^([^\s]+)\s+as\s+[^\s]+$/)?.[1] || specifier
+        if (forumOwnedRuntimeNames.has(importedName)) {
+          offenders.push(`${relative(repoRoot, path)} imports ${specifier} from @bias/forum`)
+        }
+      }
+      match = importPattern.exec(source)
+    }
+  }
+
+  assert.deepEqual(offenders, [])
+})
+
+test('forum public sdk does not export discussion and post runtime APIs', () => {
+  const forbiddenNames = [
+    'getDiscussionBadges',
+    'getDiscussionListContexts',
+    'getDiscussionListHero',
+    'getDiscussionListRequests',
+    'getDiscussionMenuItems',
+    'getDiscussionPresentationItems',
+    'getDiscussionReplyState',
+    'getDiscussionReviewBanner',
+    'getDiscussionStateBadges',
+    'getPostFlagPanel',
+    'getPostMenuItems',
+    'getPostReviewBanner',
+    'getPostStateBadges',
+    'getPostTypeDefinition',
+    'registerDiscussionAction',
+    'registerDiscussionActionHandler',
+    'registerDiscussionListContext',
+    'registerDiscussionListHero',
+    'registerDiscussionListRequest',
+    'registerDiscussionPresentation',
+    'registerDiscussionReplyState',
+    'registerDiscussionReviewBanner',
+    'registerPostAction',
+    'registerPostActionHandler',
+    'registerPostFlagPanel',
+    'registerPostReviewBanner',
+    'registerPostStateBadge',
+    'runDiscussionAction',
+    'runPostAction',
+  ]
+  const sources = [
+    readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8'),
+    readFileSync(resolve(repoRoot, 'frontend/src/forum/nodeSdk.js'), 'utf8'),
+  ]
+
+  const offenders = []
+  for (const source of sources) {
+    for (const name of forbiddenNames) {
+      if (new RegExp(`\\b${name}\\b`).test(source)) {
+        offenders.push(name)
+      }
+    }
+  }
+
+  assert.deepEqual(offenders, [])
+})
+
+test('discussion and post sdks own their runtime exports', () => {
+  const sources = [
+    readFileSync(resolve(repoRoot, 'extensions/discussions/frontend/forum/sdk.js'), 'utf8'),
+    readFileSync(resolve(repoRoot, 'extensions/discussions/frontend/forum/nodeSdk.js'), 'utf8'),
+    readFileSync(resolve(repoRoot, 'extensions/posts/frontend/forum/sdk.js'), 'utf8'),
+    readFileSync(resolve(repoRoot, 'extensions/posts/frontend/forum/nodeSdk.js'), 'utf8'),
+  ]
+
+  assert.deepEqual(
+    sources
+      .map(source => source.includes('@bias/forum'))
+      .filter(Boolean),
+    []
+  )
+})
+
+test('feature runtime APIs are owned by their extension sdks instead of forum', () => {
+  const forumRuntimeNames = new Set([
+    'getNotificationRenderers',
+    'registerNotificationRenderer',
+    'getSearchSources',
+    'getSearchModalProvider',
+    'getSearchModalSections',
+    'registerSearchSource',
+    'registerSearchModalProvider',
+    'registerSearchModalSection',
+    'getProfilePanels',
+    'getUserBadges',
+    'getAuthModalProvider',
+    'registerProfilePanel',
+    'registerUserBadge',
+    'registerAuthModalProvider',
+    'getForumRealtimeEvents',
+    'registerForumRealtimeEvent',
+    'getStartDiscussionProvider',
+    'registerStartDiscussionProvider',
+    'useStartDiscussionAction',
+    'formatRelativeTime',
+    'formatMonth',
+    'unwrapList',
+  ])
+  const offenders = []
+  const importPattern = /import\s*\{([^{}]*)\}\s*from\s*['"]@bias\/forum['"];?/g
+
+  for (const path of listFrontendFiles(extensionRoot)) {
+    const source = readFileSync(path, 'utf8')
+    let match = importPattern.exec(source)
+    while (match) {
+      for (const specifier of match[1].split(',').map(item => item.trim()).filter(Boolean)) {
+        const importedName = specifier.match(/^([^\s]+)\s+as\s+[^\s]+$/)?.[1] || specifier
+        if (forumRuntimeNames.has(importedName)) {
+          offenders.push(`${relative(repoRoot, path)} imports ${specifier} from @bias/forum`)
+        }
+      }
+      match = importPattern.exec(source)
+    }
+  }
+
+  assert.deepEqual(offenders, [])
+})
+
+test('forum public sdk does not export feature-owned runtime APIs', () => {
+  const forbiddenNames = [
+    'getNotificationRenderers',
+    'registerNotificationRenderer',
+    'getSearchSources',
+    'getSearchModalProvider',
+    'getSearchModalSections',
+    'registerSearchSource',
+    'registerSearchModalProvider',
+    'registerSearchModalSection',
+    'getProfilePanels',
+    'getUserBadges',
+    'registerProfilePanel',
+    'registerUserBadge',
+    'getForumRealtimeEvents',
+    'registerForumRealtimeEvent',
+    'getStartDiscussionProvider',
+    'registerStartDiscussionProvider',
+    'useStartDiscussionAction',
+    'formatRelativeTime',
+    'formatMonth',
+    'unwrapList',
+    'usePaginatedListState',
+    'useRequestedPaginatedListState',
+    'useRouteListState',
+    'useRoutePagination',
+  ]
+  const sources = [
+    readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8'),
+    readFileSync(resolve(repoRoot, 'frontend/src/forum/nodeSdk.js'), 'utf8'),
+    readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.d.ts'), 'utf8'),
+  ]
+
+  const offenders = []
+  for (const source of sources) {
+    for (const name of forbiddenNames) {
+      if (new RegExp(`\\b${name}\\b`).test(source)) {
+        offenders.push(name)
+      }
+    }
+  }
+
+  assert.deepEqual(offenders, [])
+})
+
+test('feature sdks expose their owned runtime APIs', () => {
+  const notificationsSdk = readFileSync(resolve(repoRoot, 'extensions/notifications/frontend/forum/sdk.js'), 'utf8')
+  const searchSdk = readFileSync(resolve(repoRoot, 'extensions/search/frontend/forum/sdk.js'), 'utf8')
+  const usersSdk = readFileSync(resolve(repoRoot, 'extensions/users/frontend/forum/sdk.js'), 'utf8')
+  const realtimeSdk = readFileSync(resolve(repoRoot, 'extensions/realtime/frontend/forum/sdk.js'), 'utf8')
+  const discussionsSdk = readFileSync(resolve(repoRoot, 'extensions/discussions/frontend/forum/sdk.js'), 'utf8')
+
+  for (const symbol of ['getNotificationRenderers', 'registerNotificationRenderer']) {
+    assert.equal(notificationsSdk.includes(symbol), true, symbol)
+  }
+  for (const symbol of ['getSearchSources', 'getSearchModalProvider', 'registerSearchSource']) {
+    assert.equal(searchSdk.includes(symbol), true, symbol)
+  }
+  for (const symbol of ['getProfilePanels', 'getUserBadges', 'getAuthModalProvider', 'registerProfilePanel', 'registerAuthModalProvider']) {
+    assert.equal(usersSdk.includes(symbol), true, symbol)
+  }
+  for (const symbol of ['getForumRealtimeEvents', 'registerForumRealtimeEvent']) {
+    assert.equal(realtimeSdk.includes(symbol), true, symbol)
+  }
+  for (const symbol of ['getStartDiscussionProvider', 'registerStartDiscussionProvider', 'useStartDiscussionAction']) {
+    assert.equal(discussionsSdk.includes(symbol), true, symbol)
+  }
 })
 
 test('mentions extension owns composer autocomplete provider and toolbar tool registration', () => {
@@ -171,9 +540,28 @@ test('emoji extension owns composer emoji tool and picker copy registration', ()
   assert.equal(emojiForumSource.includes("moduleId: 'emoji'"), true)
 })
 
+test('uploads extension owns composer upload and image tool registration', () => {
+  const composerSource = readFileSync(resolve(repoRoot, 'frontend/src/utils/composer.js'), 'utf8')
+  const uploadsForumSource = readExtensionForumSource('uploads')
+
+  assert.equal(composerSource.includes("key: 'upload'"), false)
+  assert.equal(composerSource.includes("key: 'image'"), false)
+  assert.equal(composerSource.includes('uploadComposerFile'), false)
+  assert.equal(composerSource.includes('/uploads'), false)
+  assert.equal(uploadsForumSource.includes('extendForum('), true)
+  assert.equal(uploadsForumSource.includes('.composerTool'), true)
+  assert.equal(uploadsForumSource.includes('.composerUploadHandler'), true)
+  assert.equal(uploadsForumSource.includes("key: 'upload'"), true)
+  assert.equal(uploadsForumSource.includes("key: 'image'"), true)
+  assert.equal(uploadsForumSource.includes("moduleId: 'uploads'"), true)
+  assert.equal(uploadsForumSource.includes('openAttachmentPicker'), true)
+  assert.equal(uploadsForumSource.includes('openImagePicker'), true)
+})
+
 test('tags and notifications extensions own navigational forum contributions', () => {
   const tagsForumSource = readExtensionForumSource('tags')
   const notificationsForumSource = readExtensionForumSource('notifications')
+  const forumSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8')
 
   assertCoreRegistryDoesNotOwn([
     "key: 'tags'",
@@ -187,6 +575,11 @@ test('tags and notifications extensions own navigational forum contributions', (
     'notifications-menu-empty',
   ])
   assert.equal(tagsForumSource.includes('extendForum(registerTagsForum)'), true)
+  assert.equal(/import\s*\{[\s\S]*ResourceNormalizer[\s\S]*Store[\s\S]*\}\s*from\s*['"]@bias\/core['"]/.test(tagsForumSource), true)
+  assert.equal(tagsForumSource.includes('new Store()'), true)
+  assert.equal(tagsForumSource.includes(".add('tags', TagModel)"), true)
+  assert.equal(tagsForumSource.includes('new ResourceNormalizer()'), true)
+  assert.equal(tagsForumSource.includes('registerResourceNormalizer'), false)
   assert.equal(tagsForumSource.includes('forum.postType'), true)
   assert.equal(tagsForumSource.includes("postType('discussionTagged'"), true)
   assert.equal(tagsForumSource.includes('forum.navItem'), true)
@@ -194,14 +587,29 @@ test('tags and notifications extensions own navigational forum contributions', (
   assert.equal(tagsForumSource.includes('forum.composerSubmitGuard'), true)
   assert.equal(tagsForumSource.includes("moduleId: 'tags'"), true)
   assert.equal(notificationsForumSource.includes('extendForum(registerNotificationsForum)'), true)
+  assert.equal(/import\s*\{[\s\S]*ResourceNormalizer[\s\S]*\}\s*from\s*['"]@bias\/core['"]/.test(notificationsForumSource), true)
+  assert.equal(notificationsForumSource.includes('new ResourceNormalizer()'), true)
+  assert.equal(notificationsForumSource.includes('registerResourceNormalizer'), false)
   assert.equal(notificationsForumSource.includes('forum.navItem'), true)
   assert.equal(notificationsForumSource.includes('forum.headerItem'), true)
   assert.equal(notificationsForumSource.includes('forum.notificationRenderer'), true)
   assert.equal(notificationsForumSource.includes("moduleId: 'notifications'"), true)
+  assert.equal(forumSdkSource.includes('registerResourceNormalizer'), false)
+})
+
+test('core resource modules declare normalizers through ResourceNormalizer extender', () => {
+  for (const extensionId of ['users', 'posts', 'discussions']) {
+    const source = readExtensionForumSource(extensionId)
+    assert.equal(/import\s*\{[\s\S]*ResourceNormalizer[\s\S]*\}\s*from\s*['"]@bias\/core['"]/.test(source), true, extensionId)
+    assert.equal(source.includes('new ResourceNormalizer()'), true, extensionId)
+    assert.equal(source.includes('registerResourceNormalizer'), false, extensionId)
+  }
 })
 
 test('search extension owns default forum search sources', () => {
   const searchForumSource = readExtensionForumSource('search')
+  const searchViewSource = readExtensionForumFileSource('search', 'SearchResultsView.vue')
+  const forumSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8')
 
   assertCoreRegistryDoesNotOwn([
     "type: 'discussions'",
@@ -216,6 +624,10 @@ test('search extension owns default forum search sources', () => {
   assert.equal(searchForumSource.includes("key: 'posts'"), true)
   assert.equal(searchForumSource.includes("key: 'users'"), true)
   assert.equal(searchForumSource.includes("moduleId: 'search'"), true)
+  assert.equal(searchForumSource.includes('useSearchFilterCatalog'), false)
+  assert.equal(forumSdkSource.includes('useSearchResultsViewModel'), false)
+  assert.equal(forumSdkSource.includes('useSearchFilterCatalog'), false)
+  assert.equal(searchViewSource.includes("import { useSearchResultsViewModel } from './useSearchResultsViewModel'"), true)
 })
 
 test('approval flags subscriptions and likes own interaction contributions', () => {

@@ -1,5 +1,5 @@
 from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.forum_events import PostFlagsDeletedEvent
+from extensions.flags.backend.events import PostFlagsDeletedEvent
 from extensions.flags.backend.models import PostFlag
 
 

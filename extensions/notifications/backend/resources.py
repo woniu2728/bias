@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from extensions.users.backend.resources import serialize_user_summary
+from apps.core.extensions.runtime_access import serialize_runtime_user
 from apps.core.resource_registry import (
     ResourceDefinition,
     ResourceFieldDefinition,
@@ -67,4 +67,5 @@ def serialize_notification_base(notification, context: dict) -> dict:
 
 
 def resolve_notification_from_user(notification, context: dict) -> dict | None:
-    return serialize_user_summary(getattr(notification, "from_user", None))
+    return serialize_runtime_user(getattr(notification, "from_user", None), resource="user_summary", context=context)
+

@@ -42,8 +42,7 @@ export function useHeaderMobileState({
       return mobileHeaderOverride.value.rightAction
     }
 
-    if (!authStore.isAuthenticated) return 'login'
-    return authStore.canStartDiscussion ? 'compose-discussion' : 'none'
+    return 'none'
   })
 
   const showMobileRightAction = computed(() => mobileRightActionType.value !== 'none')
@@ -158,9 +157,7 @@ function resolveMobileRightActionLabel(actionType) {
   switch (actionType) {
     case 'discussion-menu':
       return '讨论操作菜单'
-    case 'login':
-      return '登录'
     default:
-      return '发起讨论'
+      return ''
   }
 }

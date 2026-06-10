@@ -1,5 +1,6 @@
-import { useStartDiscussionAction } from '@bias/forum'
-import { computed } from '@bias/forum'
+import { computed } from '@bias/core'
+import { useStartDiscussionAction } from '@bias/discussions'
+
 import { useTagsMetaState } from './useTagsMetaState.js'
 import { useTagsPage } from './useTagsPage.js'
 import { useTagsViewBindings } from './useTagsViewBindings.js'

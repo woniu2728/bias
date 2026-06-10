@@ -1,6 +1,6 @@
+from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
-from extensions.users.backend.models import User
 
 
 class Discussion(models.Model):
@@ -20,7 +20,7 @@ class Discussion(models.Model):
     slug = models.SlugField(max_length=255, unique=True, db_index=True)
 
     # 作者
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='discussions')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='discussions')
 
     # 时间戳
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -29,7 +29,11 @@ class Discussion(models.Model):
 
     # 最后发帖用户
     last_posted_user = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='last_posted_discussions'
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='last_posted_discussions',
     )
     last_post_id = models.IntegerField(null=True, blank=True)
     last_post_number = models.IntegerField(null=True, blank=True)
@@ -49,7 +53,11 @@ class Discussion(models.Model):
     # 隐藏相关
     hidden_at = models.DateTimeField(null=True, blank=True)
     hidden_user = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='hidden_discussions'
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='hidden_discussions',
     )
 
     # 审核相关
@@ -61,7 +69,7 @@ class Discussion(models.Model):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     approved_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -133,7 +141,7 @@ class DiscussionUser(models.Model):
     Bias 讨论-用户状态表
     """
     discussion = models.ForeignKey(Discussion, on_delete=models.CASCADE, related_name='user_states')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='discussion_states')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='discussion_states')
 
     # 阅读状态
     last_read_at = models.DateTimeField(null=True, blank=True)

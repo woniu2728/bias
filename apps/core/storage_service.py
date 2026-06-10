@@ -20,8 +20,6 @@ def get_runtime_storage_settings() -> dict:
 class BaseStorageBackend:
     def __init__(self, config: dict):
         self.config = config
-        self.attachments_dir = self._normalize_dir(config.get("storage_attachments_dir") or "attachments")
-        self.avatars_dir = self._normalize_dir(config.get("storage_avatars_dir") or "avatars")
 
     def save_bytes(self, key: str, content: bytes, content_type: Optional[str] = None) -> str:
         raise NotImplementedError

@@ -1,6 +1,5 @@
+from django.conf import settings
 from django.db import models
-
-from extensions.users.backend.models import User
 
 
 class Notification(models.Model):
@@ -8,9 +7,9 @@ class Notification(models.Model):
     通知记录，由 notifications 扩展拥有。
     """
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications")
     from_user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

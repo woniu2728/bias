@@ -1,17 +1,117 @@
 import json
+from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.core.management import call_command
 from django.test import TestCase
 from ninja_jwt.tokens import RefreshToken
 
-from extensions.discussions.backend.models import Discussion
-from extensions.discussions.backend.services import DiscussionService
-from extensions.posts.backend.models import Post
-from extensions.posts.backend.services import PostService
-from extensions.users.backend.models import Group, Permission, User
+from apps.core.forum_registry import (
+    get_registry_permission_codes_by_prefix,
+    get_registry_staff_managed_admin_permission_codes,
+)
+from apps.core.settings_service import clear_runtime_setting_caches
+from extensions.testing import ExtensionRuntimeTestMixin
+from apps.core.extensions.runtime_access import (
+    approve_runtime_discussion,
+    create_runtime_discussion,
+    get_runtime_discussion_model,
+    list_runtime_discussions,
+    reject_runtime_discussion,
+)
 from extensions.approval.backend.resources import resolve_approval_event_data
-from extensions.notifications.backend.models import Notification
+from apps.core.extensions.runtime_access import get_runtime_notification_model
+from apps.core.extensions.runtime_access import (
+    approve_runtime_post,
+    create_runtime_post,
+    get_runtime_post_model,
+    reject_runtime_post,
+)
+from apps.core.extensions.runtime_access import (
+    get_runtime_group_model,
+    get_runtime_permission_model,
+    get_runtime_user_model,
+)
+
+
+class RuntimeModelProxy:
+    def __init__(self, resolver):
+        self._resolver = resolver
+
+    def __getattr__(self, name):
+        return getattr(self._resolver(), name)
+
+
+User = RuntimeModelProxy(get_runtime_user_model)
+Group = RuntimeModelProxy(get_runtime_group_model)
+Permission = RuntimeModelProxy(get_runtime_permission_model)
+
+
+def discussion_model():
+    return get_runtime_discussion_model()
+
+
+def post_model():
+    return get_runtime_post_model()
+
+
+def notification_model():
+    return get_runtime_notification_model()
+
+
+class ApprovalPermissionRegistryTests(TestCase):
+    def test_approval_admin_permissions_are_registered_by_extension(self):
+        permissions = {
+            "admin.approval.view",
+            "admin.approval.approve",
+            "admin.approval.reject",
+        }
+
+        self.assertEqual(set(get_registry_permission_codes_by_prefix("admin.approval.")), permissions)
+        self.assertTrue(permissions.issubset(set(get_registry_staff_managed_admin_permission_codes())))
+
+
+class ApprovalExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
+    def test_approval_extension_registers_runtime_service_provider(self):
+        application = self.bootstrap_extensions("approval")
+        service = application.get_service("approval.service")
+
+        self.assertIn("approval.service", application.get_service_provider_keys(extension_id="approval"))
+        for key in ("serialize_item", "list_queue", "process_item", "bulk_process"):
+            self.assertTrue(callable(service[key]), key)
+
+    def test_inspect_reports_approval_migration_marker(self):
+        stdout = StringIO()
+        call_command(
+            "inspect_extensions",
+            "--extension-id",
+            "approval",
+            stdout=stdout,
+        )
+        payload = json.loads(stdout.getvalue())
+        extension = payload["extensions"][0]
+
+        self.assertEqual(extension["id"], "approval")
+        self.assertIn(
+            "0001_record_approval_lifecycle_storage.py",
+            extension["migration_plan"]["pending_files"],
+        )
+
+    def test_public_forum_settings_filter_approval_capabilities_when_extension_disabled(self):
+        self.disable_extension_for_test("approval")
+        self.addCleanup(clear_runtime_setting_caches)
+        clear_runtime_setting_caches()
+
+        response = self.client.get("/api/forum")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertNotIn("approval", payload["enabled_modules"])
+        self.assertFalse(any(item["id"] == "approval" for item in payload["enabled_extensions"]))
+        self.assertFalse(any(item["module_id"] == "approval" for item in payload["notification_types"]))
+        self.assertFalse(any(item["module_id"] == "approval" for item in payload["user_preferences"]))
+        self.assertFalse(any(item["module_id"] == "approval" for item in payload["post_types"]))
 
 
 def discussion_resource_payload(*, title=None, content=None, tag_ids=None):
@@ -71,17 +171,17 @@ class AdminApprovalQueueApiTests(TestCase):
             is_email_confirmed=True,
         )
 
-        self.pending_discussion = DiscussionService.create_discussion(
+        self.pending_discussion = create_runtime_discussion(
             title="待审核讨论",
             content="首帖需要审核",
             user=self.pending_author,
         )
-        self.discussion = DiscussionService.create_discussion(
+        self.discussion = create_runtime_discussion(
             title="已通过讨论",
             content="已发布首帖",
             user=self.author,
         )
-        self.post = PostService.create_post(
+        self.post = create_runtime_post(
             discussion_id=self.discussion.id,
             content="这是一条待审核回复",
             user=self.replier,
@@ -150,7 +250,7 @@ class AdminApprovalQueueApiTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.pending_discussion.refresh_from_db()
         self.assertEqual(self.pending_discussion.approval_status, "approved")
-        approved_notification = Notification.objects.get(
+        approved_notification = notification_model().objects.get(
             user=self.pending_author,
             type="discussionApproved",
             subject_id=self.pending_discussion.id,
@@ -170,7 +270,7 @@ class AdminApprovalQueueApiTests(TestCase):
         self.post.refresh_from_db()
         self.assertEqual(self.post.approval_status, "rejected")
         self.assertIsNotNone(self.post.hidden_at)
-        rejected_notification = Notification.objects.get(
+        rejected_notification = notification_model().objects.get(
             user=self.replier,
             type="postRejected",
             subject_id=self.post.id,
@@ -204,12 +304,12 @@ class AdminApprovalQueueApiTests(TestCase):
         self.assertEqual(self.pending_discussion.approval_status, "approved")
         self.assertEqual(self.post.approval_status, "approved")
 
-        discussion_notification = Notification.objects.get(
+        discussion_notification = notification_model().objects.get(
             user=self.pending_author,
             type="discussionApproved",
             subject_id=self.pending_discussion.id,
         )
-        post_notification = Notification.objects.get(
+        post_notification = notification_model().objects.get(
             user=self.replier,
             type="postApproved",
             subject_id=self.post.id,
@@ -229,7 +329,7 @@ class AdminApprovalQueueApiTests(TestCase):
         self.assertIn("请至少选择一条待审核内容", response.json()["error"])
 
     def test_admin_without_approval_permissions_is_denied_for_bulk_processing(self):
-        with patch("extensions.approval.backend.admin_api.UserService.has_forum_permission", return_value=False):
+        with patch("extensions.approval.backend.admin_api.has_runtime_forum_permission", return_value=False):
             response = self.client.post(
                 "/api/admin/approval-queue/bulk/approve",
                 data=json.dumps({
@@ -279,7 +379,7 @@ class AdminApprovalQueueApiTests(TestCase):
         self.assertEqual(bulk_response.status_code, 403, bulk_response.content)
 
     def test_admin_without_approval_permissions_is_denied(self):
-        with patch("extensions.approval.backend.admin_api.UserService.has_forum_permission", return_value=False):
+        with patch("extensions.approval.backend.admin_api.has_runtime_forum_permission", return_value=False):
             list_response = self.client.get(
                 "/api/admin/approval-queue",
                 **self.auth_header(),
@@ -322,12 +422,12 @@ class PostApprovalForumApiTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        self.discussion = DiscussionService.create_discussion(
+        self.discussion = create_runtime_discussion(
             title="Approval post discussion",
             content="First post",
             user=self.author,
         )
-        self.post = PostService.create_post(
+        self.post = create_runtime_post(
             discussion_id=self.discussion.id,
             content="需要审核相关操作的内容",
             user=self.author,
@@ -358,12 +458,12 @@ class PostApprovalForumApiTests(TestCase):
         self.assertEqual(response.json()["approval_status"], "pending")
 
     def test_author_can_still_view_rejected_reply_and_note(self):
-        rejected_post = PostService.create_post(
+        rejected_post = create_runtime_post(
             discussion_id=self.discussion.id,
             content="需要补充说明",
             user=self.reporter,
         )
-        PostService.reject_post(rejected_post, self.admin, note="请补充更完整的回复内容")
+        reject_runtime_post(rejected_post, self.admin, note="请补充更完整的回复内容")
 
         detail_response = self.client.get(
             f"/api/posts/{rejected_post.id}",
@@ -384,12 +484,12 @@ class PostApprovalForumApiTests(TestCase):
         self.assertEqual(target["approval_status"], "rejected")
 
     def test_other_member_cannot_view_rejected_reply(self):
-        rejected_post = PostService.create_post(
+        rejected_post = create_runtime_post(
             discussion_id=self.discussion.id,
             content="需要补充说明",
             user=self.reporter,
         )
-        PostService.reject_post(rejected_post, self.admin, note="请补充更完整的回复内容")
+        reject_runtime_post(rejected_post, self.admin, note="请补充更完整的回复内容")
 
         reader = User.objects.create_user(
             username="reader-posts",
@@ -406,12 +506,12 @@ class PostApprovalForumApiTests(TestCase):
         self.assertEqual(detail_response.status_code, 404, detail_response.content)
 
     def test_author_editing_rejected_reply_resubmits_it_for_review(self):
-        rejected_post = PostService.create_post(
+        rejected_post = create_runtime_post(
             discussion_id=self.discussion.id,
             content="需要补充说明",
             user=self.reporter,
         )
-        PostService.reject_post(rejected_post, self.admin, note="请补充更完整的回复内容")
+        reject_runtime_post(rejected_post, self.admin, note="请补充更完整的回复内容")
 
         response = self.client.patch(
             f"/api/posts/{rejected_post.id}",
@@ -464,14 +564,15 @@ class PostApprovalForumApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         pending_post_id = response.json()["id"]
-        pending_post = Post.objects.get(id=pending_post_id)
-        self.assertEqual(pending_post.approval_status, Post.APPROVAL_PENDING)
+        PostModel = post_model()
+        pending_post = PostModel.objects.get(id=pending_post_id)
+        self.assertEqual(pending_post.approval_status, PostModel.APPROVAL_PENDING)
 
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.approve_post(pending_post, self.admin, note="已通过审核")
+            approve_runtime_post(pending_post, self.admin, note="已通过审核")
 
         pending_post.refresh_from_db()
-        self.assertEqual(pending_post.approval_status, Post.APPROVAL_APPROVED)
+        self.assertEqual(pending_post.approval_status, PostModel.APPROVAL_APPROVED)
 
         reader = User.objects.create_user(
             username="reader-posts-visible",
@@ -506,14 +607,14 @@ class PostApprovalForumApiTests(TestCase):
         )
 
     def test_rejecting_post_creates_post_rejected_event_post(self):
-        pending_post = PostService.create_post(
+        pending_post = create_runtime_post(
             discussion_id=self.discussion.id,
             content="待拒绝回复",
             user=self.reporter,
         )
 
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.reject_post(pending_post, self.admin, note="回复质量不足")
+            reject_runtime_post(pending_post, self.admin, note="回复质量不足")
 
         posts_response = self.client.get(
             f"/api/discussions/{self.discussion.id}/posts",
@@ -533,13 +634,13 @@ class PostApprovalForumApiTests(TestCase):
         )
 
     def test_editing_rejected_post_creates_post_resubmitted_event_post(self):
-        rejected_post = PostService.create_post(
+        rejected_post = create_runtime_post(
             discussion_id=self.discussion.id,
             content="被拒绝的回复",
             user=self.reporter,
         )
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.reject_post(rejected_post, self.admin, note="请补充更多细节")
+            reject_runtime_post(rejected_post, self.admin, note="请补充更多细节")
 
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.patch(
@@ -606,7 +707,7 @@ class DiscussionApprovalForumApiTests(TestCase):
         self.assertEqual(response.json()["approval_status"], "pending")
 
     def test_author_can_still_view_rejected_discussion_and_note(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Rejected discussion",
             content="Needs moderation",
             user=self.author,
@@ -616,7 +717,7 @@ class DiscussionApprovalForumApiTests(TestCase):
             email="approval-admin@example.com",
             password="password123",
         )
-        DiscussionService.reject_discussion(discussion, admin, note="内容需要补充上下文")
+        reject_runtime_discussion(discussion, admin, note="内容需要补充上下文")
 
         detail_response = self.client.get(
             f"/api/discussions/{discussion.id}",
@@ -637,7 +738,7 @@ class DiscussionApprovalForumApiTests(TestCase):
         self.assertTrue(any(item["id"] == discussion.id and item["approval_status"] == "rejected" for item in items))
 
     def test_other_member_cannot_view_rejected_discussion(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Rejected discussion",
             content="Needs moderation",
             user=self.author,
@@ -647,7 +748,7 @@ class DiscussionApprovalForumApiTests(TestCase):
             email="approval-admin-other@example.com",
             password="password123",
         )
-        DiscussionService.reject_discussion(discussion, admin, note="拒绝原因")
+        reject_runtime_discussion(discussion, admin, note="拒绝原因")
 
         detail_response = self.client.get(
             f"/api/discussions/{discussion.id}",
@@ -657,7 +758,7 @@ class DiscussionApprovalForumApiTests(TestCase):
         self.assertEqual(detail_response.status_code, 404, detail_response.content)
 
     def test_author_editing_rejected_discussion_resubmits_it_for_review(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Rejected discussion",
             content="Needs moderation",
             user=self.author,
@@ -667,7 +768,7 @@ class DiscussionApprovalForumApiTests(TestCase):
             email="approval-admin-resubmit@example.com",
             password="password123",
         )
-        DiscussionService.reject_discussion(discussion, admin, note="请补充上下文")
+        reject_runtime_discussion(discussion, admin, note="请补充上下文")
 
         response = self.client.patch(
             f"/api/discussions/{discussion.id}",
@@ -723,8 +824,9 @@ class DiscussionApprovalForumApiTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         discussion_id = response.json()["id"]
 
-        discussion = Discussion.objects.get(id=discussion_id)
-        self.assertEqual(discussion.approval_status, Discussion.APPROVAL_PENDING)
+        DiscussionModel = discussion_model()
+        discussion = DiscussionModel.objects.get(id=discussion_id)
+        self.assertEqual(discussion.approval_status, DiscussionModel.APPROVAL_PENDING)
 
         admin = User.objects.create_superuser(
             username="approval-admin-visible",
@@ -732,10 +834,10 @@ class DiscussionApprovalForumApiTests(TestCase):
             password="password123",
         )
         with self.captureOnCommitCallbacks(execute=True):
-            DiscussionService.approve_discussion(discussion, admin, note="已通过审核")
+            approve_runtime_discussion(discussion, admin, note="已通过审核")
 
         discussion.refresh_from_db()
-        self.assertEqual(discussion.approval_status, Discussion.APPROVAL_APPROVED)
+        self.assertEqual(discussion.approval_status, DiscussionModel.APPROVAL_APPROVED)
 
         detail_response = self.client.get(
             f"/api/discussions/{discussion.id}",
@@ -766,7 +868,7 @@ class DiscussionApprovalForumApiTests(TestCase):
         self.assertTrue(any(item["id"] == discussion.id for item in list_response.json()["data"]))
 
     def test_rejecting_discussion_creates_discussion_rejected_event_post(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Reject me",
             content="Needs rejection",
             user=self.author,
@@ -778,7 +880,7 @@ class DiscussionApprovalForumApiTests(TestCase):
         )
 
         with self.captureOnCommitCallbacks(execute=True):
-            DiscussionService.reject_discussion(discussion, admin, note="内容不符合要求")
+            reject_runtime_discussion(discussion, admin, note="内容不符合要求")
 
         posts_response = self.client.get(
             f"/api/discussions/{discussion.id}/posts",
@@ -796,7 +898,7 @@ class DiscussionApprovalForumApiTests(TestCase):
         )
 
     def test_editing_rejected_discussion_creates_resubmitted_event_post(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Resubmit me",
             content="Original content",
             user=self.author,
@@ -806,7 +908,7 @@ class DiscussionApprovalForumApiTests(TestCase):
             email="discussion-resubmit-admin@example.com",
             password="password123",
         )
-        DiscussionService.reject_discussion(discussion, admin, note="请补充细节")
+        reject_runtime_discussion(discussion, admin, note="请补充细节")
 
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.patch(
@@ -849,7 +951,7 @@ class ApprovalSearchVisibilityTests(TestCase):
         return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
 
     def test_discussion_list_search_respects_post_approval_visibility(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="普通讨论标题",
             content="首帖不包含目标词",
             user=self.user,
@@ -862,14 +964,14 @@ class ApprovalSearchVisibilityTests(TestCase):
         )
         trusted_group = Group.objects.create(name="ListSearchTrusted", color="#4d698e")
         Permission.objects.create(group=trusted_group, permission="replyWithoutApproval")
-        PostService.create_post(
+        create_runtime_post(
             discussion_id=discussion.id,
             content="pendingreplyvisibilitykeyword",
             user=pending_author,
         )
 
-        guest_discussions, guest_total = DiscussionService.get_discussion_list(q="pendingreplyvisibilitykeyword")
-        author_discussions, author_total = DiscussionService.get_discussion_list(
+        guest_discussions, guest_total = list_runtime_discussions(q="pendingreplyvisibilitykeyword")
+        author_discussions, author_total = list_runtime_discussions(
             q="pendingreplyvisibilitykeyword",
             user=pending_author,
         )
@@ -885,7 +987,7 @@ class ApprovalSearchVisibilityTests(TestCase):
             email="search-approval-admin@example.com",
             password="password123",
         )
-        approved = DiscussionService.create_discussion(
+        approved = create_runtime_discussion(
             title="统一搜索可见性",
             content="公开讨论内容",
             user=self.user,
@@ -898,17 +1000,17 @@ class ApprovalSearchVisibilityTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        pending = DiscussionService.create_discussion(
+        pending = create_runtime_discussion(
             title="统一搜索可见性",
             content="待审核讨论内容",
             user=pending_author,
         )
-        rejected = DiscussionService.create_discussion(
+        rejected = create_runtime_discussion(
             title="统一搜索可见性",
             content="被拒绝讨论内容",
             user=pending_author,
         )
-        DiscussionService.reject_discussion(rejected, admin, note="测试拒绝")
+        reject_runtime_discussion(rejected, admin, note="测试拒绝")
 
         guest_response = self.client.get("/api/search", {"q": "统一搜索可见性", "type": "discussions"})
         self.assertEqual(guest_response.status_code, 200, guest_response.content)
@@ -942,12 +1044,12 @@ class ApprovalSearchVisibilityTests(TestCase):
             email="search-post-admin@example.com",
             password="password123",
         )
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="搜索回复可见性",
             content="首帖公开",
             user=self.user,
         )
-        approved_reply = PostService.create_post(
+        approved_reply = create_runtime_post(
             discussion_id=discussion.id,
             content="统一回复搜索公开内容",
             user=self.user,
@@ -960,17 +1062,17 @@ class ApprovalSearchVisibilityTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        pending_reply = PostService.create_post(
+        pending_reply = create_runtime_post(
             discussion_id=discussion.id,
             content="统一回复搜索待审核内容",
             user=pending_author,
         )
-        rejected_reply = PostService.create_post(
+        rejected_reply = create_runtime_post(
             discussion_id=discussion.id,
             content="统一回复搜索被拒绝内容",
             user=pending_author,
         )
-        PostService.reject_post(rejected_reply, admin, note="测试拒绝回复")
+        reject_runtime_post(rejected_reply, admin, note="测试拒绝回复")
 
         guest_response = self.client.get("/api/search", {"q": "统一回复搜索", "type": "posts"})
         self.assertEqual(guest_response.status_code, 200, guest_response.content)
@@ -1019,3 +1121,5 @@ class ApprovalPostEventResourceTests(TestCase):
                 "target_post_number": 3,
             },
         )
+
+

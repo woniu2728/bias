@@ -10,6 +10,8 @@
   ],
   "dependencies": [
     "core",
+    "emoji",
+    "realtime",
     "users"
   ],
   "provides": [
@@ -19,9 +21,9 @@
   ],
   "django_app_config": "extensions.posts.backend.apps.PostsExtensionConfig",
   "django_app_label": "posts",
-  "django_migration_module": "apps.posts.migrations",
-  "migration_namespace": "extensions.posts.backend.migrations",
   "backend_entry": "extensions.posts.backend.ext",
+  "frontend_admin_entry": "extensions/posts/frontend/admin/index.js",
+  "frontend_forum_entry": "extensions/posts/frontend/forum/index.js",
   "compatibility": {
     "bias_version": "^1.0.0",
     "api_version": "1.0",
@@ -31,7 +33,7 @@
   },
   "security": {
     "support_email": "",
-    "capabilities_notice": "该扩展承载帖子类型注册和帖子流基础能力；Django AppConfig 由扩展声明，迁移模块复用历史路径以保持数据库连续性。"
+    "capabilities_notice": "该扩展承载帖子类型注册和帖子流基础能力；Django AppConfig 与 Django 迁移模块均由扩展目录统一声明。"
   },
   "distribution": {
     "channel": "private",

@@ -1,12 +1,5 @@
 const forumNavItems = []
 const forumSidebarSections = []
-const discussionListContextItems = []
-const discussionListRequestItems = []
-const discussionListHeroItems = []
-const discussionActionItems = []
-const discussionActionHandlers = []
-const postActionItems = []
-const postActionHandlers = []
 const headerItems = []
 const forumNavSections = []
 const composerTools = []
@@ -21,41 +14,63 @@ const composerDraftMetaItems = []
 const composerSubmitSuccessHandlers = []
 const composerAutocompleteProviders = []
 const composerPreviewTransformers = []
-const profilePanels = []
-const notificationRenderers = []
-const searchSources = []
-const searchModalSections = []
-const userBadges = []
-const discussionBadges = []
-const discussionStateBadges = []
-const discussionPresentationItems = []
-const postStateBadges = []
+const composerHosts = []
+const composerUploadHandlers = []
 const heroMetaItems = []
-const discussionReplyStates = []
-const postReviewBanners = []
-const discussionReviewBanners = []
-const postFlagPanels = []
 const feedbackNotes = []
 const emptyStates = []
 const pageStates = []
 const stateBlocks = []
 const uiCopies = []
 const forumRuntimeHooks = []
-const forumRealtimeEvents = []
 
-import { getCurrentExtensionId } from '../common/extensionRuntime.js'
-import ItemList from '../common/itemList.js'
+import {
+  clearRegistryExtensions,
+  isRegisteredItemEnabled,
+  normalizeRegisteredItem,
+  orderedRegisteredItems,
+  resolveRegisteredItem,
+  upsertByKey,
+} from '../common/contributionRegistry.js'
+import { getFrontendRegistrySlot } from '../common/frontendRegistrySlots.js'
+
+const discussionListContextItems = getFrontendRegistrySlot('discussions.listContexts')
+const discussionListRequestItems = getFrontendRegistrySlot('discussions.listRequests')
+const discussionListHeroItems = getFrontendRegistrySlot('discussions.listHeroes')
+const discussionActionItems = getFrontendRegistrySlot('discussions.actions')
+const discussionActionHandlers = getFrontendRegistrySlot('discussions.actionHandlers')
+const discussionBadges = getFrontendRegistrySlot('discussions.badges')
+const discussionStateBadges = getFrontendRegistrySlot('discussions.stateBadges')
+const discussionPresentationItems = getFrontendRegistrySlot('discussions.presentation')
+const discussionReplyStates = getFrontendRegistrySlot('discussions.replyStates')
+const discussionReviewBanners = getFrontendRegistrySlot('discussions.reviewBanners')
+const startDiscussionProviders = getFrontendRegistrySlot('discussions.startProviders')
+const postActionItems = getFrontendRegistrySlot('posts.actions')
+const postActionHandlers = getFrontendRegistrySlot('posts.actionHandlers')
+const postStateBadges = getFrontendRegistrySlot('posts.stateBadges')
+const postReviewBanners = getFrontendRegistrySlot('posts.reviewBanners')
+const postFlagPanels = getFrontendRegistrySlot('posts.flagPanels')
+const postTypeDefinitions = getFrontendRegistrySlot('posts.types')
+const fallbackPostTypeDefinition = {
+  type: 'event',
+  label: '系统事件',
+  component: null,
+  order: 999,
+  isDefault: false,
+  isFallback: true,
+}
+const searchSources = getFrontendRegistrySlot('search.sources')
+const searchModalProviders = getFrontendRegistrySlot('search.modalProviders')
+const searchModalSections = getFrontendRegistrySlot('search.modalSections')
+const profilePanels = getFrontendRegistrySlot('users.profilePanels')
+const userBadges = getFrontendRegistrySlot('users.badges')
+const authModalProviders = getFrontendRegistrySlot('users.authModalProviders')
+const notificationRenderers = getFrontendRegistrySlot('notifications.renderers')
+const forumRealtimeEvents = getFrontendRegistrySlot('realtime.forumEvents')
 
 const registryTargets = [
   forumNavItems,
   forumSidebarSections,
-  discussionListContextItems,
-  discussionListRequestItems,
-  discussionListHeroItems,
-  discussionActionItems,
-  discussionActionHandlers,
-  postActionItems,
-  postActionHandlers,
   headerItems,
   forumNavSections,
   composerTools,
@@ -70,153 +85,44 @@ const registryTargets = [
   composerSubmitSuccessHandlers,
   composerAutocompleteProviders,
   composerPreviewTransformers,
-  profilePanels,
-  notificationRenderers,
-  searchSources,
-  searchModalSections,
-  userBadges,
-  discussionBadges,
-  discussionStateBadges,
-  discussionPresentationItems,
-  postStateBadges,
+  composerHosts,
+  composerUploadHandlers,
   heroMetaItems,
-  discussionReplyStates,
-  postReviewBanners,
-  discussionReviewBanners,
-  postFlagPanels,
   feedbackNotes,
   emptyStates,
   pageStates,
   stateBlocks,
   uiCopies,
   forumRuntimeHooks,
+  discussionListContextItems,
+  discussionListRequestItems,
+  discussionListHeroItems,
+  discussionActionItems,
+  discussionActionHandlers,
+  discussionBadges,
+  discussionStateBadges,
+  discussionPresentationItems,
+  discussionReplyStates,
+  discussionReviewBanners,
+  startDiscussionProviders,
+  postActionItems,
+  postActionHandlers,
+  postStateBadges,
+  postReviewBanners,
+  postFlagPanels,
+  postTypeDefinitions,
+  searchSources,
+  searchModalProviders,
+  searchModalSections,
+  profilePanels,
+  userBadges,
+  authModalProviders,
+  notificationRenderers,
   forumRealtimeEvents,
 ]
 
-function upsertByKey(target, key, value) {
-  const existingIndex = target.findIndex(item => item.key === key)
-  if (existingIndex >= 0) {
-    target.splice(existingIndex, 1, value)
-    return value
-  }
-
-  target.push(value)
-  return value
-}
-
-function orderedRegisteredItems(target) {
-  const items = new ItemList()
-  target.forEach((item, index) => {
-    const key = String(item?.key || item?.name || item?.type || index).trim()
-    items.add(key, item, -(Number(item?.order ?? item?.priority ?? 100) || 100))
-  })
-  return items.toArray()
-}
-
-function normalizeRegisteredItem(item, defaults = {}) {
-  const moduleId = String(item?.moduleId || item?.module_id || '').trim()
-  const extensionId = String(item?.extensionId || item?.extension_id || getCurrentExtensionId() || '').trim()
-  return {
-    order: 100,
-    surfaces: [],
-    ...defaults,
-    ...item,
-    ...(moduleId ? { moduleId, module_id: moduleId } : {}),
-    ...(extensionId ? { extensionId, extension_id: extensionId } : {}),
-  }
-}
-
 export function clearForumRegistryExtensions(extensionId = '') {
-  const normalizedExtensionId = String(extensionId || '').trim()
-  for (const target of registryTargets) {
-    for (let index = target.length - 1; index >= 0; index -= 1) {
-      const itemExtensionId = String(target[index]?.extensionId || target[index]?.extension_id || '').trim()
-      if (!itemExtensionId) {
-        continue
-      }
-      if (!normalizedExtensionId || itemExtensionId === normalizedExtensionId) {
-        target.splice(index, 1)
-      }
-    }
-  }
-}
-
-function isRegisteredItemEnabled(item, context = {}) {
-  const moduleId = String(item?.moduleId || item?.module_id || '').trim()
-  if (!moduleId) {
-    return true
-  }
-
-  const checker = context.forumStore?.isModuleEnabled
-  if (typeof checker === 'function') {
-    return checker(moduleId)
-  }
-
-  return true
-}
-
-function resolveRegisteredItem(item, context = {}) {
-  if (!isRegisteredItemEnabled(item, context)) {
-    return null
-  }
-
-  if (Array.isArray(item.surfaces) && item.surfaces.length > 0) {
-    const currentSurface = String(context.surface || '').trim()
-    if (!currentSurface || !item.surfaces.includes(currentSurface)) {
-      return null
-    }
-  }
-
-  const isVisible = typeof item.isVisible === 'function' ? item.isVisible(context) : true
-  if (!isVisible) {
-    return null
-  }
-
-  const resolvedItem = typeof item.resolve === 'function'
-    ? item.resolve(context)
-    : item
-
-  if (!resolvedItem) {
-    return null
-  }
-
-  const getResolvedValue = field => {
-    if (field in resolvedItem) {
-      const value = resolvedItem[field]
-      return typeof value === 'function' ? value(context) : value
-    }
-
-    const fallback = item[field]
-    return typeof fallback === 'function' ? fallback(context) : fallback
-  }
-
-  return {
-    ...item,
-    ...resolvedItem,
-    icon: getResolvedValue('icon'),
-    label: getResolvedValue('label'),
-    title: getResolvedValue('title'),
-    tone: getResolvedValue('tone'),
-    to: getResolvedValue('to'),
-    href: getResolvedValue('href'),
-    badge: getResolvedValue('badge'),
-    count: getResolvedValue('count'),
-    component: getResolvedValue('component'),
-    componentProps: getResolvedValue('componentProps') || {},
-    active: Boolean(
-      'isActive' in resolvedItem
-        ? (typeof resolvedItem.isActive === 'function' ? resolvedItem.isActive(context) : resolvedItem.active)
-        : (typeof item.isActive === 'function' ? item.isActive(context) : item.active)
-    ),
-    description: getResolvedValue('description'),
-    disabledReason: getResolvedValue('disabledReason'),
-    confirm: getResolvedValue('confirm'),
-    disabled: Boolean(
-      'isDisabled' in resolvedItem
-        ? (typeof resolvedItem.isDisabled === 'function' ? resolvedItem.isDisabled(context) : resolvedItem.disabled)
-        : (typeof item.isDisabled === 'function' ? item.isDisabled(context) : item.disabled)
-    ),
-  }
+  clearRegistryExtensions(registryTargets, extensionId)
 }
 
 export function registerForumNavItem(item) {
@@ -325,7 +231,6 @@ export function getDiscussionActionHandler(actionKey, context = {}) {
   if (!normalizedActionKey) {
     return null
   }
-
   return orderedRegisteredItems(discussionActionHandlers)
     .filter(item => String(item.key || '') === normalizedActionKey)
     .map(item => resolveRegisteredItem(item, context))
@@ -353,7 +258,6 @@ export function getPostActionHandler(actionKey, context = {}) {
   if (!normalizedActionKey) {
     return null
   }
-
   return orderedRegisteredItems(postActionHandlers)
     .filter(item => String(item.key || '') === normalizedActionKey)
     .map(item => resolveRegisteredItem(item, context))
@@ -364,6 +268,106 @@ export function getPostActions(context = {}) {
   return orderedRegisteredItems(postActionItems)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
+}
+
+export function registerDiscussionMenuItem(factory) {
+  return registerDiscussionAction({
+    key: `external-discussion-action-${Date.now()}-${Math.random()}`,
+    isVisible: context => Boolean(factory(context)),
+    resolve: factory,
+  })
+}
+
+export function getDiscussionMenuItems(context = {}) {
+  return getDiscussionActions(context)
+    .filter(Boolean)
+    .sort((left, right) => (left.order || 100) - (right.order || 100))
+}
+
+export function registerPostMenuItem(factory) {
+  return registerPostAction({
+    key: `external-post-action-${Date.now()}-${Math.random()}`,
+    isVisible: context => Boolean(factory(context)),
+    resolve: factory,
+  })
+}
+
+export function getPostMenuItems(context = {}) {
+  return getPostActions(context)
+    .filter(Boolean)
+    .sort((left, right) => (left.order || 100) - (right.order || 100))
+}
+
+export function resolveDiscussionAction(actionKey, context = {}) {
+  return getDiscussionActions(context).find(item => item.key === actionKey) || null
+}
+
+export function resolvePostAction(actionKey, context = {}) {
+  return getPostActions(context).find(item => item.key === actionKey) || null
+}
+
+export async function runDiscussionAction(item, context = {}) {
+  return runRegisteredAction(item, context, {
+    handlerKey: 'discussionActionHandlers',
+    getHandler: getDiscussionActionHandler,
+  })
+}
+
+export async function runPostAction(item, context = {}) {
+  return runRegisteredAction(item, context, {
+    handlerKey: 'postActionHandlers',
+    getHandler: getPostActionHandler,
+  })
+}
+
+async function runRegisteredAction(item, context = {}, { handlerKey = '', getHandler = null } = {}) {
+  if (!item || item.disabled) {
+    return false
+  }
+
+  const modalStore = context.modalStore
+  if (item.confirm && modalStore?.confirm) {
+    const confirmed = await modalStore.confirm({
+      title: item.confirm.title || item.label || getConfirmationText('discussion-action-confirm-title', '确认操作'),
+      message: item.confirm.message || getConfirmationText('discussion-action-confirm-message', '确定继续执行这个操作吗？'),
+      confirmText: item.confirm.confirmText || getConfirmationText('discussion-action-confirm-default', '继续'),
+      cancelText: item.confirm.cancelText || getConfirmationText('discussion-action-confirm-cancel', '取消'),
+      tone: item.confirm.tone || item.tone || 'primary',
+    })
+    if (!confirmed) {
+      return false
+    }
+  }
+
+  if (typeof item.onClick === 'function') {
+    await item.onClick({
+      ...context,
+      item,
+    })
+    return true
+  }
+
+  const handlers = context[handlerKey] || {}
+  const actionKey = item.action || item.key
+  if (actionKey && typeof handlers[actionKey] === 'function') {
+    await handlers[actionKey](item, context)
+    return true
+  }
+
+  const registeredHandler = typeof getHandler === 'function' ? getHandler(actionKey, context) : null
+  if (typeof registeredHandler?.handle === 'function') {
+    await registeredHandler.handle({
+      ...context,
+      item,
+    })
+    return true
+  }
+
+  return false
+}
+
+function getConfirmationText(surface, fallback) {
+  return getUiCopy({ surface })?.text || fallback
 }
 
 export function registerHeaderItem(item) {
@@ -378,6 +382,17 @@ export function getHeaderItems(context = {}, placement = '') {
     .filter(item => !placement || item.placement === placement)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
+}
+
+export function registerAuthModalProvider(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(authModalProviders, normalizedItem.key, normalizedItem)
+}
+
+export function getAuthModalProvider(context = {}) {
+  return orderedRegisteredItems(authModalProviders)
+    .map(item => resolveRegisteredItem(item, context))
+    .find(item => typeof item?.open === 'function' || item?.component) || null
 }
 
 export function registerComposerTool(item) {
@@ -482,6 +497,31 @@ export function registerComposerPreviewTransformer(item) {
   return upsertByKey(composerPreviewTransformers, normalizedItem.key, normalizedItem)
 }
 
+export function registerComposerHost(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  if (!normalizedItem.component) {
+    return null
+  }
+  return upsertByKey(composerHosts, normalizedItem.key, normalizedItem)
+}
+
+export function getComposerHosts(context = {}) {
+  return orderedRegisteredItems(composerHosts)
+    .map(item => resolveRegisteredItem(item, context))
+    .filter(item => item?.component)
+}
+
+export function registerComposerUploadHandler(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(composerUploadHandlers, normalizedItem.key, normalizedItem)
+}
+
+export function getComposerUploadHandler(context = {}) {
+  return orderedRegisteredItems(composerUploadHandlers)
+    .map(item => resolveRegisteredItem(item, context))
+    .find(item => typeof item?.upload === 'function') || null
+}
+
 export function registerProfilePanel(item) {
   const normalizedItem = normalizeRegisteredItem(item)
   return upsertByKey(profilePanels, normalizedItem.key, normalizedItem)
@@ -496,9 +536,14 @@ export function getProfilePanels(context = {}) {
 export function registerNotificationRenderer(item) {
   const moduleId = String(item?.moduleId || item?.module_id || '').trim()
   const navigationScope = String(item?.navigationScope || item?.navigation_scope || '').trim()
-  const normalizedItem = normalizeRegisteredItem(item, {
+  const normalizedItem = normalizeRegisteredItem({
     icon: 'fas fa-bell',
+    navigationTarget: null,
     navigationScope: 'notifications',
+    unreadCountField: '',
+    ...item,
+    key: item?.key || item?.type,
+    type: item?.type || item?.key,
   })
   if (moduleId) {
     normalizedItem.moduleId = moduleId
@@ -530,6 +575,17 @@ export function getSearchSources(context = {}) {
     .filter(Boolean)
 }
 
+export function registerSearchModalProvider(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(searchModalProviders, normalizedItem.key, normalizedItem)
+}
+
+export function getSearchModalProvider(context = {}) {
+  return orderedRegisteredItems(searchModalProviders)
+    .map(item => resolveRegisteredItem(item, context))
+    .find(item => typeof item?.open === 'function' || item?.component) || null
+}
+
 export function registerSearchModalSection(item) {
   const normalizedItem = normalizeRegisteredItem(item)
   return upsertByKey(searchModalSections, normalizedItem.key, normalizedItem)
@@ -539,6 +595,17 @@ export function getSearchModalSections(context = {}) {
   return orderedRegisteredItems(searchModalSections)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
+}
+
+export function registerStartDiscussionProvider(item) {
+  const normalizedItem = normalizeRegisteredItem(item)
+  return upsertByKey(startDiscussionProviders, normalizedItem.key, normalizedItem)
+}
+
+export function getStartDiscussionProvider(context = {}) {
+  return orderedRegisteredItems(startDiscussionProviders)
+    .map(item => resolveRegisteredItem(item, context))
+    .find(item => typeof item?.start === 'function' || typeof item?.open === 'function' || typeof item?.handle === 'function') || null
 }
 
 export function registerUserBadge(item) {
@@ -596,6 +663,54 @@ export function getPostStateBadges(context = {}) {
     .filter(Boolean)
 }
 
+export function registerPostType(definition) {
+  const type = String(definition?.code || definition?.type || '').trim()
+  if (!type) {
+    return null
+  }
+
+  const normalizedDefinition = normalizeRegisteredItem({
+    order: 100,
+    ...definition,
+    type,
+    key: definition?.key || type,
+    isDefault: Boolean(definition?.is_default ?? definition?.isDefault),
+  })
+
+  return upsertByKey(postTypeDefinitions, normalizedDefinition.type, normalizedDefinition)
+}
+
+export function getPostTypeDefinition(type) {
+  const normalizedType = String(type || 'comment').trim() || 'comment'
+  const exactMatch = postTypeDefinitions.find(item => item.type === normalizedType)
+  if (exactMatch) {
+    return exactMatch
+  }
+
+  if (normalizedType !== 'comment') {
+    return {
+      ...fallbackPostTypeDefinition,
+      type: normalizedType,
+      label: normalizedType,
+    }
+  }
+
+  return (
+    postTypeDefinitions.find(item => item.isDefault)
+    || postTypeDefinitions[0]
+    || null
+  )
+}
+
+export function syncPostTypes(definitions = []) {
+  definitions.forEach((definition, index) => {
+    registerPostType({
+      ...definition,
+      order: Number(definition?.order ?? ((index + 1) * 10)),
+    })
+  })
+}
+
 export function registerHeroMeta(item) {
   const normalizedItem = normalizeRegisteredItem(item)
   return upsertByKey(heroMetaItems, normalizedItem.key, normalizedItem)
@@ -613,21 +728,7 @@ export function registerDiscussionReplyState(item) {
 }
 
 export function getDiscussionReplyState(context = {}) {
-  const resolvedItems = orderedRegisteredItems(discussionReplyStates)
-    .map(item => resolveRegisteredItem(item, context))
-    .filter(Boolean)
-
-  if (!resolvedItems.length) {
-    return null
-  }
-
-  const currentSurface = String(context.surface || '').trim()
-  if (!currentSurface) {
-    return resolvedItems[0]
-  }
-
-  const surfaceSpecificItem = resolvedItems.find(item => Array.isArray(item.surfaces) && item.surfaces.includes(currentSurface))
-  return surfaceSpecificItem || resolvedItems[0]
+  return getFirstSurfaceAwareRegistryItem(discussionReplyStates, context)
 }
 
 export function registerPostReviewBanner(item) {
@@ -636,21 +737,7 @@ export function registerPostReviewBanner(item) {
 }
 
 export function getPostReviewBanner(context = {}) {
-  const resolvedItems = orderedRegisteredItems(postReviewBanners)
-    .map(item => resolveRegisteredItem(item, context))
-    .filter(Boolean)
-
-  if (!resolvedItems.length) {
-    return null
-  }
-
-  const currentSurface = String(context.surface || '').trim()
-  if (!currentSurface) {
-    return resolvedItems[0]
-  }
-
-  const surfaceSpecificItem = resolvedItems.find(item => Array.isArray(item.surfaces) && item.surfaces.includes(currentSurface))
-  return surfaceSpecificItem || resolvedItems[0]
+  return getFirstSurfaceAwareRegistryItem(postReviewBanners, context)
 }
 
 export function registerDiscussionReviewBanner(item) {
@@ -659,21 +746,7 @@ export function registerDiscussionReviewBanner(item) {
 }
 
 export function getDiscussionReviewBanner(context = {}) {
-  const resolvedItems = orderedRegisteredItems(discussionReviewBanners)
-    .map(item => resolveRegisteredItem(item, context))
-    .filter(Boolean)
-
-  if (!resolvedItems.length) {
-    return null
-  }
-
-  const currentSurface = String(context.surface || '').trim()
-  if (!currentSurface) {
-    return resolvedItems[0]
-  }
-
-  const surfaceSpecificItem = resolvedItems.find(item => Array.isArray(item.surfaces) && item.surfaces.includes(currentSurface))
-  return surfaceSpecificItem || resolvedItems[0]
+  return getFirstSurfaceAwareRegistryItem(discussionReviewBanners, context)
 }
 
 export function registerPostFlagPanel(item) {
@@ -682,21 +755,7 @@ export function registerPostFlagPanel(item) {
 }
 
 export function getPostFlagPanel(context = {}) {
-  const resolvedItems = orderedRegisteredItems(postFlagPanels)
-    .map(item => resolveRegisteredItem(item, context))
-    .filter(Boolean)
-
-  if (!resolvedItems.length) {
-    return null
-  }
-
-  const currentSurface = String(context.surface || '').trim()
-  if (!currentSurface) {
-    return resolvedItems[0]
-  }
-
-  const surfaceSpecificItem = resolvedItems.find(item => Array.isArray(item.surfaces) && item.surfaces.includes(currentSurface))
-  return surfaceSpecificItem || resolvedItems[0]
+  return getFirstSurfaceAwareRegistryItem(postFlagPanels, context)
 }
 
 export function registerFeedbackNote(item) {
@@ -705,21 +764,7 @@ export function registerFeedbackNote(item) {
 }
 
 export function getFeedbackNote(context = {}) {
-  const resolvedItems = orderedRegisteredItems(feedbackNotes)
-    .map(item => resolveRegisteredItem(item, context))
-    .filter(Boolean)
-
-  if (!resolvedItems.length) {
-    return null
-  }
-
-  const currentSurface = String(context.surface || '').trim()
-  if (!currentSurface) {
-    return resolvedItems[0]
-  }
-
-  const surfaceSpecificItem = resolvedItems.find(item => Array.isArray(item.surfaces) && item.surfaces.includes(currentSurface))
-  return surfaceSpecificItem || resolvedItems[0]
+  return getFirstSurfaceAwareRegistryItem(feedbackNotes, context)
 }
 
 export function registerEmptyState(item) {
@@ -728,21 +773,7 @@ export function registerEmptyState(item) {
 }
 
 export function getEmptyState(context = {}) {
-  const resolvedItems = orderedRegisteredItems(emptyStates)
-    .map(item => resolveRegisteredItem(item, context))
-    .filter(Boolean)
-
-  if (!resolvedItems.length) {
-    return null
-  }
-
-  const currentSurface = String(context.surface || '').trim()
-  if (!currentSurface) {
-    return resolvedItems[0]
-  }
-
-  const surfaceSpecificItem = resolvedItems.find(item => Array.isArray(item.surfaces) && item.surfaces.includes(currentSurface))
-  return surfaceSpecificItem || resolvedItems[0]
+  return getFirstSurfaceAwareRegistryItem(emptyStates, context)
 }
 
 export function registerPageState(item) {
@@ -751,21 +782,7 @@ export function registerPageState(item) {
 }
 
 export function getPageState(context = {}) {
-  const resolvedItems = orderedRegisteredItems(pageStates)
-    .map(item => resolveRegisteredItem(item, context))
-    .filter(Boolean)
-
-  if (!resolvedItems.length) {
-    return null
-  }
-
-  const currentSurface = String(context.surface || '').trim()
-  if (!currentSurface) {
-    return resolvedItems[0]
-  }
-
-  const surfaceSpecificItem = resolvedItems.find(item => Array.isArray(item.surfaces) && item.surfaces.includes(currentSurface))
-  return surfaceSpecificItem || resolvedItems[0]
+  return getFirstSurfaceAwareRegistryItem(pageStates, context)
 }
 
 export function registerStateBlock(item) {
@@ -774,7 +791,11 @@ export function registerStateBlock(item) {
 }
 
 export function getStateBlock(context = {}) {
-  const resolvedItems = orderedRegisteredItems(stateBlocks)
+  return getFirstSurfaceAwareRegistryItem(stateBlocks, context)
+}
+
+function getFirstSurfaceAwareRegistryItem(target, context = {}) {
+  const resolvedItems = orderedRegisteredItems(target)
     .map(item => resolveRegisteredItem(item, context))
     .filter(Boolean)
 

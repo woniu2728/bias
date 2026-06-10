@@ -46,6 +46,7 @@ from apps.core.models import ExtensionInstallation, Setting
 
 
 EXTENSION_PACKAGE_LOCK_SETTING = "extensions.package_lock"
+EXTENSION_ENABLED_ORDER_SETTING = "extensions_enabled_order"
 
 
 class ExtensionManager:
@@ -453,12 +454,22 @@ class ExtensionManager:
             installation.extension_id: installation
             for installation in ExtensionInstallation.objects.all()
         }
+        created = []
         updated = []
         pruned = []
 
         for extension_id, extension in discovered.items():
             installation = installations.get(extension_id)
             if installation is None:
+                installation = self._write_installation_state(
+                    extension,
+                    installed=extension.runtime.installed,
+                    enabled=extension.runtime.enabled,
+                    booted=extension.runtime.booted,
+                    meta_updates={"sync": {"created": True, "reason": "extension_package_discovered"}},
+                )
+                installations[extension_id] = installation
+                created.append(extension_id)
                 continue
             changed_fields = []
             if installation.version != extension.version:
@@ -490,8 +501,9 @@ class ExtensionManager:
 
         def after_commit() -> None:
             reset_extension_runtime_state()
-            if updated or pruned:
+            if created or updated or pruned:
                 self._dispatch_extension_lifecycle_event(ExtensionPackagesSyncedEvent(
+                    created=tuple(created),
                     updated=tuple(updated),
                     pruned=tuple(pruned),
                 ))
@@ -499,10 +511,28 @@ class ExtensionManager:
         self._run_after_commit(after_commit)
         return {
             "discovered": sorted(discovered.keys()),
+            "created": created,
             "updated": updated,
             "pruned": pruned,
             "locked": len(self._build_package_lock(discovered=discovered, installations=installations)["packages"]),
             "package_inspection": self.inspect_extension_packages(force=True),
+        }
+
+    @transaction.atomic
+    def sync_enabled_extension_order(self) -> dict:
+        before = self.inspect_enabled_extension_order(force=True)
+        self._persist_enabled_order()
+        self.load(force=True)
+        after = self.inspect_enabled_extension_order(force=True)
+
+        def after_commit() -> None:
+            reset_extension_runtime_state()
+
+        self._run_after_commit(after_commit)
+        return {
+            "changed": bool(before.get("drift")),
+            "before": before,
+            "after": after,
         }
 
     def get_extension_package_lock(self) -> dict:
@@ -548,6 +578,7 @@ class ExtensionManager:
         discovered_ids = set(discovered.keys())
         installed_ids = set(installations.keys())
         dependency_resolution = _build_dependency_resolution_payload(list(discovered.values()))
+        enabled_order = self.inspect_enabled_extension_order(force=False)
         return {
             "schema": 1,
             "packages": packages,
@@ -568,10 +599,43 @@ class ExtensionManager:
                 "unmanaged_discovered_count": len(unmanaged),
             },
             "dependency_resolution": dependency_resolution,
+            "enabled_order": enabled_order,
             "missing": missing,
             "version_drift": version_drift,
             "source_drift": source_drift,
             "unmanaged_discovered": unmanaged,
+        }
+
+    def inspect_enabled_extension_order(self, *, force: bool = False) -> dict:
+        self.load(force=force)
+        enabled_extensions = [
+            extension
+            for extension in self.get_extensions()
+            if extension.runtime.installed and extension.runtime.enabled
+        ]
+        resolved = resolve_extension_order(
+            enabled_extensions,
+            satisfied_dependency_ids=_get_core_satisfied_dependency_ids(),
+        )
+        resolved_ids = list(resolved.get("order") or [])
+        persisted_ids = self._read_persisted_enabled_order()
+        known_enabled_ids = {extension.id for extension in enabled_extensions}
+        stale_ids = [
+            extension_id
+            for extension_id in persisted_ids
+            if extension_id not in known_enabled_ids
+        ]
+        drift = persisted_ids != resolved_ids
+        return {
+            "schema": 1,
+            "persisted": persisted_ids,
+            "resolved": resolved_ids,
+            "stale": stale_ids,
+            "drift": drift,
+            "changed": drift,
+            "enabled_count": len(resolved_ids),
+            "missing_dependencies": dict(resolved.get("missing_dependencies") or {}),
+            "circular_dependencies": list(resolved.get("circular_dependencies") or []),
         }
 
     def _persist_package_lock(
@@ -622,6 +686,8 @@ class ExtensionManager:
                 "missing": extension is None,
                 "version_mismatch": bool(installation is not None and extension is not None and installed_version != discovered_version),
                 "source_mismatch": bool(installation is not None and extension is not None and installed_source != discovered_source),
+                "abandoned": bool(extension.manifest.distribution.abandoned) if extension is not None else False,
+                "replacement": str(extension.manifest.distribution.replacement or "") if extension is not None else "",
             })
         return {
             "schema": 1,
@@ -815,8 +881,12 @@ class ExtensionManager:
             model_defaults=tuple(extension.model_defaults),
             model_slug_drivers=tuple(extension.model_slug_drivers),
             search_drivers=tuple(extension.search_drivers),
+            search_indexes=tuple(extension.search_indexes),
             event_listeners=tuple(extension.event_listeners),
             realtime_included=tuple(extension.realtime_included),
+            realtime_discussion_visibility=tuple(extension.discover().realtime_discussion_visibility),
+            realtime_discussion_transports=tuple(extension.discover().realtime_discussion_transports),
+            realtime_discussion_broadcasts=tuple(extension.discover().realtime_discussion_broadcasts),
             discussion_lifecycle=tuple(extension.discussion_lifecycle),
             post_lifecycle=tuple(extension.post_lifecycle),
             runtime_actions=tuple(extension.manifest_runtime_actions),
@@ -957,12 +1027,15 @@ class ExtensionManager:
             **dict(base_result.get("details") or {}),
             **dict(hook_result.get("details") or {}),
         }
+        hook_status = str(hook_result.get("status") or "").strip()
+        base_status = str(base_result.get("status") or "").strip()
+        use_hook_result = bool(hook_status and hook_status != "skipped")
         return {
             "hook": hook_name,
-            "status": hook_result.get("status") or base_result.get("status") or "ok",
-            "status_label": hook_result.get("status_label") or base_result.get("status_label") or "已执行",
-            "message": hook_result.get("message") or base_result.get("message") or "扩展迁移已执行。",
-            "executed_at": hook_result.get("executed_at") or base_result.get("executed_at"),
+            "status": (hook_result.get("status") if use_hook_result else base_status) or "ok",
+            "status_label": (hook_result.get("status_label") if use_hook_result else base_result.get("status_label")) or "已执行",
+            "message": (hook_result.get("message") if use_hook_result else base_result.get("message")) or "扩展迁移已执行。",
+            "executed_at": (hook_result.get("executed_at") if use_hook_result else base_result.get("executed_at")),
             "details": merged_details,
         }
 
@@ -1082,9 +1155,26 @@ class ExtensionManager:
         ]
         ordered_ids = [extension.id for extension in self.sort_extensions_for_boot(extensions)]
         Setting.objects.update_or_create(
-            key="extensions_enabled_order",
+            key=EXTENSION_ENABLED_ORDER_SETTING,
             defaults={"value": json_dumps(ordered_ids)},
         )
+
+    def _read_persisted_enabled_order(self) -> list[str]:
+        setting = Setting.objects.filter(key=EXTENSION_ENABLED_ORDER_SETTING).only("value").first()
+        raw_value = str(getattr(setting, "value", "") or "")
+        if not raw_value:
+            return []
+        try:
+            payload = json.loads(raw_value)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(payload, list):
+            return []
+        return [
+            str(item).strip()
+            for item in payload
+            if str(item).strip()
+        ]
 
     def _run_backend_hook(self, extension, hook_name: str, *, meta: dict | None = None) -> dict:
         return run_extension_backend_hook(

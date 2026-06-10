@@ -12,7 +12,11 @@ import {
   resetAdminExtensionRuntimeContributions,
   resetLoadedAdminExtensions,
 } from './extensionBootstrap.js'
-import { createAdminExtensionApp } from './extensionApp.js'
+import {
+  createAdminExtensionApp,
+  getAdminExtensionInitializers,
+  resetAdminExtensionAppRuntime,
+} from './extensionApp.js'
 import { createRuntimeApplication } from '../common/application.js'
 import {
   onLazyModuleLoad,
@@ -22,15 +26,14 @@ import {
 import { createAdminRuntimeRegistry } from './runtimeRegistry.js'
 import {
   Exports as AdminSdkExports,
-  ItemList as AdminSdkItemList,
   createAdminRuntimeRegistry as createAdminRuntimeRegistryFromSdk,
 } from './sdk.js'
+import { ItemList as AdminSdkItemList } from '../common/sdk.js'
 import {
   clearAdminRoutesForExtension,
   getAdminRoutes,
   registerAdminRoute,
 } from './registry/routes.js'
-import { resetAdminExtensionAppRuntime } from './extensionApp.js'
 
 test('createAdminExtensionApp exposes public admin extension APIs', () => {
   const router = { name: 'router' }
@@ -334,7 +337,56 @@ test('bootstrapEnabledAdminExtensions runs runtime application initializers', as
   }
 })
 
+test('bootstrapEnabledAdminExtensions runs initializer-only entry modules', async () => {
+  resetLoadedAdminExtensions()
+  const calls = []
+  const previousBias = globalThis.bias
+  globalThis.bias = { extensions: Object.create(null) }
+  const runtimeApp = createRuntimeApplication({ kind: 'admin' })
+  const router = {
+    addRoute() {},
+    hasRoute() {
+      return false
+    },
+    getRoutes() {
+      return []
+    },
+    removeRoute() {},
+  }
+
+  try {
+    await bootstrapEnabledAdminExtensions({
+      app: runtimeApp,
+      router,
+      runtime: { stamp: 'initializer-only-test' },
+      registry: { adminApi: {} },
+      extensions: [{
+        id: 'initializer-only',
+        enabled: true,
+        frontend_admin_entry: 'extensions/initializer-only/frontend/admin/index.js',
+      }],
+      entryModules: {
+        '../../../extensions/initializer-only/frontend/admin/index.js': async () => {
+          getAdminExtensionInitializers().add('initializer-only', extensionApp => {
+            calls.push(extensionApp.extension.id)
+            calls.push(extensionApp.application.kind)
+          })
+          return { ready: true }
+        },
+      },
+    })
+
+    assert.deepEqual(calls, ['initializer-only', 'admin'])
+    assert.equal(runtimeApp.extensions['initializer-only'].modules.admin.ready, true)
+    assert.equal(globalThis.bias.extensions['initializer-only'], runtimeApp.extensions['initializer-only'])
+  } finally {
+    getAdminExtensionInitializers().clear('initializer-only')
+    globalThis.bias = previousBias
+  }
+})
+
 test('registerExtensionAdminRoutes resolves extension-owned route components from generated importers', async () => {
+  const runtimeApp = createRuntimeApplication({ kind: 'admin' })
   const component = { name: 'AdminRoutePage' }
   const extension = {
     id: 'admin-route-demo',
@@ -360,6 +412,7 @@ test('registerExtensionAdminRoutes resolves extension-owned route components fro
     ])
 
     const registered = registerExtensionAdminRoutes(null, extension, {
+      app: runtimeApp,
       importers: {
         '../../../extensions/admin-route-demo/frontend/admin/Page.vue': async () => ({ default: component }),
       },
@@ -373,6 +426,9 @@ test('registerExtensionAdminRoutes resolves extension-owned route components fro
     assert.equal(route.navOrder, 42)
     assert.equal(route.extensionId, 'admin-route-demo')
     assert.equal(await route.component(), component)
+    assert.equal(runtimeApp.routes.definitions['admin-route-demo.page'].path, '/admin/route-demo')
+    assert.equal(runtimeApp.routes.definitions['admin-route-demo.page'].frontend, 'admin')
+    assert.equal(runtimeApp.routes.definitions['admin-route-demo.page'].moduleId, 'admin-route-demo')
   } finally {
     clearAdminRoutesForExtension('admin-route-demo')
   }
@@ -478,6 +534,8 @@ test('bootstrapEnabledAdminExtensions resolves backend-only route components fro
     assert.equal(result.addedRouteCount, 1)
     assert.equal(addedRoutes[0].name, 'admin-output-route.page')
     assert.equal(await addedRoutes[0].component(), component)
+    assert.equal(runtimeApp.routes.definitions['admin-output-route.page'].path, '/admin/output-route')
+    assert.equal(runtimeApp.routes.definitions['admin-output-route.page'].frontend, 'admin')
   } finally {
     clearAdminRoutesForExtension('admin-output-route')
   }
@@ -485,6 +543,12 @@ test('bootstrapEnabledAdminExtensions resolves backend-only route components fro
 
 test('registerExtensionAdminRoutes removes declared admin routes', () => {
   const removed = []
+  const runtimeApp = createRuntimeApplication({ kind: 'admin' })
+  runtimeApp.routes.definitions['admin-route-remove.page'] = {
+    path: '/admin/remove-me',
+    name: 'admin-route-remove.page',
+    extensionId: 'admin-route-remove',
+  }
   const router = {
     hasRoute(name) {
       return name === 'admin-route-remove.page'
@@ -510,11 +574,12 @@ test('registerExtensionAdminRoutes removes declared admin routes', () => {
         name: 'admin-route-remove.page',
         removed: true,
       }],
-    })
+    }, { app: runtimeApp })
 
     assert.deepEqual(registered, ['admin-route-remove.page'])
     assert.deepEqual(removed, ['admin-route-remove.page'])
     assert.equal(getAdminRoutes().some(route => route.name === 'admin-route-remove.page'), false)
+    assert.equal(runtimeApp.routes.definitions['admin-route-remove.page'], undefined)
   } finally {
     clearAdminRoutesForExtension('admin-route-remove')
   }

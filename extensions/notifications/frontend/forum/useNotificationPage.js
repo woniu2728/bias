@@ -1,13 +1,16 @@
-import { getEmptyState, getStateBlock, getUiCopy } from '@bias/forum'
+import {
+  ref,
+  computed,
+  useRoutePagination } from '@bias/core'
+import { getEmptyState,
+  getStateBlock,
+  getUiCopy
+} from '@bias/forum'
 import {
   getResolvedNotificationTypes,
   resolveNotificationPath,
   useNotificationGroups,
 } from './notificationRuntime.js'
-import {
-  useRoutePagination,
-} from '@bias/forum'
-import { computed, ref } from '@bias/forum'
 import { useNotificationBulkActions } from './useNotificationBulkActions.js'
 import { useNotificationDisplayState } from './useNotificationDisplayState.js'
 import { useNotificationItemActions } from './useNotificationItemActions.js'

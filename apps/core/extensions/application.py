@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from apps.core.domain_events import DomainEventBus
 from apps.core.extensions.container import import_string, resolve_container_value
+from apps.core.extensions.model_references import model_class, model_matches, resolve_model_reference
 from apps.core.extensions.types import (
     ExtensionAdminActionDefinition,
     ExtensionDiscussionLifecycleDefinition,
@@ -33,8 +34,11 @@ from apps.core.extensions.types import (
     ExtensionResourceFilterDefinition,
     ExtensionResourceRelationshipDefinition,
     ExtensionResourceSortDefinition,
+    ExtensionRealtimeDiscussionBroadcastDefinition,
+    ExtensionRealtimeDiscussionTransportDefinition,
     ExtensionRealtimeIncludedDefinition,
     ExtensionSearchDriverDefinition,
+    ExtensionSearchIndexDefinition,
     ExtensionSystemHookDefinition,
     ExtensionValidatorDefinition,
     ExtensionMailDefinition,
@@ -86,6 +90,14 @@ class ApplicationNamedRoute:
     handler: Any
     module_id: str = ""
     tags: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ApplicationWebSocketRoute:
+    path: str
+    name: str
+    consumer: Any
+    module_id: str = ""
 
 
 @dataclass
@@ -517,16 +529,15 @@ class ApplicationModelService:
             definitions.append((self._visibility_sort_key(definition, model, requested_ability, sequence), definition))
         return [definition for _key, definition in sorted(definitions, key=lambda item: item[0])]
 
-    @classmethod
     def _visibility_sort_key(
-        cls,
+        self,
         definition: ExtensionModelVisibilityDefinition,
         model: Any,
         requested_ability: str,
         sequence: int,
     ) -> tuple[int, int, int, int]:
-        lineage = cls._model_lineage(model)
-        registered_class = cls._model_class(definition.model)
+        lineage = self._model_lineage(model)
+        registered_class = self._model_class(definition.model)
         try:
             lineage_index = lineage.index(registered_class) if registered_class in lineage else len(lineage)
         except ValueError:
@@ -535,26 +546,17 @@ class ApplicationModelService:
         ability_index = 0 if ability == "*" else 1
         return (lineage_index, ability_index, int(getattr(definition, "order", 100) or 100), sequence)
 
-    @staticmethod
-    def _model_matches(registered_model: Any, model: Any) -> bool:
-        registered_class = ApplicationModelService._model_class(registered_model)
-        model_class = ApplicationModelService._model_class(model)
-        if registered_class is None or model_class is None:
-            return registered_model == model
-        return issubclass(model_class, registered_class)
+    def _model_matches(self, registered_model: Any, model: Any) -> bool:
+        return model_matches(registered_model, model, self._host)
 
-    @staticmethod
-    def _model_class(model: Any) -> type | None:
-        if isinstance(model, type):
-            return model
-        return getattr(model, "__class__", None)
+    def _model_class(self, model: Any) -> type | None:
+        return model_class(model, self._host)
 
-    @classmethod
-    def _model_lineage(cls, model: Any) -> list[type]:
-        model_class = cls._model_class(model)
-        if model_class is None:
+    def _model_lineage(self, model: Any) -> list[type]:
+        resolved_model_class = self._model_class(model)
+        if resolved_model_class is None:
             return []
-        return [item for item in reversed(model_class.__mro__) if item is not object]
+        return [item for item in reversed(resolved_model_class.__mro__) if item is not object]
 
     def register_relation(self, extension_id: str, definition: ExtensionModelRelationDefinition) -> None:
         normalized = str(extension_id or "").strip()
@@ -673,7 +675,7 @@ class ApplicationModelService:
             for items in self._private_checkers_by_extension.values():
                 definitions.extend(items)
         if model is not None:
-            definitions = [definition for definition in definitions if definition.model == model]
+            definitions = [definition for definition in definitions if self._model_matches(definition.model, model)]
         return definitions
 
     def is_private(self, model: Any, instance: Any, *, default: bool = False) -> bool:
@@ -689,13 +691,13 @@ class ApplicationModelService:
                 result = False
         return result
 
-    @staticmethod
-    def _ensure_private_save_hook(model: Any) -> None:
-        if model is None or not hasattr(model, "_meta"):
+    def _ensure_private_save_hook(self, model: Any) -> None:
+        resolved_model = resolve_model_reference(model, self._host)
+        if resolved_model is None or not hasattr(resolved_model, "_meta"):
             return
         from django.db.models.signals import pre_save
 
-        model_label = f"{getattr(model, '__module__', '')}.{getattr(model, '__qualname__', getattr(model, '__name__', ''))}"
+        model_label = f"{getattr(resolved_model, '__module__', '')}.{getattr(resolved_model, '__qualname__', getattr(resolved_model, '__name__', ''))}"
 
         def refresh_private_flag(sender, instance, **kwargs):
             if instance is None or not hasattr(instance, "is_private"):
@@ -706,7 +708,7 @@ class ApplicationModelService:
 
         pre_save.connect(
             refresh_private_flag,
-            sender=model,
+            sender=resolved_model,
             weak=False,
             dispatch_uid=f"bias.model_private.pre_save.{model_label}",
         )
@@ -840,6 +842,7 @@ class ApplicationSearchService:
     def __init__(self, host: "ExtensionHost") -> None:
         self._host = host
         self._drivers_by_extension: dict[str, tuple[ExtensionSearchDriverDefinition, ...]] = {}
+        self._indexes_by_extension: dict[str, tuple[ExtensionSearchIndexDefinition, ...]] = {}
         from apps.core.resource_search import ResourceSearchManager
 
         self.manager = ResourceSearchManager(container=host)
@@ -869,6 +872,24 @@ class ApplicationSearchService:
             for driver in self.get_drivers()
             if driver.target == normalized
         ]
+
+    def register_index_definition(self, extension_id: str, definition: ExtensionSearchIndexDefinition) -> None:
+        normalized = str(extension_id or "").strip()
+        if not normalized:
+            return
+        definition = replace(definition, module_id=definition.module_id or normalized)
+        indexes = tuple([*self._indexes_by_extension.get(normalized, ()), definition])
+        self._indexes_by_extension[normalized] = indexes
+        view = self._host._get_or_create_runtime_view(normalized)
+        view.search_indexes = indexes
+
+    def get_index_definitions(self, *, extension_id: str | None = None) -> list[ExtensionSearchIndexDefinition]:
+        if extension_id is not None:
+            return list(self._indexes_by_extension.get(str(extension_id or "").strip(), ()))
+        indexes: list[ExtensionSearchIndexDefinition] = []
+        for items in self._indexes_by_extension.values():
+            indexes.extend(items)
+        return indexes
 
     def apply_filters(self, target: str, queryset, query: str, context: dict | None = None):
         text_query, parsed_filters = self.extract_filter_tokens(query, targets=(target,))
@@ -1285,6 +1306,68 @@ class ApplicationRouteService:
             for route in self.get_routes()
             if (route.app_name, route.name) in route_keys
         )
+
+
+class ApplicationWebSocketRouteService:
+    def __init__(self, host: "ExtensionHost") -> None:
+        self._host = host
+        self._routes: dict[str, ApplicationWebSocketRoute] = {}
+        self._route_names_by_extension: dict[str, tuple[str, ...]] = {}
+
+    def add_route(
+        self,
+        extension_id: str,
+        path: str,
+        name: str,
+        consumer: Any,
+    ) -> ApplicationWebSocketRoute | None:
+        normalized_extension_id = str(extension_id or "").strip()
+        normalized_path = str(path or "").strip()
+        normalized_name = str(name or "").strip()
+        if not normalized_extension_id or not normalized_path or not normalized_name or consumer is None:
+            return None
+
+        route = ApplicationWebSocketRoute(
+            path=normalized_path,
+            name=normalized_name,
+            consumer=consumer,
+            module_id=normalized_extension_id,
+        )
+        self._routes[normalized_name] = route
+        route_names = [
+            item
+            for item in self._route_names_by_extension.get(normalized_extension_id, ())
+            if item != normalized_name
+        ]
+        route_names.append(normalized_name)
+        self._route_names_by_extension[normalized_extension_id] = tuple(route_names)
+        self._sync_route_view(normalized_extension_id)
+        return route
+
+    def remove_routes(self, extension_id: str) -> None:
+        normalized_extension_id = str(extension_id or "").strip()
+        if not normalized_extension_id:
+            return
+        for name in self._route_names_by_extension.pop(normalized_extension_id, ()):
+            self._routes.pop(name, None)
+        self._sync_route_view(normalized_extension_id)
+
+    def get_routes(self, *, extension_id: str | None = None) -> list[ApplicationWebSocketRoute]:
+        if extension_id is not None:
+            route_names = self._route_names_by_extension.get(str(extension_id or "").strip(), ())
+            return [
+                self._routes[name]
+                for name in route_names
+                if name in self._routes
+            ]
+        return [
+            self._routes[name]
+            for name in sorted(self._routes.keys())
+        ]
+
+    def _sync_route_view(self, extension_id: str) -> None:
+        view = self._host._get_or_create_runtime_view(extension_id)
+        view.websocket_routes = tuple(self.get_routes(extension_id=extension_id))
 
 
 class ApplicationFrontendService:
@@ -1880,15 +1963,29 @@ class ApplicationEventService:
         normalized_extension_id = str(extension_id or "").strip()
         if not normalized_extension_id:
             return
+        event_type = self._resolve_event_type(getattr(definition, "event_type", None))
+        if event_type is None:
+            raise RuntimeError(f"无法解析扩展事件类型: {getattr(definition, 'event_type', None)}")
+        definition = replace(definition, event_type=event_type)
 
         view = self._host._get_or_create_runtime_view(normalized_extension_id)
         view.event_listeners = tuple([*view.event_listeners, definition])
         self._host.forum.register_event_listener(self._build_forum_event_listener_definition(normalized_extension_id, definition))
         self._event_bus.register(
-            definition.event_type,
+            event_type,
             definition.handler,
             listener_key=self._build_event_bus_listener_key(normalized_extension_id, definition),
         )
+
+    @staticmethod
+    def _resolve_event_type(event_type: Any):
+        if isinstance(event_type, str):
+            try:
+                resolved = import_string(event_type)
+            except Exception:
+                return None
+            return resolved if isinstance(resolved, type) else None
+        return event_type if isinstance(event_type, type) else None
 
     @staticmethod
     def _build_forum_event_listener_definition(extension_id: str, definition) -> EventListenerDefinition:
@@ -1941,6 +2038,7 @@ class ApplicationEventService:
 class ApplicationRealtimeService:
     def __init__(self, host: "ExtensionHost") -> None:
         self._host = host
+        self._discussion_transports_by_extension: dict[str, tuple[ExtensionRealtimeDiscussionTransportDefinition, ...]] = {}
 
     def register_included_enricher(self, extension_id: str, definition: ExtensionRealtimeIncludedDefinition) -> None:
         normalized_extension_id = str(extension_id or "").strip()
@@ -1958,10 +2056,6 @@ class ApplicationRealtimeService:
             ),
             definition,
         ])
-
-        from apps.core.forum_runtime import register_realtime_included_enricher
-
-        register_realtime_included_enricher(f"{normalized_extension_id}:{normalized_key}", handler)
 
     def register_discussion_visibility_resolver(self, extension_id: str, definition: ExtensionSystemHookDefinition) -> None:
         normalized_extension_id = str(extension_id or "").strip()
@@ -1981,9 +2075,64 @@ class ApplicationRealtimeService:
             definition,
         ])
 
-        from apps.core.forum_runtime import register_realtime_discussion_visibility_resolver
+    def register_discussion_transport(
+        self,
+        extension_id: str,
+        definition: ExtensionRealtimeDiscussionTransportDefinition,
+    ) -> None:
+        normalized_extension_id = str(extension_id or "").strip()
+        normalized_key = str(getattr(definition, "key", "") or "").strip()
+        handler = getattr(definition, "handler", None)
+        if not normalized_extension_id or not normalized_key or not callable(handler):
+            return
 
-        register_realtime_discussion_visibility_resolver(f"{normalized_extension_id}:{normalized_key}", handler)
+        current = tuple(
+            item
+            for item in self._discussion_transports_by_extension.get(normalized_extension_id, ())
+            if str(getattr(item, "key", "") or "").strip() != normalized_key
+        )
+        definitions = tuple([*current, definition])
+        self._discussion_transports_by_extension[normalized_extension_id] = definitions
+        self._host._get_or_create_runtime_view(normalized_extension_id).realtime_discussion_transports = definitions
+
+    def register_discussion_broadcast(
+        self,
+        extension_id: str,
+        definition: ExtensionRealtimeDiscussionBroadcastDefinition,
+    ) -> None:
+        normalized_extension_id = str(extension_id or "").strip()
+        if not normalized_extension_id:
+            return
+
+        event_type = self._resolve_event_type(definition.event_type)
+        event_name_key = self._event_value_key(definition.event_name)
+        if event_type is None or not event_name_key:
+            return
+
+        view = self._host._get_or_create_runtime_view(normalized_extension_id)
+        view.realtime_discussion_broadcasts = tuple([
+            *(
+                item
+                for item in view.realtime_discussion_broadcasts
+                if not (
+                    self._resolve_event_type(item.event_type) == event_type
+                    and self._event_value_key(item.event_name) == event_name_key
+                )
+            ),
+            replace(definition, event_type=event_type),
+        ])
+
+        handler = self._build_discussion_broadcast_handler(definition)
+        self._host.event_bus.register(
+            event_type,
+            handler,
+            listener_key=(
+                "realtime.discussion",
+                normalized_extension_id,
+                self._event_type_key(event_type),
+                event_name_key,
+            ),
+        )
 
     def get_included_enrichers(self, *, extension_id: str | None = None) -> list[ExtensionRealtimeIncludedDefinition]:
         if extension_id is not None:
@@ -2008,6 +2157,141 @@ class ApplicationRealtimeService:
         for view in self._host.get_runtime_views():
             definitions.extend(view.realtime_discussion_visibility)
         return definitions
+
+    def get_discussion_transports(
+        self,
+        *,
+        extension_id: str | None = None,
+    ) -> list[ExtensionRealtimeDiscussionTransportDefinition]:
+        if extension_id is not None:
+            return list(self._discussion_transports_by_extension.get(str(extension_id or "").strip(), ()))
+
+        definitions: list[ExtensionRealtimeDiscussionTransportDefinition] = []
+        for items in self._discussion_transports_by_extension.values():
+            definitions.extend(items)
+        return definitions
+
+    def broadcast_discussion_event(self, discussion_id: int, event_type: str, payload: dict) -> None:
+        for definition in self.get_discussion_transports():
+            handler = getattr(definition, "handler", None)
+            if callable(handler):
+                handler(discussion_id, event_type, payload)
+
+    def get_discussion_broadcasts(
+        self,
+        *,
+        extension_id: str | None = None,
+    ) -> list[ExtensionRealtimeDiscussionBroadcastDefinition]:
+        if extension_id is not None:
+            view = self._host.get_runtime_view(extension_id)
+            if view is None:
+                return []
+            return list(view.realtime_discussion_broadcasts)
+
+        definitions: list[ExtensionRealtimeDiscussionBroadcastDefinition] = []
+        for view in self._host.get_runtime_views():
+            definitions.extend(view.realtime_discussion_broadcasts)
+        return definitions
+
+    @staticmethod
+    def _resolve_event_type(event_type: Any):
+        if isinstance(event_type, str):
+            try:
+                resolved = import_string(event_type)
+            except Exception:
+                return None
+            return resolved if isinstance(resolved, type) else None
+        return event_type if isinstance(event_type, type) else None
+
+    @staticmethod
+    def _event_type_key(event_type: Any) -> str:
+        return ":".join(
+            item
+            for item in (
+                str(getattr(event_type, "__module__", "") or "").strip(),
+                str(getattr(event_type, "__qualname__", "") or "").strip(),
+            )
+            if item
+        ) or str(event_type)
+
+    @staticmethod
+    def _event_value_key(value: Any) -> str:
+        if callable(value):
+            return ":".join(
+                item
+                for item in (
+                    str(getattr(value, "__module__", "") or "").strip(),
+                    str(getattr(value, "__qualname__", "") or "").strip(),
+                )
+                if item
+            ) or str(value)
+        return str(value or "").strip()
+
+    @staticmethod
+    def _resolve_event_value(source: Any, event: Any, *, default: Any = None) -> Any:
+        if source is None:
+            return default
+        if callable(source):
+            try:
+                return source(event)
+            except TypeError:
+                return source()
+        if isinstance(source, str):
+            return getattr(event, source, default)
+        return source
+
+    def _build_discussion_broadcast_handler(self, definition: ExtensionRealtimeDiscussionBroadcastDefinition):
+        def handle(event) -> None:
+            condition = getattr(definition, "condition", None)
+            if condition is not None and not bool(self._resolve_event_value(condition, event, default=True)):
+                return
+
+            discussion_id = self._resolve_event_value(definition.discussion_id, event)
+            try:
+                normalized_discussion_id = int(discussion_id)
+            except (TypeError, ValueError):
+                return
+            if normalized_discussion_id <= 0:
+                return
+
+            event_name = self._resolve_event_name(definition.event_name, event)
+            normalized_event_name = str(event_name or "").strip()
+            if not normalized_event_name:
+                return
+
+            post_id = self._resolve_event_value(definition.post_id, event)
+            if post_id is None and definition.include_post:
+                post_id = getattr(event, "post_id", None)
+            try:
+                normalized_post_id = int(post_id) if post_id is not None else None
+            except (TypeError, ValueError):
+                normalized_post_id = None
+
+            extension_context = self._resolve_event_value(definition.extension_context, event, default=None)
+            broadcaster = self._host.make("realtime.discussion_broadcaster", None)
+            if not callable(broadcaster):
+                raise RuntimeError("扩展运行时服务未注册: realtime.discussion_broadcaster")
+
+            broadcaster(
+                normalized_discussion_id,
+                normalized_event_name,
+                include_discussion=definition.include_discussion,
+                include_post=definition.include_post,
+                post_id=normalized_post_id,
+                post_id_getter=definition.post_id_getter,
+                extension_context=extension_context,
+            )
+
+        return handle
+
+    @staticmethod
+    def _resolve_event_name(source: Any, event: Any) -> Any:
+        if callable(source):
+            try:
+                return source(event)
+            except TypeError:
+                return source()
+        return source
 
 
 class ApplicationForumPermissionService:
@@ -2364,6 +2648,7 @@ class ExtensionApplicationRecord:
     model_defaults: list[ExtensionModelDefaultDefinition] = field(default_factory=list)
     model_slug_drivers: list[ExtensionModelSlugDriverDefinition] = field(default_factory=list)
     search_drivers: list[ExtensionSearchDriverDefinition] = field(default_factory=list)
+    search_indexes: list[ExtensionSearchIndexDefinition] = field(default_factory=list)
     validators: list[ExtensionValidatorDefinition] = field(default_factory=list)
     mailers: list[ExtensionMailDefinition] = field(default_factory=list)
     error_handlers: list[ExtensionSystemHookDefinition] = field(default_factory=list)
@@ -2379,6 +2664,8 @@ class ExtensionApplicationRecord:
     event_listeners: list[ExtensionEventListenerDefinition] = field(default_factory=list)
     realtime_included: list[ExtensionRealtimeIncludedDefinition] = field(default_factory=list)
     realtime_discussion_visibility: list[ExtensionSystemHookDefinition] = field(default_factory=list)
+    realtime_discussion_transports: list[ExtensionRealtimeDiscussionTransportDefinition] = field(default_factory=list)
+    realtime_discussion_broadcasts: list[ExtensionRealtimeDiscussionBroadcastDefinition] = field(default_factory=list)
     forum_permission_checkers: list[ApplicationForumPermissionChecker] = field(default_factory=list)
     discussion_lifecycle: list[ExtensionDiscussionLifecycleDefinition] = field(default_factory=list)
     post_lifecycle: list[ExtensionPostLifecycleDefinition] = field(default_factory=list)
@@ -2386,6 +2673,7 @@ class ExtensionApplicationRecord:
     admin_actions: list[ExtensionAdminActionDefinition] = field(default_factory=list)
     route_mounts: list[ApplicationRouteMount] = field(default_factory=list)
     named_routes: list[ApplicationNamedRoute] = field(default_factory=list)
+    websocket_routes: list[ApplicationWebSocketRoute] = field(default_factory=list)
     middleware_mounts: list[ApplicationMiddlewareMount] = field(default_factory=list)
     policy_mounts: list[ApplicationPolicyMount] = field(default_factory=list)
     service_providers: list[str] = field(default_factory=list)
@@ -2458,6 +2746,7 @@ class ExtensionRuntimeView:
     model_defaults: tuple[ExtensionModelDefaultDefinition, ...] = ()
     model_slug_drivers: tuple[ExtensionModelSlugDriverDefinition, ...] = ()
     search_drivers: tuple[ExtensionSearchDriverDefinition, ...] = ()
+    search_indexes: tuple[ExtensionSearchIndexDefinition, ...] = ()
     validators: tuple[ExtensionValidatorDefinition, ...] = ()
     mailers: tuple[ExtensionMailDefinition, ...] = ()
     error_handlers: tuple[ExtensionSystemHookDefinition, ...] = ()
@@ -2473,6 +2762,8 @@ class ExtensionRuntimeView:
     event_listeners: tuple[ExtensionEventListenerDefinition, ...] = ()
     realtime_included: tuple[ExtensionRealtimeIncludedDefinition, ...] = ()
     realtime_discussion_visibility: tuple[ExtensionSystemHookDefinition, ...] = ()
+    realtime_discussion_transports: tuple[ExtensionRealtimeDiscussionTransportDefinition, ...] = ()
+    realtime_discussion_broadcasts: tuple[ExtensionRealtimeDiscussionBroadcastDefinition, ...] = ()
     forum_permission_checkers: tuple[ApplicationForumPermissionChecker, ...] = ()
     discussion_lifecycle: tuple[ExtensionDiscussionLifecycleDefinition, ...] = ()
     post_lifecycle: tuple[ExtensionPostLifecycleDefinition, ...] = ()
@@ -2480,6 +2771,7 @@ class ExtensionRuntimeView:
     admin_actions: tuple[ExtensionAdminActionDefinition, ...] = ()
     route_mounts: tuple[ApplicationRouteMount, ...] = ()
     named_routes: tuple[ApplicationNamedRoute, ...] = ()
+    websocket_routes: tuple[ApplicationWebSocketRoute, ...] = ()
     middleware_mounts: tuple[ApplicationMiddlewareMount, ...] = ()
     policy_mounts: tuple[ApplicationPolicyMount, ...] = ()
     service_providers: tuple[str, ...] = ()
@@ -2500,6 +2792,7 @@ class ExtensionApplication:
         self,
         *,
         extensions_to_boot: tuple["Extension", ...] | list["Extension"] = (),
+        extensions_to_catalog: tuple["Extension", ...] | list["Extension"] = (),
         forum_registry: "ForumRegistry | None" = None,
         resource_registry: "ResourceRegistry | None" = None,
         event_bus: DomainEventBus | None = None,
@@ -2514,6 +2807,7 @@ class ExtensionApplication:
             resource_registry = ResourceRegistry()
 
         self.extensions_to_boot = tuple(extensions_to_boot or ())
+        self.extensions_to_catalog = tuple(extensions_to_catalog or self.extensions_to_boot)
         self.forum_registry = forum_registry
         self.resource_registry = resource_registry
         self.event_bus = event_bus or DomainEventBus()
@@ -2554,6 +2848,7 @@ class ExtensionApplication:
         self.user = ApplicationSystemHookService(self, "user_handlers")
         self.signals = ApplicationSignalService(self)
         self.routes = ApplicationRouteService(self)
+        self.websocket_routes = ApplicationWebSocketRouteService(self)
         self.frontend = ApplicationFrontendService(self)
         self.providers = ApplicationServiceProviderRegistry(self)
         self.locales = ApplicationLocaleService(self)
@@ -2577,6 +2872,8 @@ class ExtensionApplication:
         self.instance("extensions.forum", self.forum)
         self.instance("routes", self.routes)
         self.instance("extensions.routes", self.routes)
+        self.instance("websocket.routes", self.websocket_routes)
+        self.instance("extensions.websocket.routes", self.websocket_routes)
         self.instance("frontend", self.frontend)
         self.instance("extensions.frontend", self.frontend)
         self.instance("resources", self.resources)
@@ -2644,6 +2941,12 @@ class ExtensionApplication:
         self.instance("event.bus", self.event_bus)
         self.instance("bias.api.resources", [])
         self.singleton("api.application", lambda host: _build_api_application_from_host(host))
+        try:
+            from apps.core.forum_runtime import set_realtime_service
+
+            set_realtime_service(self.realtime)
+        except Exception:
+            pass
 
     def booting(self, callback: LifecycleCallback) -> None:
         if callable(callback):
@@ -2676,10 +2979,12 @@ class ExtensionApplication:
             callback(self)
 
     def _register_extensions(self) -> None:
+        for extension in self.extensions_to_catalog:
+            if extension.source != "site":
+                self.forum.register_extension_module(extension)
         for extension in self.extensions_to_boot:
             if extension.source != "site":
                 self.forum.register_external_module_id(extension.id)
-                self.forum.register_extension_module(extension)
             self._mark_extension_lifecycle_phase(extension.id, "register")
             extension.register(self)
 
@@ -3204,6 +3509,9 @@ class ExtensionApplication:
     def get_named_routes(self, *, app_name: str | None = None) -> list[ApplicationNamedRoute]:
         return self.routes.get_routes(app_name=app_name)
 
+    def get_websocket_routes(self) -> list[ApplicationWebSocketRoute]:
+        return self.websocket_routes.get_routes()
+
     def get_frontend_extension(self, extension_id: str) -> ApplicationFrontendExtension | None:
         return self.frontend.get_extension(extension_id)
 
@@ -3380,6 +3688,7 @@ class ExtensionApplication:
             model_defaults=list(view.model_defaults),
             model_slug_drivers=list(view.model_slug_drivers),
             search_drivers=list(view.search_drivers),
+            search_indexes=list(view.search_indexes),
             validators=list(view.validators),
             mailers=list(view.mailers),
             error_handlers=list(view.error_handlers),
@@ -3395,6 +3704,8 @@ class ExtensionApplication:
             event_listeners=list(view.event_listeners),
             realtime_included=list(view.realtime_included),
             realtime_discussion_visibility=list(view.realtime_discussion_visibility),
+            realtime_discussion_transports=list(view.realtime_discussion_transports),
+            realtime_discussion_broadcasts=list(view.realtime_discussion_broadcasts),
             forum_permission_checkers=list(view.forum_permission_checkers),
             discussion_lifecycle=list(view.discussion_lifecycle),
             post_lifecycle=list(view.post_lifecycle),
@@ -3402,6 +3713,7 @@ class ExtensionApplication:
             admin_actions=list(view.admin_actions),
             route_mounts=list(view.route_mounts),
             named_routes=list(view.named_routes),
+            websocket_routes=list(view.websocket_routes),
             middleware_mounts=list(view.middleware_mounts),
             policy_mounts=list(view.policy_mounts),
             service_providers=list(view.service_providers),

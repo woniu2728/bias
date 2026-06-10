@@ -29,15 +29,6 @@ registerAdminMailPageCopy({
     savingLabel: '保存中...',
     saveSuccessText: '保存成功',
     saveErrorText: '保存失败，请检查当前配置',
-    testSectionTitle: '发送测试邮件',
-    testSectionDescription: '优先发送到你填写的测试收件箱。留空时，会回退到当前管理员邮箱。',
-    testRecipientLabel: '测试收件箱',
-    testRecipientHint: '建议填写一个真实可收信邮箱，便于直接验证 SMTP 是否可用。',
-    effectiveRecipientPrefix: '实际发送到：',
-    effectiveRecipientEmptyText: '（未设置）',
-    unsavedChangesHint: '请先保存当前修改，再发送测试邮件。',
-    testSendLabel: '发送测试邮件',
-    testSendingLabel: '发送中...',
   }),
 })
 
@@ -53,7 +44,6 @@ registerAdminMailPageConfig({
       mail_encryption: 'tls',
       mail_username: '',
       mail_password: '',
-      mail_test_recipient: '',
     },
     placeholders: {
       mailFrom: 'Bias <your@gmail.com>',
@@ -61,7 +51,6 @@ registerAdminMailPageConfig({
       mailPort: '587',
       mailUsername: 'your@gmail.com',
       mailPassword: '应用专用密码',
-      mailTestRecipient: 'admin@example.com',
     },
     encryptionOptions: [
       { value: '', label: '无' },
@@ -81,9 +70,6 @@ registerAdminMailPageActionMeta({
   order: 10,
   resolve: () => ({
     loadErrorText: '加载邮件设置失败，请稍后重试',
-    testSuccessTitle: '测试邮件已发送',
-    testSuccessMessage: toEmail => `测试邮件已发送到 ${toEmail}，请检查收件箱`,
-    testFailedTitle: '发送测试邮件失败',
     unknownErrorText: '未知错误',
   }),
 })

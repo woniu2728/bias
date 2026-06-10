@@ -1,4 +1,10 @@
-import { computed, getEmptyState, getStateBlock, getUiCopy, watch } from '@bias/forum'
+import {
+  watch,
+  computed } from '@bias/core'
+import { getEmptyState,
+  getStateBlock,
+  getUiCopy
+} from '@bias/forum'
 import { resolveTagsMetaPayload } from './tagsMeta.js'
 
 export function createTagsMetaState({

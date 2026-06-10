@@ -1,6 +1,6 @@
 import api from '../api/index.js'
 import { generatedForumExtensionModules } from '../generated/extensionImportMap.js'
-import { createRuntimeApplication } from '../common/application.js'
+import { createRuntimeApplication, hasExtensionExtenders } from '../common/application.js'
 import {
   applyExtensionDocumentPayload,
   clearExtensionDocumentRuntime,
@@ -20,6 +20,7 @@ import {
   registerLoadedExtensionModule,
   unregisterLoadedExtensionModule,
 } from '../common/extensionRuntime.js'
+import { resetResourceNormalizers } from '../common/resourceNormalizers.js'
 import {
   normalizeExtensionFrontendEntry,
   registerExtensionFrontendOutput,
@@ -27,6 +28,10 @@ import {
   resolveExtensionRouteComponentKeys,
   withRuntimeApplication,
 } from '../common/extensionRouteRuntime.js'
+import {
+  registerRuntimeRouteDefinition,
+  unregisterRuntimeRouteDefinition,
+} from '../common/routeRegistry.js'
 
 export {
   applyExtensionDocumentPayload,
@@ -36,19 +41,18 @@ export {
   registerExtensionTitleDriver,
 }
 
-const forumRouteComponents = {
-  DiscussionListView: () => import('../views/DiscussionListView.vue'),
-}
+const forumRouteComponents = {}
 
 export function normalizeExtensionForumEntry(entry) {
   return normalizeExtensionFrontendEntry(entry)
 }
 
-export function registerExtensionForumRoutes(router, extension, { components = forumRouteComponents, importers = generatedForumExtensionModules } = {}) {
+export function registerExtensionForumRoutes(router, extension, { app = null, application = null, components = forumRouteComponents, importers = generatedForumExtensionModules } = {}) {
   if (!router || typeof router.addRoute !== 'function') {
     return []
   }
 
+  const runtimeApp = application || app || extension?.application || null
   const routes = Array.isArray(extension?.frontend_routes)
     ? extension.frontend_routes
     : []
@@ -70,6 +74,7 @@ export function registerExtensionForumRoutes(router, extension, { components = f
         router.removeRoute(name)
         registeredRoutes.push(name)
       }
+      unregisterRuntimeRouteDefinition(runtimeApp, name)
       continue
     }
     if (!path || !componentKey) {
@@ -84,7 +89,7 @@ export function registerExtensionForumRoutes(router, extension, { components = f
       throw new Error(`找不到扩展前台路由组件: ${componentKey}`)
     }
 
-    router.addRoute({
+    const normalizedRoute = {
       path,
       name,
       component,
@@ -100,7 +105,9 @@ export function registerExtensionForumRoutes(router, extension, { components = f
           headTags: Array.isArray(route.head_tags) ? route.head_tags : [],
         },
       },
-    })
+    }
+    router.addRoute(normalizedRoute)
+    registerRuntimeRouteDefinition(runtimeApp, route, normalizedRoute, extension)
     registeredRoutes.push(name)
   }
 
@@ -137,16 +144,16 @@ export async function loadExtensionForumEntryModule(entryPath, { importers = {} 
 }
 
 export function validateForumExtensionModule(module, extensionId = '') {
-  if (!module || !module.extend) {
+  if (!module) {
     const suffix = extensionId ? ` (${extensionId})` : ''
-    throw new Error(`扩展前台入口缺少 extend 导出${suffix}`)
+    throw new Error(`扩展前台入口加载失败${suffix}`)
   }
 }
 
 export function validateCommonExtensionModule(module, extensionId = '') {
-  if (!module || !module.extend) {
+  if (!module) {
     const suffix = extensionId ? ` (${extensionId})` : ''
-    throw new Error(`扩展通用入口缺少 extend 导出${suffix}`)
+    throw new Error(`扩展通用入口加载失败${suffix}`)
   }
 }
 
@@ -189,6 +196,7 @@ export async function loadEnabledForumExtensions({
     registerExtensionFrontendOutput(application, extensionId, 'forum', runtimeExtension?.frontend_outputs?.forum)
 
     const registeredRoutes = registerExtensionForumRoutes(router, runtimeExtension, {
+      app: application,
       components: routeComponents || forumRouteComponents,
       importers,
     })
@@ -262,7 +270,7 @@ export async function loadEnabledForumExtensions({
 }
 
 async function bootModuleExtenders(application, extensionId, module, extensionApp) {
-  if (!application || !module?.extend) {
+  if (!application || !hasExtensionExtenders(module)) {
     return
   }
   await application.bootExtensions({
@@ -282,9 +290,7 @@ export function getForumInitializers() {
 async function runForumExtensionInitializers(items) {
   const appsByExtensionId = new Map(items.map(item => [item.extensionId, item.app]))
   const initializerGroups = new Set(items.map(item => item.app?.initializers).filter(Boolean))
-  if (!initializerGroups.size) {
-    initializerGroups.add(getForumExtensionInitializers())
-  }
+  initializerGroups.add(getForumExtensionInitializers())
 
   for (const initializers of initializerGroups) {
     await initializers.runWithAppResolver(extensionId => appsByExtensionId.get(extensionId), {
@@ -319,6 +325,7 @@ export function resetLoadedExtensionsWhenRuntimeChanges(loadedIds, runtime, { on
 
 export function resetForumExtensionRuntimeContributions(extensionId = '', { app } = {}) {
   clearForumRegistryExtensions(extensionId)
+  resetResourceNormalizers(extensionId)
   if (extensionId) {
     clearExtensionDocumentRuntimeForExtension(extensionId)
   } else {

@@ -136,7 +136,7 @@
           </section>
         </form>
 
-        <section class="Form-section Form-section--test">
+        <section v-if="sendTestEmailAction" class="Form-section Form-section--test">
           <div class="Form-sectionHeader">
             <h3>{{ mailCopy?.testSectionTitle || '发送测试邮件' }}</h3>
             <p>{{ mailCopy?.testSectionDescription || '优先发送到你填写的测试收件箱。留空时，会回退到当前管理员邮箱。' }}</p>
@@ -191,15 +191,21 @@ import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { useAdminSaveFeedback } from '../composables/useAdminSaveFeedback'
 import api from '../../api'
 import { useModalStore } from '../../stores/modal'
+import { useAdminRegistryStore } from '../../stores/adminRegistry'
 import {
+  getAdminMailPageAction,
   getAdminMailPageActionMeta,
   getAdminMailPageConfig,
   getAdminMailPageCopy,
 } from '../registry'
 
-const mailCopy = computed(() => getAdminMailPageCopy())
-const mailConfig = computed(() => getAdminMailPageConfig())
-const mailActionMeta = computed(() => getAdminMailPageActionMeta())
+const adminRegistryStore = useAdminRegistryStore()
+const pageContext = computed(() => ({
+  isModuleEnabled: moduleId => adminRegistryStore.isModuleEnabled(moduleId),
+}))
+const mailCopy = computed(() => getAdminMailPageCopy(pageContext.value))
+const mailConfig = computed(() => getAdminMailPageConfig(pageContext.value))
+const mailActionMeta = computed(() => getAdminMailPageActionMeta(pageContext.value))
 const loading = ref(true)
 const loadError = ref('')
 const settings = ref({})
@@ -213,6 +219,16 @@ const modalStore = useModalStore()
 const { saveSuccess, saveError, resetSaveFeedback, showSaveSuccess, showSaveError } = useAdminSaveFeedback()
 const encryptionOptions = computed(() => mailConfig.value?.encryptionOptions || [])
 const formatOptions = computed(() => mailConfig.value?.formatOptions || [])
+const sendTestEmailAction = computed(() => getAdminMailPageAction('send-test-email', {
+  api,
+  modalStore,
+  mailActionMeta: mailActionMeta.value,
+  ...pageContext.value,
+  getRecipient: () => effectiveTestToEmail.value,
+  setTesting: value => {
+    testing.value = value
+  },
+}))
 
 function defaultSettings() {
   return {
@@ -352,25 +368,10 @@ async function handleSubmit() {
 }
 
 async function sendTestEmail() {
-  testing.value = true
-  try {
-    const data = await api.post('/admin/mail/test', {
-      to_email: effectiveTestToEmail.value,
-    })
-    await modalStore.alert({
-      title: mailActionMeta.value?.testSuccessTitle || '测试邮件已发送',
-      message: mailActionMeta.value?.testSuccessMessage?.(data?.to_email || effectiveTestToEmail.value) || `测试邮件已发送到 ${data?.to_email || effectiveTestToEmail.value}，请检查收件箱`,
-      tone: 'success'
-    })
-  } catch (error) {
-    await modalStore.alert({
-      title: mailActionMeta.value?.testFailedTitle || '发送测试邮件失败',
-      message: error.response?.data?.error || error.message || mailActionMeta.value?.unknownErrorText || '未知错误',
-      tone: 'danger'
-    })
-  } finally {
-    testing.value = false
+  if (!sendTestEmailAction.value?.run) {
+    return
   }
+  await sendTestEmailAction.value.run()
 }
 </script>
 

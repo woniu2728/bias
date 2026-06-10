@@ -877,7 +877,16 @@ class ResourceRegistry:
             if not self._is_applicable(definition.condition, resolved_context):
                 continue
             operation = str(definition.operation or "add").strip().lower()
-            if operation == "remove":
+            value = self._sort_definition_value(definition)
+            if operation == "add":
+                output.append(value)
+            elif operation == "before_all":
+                output.insert(0, value)
+            elif operation == "before":
+                self._insert_before(output, definition.anchor, value)
+            elif operation == "after":
+                self._insert_after(output, definition.anchor, value)
+            elif operation == "remove":
                 output = [item for item in output if self._item_name(item) != definition.sort]
             elif operation == "mutate" and definition.mutator is not None:
                 output = [
@@ -886,16 +895,6 @@ class ResourceRegistry:
                     else item
                     for item in output
                 ]
-
-        for definition in self.get_effective_sorts(resource, resolved_context):
-            if not self._is_applicable(definition.condition, resolved_context):
-                continue
-            operation = str(definition.operation or "add").strip().lower()
-            value = definition.handler
-            if operation in {"add", "before_all", "before", "after"}:
-                output.append(value)
-            elif operation == "remove":
-                output = [item for item in output if self._item_name(item) != definition.sort]
         return output
 
     def build_preload_plan(
@@ -2696,15 +2695,23 @@ class ResourceRegistry:
         return str(getattr(definition, "kind", "") or "").strip().lower()
 
     @staticmethod
+    def _sort_definition_value(definition: ResourceSortDefinition):
+        handler = getattr(definition, "handler", None)
+        return definition if handler is None else handler
+
+    @staticmethod
     def _external_sort_mutator_result(definition: ResourceSortDefinition, target):
         if definition.mutator is None:
             return target
         try:
             mutated = definition.mutator(target)
         except (AttributeError, TypeError):
-            return target
+            try:
+                mutated = definition.mutator(definition)
+            except (AttributeError, TypeError):
+                return target
         if ResourceRegistry._is_sort_definition_like(mutated):
-            return target
+            return ResourceRegistry._sort_definition_value(mutated)
         return mutated if mutated is not None else target
 
     @staticmethod
@@ -2896,6 +2903,12 @@ class ResourceRegistry:
 
 
 _resource_registry: ResourceRegistry | None = None
+
+
+def reset_resource_registry_state() -> None:
+    global _resource_registry
+
+    _resource_registry = None
 
 
 def get_resource_registry() -> ResourceRegistry:

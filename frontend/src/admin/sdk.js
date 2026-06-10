@@ -10,4 +10,9 @@ export {
   resetLoadedAdminExtensionsWhenRuntimeChanges,
 } from './extensionBootstrap.js'
 export { adminRuntimeRegistry, createAdminRuntimeRegistry } from './runtimeRegistry.js'
-export * from '../common/sdk.js'
+export {
+  AdminExtender,
+  ExportsExtender,
+  ExportsExtender as Exports,
+  extendAdmin,
+} from '../common/extenders.js'

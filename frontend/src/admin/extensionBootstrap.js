@@ -27,6 +27,12 @@ import {
   resolveExtensionRouteComponentKeys,
   withRuntimeApplication,
 } from '../common/extensionRouteRuntime.js'
+import { hasExtensionExtenders } from '../common/application.js'
+import {
+  registerRuntimeRouteDefinition,
+  unregisterRuntimeRouteDefinition,
+  unregisterRuntimeRoutesForExtension,
+} from '../common/routeRegistry.js'
 
 const loadedAdminExtensionIds = new Set()
 
@@ -70,6 +76,7 @@ export async function bootstrapEnabledAdminExtensions({
         const runtimeExtension = withRuntimeApplication(extension, application)
         registerExtensionFrontendOutput(application, extensionId, 'admin', runtimeExtension?.frontend_outputs?.admin)
         registerExtensionAdminRoutes(router, runtimeExtension, {
+          app: application,
           components: routeComponents,
           importers: entryModules,
         })
@@ -81,6 +88,7 @@ export async function bootstrapEnabledAdminExtensions({
     const runtimeExtension = withRuntimeApplication(extension, application)
     registerExtensionFrontendOutput(application, extensionId, 'admin', runtimeExtension?.frontend_outputs?.admin)
     registerExtensionAdminRoutes(router, runtimeExtension, {
+      app: application,
       components: routeComponents,
       importers: entryModules,
     })
@@ -91,23 +99,21 @@ export async function bootstrapEnabledAdminExtensions({
     }
 
     const module = await importer()
-    if (module?.extend) {
-      const app = createAdminExtensionApp({
-        app: application,
-        extension: runtimeExtension,
-        loadedExtensionIds: loadedAdminExtensionIds,
-        registry: resolvedRegistry,
-        router,
-      })
-      registerLoadedExtensionModule(extensionId, module, {
-        app: application,
-        extension: runtimeExtension,
-        frontend: 'admin',
-        entryPath,
-      })
-      await bootModuleExtenders(application, extensionId, module, app)
-      initializedApps.push({ app, extensionId })
-    }
+    const app = createAdminExtensionApp({
+      app: application,
+      extension: runtimeExtension,
+      loadedExtensionIds: loadedAdminExtensionIds,
+      registry: resolvedRegistry,
+      router,
+    })
+    registerLoadedExtensionModule(extensionId, module, {
+      app: application,
+      extension: runtimeExtension,
+      frontend: 'admin',
+      entryPath,
+    })
+    await bootModuleExtenders(application, extensionId, module, app)
+    initializedApps.push({ app, extensionId })
     loadedAdminExtensionIds.add(extensionId)
   }
 
@@ -137,7 +143,8 @@ export async function bootstrapEnabledAdminExtensions({
   return { addedRouteCount }
 }
 
-export function registerExtensionAdminRoutes(router, extension, { components = adminRouteComponents, importers = generatedAdminExtensionModules } = {}) {
+export function registerExtensionAdminRoutes(router, extension, { app = null, application = null, components = adminRouteComponents, importers = generatedAdminExtensionModules } = {}) {
+  const runtimeApp = application || app || extension?.application || null
   const routes = Array.isArray(extension?.frontend_routes)
     ? extension.frontend_routes
     : []
@@ -157,6 +164,7 @@ export function registerExtensionAdminRoutes(router, extension, { components = a
       if (router && typeof router.removeRoute === 'function' && (!router.hasRoute || router.hasRoute(name))) {
         router.removeRoute(name)
       }
+      unregisterRuntimeRouteDefinition(runtimeApp, name)
       registeredRoutes.push(name)
       continue
     }
@@ -172,7 +180,7 @@ export function registerExtensionAdminRoutes(router, extension, { components = a
       throw new Error(`找不到扩展后台路由组件: ${componentKey}`)
     }
 
-    registerAdminRoute({
+    const normalizedRoute = {
       path,
       name,
       component,
@@ -193,7 +201,9 @@ export function registerExtensionAdminRoutes(router, extension, { components = a
         title: route.title || undefined,
         description: route.description || undefined,
       },
-    })
+    }
+    registerAdminRoute(normalizedRoute)
+    registerRuntimeRouteDefinition(runtimeApp, route, normalizedRoute, extension, 'admin')
     registeredRoutes.push(name)
   }
 
@@ -217,7 +227,7 @@ export function resolveAdminRouteComponentKeys(componentKey, extension = {}) {
 }
 
 async function bootModuleExtenders(application, extensionId, module, extensionApp) {
-  if (!application || !module?.extend) {
+  if (!application || !hasExtensionExtenders(module)) {
     return
   }
   await application.bootExtensions({
@@ -259,6 +269,7 @@ export function resetAdminExtensionRuntimeContributions(extensionId = '', { rout
   clearAdminRoutesForExtension(extensionId)
   clearAdminRegistryExtensions(extensionId)
   unregisterLoadedExtensionModule(extensionId, { app })
+  unregisterRuntimeRoutesForExtension(app, extensionId)
   resetAdminExtensionAppRuntime(extensionId, { app })
 }
 
@@ -281,9 +292,7 @@ function removeAdminRuntimeRoutes(router, extensionId = '') {
 async function runAdminExtensionInitializers(items) {
   const appsByExtensionId = new Map(items.map(item => [item.extensionId, item.app]))
   const initializerGroups = new Set(items.map(item => item.app?.initializers).filter(Boolean))
-  if (!initializerGroups.size) {
-    initializerGroups.add(getAdminExtensionInitializers())
-  }
+  initializerGroups.add(getAdminExtensionInitializers())
 
   for (const initializers of initializerGroups) {
     await initializers.runWithAppResolver(extensionId => appsByExtensionId.get(extensionId), {

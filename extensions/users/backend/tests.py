@@ -1,5 +1,6 @@
 import json
 from io import BytesIO
+from io import StringIO
 import httpx
 from unittest.mock import Mock, patch
 
@@ -14,16 +15,281 @@ from datetime import timedelta
 from PIL import Image
 from ninja_jwt.tokens import RefreshToken
 
-from apps.core.forum_events import UserSuspendedEvent, UserUnsuspendedEvent
+from extensions.users.backend.events import UserSuspendedEvent, UserUnsuspendedEvent
+from apps.core.extension_settings_service import save_extension_settings
+from apps.core.forum_registry import get_forum_registry
 from apps.core.models import AuditLog, Setting
 from apps.core.jwt_auth import ACCESS_TOKEN_COOKIE_NAME
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
-from extensions.notifications.backend.models import Notification
+from apps.core.extensions.runtime_access import get_runtime_notification_model
+from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.users.backend.handlers import user_resource_endpoints
+from extensions.users.backend.avatar_upload import UserAvatarUploadService
 from extensions.users.backend.models import Group
 from extensions.users.backend.models import EmailToken, PasswordToken, Permission, User
+from extensions.users.backend.resources import serialize_user_payload, serialize_user_summary
 from extensions.users.backend.services import UserService
+
+
+class RuntimeModelProxy:
+    def __init__(self, resolver):
+        self._resolver = resolver
+
+    def __getattr__(self, name):
+        return getattr(self._resolver(), name)
+
+
+Notification = RuntimeModelProxy(get_runtime_notification_model)
+
+
+class UserPreferencesApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="prefs-user",
+            email="prefs-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+
+    def auth_header(self, user=None):
+        token = RefreshToken.for_user(user or self.user).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def test_preferences_api_returns_ui_values_defaults(self):
+        response = self.client.get("/api/users/me/preferences", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["ui_values"], {})
+        self.assertIn("values", payload)
+        self.assertIn("definitions", payload)
+
+    def test_preferences_api_updates_ui_values(self):
+        response = self.client.patch(
+            "/api/users/me/preferences",
+            data=json.dumps({
+                "values": {
+                    "notify_user_mentioned": False,
+                },
+                "ui_values": {},
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.preferences_ui, {})
+        self.assertFalse(self.user.preferences["notify_user_mentioned"])
+        self.assertEqual(response.json()["ui_values"], {})
+
+
+class UsersExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
+    def test_users_extension_registers_runtime_service_provider(self):
+        application = self.bootstrap_extensions("users")
+        service = application.get_service("users.service")
+
+        self.assertIn("users.service", application.get_service_provider_keys(extension_id="users"))
+        self.assertIs(service["model"], User)
+        self.assertIs(service["group_model"], Group)
+        self.assertIs(service["permission_model"], Permission)
+        for key in (
+            "get_by_id",
+            "get_by_username",
+            "list_by_usernames",
+            "username_id_map",
+            "ensure_not_suspended",
+            "has_forum_permission",
+            "get_preference",
+            "increment_discussion_count",
+            "increment_comment_count",
+            "apply_comment_count_deltas",
+        ):
+            self.assertTrue(callable(service[key]), key)
+
+        provider_definition = application.get_service("user").get_definitions()[0].callback
+        provider_payload = provider_definition({}, {}) if callable(provider_definition) else provider_definition
+        provider = provider_payload["provider"]()
+        for key in ("get_by_username", "list_by_usernames", "username_id_map", "serialize"):
+            self.assertTrue(callable(provider[key]), key)
+
+    def test_users_capabilities_are_filtered_when_extension_disabled(self):
+        self.disable_extension_for_test("users")
+
+        registry = get_forum_registry()
+
+        self.assertFalse(registry.get_module("users").enabled)
+        self.assertFalse(any(item.module_id == "users" for item in registry.get_admin_pages()))
+        self.assertNotIn("viewUserList", registry.get_valid_permission_codes())
+        self.assertNotIn("searchUsers", registry.get_valid_permission_codes())
+        self.assertNotIn("user.edit", registry.get_valid_permission_codes())
+        self.assertNotIn("user.suspend", registry.get_valid_permission_codes())
+
+    def test_extension_detail_api_surfaces_user_frontend_routes(self):
+        admin = User.objects.create_superuser(
+            username="user-detail-admin",
+            email="user-detail-admin@example.com",
+            password="password123",
+        )
+        token = RefreshToken.for_user(admin).access_token
+        response = self.client.get(
+            "/api/admin/extensions/users",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()["extension"]
+        self.assertEqual(payload["frontend_forum_entry"], "extensions/users/frontend/forum/index.js")
+        users_routes = {
+            item["name"]: item
+            for item in payload["frontend_routes"]
+            if item["frontend"] == "forum"
+        }
+        self.assertEqual(users_routes["login"]["path"], "/login")
+        self.assertEqual(users_routes["login"]["component"], "./AuthRouteView.vue")
+        self.assertEqual(users_routes["login"]["module_id"], "users")
+        self.assertEqual(users_routes["register"]["path"], "/register")
+        self.assertEqual(users_routes["register"]["component"], "./AuthRouteView.vue")
+        self.assertEqual(users_routes["forgot-password"]["path"], "/forgot-password")
+        self.assertEqual(users_routes["forgot-password"]["component"], "./AuthRouteView.vue")
+        self.assertEqual(users_routes["verify-email"]["path"], "/verify-email")
+        self.assertEqual(users_routes["verify-email"]["component"], "./VerifyEmailView.vue")
+        self.assertEqual(users_routes["reset-password"]["path"], "/reset-password")
+        self.assertEqual(users_routes["reset-password"]["component"], "./ResetPasswordView.vue")
+        self.assertEqual(users_routes["profile"]["path"], "/profile")
+        self.assertEqual(users_routes["profile"]["component"], "./ProfileView.vue")
+        self.assertEqual(users_routes["profile"]["module_id"], "users")
+        self.assertTrue(users_routes["profile"]["requires_auth"])
+        self.assertEqual(users_routes["user-profile"]["path"], "/u/:id")
+        self.assertEqual(users_routes["user-profile"]["component"], "./ProfileView.vue")
+        self.assertEqual(users_routes["user-profile"]["module_id"], "users")
+
+    def test_inspect_reports_users_models_as_extension_owned(self):
+        stdout = StringIO()
+        call_command(
+            "inspect_extensions",
+            "--extension-id",
+            "users",
+            stdout=stdout,
+        )
+        payload = json.loads(stdout.getvalue())
+        extension = payload["extensions"][0]
+        audit = extension["model_ownership_audit"]
+
+        self.assertEqual(extension["id"], "users")
+        self.assertEqual(audit["owned_model_count"], 6)
+        self.assertEqual(audit["app_label_migration_required_count"], 0)
+        self.assertEqual(extension["django_app_label"], "users")
+        self.assertEqual(audit["target_app_label"], "users")
+        self.assertEqual(audit["target_app_label_source"], "manifest")
+        self.assertTrue(all(
+            item["target_app_label"] == "users"
+            and item["target_app_label_source"] == "manifest"
+            for item in audit["items"]
+        ))
+        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class AdminMailTestEmailApiTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="mail-admin",
+            email="admin@example.com",
+            password="password123",
+        )
+
+    def auth_header(self):
+        token = RefreshToken.for_user(self.admin).access_token
+        return {"HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+    def tearDown(self):
+        clear_runtime_setting_caches()
+        super().tearDown()
+
+    def save_mail_settings(self, payload=None):
+        response = self.client.post(
+            "/api/admin/mail",
+            data=json.dumps({
+                "mail_from": "Bias Mailer <service@example.com>",
+                "mail_driver": "smtp",
+                **(payload or {}),
+            }),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        return response
+
+    def test_mail_settings_affect_test_email_sender(self):
+        self.save_mail_settings()
+
+        response = self.client.post("/api/admin/mail/test", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(response.json()["to_email"], "admin@example.com")
+        self.assertEqual(mail.outbox[0].to, ["admin@example.com"])
+        self.assertEqual(mail.outbox[0].from_email, "Bias Mailer <service@example.com>")
+
+    def test_mail_test_endpoint_sends_to_current_admin_email(self):
+        self.save_mail_settings()
+
+        response = self.client.post("/api/admin/mail/test", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["to_email"], "admin@example.com")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["admin@example.com"])
+
+    def test_mail_test_endpoint_accepts_custom_recipient(self):
+        self.save_mail_settings()
+
+        response = self.client.post(
+            "/api/admin/mail/test",
+            data=json.dumps({"to_email": "real-recipient@example.com"}),
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["to_email"], "real-recipient@example.com")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["real-recipient@example.com"])
+
+    def test_mail_test_endpoint_uses_saved_test_recipient(self):
+        self.save_mail_settings({"mail_test_recipient": "saved-recipient@example.com"})
+
+        response = self.client.post(
+            "/api/admin/mail/test",
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["to_email"], "saved-recipient@example.com")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["saved-recipient@example.com"])
+
+
+class UserResourceSerializationTests(TestCase):
+    def test_serialize_user_payload_keeps_registered_primary_group_field(self):
+        user = User.objects.create_user(
+            username="resource-user",
+            email="resource-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        group = Group.objects.create(name="ResourceGroup", color="#16a085", icon="fas fa-user")
+        user.user_groups.add(group)
+
+        summary_payload = serialize_user_summary(user)
+        discussion_payload = serialize_user_payload(user, resource="discussion_user")
+
+        self.assertEqual(summary_payload["username"], user.username)
+        self.assertEqual(summary_payload["primary_group"]["name"], group.name)
+        self.assertEqual(discussion_payload["primary_group"]["name"], group.name)
 
 
 @override_settings(
@@ -112,7 +378,7 @@ class PasswordResetApiTests(TestCase):
         )
         clear_runtime_setting_caches()
 
-        with patch("apps.core.tasks.send_password_reset_email_task.delay") as delay:
+        with patch("extensions.users.backend.tasks.send_password_reset_email_task.delay") as delay:
             response = self.client.post(
                 "/api/users/forgot-password",
                 data=json.dumps({"email": self.user.email}),
@@ -132,7 +398,7 @@ class PasswordResetApiTests(TestCase):
         )
         clear_runtime_setting_caches()
 
-        with patch("apps.core.tasks.send_password_reset_email_task.delay", side_effect=RuntimeError("queue down")):
+        with patch("extensions.users.backend.tasks.send_password_reset_email_task.delay", side_effect=RuntimeError("queue down")):
             response = self.client.post(
                 "/api/users/forgot-password",
                 data=json.dumps({"email": self.user.email}),
@@ -158,8 +424,8 @@ class AvatarUploadApiTests(TestCase):
         )
         self.token = str(RefreshToken.for_user(self.user).access_token)
 
-    @patch("extensions.users.backend.handlers.FileUploadService.delete_file")
-    @patch("extensions.users.backend.handlers.FileUploadService.upload_avatar")
+    @patch("extensions.users.backend.handlers.UserAvatarUploadService.delete_avatar")
+    @patch("extensions.users.backend.handlers.UserAvatarUploadService.upload_avatar")
     def test_upload_avatar_updates_user_avatar_url(self, upload_avatar, delete_file):
         upload_avatar.return_value = (f"/media/avatars/{self.user.id}/new-avatar.png", {})
 
@@ -179,7 +445,7 @@ class AvatarUploadApiTests(TestCase):
         upload_avatar.assert_called_once()
         delete_file.assert_not_called()
 
-    @patch("extensions.users.backend.handlers.FileUploadService.upload_avatar")
+    @patch("extensions.users.backend.handlers.UserAvatarUploadService.upload_avatar")
     def test_upload_avatar_for_other_user_is_forbidden(self, upload_avatar):
         response = self.client.post(
             f"/api/users/{self.other_user.id}/avatar",
@@ -191,6 +457,13 @@ class AvatarUploadApiTests(TestCase):
         self.other_user.refresh_from_db()
         self.assertIsNone(self.other_user.avatar_url)
         upload_avatar.assert_not_called()
+
+    def test_avatar_upload_limit_comes_from_users_extension_settings(self):
+        save_extension_settings("users", {"avatar_max_size_mb": 3, "avatars_dir": "profile-images"})
+
+        self.assertEqual(UserAvatarUploadService.get_avatar_upload_limit_mb(), 3)
+        self.assertEqual(UserAvatarUploadService.get_avatar_upload_limit_bytes(), 3 * 1024 * 1024)
+        self.assertEqual(UserAvatarUploadService.get_avatars_dir(), "profile-images")
 
     def _build_avatar_file(self):
         buffer = BytesIO()
@@ -826,7 +1099,7 @@ class HumanVerificationAuthTests(TestCase):
         self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(response.json()["error"], "请先完成真人验证")
 
-    @patch("apps.core.human_verification.httpx.post")
+    @patch("extensions.users.backend.human_verification.httpx.post")
     def test_login_accepts_valid_human_verification_token(self, mock_post):
         self.enable_turnstile(login_enabled=True, register_enabled=False)
         mock_post.return_value = self._build_turnstile_response({"success": True})
@@ -849,7 +1122,7 @@ class HumanVerificationAuthTests(TestCase):
         self.assertEqual(mock_post.call_args.kwargs["data"]["secret"], "secret-key")
         self.assertEqual(mock_post.call_args.kwargs["data"]["response"], "turnstile-ok")
 
-    @patch("apps.core.human_verification.httpx.post")
+    @patch("extensions.users.backend.human_verification.httpx.post")
     def test_register_accepts_valid_human_verification_token(self, mock_post):
         self.enable_turnstile(login_enabled=False, register_enabled=True)
         mock_post.return_value = self._build_turnstile_response({"success": True})
@@ -869,7 +1142,7 @@ class HumanVerificationAuthTests(TestCase):
         self.assertEqual(response.json()["username"], "verified-register")
         self.assertTrue(User.objects.filter(username="verified-register").exists())
 
-    @patch("apps.core.human_verification.httpx.post")
+    @patch("extensions.users.backend.human_verification.httpx.post")
     def test_login_returns_service_unavailable_when_turnstile_verification_breaks(self, mock_post):
         self.enable_turnstile(login_enabled=True, register_enabled=False)
         mock_post.side_effect = httpx.ConnectError("boom")
@@ -886,6 +1159,62 @@ class HumanVerificationAuthTests(TestCase):
 
         self.assertEqual(response.status_code, 503, response.content)
         self.assertEqual(response.json()["error"], "真人验证服务暂时不可用，请稍后再试")
+
+    def test_public_forum_settings_expose_human_verification_public_fields(self):
+        self.enable_turnstile(login_enabled=True, register_enabled=False)
+
+        response = self.client.get("/api/forum")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertEqual(payload["auth_human_verification_provider"], "turnstile")
+        self.assertEqual(payload["auth_turnstile_site_key"], "site-key")
+        self.assertTrue(payload["auth_human_verification_login_enabled"])
+        self.assertFalse(payload["auth_human_verification_register_enabled"])
+        self.assertNotIn("auth_turnstile_secret_key", payload)
+
+    def test_admin_advanced_settings_persist_users_human_verification_config(self):
+        admin = User.objects.create_superuser(
+            username="human-admin",
+            email="human-admin@example.com",
+            password="password123",
+        )
+        response = self.client.post(
+            "/api/users/login",
+            data=json.dumps({
+                "identification": "human-admin",
+                "password": "password123",
+            }),
+            content_type="application/json",
+        )
+        access = response.json()["access"]
+
+        response = self.client.post(
+            "/api/admin/advanced",
+            data=json.dumps({
+                "auth_human_verification_provider": "turnstile",
+                "auth_turnstile_site_key": "site-key",
+                "auth_turnstile_secret_key": "secret-key",
+                "auth_human_verification_login_enabled": True,
+                "auth_human_verification_register_enabled": False,
+            }),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {access}",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="advanced.auth_human_verification_provider").value),
+            "turnstile",
+        )
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="advanced.auth_turnstile_site_key").value),
+            "site-key",
+        )
+        self.assertEqual(
+            json.loads(Setting.objects.get(key="advanced.auth_human_verification_register_enabled").value),
+            False,
+        )
 
     @staticmethod
     def _build_turnstile_response(payload):
@@ -967,7 +1296,7 @@ class EmailVerificationApiTests(TestCase):
         )
         clear_runtime_setting_caches()
 
-        with patch("apps.core.tasks.send_verification_email_task.delay") as delay:
+        with patch("extensions.users.backend.tasks.send_verification_email_task.delay") as delay:
             response = self.client.post(
                 "/api/users/me/resend-email-verification",
                 HTTP_AUTHORIZATION=f"Bearer {self.token}",

@@ -9,7 +9,8 @@
     "Bias"
   ],
   "dependencies": [
-    "core"
+    "core",
+    "realtime"
   ],
   "provides": [
     "profiles",
@@ -18,8 +19,6 @@
   ],
   "django_app_config": "extensions.users.backend.apps.UsersExtensionConfig",
   "django_app_label": "users",
-  "django_migration_module": "apps.users.migrations",
-  "migration_namespace": "extensions.users.backend.migrations",
   "backend_entry": "extensions.users.backend.ext",
   "frontend_admin_entry": "extensions/users/frontend/admin/index.js",
   "compatibility": {
@@ -31,7 +30,7 @@
   },
   "security": {
     "support_email": "",
-    "capabilities_notice": "该扩展承载用户资料、用户组和封禁管理入口；Django AppConfig 由扩展声明，迁移模块复用历史路径以保持数据库连续性。"
+    "capabilities_notice": "该扩展承载用户资料、用户组和封禁管理入口；Django AppConfig 与 Django 迁移模块均由扩展目录统一声明。"
   },
   "distribution": {
     "channel": "private",

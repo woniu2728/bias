@@ -1,4 +1,6 @@
 """讨论系统业务逻辑层。"""
+from __future__ import annotations
+
 from typing import Any, List, Optional, Tuple
 
 from django.core.exceptions import PermissionDenied
@@ -9,17 +11,17 @@ from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
 from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
 from apps.core.extensions.runtime_access import (
+    apply_runtime_discussion_search,
     evaluate_runtime_model_policy,
     get_runtime_resource_registry,
 )
 from apps.core.forum_registry import get_forum_registry
 from extensions.discussions.backend import discussion_tracking, service_lifecycle
 from extensions.discussions.backend.models import Discussion, DiscussionUser
-from extensions.posts.backend.models import Post
 from apps.core.services import PaginationService
-from extensions.users.backend.models import User
-from extensions.users.backend.services import UserService
-from extensions.search.backend.services import SearchService
+from apps.core.extensions.runtime_access import (
+    has_runtime_forum_permission,
+)
 
 
 def _get_forum_registry():
@@ -203,7 +205,7 @@ class DiscussionService:
 
         # 搜索
         if q:
-            queryset = SearchService.apply_discussion_search(queryset, q, user=user)
+            queryset = apply_runtime_discussion_search(queryset, q, user=user)
 
         # 按作者过滤
         if author:
@@ -452,10 +454,10 @@ class DiscussionService:
         if user.is_suspended:
             return False
         allowed = False
-        if UserService.has_forum_permission(user, "discussion.edit"):
+        if has_runtime_forum_permission(user, "discussion.edit"):
             allowed = True
         elif discussion.user_id == user.id:
-            allowed = UserService.has_forum_permission(user, "discussion.editOwn")
+            allowed = has_runtime_forum_permission(user, "discussion.editOwn")
         return bool(evaluate_extension_policy(
             "discussion.edit",
             default=allowed,
@@ -471,10 +473,10 @@ class DiscussionService:
         if user.is_suspended:
             return False
         allowed = False
-        if UserService.has_forum_permission(user, "discussion.delete"):
+        if has_runtime_forum_permission(user, "discussion.delete"):
             allowed = True
         elif discussion.user_id == user.id:
-            allowed = UserService.has_forum_permission(user, "discussion.deleteOwn")
+            allowed = has_runtime_forum_permission(user, "discussion.deleteOwn")
         return bool(evaluate_extension_policy(
             "discussion.delete",
             default=allowed,
@@ -489,7 +491,7 @@ class DiscussionService:
             return False
         if user.is_suspended:
             return False
-        if not UserService.has_forum_permission(user, "discussion.reply"):
+        if not has_runtime_forum_permission(user, "discussion.reply"):
             return False
         if discussion.approval_status != Discussion.APPROVAL_APPROVED and not user.is_staff:
             return False
@@ -523,3 +525,5 @@ class DiscussionService:
         """
         from apps.core.markdown_service import MarkdownService
         return MarkdownService.render(content, sanitize=True)
+
+

@@ -5,50 +5,36 @@ from typing import Dict, List
 
 from django.db import connection
 
-from apps.core.forum_registry import get_forum_registry
-
-
-def _get_searchable_post_types_sql() -> str:
-    searchable_post_types = get_forum_registry().get_searchable_post_type_codes()
-    return ", ".join(f"'{code}'" for code in searchable_post_types) or "'comment'"
-
 
 def get_search_index_definitions() -> list[dict[str, str]]:
-    return [
-        {
-            "name": "discussions_title_slug_fts_idx",
-            "drop": "DROP INDEX CONCURRENTLY IF EXISTS discussions_title_slug_fts_idx",
-            "create": """
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS discussions_title_slug_fts_idx
-                ON discussions
-                USING GIN (to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(slug, '')))
-            """,
-        },
-        {
-            "name": "posts_content_fts_idx",
-            "drop": "DROP INDEX CONCURRENTLY IF EXISTS posts_content_fts_idx",
-            "create": """
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS posts_content_fts_idx
-                ON posts
-                USING GIN (to_tsvector('simple', coalesce(content, '')))
-                WHERE type IN ({searchable_post_types})
-            """.format(searchable_post_types=_get_searchable_post_types_sql()),
-        },
-        {
-            "name": "users_profile_fts_idx",
-            "drop": "DROP INDEX CONCURRENTLY IF EXISTS users_profile_fts_idx",
-            "create": """
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS users_profile_fts_idx
-                ON users
-                USING GIN (
-                    to_tsvector(
-                        'simple',
-                        coalesce(username, '') || ' ' || coalesce(display_name, '') || ' ' || coalesce(bio, '')
-                    )
-                )
-            """,
-        },
-    ]
+    definitions = []
+    try:
+        from apps.core.extensions.bootstrap import get_extension_host
+
+        host = get_extension_host(force=True)
+        search_service = getattr(host, "search", None) if host is not None else None
+        raw_definitions = search_service.get_index_definitions() if search_service is not None else []
+    except Exception:
+        raw_definitions = []
+
+    for definition in raw_definitions:
+        name = str(getattr(definition, "name", "") or "").strip()
+        drop = str(getattr(definition, "drop", "") or "").strip()
+        create = getattr(definition, "create", "")
+        if callable(create):
+            create = create()
+        create = str(create or "").strip()
+        if not name or not drop or not create:
+            continue
+        definitions.append({
+            "name": name,
+            "drop": drop,
+            "create": create,
+            "module_id": str(getattr(definition, "module_id", "") or "").strip(),
+            "description": str(getattr(definition, "description", "") or "").strip(),
+        })
+
+    return definitions
 
 
 class SearchIndexService:
@@ -100,7 +86,7 @@ class SearchIndexService:
         else:
             status = "healthy"
             label = "索引状态正常"
-            message = "讨论、回复和用户搜索所需的 PostgreSQL 全文索引都已存在。"
+            message = "扩展声明的 PostgreSQL 全文索引都已存在。"
 
         return {
             "supported": True,

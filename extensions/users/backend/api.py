@@ -5,7 +5,6 @@ from django.conf import settings
 from django.http import JsonResponse
 
 from apps.core.api_errors import api_error
-from apps.core.human_verification import HumanVerificationError, verify_human_verification
 from apps.core.jwt_auth import (
     ACCESS_TOKEN_COOKIE_NAME,
     ACCESS_TOKEN_COOKIE_PATH,
@@ -15,6 +14,7 @@ from apps.core.jwt_auth import (
     access_token_max_age,
     refresh_token_max_age,
 )
+from extensions.users.backend.human_verification import HumanVerificationError, verify_human_verification
 from extensions.users.backend.preferences import normalize_user_preferences, normalize_user_ui_preferences, serialize_user_preferences
 from extensions.users.backend.schemas import (
     EmailVerifySchema,

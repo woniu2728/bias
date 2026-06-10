@@ -6,9 +6,9 @@ from typing import Callable
 
 from django.utils import timezone
 
+from apps.core.extensions.runtime_access import create_runtime_post_event
+from apps.core.extensions.runtime_access import get_runtime_user_by_id
 from extensions.discussions.backend.models import Discussion
-from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
 
 
 TimelineContentBuilder = Callable[[object], tuple[str, str] | None]
@@ -49,28 +49,26 @@ def create_timeline_event_post(
     post_type: str,
     content: str,
     update_discussion_last_post: bool = True,
-) -> Post | None:
-    from extensions.posts.backend.services import PostService
-
+) -> object | None:
     try:
-        actor = User.objects.get(id=actor_user_id)
+        actor = get_runtime_user_by_id(actor_user_id)
         discussion = Discussion.objects.get(id=discussion_id)
-    except (User.DoesNotExist, Discussion.DoesNotExist):
+    except Discussion.DoesNotExist:
+        return None
+    except Exception:
         return None
 
-    locked_discussion = PostService._lock_discussion_for_post_number(discussion.id)
-    event_post = PostService._create_post_with_sequential_number(
-        discussion=locked_discussion,
-        user=actor,
-        type=post_type,
+    event_post = create_runtime_post_event(
+        discussion=discussion,
+        actor=actor,
+        post_type=post_type,
         content=content,
         content_html="",
-        approval_status=Post.APPROVAL_APPROVED,
         approved_at=timezone.now(),
-        approved_by=actor,
     )
 
     if update_discussion_last_post:
+        locked_discussion = event_post.discussion
         locked_discussion.last_post_id = event_post.id
         locked_discussion.last_post_number = event_post.number
         locked_discussion.last_posted_at = event_post.created_at
@@ -145,3 +143,5 @@ def build_post_hidden_content(event) -> tuple[str, str] | None:
         f"target_post_id: {event.post_id}\n"
         f"target_post_number: {event.post_number}"
     )
+
+

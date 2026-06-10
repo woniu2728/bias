@@ -10,16 +10,20 @@
   ],
   "dependencies": [
     "core",
+    "discussions",
     "posts",
     "notifications",
     "users"
+  ],
+  "optional_dependencies": [
+    "tags"
   ],
   "provides": [
     "user-mentions"
   ],
   "backend_entry": "extensions.mentions.backend.ext",
   "django_app_config": "extensions.mentions.backend.apps.MentionsExtensionConfig",
-  "migration_namespace": "extensions.mentions.backend.migrations",
+  "django_app_label": "mentions",
   "frontend_admin_entry": "extensions/mentions/frontend/admin/index.js",
   "frontend_forum_entry": "extensions/mentions/frontend/forum/index.js",
   "compatibility": {

@@ -267,3 +267,4 @@ def _resolve_user_groups(user, context: dict) -> list[dict]:
         }
         for group in user.user_groups.all()
     ]
+

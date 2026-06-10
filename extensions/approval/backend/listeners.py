@@ -1,145 +1,138 @@
-from apps.core.forum_events import (
-    DiscussionApprovedEvent,
-    DiscussionRejectedEvent,
-    DiscussionResubmittedEvent,
-    PostApprovedEvent,
-    PostRejectedEvent,
-    PostResubmittedEvent,
+from apps.core.extensions import runtime_access
+from apps.core.extensions.runtime_access import (
+    get_runtime_discussion_model,
+    get_runtime_user_by_id,
 )
-from extensions.discussions.backend.realtime import broadcast_discussion_event
-from extensions.discussions.backend.timeline import (
-    build_discussion_resubmitted_content,
-    build_discussion_review_content,
-    build_post_resubmitted_content,
-    build_post_review_content,
-    create_timeline_from_builder,
-    make_timeline_context,
+from apps.core.extensions.runtime_access import (
+    get_runtime_post_model,
 )
 
 
-def handle_discussion_approved(event: DiscussionApprovedEvent) -> None:
-    from extensions.discussions.backend.models import Discussion
-    from extensions.notifications.backend.services import NotificationService
-    from extensions.users.backend.models import User
-
-    try:
-        discussion = Discussion.objects.select_related("user").get(id=event.discussion_id)
-        admin_user = User.objects.get(id=event.admin_user_id)
-    except (Discussion.DoesNotExist, User.DoesNotExist):
+def handle_discussion_approved(event) -> None:
+    discussion = _resolve_discussion_or_none(event.discussion_id, select_related=("user",))
+    admin_user = _resolve_user_or_none(event.admin_user_id)
+    if discussion is None or admin_user is None:
         return
 
-    NotificationService.notify_discussion_approved(discussion, admin_user, note=event.note)
-    broadcast_discussion_event(
-        event.discussion_id,
-        "discussion.approved",
-        include_discussion=True,
-        include_post=True,
-        post_id_getter=lambda current_discussion: current_discussion.first_post_id,
-    )
-    create_timeline_from_builder(
-        make_timeline_context(
-            event,
-            actor_user_id=event.admin_user_id,
-            post_type="discussionApproved",
-            previous_status="pending",
-        ),
-        build_discussion_review_content,
+    runtime_access.notify_runtime_notification("notify_discussion_approved", discussion, admin_user, note=event.note)
+    runtime_access.create_runtime_timeline_from_builder(
+        event,
+        "discussion_review",
+        extra={
+            "actor_user_id": event.admin_user_id,
+            "post_type": "discussionApproved",
+            "previous_status": "pending",
+        },
         update_discussion_last_post=False,
     )
 
 
-def handle_discussion_rejected(event: DiscussionRejectedEvent) -> None:
-    from extensions.discussions.backend.models import Discussion
-    from extensions.notifications.backend.services import NotificationService
-    from extensions.users.backend.models import User
-
-    try:
-        discussion = Discussion.objects.select_related("user").get(id=event.discussion_id)
-        admin_user = User.objects.get(id=event.admin_user_id)
-    except (Discussion.DoesNotExist, User.DoesNotExist):
+def handle_discussion_rejected(event) -> None:
+    discussion = _resolve_discussion_or_none(event.discussion_id, select_related=("user",))
+    admin_user = _resolve_user_or_none(event.admin_user_id)
+    if discussion is None or admin_user is None:
         return
 
-    NotificationService.notify_discussion_rejected(discussion, admin_user, note=event.note)
-    broadcast_discussion_event(event.discussion_id, "discussion.rejected")
-    create_timeline_from_builder(
-        make_timeline_context(
-            event,
-            actor_user_id=event.admin_user_id,
-            post_type="discussionRejected",
-        ),
-        build_discussion_review_content,
+    runtime_access.notify_runtime_notification("notify_discussion_rejected", discussion, admin_user, note=event.note)
+    runtime_access.create_runtime_timeline_from_builder(
+        event,
+        "discussion_review",
+        extra={
+            "actor_user_id": event.admin_user_id,
+            "post_type": "discussionRejected",
+        },
         update_discussion_last_post=False,
     )
 
 
-def handle_discussion_resubmitted(event: DiscussionResubmittedEvent) -> None:
-    broadcast_discussion_event(event.discussion_id, "discussion.resubmitted")
-    create_timeline_from_builder(
-        make_timeline_context(
-            event,
-            post_type="discussionResubmitted",
-        ),
-        build_discussion_resubmitted_content,
+def handle_discussion_resubmitted(event) -> None:
+    runtime_access.create_runtime_timeline_from_builder(
+        event,
+        "discussion_resubmitted",
+        extra={
+            "post_type": "discussionResubmitted",
+        },
         update_discussion_last_post=False,
     )
 
 
-def handle_post_approved(event: PostApprovedEvent) -> None:
-    from extensions.notifications.backend.services import NotificationService
-    from extensions.posts.backend.models import Post
-    from extensions.users.backend.models import User
-
-    try:
-        post = Post.objects.select_related("user", "discussion").get(id=event.post_id)
-        admin_user = User.objects.get(id=event.admin_user_id)
-    except (Post.DoesNotExist, User.DoesNotExist):
+def handle_post_approved(event) -> None:
+    post = _resolve_post_or_none(event.post_id, select_related=("user", "discussion"))
+    admin_user = _resolve_user_or_none(event.admin_user_id)
+    if post is None or admin_user is None:
         return
 
-    NotificationService.notify_post_approved(post, admin_user, note=event.note)
-    broadcast_discussion_event(event.discussion_id, "post.approved", include_discussion=True, post_id=event.post_id)
-    enriched_event = make_timeline_context(
+    runtime_access.notify_runtime_notification("notify_post_approved", post, admin_user, note=event.note)
+    runtime_access.create_runtime_timeline_from_builder(
         event,
-        actor_user_id=event.admin_user_id,
-        post_type="postApproved",
-        post_number=getattr(post, "number", None),
+        "post_review",
+        extra={
+            "actor_user_id": event.admin_user_id,
+            "post_type": "postApproved",
+            "post_number": getattr(post, "number", None),
+        },
+        update_discussion_last_post=False,
     )
-    create_timeline_from_builder(enriched_event, build_post_review_content, update_discussion_last_post=False)
 
 
-def handle_post_rejected(event: PostRejectedEvent) -> None:
-    from extensions.notifications.backend.services import NotificationService
-    from extensions.posts.backend.models import Post
-    from extensions.users.backend.models import User
-
-    try:
-        post = Post.objects.select_related("discussion", "user").get(id=event.post_id)
-        admin_user = User.objects.get(id=event.admin_user_id)
-    except (Post.DoesNotExist, User.DoesNotExist):
+def handle_post_rejected(event) -> None:
+    post = _resolve_post_or_none(event.post_id, select_related=("discussion", "user"))
+    admin_user = _resolve_user_or_none(event.admin_user_id)
+    if post is None or admin_user is None:
         return
 
-    NotificationService.notify_post_rejected(post, admin_user, note=event.note)
-    broadcast_discussion_event(event.discussion_id, "post.rejected")
-    enriched_event = make_timeline_context(
+    runtime_access.notify_runtime_notification("notify_post_rejected", post, admin_user, note=event.note)
+    runtime_access.create_runtime_timeline_from_builder(
         event,
-        actor_user_id=event.admin_user_id,
-        post_type="postRejected",
-        post_number=getattr(post, "number", None),
+        "post_review",
+        extra={
+            "actor_user_id": event.admin_user_id,
+            "post_type": "postRejected",
+            "post_number": getattr(post, "number", None),
+        },
+        update_discussion_last_post=False,
     )
-    create_timeline_from_builder(enriched_event, build_post_review_content, update_discussion_last_post=False)
 
 
-def handle_post_resubmitted(event: PostResubmittedEvent) -> None:
-    from extensions.posts.backend.models import Post
-
-    try:
-        post = Post.objects.get(id=event.post_id)
-    except Post.DoesNotExist:
+def handle_post_resubmitted(event) -> None:
+    post = _resolve_post_or_none(event.post_id)
+    if post is None:
         return
 
-    enriched_event = make_timeline_context(
+    runtime_access.create_runtime_timeline_from_builder(
         event,
-        post_type="postResubmitted",
-        post_number=getattr(post, "number", None),
+        "post_resubmitted",
+        extra={
+            "post_type": "postResubmitted",
+            "post_number": getattr(post, "number", None),
+        },
+        update_discussion_last_post=False,
     )
-    broadcast_discussion_event(event.discussion_id, "post.resubmitted")
-    create_timeline_from_builder(enriched_event, build_post_resubmitted_content, update_discussion_last_post=False)
+
+
+def _resolve_user_or_none(user_id: int):
+    try:
+        return get_runtime_user_by_id(user_id)
+    except Exception:
+        return None
+
+
+def _resolve_discussion_or_none(discussion_id: int, *, select_related: tuple[str, ...] = ()):
+    try:
+        queryset = get_runtime_discussion_model().objects
+        if select_related:
+            queryset = queryset.select_related(*select_related)
+        return queryset.get(id=discussion_id)
+    except Exception:
+        return None
+
+
+def _resolve_post_or_none(post_id: int, *, select_related: tuple[str, ...] = ()):
+    try:
+        queryset = get_runtime_post_model().objects
+        if select_related:
+            queryset = queryset.select_related(*select_related)
+        return queryset.get(id=post_id)
+    except Exception:
+        return None
+

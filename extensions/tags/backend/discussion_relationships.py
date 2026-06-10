@@ -1,44 +1,30 @@
 from __future__ import annotations
 
 from apps.core.domain_events import dispatch_forum_event_after_commit
-from extensions.tags.backend.models import DiscussionTag
+from apps.core.extensions.runtime_access import ensure_can_start_discussion_in_runtime_tags
 from extensions.tags.backend.events import DiscussionTaggedEvent, TagStatsRefreshRequestedEvent
-from extensions.tags.backend.services import TagService
+from extensions.tags.backend.tag_relationships import replace_discussion_tags
 
 
 def set_discussion_tags_relationship(discussion, value, context: dict | None = None) -> None:
     context = context or {}
     user = context.get("user")
     tag_ids = _relationship_tag_ids(value)
-    tags = tuple(TagService.ensure_can_start_discussion(user, tag_ids))
+    tags = tuple(ensure_can_start_discussion_in_runtime_tags(user, tag_ids))
 
-    previous_tag_ids = list(discussion.discussion_tags.values_list("tag_id", flat=True))
-    previous_tag_names = list(
-        discussion.discussion_tags.select_related("tag")
-        .order_by("tag__name")
-        .values_list("tag__name", flat=True)
-    )
-
-    DiscussionTag.objects.filter(discussion=discussion).delete()
-    DiscussionTag.objects.bulk_create([
-        DiscussionTag(discussion=discussion, tag=tag)
-        for tag in tags
-    ])
-
-    current_tag_ids = [tag.id for tag in tags]
-    current_tag_names = [tag.name for tag in sorted(tags, key=lambda item: item.name)]
-    affected_tag_ids = tuple(sorted(set(previous_tag_ids) | set(current_tag_ids)))
+    result = replace_discussion_tags(discussion, tags)
+    affected_tag_ids = tuple(result["affected_tag_ids"])
 
     if not context.get("creating"):
-        added_tags = [name for name in current_tag_names if name not in previous_tag_names]
-        removed_tags = [name for name in previous_tag_names if name not in current_tag_names]
+        added_tags = tuple(result["added_tags"])
+        removed_tags = tuple(result["removed_tags"])
         if added_tags or removed_tags:
             dispatch_forum_event_after_commit(
                 DiscussionTaggedEvent(
                     discussion_id=discussion.id,
                     actor_user_id=context.get("actor_user_id"),
-                    added_tags=tuple(added_tags),
-                    removed_tags=tuple(removed_tags),
+                    added_tags=added_tags,
+                    removed_tags=removed_tags,
                     tag_ids=affected_tag_ids,
                 )
             )

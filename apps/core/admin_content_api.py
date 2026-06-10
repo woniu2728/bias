@@ -21,8 +21,10 @@ from apps.core.extension_diagnostics import (
 )
 from apps.core.extension_service import ExtensionService
 from apps.core.extension_settings_service import get_extension_settings, serialize_extension_settings_schema, save_extension_settings
+from apps.core.extension_django_apps import normalize_extension_django_app_label
 from apps.core.extensions.product import get_extension_protected_reason, is_extension_protected, is_product_visible_extension
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
+from apps.core.extensions.frontend_runtime_service import build_frontend_document_payload
 from apps.core.extensions.recovery import (
     advance_extension_bisect,
     get_extension_bisect_state,
@@ -34,6 +36,7 @@ from apps.core.extensions.recovery import (
 )
 from apps.core.audit import log_admin_action
 from apps.core.jwt_auth import AccessTokenAuth
+from apps.core.markdown_service import MarkdownService
 from apps.core.forum_registry import get_core_module_ids, get_forum_registry
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
 
@@ -110,6 +113,65 @@ def stop_admin_extension_bisect(request):
     if denied:
         return denied
     return {"bisect": stop_extension_bisect()}
+
+
+@router.post("/extensions/sync", auth=AccessTokenAuth(), tags=["Admin"])
+def sync_admin_extensions(request, payload: dict = Body(default={})):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    prune_missing = bool(dict(payload or {}).get("prune_missing", True))
+    ExtensionService.sync_extension_packages(
+        prune_missing=prune_missing,
+        actor=request.auth,
+        request=request,
+    )
+    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+
+
+@router.post("/extensions/sync-order", auth=AccessTokenAuth(), tags=["Admin"])
+def sync_admin_extension_order(request):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    try:
+        ExtensionService.sync_enabled_extension_order(
+            actor=request.auth,
+            request=request,
+        )
+    except ExtensionStateError as exc:
+        return api_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
+    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+
+
+@router.post("/extensions/rebuild-frontend", auth=AccessTokenAuth(), tags=["Admin"])
+def rebuild_admin_extension_frontend(request, payload: dict = Body(default={})):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    options = dict(payload or {})
+    result = ExtensionService.rebuild_extension_frontend_assets(
+        run_build=bool(options.get("run_build", True)),
+        include_disabled=bool(options.get("include_disabled", False)),
+        publish=bool(options.get("publish", False)),
+        actor=request.auth,
+        request=request,
+    )
+    status = str(result.get("status") or "")
+    if status and status != "ok":
+        return api_error(
+            str(result.get("message") or "扩展前端资产重建失败"),
+            status=409,
+            code="extension_frontend_rebuild_failed",
+            field_errors=result,
+        )
+    return {
+        **_serialize_admin_extensions_payload(get_extension_registry().get_extensions()),
+        "frontend_rebuild": result,
+    }
 
 
 @router.get("/extensions/{extension_id}", auth=AccessTokenAuth(), tags=["Admin"])
@@ -302,6 +364,7 @@ def _serialize_admin_extensions_payload(extensions):
         "runtime": {
             **_serialize_extension_runtime_rebuild_state(),
             "recovery": serialize_extension_recovery_state(),
+            "package_lock": ExtensionService.inspect_extension_packages(),
         },
         "extensions": payload,
     }
@@ -329,6 +392,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
     notification_types = _build_extension_notification_types(extension)
     user_preferences = _build_extension_user_preferences(extension)
     event_listeners = _build_extension_event_listeners(extension, runtime_view)
+    realtime_broadcasts = _build_extension_realtime_broadcasts(runtime_view)
     post_lifecycle = _build_extension_post_lifecycle(extension, runtime_view)
     post_types = _build_extension_post_types(extension)
     search_filters = _build_extension_search_filters(extension)
@@ -341,8 +405,8 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
     resource_sorts = _build_extension_resource_sorts(extension)
     resource_filters = _build_extension_resource_filters(extension)
     model_definitions = _build_extension_model_definitions(runtime_view)
-    owned_models = _build_extension_owned_models(runtime_view)
-    model_ownership_audit = _build_extension_model_ownership_audit(runtime_view)
+    owned_models = _build_extension_owned_models(runtime_view, extension=extension)
+    model_ownership_audit = _build_extension_model_ownership_audit(runtime_view, extension=extension)
     model_relations = _build_extension_model_relations(runtime_view)
     model_visibility = _build_extension_model_visibility(runtime_view)
     search_drivers = _build_extension_search_drivers(runtime_view)
@@ -352,6 +416,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         notification_types=notification_types,
         user_preferences=user_preferences,
         event_listeners=event_listeners,
+        realtime_broadcasts=realtime_broadcasts,
         post_lifecycle=post_lifecycle,
         post_types=post_types,
         search_filters=search_filters,
@@ -374,14 +439,20 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "name": extension.name,
         "version": extension.version,
         "description": extension.description,
-        "icon": extension.manifest.icon,
-        "category": extension.manifest.category,
-        "documentation_url": extension.manifest.documentation_url,
-        "dependencies": list(extension.manifest.dependencies),
-        "optional_dependencies": list(extension.manifest.optional_dependencies),
-        "conflicts": list(extension.manifest.conflicts),
-        "provides": list(extension.manifest.provides),
-        "backend_entry": extension.manifest.backend_entry,
+        "icon": _manifest_attr(extension, "icon", "fas fa-puzzle-piece"),
+        "category": _manifest_attr(extension, "category", "feature"),
+        "authors": _build_extension_author_names(extension),
+        "homepage": _manifest_attr(extension, "homepage"),
+        "documentation_url": _manifest_attr(extension, "documentation_url"),
+        "links": _build_extension_links(extension),
+        "readme": _build_extension_readme(extension),
+        "dependencies": _manifest_sequence(extension, "dependencies"),
+        "optional_dependencies": _manifest_sequence(extension, "optional_dependencies"),
+        "conflicts": _manifest_sequence(extension, "conflicts"),
+        "provides": _manifest_sequence(extension, "provides"),
+        "backend_entry": _manifest_attr(extension, "backend_entry"),
+        "django_app_config": _manifest_attr(extension, "django_app_config"),
+        "django_app_label": _manifest_attr(extension, "django_app_label") or normalize_extension_django_app_label(extension.id),
         "frontend_admin_entry": frontend_admin_entry,
         "frontend_forum_entry": frontend_forum_entry,
         "frontend_outputs": frontend_outputs,
@@ -393,22 +464,24 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "settings_schema": serialize_extension_settings_schema(extension.id),
         "settings_values": get_extension_settings(extension.id) if serialize_extension_settings_schema(extension.id) else {},
         "compatibility": {
-            "bias_version": extension.manifest.compatibility.bias_version,
-            "api_version": extension.manifest.compatibility.api_version,
-            "api_stability": extension.manifest.compatibility.api_stability,
+            "bias_version": _manifest_nested_attr(extension, "compatibility", "bias_version"),
+            "api_version": _manifest_nested_attr(extension, "compatibility", "api_version", "1.0"),
+            "api_stability": _manifest_nested_attr(extension, "compatibility", "api_stability", "experimental"),
             "api_stability_label": _resolve_api_stability_label(extension),
-            "breaking_change_policy": extension.manifest.compatibility.breaking_change_policy,
+            "breaking_change_policy": _manifest_nested_attr(extension, "compatibility", "breaking_change_policy"),
         },
         "security": {
-            "policy_url": extension.manifest.security.policy_url,
-            "support_email": extension.manifest.security.support_email,
-            "capabilities_notice": extension.manifest.security.capabilities_notice,
+            "policy_url": _manifest_nested_attr(extension, "security", "policy_url"),
+            "support_email": _manifest_nested_attr(extension, "security", "support_email"),
+            "capabilities_notice": _manifest_nested_attr(extension, "security", "capabilities_notice"),
         },
         "distribution": {
-            "channel": extension.manifest.distribution.channel,
+            "channel": _manifest_nested_attr(extension, "distribution", "channel", "private"),
             "channel_label": _resolve_distribution_channel_label(extension),
-            "signing_key_id": extension.manifest.distribution.signing_key_id,
-            "signature_url": extension.manifest.distribution.signature_url,
+            "signing_key_id": _manifest_nested_attr(extension, "distribution", "signing_key_id"),
+            "signature_url": _manifest_nested_attr(extension, "distribution", "signature_url"),
+            "abandoned": bool(_manifest_nested_value(extension, "distribution", "abandoned", False)),
+            "replacement": _manifest_nested_attr(extension, "distribution", "replacement"),
         },
         "installed": extension.runtime.installed,
         "enabled": extension.runtime.enabled,
@@ -472,6 +545,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "notification_types": notification_types,
         "user_preferences": user_preferences,
         "event_listeners": event_listeners,
+        "realtime_broadcasts": realtime_broadcasts,
         "post_lifecycle": post_lifecycle,
         "post_types": post_types,
         "search_filters": search_filters,
@@ -498,7 +572,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
             "settings_page": settings_page,
             "permissions_page": permissions_page,
             "operations_page": operations_page,
-            "documentation_url": extension.manifest.documentation_url,
+            "documentation_url": _manifest_attr(extension, "documentation_url"),
         },
         "lifecycle": {
             "registration_mode": extension.lifecycle.registration_mode,
@@ -546,6 +620,94 @@ def _serialize_extension_recovery_status(extension):
         "bisect_current": extension_id in set(bisect.get("current") or []),
         "bisect_candidate": extension_id in set(bisect.get("ids") or []),
         "bisect_culprit": extension_id == str(bisect.get("culprit") or "").strip(),
+    }
+
+
+def _build_extension_links(extension) -> dict:
+    links: dict[str, object] = {}
+    documentation_url = _manifest_attr(extension, "documentation_url")
+    homepage = _manifest_attr(extension, "homepage")
+    support_email = _manifest_nested_attr(extension, "security", "support_email")
+    if documentation_url:
+        links["documentation"] = documentation_url
+    if homepage:
+        links["website"] = homepage
+    if support_email:
+        links["support"] = f"mailto:{support_email}"
+
+    extra_links = dict((_manifest_value(extension, "extra", {}) or {}).get("links") or {})
+    for key, value in extra_links.items():
+        normalized_key = str(key or "").strip()
+        if normalized_key and value:
+            links[normalized_key] = value
+
+    links["authors"] = _build_extension_author_links(extension)
+    return links
+
+
+def _build_extension_author_names(extension) -> list[str]:
+    return [
+        str(getattr(author, "name", "") or "").strip()
+        for author in _manifest_sequence(extension, "authors")
+        if str(getattr(author, "name", "") or "").strip()
+    ]
+
+
+def _build_extension_author_links(extension) -> list[dict[str, str]]:
+    author_links = []
+    for author in _manifest_sequence(extension, "authors"):
+        name = str(getattr(author, "name", "") or "").strip()
+        if not name:
+            continue
+        homepage = str(getattr(author, "homepage", "") or "").strip()
+        email = str(getattr(author, "email", "") or "").strip()
+        link = homepage or (f"mailto:{email}" if email else "")
+        author_links.append({"name": name, "link": link})
+    return author_links
+
+
+def _build_extension_readme(extension) -> dict:
+    if extension.source != "filesystem":
+        return {
+            "available": False,
+            "path": "",
+            "html": "",
+            "source": "",
+        }
+
+    manifest_path = _manifest_attr(extension, "path")
+    root_path = Path(manifest_path) if manifest_path else None
+    if root_path is None:
+        return {
+            "available": False,
+            "path": "",
+            "html": "",
+            "source": "",
+        }
+
+    for candidate in (
+        root_path / "README.md",
+        root_path / "README",
+        root_path / "docs" / "README.md",
+    ):
+        if not candidate.exists() or not candidate.is_file():
+            continue
+        try:
+            source = candidate.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            source = candidate.read_text(encoding="utf-8", errors="replace")
+        return {
+            "available": bool(source.strip()),
+            "path": str(candidate),
+            "html": MarkdownService.render(source, sanitize=True),
+            "source": source,
+        }
+
+    return {
+        "available": False,
+        "path": "",
+        "html": "",
+        "source": "",
     }
 
 
@@ -820,6 +982,32 @@ def _build_extension_event_listeners(extension, runtime_record=None):
     return listeners
 
 
+def _build_extension_realtime_broadcasts(runtime_record=None):
+    if runtime_record is None:
+        return []
+
+    broadcasts = []
+    for item in getattr(runtime_record, "realtime_discussion_broadcasts", ()) or ():
+        event_type = getattr(item, "event_type", None)
+        broadcasts.append({
+            "event": getattr(event_type, "__name__", str(event_type or "")),
+            "event_name": _serialize_callable_or_value(getattr(item, "event_name", "")),
+            "channel": "discussion",
+            "module_id": getattr(runtime_record, "extension_id", ""),
+            "include_discussion": bool(getattr(item, "include_discussion", False)),
+            "include_post": bool(getattr(item, "include_post", False)),
+            "description": getattr(item, "description", ""),
+            "source": "runtime",
+        })
+    return broadcasts
+
+
+def _serialize_callable_or_value(value):
+    if callable(value):
+        return getattr(value, "__qualname__", getattr(value, "__name__", str(value or "")))
+    return str(value or "")
+
+
 def _build_extension_post_lifecycle(extension, runtime_record=None):
     if runtime_record is None:
         return []
@@ -1071,7 +1259,7 @@ def _build_extension_model_definitions(runtime_view):
         return []
     definitions = [
         {
-            "model": getattr(item.model, "__name__", str(item.model)),
+            "model": _model_name(item.model),
             "key": item.key,
             "kind": item.kind,
             "description": item.description,
@@ -1080,7 +1268,7 @@ def _build_extension_model_definitions(runtime_view):
     ]
     definitions.extend([
         {
-            "model": getattr(item.model, "__name__", str(item.model)),
+            "model": _model_name(item.model),
             "key": item.name,
             "kind": f"relation:{item.relation_type}",
             "description": item.description,
@@ -1089,7 +1277,7 @@ def _build_extension_model_definitions(runtime_view):
     ])
     definitions.extend([
         {
-            "model": getattr(item.model, "__name__", str(item.model)),
+            "model": _model_name(item.model),
             "key": item.attribute,
             "kind": "cast",
             "description": item.description,
@@ -1098,7 +1286,7 @@ def _build_extension_model_definitions(runtime_view):
     ])
     definitions.extend([
         {
-            "model": getattr(item.model, "__name__", str(item.model)),
+            "model": _model_name(item.model),
             "key": item.attribute,
             "kind": "default",
             "description": item.description,
@@ -1107,7 +1295,7 @@ def _build_extension_model_definitions(runtime_view):
     ])
     definitions.extend([
         {
-            "model": getattr(item.model, "__name__", str(item.model)),
+            "model": _model_name(item.model),
             "key": item.identifier,
             "kind": "model-url:slug",
             "description": item.description,
@@ -1117,26 +1305,32 @@ def _build_extension_model_definitions(runtime_view):
     return definitions
 
 
-def _build_extension_owned_models(runtime_view):
+def _build_extension_owned_models(runtime_view, *, extension=None):
     if runtime_view is None:
         return []
     items = []
+    target_app_label = _extension_app_label(runtime_view.extension_id, extension=extension)
+    target_app_label_source = _extension_app_label_source(extension)
     for item in getattr(runtime_view, "model_definitions", ()) or ():
         if item.kind != "owner":
             continue
         model = item.model
         current_app_label = _model_app_label(model)
-        target_app_label = _extension_app_label(runtime_view.extension_id)
         package_migration_required = _model_package_migration_required(model, runtime_view.extension_id)
-        app_label_migration_required = _model_app_label_migration_required(model, runtime_view.extension_id)
+        app_label_migration_required = _model_app_label_migration_required(
+            model,
+            runtime_view.extension_id,
+            extension=extension,
+        )
         items.append({
             "module_id": runtime_view.extension_id,
-            "model": getattr(model, "__name__", str(model)),
+            "model": _model_name(model),
             "model_label": _model_label(model),
             "model_module": _model_module(model),
             "app_label": current_app_label,
             "current_app_label": current_app_label,
             "target_app_label": target_app_label,
+            "target_app_label_source": target_app_label_source,
             "db_table": _model_db_table(model),
             "storage_origin": _model_storage_origin(model, runtime_view.extension_id),
             "package_migration_required": package_migration_required,
@@ -1155,7 +1349,7 @@ def _build_extension_owned_models(runtime_view):
     return items
 
 
-def _build_extension_model_ownership_audit(runtime_view):
+def _build_extension_model_ownership_audit(runtime_view, *, extension=None):
     if runtime_view is None:
         return {
             "owned_model_count": 0,
@@ -1163,16 +1357,20 @@ def _build_extension_model_ownership_audit(runtime_view):
             "django_app_count": 0,
             "package_migration_required_count": 0,
             "app_label_migration_required_count": 0,
+            "target_app_label": "",
+            "target_app_label_source": "",
             "items": [],
         }
 
-    items = _build_extension_owned_models(runtime_view)
+    items = _build_extension_owned_models(runtime_view, extension=extension)
     return {
         "owned_model_count": len(items),
         "extension_native_count": sum(1 for item in items if item["storage_origin"] == "extension"),
         "django_app_count": sum(1 for item in items if item["storage_origin"] == "django_app"),
         "package_migration_required_count": sum(1 for item in items if item["package_migration_required"]),
         "app_label_migration_required_count": sum(1 for item in items if item["app_label_migration_required"]),
+        "target_app_label": _extension_app_label(runtime_view.extension_id, extension=extension),
+        "target_app_label_source": _extension_app_label_source(extension),
         "app_label_migration_plan_required_count": sum(
             1
             for item in items
@@ -1193,10 +1391,10 @@ def _build_extension_model_relations(runtime_view):
     return [
         {
             "module_id": runtime_view.extension_id,
-            "model": getattr(item.model, "__name__", str(item.model)),
+            "model": _model_name(item.model),
             "name": item.name,
             "relation_type": item.relation_type,
-            "related_model": getattr(item.related_model, "__name__", str(item.related_model)),
+            "related_model": _model_name(item.related_model),
             "foreign_key": item.foreign_key,
             "owner_key": item.owner_key,
             "inject_attribute": bool(getattr(item, "inject_attribute", True)),
@@ -1211,7 +1409,7 @@ def _build_extension_model_visibility(runtime_view):
         return []
     return [
         {
-            "model": getattr(item.model, "__name__", str(item.model)),
+            "model": _model_name(item.model),
             "ability": item.ability,
             "description": item.description,
         }
@@ -1219,7 +1417,50 @@ def _build_extension_model_visibility(runtime_view):
     ]
 
 
+def _resolve_display_model(model):
+    from apps.core.extensions.model_references import resolve_model_reference
+
+    return resolve_model_reference(model) or model
+
+
+def _manifest_attr(extension, name: str, default: str = "") -> str:
+    return str(_manifest_value(extension, name, default) or default).strip()
+
+
+def _manifest_value(extension, name: str, default=None):
+    manifest = getattr(extension, "manifest", None)
+    if isinstance(manifest, dict):
+        return manifest.get(name, default)
+    return getattr(manifest, name, default)
+
+
+def _manifest_nested_value(extension, group: str, name: str, default=None):
+    parent = _manifest_value(extension, group, None)
+    if isinstance(parent, dict):
+        return parent.get(name, default)
+    return getattr(parent, name, default)
+
+
+def _manifest_nested_attr(extension, group: str, name: str, default: str = "") -> str:
+    return str(_manifest_nested_value(extension, group, name, default) or default).strip()
+
+
+def _manifest_sequence(extension, name: str) -> list:
+    value = _manifest_value(extension, name, ()) or ()
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+
+def _model_name(model) -> str:
+    resolved_model = _resolve_display_model(model)
+    return str(getattr(resolved_model, "__name__", "") or str(resolved_model))
+
+
 def _model_label(model) -> str:
+    model = _resolve_display_model(model)
     meta = getattr(model, "_meta", None)
     label = str(getattr(meta, "label", "") or getattr(meta, "label_lower", "") or "").strip()
     if label:
@@ -1230,19 +1471,28 @@ def _model_label(model) -> str:
 
 
 def _model_module(model) -> str:
+    model = _resolve_display_model(model)
     return str(getattr(model, "__module__", "") or "").strip()
 
 
 def _model_app_label(model) -> str:
+    model = _resolve_display_model(model)
     meta = getattr(model, "_meta", None)
     return str(getattr(meta, "app_label", "") or "").strip()
 
 
-def _extension_app_label(extension_id: str) -> str:
-    return str(extension_id or "").replace("-", "_").strip()
+def _extension_app_label(extension_id: str, *, extension=None) -> str:
+    manifest_label = str(getattr(getattr(extension, "manifest", None), "django_app_label", "") or "").strip()
+    return normalize_extension_django_app_label(extension_id, manifest_label)
+
+
+def _extension_app_label_source(extension=None) -> str:
+    manifest_label = str(getattr(getattr(extension, "manifest", None), "django_app_label", "") or "").strip()
+    return "manifest" if manifest_label else "extension_id"
 
 
 def _model_db_table(model) -> str:
+    model = _resolve_display_model(model)
     meta = getattr(model, "_meta", None)
     return str(getattr(meta, "db_table", "") or "").strip()
 
@@ -1263,9 +1513,9 @@ def _model_package_migration_required(model, extension_id: str) -> bool:
     return _model_storage_origin(model, extension_id) == "django_app"
 
 
-def _model_app_label_migration_required(model, extension_id: str) -> bool:
+def _model_app_label_migration_required(model, extension_id: str, *, extension=None) -> bool:
     app_label = _model_app_label(model)
-    expected = _extension_app_label(extension_id)
+    expected = _extension_app_label(extension_id, extension=extension)
     return bool(app_label and expected and app_label != expected)
 
 
@@ -1332,7 +1582,8 @@ def _build_extension_delivery_assets(extension):
             "assets": [],
         }
 
-    root_path = Path(extension.manifest.path) if extension.manifest.path else None
+    manifest_path = _manifest_attr(extension, "path")
+    root_path = Path(manifest_path) if manifest_path else None
     asset_specs = [
         {
             "key": "backend_entry",
@@ -1371,8 +1622,9 @@ def _build_extension_delivery_assets(extension):
             "kind": "docs",
         },
     ]
-    if str(extension.manifest.distribution.signature_url or "").strip():
-        signature_path = str(extension.manifest.distribution.signature_url or "").strip()
+    signature_url = _manifest_nested_attr(extension, "distribution", "signature_url")
+    if signature_url:
+        signature_path = signature_url
         if not signature_path.startswith(("http://", "https://")):
             root = root_path if root_path else None
             if signature_path.startswith("file://"):
@@ -1438,6 +1690,7 @@ def _build_extension_capability_summary(
     notification_types,
     user_preferences,
     event_listeners,
+    realtime_broadcasts,
     post_lifecycle,
     post_types,
     search_filters,
@@ -1458,6 +1711,7 @@ def _build_extension_capability_summary(
         "notification_type_count": len(notification_types),
         "user_preference_count": len(user_preferences),
         "event_listener_count": len(event_listeners),
+        "realtime_broadcast_count": len(realtime_broadcasts),
         "post_lifecycle_count": len(post_lifecycle),
         "post_type_count": len(post_types),
         "search_filter_count": len(search_filters),
@@ -1560,12 +1814,13 @@ def _build_default_extension_admin_actions(extension, *, runtime_record=None):
             "description": "",
             "order": 40,
         })
-    if extension.manifest.documentation_url:
+    documentation_url = _manifest_attr(extension, "documentation_url")
+    if documentation_url:
         generated.append({
             "key": "documentation",
             "label": "文档",
             "kind": "link",
-            "target": extension.manifest.documentation_url,
+            "target": documentation_url,
             "icon": "fas fa-book",
             "tone": "subtle",
             "opens_in_new_tab": False,
@@ -1578,28 +1833,30 @@ def _build_default_extension_admin_actions(extension, *, runtime_record=None):
 
 
 def _resolve_api_stability_label(extension):
-    label = str(extension.manifest.compatibility.api_stability_label or "").strip()
+    label = _manifest_nested_attr(extension, "compatibility", "api_stability_label")
     if label:
         return label
+    api_stability = _manifest_nested_attr(extension, "compatibility", "api_stability", "experimental")
     return {
         "experimental": "实验性",
         "beta": "测试中",
         "stable": "稳定",
         "deprecated": "废弃中",
         "internal": "内部",
-    }.get(extension.manifest.compatibility.api_stability, extension.manifest.compatibility.api_stability or "未知")
+    }.get(api_stability, api_stability or "未知")
 
 
 def _resolve_distribution_channel_label(extension):
-    label = str(extension.manifest.distribution.channel_label or "").strip()
+    label = _manifest_nested_attr(extension, "distribution", "channel_label")
     if label:
         return label
+    channel = _manifest_nested_attr(extension, "distribution", "channel", "private")
     return {
         "private": "私有分发",
         "bundled": "随平台内置",
         "partner": "合作方分发",
         "public": "公开分发",
-    }.get(extension.manifest.distribution.channel, extension.manifest.distribution.channel or "未知")
+    }.get(channel, channel or "未知")
 
 
 def _build_extension_debug_info(extension):
@@ -1618,7 +1875,8 @@ def _build_extension_debug_info(extension):
         permissions_pages=permissions_pages,
         operations_pages=operations_pages,
     )
-    extension_root_path = Path(extension.manifest.path) if str(extension.manifest.path or "").strip() else None
+    manifest_path = _manifest_attr(extension, "path")
+    extension_root_path = Path(manifest_path) if manifest_path else None
     extensions_base_path = extension_root_path.parent if extension_root_path is not None else None
     inspection = inspect_frontend_admin_entry(
         runtime_surface_view,
@@ -1678,7 +1936,7 @@ def _build_extension_debug_info(extension):
     ]
 
     return {
-        "manifest_path": extension.manifest.path,
+        "manifest_path": manifest_path,
         "frontend_admin_entry": {
             "entry": inspection["entry"],
             "entry_type": inspection["entry_type"],
@@ -1704,6 +1962,10 @@ def _build_extension_debug_info(extension):
             "resolved_path": backend_inspection["resolved_path"],
             "available_hooks": list(backend_inspection["available_hooks"]),
         },
+        "system_hooks": _build_extension_system_hooks(runtime_record),
+        "settings_runtime": _build_extension_settings_runtime(runtime_record),
+        "frontend_document": _build_extension_frontend_document(runtime_record),
+        "theme_runtime": _build_extension_theme_runtime(runtime_record),
         "migration_execution": _serialize_extension_migration_execution(extension),
         "migration_plan": _serialize_extension_migration_plan(extension),
         "admin_surface_statuses": admin_surface_statuses,
@@ -1739,6 +2001,169 @@ def _build_extension_debug_info(extension):
         ],
         "validation_issues": validation_issues,
     }
+
+
+def _build_extension_settings_runtime(runtime_record=None) -> dict:
+    if runtime_record is None:
+        return {
+            "defaults": [],
+            "reset_rules": [],
+            "frontend_cache_keys": [],
+            "theme_variables": [],
+            "forum_serializations": [],
+            "forum_settings_keys": [],
+        }
+
+    return {
+        "defaults": [
+            {
+                "key": str(getattr(definition, "key", "") or ""),
+                "value": _serialize_debug_value(getattr(definition, "value", None)),
+                "module_id": str(getattr(definition, "module_id", "") or getattr(runtime_record, "extension_id", "") or ""),
+            }
+            for definition in getattr(runtime_record, "settings_defaults", ()) or ()
+        ],
+        "reset_rules": [
+            {
+                "key": str(getattr(definition, "key", "") or ""),
+                "callback": _serialize_debug_value(getattr(definition, "callback", None)),
+                "module_id": str(getattr(definition, "module_id", "") or getattr(runtime_record, "extension_id", "") or ""),
+            }
+            for definition in getattr(runtime_record, "settings_reset_rules", ()) or ()
+        ],
+        "frontend_cache_keys": [
+            str(key)
+            for key in getattr(runtime_record, "settings_frontend_cache_keys", ()) or ()
+            if str(key or "").strip()
+        ],
+        "theme_variables": [
+            {
+                "name": str(getattr(definition, "name", "") or ""),
+                "key": str(getattr(definition, "key", "") or ""),
+                "callback": _serialize_debug_value(getattr(definition, "callback", None)),
+                "module_id": str(getattr(definition, "module_id", "") or getattr(runtime_record, "extension_id", "") or ""),
+            }
+            for definition in getattr(runtime_record, "settings_theme_variables", ()) or ()
+        ],
+        "forum_serializations": [
+            {
+                "attribute": str(getattr(definition, "attribute", "") or ""),
+                "key": str(getattr(definition, "key", "") or ""),
+                "callback": _serialize_debug_value(getattr(definition, "callback", None)),
+                "module_id": str(getattr(definition, "module_id", "") or getattr(runtime_record, "extension_id", "") or ""),
+            }
+            for definition in getattr(runtime_record, "settings_forum_serializations", ()) or ()
+        ],
+        "forum_settings_keys": [
+            str(key)
+            for key in getattr(runtime_record, "forum_settings_keys", ()) or ()
+            if str(key or "").strip()
+        ],
+    }
+
+
+def _build_extension_frontend_document(runtime_record=None) -> dict:
+    if runtime_record is None:
+        return {
+            "preloads": [],
+            "document_attributes": [],
+            "head_tags": [],
+            "theme_variables": [],
+            "title_driver": "",
+            "content_callbacks": [],
+        }
+
+    try:
+        settings_values = get_extension_settings(runtime_record.extension_id)
+    except Exception:
+        settings_values = {}
+    return build_frontend_document_payload(runtime_record, settings_values=settings_values)
+
+
+def _build_extension_theme_runtime(runtime_record=None) -> dict:
+    if runtime_record is None:
+        return {
+            "handlers": [],
+            "variables": [],
+            "document_attributes": [],
+            "head_tags": [],
+        }
+
+    handlers = []
+    variables = []
+    document_attributes = []
+    head_tags = []
+    for definition in getattr(runtime_record, "theme_handlers", ()) or ():
+        payload = getattr(definition, "callback", None)
+        payload_value = _serialize_debug_value(payload)
+        item = {
+            "key": str(getattr(definition, "key", "") or ""),
+            "payload": payload_value,
+            "module_id": str(getattr(definition, "module_id", "") or getattr(runtime_record, "extension_id", "") or ""),
+            "description": str(getattr(definition, "description", "") or ""),
+            "order": int(getattr(definition, "order", 100) or 100),
+        }
+        handlers.append(item)
+        if item["key"] == "variables":
+            variables.append(payload_value)
+        elif item["key"] == "document_attributes":
+            document_attributes.append(payload_value)
+        elif item["key"] == "head_tag":
+            head_tags.append(payload_value)
+
+    return {
+        "handlers": sorted(handlers, key=lambda item: (item["order"], item["key"])),
+        "variables": variables,
+        "document_attributes": document_attributes,
+        "head_tags": head_tags,
+    }
+
+
+def _build_extension_system_hooks(runtime_record=None) -> list[dict]:
+    if runtime_record is None:
+        return []
+
+    groups = (
+        ("error.handling", "错误处理", "error_handlers"),
+        ("auth", "认证", "auth_handlers"),
+        ("csrf", "CSRF", "csrf_handlers"),
+        ("filesystem", "文件系统", "filesystem_drivers"),
+        ("console", "控制台", "console_commands"),
+        ("session", "会话", "session_handlers"),
+        ("theme", "主题", "theme_handlers"),
+        ("throttle.api", "API 限流", "throttle_api_handlers"),
+        ("user", "用户", "user_handlers"),
+    )
+    hooks = []
+    for service, service_label, attribute in groups:
+        for definition in getattr(runtime_record, attribute, ()) or ():
+            payload = getattr(definition, "callback", None)
+            payload_dict = payload if isinstance(payload, dict) else {}
+            hooks.append({
+                "service": service,
+                "service_label": service_label,
+                "key": str(getattr(definition, "key", "") or ""),
+                "name": str(payload_dict.get("name") or payload_dict.get("route_name") or payload_dict.get("identifier") or ""),
+                "module_id": str(getattr(definition, "module_id", "") or getattr(runtime_record, "extension_id", "") or ""),
+                "description": str(getattr(definition, "description", "") or payload_dict.get("description") or ""),
+                "order": int(getattr(definition, "order", 100) or 100),
+            })
+    return sorted(hooks, key=lambda item: (item["service"], item["order"], item["key"]))
+
+
+def _serialize_debug_value(value):
+    if value is None:
+        return None
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {
+            str(key): _serialize_debug_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_serialize_debug_value(item) for item in value]
+    return getattr(value, "__name__", str(value))
 
 
 def _resolve_available_extension_ids_for_validation() -> set[str]:

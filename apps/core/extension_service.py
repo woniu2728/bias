@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from apps.core.audit import log_admin_action
 from apps.core.extensions.exceptions import ExtensionStateError
+from apps.core.extensions.frontend_compiler import recompile_extension_frontend_assets
 from apps.core.extensions.manager import get_extension_manager
-from apps.core.extensions.lifecycle import reset_extension_runtime_state
+from apps.core.extensions.lifecycle import (
+    clear_extension_runtime_rebuild_marker,
+    mark_extension_runtime_requires_rebuild,
+    mark_extension_runtime_version_changed,
+    reset_extension_runtime_state,
+)
 from apps.core.extensions.validation import resolve_bias_version_compatibility
 
 
@@ -33,6 +39,108 @@ class ExtensionService:
     @staticmethod
     def list_extensions():
         return get_extension_manager().get_extensions()
+
+    @staticmethod
+    def inspect_extension_packages():
+        return get_extension_manager().inspect_extension_packages(force=True)
+
+    @staticmethod
+    def sync_extension_packages(*, prune_missing: bool = True, actor=None, request=None):
+        result = get_extension_manager().sync_extension_packages(prune_missing=prune_missing)
+        reset_extension_runtime_state()
+
+        if request is not None:
+            summary = dict((result.get("package_inspection") or {}).get("summary") or {})
+            log_admin_action(
+                request,
+                "admin.extension.sync_packages",
+                target_type="extension",
+                target_id=None,
+                data={
+                    "prune_missing": bool(prune_missing),
+                    "discovered_count": len(result.get("discovered") or []),
+                    "updated": list(result.get("updated") or []),
+                    "pruned": list(result.get("pruned") or []),
+                    "missing_count": int(summary.get("missing_count") or 0),
+                    "version_drift_count": int(summary.get("version_drift_count") or 0),
+                    "source_drift_count": int(summary.get("source_drift_count") or 0),
+                },
+            )
+
+        return result
+
+    @staticmethod
+    def sync_enabled_extension_order(*, actor=None, request=None):
+        result = get_extension_manager().sync_enabled_extension_order()
+        reset_extension_runtime_state()
+
+        if request is not None:
+            after = dict(result.get("after") or {})
+            log_admin_action(
+                request,
+                "admin.extension.sync_enabled_order",
+                target_type="extension",
+                target_id=None,
+                data={
+                    "changed": bool(result.get("changed")),
+                    "persisted": list(after.get("persisted") or []),
+                    "resolved": list(after.get("resolved") or []),
+                    "stale": list(after.get("stale") or []),
+                },
+            )
+
+        return result
+
+    @staticmethod
+    def rebuild_extension_frontend_assets(
+        *,
+        run_build: bool = True,
+        include_disabled: bool = False,
+        publish: bool = False,
+        actor=None,
+        request=None,
+    ):
+        manager = get_extension_manager()
+        manager.load(force=True)
+        extensions = [
+            extension
+            for extension in manager.get_extensions()
+            if extension.runtime.installed
+            and (include_disabled or extension.runtime.enabled)
+        ]
+        result = recompile_extension_frontend_assets(
+            extensions,
+            run_build=run_build,
+            clear_marker=run_build,
+            publish_dist=publish,
+        ).to_dict()
+
+        if result.get("status") == "ok" and run_build:
+            clear_extension_runtime_rebuild_marker()
+            mark_extension_runtime_version_changed("extension_frontend_rebuilt")
+            reset_extension_runtime_state()
+        elif result.get("status") == "ok":
+            mark_extension_runtime_requires_rebuild("extension_frontend_manifest_built")
+        else:
+            mark_extension_runtime_requires_rebuild("extension_frontend_rebuild_failed")
+
+        if request is not None:
+            log_admin_action(
+                request,
+                "admin.extension.rebuild_frontend_assets",
+                target_type="extension",
+                target_id=None,
+                data={
+                    "run_build": bool(run_build),
+                    "include_disabled": bool(include_disabled),
+                    "publish": bool(publish),
+                    "status": str(result.get("status") or ""),
+                    "extension_count": int(result.get("extension_count") or 0),
+                    "returncode": result.get("returncode"),
+                },
+            )
+
+        return result
 
     @staticmethod
     def get_extension(extension_id: str):

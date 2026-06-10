@@ -1,3 +1,4 @@
+import { ResourceNormalizerExtender } from './resourceNormalizers.js'
 import { ModelExtender, StoreExtender } from './resourceModel.js'
 import {
   AdminExtender,
@@ -14,6 +15,8 @@ import {
 
 export {
   ModelExtender,
+  ModelExtender as ResourceModelExtender,
+  ResourceNormalizerExtender,
   StoreExtender,
   NotificationExtender,
   PostTypesExtender,
@@ -29,6 +32,7 @@ export {
 
 export {
   ModelExtender as Model,
+  ResourceNormalizerExtender as ResourceNormalizer,
   StoreExtender as Store,
   NotificationExtender as Notification,
   PostTypesExtender as PostTypes,
@@ -40,6 +44,8 @@ export {
 
 export default {
   Model: ModelExtender,
+  ResourceModelExtender: ModelExtender,
+  ResourceNormalizer: ResourceNormalizerExtender,
   Store: StoreExtender,
   Notification: NotificationExtender,
   PostTypes: PostTypesExtender,

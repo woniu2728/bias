@@ -1,4 +1,6 @@
-from typing import List, Optional
+from __future__ import annotations
+
+from typing import Any, List, Optional
 
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
@@ -8,16 +10,15 @@ from django.utils import timezone
 from apps.core.visibility import can_view_model_instance
 from extensions.discussions.backend.visibility import apply_discussion_visibility_scope
 from extensions.discussions.backend.models import Discussion, DiscussionUser
-from extensions.users.backend.models import User
 
 
-def viewer_cache_identity(user: Optional[User]) -> str:
+def viewer_cache_identity(user: Optional[Any]) -> str:
     if user and user.is_authenticated:
         return f"user:{user.id}"
     return "guest"
 
 
-def view_count_cache_key(discussion_id: int, user: Optional[User]) -> str:
+def view_count_cache_key(discussion_id: int, user: Optional[Any]) -> str:
     return f"discussion.viewed.{discussion_id}.{viewer_cache_identity(user)}"
 
 
@@ -32,7 +33,7 @@ def view_count_flush_lock_cache_key(discussion_id: int) -> str:
 def record_view(
     discussion: Discussion,
     *,
-    user: Optional[User],
+    user: Optional[Any],
     throttle_seconds: int,
     cache_timeout: int,
     pending_ids_cache_key: str,
@@ -192,15 +193,15 @@ def flush_all_pending_view_counts(
     return flushed_count
 
 
-def can_view_discussion(discussion: Discussion, user: Optional[User]) -> bool:
+def can_view_discussion(discussion: Discussion, user: Optional[Any]) -> bool:
     return can_view_model_instance(Discussion, discussion, user=user, ability="view")
 
 
-def apply_visibility_filters(queryset, user: Optional[User] = None):
+def apply_visibility_filters(queryset, user: Optional[Any] = None):
     return apply_discussion_visibility_scope(queryset, user)
 
 
-def attach_user_read_state(discussions: List[Discussion], user: Optional[User]) -> None:
+def attach_user_read_state(discussions: List[Discussion], user: Optional[Any]) -> None:
     if not discussions:
         return
 
@@ -242,14 +243,14 @@ def attach_user_read_state(discussions: List[Discussion], user: Optional[User]) 
         discussion.is_unread = discussion.unread_count > 0
 
 
-def mark_all_as_read(user: User):
+def mark_all_as_read(user: Any):
     now = timezone.now()
     user.marked_all_as_read_at = now
     user.save(update_fields=["marked_all_as_read_at"])
     return now
 
 
-def update_read_state(discussion_id: int, user: User, last_read_post_number: int) -> DiscussionUser:
+def update_read_state(discussion_id: int, user: Any, last_read_post_number: int) -> DiscussionUser:
     discussion = Discussion.objects.get(id=discussion_id)
     if not can_view_discussion(discussion, user):
         raise PermissionDenied("没有权限查看此讨论")

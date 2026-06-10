@@ -8,16 +8,10 @@ from apps.core.extensions import (
     LifecycleExtender,
     NotificationsExtender,
     PostEventExtender,
+    RealtimeExtender,
+    ServiceProviderExtender,
 )
 from apps.core.extensions.types import ExtensionEventListenerDefinition
-from apps.core.forum_events import (
-    DiscussionApprovedEvent,
-    DiscussionRejectedEvent,
-    DiscussionResubmittedEvent,
-    PostApprovedEvent,
-    PostRejectedEvent,
-    PostResubmittedEvent,
-)
 from apps.core.forum_registry_types import (
     AdminPageDefinition,
     NotificationTypeDefinition,
@@ -39,6 +33,7 @@ from extensions.approval.backend.resources import (
     admin_stats_resource_field_definitions,
     resolve_approval_event_data,
 )
+from extensions.approval.backend.runtime import approval_service_provider
 
 
 EXTENSION_ID = "approval"
@@ -60,6 +55,10 @@ def extend():
             mounts=(("/admin", approval_admin_router),),
             tags=("Admin",),
         ),
+        ServiceProviderExtender(
+            key="approval.service",
+            provider=approval_service_provider,
+        ),
         ApiResourceExtender("admin_stats").fields(admin_stats_resource_field_definitions),
         ForumCapabilitiesExtender(
             post_types=post_type_definitions(),
@@ -75,6 +74,41 @@ def extend():
         ),
         EventListenersExtender(
             listeners=approval_event_listener_definitions(),
+        ),
+        RealtimeExtender()
+        .broadcast_discussion_event(
+            "extensions.discussions.backend.events.DiscussionApprovedEvent",
+            "discussion.approved",
+            include_discussion=True,
+            include_post=True,
+            post_id_getter=lambda current_discussion: current_discussion.first_post_id,
+            description="讨论审核通过后向讨论实时流广播审核状态变更。",
+        )
+        .broadcast_discussion_event(
+            "extensions.discussions.backend.events.DiscussionRejectedEvent",
+            "discussion.rejected",
+            description="讨论审核拒绝后向讨论实时流广播审核状态变更。",
+        )
+        .broadcast_discussion_event(
+            "extensions.discussions.backend.events.DiscussionResubmittedEvent",
+            "discussion.resubmitted",
+            description="讨论重新提交审核后向讨论实时流广播审核状态变更。",
+        )
+        .broadcast_discussion_event(
+            "extensions.posts.backend.events.PostApprovedEvent",
+            "post.approved",
+            include_discussion=True,
+            description="回复审核通过后向讨论实时流广播审核状态变更。",
+        )
+        .broadcast_discussion_event(
+            "extensions.posts.backend.events.PostRejectedEvent",
+            "post.rejected",
+            description="回复审核拒绝后向讨论实时流广播审核状态变更。",
+        )
+        .broadcast_discussion_event(
+            "extensions.posts.backend.events.PostResubmittedEvent",
+            "post.resubmitted",
+            description="回复重新提交审核后向讨论实时流广播审核状态变更。",
         ),
         LifecycleExtender(
             install=install,
@@ -282,34 +316,34 @@ def user_preference_definitions():
 def approval_event_listener_definitions():
     return (
         ExtensionEventListenerDefinition(
-            event_type=DiscussionApprovedEvent,
+            event_type="extensions.discussions.backend.events.DiscussionApprovedEvent",
             handler=handle_discussion_approved,
-            description="讨论审核通过后通知作者、广播实时事件并写入讨论时间线。",
+            description="讨论审核通过后通知作者并写入讨论时间线。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=DiscussionRejectedEvent,
+            event_type="extensions.discussions.backend.events.DiscussionRejectedEvent",
             handler=handle_discussion_rejected,
-            description="讨论审核拒绝后通知作者、广播实时事件并写入讨论时间线。",
+            description="讨论审核拒绝后通知作者并写入讨论时间线。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=DiscussionResubmittedEvent,
+            event_type="extensions.discussions.backend.events.DiscussionResubmittedEvent",
             handler=handle_discussion_resubmitted,
-            description="讨论重新提交审核后广播实时事件并写入讨论时间线。",
+            description="讨论重新提交审核后写入讨论时间线。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostApprovedEvent,
+            event_type="extensions.posts.backend.events.PostApprovedEvent",
             handler=handle_post_approved,
-            description="回复审核通过后通知作者、广播实时事件并写入讨论时间线。",
+            description="回复审核通过后通知作者并写入讨论时间线。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostRejectedEvent,
+            event_type="extensions.posts.backend.events.PostRejectedEvent",
             handler=handle_post_rejected,
-            description="回复审核拒绝后通知作者、广播实时事件并写入讨论时间线。",
+            description="回复审核拒绝后通知作者并写入讨论时间线。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostResubmittedEvent,
+            event_type="extensions.posts.backend.events.PostResubmittedEvent",
             handler=handle_post_resubmitted,
-            description="回复重新提交审核后广播实时事件并写入讨论时间线。",
+            description="回复重新提交审核后写入讨论时间线。",
         ),
     )
 
@@ -346,24 +380,4 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Approval 扩展已卸载。",
-    }
-
-
-def run_migrations(context):
-    return _migration_hook_result(context, "run_migrations", "Approval 扩展迁移已执行。")
-
-
-def rollback_migrations(context):
-    return _migration_hook_result(context, "rollback_migrations", "Approval 扩展迁移已回滚。")
-
-
-def _migration_hook_result(context, hook: str, message: str):
-    return {
-        "hook": hook,
-        "status": "ok",
-        "status_label": "已执行",
-        "message": message,
-        "details": {
-            "migration_namespace": context.migration_namespace,
-        },
     }

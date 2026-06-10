@@ -161,6 +161,9 @@ function createRegistryAdapter(items, defaults = {}, { single = false } = {}) {
       const resolved = resolveRegistryItems(items, context)
       return single ? (resolved[0] || null) : resolved
     },
+    getAll(context = {}) {
+      return resolveRegistryItems(items, context)
+    },
     getByKey(context = {}, key = '') {
       const normalizedKey = normalizeKey(key)
       if (!normalizedKey) {

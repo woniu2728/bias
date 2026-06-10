@@ -51,6 +51,17 @@ export {
   registerAdminUsersPageActionMeta,
 } from './pageActionMeta.js'
 export {
+  getAdminAppearancePageAction,
+  getAdminAppearancePageActions,
+  getAdminMailPageAction,
+  getAdminMailPageActions,
+  getAdminPageAction,
+  getAdminPageActions,
+  registerAdminAppearancePageAction,
+  registerAdminMailPageAction,
+  registerAdminPageAction,
+} from './pageActions.js'
+export {
   getAdminPageNoteTemplates,
   registerAdminPageNoteTemplate,
 } from './pageNoteTemplates.js'

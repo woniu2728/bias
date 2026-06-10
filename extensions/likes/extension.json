@@ -7,15 +7,17 @@
   "icon": "fas fa-thumbs-up",
   "dependencies": [
     "core",
+    "discussions",
     "posts",
-    "notifications"
+    "notifications",
+    "users"
   ],
   "capabilities": [
     "post-likes"
   ],
   "backend_entry": "extensions.likes.backend.ext",
   "django_app_config": "extensions.likes.backend.apps.LikesExtensionConfig",
-  "migration_namespace": "extensions.likes.backend.migrations",
+  "django_app_label": "likes",
   "frontend_forum_entry": "extensions/likes/frontend/forum/index.js",
   "compatibility": {
     "bias_version": "^1.0.0",

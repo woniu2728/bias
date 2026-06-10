@@ -32,21 +32,19 @@
       </button>
     </div>
 
-    <div class="mobile-drawer-section">
-      <button type="button" class="mobile-drawer-search" @click="$emit('open-search')">
-        <i class="fas fa-search"></i>
-        <span>{{ searchLabelText }}</span>
-      </button>
-
-      <button
-        v-if="authStore.canStartDiscussion"
-        type="button"
-        class="mobile-drawer-compose"
-        @click="$emit('start-discussion')"
+    <div v-if="actionItems.length" class="mobile-drawer-section">
+      <component
+        :is="item.to ? 'router-link' : item.href ? 'a' : 'button'"
+        v-for="item in actionItems"
+        :key="item.key"
+        v-bind="item.to ? { to: item.to } : item.href ? { href: item.href } : { type: 'button' }"
+        class="mobile-drawer-action"
+        :class="[item.className, { active: item.active, 'mobile-drawer-action--primary': item.tone === 'primary' }]"
+        @click="$emit('item-click', item, $event)"
       >
-        <i class="fas fa-pen-to-square"></i>
-        <span>{{ startDiscussionText }}</span>
-      </button>
+        <i v-if="item.icon" :class="item.icon"></i>
+        <span>{{ item.label }}</span>
+      </component>
     </div>
 
     <nav class="mobile-drawer-nav">
@@ -89,21 +87,12 @@
     </nav>
 
     <div v-if="authStore.isAuthenticated && authStore.user" class="mobile-drawer-user">
-      <div class="mobile-drawer-userCard">
-        <img
-          v-if="authStore.user?.avatar_url"
-          :src="authStore.user.avatar_url"
-          :alt="authStore.user?.username"
-          class="avatar avatar-image"
-        />
-        <div v-else class="avatar" :style="{ backgroundColor: getUserAvatarColor(authStore.user) }">
-          {{ getUserInitial(authStore.user) }}
-        </div>
-        <div class="mobile-drawer-userMeta">
-          <strong>{{ authStore.user?.display_name || authStore.user?.username }}</strong>
-          <span>@{{ authStore.user?.username }}</span>
-        </div>
-      </div>
+      <component
+        :is="item.component"
+        v-for="item in userCardItems"
+        :key="item.key"
+        v-bind="item.componentProps || {}"
+      />
       <component
         :is="item.to ? 'router-link' : item.href ? 'a' : 'button'"
         v-for="item in userItems"
@@ -149,17 +138,17 @@ const props = defineProps({
     type: Object,
     required: true
   },
-  currentSearchQuery: {
-    type: String,
-    default: ''
-  },
   isMobileNavActive: {
     type: Function,
     required: true
   },
-  profilePath: {
-    type: Function,
-    required: true
+  actionItems: {
+    type: Array,
+    default: () => []
+  },
+  userCardItems: {
+    type: Array,
+    default: () => []
   },
   guestItems: {
     type: Array,
@@ -172,27 +161,12 @@ const props = defineProps({
   userItems: {
     type: Array,
     default: () => []
-  },
-  getUserAvatarColor: {
-    type: Function,
-    required: true
-  },
-  getUserInitial: {
-    type: Function,
-    required: true
   }
 })
 
 const closeLabelText = computed(() => getUiCopy({
   surface: 'mobile-drawer-close-label',
 })?.text || '关闭导航菜单')
-const searchLabelText = computed(() => getUiCopy({
-  surface: 'mobile-drawer-search-label',
-  currentSearchQuery: props.currentSearchQuery,
-})?.text || (props.currentSearchQuery ? `搜索：${props.currentSearchQuery}` : '搜索论坛'))
-const startDiscussionText = computed(() => getUiCopy({
-  surface: 'mobile-drawer-start-discussion',
-})?.text || '发起讨论')
 const profileSectionTitleText = computed(() => getUiCopy({
   surface: 'mobile-drawer-profile-section-title',
 })?.text || '个人')
@@ -207,8 +181,6 @@ const mobilePrimaryNavItems = computed(() => getForumNavItems({
 
 defineEmits([
   'close',
-  'open-search',
-  'start-discussion',
   'item-click',
 ])
 </script>
@@ -299,8 +271,7 @@ defineEmits([
   margin-bottom: 16px;
 }
 
-.mobile-drawer-search,
-.mobile-drawer-compose,
+.mobile-drawer-action,
 .mobile-drawer-link {
   width: 100%;
   min-height: 40px;
@@ -314,12 +285,12 @@ defineEmits([
   text-decoration: none;
 }
 
-.mobile-drawer-search {
+.mobile-drawer-action {
   background: #f4f7fa;
   color: #5d6e81;
 }
 
-.mobile-drawer-compose {
+.mobile-drawer-action--primary {
   background: var(--forum-accent-color);
   color: #fff;
 }
@@ -387,54 +358,6 @@ defineEmits([
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.mobile-drawer-userCard {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 4px 6px;
-}
-
-.avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--forum-primary-color);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.avatar-image {
-  object-fit: cover;
-}
-
-.mobile-drawer-userMeta {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.mobile-drawer-userMeta strong,
-.mobile-drawer-userMeta span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mobile-drawer-userMeta strong {
-  color: #2b3b4d;
-  font-size: 14px;
-}
-
-.mobile-drawer-userMeta span {
-  color: #7a8997;
-  font-size: 12px;
 }
 
 .mobile-drawer-auth {

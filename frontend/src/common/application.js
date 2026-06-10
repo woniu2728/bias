@@ -119,7 +119,7 @@ export function createRuntimeApplication({
     },
     async bootExtensions(extensions = {}, { createExtensionApp, onError } = {}) {
       for (const [extensionId, extension] of normalizeExtensionEntries(extensions)) {
-        const extenders = normalizeExtenders(extension?.extend)
+        const extenders = normalizeExtensionExtenders(extension)
         const extensionApp = typeof createExtensionApp === 'function'
           ? createExtensionApp(extensionId, extension, app)
           : app
@@ -168,13 +168,26 @@ export function createRuntimeApplication({
       return document
     },
     route(name, params = {}) {
+      if (typeof name === 'string') {
+        const helper = app.routes?.helpers?.[name] || app.routeHelpers?.[name]
+        if (typeof helper === 'function') {
+          return helper(params)
+        }
+      }
       if (!router || typeof router.resolve !== 'function') {
-        throw new Error('Application router is not configured')
+        return resolveRegisteredRoute(app, name, params)
       }
       const location = typeof name === 'object'
         ? name
         : normalizeRouteLocation(name, params)
-      return router.resolve(location).href
+      try {
+        return router.resolve(location).href
+      } catch (error) {
+        if (typeof name === 'object') {
+          throw error
+        }
+        return resolveRegisteredRoute(app, name, params, error)
+      }
     },
     async request(options = {}) {
       if (!api) {
@@ -362,11 +375,41 @@ function normalizeExtensionEntries(extensions) {
   return []
 }
 
+export function normalizeExtensionExtenders(module) {
+  return normalizeExtenders(resolveExtensionExtenderSource(module))
+}
+
+export function hasExtensionExtenders(module) {
+  return normalizeExtensionExtenders(module).length > 0
+}
+
+function resolveExtensionExtenderSource(module) {
+  if (!module) return null
+  if (Object.prototype.hasOwnProperty.call(Object(module), 'extend')) {
+    return module.extend
+  }
+  const defaultExport = module.default
+  if (defaultExport && typeof defaultExport === 'object' && Object.prototype.hasOwnProperty.call(defaultExport, 'extend')) {
+    return defaultExport.extend
+  }
+  return defaultExport
+}
+
 function normalizeExtenders(value) {
   if (!value) return []
   return [value]
     .flat(Infinity)
-    .filter(item => item && typeof item.extend === 'function')
+    .map(item => {
+      if (!item) return null
+      if (typeof item.extend === 'function') return item
+      if (typeof item === 'function') {
+        return {
+          extend: item,
+        }
+      }
+      return null
+    })
+    .filter(Boolean)
 }
 
 function normalizeRequestOptions(options) {
@@ -393,6 +436,37 @@ function normalizeRouteLocation(name, params = {}) {
     query,
     hash,
   }
+}
+
+function resolveRegisteredRoute(app, name, params = {}, fallbackError = null) {
+  if (typeof name === 'object') {
+    if (fallbackError) throw fallbackError
+    throw new Error('Application router is not configured')
+  }
+  const route = app?.routes?.definitions?.[name]
+  if (!route?.path) {
+    if (fallbackError) throw fallbackError
+    throw new Error(`Route '${name}' does not exist`)
+  }
+  const values = params && typeof params === 'object' ? { ...params } : {}
+  const query = values.query && typeof values.query === 'object' ? values.query : {}
+  const hash = values.hash ? String(values.hash) : ''
+  delete values.query
+  delete values.hash
+  const consumed = new Set()
+  const path = String(route.path || '').replace(/:([^/]+)/g, (match, key) => {
+    consumed.add(key)
+    const value = values[key]
+    return encodeURIComponent(value == null ? '' : String(value))
+  })
+  const extraQuery = {}
+  for (const [key, value] of Object.entries(values)) {
+    if (!consumed.has(key) && value) {
+      extraQuery[key] = value
+    }
+  }
+  const queryString = new URLSearchParams({ ...extraQuery, ...query }).toString()
+  return path + (queryString ? `?${queryString}` : '') + hash
 }
 
 function normalizeResponseEnvelope(result) {

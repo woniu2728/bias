@@ -114,7 +114,8 @@
 </template>
 
 <script setup>
-import { computed } from '@bias/forum'
+
+import { computed } from '@bias/core'
 import { getUiCopy } from '@bias/forum'
 
 const props = defineProps({

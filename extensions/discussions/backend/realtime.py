@@ -4,8 +4,9 @@ from collections import OrderedDict
 
 from django.contrib.auth.models import AnonymousUser
 
-from apps.core.forum_runtime import iter_realtime_included_enrichers
-from apps.core.websocket_service import WebSocketService
+from apps.core.extensions.runtime_access import serialize_runtime_post_by_id
+from apps.core.forum_runtime import broadcast_realtime_discussion_event, iter_realtime_included_enrichers
+from apps.core.extensions.runtime_access import serialize_runtime_user
 
 
 def resolve_visible_discussion_ids(discussion_ids, user) -> list[int]:
@@ -71,11 +72,15 @@ def broadcast_discussion_event(
         )
     )
 
-    WebSocketService.broadcast_discussion_event(
+    broadcast_realtime_discussion_event(
         discussion_id,
         event_type,
         payload,
     )
+
+
+def discussion_realtime_broadcaster_provider():
+    return broadcast_discussion_event
 
 
 def load_discussion_for_realtime(discussion_id: int):
@@ -96,20 +101,7 @@ def serialize_discussion_for_realtime(discussion):
 
 
 def serialize_post_for_realtime(post_id: int):
-    from extensions.posts.backend.handlers import apply_post_resource_preloads, serialize_post
-    from extensions.posts.backend.models import Post
-
-    post = (
-        apply_post_resource_preloads(
-            Post.objects.select_related("discussion"),
-            user=None,
-        )
-        .filter(id=post_id)
-        .first()
-    )
-    if post is None:
-        return None
-    return serialize_post(post, user=None)
+    return serialize_runtime_post_by_id(post_id, user=None)
 
 
 def build_realtime_included_payload(
@@ -150,13 +142,11 @@ def build_realtime_included_payload(
 
 
 def collect_discussion_users(target: OrderedDict, discussion) -> None:
-    from extensions.users.backend.resources import serialize_user_payload
-
     for user in (
         getattr(discussion, "user", None),
         getattr(discussion, "last_posted_user", None),
     ):
-        payload = serialize_user_payload(user, resource="discussion_user")
+        payload = serialize_runtime_user(user, resource="discussion_user")
         if payload and payload.get("id") is not None:
             merge_included_resource(target, payload)
 
@@ -174,3 +164,4 @@ def merge_included_resource(target: OrderedDict, payload: dict) -> None:
         **(target.get(resource_id) or {}),
         **payload,
     }
+

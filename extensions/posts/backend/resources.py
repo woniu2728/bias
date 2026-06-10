@@ -222,3 +222,4 @@ def _parse_post_target_state_content(content: str | None) -> dict:
         "target_post_id": target_post_id,
         "target_post_number": target_post_number,
     }
+

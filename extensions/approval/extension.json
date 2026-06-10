@@ -12,14 +12,14 @@
     "core",
     "discussions",
     "posts",
-    "notifications"
+    "notifications",
+    "users"
   ],
   "provides": [
     "discussion-approval",
     "post-approval"
   ],
   "backend_entry": "extensions.approval.backend.ext",
-  "migration_namespace": "extensions.approval.backend.migrations",
   "frontend_admin_entry": "extensions/approval/frontend/admin/index.js",
   "frontend_forum_entry": "extensions/approval/frontend/forum/index.js",
   "compatibility": {

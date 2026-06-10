@@ -256,7 +256,10 @@ export class ForumExtender {
   composerSubmitSuccess(definition) { return this.register('registerComposerSubmitSuccess', definition) }
   composerAutocompleteProvider(definition) { return this.register('registerComposerAutocompleteProvider', definition) }
   composerPreviewTransformer(definition) { return this.register('registerComposerPreviewTransformer', definition) }
+  composerHost(definition) { return this.register('registerComposerHost', definition) }
+  composerUploadHandler(definition) { return this.register('registerComposerUploadHandler', definition) }
   notificationRenderer(definition) { return this.register('registerNotificationRenderer', definition) }
+  searchModalProvider(definition) { return this.register('registerSearchModalProvider', definition) }
   searchModalSection(definition) { return this.register('registerSearchModalSection', definition) }
   userBadge(definition) { return this.register('registerUserBadge', definition) }
   emptyState(definition) { return this.register('registerEmptyState', definition) }
@@ -449,6 +452,7 @@ export class AdminExtender {
 
   pageCopy(pageKey, definition) { return this.registerPageContribution('registerAdminPageCopy', pageKey, definition) }
   pageConfig(pageKey, definition) { return this.registerPageContribution('registerAdminPageConfig', pageKey, definition) }
+  pageAction(pageKey, definition) { return this.registerPageContribution('registerAdminPageAction', pageKey, definition) }
   pageActionMeta(pageKey, definition) { return this.registerPageContribution('registerAdminPageActionMeta', pageKey, definition) }
   pageNoteTemplate(pageKey, definition) { return this.registerPageContribution('registerAdminPageNoteTemplate', pageKey, definition) }
 

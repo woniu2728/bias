@@ -1,37 +1,12 @@
 import {
-  registerAdminDashboardAction,
   registerAdminDashboardActionMeta,
   registerAdminDashboardAlert,
   registerAdminDashboardConfig,
   registerAdminDashboardCopy,
-  registerAdminDashboardQueueMetric,
-  registerAdminDashboardStat,
   registerAdminDashboardStatusBadge,
   registerAdminDashboardStatusItem,
   registerAdminDashboardStatusSummary,
 } from '../dashboard.js'
-
-registerAdminDashboardStat({
-  key: 'discussions',
-  order: 20,
-  icon: 'fas fa-comments',
-  moduleId: 'core',
-  resolve: ({ stats, copy }) => ({
-    label: copy?.discussionsStatLabel || '讨论总数',
-    value: stats?.totalDiscussions || 0,
-  }),
-})
-
-registerAdminDashboardStat({
-  key: 'posts',
-  order: 30,
-  icon: 'fas fa-comment',
-  moduleId: 'core',
-  resolve: ({ stats, copy }) => ({
-    label: copy?.postsStatLabel || '帖子总数',
-    value: stats?.totalPosts || 0,
-  }),
-})
 
 registerAdminDashboardStatusSummary({
   key: 'runtime',
@@ -175,47 +150,6 @@ registerAdminDashboardAlert({
   },
 })
 
-registerAdminDashboardQueueMetric({
-  key: 'queue-enqueued',
-  order: 10,
-  variant: 'stat',
-  resolve: ({ stats, copy }) => ({
-    label: copy?.queueEnqueuedLabel || '入队',
-    value: stats?.queueMetrics?.enqueued_count || 0,
-  }),
-})
-
-registerAdminDashboardQueueMetric({
-  key: 'queue-sync',
-  order: 20,
-  variant: 'stat',
-  resolve: ({ stats, copy }) => ({
-    label: copy?.queueSyncLabel || '同步',
-    value: stats?.queueMetrics?.sync_count || 0,
-  }),
-})
-
-registerAdminDashboardQueueMetric({
-  key: 'queue-fallback',
-  order: 30,
-  variant: 'stat',
-  resolve: ({ stats, copy }) => ({
-    label: copy?.queueFallbackLabel || '回退',
-    value: stats?.queueMetrics?.fallback_count || 0,
-  }),
-})
-
-registerAdminDashboardQueueMetric({
-  key: 'queue-last-task',
-  order: 40,
-  variant: 'detail',
-  resolve: ({ stats, copy }) => ({
-    label: copy?.queueLastTaskLabel || '最近任务',
-    value: stats?.queueMetrics?.last_task || copy?.emptyValueText || '-',
-    error: stats?.queueMetrics?.last_error || '',
-  }),
-})
-
 registerAdminDashboardCopy({
   key: 'core-dashboard-copy',
   order: 10,
@@ -239,8 +173,6 @@ registerAdminDashboardCopy({
     redisUnavailableText: 'Redis 已配置但不可用',
     queueWorkerUndetectedText: '队列未检测',
     authSecretStatusLabel: '认证密钥',
-    discussionsStatLabel: '讨论总数',
-    postsStatLabel: '帖子总数',
     pendingApprovalsStatLabel: '待审核内容',
     openFlagsStatLabel: '待处理举报',
     pythonVersionLabel: 'Python 版本',
@@ -250,10 +182,6 @@ registerAdminDashboardCopy({
     realtimeDriverLabel: '实时层',
     queueDriverLabel: '队列执行',
     queueWorkerLabel: '队列 Worker',
-    queueEnqueuedLabel: '入队',
-    queueSyncLabel: '同步',
-    queueFallbackLabel: '回退',
-    queueLastTaskLabel: '最近任务',
     emptyValueText: '-',
   }),
 })
@@ -279,14 +207,6 @@ registerAdminDashboardConfig({
       authSecretStatus: 'healthy',
       authSecretLabel: '健康',
       authSecretMessage: '',
-      queueMetrics: {
-        enqueued_count: 0,
-        sync_count: 0,
-        fallback_count: 0,
-        last_task: '',
-        last_error: '',
-        last_event_at: '',
-      },
       realtimeDriver: null,
       redisEnabled: false,
       cacheConnectionStatus: 'disabled',
@@ -305,8 +225,6 @@ registerAdminDashboardConfig({
       debugMode: false,
       maintenanceMode: false,
       totalUsers: 0,
-      totalDiscussions: 0,
-      totalPosts: 0,
       pendingApprovals: 0,
       openFlags: 0,
     },
@@ -318,58 +236,5 @@ registerAdminDashboardActionMeta({
   order: 10,
   resolve: () => ({
     loadingErrorText: '加载统计数据失败，请稍后重试',
-    queueResetIdleText: '重置指标',
-    queueResetPendingText: '重置中...',
-    queueResetConfirmTitle: '重置队列指标',
-    queueResetConfirmMessage: '确定重置队列运行指标吗？当前累计的入队、同步和回退计数会清零。',
-    queueResetConfirmText: '重置',
-    queueResetCancelText: '取消',
-    queueResetSuccessTitle: '指标已重置',
-    queueResetSuccessMessage: '队列运行指标已重置',
-    queueResetErrorMessage: '重置失败，请稍后重试',
-  }),
-})
-
-registerAdminDashboardAction({
-  key: 'reset-queue-metrics',
-  order: 10,
-  resolve: ({ api, modalStore, stats, setStats, setMessage, setMessageTone, setPending, copy }) => ({
-    run: async () => {
-      const confirmed = await modalStore.confirm({
-        title: copy?.queueResetConfirmTitle || '重置队列指标',
-        message: copy?.queueResetConfirmMessage || '确定重置队列运行指标吗？当前累计的入队、同步和回退计数会清零。',
-        confirmText: copy?.queueResetConfirmText || '重置',
-        cancelText: copy?.queueResetCancelText || '取消',
-        tone: 'warning'
-      })
-      if (!confirmed) {
-        return
-      }
-
-      setPending(true)
-      setMessage('')
-      setMessageTone('success')
-
-      try {
-        const data = await api.post('/admin/queue/metrics/reset')
-        setStats({
-          ...stats,
-          queueMetrics: data.metrics || stats.queueMetrics
-        })
-        const successMessage = data.message || copy?.queueResetSuccessMessage || '队列运行指标已重置'
-        setMessage(successMessage)
-        await modalStore.alert({
-          title: copy?.queueResetSuccessTitle || '指标已重置',
-          message: successMessage,
-          tone: 'success'
-        })
-      } catch (error) {
-        console.error('重置队列指标失败:', error)
-        setMessageTone('error')
-        setMessage(error.response?.data?.error || copy?.queueResetErrorMessage || '重置失败，请稍后重试')
-      } finally {
-        setPending(false)
-      }
-    },
   }),
 })

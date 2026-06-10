@@ -50,7 +50,12 @@
 </template>
 
 <script setup>
-import { computed, getUiCopy, ref, watch } from '@bias/forum'
+import {
+  watch,
+  computed,
+  ref } from '@bias/core'
+import { getUiCopy
+} from '@bias/forum'
 
 const props = defineProps({
   groups: {

@@ -21,7 +21,21 @@ export function registerAdminPageActionMeta(pageKey, item) {
 }
 
 export function getAdminPageActionMeta(pageKey, context = {}) {
-  return getPageActionMetaRegistry(pageKey).get(context)
+  return mergePageContributions(getPageActionMetaRegistry(pageKey).getAll(context))
+}
+
+function mergePageContributions(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return null
+  }
+
+  return [...items].reverse().reduce((merged, item) => {
+    const next = { ...merged }
+    for (const [key, value] of Object.entries(item || {})) {
+      next[key] = value
+    }
+    return next
+  }, {})
 }
 
 const basicsPageActionMeta = getPageActionMetaRegistry('core.basics')
@@ -35,13 +49,13 @@ export const registerAdminBasicsPageActionMeta = basicsPageActionMeta.register
 export const getAdminBasicsPageActionMeta = basicsPageActionMeta.get
 
 export const registerAdminAppearancePageActionMeta = appearancePageActionMeta.register
-export const getAdminAppearancePageActionMeta = appearancePageActionMeta.get
+export const getAdminAppearancePageActionMeta = context => getAdminPageActionMeta('core.appearance', context)
 
 export const registerAdminMailPageActionMeta = mailPageActionMeta.register
-export const getAdminMailPageActionMeta = mailPageActionMeta.get
+export const getAdminMailPageActionMeta = context => getAdminPageActionMeta('core.mail', context)
 
 export const registerAdminAdvancedPageActionMeta = advancedPageActionMeta.register
-export const getAdminAdvancedPageActionMeta = advancedPageActionMeta.get
+export const getAdminAdvancedPageActionMeta = context => getAdminPageActionMeta('core.advanced', context)
 
 export const registerAdminPermissionsPageActionMeta = permissionsPageActionMeta.register
 export const getAdminPermissionsPageActionMeta = permissionsPageActionMeta.get

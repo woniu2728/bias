@@ -5,9 +5,14 @@ from pydantic import BaseModel, Field, validator
 
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
-from extensions.posts.backend.models import Post
-from extensions.posts.backend.services import PostService
-from extensions.flags.backend.services import delete_post_flags, report_post, resolve_post_flags
+from apps.core.extensions.runtime_access import (
+    delete_runtime_post_flags,
+    get_runtime_post_by_id,
+    is_runtime_post_not_found,
+    report_runtime_post_flag,
+    resolve_runtime_post_flags,
+    serialize_runtime_post,
+)
 
 
 class PostReportSchema(BaseModel):
@@ -79,19 +84,21 @@ def dispatch_post_report(context):
     post_id = _post_object_id(context)
     payload = PostReportSchema(**_post_payload(context))
     try:
-        flag = report_post(
+        flag = report_runtime_post_flag(
             post_id=post_id,
             user=context["user"],
             reason=payload.reason,
             message=payload.message,
         )
         return serialize_flag(flag)
-    except Post.DoesNotExist:
-        return api_error("帖子不存在", status=404)
     except PermissionDenied as exc:
         return api_error(str(exc), status=403)
     except ValueError as exc:
         return api_error(str(exc), status=400)
+    except Exception as exc:
+        if not is_runtime_post_not_found(exc):
+            raise
+        return api_error("帖子不存在", status=404)
 
 
 def dispatch_post_resolve_flags(context):
@@ -99,7 +106,7 @@ def dispatch_post_resolve_flags(context):
     post_id = _post_object_id(context)
     payload = PostFlagResolveSchema(**_post_payload(context))
     try:
-        resolved_count = resolve_post_flags(
+        resolved_count = resolve_runtime_post_flags(
             post_id=post_id,
             admin_user=context["user"],
             status=payload.status,
@@ -116,29 +123,30 @@ def dispatch_post_resolve_flags(context):
                 "resolution_note": payload.resolution_note,
             },
         )
-        post = PostService.get_post_by_id(post_id, context["user"])
+        post = get_runtime_post_by_id(post_id, user=context["user"], require_visible=True)
         if not post:
             return api_error("帖子不存在", status=404)
-        from extensions.posts.backend.handlers import serialize_post
 
         return {
             "message": "举报已处理",
             "resolved_count": resolved_count,
-            "post": serialize_post(post, context["user"]),
+            "post": serialize_runtime_post(post, context["user"]),
         }
-    except Post.DoesNotExist:
-        return api_error("帖子不存在", status=404)
     except PermissionDenied as exc:
         return api_error(str(exc), status=403)
     except ValueError as exc:
         return api_error(str(exc), status=400)
+    except Exception as exc:
+        if not is_runtime_post_not_found(exc):
+            raise
+        return api_error("帖子不存在", status=404)
 
 
 def dispatch_post_delete_flags(context):
     request = context["request"]
     post_id = _post_object_id(context)
     try:
-        deleted_count = delete_post_flags(post_id, context["user"])
+        deleted_count = delete_runtime_post_flags(post_id, context["user"])
         log_admin_action(
             request,
             "admin.flag.delete",
@@ -147,12 +155,14 @@ def dispatch_post_delete_flags(context):
             data={"deleted_count": deleted_count},
         )
         return 204, None
-    except Post.DoesNotExist:
-        return api_error("帖子不存在", status=404)
     except PermissionDenied as exc:
         return api_error(str(exc), status=403)
     except ValueError as exc:
         return api_error(str(exc), status=400)
+    except Exception as exc:
+        if not is_runtime_post_not_found(exc):
+            raise
+        return api_error("帖子不存在", status=404)
 
 
 def _post_payload(context) -> dict:
@@ -165,3 +175,4 @@ def _post_object_id(context) -> int:
         return int(context.get("object_id") or 0)
     except (TypeError, ValueError):
         return 0
+

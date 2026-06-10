@@ -1,6 +1,7 @@
+import { ref } from '@bias/core'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { ref } from '@bias/forum'
+
 import { createTagsViewBindings } from './useTagsViewBindings.js'
 
 test('tags view bindings expose sidebar, hero and content props', () => {

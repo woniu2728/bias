@@ -1,8 +1,13 @@
-import { extendForum, normalizeUser, registerResourceNormalizer } from '@bias/forum'
+import { ResourceNormalizer } from '@bias/core'
+import { extendForum } from '@bias/forum'
+import { normalizeUser } from '@bias/users'
 import NotificationHeaderItem from './NotificationHeaderItem.vue'
 import { useNotificationStore } from './store.js'
 
 export const extend = [
+  new ResourceNormalizer()
+    .add('notifications', normalizeNotification)
+    .add('notification', normalizeNotification),
   extendForum(registerNotificationsForum),
 ]
 
@@ -15,9 +20,6 @@ function registerNotificationsForum(forum) {
 }
 
 function registerRuntime(forum) {
-  registerResourceNormalizer('notifications', normalizeNotification)
-  registerResourceNormalizer('notification', normalizeNotification)
-
   forum.runtime({
     key: 'notifications-runtime',
     moduleId: 'notifications',

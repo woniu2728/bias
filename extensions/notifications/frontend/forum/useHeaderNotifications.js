@@ -1,11 +1,15 @@
-import { getEmptyState, getStateBlock, getUiCopy } from '@bias/forum'
+import {
+  getEmptyState,
+  getStateBlock,
+  getUiCopy
+} from '@bias/forum'
+import { ref } from '@bias/core'
 import {
   getNotificationPresentationModel,
   getResolvedNotificationTypes,
   resolveNotificationPath,
   useNotificationGroups
 } from './notificationRuntime.js'
-import { ref } from '@bias/forum'
 import { useHeaderNotificationActions } from './useHeaderNotificationActions.js'
 import { createHeaderNotificationDisplayState } from './useHeaderNotificationDisplayState.js'
 

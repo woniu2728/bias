@@ -1,4 +1,5 @@
-import { computed, getTrackedDiscussionIdsFromDiscussionItems, ref } from '@bias/forum'
+import { ref, computed } from '@bias/core'
+import { getTrackedDiscussionIdsFromDiscussionItems } from '@bias/realtime'
 import { flattenTags, normalizeTag, unwrapTagList } from './tagUtils.js'
 
 export function createTagsResourceState({

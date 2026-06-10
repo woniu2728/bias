@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from extensions.users.backend.models import User
+from typing import Any
 
 
 def parse_liked_by_search_filter(token: str) -> str | None:
@@ -47,7 +47,7 @@ def apply_liked_by_resource_filter(queryset, value, context: dict):
     return queryset.filter(likes__user__username=normalized).distinct()
 
 
-def resolve_liked_posts_for_user(user: User, context: dict) -> dict:
+def resolve_liked_posts_for_user(user: Any, context: dict) -> dict:
     return {
         "href": f"/api/posts?filter[likedBy]={user.id}",
         "filter": {

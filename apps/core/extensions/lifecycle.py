@@ -196,12 +196,12 @@ def reset_extension_runtime_state() -> None:
     )
     from apps.core.extensions.signal_runtime import disconnect_runtime_signal_receivers
     from apps.core.forum_permissions import clear_forum_permission_checkers
+    from apps.core.forum_resources import reset_forum_resource_bootstrap_state
     from apps.core.forum_runtime import (
-        clear_realtime_discussion_visibility_resolvers,
-        clear_realtime_included_enrichers,
+        clear_realtime_service,
     )
-    from apps.core.forum_registry import get_forum_registry
-    from apps.core.resource_registry import get_resource_registry
+    from apps.core.forum_registry import reset_forum_registry_state
+    from apps.core.resource_registry import reset_resource_registry_state
     from apps.core.settings_service import clear_runtime_setting_caches
 
     frontend_runtime_service._frontend_runtime_catalog = {}
@@ -217,16 +217,14 @@ def reset_extension_runtime_state() -> None:
     reset_extension_application_bootstrap_state()
     get_extension_manager().invalidate()
 
-    forum_registry = get_forum_registry()
-    forum_registry._external_enabled_module_ids.clear()
-
-    resource_registry = get_resource_registry()
+    reset_forum_registry_state()
+    reset_resource_registry_state()
+    reset_forum_resource_bootstrap_state()
 
     event_bus = get_forum_event_bus()
     event_bus.clear()
     reset_extension_runtime_event_listener_bootstrap()
-    clear_realtime_included_enrichers()
-    clear_realtime_discussion_visibility_resolvers()
+    clear_realtime_service()
     clear_forum_permission_checkers()
     bootstrap_extension_runtime_event_listeners()
 

@@ -6,15 +6,18 @@ from apps.core.resource_registry import (
 )
 
 
-_resources_bootstrapped = False
+_bootstrapped_registry_ids: set[int] = set()
 
 
-def bootstrap_forum_resource_fields() -> None:
-    global _resources_bootstrapped
-    if _resources_bootstrapped:
+def reset_forum_resource_bootstrap_state() -> None:
+    _bootstrapped_registry_ids.clear()
+
+
+def bootstrap_forum_resource_fields(registry=None) -> None:
+    registry = registry or get_resource_registry()
+    registry_id = id(registry)
+    if registry_id in _bootstrapped_registry_ids:
         return
-
-    registry = get_resource_registry()
 
     registry.register_resource(
         ResourceDefinition(
@@ -32,7 +35,7 @@ def bootstrap_forum_resource_fields() -> None:
             description="后台运行状态与统计资源。",
         )
     )
-    _resources_bootstrapped = True
+    _bootstrapped_registry_ids.add(registry_id)
 
 
 def _serialize_forum_base(forum, context: dict) -> dict:

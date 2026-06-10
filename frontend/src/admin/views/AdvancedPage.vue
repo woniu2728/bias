@@ -224,22 +224,9 @@
           <p class="Form-help">{{ advancedCopy?.queueEnabledHelpText || '关闭时强制同步执行。开启后，已接入任务会入队执行；入队失败时会同步回退，避免影响主流程。' }}</p>
         </div>
 
-        <div class="Form-group">
-          <label>
-            <input
-              id="advanced-realtime-typing-enabled"
-              v-model="settings.realtime_typing_enabled"
-              name="realtime_typing_enabled"
-              type="checkbox"
-              class="FormControl-checkbox"
-            />
-            {{ advancedCopy?.realtimeTypingEnabledLabel || '启用回复输入提示' }}
-          </label>
-          <p class="Form-help">{{ advancedCopy?.realtimeTypingEnabledHelpText || '关闭后，讨论详情页不再广播“正在输入”状态；仍保留其他实时通知与更新。' }}</p>
-        </div>
       </div>
 
-      <div class="Form-section">
+      <div v-if="showHumanVerificationSection" class="Form-section">
         <h3 class="Section-title">{{ advancedCopy?.humanVerificationSectionTitle || '安全与真人验证' }}</h3>
 
         <div class="Form-group">
@@ -328,67 +315,15 @@
           <p class="Form-help">{{ advancedCopy?.storageDriverHelpText || 'Composer 上传、头像上传和后续附件能力都会读取这里的运行时配置' }}</p>
         </div>
 
-        <div class="Form-grid">
-          <div class="Form-group">
-            <label for="advanced-storage-attachments-dir">{{ advancedCopy?.storageAttachmentsDirLabel || '附件目录' }}</label>
-            <input
-              id="advanced-storage-attachments-dir"
-              v-model="settings.storage_attachments_dir"
-              name="storage_attachments_dir"
-              type="text"
-              class="FormControl"
-              :placeholder="advancedConfig?.placeholders?.storageAttachmentsDir || 'attachments'"
-            />
-            <p class="Form-help">{{ advancedCopy?.storageAttachmentsDirHelpText || '统一的附件对象目录，支持多级路径' }}</p>
-          </div>
+        <p class="Form-help">{{ advancedCopy?.storageObjectDirectoryHelpText || '附件和头像对象目录由对应扩展管理。' }}</p>
 
-          <div class="Form-group">
-            <label for="advanced-storage-avatars-dir">{{ advancedCopy?.storageAvatarsDirLabel || '头像目录' }}</label>
-            <input
-              id="advanced-storage-avatars-dir"
-              v-model="settings.storage_avatars_dir"
-              name="storage_avatars_dir"
-              type="text"
-              class="FormControl"
-              :placeholder="advancedConfig?.placeholders?.storageAvatarsDir || 'avatars'"
-            />
-            <p class="Form-help">{{ advancedCopy?.storageAvatarsDirHelpText || '头像和缩略图的对象目录' }}</p>
-          </div>
-        </div>
-
-        <div class="Form-section Form-section--nested">
+        <div v-if="showUploadPolicySection" class="Form-section Form-section--nested">
           <div class="Form-sectionHeader">
             <h4>{{ advancedCopy?.uploadPolicyTitle || '上传策略' }}</h4>
             <p>{{ advancedCopy?.uploadPolicyDescription || '限制上传大小，扩展名白名单仍由服务端固定控制。' }}</p>
           </div>
 
           <div class="Form-grid">
-            <div class="Form-group">
-              <label for="advanced-upload-avatar-max-size">{{ advancedCopy?.uploadAvatarMaxSizeLabel || '头像最大体积（MB）' }}</label>
-              <input
-                id="advanced-upload-avatar-max-size"
-                v-model.number="settings.upload_avatar_max_size_mb"
-                name="upload_avatar_max_size_mb"
-                type="number"
-                min="1"
-                max="100"
-                class="FormControl"
-              />
-            </div>
-
-            <div class="Form-group">
-              <label for="advanced-upload-attachment-max-size">{{ advancedCopy?.uploadAttachmentMaxSizeLabel || '附件最大体积（MB）' }}</label>
-              <input
-                id="advanced-upload-attachment-max-size"
-                v-model.number="settings.upload_attachment_max_size_mb"
-                name="upload_attachment_max_size_mb"
-                type="number"
-                min="1"
-                max="100"
-                class="FormControl"
-              />
-            </div>
-
             <div class="Form-group">
               <label for="advanced-upload-site-asset-max-size">{{ advancedCopy?.uploadSiteAssetMaxSizeLabel || '站点资源最大体积（MB）' }}</label>
               <input
@@ -890,6 +825,8 @@ const modalStore = useModalStore()
 const { saveSuccess, saveError, saveErrorMessage, resetSaveFeedback, showSaveSuccess, showSaveError } = useAdminSaveFeedback()
 const cacheDriverOptions = computed(() => advancedConfig.value?.cacheDriverOptions || [])
 const queueDriverOptions = computed(() => advancedConfig.value?.queueDriverOptions || [])
+const showHumanVerificationSection = computed(() => Boolean(advancedConfig.value?.enableHumanVerificationSection))
+const showUploadPolicySection = computed(() => Boolean(advancedConfig.value?.enableUploadPolicySection))
 const humanVerificationProviderOptions = computed(() => advancedConfig.value?.humanVerificationProviderOptions || [])
 const storageDriverOptions = computed(() => advancedConfig.value?.storageDriverOptions || [])
 const imagebedMethodOptions = computed(() => advancedConfig.value?.imagebedMethodOptions || [])
@@ -949,7 +886,6 @@ function defaultSettings() {
     cache_lifetime: 3600,
     queue_driver: 'sync',
     queue_enabled: false,
-    realtime_typing_enabled: true,
     maintenance_mode: false,
     maintenance_mode_key: 'none',
     maintenance_message: '',
@@ -957,17 +893,7 @@ function defaultSettings() {
     extension_safe_mode_extensions: [],
     debug_mode: false,
     log_queries: false,
-    auth_human_verification_provider: 'off',
-    auth_turnstile_site_key: '',
-    auth_turnstile_secret_key: '',
-    auth_human_verification_login_enabled: true,
-    auth_human_verification_register_enabled: true,
     storage_driver: 'local',
-    storage_attachments_dir: 'attachments',
-    storage_avatars_dir: 'avatars',
-    upload_avatar_max_size_mb: 2,
-    upload_attachment_max_size_mb: 10,
-    upload_site_asset_max_size_mb: 2,
     storage_local_path: '',
     storage_local_base_url: '/media/',
     storage_s3_bucket: '',
@@ -1158,12 +1084,9 @@ function createSettingsSnapshot(value) {
       ? value.extension_safe_mode_extensions.join(',')
       : String(value.extension_safe_mode_extensions || ''),
     queue_enabled: Boolean(value.queue_enabled),
-    realtime_typing_enabled: Boolean(value.realtime_typing_enabled),
     queue_driver: value.queue_driver,
     log_queries: Boolean(value.log_queries),
     storage_driver: value.storage_driver,
-    upload_avatar_max_size_mb: normalizeUploadSize(value.upload_avatar_max_size_mb),
-    upload_attachment_max_size_mb: normalizeUploadSize(value.upload_attachment_max_size_mb),
     upload_site_asset_max_size_mb: normalizeUploadSize(value.upload_site_asset_max_size_mb),
   }
 }

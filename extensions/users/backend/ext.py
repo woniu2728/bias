@@ -6,12 +6,18 @@ from apps.core.extensions import (
     FrontendExtender,
     LifecycleExtender,
     ModelExtender,
+    SearchIndexExtender,
+    SettingsExtender,
+    ServiceProviderExtender,
     UserExtender,
 )
+from apps.core.extensions.backend import _build_setting_field_definition
 from apps.core.forum_registry_types import AdminPageDefinition, PermissionDefinition
 from extensions.users.backend.admin_api import router as admin_users_router
 from extensions.users.backend.api import router as users_router
 from extensions.users.backend.handlers import user_resource_endpoints
+from extensions.users.backend.human_verification import serialize_public_human_verification_setting
+from extensions.users.backend.mail_templates import mail_setting_defaults
 from extensions.users.backend.models import AccessToken, EmailToken, Group, PasswordToken, Permission, User
 from extensions.users.backend.resources import (
     admin_stats_resource_field_definitions,
@@ -19,7 +25,8 @@ from extensions.users.backend.resources import (
     user_resource_field_definitions,
     user_resource_relationship_definitions,
 )
-from extensions.users.backend.runtime import user_model_provider
+from extensions.users.backend.runtime import user_model_provider, user_service_provider
+from extensions.users.backend.search_targets import user_search_target_provider
 from extensions.users.backend.services import UserService
 
 
@@ -30,6 +37,54 @@ def extend():
     return [
         FrontendExtender(
             admin_entry="extensions/users/frontend/admin/index.js",
+            forum_entry="extensions/users/frontend/forum/index.js",
+        )
+        .route(
+            "/login",
+            "login",
+            "./AuthRouteView.vue",
+            order=20,
+        )
+        .route(
+            "/register",
+            "register",
+            "./AuthRouteView.vue",
+            order=21,
+        )
+        .route(
+            "/forgot-password",
+            "forgot-password",
+            "./AuthRouteView.vue",
+            order=22,
+        )
+        .route(
+            "/verify-email",
+            "verify-email",
+            "./VerifyEmailView.vue",
+            title="验证邮箱",
+            description="验证你的账号邮箱地址。",
+            order=23,
+        )
+        .route(
+            "/reset-password",
+            "reset-password",
+            "./ResetPasswordView.vue",
+            title="重置密码",
+            description="设置新的账号登录密码。",
+            order=24,
+        )
+        .route(
+            "/profile",
+            "profile",
+            "./ProfileView.vue",
+            requires_auth=True,
+            order=50,
+        )
+        .route(
+            "/u/:id",
+            "user-profile",
+            "./ProfileView.vue",
+            order=51,
         ),
         AdminSurfaceExtender(
             permissions=permission_definitions(),
@@ -62,16 +117,103 @@ def extend():
             disable=disable,
             uninstall=uninstall,
         ),
+        build_user_settings_extender(),
+        build_human_verification_settings_extender(),
         ForumPermissionExtender().checker(
             "users.forum-permissions",
             UserService.has_forum_permission,
             description="基于用户组、后台权限与扩展策略判断论坛权限。",
         ),
+        build_mail_settings_extender(),
         UserExtender().model_provider(
             user_model_provider,
             description="提供 core 运行时需要的用户模型查询、在线用户序列化与管理员账号管理能力。",
         ),
+        ServiceProviderExtender(
+            key="users.service",
+            provider=user_service_provider,
+        ),
+        ServiceProviderExtender(
+            key="search.target.user",
+            provider=user_search_target_provider,
+        ),
+        SearchIndexExtender().postgres_index(
+            "users_profile_fts_idx",
+            drop="DROP INDEX CONCURRENTLY IF EXISTS users_profile_fts_idx",
+            create="""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS users_profile_fts_idx
+                ON users
+                USING GIN (
+                    to_tsvector(
+                        'simple',
+                        coalesce(username, '') || ' ' || coalesce(display_name, '') || ' ' || coalesce(bio, '')
+                    )
+                )
+            """,
+            description="为用户名称、显示名和简介提供 PostgreSQL 全文搜索索引。",
+        ),
     ]
+
+
+def build_mail_settings_extender():
+    extender = SettingsExtender(generated_page=False)
+    for key, value in mail_setting_defaults().items():
+        extender = extender.default(f"mail.{key}", value)
+    return extender
+
+
+def build_user_settings_extender():
+    return SettingsExtender(fields=(
+        _build_setting_field_definition({
+            "key": "avatars_dir",
+            "label": "头像目录",
+            "type": "text",
+            "default": "avatars",
+            "help_text": "头像和缩略图对象保存目录，支持多级路径。",
+            "required": True,
+            "order": 5,
+        }),
+        _build_setting_field_definition({
+            "key": "avatar_max_size_mb",
+            "label": "头像最大体积（MB）",
+            "type": "number",
+            "default": 2,
+            "help_text": "限制用户头像上传大小，允许范围 1-100MB。",
+            "required": True,
+            "order": 10,
+        }),
+    )).default("avatars_dir", "avatars").default("avatar_max_size_mb", 2)
+
+
+def build_human_verification_settings_extender():
+    return (
+        SettingsExtender(generated_page=False)
+        .default("advanced.auth_human_verification_provider", "off")
+        .default("advanced.auth_turnstile_site_key", "")
+        .default("advanced.auth_turnstile_secret_key", "")
+        .default("advanced.auth_human_verification_login_enabled", True)
+        .default("advanced.auth_human_verification_register_enabled", True)
+        .serialize_to_forum(
+            "auth_human_verification_provider",
+            "advanced.auth_human_verification_provider",
+            serialize_public_human_verification_setting("auth_human_verification_provider"),
+        )
+        .serialize_to_forum(
+            "auth_turnstile_site_key",
+            "advanced.auth_turnstile_site_key",
+            serialize_public_human_verification_setting("auth_turnstile_site_key"),
+        )
+        .serialize_to_forum(
+            "auth_human_verification_login_enabled",
+            "advanced.auth_human_verification_login_enabled",
+            serialize_public_human_verification_setting("auth_human_verification_login_enabled"),
+        )
+        .serialize_to_forum(
+            "auth_human_verification_register_enabled",
+            "advanced.auth_human_verification_register_enabled",
+            serialize_public_human_verification_setting("auth_human_verification_register_enabled"),
+        )
+    )
 
 
 def permission_definitions():
@@ -160,24 +302,4 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Users 扩展已卸载。",
-    }
-
-
-def run_migrations(context):
-    return _migration_hook_result(context, "run_migrations", "Users 扩展迁移已执行。")
-
-
-def rollback_migrations(context):
-    return _migration_hook_result(context, "rollback_migrations", "Users 扩展迁移已回滚。")
-
-
-def _migration_hook_result(context, hook: str, message: str):
-    return {
-        "hook": hook,
-        "status": "ok",
-        "status_label": "已执行",
-        "message": message,
-        "details": {
-            "migration_namespace": context.migration_namespace,
-        },
     }

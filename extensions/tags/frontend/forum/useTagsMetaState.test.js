@@ -1,6 +1,7 @@
+import { nextTick, ref } from '@bias/core'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { nextTick, ref } from '@bias/forum'
+
 import { createTagsMetaState } from './useTagsMetaState.js'
 
 test('tags meta state resolves hero and state copy', () => {

@@ -1,23 +1,26 @@
 from apps.core.extensions import (
     ApiResourceExtender,
+    EventListenersExtender,
     ForumCapabilitiesExtender,
     FrontendExtender,
     LifecycleExtender,
     ModelExtender,
     NotificationsExtender,
     PolicyExtender,
+    RuntimeModel,
     SearchDriverExtender,
+    ServiceProviderExtender,
     SettingsExtender,
 )
 from apps.core.extensions.backend import _build_setting_field_definition
-from apps.core.extensions.types import ExtensionModelRelationDefinition, ExtensionSearchDriverDefinition
+from apps.core.extensions.types import ExtensionEventListenerDefinition, ExtensionModelRelationDefinition, ExtensionSearchDriverDefinition
 from apps.core.forum_registry_types import NotificationTypeDefinition, UserPreferenceDefinition
 from apps.core.forum_registry_types import SearchFilterDefinition
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceFieldDefinition, ResourceFilterDefinition, ResourceRelationshipDefinition
-from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
 from extensions.likes.backend.models import PostLike
+from extensions.likes.backend.events import PostLikedEvent
 from extensions.likes.backend.handlers import dispatch_post_like_mutation
+from extensions.likes.backend.listeners import handle_post_liked_notification
 from extensions.likes.backend.resources import (
     post_like_preload_resolver,
     resolve_post_likes,
@@ -29,10 +32,13 @@ from extensions.likes.backend.search import (
     apply_liked_by_resource_filter,
     parse_liked_by_search_filter,
 )
-from extensions.likes.backend.services import like_post_policy, resolve_post_can_like
+from extensions.likes.backend.services import LikePostPolicy, resolve_post_can_like
+from extensions.likes.backend.runtime import like_service_provider
 
 
 EXTENSION_ID = "likes"
+POST_MODEL = RuntimeModel("posts.service", description="posts 扩展提供的帖子模型。")
+USER_MODEL = RuntimeModel("users.service", description="users 扩展提供的用户模型。")
 
 
 def extend():
@@ -44,6 +50,9 @@ def extend():
             notification_types=notification_type_definitions(),
             user_preferences=user_preference_definitions(),
         ),
+        EventListenersExtender(
+            listeners=event_listener_definitions(),
+        ),
         SettingsExtender(fields=setting_definitions())
         .default("like_own_post", False),
         ForumCapabilitiesExtender(
@@ -52,7 +61,11 @@ def extend():
         SearchDriverExtender(
             drivers=search_driver_definitions(),
         ),
-        PolicyExtender(mounts=(("post.like", like_post_policy),)),
+        PolicyExtender(mounts=(("post.like", LikePostPolicy),)),
+        ServiceProviderExtender(
+            key="likes.service",
+            provider=like_service_provider,
+        ),
         ModelExtender(
             relations=model_relation_definitions(),
         ).owns(
@@ -86,6 +99,16 @@ def notification_type_definitions():
             preference_key="notify_post_liked",
             preference_label="回复被点赞通知",
             preference_description="当你的回复被其他用户点赞时通知你。",
+        ),
+    )
+
+
+def event_listener_definitions():
+    return (
+        ExtensionEventListenerDefinition(
+            event_type=PostLikedEvent,
+            handler=handle_post_liked_notification,
+            description="点赞后发送回复被点赞通知。",
         ),
     )
 
@@ -145,14 +168,14 @@ def search_driver_definitions():
 def model_relation_definitions():
     return (
         ExtensionModelRelationDefinition(
-            model=Post,
+            model=POST_MODEL,
             name="likes",
             resolver=lambda post: [
                 like.user
                 for like in post.likes.select_related("user").all()
             ],
             relation_type="belongsToMany",
-            related_model=User,
+            related_model=USER_MODEL,
             description="点赞该回复的用户。",
             inject_attribute=False,
         ),
@@ -261,24 +284,4 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Likes 扩展已卸载。",
-    }
-
-
-def run_migrations(context):
-    return _migration_hook_result(context, "run_migrations", "Likes 扩展迁移已执行。")
-
-
-def rollback_migrations(context):
-    return _migration_hook_result(context, "rollback_migrations", "Likes 扩展迁移已回滚。")
-
-
-def _migration_hook_result(context, hook: str, message: str):
-    return {
-        "hook": hook,
-        "status": "ok",
-        "status_label": "已执行",
-        "message": message,
-        "details": {
-            "migration_namespace": context.migration_namespace,
-        },
     }

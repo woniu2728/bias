@@ -6,10 +6,10 @@ from ninja import Router
 from apps.core.api_errors import api_error
 from apps.core.auth import get_optional_user
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
+from apps.core.forum_permissions import has_forum_permission
 from apps.core.resource_api import ResourceQueryOptions, apply_resource_preloads, parse_resource_query_options
 from extensions.search.backend.schemas import SearchFilterCatalogSchema, SearchSuggestionSchema
 from extensions.search.backend.services import SearchService
-from extensions.users.backend.services import UserService
 
 
 router = Router()
@@ -87,7 +87,7 @@ def search(
 
     query = q.strip()
     user = get_optional_user(request)
-    can_search_users = bool(user and UserService.has_forum_permission(user, "searchUsers"))
+    can_search_users = has_forum_permission(user, "searchUsers")
     discussion_resource_options = parse_resource_query_options(request, "search_discussion")
     post_resource_options = parse_resource_query_options(request, "search_post")
     user_resource_options = parse_resource_query_options(request, "search_user")
@@ -273,3 +273,4 @@ def get_search_filters(request, target: str = "all"):
             for item in SearchService.get_public_search_filters(targets=targets)
         ],
     }
+

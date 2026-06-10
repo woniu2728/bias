@@ -1,72 +1,86 @@
-import api from '../api/index.js'
-
-export const forumApi = api
-
 export {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  reactive,
-  ref,
-  watch,
-  useRoute,
-  useRouter,
-} from './vueRuntime.js'
+  ForumExtender,
+  extendForum,
+} from '../common/sdk.js'
 export {
-  usePaginatedListState,
-  useRouteListState,
-  useRoutePagination,
-  useStartDiscussionAction,
-} from './routeRuntime.js'
-export {
+  getComposerNotices,
+  getComposerFields,
+  getComposerSecondaryActions,
+  getComposerDraftMeta,
+  getComposerHosts,
+  getComposerUploadHandler,
+  runComposerPreviewTransformers,
+  getComposerStatusItems,
+  getComposerTools,
   getComposerAutocompleteProviders,
   getEmptyState,
-  getForumRealtimeEvents,
-  getNotificationRenderers,
+  getFeedbackNote,
+  getForumNavItems,
+  getForumNavSections,
+  getForumSidebarSections,
+  getHeroMetaItems,
+  getPageState,
   getStateBlock,
   getUiCopy,
+  registerComposerNotice,
+  registerComposerField,
+  registerComposerHost,
+  registerComposerUploadHandler,
+  registerComposerSecondaryAction,
+  registerComposerInitialState,
+  registerComposerPayloadContributor,
   registerComposerAutocompleteProvider,
+  registerComposerPreviewTransformer,
+  registerComposerStatusItem,
+  registerComposerSubmitGuard,
+  registerComposerSubmitSuccess,
+  registerComposerTool,
   registerEmptyState,
-  registerForumRealtimeEvent,
+  registerFeedbackNote,
+  registerForumRuntime,
+  registerForumNavSection,
+  registerForumSidebarSection,
+  registerHeaderItem,
+  registerHeroMeta,
+  registerStateBlock,
+  registerUiCopy,
+  runComposerInitialStateContributors,
+  runComposerPayloadContributors,
+  runComposerSubmitGuards,
+  runComposerSubmitSuccess,
+  runForumRuntimeHook,
 } from './frontendRegistry.js'
 export const ModerationActionModal = null
-export { defineStore } from 'pinia'
-export { registerResourceNormalizer, useResourceStore } from '../stores/resource.js'
+export const ForumActionMenu = null
+export const ForumHeroPanel = null
+export const ForumInlineMessage = null
+export const ForumLoadMoreButton = null
+export const ForumPageWithSidebar = null
+export const ForumPagination = null
+export const ForumPrimaryNav = null
+export const ForumSearchFilterNav = null
+export const ForumStateBadge = null
+export const ForumStateBlock = null
+export const ComposerActionBar = null
+export const ComposerAutocompleteOutlet = null
+export const ComposerHeaderBar = null
+export const ComposerNoticeStack = null
+export const ComposerPreviewPanel = null
+export const ComposerStatusBar = null
+
+export function useForumUiStore() {
+  return {
+    applyRuntimeState() {},
+    hydrateFromUiValues() {},
+    initialize() {},
+    refreshFromUserPreferences() {},
+    reset() {},
+    syncFromForumSettings() {},
+  }
+}
 export {
   getTextareaCaretCoordinates,
 } from '../utils/composer.js'
-export {
-  buildDiscussionPath,
-  buildUserPath,
-  formatRelativeTime,
-  getUserAvatarColor,
-  getUserDisplayName,
-  getUserInitial,
-  normalizeDiscussion,
-  normalizePost,
-  normalizeUser,
-  unwrapList,
-} from '../utils/forum.js'
-export {
-  FORUM_REALTIME_REFRESH_EVENT_TYPES,
-  getForumRealtimeEventPolicy,
-  getTrackedDiscussionIdsFromDiscussionItems,
-  getTrackedDiscussionIdsFromPostItems,
-  hasTrackedDiscussionId,
-  mergeForumEventPayload,
-  shouldAppendForumRealtimePost,
-  shouldMarkForumEventAsNewReply,
-  shouldRefreshForumEvent,
-  shouldUpsertForumRealtimePost,
-} from '../utils/forumRealtime.js'
-export {
-  highlightSearchText,
-} from '../utils/search.js'
-export {
-  renderTwemojiHtml,
-  renderTwemojiText,
-  setTwemojiBaseUrl,
-  setTwemojiEnabled,
-} from '../utils/twemoji.js'
-export * from '../common/sdk.js'
+export function useComposerRuntime() {
+  return {}
+}

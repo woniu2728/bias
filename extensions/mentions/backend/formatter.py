@@ -1,4 +1,4 @@
-from extensions.users.backend.models import User
+from apps.core.extensions.runtime_access import get_runtime_username_id_map
 from extensions.mentions.backend.parser import MENTION_RE, extract_mentioned_usernames
 
 
@@ -7,10 +7,7 @@ def render_mentions_html(html: str) -> str:
         return ""
 
     mention_names = set(extract_mentioned_usernames(html))
-    mention_map = {
-        item["username"]: item["id"]
-        for item in User.objects.filter(username__in=mention_names).values("id", "username")
-    }
+    mention_map = get_runtime_username_id_map(mention_names)
 
     def replace_mention(match):
         username = match.group(1)
@@ -29,3 +26,4 @@ def render_mentions_html(html: str) -> str:
             processed_parts.append("<a" + part)
 
     return "".join(processed_parts)
+

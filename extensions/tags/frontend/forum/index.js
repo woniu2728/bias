@@ -1,21 +1,33 @@
-import { buildDiscussionHeroColorStyle, extendForum, forumApi, getUiCopy, registerResourceNormalizer } from '@bias/forum'
+import {
+  ResourceNormalizer,
+  Store,
+  api
+} from '@bias/core'
+import { extendForum,
+  getUiCopy
+} from '@bias/forum'
+import { buildDiscussionHeroColorStyle } from '@bias/discussions'
 import DiscussionTagLabels from './DiscussionTagLabels.vue'
 import DiscussionTaggedPostItem from './DiscussionTaggedPostItem.vue'
 import DiscussionComposerTagFields from './DiscussionComposerTagFields.vue'
 import DiscussionSidebarTagsSection from './DiscussionSidebarTagsSection.vue'
 import TagDiscussionModal from './TagDiscussionModal.vue'
+import { TagModel } from './tagModel.js'
 import { buildTagPath, flattenTags, normalizeTag, unwrapTagList } from './tagUtils.js'
 
 export const extend = [
+  new Store()
+    .add('tags', TagModel)
+    .add('tag', TagModel),
+  new ResourceNormalizer()
+    .add('tags', normalizeTag)
+    .add('tag', normalizeTag)
+    .add('discussions', normalizeTaggedDiscussion)
+    .add('discussion', normalizeTaggedDiscussion),
   extendForum(registerTagsForum),
 ]
 
 function registerTagsForum(forum) {
-  registerResourceNormalizer('tags', normalizeTag)
-  registerResourceNormalizer('tag', normalizeTag)
-  registerResourceNormalizer('discussions', normalizeTaggedDiscussion)
-  registerResourceNormalizer('discussion', normalizeTaggedDiscussion)
-
   forum.postType('discussionTagged', {
     label: '讨论标签变更',
     component: DiscussionTaggedPostItem,
@@ -69,7 +81,7 @@ function registerTagsForum(forum) {
       return {
         currentTagSlug,
         async loadResources({ resourceStore }) {
-          const tagsResponse = await forumApi.get('/tags', {
+          const tagsResponse = await api.get('/tags', {
             params: {
               include_children: true,
             },
@@ -77,7 +89,7 @@ function registerTagsForum(forum) {
           let currentTagResponse = null
           if (currentTagSlug) {
             try {
-              currentTagResponse = await forumApi.get(`/tags/slug/${currentTagSlug}`)
+              currentTagResponse = await api.get(`/tags/slug/${currentTagSlug}`)
             } catch (error) {
               console.error('加载标签详情失败:', error)
             }
@@ -110,7 +122,7 @@ function registerTagsForum(forum) {
     isVisible: ({ route }) => route?.name !== 'tag-detail',
     resolve: () => ({
       async loadResources({ resourceStore }) {
-        const response = await forumApi.get('/tags', {
+        const response = await api.get('/tags', {
           params: {
             include_children: true,
           },
@@ -419,7 +431,7 @@ function registerTagsForum(forum) {
     order: 20,
     surfaces: ['search-modal-empty'],
     async load({ modalStore, resourceStore, router }) {
-      const response = await forumApi.get('/tags/popular', {
+      const response = await api.get('/tags/popular', {
         params: {
           limit: 6,
         },

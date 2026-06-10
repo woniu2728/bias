@@ -8,6 +8,9 @@ from apps.core.extensions import (
     ModelExtender,
     ModelVisibilityExtender,
     RealtimeExtender,
+    RuntimeModel,
+    SearchIndexExtender,
+    ServiceProviderExtender,
 )
 from apps.core.forum_registry_types import (
     DiscussionListFilterDefinition,
@@ -16,22 +19,18 @@ from apps.core.forum_registry_types import (
     PostTypeDefinition,
 )
 from apps.core.extensions.types import ExtensionEventListenerDefinition
-from apps.core.forum_events import (
+from extensions.discussions.backend.events import (
     DiscussionCreatedEvent,
     DiscussionHiddenEvent,
     DiscussionLockedEvent,
     DiscussionRenamedEvent,
     DiscussionStickyChangedEvent,
-    PostCreatedEvent,
-    PostHiddenEvent,
 )
 from extensions.discussions.backend.listeners import (
-    handle_discussion_created,
     handle_discussion_hidden,
     handle_discussion_locked,
     handle_discussion_renamed,
     handle_discussion_sticky_changed,
-    handle_post_created,
     handle_post_hidden,
 )
 from extensions.discussions.backend.registry import (
@@ -51,18 +50,46 @@ from extensions.discussions.backend.resources import (
     discussion_resource_definitions,
     discussion_resource_field_definitions,
 )
-from extensions.discussions.backend.realtime import resolve_visible_discussion_ids
+from extensions.discussions.backend.realtime import discussion_realtime_broadcaster_provider, resolve_visible_discussion_ids
+from extensions.discussions.backend.runtime import discussion_service_provider, discussion_timeline_provider
+from extensions.discussions.backend.search_targets import discussion_search_target_provider, post_search_target_provider
 from extensions.discussions.backend.visibility import scope_discussion_view, scope_post_view
-from extensions.posts.backend.models import Post
 
 
 EXTENSION_ID = "discussions"
+POST_MODEL = RuntimeModel("posts.service", description="posts 扩展提供的帖子模型。")
 
 
 def extend():
     return [
         FrontendExtender(
             admin_entry="extensions/discussions/frontend/admin/index.js",
+            forum_entry="extensions/discussions/frontend/forum/index.js",
+        )
+        .route(
+            "/",
+            "home",
+            "./DiscussionListView.vue",
+            title="全部讨论",
+            description="浏览论坛最新讨论、热门主题和社区回复。",
+            order=0,
+        )
+        .route(
+            "/d/:id",
+            "discussion-detail",
+            "./DiscussionDetailView.vue",
+            title="讨论详情",
+            description="查看讨论内容和回复。",
+            order=1,
+        )
+        .route(
+            "/discussions/create",
+            "discussion-create",
+            "./DiscussionCreateView.vue",
+            title="发起讨论",
+            description="创建新的论坛讨论。",
+            requires_auth=True,
+            order=2,
         ),
         AdminSurfaceExtender(
             permissions=permission_definitions(),
@@ -80,6 +107,52 @@ def extend():
         RealtimeExtender().discussion_visibility(
             resolve_visible_discussion_ids,
             description="根据讨论可见性规则解析实时订阅可见讨论。",
+        )
+        .broadcast_discussion_event(
+            DiscussionCreatedEvent,
+            "discussion.created",
+            include_discussion=True,
+            include_post=True,
+            post_id_getter=lambda discussion: discussion.first_post_id,
+            condition=lambda event: event.is_approved,
+            description="审核通过的讨论创建后广播实时讨论和首帖资源。",
+        )
+        .broadcast_discussion_event(
+            DiscussionRenamedEvent,
+            "discussion.renamed",
+            include_discussion=True,
+            description="讨论重命名后广播实时讨论资源。",
+        )
+        .broadcast_discussion_event(
+            DiscussionLockedEvent,
+            "discussion.locked",
+            include_discussion=True,
+            description="讨论锁定状态变化后广播实时讨论资源。",
+        )
+        .broadcast_discussion_event(
+            DiscussionStickyChangedEvent,
+            "discussion.sticky_changed",
+            include_discussion=True,
+            description="讨论置顶状态变化后广播实时讨论资源。",
+        )
+        .broadcast_discussion_event(
+            DiscussionHiddenEvent,
+            "discussion.hidden",
+            description="讨论隐藏状态变化后广播实时事件。",
+        )
+        .broadcast_discussion_event(
+            "extensions.posts.backend.events.PostCreatedEvent",
+            "post.created",
+            include_discussion=True,
+            include_post=True,
+            post_id="post_id",
+            condition=lambda event: event.is_approved,
+            description="审核通过的回复创建后广播实时讨论和帖子资源。",
+        )
+        .broadcast_discussion_event(
+            "extensions.posts.backend.events.PostHiddenEvent",
+            "post.hidden",
+            description="回复隐藏状态变化后广播实时事件。",
         ),
         ApiResourceExtender("discussion")
         .endpoints_with(*discussion_resource_endpoints())
@@ -99,9 +172,39 @@ def extend():
             description="限制当前用户只能查看有权限访问的讨论。",
         )
         .scope(
-            Post,
+            POST_MODEL,
             scope_post_view,
             description="限制当前用户只能查看有权限访问的讨论帖子。",
+        ),
+        ServiceProviderExtender(
+            key="discussions.service",
+            provider=discussion_service_provider,
+        ),
+        ServiceProviderExtender(
+            key="discussions.timeline",
+            provider=discussion_timeline_provider,
+        ),
+        ServiceProviderExtender(
+            key="search.target.discussion",
+            provider=discussion_search_target_provider,
+        ),
+        ServiceProviderExtender(
+            key="search.target.post",
+            provider=post_search_target_provider,
+        ),
+        ServiceProviderExtender(
+            key="realtime.discussion_broadcaster",
+            provider=discussion_realtime_broadcaster_provider,
+        ),
+        SearchIndexExtender().postgres_index(
+            "discussions_title_slug_fts_idx",
+            drop="DROP INDEX CONCURRENTLY IF EXISTS discussions_title_slug_fts_idx",
+            create="""
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS discussions_title_slug_fts_idx
+                ON discussions
+                USING GIN (to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(slug, '')))
+            """,
+            description="为讨论标题和 slug 提供 PostgreSQL 全文搜索索引。",
         ),
         LifecycleExtender(
             install=install,
@@ -403,39 +506,29 @@ def discussion_list_filter_definitions():
 def event_listener_definitions():
     return (
         ExtensionEventListenerDefinition(
-            event_type=DiscussionCreatedEvent,
-            handler=handle_discussion_created,
-            description="讨论创建后广播实时讨论和首帖资源。",
-        ),
-        ExtensionEventListenerDefinition(
             event_type=DiscussionRenamedEvent,
             handler=handle_discussion_renamed,
-            description="讨论重命名后广播实时事件并写入时间线事件帖。",
+            description="讨论重命名后写入时间线事件帖。",
         ),
         ExtensionEventListenerDefinition(
             event_type=DiscussionLockedEvent,
             handler=handle_discussion_locked,
-            description="讨论锁定状态变化后广播实时事件并写入时间线事件帖。",
+            description="讨论锁定状态变化后写入时间线事件帖。",
         ),
         ExtensionEventListenerDefinition(
             event_type=DiscussionStickyChangedEvent,
             handler=handle_discussion_sticky_changed,
-            description="讨论置顶状态变化后广播实时事件并写入时间线事件帖。",
+            description="讨论置顶状态变化后写入时间线事件帖。",
         ),
         ExtensionEventListenerDefinition(
             event_type=DiscussionHiddenEvent,
             handler=handle_discussion_hidden,
-            description="讨论隐藏状态变化后广播实时事件并写入时间线事件帖。",
+            description="讨论隐藏状态变化后写入时间线事件帖。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostCreatedEvent,
-            handler=handle_post_created,
-            description="可见回复创建后广播实时讨论和帖子资源。",
-        ),
-        ExtensionEventListenerDefinition(
-            event_type=PostHiddenEvent,
+            event_type="extensions.posts.backend.events.PostHiddenEvent",
             handler=handle_post_hidden,
-            description="回复隐藏状态变化后广播实时事件并写入时间线事件帖。",
+            description="回复隐藏状态变化后写入时间线事件帖。",
         ),
     )
 
@@ -472,24 +565,4 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Discussions 扩展已卸载。",
-    }
-
-
-def run_migrations(context):
-    return _migration_hook_result(context, "run_migrations", "Discussions 扩展迁移已执行。")
-
-
-def rollback_migrations(context):
-    return _migration_hook_result(context, "rollback_migrations", "Discussions 扩展迁移已回滚。")
-
-
-def _migration_hook_result(context, hook: str, message: str):
-    return {
-        "hook": hook,
-        "status": "ok",
-        "status_label": "已执行",
-        "message": message,
-        "details": {
-            "migration_namespace": context.migration_namespace,
-        },
     }

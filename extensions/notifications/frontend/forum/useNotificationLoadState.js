@@ -1,5 +1,5 @@
-import { usePaginatedListState } from '@bias/forum'
-import { ref } from '@bias/forum'
+import { ref, usePaginatedListState } from '@bias/core'
+
 
 export function createNotificationLoadState({
   fetchNotifications,

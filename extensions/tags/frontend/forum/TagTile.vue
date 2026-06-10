@@ -36,11 +36,11 @@
 
 <script setup>
 import {
-  buildDiscussionPath,
   computed,
-  formatRelativeTime,
-  getEmptyState,
+  formatRelativeTime } from '@bias/core'
+import { getEmptyState
 } from '@bias/forum'
+import { buildDiscussionPath } from '@bias/discussions'
 import TagBadge from './TagBadge.vue'
 import { buildTagPath } from './tagUtils.js'
 

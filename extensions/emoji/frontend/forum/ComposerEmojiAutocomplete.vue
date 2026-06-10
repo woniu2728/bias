@@ -30,8 +30,14 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from '@bias/forum'
-import { getUiCopy } from '@bias/forum'
+
+import {
+  watch,
+  computed,
+  nextTick,
+  ref } from '@bias/core'
+import { getUiCopy
+} from '@bias/forum'
 
 const props = defineProps({
   items: {

@@ -74,7 +74,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { getUserAvatarColor, getUserInitial } from '@/utils/forum'
-import { useAuthStore } from '../../stores/auth'
+import { useAuthStore } from '@bias/users'
 import { getAdminRouteMeta } from '../navigation'
 
 defineProps({

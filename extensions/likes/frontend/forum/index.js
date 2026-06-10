@@ -1,8 +1,9 @@
 import {
-  extendForum,
-  forumApi,
-  getUiCopy,
   ref,
+  api
+} from '@bias/core'
+import { extendForum,
+  getUiCopy
 } from '@bias/forum'
 
 export const extend = [
@@ -110,7 +111,7 @@ async function handleTogglePostLike({
         like_count: Math.max(0, previousLikeCount - 1),
         is_liked: false,
       })
-      await forumApi.delete(`/posts/${post.id}/like`)
+      await api.delete(`/posts/${post.id}/like`)
       return
     }
 
@@ -118,7 +119,7 @@ async function handleTogglePostLike({
       like_count: previousLikeCount + 1,
       is_liked: true,
     })
-    await forumApi.post(`/posts/${post.id}/like`)
+    await api.post(`/posts/${post.id}/like`)
   } catch (error) {
     patchPost?.(post.id, {
       like_count: previousLikeCount,

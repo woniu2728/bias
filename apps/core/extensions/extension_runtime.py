@@ -306,12 +306,28 @@ class Extension:
         return tuple(self.discover().search_drivers)
 
     @property
+    def search_indexes(self):
+        return tuple(self.discover().search_indexes)
+
+    @property
     def event_listeners(self):
         return tuple(self.discover().event_listeners)
 
     @property
     def realtime_included(self):
         return tuple(self.discover().realtime_included)
+
+    @property
+    def realtime_discussion_visibility(self):
+        return tuple(self.discover().realtime_discussion_visibility)
+
+    @property
+    def realtime_discussion_transports(self):
+        return tuple(self.discover().realtime_discussion_transports)
+
+    @property
+    def realtime_discussion_broadcasts(self):
+        return tuple(self.discover().realtime_discussion_broadcasts)
 
     @property
     def discussion_lifecycle(self):

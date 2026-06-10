@@ -481,7 +481,6 @@ def _is_core_route_component(component: str, frontend: str) -> bool:
             "UsersPage",
         }
     return normalized in {
-        "DiscussionListView",
     }
 
 

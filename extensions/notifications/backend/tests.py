@@ -1,21 +1,64 @@
+import json
+from io import StringIO
+
 from django.core.cache import cache
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.db import connection
 from ninja_jwt.tokens import RefreshToken
 from unittest.mock import patch
 
-from extensions.discussions.backend.models import DiscussionUser
+from apps.core.forum_registry import get_forum_registry
 from apps.core.models import Setting
-from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
+from apps.core.extensions.runtime_access import (
+    create_runtime_discussion,
+    get_runtime_discussion_state_model,
+)
+from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry, get_resource_registry
 from apps.core.settings_service import clear_runtime_setting_caches
-from extensions.discussions.backend.services import DiscussionService
+from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.notifications.backend.services import NotificationService
-from extensions.posts.backend.services import PostService
-from extensions.users.backend.models import User
-from extensions.likes.backend.services import like_post
 from extensions.notifications.backend.ext import notification_resource_endpoints
-from extensions.notifications.backend.models import Notification
+from apps.core.extensions.runtime_access import get_runtime_notification_model
+from apps.core.extensions.runtime_access import (
+    create_runtime_post,
+    like_runtime_post,
+)
+from apps.core.extensions.runtime_access import (
+    get_runtime_user_model,
+)
+
+
+class RuntimeModelProxy:
+    def __init__(self, resolver):
+        self._resolver = resolver
+
+    def __getattr__(self, name):
+        return getattr(self._resolver(), name)
+
+
+User = RuntimeModelProxy(get_runtime_user_model)
+
+
+def discussion_state_model():
+    return get_runtime_discussion_state_model()
+
+
+def notification_model():
+    return get_runtime_notification_model()
+
+
+class RuntimeNotificationModel:
+    @property
+    def objects(self):
+        return notification_model().objects
+
+    def __call__(self, *args, **kwargs):
+        return notification_model()(*args, **kwargs)
+
+
+Notification = RuntimeNotificationModel()
 
 
 class NotificationServiceTests(TestCase):
@@ -38,6 +81,7 @@ class NotificationServiceTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
+
         self.mentioned = User.objects.create_user(
             username="mentioned",
             email="mentioned@example.com",
@@ -50,13 +94,13 @@ class NotificationServiceTests(TestCase):
             password="password123",
         )
 
-        self.discussion = DiscussionService.create_discussion(
+        self.discussion = create_runtime_discussion(
             title="Notification discussion",
             content="Initial post",
             user=self.author,
         )
         with self.captureOnCommitCallbacks(execute=True):
-            self.initial_reply = PostService.create_post(
+            self.initial_reply = create_runtime_post(
                 discussion_id=self.discussion.id,
                 content="First reply",
                 user=self.participant,
@@ -88,7 +132,7 @@ class NotificationServiceTests(TestCase):
 
     def test_reply_to_post_creates_post_reply_notification(self):
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.create_post(
+            create_runtime_post(
                 discussion_id=self.discussion.id,
                 content="@author Thanks for the update",
                 user=self.replier,
@@ -107,7 +151,7 @@ class NotificationServiceTests(TestCase):
 
     def test_like_notification_contains_post_number(self):
         with self.captureOnCommitCallbacks(execute=True):
-            like_post(self.initial_reply.id, self.replier)
+            like_runtime_post(self.initial_reply.id, self.replier)
 
         notification = Notification.objects.get(
             user=self.participant,
@@ -121,7 +165,7 @@ class NotificationServiceTests(TestCase):
 
     def test_mention_notification_contains_post_number(self):
         with self.captureOnCommitCallbacks(execute=True):
-            post = PostService.create_post(
+            post = create_runtime_post(
                 discussion_id=self.discussion.id,
                 content=f"Hello @{self.mentioned.username}",
                 user=self.replier,
@@ -142,7 +186,7 @@ class NotificationServiceTests(TestCase):
         self.participant.save(update_fields=["preferences"])
 
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.create_post(
+            create_runtime_post(
                 discussion_id=self.discussion.id,
                 content="Reply without notify",
                 user=self.replier,
@@ -161,7 +205,7 @@ class NotificationServiceTests(TestCase):
         self.participant.save(update_fields=["preferences"])
 
         with self.captureOnCommitCallbacks(execute=True):
-            like_post(self.initial_reply.id, self.replier)
+            like_runtime_post(self.initial_reply.id, self.replier)
 
         self.assertFalse(
             Notification.objects.filter(
@@ -176,7 +220,7 @@ class NotificationServiceTests(TestCase):
         self.mentioned.save(update_fields=["preferences"])
 
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.create_post(
+            create_runtime_post(
                 discussion_id=self.discussion.id,
                 content=f"Hello again @{self.mentioned.username}",
                 user=self.replier,
@@ -191,13 +235,13 @@ class NotificationServiceTests(TestCase):
 
     def test_multiple_replies_in_same_discussion_create_multiple_notifications(self):
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.create_post(
+            create_runtime_post(
                 discussion_id=self.discussion.id,
                 content="Second reply",
                 user=self.replier,
             )
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.create_post(
+            create_runtime_post(
                 discussion_id=self.discussion.id,
                 content="Third reply",
                 user=self.replier,
@@ -216,23 +260,24 @@ class NotificationServiceTests(TestCase):
             [2, 3, 4],
         )
 
-    def test_discussion_reply_notifications_dispatch_synchronously_when_queue_disabled(self):
+    def test_discussion_reply_notifications_dispatch_created_event(self):
         subscriber = User.objects.create_user(
             username="subscriber",
             email="subscriber@example.com",
             password="password123",
             is_email_confirmed=True,
         )
-        DiscussionUser.objects.create(discussion=self.discussion, user=subscriber, is_subscribed=True)
+        discussion_state_model().objects.create(discussion=self.discussion, user=subscriber, is_subscribed=True)
         with self.captureOnCommitCallbacks(execute=True):
-            new_post = PostService.create_post(
+            new_post = create_runtime_post(
                 discussion_id=self.discussion.id,
                 content="Sync reply",
                 user=self.replier,
             )
+        existing_notification_ids = set(Notification.objects.values_list("id", flat=True))
 
         with patch("extensions.notifications.backend.tasks.dispatch_notification_batch.delay") as delay:
-            with patch("extensions.notifications.backend.services.NotificationService._send_websocket_notification") as websocket_send:
+            with patch("extensions.notifications.backend.services.dispatch_forum_event_after_commit") as dispatch_event:
                 with self.captureOnCommitCallbacks(execute=True):
                     NotificationService.notify_discussion_reply(
                         discussion_id=self.discussion.id,
@@ -244,13 +289,16 @@ class NotificationServiceTests(TestCase):
             type="discussionReply",
             subject_id=self.discussion.id,
             data__post_id=new_post.id,
-        )
+        ).exclude(id__in=existing_notification_ids)
         self.assertEqual({item.user_id for item in created_notifications}, {self.author.id, subscriber.id})
         delay.assert_not_called()
-        self.assertEqual(websocket_send.call_count, 2)
+        dispatched_ids = set()
+        for call in dispatch_event.call_args_list:
+            dispatched_ids.update(getattr(call.args[0], "notification_ids", ()))
+        self.assertTrue(set(created_notifications.values_list("id", flat=True)).issubset(dispatched_ids))
 
     @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
-    def test_discussion_reply_notifications_use_queue_when_enabled(self):
+    def test_discussion_reply_notifications_dispatch_created_event_when_queue_enabled(self):
         Setting.objects.update_or_create(
             key="advanced.queue_enabled",
             defaults={"value": "true"},
@@ -274,16 +322,17 @@ class NotificationServiceTests(TestCase):
             is_email_confirmed=True,
             preferences={"notify_new_post": False},
         )
-        DiscussionUser.objects.create(discussion=self.discussion, user=subscriber, is_subscribed=True)
-        DiscussionUser.objects.create(discussion=self.discussion, user=muted, is_subscribed=True)
+        discussion_state_model().objects.create(discussion=self.discussion, user=subscriber, is_subscribed=True)
+        discussion_state_model().objects.create(discussion=self.discussion, user=muted, is_subscribed=True)
         with self.captureOnCommitCallbacks(execute=True):
-            new_post = PostService.create_post(
+            new_post = create_runtime_post(
                 discussion_id=self.discussion.id,
                 content="Bulk reply",
                 user=self.replier,
             )
+        existing_notification_ids = set(Notification.objects.values_list("id", flat=True))
 
-        with patch("extensions.notifications.backend.tasks.dispatch_notification_batch.delay") as delay:
+        with patch("extensions.notifications.backend.services.dispatch_forum_event_after_commit") as dispatch_event:
             with self.captureOnCommitCallbacks(execute=True):
                 NotificationService.notify_discussion_reply(
                     discussion_id=self.discussion.id,
@@ -295,12 +344,15 @@ class NotificationServiceTests(TestCase):
             type="discussionReply",
             subject_id=self.discussion.id,
             data__post_id=new_post.id,
-        )
+        ).exclude(id__in=existing_notification_ids)
         self.assertEqual({item.user_id for item in created_notifications}, {self.author.id, subscriber.id})
-        delay.assert_called_once()
+        dispatched_ids = set()
+        for call in dispatch_event.call_args_list:
+            dispatched_ids.update(getattr(call.args[0], "notification_ids", ()))
+        self.assertTrue(set(created_notifications.values_list("id", flat=True)).issubset(dispatched_ids))
 
     @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
-    def test_bulk_notifications_fallback_to_local_dispatch_when_task_enqueue_fails(self):
+    def test_bulk_notifications_expose_realtime_batch_loader_when_task_enqueue_fails(self):
         Setting.objects.update_or_create(
             key="advanced.queue_enabled",
             defaults={"value": "true"},
@@ -311,7 +363,8 @@ class NotificationServiceTests(TestCase):
         )
         clear_runtime_setting_caches()
 
-        first = Notification(
+        NotificationModel = notification_model()
+        first = NotificationModel(
             user=self.author,
             from_user=self.replier,
             type="discussionReply",
@@ -319,7 +372,7 @@ class NotificationServiceTests(TestCase):
             subject_id=self.discussion.id,
             data={"discussion_id": self.discussion.id},
         )
-        second = Notification(
+        second = NotificationModel(
             user=self.participant,
             from_user=self.replier,
             type="discussionReply",
@@ -329,12 +382,12 @@ class NotificationServiceTests(TestCase):
         )
 
         with patch("extensions.notifications.backend.tasks.dispatch_notification_batch.delay", side_effect=RuntimeError("queue down")):
-            with patch("extensions.notifications.backend.services.NotificationService._send_websocket_notification") as websocket_send:
-                with self.captureOnCommitCallbacks(execute=True):
-                    created = NotificationService.create_notifications_bulk([first, second])
+            with self.captureOnCommitCallbacks(execute=True):
+                created = NotificationService.create_notifications_bulk([first, second])
 
         self.assertEqual(len(created), 2)
-        self.assertEqual(websocket_send.call_count, 2)
+        loaded = NotificationService.load_notifications_for_realtime([item.id for item in created])
+        self.assertEqual([item.id for item in loaded], [item.id for item in created])
 
     def auth_header(self, user):
         token = RefreshToken.for_user(user).access_token
@@ -410,7 +463,7 @@ class NotificationServiceTests(TestCase):
         self.assertEqual(payload["unread_type_counts"]["postReply"], 1)
 
     def test_mark_filtered_as_read_endpoint_supports_type_and_discussion_filters(self):
-        other_discussion = DiscussionService.create_discussion(
+        other_discussion = create_runtime_discussion(
             title="Another discussion",
             content="Seed content",
             user=self.author,
@@ -812,3 +865,65 @@ class NotificationServiceTests(TestCase):
             "user": self.author,
         })
         self.assertEqual(NotificationService.get_unread_count(self.author), unread_before)
+
+
+class NotificationExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
+    def test_notifications_extension_registers_runtime_service_provider(self):
+        application = self.bootstrap_extensions("notifications")
+        service = application.get_service("notifications.service")
+
+        self.assertIn("notifications.service", application.get_service_provider_keys(extension_id="notifications"))
+        self.assertEqual(service["model"].__name__, "Notification")
+        for key in (
+            "notify_discussion_reply",
+            "notify_discussion_approved",
+            "notify_discussion_rejected",
+            "notify_post_approved",
+            "notify_post_rejected",
+            "notify_post_liked",
+            "notify_user_mentioned",
+            "dispatch_batch",
+            "send_batch",
+            "load_realtime_notifications",
+            "serialize_realtime_notification",
+            "delete_discussion_reply_for_post",
+        ):
+            self.assertTrue(callable(service[key]), key)
+
+    def test_notifications_capabilities_are_filtered_when_extension_disabled(self):
+        self.disable_extension_for_test("notifications")
+
+        resource_registry = get_resource_registry()
+        forum_registry = get_forum_registry()
+
+        self.assertIsNone(resource_registry.get_dispatch_endpoint("notification", "read", "POST", {}))
+        self.assertIsNone(resource_registry.get_dispatch_endpoint("notification", "index", "GET", {}))
+        self.assertFalse(any(item.module_id == "notifications" for item in forum_registry.get_notification_types()))
+
+    def test_inspect_reports_notification_model_as_extension_native(self):
+        stdout = StringIO()
+        call_command(
+            "inspect_extensions",
+            "--extension-id",
+            "notifications",
+            stdout=stdout,
+        )
+        payload = json.loads(stdout.getvalue())
+        extension = payload["extensions"][0]
+        audit = extension["model_ownership_audit"]
+        item = audit["items"][0]
+
+        self.assertEqual(extension["id"], "notifications")
+        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+        self.assertEqual(audit["owned_model_count"], 1)
+        self.assertEqual(audit["extension_native_count"], 1)
+        self.assertEqual(audit["django_app_count"], 0)
+        self.assertEqual(audit["package_migration_required_count"], 0)
+        self.assertEqual(audit["app_label_migration_required_count"], 0)
+        self.assertEqual(item["model"], "Notification")
+        self.assertEqual(item["model_module"], "extensions.notifications.backend.models")
+        self.assertEqual(item["current_app_label"], "notifications")
+        self.assertEqual(item["target_app_label"], "notifications")
+        self.assertEqual(item["migration_risk"], "none")
+
+

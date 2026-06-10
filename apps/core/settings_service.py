@@ -22,14 +22,6 @@ from apps.core.extensions.runtime_service import (
 from apps.core.extensions.frontend_runtime_service import build_enabled_frontend_document_payload
 from apps.core.extensions.recovery import serialize_extension_recovery_state
 from apps.core.mail_drivers import serialize_mail_settings
-from apps.core.mail_templates import (
-    DEFAULT_PASSWORD_RESET_HTML,
-    DEFAULT_PASSWORD_RESET_SUBJECT,
-    DEFAULT_PASSWORD_RESET_TEXT,
-    DEFAULT_VERIFICATION_HTML,
-    DEFAULT_VERIFICATION_SUBJECT,
-    DEFAULT_VERIFICATION_TEXT,
-)
 from apps.core.models import Setting
 from apps.core.forum_registry import get_forum_registry
 
@@ -70,12 +62,6 @@ MAIL_SETTINGS_STATIC_DEFAULTS = {
     "mail_password": "",
     "mail_from_name": "Bias",
     "mail_test_recipient": "",
-    "mail_verification_subject": DEFAULT_VERIFICATION_SUBJECT,
-    "mail_verification_text": DEFAULT_VERIFICATION_TEXT,
-    "mail_verification_html": DEFAULT_VERIFICATION_HTML,
-    "mail_password_reset_subject": DEFAULT_PASSWORD_RESET_SUBJECT,
-    "mail_password_reset_text": DEFAULT_PASSWORD_RESET_TEXT,
-    "mail_password_reset_html": DEFAULT_PASSWORD_RESET_HTML,
 }
 
 ADVANCED_SETTINGS_DEFAULTS = {
@@ -83,7 +69,6 @@ ADVANCED_SETTINGS_DEFAULTS = {
     "cache_lifetime": 3600,
     "queue_driver": "redis" if "redis" in getattr(settings, "CELERY_BROKER_URL", "") else "sync",
     "queue_enabled": False,
-    "realtime_typing_enabled": True,
     "maintenance_mode": False,
     "maintenance_mode_key": "none",
     "maintenance_message": "论坛正在维护中，请稍后再试...",
@@ -92,11 +77,6 @@ ADVANCED_SETTINGS_DEFAULTS = {
     "debug_mode": settings.DEBUG,
     "log_queries": False,
     "storage_driver": "local",
-    "storage_attachments_dir": "attachments",
-    "storage_avatars_dir": "avatars",
-    "upload_avatar_max_size_mb": 2,
-    "upload_attachment_max_size_mb": 10,
-    "upload_site_asset_max_size_mb": 2,
     "storage_local_path": str(getattr(settings, "MEDIA_ROOT", "")),
     "storage_local_base_url": getattr(settings, "MEDIA_URL", "/media/"),
     "storage_s3_bucket": "",
@@ -125,11 +105,6 @@ ADVANCED_SETTINGS_DEFAULTS = {
     "storage_imagebed_headers": "{}",
     "storage_imagebed_form_data": "{}",
     "storage_imagebed_url_path": "data.url",
-    "auth_human_verification_provider": "off",
-    "auth_turnstile_site_key": "",
-    "auth_turnstile_secret_key": "",
-    "auth_human_verification_login_enabled": True,
-    "auth_human_verification_register_enabled": True,
 }
 
 
@@ -159,6 +134,7 @@ def get_setting_group(prefix: str, defaults: dict) -> dict:
 
 def get_mail_settings_defaults() -> dict:
     mail_defaults = MAIL_SETTINGS_STATIC_DEFAULTS.copy()
+    mail_defaults.update(get_extension_mail_setting_defaults())
 
     site_config = None
     try:
@@ -190,6 +166,57 @@ def get_mail_settings_defaults() -> dict:
         })
 
     return mail_defaults
+
+
+def get_extension_mail_setting_defaults() -> dict:
+    return get_extension_setting_group_defaults("mail")
+
+
+def get_advanced_settings_defaults() -> dict:
+    defaults = ADVANCED_SETTINGS_DEFAULTS.copy()
+    defaults.update(get_extension_setting_group_defaults("advanced"))
+    return defaults
+
+
+def get_extension_setting_group_defaults(prefix: str) -> dict:
+    normalized_prefix = str(prefix or "").strip()
+    defaults = {}
+
+    def collect(definitions) -> None:
+        for definition in definitions or ():
+            key = str(getattr(definition, "key", "") or "").strip()
+            if not key.startswith(f"{normalized_prefix}."):
+                continue
+            defaults[key.split(".", 1)[1]] = getattr(definition, "value", None)
+
+    try:
+        from apps.core.extensions.bootstrap import get_extension_host
+
+        host = get_extension_host(force=True)
+        if host is not None:
+            extension_map = {
+                extension.id: extension
+                for extension in host.get_runtime_extensions()
+            }
+            for runtime_view in host.get_extension_views():
+                extension = extension_map.get(runtime_view.extension_id)
+                if extension is None or not getattr(extension.runtime, "enabled", False):
+                    continue
+                collect(getattr(runtime_view, "settings_defaults", ()) or ())
+            return defaults
+    except Exception:
+        pass
+
+    try:
+        from apps.core.extensions.manager import get_extension_manager
+
+        for extension in get_extension_manager().get_extensions():
+            if not getattr(extension.runtime, "enabled", False):
+                continue
+            collect(getattr(extension, "settings_defaults", ()) or ())
+    except Exception:
+        pass
+    return defaults
 
 
 def get_mail_settings() -> dict:
@@ -274,7 +301,7 @@ def _is_valid_public_forum_settings_cache(payload) -> bool:
 
 
 def get_advanced_settings() -> dict:
-    advanced_settings = get_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS)
+    advanced_settings = get_setting_group("advanced", get_advanced_settings_defaults())
     advanced_settings["cache_driver"] = (
         "redis" if "redis" in settings.CACHES.get("default", {}).get("BACKEND", "").lower() else "file"
     )
@@ -394,27 +421,7 @@ def get_public_forum_settings(user=None) -> dict:
         "maintenance_mode_key": advanced_settings.get("maintenance_mode_key", "none"),
         "maintenance_mode_label": advanced_settings.get("maintenance_mode_label", "未启用"),
         "maintenance_message": get_maintenance_message(),
-        "realtime_typing_enabled": bool(advanced_settings.get("realtime_typing_enabled", True)),
-        "auth_human_verification_provider": "off",
-        "auth_turnstile_site_key": "",
-        "auth_human_verification_login_enabled": False,
-        "auth_human_verification_register_enabled": False,
     })
-
-    provider = str(advanced_settings.get("auth_human_verification_provider") or "off").strip().lower()
-    site_key = str(advanced_settings.get("auth_turnstile_site_key") or "").strip()
-    secret_key = str(advanced_settings.get("auth_turnstile_secret_key") or "").strip()
-    if provider == "turnstile" and site_key and secret_key:
-        forum_settings.update({
-            "auth_human_verification_provider": "turnstile",
-            "auth_turnstile_site_key": site_key,
-            "auth_human_verification_login_enabled": bool(
-                advanced_settings.get("auth_human_verification_login_enabled", True)
-            ),
-            "auth_human_verification_register_enabled": bool(
-                advanced_settings.get("auth_human_verification_register_enabled", True)
-            ),
-        })
 
     forum_settings["notification_types"] = [
         {
@@ -491,6 +498,7 @@ def get_public_forum_settings(user=None) -> dict:
         or str(extension.get("frontend_common_entry", "") or "").strip()
         or any(route.get("frontend") == "forum" for route in extension.get("frontend_routes", []))
     ]
+    forum_settings.update(_serialize_extension_forum_settings(forum_settings["enabled_extensions"]))
 
     forum_settings["extension_locales"] = get_enabled_extension_locales()
     forum_settings["extension_document"] = build_enabled_frontend_document_payload()
@@ -500,6 +508,15 @@ def get_public_forum_settings(user=None) -> dict:
         _cache_set(PUBLIC_FORUM_SETTINGS_CACHE_KEY, forum_settings, cache_lifetime)
 
     return forum_settings
+
+
+def _serialize_extension_forum_settings(enabled_extensions: list[dict]) -> dict:
+    output: dict = {}
+    for extension in enabled_extensions:
+        forum_settings = extension.get("forum_settings")
+        if isinstance(forum_settings, dict):
+            output.update(forum_settings)
+    return output
 
 
 def _serialize_extension_runtime_stamp() -> dict:

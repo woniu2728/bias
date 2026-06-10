@@ -1,82 +1,16 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { openForgotPasswordModal, openLoginModal, openRegisterModal } from '@/utils/authModal'
+import { useAuthStore, openForgotPasswordModal, openLoginModal, openRegisterModal } from '@bias/users'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/',
-      name: 'home',
-      component: () => import('@/views/DiscussionListView.vue'),
-      meta: {
-        title: '全部讨论',
-        description: '浏览论坛最新讨论、热门主题和社区回复。'
-      }
-    },
-    {
-      path: '/login',
-      name: 'login',
-      component: () => import('@/views/AuthRouteView.vue')
-    },
-    {
-      path: '/register',
-      name: 'register',
-      component: () => import('@/views/AuthRouteView.vue')
-    },
-    {
-      path: '/forgot-password',
-      name: 'forgot-password',
-      component: () => import('@/views/AuthRouteView.vue')
-    },
-    {
-      path: '/verify-email',
-      name: 'verify-email',
-      component: () => import('@/views/VerifyEmailView.vue')
-    },
-    {
-      path: '/reset-password',
-      name: 'reset-password',
-      component: () => import('@/views/ResetPasswordView.vue')
-    },
-    {
       path: '/discussions',
       redirect: '/'
     },
     {
-      path: '/d/:id',
-      name: 'discussion-detail',
-      component: () => import('@/views/DiscussionDetailView.vue')
-    },
-    {
       path: '/discussions/:id',
       redirect: to => `/d/${to.params.id}`
-    },
-    {
-      path: '/discussions/create',
-      name: 'discussion-create',
-      component: () => import('@/views/DiscussionCreateView.vue'),
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/search',
-      name: 'search',
-      component: () => import('@/views/SearchResultsView.vue'),
-      meta: {
-        title: '搜索',
-        description: '搜索论坛中的讨论、回复和用户。'
-      }
-    },
-    {
-      path: '/profile',
-      name: 'profile',
-      component: () => import('@/views/ProfileView.vue'),
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/u/:id',
-      name: 'user-profile',
-      component: () => import('@/views/ProfileView.vue')
     }
   ]
 })

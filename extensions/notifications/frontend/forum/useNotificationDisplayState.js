@@ -1,4 +1,5 @@
-import { computed } from '@bias/forum'
+import { computed } from '@bias/core'
+
 
 export function createNotificationDisplayState({
   activeType,

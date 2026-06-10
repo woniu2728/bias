@@ -12,9 +12,9 @@ import secrets
 
 from extensions.users.backend.models import User, Group, Permission, EmailToken, PasswordToken
 from apps.core.models import AuditLog
-from apps.core.email_service import EmailService
 from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
 from apps.core.forum_registry import get_registry_staff_managed_admin_permission_codes
+from extensions.users.backend.mail import queue_password_reset_email, queue_verification_email
 
 
 class UserService:
@@ -321,7 +321,7 @@ class UserService:
             expires_at=expires_at,
         )
 
-        EmailService.queue_verification_email(
+        queue_verification_email(
             user_email=email_token.email,
             username=user.display_name or user.username,
             token=token,
@@ -380,7 +380,7 @@ class UserService:
             expires_at=expires_at,
         )
 
-        email_sent = EmailService.queue_password_reset_email(
+        email_sent = queue_password_reset_email(
             user_email=user.email,
             username=user.display_name or user.username,
             token=token,

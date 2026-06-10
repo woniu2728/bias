@@ -28,8 +28,14 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from '@bias/forum'
-import { forumApi, getUiCopy } from '@bias/forum'
+
+import {
+  api,
+  watch,
+  computed,
+  ref } from '@bias/core'
+import { getUiCopy
+} from '@bias/forum'
 import { flattenTags, normalizeTag, unwrapTagList } from './tagUtils.js'
 
 const props = defineProps({
@@ -121,7 +127,7 @@ async function ensureTagsLoaded() {
   loadingTags.value = true
   syncState()
   try {
-    const response = await forumApi.get('/tags', {
+    const response = await api.get('/tags', {
       params: {
         include_children: true,
         purpose: 'start_discussion',

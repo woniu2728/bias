@@ -1,54 +1,28 @@
+from __future__ import annotations
+
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
 from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.extensions.runtime_access import get_runtime_post_lifecycle_service, refresh_runtime_model_private
-from apps.core.forum_events import (
+from apps.core.extensions.runtime_access import (
+    get_runtime_post_lifecycle_service,
+    refresh_runtime_model_private,
+)
+from extensions.posts.backend.events import (
     PostApprovedEvent,
     PostRejectedEvent,
 )
-from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
-
-
-def refresh_discussion_approved_stats(discussion: Discussion, *, discussion_counted_post_types, user_counted_post_types):
-    approved_posts = Post.objects.filter(
-        discussion=discussion,
-        type__in=discussion_counted_post_types,
-        approval_status=Post.APPROVAL_APPROVED,
-        hidden_at__isnull=True,
-    ).order_by("number")
-
-    approved_count = approved_posts.count()
-    last_post = approved_posts.order_by("-number").select_related("user").first()
-
-    discussion.comment_count = approved_count
-    if last_post:
-        discussion.last_post_id = last_post.id
-        discussion.last_post_number = last_post.number
-        discussion.last_posted_at = last_post.created_at
-        discussion.last_posted_user = last_post.user
-    else:
-        discussion.last_post_id = None
-        discussion.last_post_number = None
-        discussion.last_posted_at = None
-        discussion.last_posted_user = None
-
-    discussion.save(update_fields=[
-        "comment_count",
-        "last_post_id",
-        "last_post_number",
-        "last_posted_at",
-        "last_posted_user",
-    ])
-    return discussion
+from apps.core.extensions.runtime_access import (
+    increment_runtime_user_comment_count,
+    mark_runtime_discussion_read,
+)
 
 
 def approve_post(
     post: Post,
-    admin_user: User,
+    admin_user,
     note: str = "",
     *,
     discussion_counted_post_types,
@@ -86,16 +60,11 @@ def approve_post(
             discussion.save()
 
             if post.user and post.type in user_counted_post_types:
-                post.user.comment_count = F("comment_count") + 1
-                post.user.save(update_fields=["comment_count"])
-                approval_defaults = {
-                    "last_read_at": now,
-                    "last_read_post_number": post.number,
-                }
-                DiscussionUser.objects.update_or_create(
-                    discussion=discussion,
+                increment_runtime_user_comment_count(post.user_id, 1)
+                mark_runtime_discussion_read(
+                    discussion_id=discussion.id,
                     user=post.user,
-                    defaults=approval_defaults,
+                    last_read_post_number=post.number,
                 )
 
             _apply_post_approved_extensions(
@@ -130,7 +99,7 @@ def _apply_post_approved_extensions(post: Post, *, context: dict) -> dict:
 
 def reject_post(
     post: Post,
-    admin_user: User,
+    admin_user,
     note: str = "",
     *,
     discussion_counted_post_types,
@@ -160,8 +129,7 @@ def reject_post(
         if was_counted:
             refresh_discussion_approved_stats_cb(post.discussion)
             if post.user and post.type in user_counted_post_types:
-                post.user.comment_count = F("comment_count") - 1
-                post.user.save(update_fields=["comment_count"])
+                increment_runtime_user_comment_count(post.user_id, -1)
 
         if previous_status != Post.APPROVAL_REJECTED:
             dispatch_forum_event_after_commit(
@@ -175,3 +143,5 @@ def reject_post(
                 )
             )
     return post
+
+

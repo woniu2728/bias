@@ -16,9 +16,7 @@ urlpatterns = []
 
 def build_api():
     extension_host = get_extension_host()
-    if extension_host is not None:
-        return extension_host.make("api.application")
-    return build_api_application(extension_host=None)
+    return build_api_application(extension_host=extension_host)
 
 
 def build_urlpatterns():

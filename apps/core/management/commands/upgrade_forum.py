@@ -35,7 +35,6 @@ class Command(BaseCommand):
         parser.add_argument("--skip-init-groups", action="store_true", help="跳过默认用户组与权限同步")
         parser.add_argument("--skip-clear-cache", action="store_true", help="跳过运行时缓存清理")
         parser.add_argument("--skip-collectstatic", action="store_true", help="跳过静态资源收集")
-        parser.add_argument("--collectstatic", action="store_true", help="兼容旧参数；当前默认会执行 collectstatic")
         parser.add_argument("--dry-run", action="store_true", help="只输出升级计划，不实际执行")
         parser.add_argument("--non-interactive", action="store_true", help="不询问备份确认，直接执行")
 

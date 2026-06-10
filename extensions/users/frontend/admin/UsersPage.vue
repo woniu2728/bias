@@ -315,7 +315,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from '@bias/core'
 import {
   adminApi,
   AdminMultiSelectMenu,
@@ -325,9 +325,9 @@ import {
   getAdminUsersPageActionMeta,
   getAdminUsersPageConfig,
   getAdminUsersPageCopy,
-  useAuthStore,
   useModalStore,
 } from '@bias/admin/components'
+import { useAuthStore } from '@bias/users'
 
 const authStore = useAuthStore()
 const modalStore = useModalStore()

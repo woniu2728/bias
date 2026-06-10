@@ -1,6 +1,5 @@
+from django.conf import settings
 from django.db import models
-from extensions.users.backend.models import User
-from extensions.discussions.backend.models import Discussion
 
 
 class Post(models.Model):
@@ -16,9 +15,9 @@ class Post(models.Model):
         (APPROVAL_REJECTED, "已拒绝"),
     ]
 
-    discussion = models.ForeignKey(Discussion, on_delete=models.CASCADE, related_name='posts')
+    discussion = models.ForeignKey('discussions.Discussion', on_delete=models.CASCADE, related_name='posts')
     number = models.IntegerField()  # 楼层号
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='posts')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='posts')
 
     # 帖子类型（comment, discussionRenamed等）
     type = models.CharField(max_length=50, default='comment', db_index=True)
@@ -37,13 +36,21 @@ class Post(models.Model):
     # 编辑相关
     edited_at = models.DateTimeField(null=True, blank=True)
     edited_user = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='edited_posts'
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='edited_posts',
     )
 
     # 隐藏相关
     hidden_at = models.DateTimeField(null=True, blank=True)
     hidden_user = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='hidden_posts'
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='hidden_posts',
     )
 
     # 审核相关
@@ -55,7 +62,7 @@ class Post(models.Model):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     approved_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -79,13 +86,6 @@ class Post(models.Model):
 
     def __str__(self):
         return f"Post #{self.number} in {self.discussion.title}"
-
-    def save(self, *args, **kwargs):
-        # 自动设置楼层号
-        if not self.number:
-            last_post = Post.objects.filter(discussion=self.discussion).order_by('-number').first()
-            self.number = (last_post.number + 1) if last_post else 1
-        super().save(*args, **kwargs)
 
     @property
     def is_hidden(self):

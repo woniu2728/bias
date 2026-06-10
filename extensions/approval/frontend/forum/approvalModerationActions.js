@@ -1,4 +1,9 @@
-import { forumApi, getUiCopy, ModerationActionModal } from '@bias/forum'
+import {
+  api } from '@bias/core'
+import {
+  getUiCopy,
+  ModerationActionModal
+} from '@bias/forum'
 
 export function registerApprovalModerationActions(forum) {
   registerApprovalModerationCopy(forum)
@@ -46,6 +51,26 @@ function registerApprovalPostModerationActions(forum) {
 
 function registerApprovalModerationCopy(forum) {
   for (const item of [
+    {
+      key: 'moderation-action-close-label',
+      order: 900,
+      text: () => '关闭',
+    },
+    {
+      key: 'moderation-action-note-label',
+      order: 910,
+      text: () => '处理备注',
+    },
+    {
+      key: 'moderation-action-note-help',
+      order: 920,
+      text: () => '备注会同步显示给内容作者，建议简明说明处理原因。',
+    },
+    {
+      key: 'moderation-action-submit-button',
+      order: 930,
+      text: ({ submitting, confirmText }) => (submitting ? '提交中...' : (confirmText || '提交')),
+    },
     {
       key: 'discussion-detail-moderation-title',
       order: 90,
@@ -151,7 +176,7 @@ async function runApprovalModeration(context = {}) {
       confirmText: getCopy('discussion-detail-moderation-confirm', isApprove ? '通过审核' : '确认拒绝', copyContext),
       confirmTone: isApprove ? 'primary' : 'danger',
       placeholder: getCopy('discussion-detail-moderation-placeholder', '', copyContext),
-      submitAction: ({ note }) => forumApi.post(
+      submitAction: ({ note }) => api.post(
         `/admin/approval-queue/${targetType}/${target.id}/${action}`,
         { note },
       ),

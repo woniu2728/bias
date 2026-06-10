@@ -197,6 +197,7 @@ def _serialize_frontend_routes(routes) -> list[dict[str, Any]]:
     for route in routes or ():
         frontend = str(getattr(route, "frontend", "") or "forum").strip() or "forum"
         removed = bool(getattr(route, "removed", False))
+        order = getattr(route, "order", 100)
         output.append({
             "path": str(getattr(route, "path", "") or "").strip(),
             "name": str(getattr(route, "name", "") or "").strip(),
@@ -209,7 +210,7 @@ def _serialize_frontend_routes(routes) -> list[dict[str, Any]]:
             "document_attributes": _serialize_frontend_values(getattr(route, "document_attributes", ()) or ()),
             "head_tags": _serialize_frontend_values(getattr(route, "head_tags", ()) or ()),
             "requires_auth": bool(getattr(route, "requires_auth", False)),
-            "order": int(getattr(route, "order", 100) or 100),
+            "order": int(order if order is not None and order != "" else 100),
             "removed": removed,
         })
     return [
@@ -268,7 +269,7 @@ def build_enabled_frontend_document_payload() -> dict[str, Any]:
     }
 
 
-def _build_frontend_document_payload(runtime_view, *, settings_values: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_frontend_document_payload(runtime_view, *, settings_values: dict[str, Any] | None = None) -> dict[str, Any]:
     theme_document = _build_theme_document_payload(runtime_view)
     return {
         "preloads": _serialize_frontend_values(getattr(runtime_view, "frontend_preloads", ()) or ()),
@@ -288,6 +289,9 @@ def _build_frontend_document_payload(runtime_view, *, settings_values: dict[str,
         "title_driver": _serialize_frontend_value(getattr(runtime_view, "frontend_title_driver", None)),
         "content_callbacks": _serialize_frontend_values(getattr(runtime_view, "frontend_content_callbacks", ()) or ()),
     }
+
+
+_build_frontend_document_payload = build_frontend_document_payload
 
 
 def _build_settings_theme_variables(runtime_view, settings_values: dict[str, Any]) -> dict[str, Any]:

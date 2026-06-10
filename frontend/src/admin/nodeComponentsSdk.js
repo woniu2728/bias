@@ -14,7 +14,6 @@ export const AdminStateBlock = null
 export const AdminSummaryGrid = null
 export const AdminToolbar = null
 export const ExtensionGeneratedPermissionsPage = null
-export const useAuthStore = () => ({ user: null })
 
 export {
   getAdminPageActionMeta,

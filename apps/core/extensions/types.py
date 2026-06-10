@@ -327,6 +327,13 @@ class ExtensionModelDefinition:
 
 
 @dataclass(frozen=True)
+class ExtensionModelReference:
+    service_key: str
+    attribute: str = "model"
+    description: str = ""
+
+
+@dataclass(frozen=True)
 class ExtensionModelVisibilityDefinition:
     model: Any
     scope: Callable[[Any, dict], Any]
@@ -393,8 +400,17 @@ class ExtensionSearchDriverDefinition:
 
 
 @dataclass(frozen=True)
+class ExtensionSearchIndexDefinition:
+    name: str
+    drop: str
+    create: str | Callable[[], str]
+    module_id: str = ""
+    description: str = ""
+
+
+@dataclass(frozen=True)
 class ExtensionEventListenerDefinition:
-    event_type: Type[Any]
+    event_type: Type[Any] | str
     handler: ExtensionDomainEventHandler
     description: str = ""
 
@@ -403,6 +419,27 @@ class ExtensionEventListenerDefinition:
 class ExtensionRealtimeIncludedDefinition:
     key: str
     handler: Any
+    description: str = ""
+
+
+@dataclass(frozen=True)
+class ExtensionRealtimeDiscussionTransportDefinition:
+    key: str
+    handler: Any
+    description: str = ""
+
+
+@dataclass(frozen=True)
+class ExtensionRealtimeDiscussionBroadcastDefinition:
+    event_type: Type[Any]
+    event_name: Any
+    discussion_id: Any = "discussion_id"
+    include_discussion: bool = False
+    include_post: bool = False
+    post_id: Any = None
+    post_id_getter: Any = None
+    extension_context: Any = None
+    condition: Any = None
     description: str = ""
 
 
@@ -520,6 +557,15 @@ class ExtensionDistributionDefinition:
     channel_label: str = "私有分发"
     signing_key_id: str = ""
     signature_url: str = ""
+    abandoned: bool = False
+    replacement: str = ""
+
+
+@dataclass(frozen=True)
+class ExtensionAuthorDefinition:
+    name: str = ""
+    homepage: str = ""
+    email: str = ""
 
 
 @dataclass(frozen=True)
@@ -530,7 +576,7 @@ class ExtensionManifest:
     description: str = ""
     icon: str = "fas fa-puzzle-piece"
     category: str = "feature"
-    authors: Tuple[str, ...] = ()
+    authors: Tuple[ExtensionAuthorDefinition, ...] = ()
     homepage: str = ""
     documentation_url: str = ""
     dependencies: Tuple[str, ...] = ()
@@ -552,7 +598,7 @@ class ExtensionManifest:
     settings_schema: Tuple[ExtensionManifestSettingFieldDefinition, ...] = ()
     migration_namespace: str = ""
     django_app_config: str = ""
-    django_migration_module: str = ""
+    django_app_label: str = ""
     source: str = "filesystem"
     path: str = ""
     extra: dict[str, Any] = field(default_factory=dict)
@@ -624,8 +670,12 @@ class ExtensionDiscoveryResult:
     model_defaults: Tuple[ExtensionModelDefaultDefinition, ...] = ()
     model_slug_drivers: Tuple[ExtensionModelSlugDriverDefinition, ...] = ()
     search_drivers: Tuple[ExtensionSearchDriverDefinition, ...] = ()
+    search_indexes: Tuple[ExtensionSearchIndexDefinition, ...] = ()
     event_listeners: Tuple[ExtensionEventListenerDefinition, ...] = ()
     realtime_included: Tuple[ExtensionRealtimeIncludedDefinition, ...] = ()
+    realtime_discussion_visibility: Tuple[Any, ...] = ()
+    realtime_discussion_transports: Tuple[ExtensionRealtimeDiscussionTransportDefinition, ...] = ()
+    realtime_discussion_broadcasts: Tuple[ExtensionRealtimeDiscussionBroadcastDefinition, ...] = ()
     discussion_lifecycle: Tuple[ExtensionDiscussionLifecycleDefinition, ...] = ()
     post_lifecycle: Tuple[ExtensionPostLifecycleDefinition, ...] = ()
     runtime_actions: Tuple[ExtensionManifestRuntimeActionDefinition, ...] = ()
@@ -678,8 +728,12 @@ class ExtensionAssembly:
     model_defaults: Tuple[Any, ...]
     model_slug_drivers: Tuple[Any, ...]
     search_drivers: Tuple[Any, ...]
+    search_indexes: Tuple[Any, ...]
     event_listeners: Tuple[Any, ...]
     realtime_included: Tuple[Any, ...]
+    realtime_discussion_visibility: Tuple[Any, ...]
+    realtime_discussion_transports: Tuple[Any, ...]
+    realtime_discussion_broadcasts: Tuple[Any, ...]
     discussion_lifecycle: Tuple[Any, ...]
     post_lifecycle: Tuple[Any, ...]
     runtime_actions: Tuple[Any, ...]

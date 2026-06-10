@@ -497,6 +497,12 @@ class ForumRegistry:
 _registry: ForumRegistry | None = None
 
 
+def reset_forum_registry_state() -> None:
+    global _registry
+
+    _registry = None
+
+
 def get_forum_registry() -> ForumRegistry:
     from apps.core.extensions.bootstrap_state import is_extension_host_bootstrapped
 

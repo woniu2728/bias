@@ -57,12 +57,9 @@ frontend/
 │   ├── stores/                 # Pinia状态管理
 │   │   ├── auth.js            # 认证状态
 │   │   └── notification.js    # 通知和WebSocket
-│   ├── views/                  # 前台页面
-│   │   ├── DiscussionListView.vue
-│   │   ├── DiscussionDetailView.vue
-│   │   ├── DiscussionCreateView.vue
-│   │   ├── ProfileView.vue
-│   │   └── NotificationView.vue
+│   ├── forum/                  # 前台扩展运行时、公开 SDK 与注册中心
+│   ├── router/                 # 前台路由宿主与导航守卫
+│   │   └── index.js           # 只保留宿主重定向和守卫；业务页面由扩展声明
 │   ├── admin/                  # 后台页面与组件
 │   ├── App.vue                 # 根组件
 │   └── main.js                 # 入口文件

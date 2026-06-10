@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from extensions.subscriptions.backend.services import get_subscription_state
+from apps.core.extensions.runtime_access import get_runtime_discussion_subscription_state
 
 
 def resolve_discussion_subscription_state(discussion, context: dict) -> bool:
     user = context.get("user")
-    return get_subscription_state(discussion, user)
+    return get_runtime_discussion_subscription_state(discussion, user)
+

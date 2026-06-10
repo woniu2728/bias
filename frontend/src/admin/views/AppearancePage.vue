@@ -55,7 +55,7 @@
             <div class="AssetCard-title">{{ appearanceCopy?.logoCardTitle || '站点 Logo' }}</div>
             <p class="Form-help">{{ appearanceCopy?.logoHelpText || '建议上传透明背景 PNG、SVG 或 WebP，Header 会优先展示这里的资源。' }}</p>
             <div class="AssetCard-actions">
-              <label class="Button Button--secondary Button--upload" :class="{ 'is-disabled': uploadingLogo }">
+              <label v-if="uploadSiteAssetAction" class="Button Button--secondary Button--upload" :class="{ 'is-disabled': uploadingLogo }">
                 <input
                   name="logo_file"
                   type="file"
@@ -97,7 +97,7 @@
             <div class="AssetCard-title">{{ appearanceCopy?.faviconCardTitle || '浏览器图标' }}</div>
             <p class="Form-help">{{ appearanceCopy?.faviconHelpText || '建议上传 `.ico`、PNG 或 SVG，小尺寸图标在浏览器标签页里更清晰。' }}</p>
             <div class="AssetCard-actions">
-              <label class="Button Button--secondary Button--upload" :class="{ 'is-disabled': uploadingFavicon }">
+              <label v-if="uploadSiteAssetAction" class="Button Button--secondary Button--upload" :class="{ 'is-disabled': uploadingFavicon }">
                 <input
                   name="favicon_file"
                   type="file"
@@ -180,15 +180,21 @@ import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { useAdminSaveFeedback } from '../composables/useAdminSaveFeedback'
 import api from '../../api'
 import { useModalStore } from '../../stores/modal'
+import { useAdminRegistryStore } from '../../stores/adminRegistry'
 import {
+  getAdminAppearancePageAction,
   getAdminAppearancePageActionMeta,
   getAdminAppearancePageConfig,
   getAdminAppearancePageCopy,
 } from '../registry'
 
-const appearanceCopy = computed(() => getAdminAppearancePageCopy())
-const appearanceConfig = computed(() => getAdminAppearancePageConfig())
-const appearanceActionMeta = computed(() => getAdminAppearancePageActionMeta())
+const adminRegistryStore = useAdminRegistryStore()
+const pageContext = computed(() => ({
+  isModuleEnabled: moduleId => adminRegistryStore.isModuleEnabled(moduleId),
+}))
+const appearanceCopy = computed(() => getAdminAppearancePageCopy(pageContext.value))
+const appearanceConfig = computed(() => getAdminAppearancePageConfig(pageContext.value))
+const appearanceActionMeta = computed(() => getAdminAppearancePageActionMeta(pageContext.value))
 const loading = ref(true)
 const loadError = ref('')
 const settings = ref({})
@@ -197,6 +203,20 @@ const uploadingLogo = ref(false)
 const uploadingFavicon = ref(false)
 const modalStore = useModalStore()
 const { saveSuccess, saveError, resetSaveFeedback, showSaveSuccess, showSaveError } = useAdminSaveFeedback()
+const uploadSiteAssetAction = computed(() => getAdminAppearancePageAction('upload-site-asset', {
+  api,
+  modalStore,
+  appearanceActionMeta: appearanceActionMeta.value,
+  ...pageContext.value,
+  settings: settings.value,
+  setUploading: (target, value) => {
+    if (target === 'logo') {
+      uploadingLogo.value = value
+    } else {
+      uploadingFavicon.value = value
+    }
+  },
+}))
 
 function buildDefaultSettings() {
   return {
@@ -246,33 +266,10 @@ async function uploadAsset(event, target) {
   event.target.value = ''
   if (!file) return
 
-  const uploadingRef = target === 'logo' ? uploadingLogo : uploadingFavicon
-  uploadingRef.value = true
-
-  try {
-    const formData = new FormData()
-    formData.append('file', file)
-
-    const response = await api.post('/admin/appearance/upload', formData, {
-      params: { target },
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-
-    if (target === 'logo') {
-      settings.value.logo_url = response.url || ''
-    } else {
-      settings.value.favicon_url = response.url || ''
-    }
-  } catch (error) {
-    console.error('上传站点资源失败:', error)
-    await modalStore.alert({
-      title: appearanceActionMeta.value?.uploadFailedTitle || '上传失败',
-      message: error.response?.data?.error || error.message || appearanceActionMeta.value?.uploadUnknownErrorText || '未知错误',
-      tone: 'danger'
-    })
-  } finally {
-    uploadingRef.value = false
+  if (!uploadSiteAssetAction.value?.run) {
+    return
   }
+  await uploadSiteAssetAction.value.run({ file, target })
 }
 </script>
 

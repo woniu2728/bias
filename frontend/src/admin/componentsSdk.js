@@ -21,6 +21,5 @@ export {
   resolveApprovalSelectionState,
   resolveApprovalTemplateOptions,
   useAdminSaveFeedback,
-  useAuthStore,
   useModalStore,
 } from './registry.js'

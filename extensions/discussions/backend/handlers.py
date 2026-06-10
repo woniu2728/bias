@@ -5,10 +5,12 @@ from django.core.exceptions import PermissionDenied
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
+from apps.core.extensions.runtime_access import get_runtime_first_post
 from apps.core.resource_api import ResourceQueryOptions, merge_resource_includes, parse_resource_query_options
 from apps.core.resource_registry import ResourceEndpointDefinition
 from apps.core.services import PaginationService
 from extensions.discussions.backend.models import Discussion
+from apps.core.extensions.runtime_access import serialize_runtime_user
 from extensions.discussions.backend.schemas import (
     DiscussionCreateSchema,
     DiscussionOutSchema,
@@ -16,8 +18,6 @@ from extensions.discussions.backend.schemas import (
     DiscussionUpdateSchema,
 )
 from extensions.discussions.backend.services import DiscussionService
-from extensions.posts.backend.models import Post
-from extensions.users.backend.resources import serialize_user_summary
 
 
 def get_resource_registry():
@@ -347,21 +347,19 @@ def dispatch_discussion_show(context):
 
     first_post = None
     if discussion.first_post_id:
-        try:
-            post = Post.objects.select_related("user").get(id=discussion.first_post_id)
+        post = get_runtime_first_post(discussion)
+        if post is not None:
             first_post = {
                 "id": post.id,
                 "number": post.number,
                 "content": post.content,
                 "content_html": post.content_html,
-                "user": serialize_user_summary(post.user),
+                "user": serialize_runtime_user(post.user, resource="user_summary"),
                 "created_at": post.created_at,
                 "updated_at": post.updated_at,
                 "approval_status": post.approval_status,
                 "approval_note": post.approval_note,
             }
-        except Post.DoesNotExist:
-            pass
 
     response_data = serialize_discussion_payload(
         discussion,
@@ -525,3 +523,4 @@ def dispatch_discussion_toggle_hide(context):
         return {"message": "操作成功", "is_hidden": discussion.is_hidden}
     except Discussion.DoesNotExist:
         return api_error("讨论不存在", status=404)
+

@@ -32,8 +32,12 @@
       </main>
       <Footer />
       <AppModalHost />
-      <DiscussionComposer />
-      <PostComposer />
+      <component
+        :is="host.component"
+        v-for="host in composerHosts"
+        :key="host.key"
+        v-bind="host.componentProps || {}"
+      />
     </template>
   </div>
 </template>
@@ -44,18 +48,14 @@ import { useRoute } from 'vue-router'
 import Header from './components/Header.vue'
 import Footer from './components/Footer.vue'
 import AppModalHost from './components/AppModalHost.vue'
-import DiscussionComposer from './components/DiscussionComposer.vue'
-import PostComposer from './components/PostComposer.vue'
 import ForumInlineMessage from './components/forum/ForumInlineMessage.vue'
-import { useAuthStore } from './stores/auth'
+import { useAuthStore, useOnlineUsersStore, openLoginModal } from '@bias/users'
 import { useComposerStore } from './stores/composer'
 import { useForumStore } from './stores/forum'
 import { useForumUiStore } from './stores/forumUi'
-import { useForumRealtimeStore } from './stores/forumRealtime'
-import { useOnlineUsersStore } from './stores/onlineUsers'
+import { useForumRealtimeStore } from '@bias/realtime'
 import { useForumRealtimeStatus } from './composables/useForumRealtimeStatus'
-import { getUiCopy, runForumRuntimeHook } from './forum/registry'
-import { openLoginModal } from './utils/authModal'
+import { getComposerHosts, getUiCopy, runForumRuntimeHook } from './forum/registry'
 
 const authStore = useAuthStore()
 const composerStore = useComposerStore()
@@ -101,6 +101,7 @@ const showAnnouncement = computed(() => (
   && Boolean(announcementMessage.value)
   && dismissedAnnouncementKey.value !== announcementKey.value
 ))
+const composerHosts = computed(() => getComposerHosts(buildForumRuntimeContext()))
 
 function syncViewportWidth() {
   if (typeof window === 'undefined') return
@@ -142,7 +143,7 @@ async function runForumRuntime(name) {
 
 async function syncAuthenticatedRuntime() {
   await runForumRuntime('onAuthenticated')
-  forumRealtimeStore.connect()
+  forumRealtimeStore.connect({ authStore })
 }
 
 function handleAuthRequired(event) {

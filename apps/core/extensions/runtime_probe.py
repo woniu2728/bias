@@ -151,7 +151,7 @@ def _build_migration_check(root_path: Path | None, extension: Extension) -> Exte
             label="迁移资源",
             status="ready",
             status_label="已就绪",
-            message="已声明迁移命名空间且迁移目录存在。",
+            message="已发现扩展迁移目录并推导迁移命名空间。",
             path=str(migration_dir),
         )
     if migration_namespace and not has_migration_dir:
@@ -160,16 +160,16 @@ def _build_migration_check(root_path: Path | None, extension: Extension) -> Exte
             label="迁移资源",
             status="attention",
             status_label="缺失",
-            message="已声明 migration_namespace，但 backend/migrations 目录不存在。",
+            message="已推导扩展迁移命名空间，但 backend/migrations 目录不存在。",
             path=str(migration_dir or ""),
         )
     if has_migration_dir:
         return ExtensionDeliveryCheckDefinition(
             key="migrations",
             label="迁移资源",
-            status="pending",
-            status_label="待完善",
-            message="迁移目录存在，但 manifest 尚未声明 migration_namespace。",
+            status="ready",
+            status_label="已就绪",
+            message="已发现扩展迁移目录。",
             path=str(migration_dir),
         )
     return ExtensionDeliveryCheckDefinition(
@@ -365,11 +365,11 @@ def _build_migration_summary(root_path: Path | None, extension: Extension) -> tu
     has_migration_dir = bool(migration_dir and migration_dir.exists())
 
     if migration_namespace and has_migration_dir:
-        return "ready", "已声明迁移"
+        return "ready", "已发现迁移"
     if migration_namespace and not has_migration_dir:
         return "attention", "迁移目录缺失"
     if has_migration_dir:
-        return "pending", "迁移命名空间待声明"
+        return "ready", "已发现迁移"
     return "pending", "未声明迁移"
 
 

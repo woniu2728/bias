@@ -2,11 +2,10 @@ from typing import Optional
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count, F
 from django.utils import timezone
 
 from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.forum_events import (
+from extensions.discussions.backend.events import (
     DiscussionApprovedEvent,
     DiscussionCreatedEvent,
     DiscussionHiddenEvent,
@@ -23,9 +22,24 @@ from apps.core.extensions.runtime_access import (
     refresh_runtime_model_private,
 )
 from extensions.discussions.backend.models import Discussion, DiscussionUser
-from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
-from extensions.users.backend.services import UserService
+from apps.core.extensions.runtime_access import (
+    approve_runtime_first_post,
+    create_runtime_first_post,
+    delete_runtime_discussion_posts,
+    get_runtime_approved_reply_counts_by_author,
+    get_runtime_first_post,
+    reject_runtime_first_post,
+    resubmit_runtime_first_post,
+    update_runtime_first_post_content,
+)
+from apps.core.extensions.runtime_access import (
+    apply_runtime_user_comment_count_deltas,
+    ensure_runtime_forum_permission,
+    ensure_runtime_user_email_confirmed,
+    ensure_runtime_user_not_suspended,
+    increment_runtime_user_discussion_count,
+    requires_runtime_content_approval,
+)
 
 
 def _prepare_discussion_create_extensions(discussion_lifecycle, *, user, payload: dict) -> dict:
@@ -82,21 +96,21 @@ def _apply_discussion_rejected_extensions(discussion_lifecycle, *, discussion, c
     return discussion_lifecycle.apply_rejected(discussion=discussion, context=context)
 
 
-def _apply_post_created_extensions(post: Post, *, context: dict) -> dict:
+def _apply_post_created_extensions(post, *, context: dict) -> dict:
     post_lifecycle = get_runtime_post_lifecycle_service()
     if post_lifecycle is None:
         return {}
     return post_lifecycle.apply_created(post=post, context=context)
 
 
-def _apply_post_updated_extensions(post: Post, *, context: dict) -> dict:
+def _apply_post_updated_extensions(post, *, context: dict) -> dict:
     post_lifecycle = get_runtime_post_lifecycle_service()
     if post_lifecycle is None:
         return {}
     return post_lifecycle.apply_updated(post=post, context=context)
 
 
-def _apply_post_approved_extensions(post: Post, *, context: dict) -> dict:
+def _apply_post_approved_extensions(post, *, context: dict) -> dict:
     post_lifecycle = get_runtime_post_lifecycle_service()
     if post_lifecycle is None:
         return {}
@@ -114,7 +128,7 @@ def _apply_discussion_resource_relationships(
     discussion: Discussion,
     *,
     payload: dict,
-    user: User,
+    user,
     creating: bool,
     actor_user_id: int,
 ) -> None:
@@ -143,7 +157,7 @@ def _discussion_relationship_payload(payload: dict) -> dict:
     return {}
 
 
-def _refresh_discussion_private_state(discussion: Discussion, *, first_post: Post | None = None) -> None:
+def _refresh_discussion_private_state(discussion: Discussion, *, first_post=None) -> None:
     refresh_runtime_model_private(discussion)
     if first_post is not None:
         first_post.is_private = discussion.is_private or refresh_runtime_model_private(first_post)
@@ -152,16 +166,16 @@ def _refresh_discussion_private_state(discussion: Discussion, *, first_post: Pos
 def create_discussion(
     title: str,
     content: str,
-    user: User,
+    user,
     *,
     extension_payload: Optional[dict] = None,
     default_post_type,
     render_markdown_cb,
 ) -> Discussion:
-    UserService.ensure_not_suspended(user, "发布讨论")
-    UserService.ensure_email_confirmed(user, "发布讨论")
-    UserService.ensure_forum_permission(user, "startDiscussion", "没有权限发起讨论")
-    requires_approval = UserService.requires_content_approval(user, "startDiscussionWithoutApproval")
+    ensure_runtime_user_not_suspended(user, "发布讨论")
+    ensure_runtime_user_email_confirmed(user, "发布讨论")
+    ensure_runtime_forum_permission(user, "startDiscussion", "没有权限发起讨论")
+    requires_approval = requires_runtime_content_approval(user, "startDiscussionWithoutApproval")
     approval_status = Discussion.APPROVAL_PENDING if requires_approval else Discussion.APPROVAL_APPROVED
     approved_at = None if requires_approval else timezone.now()
     approved_by = None if requires_approval else user
@@ -184,14 +198,13 @@ def create_discussion(
             approved_by=approved_by,
         )
 
-        first_post = Post.objects.create(
+        first_post = create_runtime_first_post(
             discussion=discussion,
-            number=1,
             user=user,
             content=content,
             content_html=render_markdown_cb(content),
-            type=default_post_type,
-            approval_status=Post.APPROVAL_PENDING if requires_approval else Post.APPROVAL_APPROVED,
+            post_type=default_post_type,
+            requires_approval=requires_approval,
             approved_at=approved_at,
             approved_by=approved_by,
         )
@@ -234,8 +247,7 @@ def create_discussion(
                     "is_approved": True,
                 },
             )
-            user.discussion_count = F("discussion_count") + 1
-            user.save(update_fields=["discussion_count"])
+            increment_runtime_user_discussion_count(user.id, 1)
 
         DiscussionUser.objects.create(
             discussion=discussion,
@@ -257,7 +269,7 @@ def create_discussion(
 
 def update_discussion(
     discussion_id: int,
-    user: User,
+    user,
     *,
     title: Optional[str] = None,
     content: Optional[str] = None,
@@ -271,7 +283,7 @@ def update_discussion(
     set_sticky_state_cb,
     set_hidden_state_cb,
 ) -> Discussion:
-    UserService.ensure_not_suspended(user, "编辑讨论")
+    ensure_runtime_user_not_suspended(user, "编辑讨论")
     discussion = Discussion.objects.get(id=discussion_id)
 
     if not can_edit_discussion_cb(discussion, user):
@@ -291,17 +303,15 @@ def update_discussion(
         first_post = None
 
         if content is not None:
-            first_post = Post.objects.get(id=discussion.first_post_id)
+            first_post = update_runtime_first_post_content(
+                discussion,
+                content=content,
+                content_html=render_markdown_cb(content),
+                editor=user,
+            )
 
         if title is not None:
             discussion.title = title
-
-        if content is not None and first_post is not None:
-            first_post.content = content
-            first_post.content_html = render_markdown_cb(content)
-            first_post.edited_at = timezone.now()
-            first_post.edited_user = user
-            first_post.save(update_fields=["content", "content_html", "edited_at", "edited_user"])
 
         _apply_discussion_update_extensions(
             discussion_lifecycle,
@@ -320,7 +330,7 @@ def update_discussion(
             actor_user_id=user.id,
         )
         if first_post is None and discussion.first_post_id:
-            first_post = Post.objects.get(id=discussion.first_post_id)
+            first_post = get_runtime_first_post(discussion)
         _refresh_discussion_private_state(discussion, first_post=first_post)
         if first_post is not None:
             first_post.save(update_fields=["is_private"])
@@ -365,22 +375,9 @@ def update_discussion(
             discussion.hidden_user = None
 
             if first_post is None:
-                first_post = Post.objects.get(id=discussion.first_post_id)
-            first_post.approval_status = Post.APPROVAL_PENDING
-            first_post.approved_at = None
-            first_post.approved_by = None
-            first_post.approval_note = ""
-            first_post.hidden_at = None
-            first_post.hidden_user = None
-            first_post.save(update_fields=[
-                "approval_status",
-                "approved_at",
-                "approved_by",
-                "approval_note",
-                "hidden_at",
-                "hidden_user",
-                "is_private",
-            ])
+                first_post = resubmit_runtime_first_post(discussion)
+            else:
+                resubmit_runtime_first_post(discussion)
             dispatch_forum_event_after_commit(
                 DiscussionResubmittedEvent(
                     discussion_id=discussion.id,
@@ -409,7 +406,7 @@ def update_discussion(
 
 def set_hidden_state(
     discussion: Discussion,
-    user: User,
+    user,
     is_hidden: bool,
     *,
     approved_reply_counts_by_author_cb,
@@ -436,13 +433,11 @@ def set_hidden_state(
             discussion_delta = -1 if is_hidden else 1
             reply_delta = -1 if is_hidden else 1
             if discussion.user:
-                User.objects.filter(id=discussion.user_id).update(
-                    discussion_count=F("discussion_count") + discussion_delta
-                )
-            for user_id, total in approved_reply_counts.items():
-                User.objects.filter(id=user_id).update(
-                    comment_count=F("comment_count") + (reply_delta * total)
-                )
+                increment_runtime_user_discussion_count(discussion.user_id, discussion_delta)
+            apply_runtime_user_comment_count_deltas({
+                user_id: reply_delta * total
+                for user_id, total in approved_reply_counts.items()
+            })
 
         dispatch_forum_event_after_commit(
             DiscussionHiddenEvent(
@@ -464,7 +459,7 @@ def set_hidden_state(
 
 def approve_discussion(
     discussion: Discussion,
-    admin_user: User,
+    admin_user,
     note: str = "",
     *,
     approved_reply_counts_by_author_cb,
@@ -493,39 +488,17 @@ def approve_discussion(
             "is_private",
         ])
 
-        first_post = Post.objects.filter(id=discussion.first_post_id).first()
-        if first_post is not None:
-            first_post.approval_status = Post.APPROVAL_APPROVED
-            first_post.approved_at = discussion.approved_at
-            first_post.approved_by = admin_user
-            first_post.approval_note = note
-            first_post.hidden_at = None
-            first_post.hidden_user = None
-            first_post.is_private = discussion.is_private or refresh_runtime_model_private(first_post)
-            first_post.save(update_fields=[
-                "approval_status",
-                "approved_at",
-                "approved_by",
-                "approval_note",
-                "hidden_at",
-                "hidden_user",
-                "is_private",
-            ])
-        else:
-            Post.objects.filter(id=discussion.first_post_id).update(
-                approval_status=Post.APPROVAL_APPROVED,
-                approved_at=discussion.approved_at,
-                approved_by=admin_user,
-                approval_note=note,
-                hidden_at=None,
-                hidden_user=None,
-            )
+        first_post = approve_runtime_first_post(
+            discussion,
+            approved_at=discussion.approved_at,
+            approved_by=admin_user,
+            note=note,
+        )
 
         if not was_counted:
             if discussion.user:
-                User.objects.filter(id=discussion.user_id).update(discussion_count=F("discussion_count") + 1)
-            for user_id, total in approved_reply_counts.items():
-                User.objects.filter(id=user_id).update(comment_count=F("comment_count") + total)
+                increment_runtime_user_discussion_count(discussion.user_id, 1)
+            apply_runtime_user_comment_count_deltas(approved_reply_counts)
             if first_post is not None:
                 _apply_post_approved_extensions(
                     first_post,
@@ -562,7 +535,7 @@ def approve_discussion(
 
 def reject_discussion(
     discussion: Discussion,
-    admin_user: User,
+    admin_user,
     note: str = "",
     *,
     approved_reply_counts_by_author_cb,
@@ -592,39 +565,20 @@ def reject_discussion(
             "is_private",
         ])
 
-        first_post = Post.objects.filter(id=discussion.first_post_id).first()
-        if first_post is not None:
-            first_post.approval_status = Post.APPROVAL_REJECTED
-            first_post.approved_at = rejected_at
-            first_post.approved_by = admin_user
-            first_post.approval_note = note
-            first_post.hidden_at = rejected_at
-            first_post.hidden_user = admin_user
-            first_post.is_private = discussion.is_private or refresh_runtime_model_private(first_post)
-            first_post.save(update_fields=[
-                "approval_status",
-                "approved_at",
-                "approved_by",
-                "approval_note",
-                "hidden_at",
-                "hidden_user",
-                "is_private",
-            ])
-        else:
-            Post.objects.filter(id=discussion.first_post_id).update(
-                approval_status=Post.APPROVAL_REJECTED,
-                approved_at=rejected_at,
-                approved_by=admin_user,
-                approval_note=note,
-                hidden_at=rejected_at,
-                hidden_user=admin_user,
-            )
+        reject_runtime_first_post(
+            discussion,
+            rejected_at=rejected_at,
+            rejected_by=admin_user,
+            note=note,
+        )
 
         if was_counted:
             if discussion.user:
-                User.objects.filter(id=discussion.user_id).update(discussion_count=F("discussion_count") - 1)
-            for user_id, total in approved_reply_counts.items():
-                User.objects.filter(id=user_id).update(comment_count=F("comment_count") - total)
+                increment_runtime_user_discussion_count(discussion.user_id, -1)
+            apply_runtime_user_comment_count_deltas({
+                user_id: -total
+                for user_id, total in approved_reply_counts.items()
+            })
 
         if previous_status != Discussion.APPROVAL_REJECTED:
             dispatch_forum_event_after_commit(
@@ -649,29 +603,20 @@ def reject_discussion(
 
 
 def approved_reply_counts_by_author(discussion: Discussion, *, user_counted_post_types) -> dict:
-    approved_replies = (
-        Post.objects.filter(
-            discussion=discussion,
-            type__in=user_counted_post_types,
-            approval_status=Post.APPROVAL_APPROVED,
-            hidden_at__isnull=True,
-            number__gt=1,
-        )
-        .exclude(user_id__isnull=True)
-        .values("user_id")
-        .annotate(total=Count("id"))
+    return get_runtime_approved_reply_counts_by_author(
+        discussion,
+        user_counted_post_types=user_counted_post_types,
     )
-    return {row["user_id"]: row["total"] for row in approved_replies}
 
 
 def delete_discussion(
     discussion_id: int,
-    user: User,
+    user,
     *,
     can_delete_discussion_cb,
     approved_reply_counts_by_author_cb,
 ) -> bool:
-    UserService.ensure_not_suspended(user, "删除讨论")
+    ensure_runtime_user_not_suspended(user, "删除讨论")
     discussion = Discussion.objects.get(id=discussion_id)
 
     if not can_delete_discussion_cb(discussion, user):
@@ -693,12 +638,7 @@ def delete_discussion(
         if counted_discussion:
             approved_reply_counts = approved_reply_counts_by_author_cb(discussion)
 
-        deleted_posts = tuple(
-            Post.objects.filter(discussion=discussion)
-            .order_by("number")
-            .values("id", "number", "approval_status", "hidden_at")
-        )
-        Post.objects.filter(discussion=discussion).delete()
+        deleted_posts = delete_runtime_discussion_posts(discussion)
         for deleted_post in deleted_posts:
             _apply_post_deleted_extensions(
                 context={
@@ -720,17 +660,17 @@ def delete_discussion(
         )
 
         if counted_discussion and discussion.user:
-            User.objects.filter(id=discussion.user_id).update(
-                discussion_count=F("discussion_count") - 1
-            )
+            increment_runtime_user_discussion_count(discussion.user_id, -1)
 
-        for user_id, total in approved_reply_counts.items():
-            User.objects.filter(id=user_id).update(comment_count=F("comment_count") - total)
+        apply_runtime_user_comment_count_deltas({
+            user_id: -total
+            for user_id, total in approved_reply_counts.items()
+        })
 
     return True
 
 
-def set_locked_state(discussion: Discussion, actor: User, is_locked: bool) -> Discussion:
+def set_locked_state(discussion: Discussion, actor, is_locked: bool) -> Discussion:
     if not actor.is_staff:
         raise PermissionDenied("没有权限锁定/解锁讨论")
 
@@ -750,7 +690,7 @@ def set_locked_state(discussion: Discussion, actor: User, is_locked: bool) -> Di
     return discussion
 
 
-def set_sticky_state(discussion: Discussion, actor: User, is_sticky: bool) -> Discussion:
+def set_sticky_state(discussion: Discussion, actor, is_sticky: bool) -> Discussion:
     if not actor.is_staff:
         raise PermissionDenied("没有权限置顶/取消置顶讨论")
 
@@ -768,3 +708,5 @@ def set_sticky_state(discussion: Discussion, actor: User, is_sticky: bool) -> Di
             )
         )
     return discussion
+
+

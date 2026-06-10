@@ -12,6 +12,9 @@
       <AdminStateBlock v-if="recoveryNotice" :tone="recoveryNotice.tone">
         {{ recoveryNotice.text }}
       </AdminStateBlock>
+      <AdminStateBlock v-if="distributionNotice" tone="warning">
+        {{ distributionNotice }}
+      </AdminStateBlock>
 
       <section class="ExtensionDetailPage-header">
         <div class="ExtensionDetailPage-headerTitleRow">
@@ -69,6 +72,13 @@
         surface="detail"
         class="ExtensionDetailPage-pluginDetail"
       />
+
+      <section v-if="extension.readme?.available && extension.readme?.html" class="ExtensionDetailSection">
+        <div class="ExtensionDetailSection-header">
+          <h3>文档</h3>
+        </div>
+        <article class="ExtensionDetailPage-readme" v-html="extension.readme.html"></article>
+      </section>
 
       <section v-if="extension.enabled && settingsComponent" class="ExtensionDetailSection">
         <div class="ExtensionDetailSection-header">
@@ -187,16 +197,45 @@ const adminEntryModules = {
 }
 
 const infoLinks = computed(() => {
+  const standardLinks = extension.value?.links && typeof extension.value.links === 'object'
+    ? extension.value.links
+    : {}
+  const labels = {
+    documentation: '文档',
+    website: '网站',
+    discuss: '讨论',
+    support: '支持',
+    source: '源码',
+    donate: '赞助',
+  }
+  const icons = {
+    documentation: 'fas fa-book',
+    website: 'fas fa-globe',
+    discuss: 'fas fa-comments',
+    support: 'fas fa-life-ring',
+    source: 'fas fa-code-branch',
+    donate: 'fas fa-heart',
+  }
+  const links = Object.entries(standardLinks)
+    .filter(([key, target]) => labels[key] && typeof target === 'string' && target)
+    .map(([key, target]) => ({
+      key,
+      label: labels[key],
+      target,
+      icon: icons[key] || 'fas fa-link',
+    }))
   const actions = Array.isArray(extension.value?.admin_actions) ? extension.value.admin_actions : []
   const allowedKeys = new Set(['documentation', 'website', 'discuss', 'support', 'source', 'donate'])
-  return actions
+  const actionLinks = actions
     .filter(action => action?.kind === 'link' && action?.target && allowedKeys.has(action.key))
+    .filter(action => !links.some(link => link.key === action.key))
     .map(action => ({
       key: action.key,
       label: action.label,
       target: action.target,
       icon: action.icon || 'fas fa-link',
     }))
+  return [...links, ...actionLinks]
 })
 
 const adminActions = computed(() => {
@@ -281,6 +320,18 @@ const recoveryNotice = computed(() => {
     return { tone: 'warning', text: '扩展恢复模式已启用，该扩展在当前恢复集合内。' }
   }
   return null
+})
+
+const distributionNotice = computed(() => {
+  const distribution = extension.value?.distribution || {}
+  if (!distribution.abandoned) {
+    return ''
+  }
+  const replacement = String(distribution.replacement || '').trim()
+  if (replacement) {
+    return `该扩展已标记为废弃，建议迁移到 ${replacement}。`
+  }
+  return '该扩展已标记为废弃，建议评估替代方案。'
 })
 
 onMounted(async () => {
@@ -610,7 +661,7 @@ function isInlineSurfaceSupported(currentExtension, surface) {
 .ExtensionDetailSection-header h3 {
   margin: 0;
   color: var(--forum-text-muted);
-  font-size: 26px;
+  font-size: 18px;
   font-weight: 600;
 }
 
@@ -618,6 +669,40 @@ function isInlineSurfaceSupported(currentExtension, surface) {
   margin: 8px 0 0;
   color: var(--forum-text-muted);
   line-height: 1.6;
+}
+
+.ExtensionDetailPage-readme {
+  color: var(--forum-text-color);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.ExtensionDetailPage-readme :deep(h1),
+.ExtensionDetailPage-readme :deep(h2),
+.ExtensionDetailPage-readme :deep(h3) {
+  margin: 0 0 10px;
+  color: var(--forum-text-color);
+  font-size: 18px;
+}
+
+.ExtensionDetailPage-readme :deep(p),
+.ExtensionDetailPage-readme :deep(ul),
+.ExtensionDetailPage-readme :deep(ol),
+.ExtensionDetailPage-readme :deep(pre) {
+  margin: 0 0 12px;
+}
+
+.ExtensionDetailPage-readme :deep(code) {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--forum-bg-subtle);
+  font-size: 12px;
+}
+
+.ExtensionDetailPage-readme :deep(pre) {
+  overflow-x: auto;
+  padding: 12px;
+  background: var(--forum-bg-subtle);
 }
 
 .ExtensionDetailPage-pluginDetail {

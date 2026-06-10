@@ -36,16 +36,17 @@
 
 <script setup>
 import {
-  DiscussionListSidebarStartButton,
+  useAuthStore } from '@bias/users'
+import { useRouter } from '@bias/core'
+import {
   ForumHeroPanel,
   ForumPageWithSidebar,
   ForumPrimaryNav,
   ForumStateBlock,
-  useAuthStore,
   useComposerStore,
-  useForumStore,
-  useRouter,
+  useForumStore
 } from '@bias/forum'
+import { DiscussionListSidebarStartButton } from '@bias/discussions'
 import TagCloud from './TagCloud.vue'
 import TagTile from './TagTile.vue'
 import { useTagsViewModel } from './useTagsViewModel.js'

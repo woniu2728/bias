@@ -5,10 +5,12 @@ from django.db.models import Max
 
 from apps.core.resource_errors import JsonApiForbidden, JsonApiValidationError
 from apps.core.resource_objects import DatabaseResource, ResourceEndpoint, ResourceField, ResourceRelationship, ResourceSort
-from extensions.posts.backend import post_query_service
-from extensions.posts.backend.models import Post
 from extensions.flags.backend.models import PostFlag
-from extensions.flags.backend.services import report_post
+from apps.core.extensions.runtime_access import (
+    get_runtime_post_by_id,
+    get_runtime_post_model,
+    report_runtime_post_flag,
+)
 
 
 class FlagResource(DatabaseResource):
@@ -124,7 +126,7 @@ class FlagResource(DatabaseResource):
         if post is None:
             raise JsonApiValidationError("缺少举报帖子", pointer="/data/relationships/post")
         try:
-            return report_post(
+            return report_runtime_post_flag(
                 post.id,
                 user,
                 reason=instance.reason,
@@ -140,12 +142,21 @@ def _set_flag_post(instance, value, context):
     post_id = _relationship_identifier(value, expected_type="post")
     if not post_id:
         raise JsonApiValidationError("缺少举报帖子", pointer="/data/relationships/post")
-    post = Post.objects.select_related("discussion", "user").filter(id=post_id).first()
-    if post is None:
-        raise JsonApiValidationError("帖子不存在", pointer="/data/relationships/post")
     user = context.get("user")
-    if not post_query_service.can_view_post(post, user):
+    try:
+        post = get_runtime_post_by_id(
+            post_id,
+            user=user,
+            require_visible=True,
+            select_related=("discussion", "user"),
+        )
+    except PermissionDenied:
         raise JsonApiForbidden("没有权限查看此帖子", pointer="/data/relationships/post")
+    except Exception as exc:
+        model = get_runtime_post_model()
+        if isinstance(exc, model.DoesNotExist):
+            raise JsonApiValidationError("帖子不存在", pointer="/data/relationships/post") from exc
+        raise
     instance.post = post
 
 
@@ -158,3 +169,4 @@ def _relationship_identifier(value, *, expected_type: str) -> int | None:
         return int(value.get("id") or 0)
     except (TypeError, ValueError):
         return None
+

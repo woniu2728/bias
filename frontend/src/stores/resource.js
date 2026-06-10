@@ -1,30 +1,15 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
-  normalizeDiscussion,
-  normalizePost,
-  normalizeUser,
-  unwrapList,
-} from '../utils/forum.js'
+  hasResourceNormalizers,
+  normalizeResourceItem,
+  normalizeResourceType,
+  registerResourceNormalizer,
+  resetResourceNormalizers,
+} from '../common/resourceNormalizers.js'
+import { unwrapList } from '../utils/forumData.js'
 
-const NORMALIZERS = {
-  users: [normalizeUser],
-  user: [normalizeUser],
-  discussions: [normalizeDiscussion],
-  discussion: [normalizeDiscussion],
-  posts: [normalizePost],
-  post: [normalizePost],
-}
-
-export function registerResourceNormalizer(type, normalizer) {
-  const normalizedType = normalizeResourceType(type)
-  if (!normalizedType || typeof normalizer !== 'function') {
-    return null
-  }
-  NORMALIZERS[normalizedType] ||= []
-  NORMALIZERS[normalizedType].push(normalizer)
-  return normalizer
-}
+export { registerResourceNormalizer, resetResourceNormalizers }
 
 function inferTypeFromCollectionKey(key) {
   const normalized = normalizeResourceType(key)
@@ -40,21 +25,6 @@ function inferTypeFromCollectionKey(key) {
     if (hasResourceNormalizers(singular)) return singular
   }
   return ''
-}
-
-function normalizeResourceType(type) {
-  return String(type || '').trim().toLowerCase()
-}
-
-function hasResourceNormalizers(type) {
-  return Array.isArray(NORMALIZERS[type]) && NORMALIZERS[type].length > 0
-}
-
-function normalizeItem(type, item) {
-  const normalizers = NORMALIZERS[normalizeResourceType(type)] || []
-  return normalizers.reduce((currentItem, normalizer) => {
-    return normalizer(currentItem)
-  }, { ...(item || {}) })
 }
 
 function getEntityId(item) {
@@ -76,7 +46,7 @@ export const useResourceStore = defineStore('resource', () => {
 
   function upsert(type, item) {
     const normalizedType = normalizeResourceType(type)
-    const normalizedItem = normalizeItem(normalizedType, item)
+    const normalizedItem = normalizeResourceItem(normalizedType, item)
     const entityId = getEntityId(normalizedItem)
     if (!normalizedType || entityId === null) {
       return normalizedItem

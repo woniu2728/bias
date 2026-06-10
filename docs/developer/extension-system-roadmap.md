@@ -151,10 +151,12 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 2. 扩展详情页已展示安装摘要和卸载风险说明
 3. `create_extension` 脚手架已生成：
    - `backend/ext.py`
-   - `backend/migrations/__init__.py`
+   - `backend/apps.py`
+   - `backend/django_migrations/__init__.py`
    - `docs/README.md`
    - `locale/zh-CN.json`
-   - `migration_namespace`
+   - `django_app_config`
+   - `django_app_label`
 4. 扩展脚手架已补齐交付样板目录
    - 仪表盘快捷入口
    - 后台路由可访问性守卫
@@ -291,8 +293,8 @@ Bias 后续不再停留在“内置模块注册中心”阶段，而是要演进
 12. 扩展开发工具链的结构约束已继续收严：
    - `frontend_admin_entry` 必须指向当前扩展自己的标准后台入口
    - `frontend_forum_entry` 必须指向当前扩展自己的标准前台入口
-   - `backend_entry` 与 `migration_namespace` 必须归属当前扩展命名空间
-   - `create_extension` 已补齐独立 `PermissionsPage.vue` 样板
+   - `backend_entry` 必须归属当前扩展命名空间
+   - `create_extension` 默认生成扩展 AppConfig 和 `django_migrations`，让新模型归属从一开始就能被审计
 13. `validate_extensions` 已支持结构化 JSON 输出：
    - 可直接在 CI、发布脚本和后续自动化工具中消费
    - 保留原有文本输出和失败退出语义
@@ -474,7 +476,8 @@ extensions/
 - `frontend_forum_entry`
 - `settings_pages`
 - `permissions_pages`
-- `migration_namespace`
+- `django_app_config`
+- `django_app_label`
 
 ### 2. ExtensionRuntimeState
 
@@ -787,6 +790,8 @@ extensions/
 2. 生成：
    - `extension.json`
    - 后端入口
+   - `backend/apps.py`
+   - `backend/django_migrations`
    - 前端入口
    - `ApiResourceExtender` 示例资源字段
    - 设置页模板
@@ -802,7 +807,7 @@ extensions/
 ### 验收标准
 
 1. 新建扩展不需要手工拷贝旧模块
-2. 新扩展能快速跑通前端入口、设置、生命周期和 API 资源字段的最小闭环
+2. 新扩展能快速跑通前端入口、AppConfig、迁移归属、设置、生命周期和 API 资源字段的最小闭环
 3. CI 能校验扩展 manifest、依赖关系和公开 extender 使用边界
 
 ## 阶段 7：第三方扩展生态预留

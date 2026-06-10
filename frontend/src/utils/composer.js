@@ -1,7 +1,6 @@
 import api from '../api/index.js'
 
 export const BASE_COMPOSER_TOOLS = [
-  { key: 'upload', title: '上传附件', icon: 'fas fa-file-upload', order: 10 },
   { key: 'heading', title: '标题', label: 'H', before: '## ', after: '', order: 20 },
   { key: 'bold', title: '加粗', label: 'B', before: '**', after: '**', order: 30 },
   { key: 'italic', title: '斜体', label: 'I', before: '*', after: '*', order: 40 },
@@ -10,23 +9,9 @@ export const BASE_COMPOSER_TOOLS = [
   { key: 'spoiler', title: '提示/警告', icon: 'fas fa-exclamation-triangle', before: '> **提示：** ', after: '', order: 70 },
   { key: 'code', title: '代码', icon: 'fas fa-code', before: '`', after: '`', order: 80 },
   { key: 'link', title: '链接', icon: 'fas fa-link', order: 90 },
-  { key: 'image', title: '图片', icon: 'fas fa-image', order: 100 },
   { key: 'bullets', title: '无序列表', icon: 'fas fa-list-ul', order: 110 },
   { key: 'ordered', title: '有序列表', icon: 'fas fa-list-ol', order: 120 }
 ]
-
-const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg']
-
-export async function uploadComposerFile(file) {
-  const formData = new FormData()
-  formData.append('file', file)
-
-  return api.post('/uploads', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  })
-}
 
 export async function fetchComposerPreview(content) {
   return api.post('/preview', {
@@ -70,13 +55,6 @@ export function defaultToolCursorOffset(tool) {
 
 export function replaceSelection(content, start, end, replacement) {
   return `${content.slice(0, start)}${replacement}${content.slice(end)}`
-}
-
-export function buildUploadedFileMarkdown(fileName, url, options = {}) {
-  const { image = false } = options
-  const fallback = image ? '图片' : '附件'
-  const safeLabel = sanitizeMarkdownLabel(stripFileExtension(fileName), fallback)
-  return image ? `![${safeLabel}](${url})` : `[${safeLabel}](${url})`
 }
 
 export function getTextareaCaretCoordinates(textarea, position) {
@@ -152,14 +130,6 @@ export function getTextareaCaretCoordinates(textarea, position) {
   return coordinates
 }
 
-export function isImageFile(file) {
-  if (!file) return false
-  if (file.type?.startsWith('image/')) return true
-
-  const name = String(file.name || '').toLowerCase()
-  return IMAGE_EXTENSIONS.some(extension => name.endsWith(extension))
-}
-
 export function getComposerErrorMessage(error, fallback) {
   return (
     error?.response?.data?.error ||
@@ -188,17 +158,4 @@ function defaultToolText(tool) {
   if (tool.key === 'code') return 'code'
   if (tool.key === 'heading') return '标题'
   return '文本'
-}
-
-function sanitizeMarkdownLabel(value, fallback) {
-  const sanitized = String(value || '')
-    .replace(/[[\]\r\n]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  return sanitized || fallback
-}
-
-function stripFileExtension(fileName) {
-  return String(fileName || '').replace(/\.[^.]+$/, '')
 }

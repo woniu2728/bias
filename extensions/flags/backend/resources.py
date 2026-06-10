@@ -3,10 +3,10 @@ from __future__ import annotations
 from django.db.models import Subquery
 from django.db.models import Prefetch
 
+from apps.core.extensions.runtime_access import get_runtime_post_model
 from apps.core.visibility import apply_related_model_visibility_subquery
-from extensions.posts.backend.models import Post
-from extensions.users.backend.services import UserService
 from extensions.flags.backend.models import PostFlag
+from apps.core.extensions.runtime_access import has_runtime_forum_permission
 
 
 def post_flag_preload_resolver(context: dict):
@@ -45,7 +45,7 @@ def resolve_forum_can_view_flags(forum, context: dict) -> bool:
     return bool(
         user
         and user.is_authenticated
-        and UserService.has_forum_permission(user, "admin.flag.view")
+        and has_runtime_forum_permission(user, "admin.flag.view")
     )
 
 
@@ -146,7 +146,7 @@ def resolve_post_flag_identifiers(post, context: dict) -> list[dict]:
 
 def resolve_post_can_moderate_flags(post, context: dict) -> bool:
     user = context.get("user")
-    return bool(user and UserService.has_forum_permission(user, "admin.flag.view"))
+    return bool(user and has_runtime_forum_permission(user, "admin.flag.view"))
 
 
 def resolve_user_new_flag_count(user, context: dict) -> int:
@@ -155,7 +155,7 @@ def resolve_user_new_flag_count(user, context: dict) -> int:
         not actor
         or not actor.is_authenticated
         or actor.id != user.id
-        or not UserService.has_forum_permission(actor, "admin.flag.view")
+        or not has_runtime_forum_permission(actor, "admin.flag.view")
     ):
         return 0
     queryset = scope_flag_visibility(PostFlag.objects.filter(status=PostFlag.STATUS_OPEN), {"user": actor})
@@ -167,13 +167,14 @@ def scope_flag_visibility(queryset, context: dict):
     if (
         not user
         or not user.is_authenticated
-        or not UserService.has_forum_permission(user, "admin.flag.view")
+        or not has_runtime_forum_permission(user, "admin.flag.view")
     ):
         return queryset.none()
     visible_post_ids = apply_related_model_visibility_subquery(
-        Post,
+        get_runtime_post_model(),
         user=user,
         ability="view",
         context={"skip_view_forum_gate": True},
     )
     return queryset.filter(post_id__in=Subquery(visible_post_ids))
+

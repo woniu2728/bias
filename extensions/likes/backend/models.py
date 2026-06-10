@@ -1,7 +1,5 @@
+from django.conf import settings
 from django.db import models
-
-from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
 
 
 class PostLike(models.Model):
@@ -9,8 +7,8 @@ class PostLike(models.Model):
     帖子点赞记录，由 likes 扩展拥有。
     """
 
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="likes")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="post_likes")
+    post = models.ForeignKey("posts.Post", on_delete=models.CASCADE, related_name="likes")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_likes")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

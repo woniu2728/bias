@@ -30,11 +30,11 @@ def _discover_extension_django_app_records(base_dir: str | Path) -> list[dict[st
         app_config = str(payload.get("django_app_config") or "").strip()
         expected_prefix = f"extensions.{extension_id.replace('-', '_')}.backend.apps."
         if app_config and app_config.startswith(expected_prefix):
-            app_label = str(payload.get("django_app_label") or extension_id.replace("-", "_")).strip()
-            migration_module = str(
-                payload.get("django_migration_module")
-                or f"extensions.{extension_id.replace('-', '_')}.backend.django_migrations"
-            ).strip()
+            app_label = normalize_extension_django_app_label(
+                extension_id,
+                payload.get("django_app_label"),
+            )
+            migration_module = f"extensions.{extension_id.replace('-', '_')}.backend.django_migrations"
             records.append({
                 "app_config": app_config,
                 "app_label": app_label,
@@ -42,3 +42,10 @@ def _discover_extension_django_app_records(base_dir: str | Path) -> list[dict[st
             })
 
     return records
+
+
+def normalize_extension_django_app_label(extension_id: str, app_label: str | None = None) -> str:
+    normalized = str(app_label or "").strip()
+    if normalized:
+        return normalized
+    return str(extension_id or "").replace("-", "_").strip()

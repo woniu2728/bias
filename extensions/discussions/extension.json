@@ -11,6 +11,7 @@
   "dependencies": [
     "core",
     "posts",
+    "realtime",
     "users"
   ],
   "provides": [
@@ -21,8 +22,6 @@
   ],
   "django_app_config": "extensions.discussions.backend.apps.DiscussionsExtensionConfig",
   "django_app_label": "discussions",
-  "django_migration_module": "apps.discussions.migrations",
-  "migration_namespace": "extensions.discussions.backend.migrations",
   "backend_entry": "extensions.discussions.backend.ext",
   "frontend_admin_entry": "extensions/discussions/frontend/admin/index.js",
   "compatibility": {
@@ -34,7 +33,7 @@
   },
   "security": {
     "support_email": "",
-    "capabilities_notice": "该扩展承载讨论权限、讨论列表排序过滤和讨论系统事件帖子类型；Django AppConfig 由扩展声明，迁移模块复用历史路径以保持数据库连续性。"
+    "capabilities_notice": "该扩展承载讨论权限、讨论列表排序过滤和讨论系统事件帖子类型；Django AppConfig 与 Django 迁移模块均由扩展目录统一声明。"
   },
   "distribution": {
     "channel": "private",

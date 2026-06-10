@@ -1,5 +1,5 @@
-import GlobalSearchModal from '@/components/modals/GlobalSearchModal.vue'
-import { openLoginModal, openRegisterModal } from '@/utils/authModal'
+import { getSearchModalProvider } from '@/forum/registry'
+import { openLoginModal, openRegisterModal } from '@bias/users'
 
 export function useHeaderActions({
   authStore,
@@ -10,17 +10,45 @@ export function useHeaderActions({
   router
 }) {
   function openSearchModal() {
-    modalStore.show(
-      GlobalSearchModal,
-      {
+    const provider = getSearchModalProvider({
+      authStore,
+      composerStore,
+      currentSearchQuery: currentSearchQuery.value,
+      modalStore,
+      route,
+      router,
+    })
+    if (!provider) {
+      return null
+    }
+
+    if (typeof provider.open === 'function') {
+      return provider.open({
+        authStore,
+        composerStore,
         initialQuery: currentSearchQuery.value,
-        initialType: String(route.query.type || 'all')
-      },
-      {
-        size: 'large',
-        className: 'Modal--search'
-      }
-    )
+        initialType: String(route.query.type || 'all'),
+        modalStore,
+        route,
+        router,
+      })
+    }
+
+    if (provider.component) {
+      return modalStore.show(
+        provider.component,
+        {
+          initialQuery: currentSearchQuery.value,
+          initialType: String(route.query.type || 'all')
+        },
+        {
+          size: provider.size || 'large',
+          className: provider.className || 'Modal--search'
+        }
+      )
+    }
+
+    return null
   }
 
   function openLogin() {

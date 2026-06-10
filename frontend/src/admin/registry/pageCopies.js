@@ -21,7 +21,21 @@ export function registerAdminPageCopy(pageKey, item) {
 }
 
 export function getAdminPageCopy(pageKey, context = {}) {
-  return getPageCopyRegistry(pageKey).get(context)
+  return mergePageContributions(getPageCopyRegistry(pageKey).getAll(context))
+}
+
+function mergePageContributions(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return null
+  }
+
+  return [...items].reverse().reduce((merged, item) => {
+    const next = { ...merged }
+    for (const [key, value] of Object.entries(item || {})) {
+      next[key] = value
+    }
+    return next
+  }, {})
 }
 
 const basicsPageCopy = getPageCopyRegistry('core.basics')
@@ -36,13 +50,13 @@ export const registerAdminBasicsPageCopy = basicsPageCopy.register
 export const getAdminBasicsPageCopy = basicsPageCopy.get
 
 export const registerAdminAppearancePageCopy = appearancePageCopy.register
-export const getAdminAppearancePageCopy = appearancePageCopy.get
+export const getAdminAppearancePageCopy = context => getAdminPageCopy('core.appearance', context)
 
 export const registerAdminMailPageCopy = mailPageCopy.register
-export const getAdminMailPageCopy = mailPageCopy.get
+export const getAdminMailPageCopy = context => getAdminPageCopy('core.mail', context)
 
 export const registerAdminAdvancedPageCopy = advancedPageCopy.register
-export const getAdminAdvancedPageCopy = advancedPageCopy.get
+export const getAdminAdvancedPageCopy = context => getAdminPageCopy('core.advanced', context)
 
 export const registerAdminAuditLogsPageCopy = auditLogsPageCopy.register
 export const getAdminAuditLogsPageCopy = auditLogsPageCopy.get

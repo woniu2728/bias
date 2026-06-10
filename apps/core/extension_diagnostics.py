@@ -42,6 +42,21 @@ def classify_extension_diagnostics(item: dict) -> dict:
     if model_ownership_audit.get("app_label_migration_required_count"):
         warning_reasons.append("扩展模型 app label 尚未完全归属扩展")
 
+    distribution = item.get("distribution") or {}
+    if distribution.get("abandoned"):
+        replacement = str(distribution.get("replacement") or "").strip()
+        if replacement:
+            warning_reasons.append(f"扩展已废弃，建议迁移到 {replacement}")
+        else:
+            warning_reasons.append("扩展已废弃")
+
+    frontend_asset_state = item.get("frontend_asset_state") or {}
+    if frontend_asset_state.get("has_frontend"):
+        if frontend_asset_state.get("requires_rebuild"):
+            warning_reasons.append("扩展前端资源待重建")
+        elif not frontend_asset_state.get("manifest_exists") or not frontend_asset_state.get("compiled"):
+            warning_reasons.append("扩展前端资源尚未生成")
+
     return {
         "blocking": bool(blocking_reasons),
         "warning": bool(warning_reasons),

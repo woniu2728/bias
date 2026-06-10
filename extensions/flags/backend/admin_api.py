@@ -4,11 +4,14 @@ from ninja import Body, Router
 
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
+from apps.core.extensions.runtime_access import (
+    get_runtime_post_flag_model,
+    has_runtime_forum_permission,
+    list_runtime_post_flags,
+    resolve_runtime_post_flag,
+)
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.services import PaginationService
-from extensions.flags.backend.models import PostFlag
-from extensions.users.backend.services import UserService
-from extensions.flags.backend.services import get_flag_list, resolve_flag
 from extensions.flags.backend.handlers import serialize_flag
 
 
@@ -18,7 +21,7 @@ router = Router()
 def _require_admin_permission(request, permission_code: str, message: str):
     if not request.auth or not request.auth.is_staff:
         return api_error("需要管理员权限", status=403)
-    if not UserService.has_forum_permission(request.auth, permission_code):
+    if not has_runtime_forum_permission(request.auth, permission_code):
         return api_error(message, status=403, code="permission_denied")
     return None
 
@@ -30,7 +33,7 @@ def list_post_flags(request, page: int = 1, limit: int = 20, status: str = "open
         return denied
 
     page, limit = PaginationService.normalize(page, limit)
-    flags, total = get_flag_list(status=status, page=page, limit=limit, user=request.auth)
+    flags, total = list_runtime_post_flags(status=status, page=page, limit=limit, user=request.auth)
     return {
         "total": total,
         "page": page,
@@ -45,11 +48,12 @@ def resolve_post_flag(request, flag_id: int, payload: dict = Body(...)):
     if denied:
         return denied
 
+    flag_model = get_runtime_post_flag_model()
     try:
-        flag = resolve_flag(
+        flag = resolve_runtime_post_flag(
             flag_id=flag_id,
             admin_user=request.auth,
-            status=payload.get("status", PostFlag.STATUS_RESOLVED),
+            status=payload.get("status", flag_model.STATUS_RESOLVED),
             resolution_note=payload.get("resolution_note", ""),
         )
         log_admin_action(
@@ -64,7 +68,8 @@ def resolve_post_flag(request, flag_id: int, payload: dict = Body(...)):
             },
         )
         return serialize_flag(flag)
-    except PostFlag.DoesNotExist:
+    except flag_model.DoesNotExist:
         return api_error("举报记录不存在", status=404)
     except ValueError as exc:
         return api_error(str(exc), status=400)
+

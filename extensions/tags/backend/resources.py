@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from extensions.tags.backend.models import Tag
+from apps.core.extensions.runtime_access import (
+    can_runtime_reply_in_tag,
+    can_runtime_start_discussion_in_tag,
+    filter_runtime_tags_for_user,
+)
 
 
 def serialize_tag_base(tag, context: dict) -> dict:
@@ -27,30 +32,21 @@ def serialize_tag_base(tag, context: dict) -> dict:
 
 
 def resolve_discussion_tags(discussion, context: dict) -> list[dict]:
-    return [
-        {
-            "id": dt.tag.id,
-            "name": dt.tag.name,
-            "slug": dt.tag.slug,
-            "color": dt.tag.color,
-            "icon": dt.tag.icon,
-        }
-        for dt in discussion.discussion_tags.all()
-    ]
+    from extensions.tags.backend.tag_relationships import serialize_discussion_tag_summaries
+
+    return serialize_discussion_tag_summaries(discussion)
 
 
 def resolve_forum_tags(forum, context: dict) -> list[dict]:
     from django.db.models import Prefetch
 
-    from extensions.tags.backend.services import TagService
-
     user = context.get("user")
-    child_queryset = TagService.filter_tags_for_user(
+    child_queryset = filter_runtime_tags_for_user(
         Tag.objects.filter(is_hidden=False).order_by("position", "name"),
         user,
         action="view",
     )
-    queryset = TagService.filter_tags_for_user(
+    queryset = filter_runtime_tags_for_user(
         Tag.objects.filter(parent__isnull=True, is_hidden=False)
         .select_related("last_posted_discussion")
         .prefetch_related(Prefetch("children", queryset=child_queryset, to_attr="visible_children"))
@@ -101,17 +97,13 @@ def resolve_post_event_mentions_tags(post, context: dict | None = None) -> list[
 
 
 def resolve_tag_can_start_discussion(tag, context: dict) -> bool:
-    from extensions.tags.backend.services import TagService
-
     user = context.get("user")
-    return TagService.can_start_discussion_in_tag(tag, user)
+    return can_runtime_start_discussion_in_tag(tag, user)
 
 
 def resolve_tag_can_reply(tag, context: dict) -> bool:
-    from extensions.tags.backend.services import TagService
-
     user = context.get("user")
-    return TagService.can_reply_in_tag(tag, user)
+    return can_runtime_reply_in_tag(tag, user)
 
 
 def resolve_tag_last_posted_discussion(tag, context: dict) -> dict | None:

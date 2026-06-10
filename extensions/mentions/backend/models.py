@@ -1,7 +1,5 @@
+from django.conf import settings
 from django.db import models
-
-from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
 
 
 class PostMentionsUser(models.Model):
@@ -9,8 +7,12 @@ class PostMentionsUser(models.Model):
     帖子提及用户关系，由 mentions 扩展拥有。
     """
 
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="mentions")
-    mentions_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mentioned_in_posts")
+    post = models.ForeignKey("posts.Post", on_delete=models.CASCADE, related_name="mentions")
+    mentions_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="mentioned_in_posts",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -102,7 +102,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from '@bias/core'
 import {
   AdminActionNoteModal,
   AdminFilterTabs,

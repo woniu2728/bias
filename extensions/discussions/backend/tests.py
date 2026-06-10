@@ -14,6 +14,7 @@ from datetime import timedelta
 from io import StringIO
 from ninja_jwt.tokens import RefreshToken
 
+from apps.core.forum_registry import get_forum_registry
 from apps.core.models import AuditLog
 from apps.core.resource_registry import (
     ResourceEndpointDefinition,
@@ -21,6 +22,7 @@ from apps.core.resource_registry import (
     ResourceRegistry,
     ResourceSortDefinition,
 )
+from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.discussions.backend.visibility import (
     build_discussion_visibility_q,
     build_post_visibility_q,
@@ -30,9 +32,175 @@ from extensions.discussions.backend.handlers import discussion_resource_endpoint
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.discussions.backend.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
 from extensions.discussions.backend.services import DiscussionService
-from extensions.posts.backend.models import Post
-from extensions.posts.backend.services import PostService
-from extensions.users.backend.models import Group, Permission, User
+from apps.core.extensions.runtime_access import (
+    create_runtime_post,
+    get_runtime_post_model,
+)
+from apps.core.extensions.runtime_access import (
+    get_runtime_group_model,
+    get_runtime_permission_model,
+    get_runtime_user_model,
+)
+
+
+class RuntimeModelProxy:
+    def __init__(self, resolver):
+        self._resolver = resolver
+
+    def __getattr__(self, name):
+        return getattr(self._resolver(), name)
+
+
+User = RuntimeModelProxy(get_runtime_user_model)
+Group = RuntimeModelProxy(get_runtime_group_model)
+Permission = RuntimeModelProxy(get_runtime_permission_model)
+Post = RuntimeModelProxy(get_runtime_post_model)
+
+
+class DiscussionRegistryTests(ExtensionRuntimeTestMixin, TestCase):
+    def test_discussions_extension_registers_runtime_service_providers(self):
+        application = self.bootstrap_extensions("discussions")
+        service = application.get_service("discussions.service")
+        timeline_service = application.get_service("discussions.timeline")
+
+        self.assertIn("discussions.service", application.get_service_provider_keys(extension_id="discussions"))
+        self.assertIn("discussions.timeline", application.get_service_provider_keys(extension_id="discussions"))
+        self.assertIs(service["model"], Discussion)
+        self.assertIs(service["state_model"], DiscussionUser)
+        self.assertEqual(service["approval_approved"], Discussion.APPROVAL_APPROVED)
+        for key in (
+            "create",
+            "update",
+            "delete",
+            "set_hidden_state",
+            "list",
+            "approve",
+            "reply_notification_context",
+            "validate_replyable",
+            "lock_for_post_number",
+            "apply_counted_filter",
+            "refresh_approved_stats",
+            "is_subscribed",
+            "set_subscription",
+            "follow_if_enabled",
+            "mark_read",
+        ):
+            self.assertTrue(callable(service[key]), key)
+        self.assertTrue(callable(timeline_service["create_from_builder"]))
+
+    def test_discussions_capabilities_are_filtered_when_extension_disabled(self):
+        self.disable_extension_for_test("discussions")
+
+        registry = get_forum_registry()
+
+        self.assertFalse(registry.get_module("discussions").enabled)
+        self.assertNotIn("viewForum", registry.get_valid_permission_codes())
+        self.assertNotIn("startDiscussion", registry.get_valid_permission_codes())
+        self.assertNotIn("discussion.reply", registry.get_valid_permission_codes())
+        self.assertNotIn("discussion.edit", registry.get_valid_permission_codes())
+        self.assertFalse(any(item.module_id == "discussions" for item in registry.get_post_types()))
+        self.assertFalse(any(item.module_id == "discussions" for item in registry.get_discussion_sorts()))
+        self.assertFalse(any(item.module_id == "discussions" for item in registry.get_discussion_list_filters()))
+
+    def test_extension_detail_api_surfaces_discussion_frontend_routes(self):
+        admin = User.objects.create_superuser(
+            username="discussion-detail-admin",
+            email="discussion-detail-admin@example.com",
+            password="password123",
+        )
+        token = RefreshToken.for_user(admin).access_token
+        response = self.client.get(
+            "/api/admin/extensions/discussions",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()["extension"]
+        self.assertEqual(payload["id"], "discussions")
+        self.assertEqual(payload["source"], "filesystem")
+        self.assertEqual(payload["frontend_admin_entry"], "extensions/discussions/frontend/admin/index.js")
+        self.assertEqual(payload["frontend_forum_entry"], "extensions/discussions/frontend/forum/index.js")
+        self.assertIn("/admin/extensions/discussions/permissions", payload["permissions_pages"])
+        frontend_routes = {
+            item["name"]: item
+            for item in payload["frontend_routes"]
+            if item["frontend"] == "forum"
+        }
+        self.assertEqual(frontend_routes["home"]["path"], "/")
+        self.assertEqual(frontend_routes["home"]["component"], "./DiscussionListView.vue")
+        self.assertEqual(frontend_routes["home"]["module_id"], "discussions")
+        self.assertEqual(frontend_routes["home"]["order"], 0)
+        self.assertEqual(frontend_routes["discussion-detail"]["path"], "/d/:id")
+        self.assertEqual(frontend_routes["discussion-detail"]["component"], "./DiscussionDetailView.vue")
+        self.assertEqual(frontend_routes["discussion-create"]["path"], "/discussions/create")
+        self.assertEqual(frontend_routes["discussion-create"]["component"], "./DiscussionCreateView.vue")
+        self.assertTrue(frontend_routes["discussion-create"]["requires_auth"])
+
+    def test_inspect_reports_discussions_models_as_extension_owned(self):
+        stdout = StringIO()
+        call_command(
+            "inspect_extensions",
+            "--extension-id",
+            "discussions",
+            stdout=stdout,
+        )
+        payload = json.loads(stdout.getvalue())
+        extension = payload["extensions"][0]
+        audit = extension["model_ownership_audit"]
+
+        self.assertEqual(extension["id"], "discussions")
+        self.assertEqual(audit["owned_model_count"], 2)
+        self.assertEqual(audit["app_label_migration_required_count"], 0)
+        self.assertEqual(extension["django_app_label"], "discussions")
+        self.assertEqual(audit["target_app_label"], "discussions")
+        self.assertEqual(audit["target_app_label_source"], "manifest")
+        self.assertTrue(all(
+            item["target_app_label"] == "discussions"
+            and item["target_app_label_source"] == "manifest"
+            for item in audit["items"]
+        ))
+        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+
+    def test_discussions_extension_registers_discussion_sort_catalog(self):
+        registry = get_forum_registry()
+
+        sorts = registry.get_discussion_sorts()
+        sort_codes = [item.code for item in sorts]
+        self.assertIn("latest", sort_codes)
+        self.assertIn("top", sort_codes)
+        self.assertIn("unanswered", sort_codes)
+        self.assertEqual(registry.get_default_discussion_sort_code(), "latest")
+        newest_sort = next(item for item in sorts if item.code == "newest")
+        unanswered_sort = next(item for item in sorts if item.code == "unanswered")
+        oldest_sort = next(item for item in sorts if item.code == "oldest")
+        self.assertEqual(newest_sort.module_id, "discussions")
+        self.assertEqual(newest_sort.icon, "fas fa-file-alt")
+        self.assertTrue(newest_sort.toolbar_visible)
+        self.assertFalse(unanswered_sort.toolbar_visible)
+        self.assertFalse(oldest_sort.toolbar_visible)
+
+    def test_discussions_and_subscriptions_extensions_register_discussion_list_filters(self):
+        registry = get_forum_registry()
+
+        filters = registry.get_discussion_list_filters()
+        filter_codes = [item.code for item in filters]
+        self.assertIn("all", filter_codes)
+        self.assertIn("following", filter_codes)
+        self.assertIn("my", filter_codes)
+        self.assertIn("unread", filter_codes)
+        self.assertEqual(registry.get_default_discussion_list_filter_code(), "all")
+        all_filter = next(item for item in filters if item.code == "all")
+        following_filter = next(item for item in filters if item.code == "following")
+        my_filter = next(item for item in filters if item.code == "my")
+        unread_filter = next(item for item in filters if item.code == "unread")
+        self.assertEqual(all_filter.module_id, "discussions")
+        self.assertTrue(all_filter.sidebar_visible)
+        self.assertEqual(all_filter.route_path, "/")
+        self.assertEqual(following_filter.module_id, "subscriptions")
+        self.assertTrue(following_filter.sidebar_visible)
+        self.assertEqual(following_filter.route_path, "/following")
+        self.assertFalse(my_filter.sidebar_visible)
+        self.assertFalse(unread_filter.sidebar_visible)
 
 
 def discussion_resource_payload(*, title=None, content=None):
@@ -405,7 +573,7 @@ class DiscussionApiTests(TestCase):
             user=self.author,
         )
         DiscussionService.get_discussion_by_id(discussion.id, self.reader)
-        PostService.create_post(
+        create_runtime_post(
             discussion_id=discussion.id,
             content="A new reply",
             user=self.author,
@@ -455,7 +623,7 @@ class DiscussionApiTests(TestCase):
             user=self.reader,
             defaults={"is_subscribed": False, "last_read_post_number": 1},
         )
-        PostService.create_post(
+        create_runtime_post(
             discussion_id=unread_discussion.id,
             content="这会制造未读",
             user=self.author,
@@ -688,12 +856,12 @@ class DiscussionApiTests(TestCase):
             user=self.author,
         )
         DiscussionService.get_discussion_by_id(discussion.id, self.reader)
-        PostService.create_post(
+        create_runtime_post(
             discussion_id=discussion.id,
             content="Reply one",
             user=self.author,
         )
-        PostService.create_post(
+        create_runtime_post(
             discussion_id=discussion.id,
             content="Reply two",
             user=self.author,
@@ -797,12 +965,12 @@ class DiscussionApiTests(TestCase):
             user=self.author,
         )
         DiscussionService.get_discussion_by_id(discussion.id, self.reader)
-        PostService.create_post(
+        create_runtime_post(
             discussion_id=discussion.id,
             content="Reply one",
             user=self.author,
         )
-        PostService.create_post(
+        create_runtime_post(
             discussion_id=discussion.id,
             content="Reply two",
             user=self.author,
@@ -894,7 +1062,7 @@ class DiscussionApiTests(TestCase):
             content="First post",
             user=self.author,
         )
-        reply = PostService.create_post(
+        reply = create_runtime_post(
             discussion_id=discussion.id,
             content="Counted reply",
             user=self.reader,
@@ -937,7 +1105,7 @@ class DiscussionApiTests(TestCase):
             content="用于验证隐藏接口",
             user=self.author,
         )
-        PostService.create_post(
+        create_runtime_post(
             discussion_id=discussion.id,
             content="隐藏时需要扣回的回复",
             user=self.reader,
@@ -1352,7 +1520,7 @@ class DiscussionApiTests(TestCase):
             content="First post",
             user=self.author,
         )
-        PostService.create_post(
+        create_runtime_post(
             discussion_id=discussion.id,
             content="Counted reply before rejection",
             user=self.reader,
@@ -1379,7 +1547,7 @@ class DiscussionApiTests(TestCase):
             content="First post",
             user=self.author,
         )
-        PostService.create_post(
+        create_runtime_post(
             discussion_id=discussion.id,
             content="Counted reply before hide",
             user=self.reader,
@@ -1398,3 +1566,5 @@ class DiscussionApiTests(TestCase):
         self.reader.refresh_from_db()
         self.assertEqual(self.author.discussion_count, 0)
         self.assertEqual(self.reader.comment_count, 0)
+
+

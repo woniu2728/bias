@@ -1,11 +1,11 @@
 import {
-  buildDiscussionPath,
+  api,
   computed,
-  forumApi,
-  getNotificationRenderers,
-  renderTwemojiText,
-  useResourceStore,
-} from '@bias/forum'
+  useResourceStore
+} from '@bias/core'
+import { renderTwemojiText } from '@bias/emoji'
+import { buildDiscussionPath } from '@bias/discussions'
+import { getNotificationRenderers } from './notificationFrontendRegistry.js'
 
 const postPathCache = new Map()
 
@@ -48,7 +48,7 @@ async function resolveDiscussionOrPostPath(notification) {
     }
 
     try {
-      const post = await forumApi.get(`/posts/${postId}`)
+      const post = await api.get(`/posts/${postId}`)
       const resolvedDiscussionId = Number(post?.discussion_id || discussionId || 0)
       const resolvedPostNumber = Number(post?.number || 0)
 

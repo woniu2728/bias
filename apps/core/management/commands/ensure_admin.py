@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.core.management import BaseCommand, CommandError
 from django.core.management.base import CommandParser
 
-from apps.core.user_runtime import ensure_runtime_admin_user
+from apps.core.extensions.runtime_access import ensure_runtime_admin_user
 
 
 class Command(BaseCommand):

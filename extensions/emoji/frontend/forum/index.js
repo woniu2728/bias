@@ -1,9 +1,5 @@
-import {
-  extendForum,
-  renderTwemojiHtml,
-  setTwemojiBaseUrl,
-  setTwemojiEnabled,
-} from '@bias/forum'
+import { extendForum } from '@bias/forum'
+import { renderTwemojiHtml, setTwemojiBaseUrl, setTwemojiEnabled } from '@bias/emoji'
 import ComposerEmojiAutocomplete from './ComposerEmojiAutocomplete.vue'
 import ComposerEmojiPicker from './ComposerEmojiPicker.vue'
 import { EMOJI_GROUPS, searchEmojiItems } from './emojiData.js'

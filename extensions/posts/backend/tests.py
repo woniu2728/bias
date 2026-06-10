@@ -1,3 +1,7 @@
+import json
+from io import StringIO
+
+from django.core.management import call_command
 from django.db import OperationalError
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -5,21 +9,159 @@ from django.db import connection
 from django.utils import timezone
 from datetime import timedelta
 from ninja_jwt.tokens import RefreshToken
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from apps.core.forum_registry import get_forum_registry
+from apps.core.extensions.runtime_access import (
+    create_runtime_discussion,
+    delete_runtime_discussion,
+    get_runtime_discussion_model,
+    get_runtime_discussion_state_model,
+    set_runtime_discussion_hidden_state,
+)
 from apps.core.models import AuditLog
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
+from apps.core.search_index_service import get_search_index_definitions
+from extensions.testing import ExtensionRuntimeTestMixin
+from extensions.posts.backend.resources import resolve_post_event_data
 from extensions.discussions.backend.visibility import (
     build_post_visibility_q,
     scope_discussion_view,
     scope_post_view,
 )
-from extensions.discussions.backend.models import Discussion, DiscussionUser
-from extensions.discussions.backend.services import DiscussionService
 from extensions.posts.backend.handlers import post_resource_endpoints
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.services import PostService
-from extensions.users.backend.models import Group, Permission, User
+from apps.core.extensions.runtime_access import (
+    get_runtime_group_model,
+    get_runtime_permission_model,
+    get_runtime_user_model,
+)
+
+
+class RuntimeModelProxy:
+    def __init__(self, resolver):
+        self._resolver = resolver
+
+    def __getattr__(self, name):
+        return getattr(self._resolver(), name)
+
+
+User = RuntimeModelProxy(get_runtime_user_model)
+Group = RuntimeModelProxy(get_runtime_group_model)
+Permission = RuntimeModelProxy(get_runtime_permission_model)
+Discussion = RuntimeModelProxy(get_runtime_discussion_model)
+DiscussionUser = RuntimeModelProxy(get_runtime_discussion_state_model)
+
+
+class PostsExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
+    def test_posts_extension_registers_runtime_service_provider(self):
+        application = self.bootstrap_extensions("posts")
+        service = application.get_service("posts.service")
+
+        self.assertIn("posts.service", application.get_service_provider_keys(extension_id="posts"))
+        self.assertIs(service["model"], Post)
+        self.assertEqual(service["approval_approved"], Post.APPROVAL_APPROVED)
+        self.assertEqual(service["approval_pending"], Post.APPROVAL_PENDING)
+        self.assertEqual(service["approval_rejected"], Post.APPROVAL_REJECTED)
+        for key in (
+            "can_view",
+            "get_by_id",
+            "create",
+            "update",
+            "delete",
+            "set_hidden_state",
+            "reply_notification_context",
+            "notification_context",
+            "get_number",
+            "create_first_post",
+            "get_first_post",
+            "update_first_post_content",
+            "resubmit_first_post",
+            "approve_first_post",
+            "reject_first_post",
+            "approved_reply_counts_by_author",
+            "approved_discussion_stats",
+            "delete_discussion_posts",
+            "serialize_by_id",
+        ):
+            self.assertTrue(callable(service[key]), key)
+
+    def test_posts_capabilities_are_filtered_when_extension_disabled(self):
+        self.disable_extension_for_test("posts")
+
+        registry = get_forum_registry()
+
+        self.assertFalse(registry.get_module("posts").enabled)
+        self.assertFalse(any(item.module_id == "posts" for item in registry.get_post_types()))
+        self.assertEqual(registry.get_default_post_type_code(), "")
+        self.assertNotIn("comment", registry.get_stream_post_type_codes())
+        self.assertNotIn("comment", registry.get_searchable_post_type_codes())
+
+    def test_inspect_reports_posts_model_as_extension_owned(self):
+        stdout = StringIO()
+        call_command(
+            "inspect_extensions",
+            "--extension-id",
+            "posts",
+            stdout=stdout,
+        )
+        payload = json.loads(stdout.getvalue())
+        extension = payload["extensions"][0]
+        audit = extension["model_ownership_audit"]
+
+        self.assertEqual(extension["id"], "posts")
+        self.assertEqual(audit["owned_model_count"], 1)
+        self.assertEqual(audit["app_label_migration_required_count"], 0)
+        self.assertEqual(extension["django_app_label"], "posts")
+        self.assertEqual(audit["target_app_label"], "posts")
+        self.assertEqual(audit["target_app_label_source"], "manifest")
+        self.assertTrue(all(
+            item["target_app_label"] == "posts"
+            and item["target_app_label_source"] == "manifest"
+            for item in audit["items"]
+        ))
+        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+
+
+class PostRegistryTests(TestCase):
+    def test_posts_extension_registers_default_comment_post_type(self):
+        registry = get_forum_registry()
+
+        self.assertEqual(registry.get_default_post_type_code(), "comment")
+        self.assertIn("comment", registry.get_stream_post_type_codes())
+        self.assertIn("comment", registry.get_searchable_post_type_codes())
+        self.assertIn("comment", registry.get_discussion_counted_post_type_codes())
+        self.assertIn("comment", registry.get_user_counted_post_type_codes())
+
+    def test_posts_extension_search_index_limits_to_searchable_post_types(self):
+        definitions = get_search_index_definitions()
+        post_index = next(definition for definition in definitions if definition["name"] == "posts_content_fts_idx")
+
+        self.assertEqual(post_index["module_id"], "posts")
+        self.assertIn("WHERE type IN ('comment')", post_index["create"])
+
+
+class PostEventResourceTests(TestCase):
+    def test_resolve_post_event_data_parses_post_hidden_payload(self):
+        payload = resolve_post_event_data(
+            SimpleNamespace(
+                type="postHidden",
+                content="state:hidden\ntarget_post_id:12\ntarget_post_number:5",
+            ),
+            {},
+        )
+
+        self.assertEqual(
+            payload,
+            {
+                "kind": "postHidden",
+                "is_hidden": True,
+                "target_post_id": 12,
+                "target_post_number": 5,
+            },
+        )
 
 
 class PostPaginationTests(TestCase):
@@ -32,7 +174,7 @@ class PostPaginationTests(TestCase):
         )
 
     def test_get_page_for_near_post(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Near pagination",
             content="First post",
             user=self.user,
@@ -55,7 +197,7 @@ class PostPaginationTests(TestCase):
         self.assertEqual(page, 3)
 
     def test_get_post_window_supports_near_before_after(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Windowed pagination",
             content="First post",
             user=self.user,
@@ -101,7 +243,7 @@ class PostPaginationTests(TestCase):
         self.assertEqual(after_window.current_end, 30)
 
     def test_create_post_retries_on_transient_sqlite_lock(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Retry post discussion",
             content="First post",
             user=self.user,
@@ -127,7 +269,7 @@ class PostPaginationTests(TestCase):
         self.assertEqual(post.content, "Retry reply")
 
     def test_create_post_applies_runtime_private_checkers(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Private reply discussion",
             content="First post",
             user=self.user,
@@ -148,7 +290,7 @@ class PostPaginationTests(TestCase):
         self.assertFalse(Post.objects.filter(build_post_visibility_q(self.user), id=reply.id).exists())
 
     def test_approve_post_refreshes_runtime_private_state(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Private approved reply discussion",
             content="First post",
             user=self.user,
@@ -182,13 +324,14 @@ class PostPaginationTests(TestCase):
         from apps.core.extensions.application import ExtensionApplication
         from apps.core.extensions.types import ExtensionModelVisibilityDefinition
 
+        discussion_model = get_runtime_discussion_model()
         reader = User.objects.create_user(
             username="post-private-reader",
             email="post-private-reader@example.com",
             password="password123",
             is_email_confirmed=True,
         )
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Scoped private posts",
             content="First post",
             user=self.user,
@@ -209,7 +352,7 @@ class PostPaginationTests(TestCase):
         app.models.register_visibility(
             "discussions",
             ExtensionModelVisibilityDefinition(
-                model=Discussion,
+                model=discussion_model,
                 ability="view",
                 scope=scope_discussion_view,
             ),
@@ -246,18 +389,19 @@ class PostPaginationTests(TestCase):
         from apps.core.extensions.application import ExtensionApplication
         from apps.core.extensions.types import ExtensionModelVisibilityDefinition
 
+        discussion_model = get_runtime_discussion_model()
         reader = User.objects.create_user(
             username="post-hidden-reader",
             email="post-hidden-reader@example.com",
             password="password123",
             is_email_confirmed=True,
         )
-        allowed_discussion = DiscussionService.create_discussion(
+        allowed_discussion = create_runtime_discussion(
             title="Scoped hidden post allowed",
             content="First post",
             user=self.user,
         )
-        denied_discussion = DiscussionService.create_discussion(
+        denied_discussion = create_runtime_discussion(
             title="Scoped hidden post denied",
             content="First post",
             user=self.user,
@@ -278,7 +422,7 @@ class PostPaginationTests(TestCase):
         app.models.register_visibility(
             "discussions",
             ExtensionModelVisibilityDefinition(
-                model=Discussion,
+                model=discussion_model,
                 ability="view",
                 scope=scope_discussion_view,
             ),
@@ -294,7 +438,7 @@ class PostPaginationTests(TestCase):
         app.models.register_visibility(
             "hidden-runtime",
             ExtensionModelVisibilityDefinition(
-                model=Discussion,
+                model=discussion_model,
                 ability="hidePosts",
                 scope=lambda queryset, context: queryset.filter(id=allowed_discussion.id),
             ),
@@ -318,7 +462,7 @@ class PostPaginationTests(TestCase):
         self.user.preferences = {"follow_after_reply": False}
         self.user.save(update_fields=["preferences"])
 
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Read progress discussion",
             content="First post",
             user=self.user,
@@ -340,7 +484,7 @@ class PostPaginationTests(TestCase):
         self.assertFalse(state.is_subscribed)
 
     def test_create_post_locks_discussion_before_allocating_floor_number(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Locked numbering discussion",
             content="First post",
             user=self.user,
@@ -359,7 +503,7 @@ class PostPaginationTests(TestCase):
         self.assertTrue(lock_discussion_mock.called)
 
     def test_refresh_discussion_stats_recomputes_discussion_counters(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Stats refresh discussion",
             content="First post",
             user=self.user,
@@ -377,7 +521,7 @@ class PostPaginationTests(TestCase):
         self.assertEqual(discussion.last_post_number, 2)
 
     def test_create_post_dispatches_created_event_after_commit(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="After commit post discussion",
             content="First post",
             user=self.user,
@@ -416,7 +560,7 @@ class PostApiTests(TestCase):
             password="password123",
             is_email_confirmed=True,
         )
-        self.discussion = DiscussionService.create_discussion(
+        self.discussion = create_runtime_discussion(
             title="Flag discussion",
             content="First post",
             user=self.author,
@@ -656,7 +800,7 @@ class PostApiTests(TestCase):
         self.reporter.refresh_from_db()
         self.assertEqual(self.reporter.comment_count, 1)
 
-        DiscussionService.delete_discussion(self.discussion.id, self.admin)
+        delete_runtime_discussion(self.discussion.id, self.admin)
 
         self.reporter.refresh_from_db()
         self.assertEqual(self.reporter.comment_count, 0)
@@ -748,7 +892,7 @@ class PostApiTests(TestCase):
         self.assertFalse(restore_log.data["is_hidden"])
 
     def test_all_posts_list_respects_hidden_discussion_visibility(self):
-        DiscussionService.set_hidden_state(self.discussion, self.admin, True)
+        set_runtime_discussion_hidden_state(self.discussion, self.admin, True)
 
         response = self.client.get(
             "/api/posts",
@@ -871,3 +1015,5 @@ class PostApiTests(TestCase):
         self.assertEqual(audit_log.user_id, moderator.id)
         self.assertEqual(audit_log.target_type, "post")
         self.assertEqual(audit_log.data["discussion_id"], self.discussion.id)
+
+

@@ -1,20 +1,15 @@
-import json
 import sys
 
 import django
 from django.conf import settings
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
-from django.core.validators import validate_email
 
 from ninja import Body, Router
 
 from apps.core import admin_runtime_helpers
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
-from apps.core.email_service import EmailService
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
-from apps.core.file_service import FileUploadService
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.mail_drivers import (
     can_mail_driver_send,
@@ -39,11 +34,11 @@ from apps.core.admin_runtime_summary import (
     probe_realtime_connection,
 )
 from apps.core.settings_service import (
-    ADVANCED_SETTINGS_DEFAULTS,
     APPEARANCE_SETTINGS_DEFAULTS,
     BASIC_SETTINGS_DEFAULTS,
     clear_runtime_setting_caches,
     get_advanced_settings as get_runtime_advanced_settings,
+    get_advanced_settings_defaults,
     get_mail_settings as get_runtime_mail_settings,
     get_mail_settings_defaults,
     get_setting_group,
@@ -213,30 +208,12 @@ def get_stats(request):
         "maintenanceMode": bool(advanced_settings.get("maintenance_mode", False)),
         "maintenanceModeKey": advanced_settings.get("maintenance_mode_key", "none"),
         "maintenanceModeLabel": advanced_settings.get("maintenance_mode_label", "未启用"),
-        "totalUsers": 0,
-        "totalDiscussions": 0,
-        "totalPosts": 0,
-        "pendingApprovals": 0,
     }
     return get_runtime_resource_registry().serialize(
         "admin_stats",
         stats,
         {"user": request.auth, "request": request},
     )
-
-
-@router.post("/queue/metrics/reset", auth=AccessTokenAuth(), tags=["Admin"])
-def reset_queue_metrics(request):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-
-    metrics = QueueService.reset_metrics()
-    log_admin_action(request, "admin.queue_metrics.reset", data={"metrics": metrics})
-    return {
-        "message": "队列运行指标已重置",
-        "metrics": metrics,
-    }
 
 
 @router.get("/settings", auth=AccessTokenAuth(), tags=["Admin"])
@@ -289,44 +266,6 @@ def save_appearance_settings(request, payload: dict = Body(...)):
     return {"message": "外观设置保存成功", "settings": settings_data}
 
 
-@router.post("/appearance/upload", auth=AccessTokenAuth(), tags=["Admin"])
-def upload_appearance_asset(request, target: str):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-
-    if target not in {"logo", "favicon"}:
-        return api_error("仅支持上传 logo 或 favicon", status=400)
-
-    file = request.FILES.get("file")
-    if not file:
-        return api_error("请选择要上传的文件", status=400)
-
-    try:
-        file_url, file_info = FileUploadService.upload_site_asset(file, target)
-    except ValueError as exc:
-        return api_error(str(exc), status=400)
-
-    log_admin_action(
-        request,
-        "admin.appearance_asset.upload",
-        target_type="appearance_asset",
-        data={
-            "target": target,
-            "original_name": file_info.get("original_name") or file.name,
-            "size": file_info.get("size") or file.size,
-            "mime_type": file_info.get("mime_type") or file.content_type,
-        },
-    )
-    return {
-        "target": target,
-        "url": file_url,
-        "original_name": file_info.get("original_name") or file.name,
-        "size": file_info.get("size") or file.size,
-        "mime_type": file_info.get("mime_type") or file.content_type,
-    }
-
-
 @router.get("/mail", auth=AccessTokenAuth(), tags=["Admin"])
 def get_mail_settings(request):
     denied = _require_staff(request)
@@ -377,53 +316,6 @@ def save_mail_settings(request, payload: dict = Body(...)):
     return response
 
 
-@router.post("/mail/test", auth=AccessTokenAuth(), tags=["Admin"])
-def send_test_email(request):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-
-    payload = {}
-    if request.body:
-        raw_body = request.body.decode("utf-8", errors="ignore").strip()
-        content_type = str(request.headers.get("content-type") or "")
-        should_parse_json = "application/json" in content_type or raw_body[:1] in {"{", "["}
-        if should_parse_json:
-            try:
-                payload = json.loads(raw_body) if raw_body else {}
-            except json.JSONDecodeError:
-                return api_error("测试邮件请求格式无效", status=400)
-            if not isinstance(payload, dict):
-                payload = {}
-
-    mail_settings = get_setting_group("mail", get_mail_settings_defaults())
-    to_email = (
-        str(payload.get("to_email") or "").strip()
-        or str(mail_settings.get("mail_test_recipient") or "").strip()
-        or str(request.auth.email or "").strip()
-    )
-    if not to_email:
-        return api_error("请先填写测试收件箱", status=400)
-
-    try:
-        validate_email(to_email)
-    except ValidationError:
-        return api_error("测试收件箱格式无效", status=400)
-
-    try:
-        sent_count = EmailService.send_test_email(to_email)
-    except Exception as exc:
-        return api_error(str(exc), status=400)
-
-    log_admin_action(
-        request,
-        "admin.mail.test",
-        target_type="mail",
-        data={"to_email": to_email, "sent_count": sent_count},
-    )
-    return {"message": "测试邮件已发送", "sent_count": sent_count, "to_email": to_email}
-
-
 @router.get("/advanced", auth=AccessTokenAuth(), tags=["Admin"])
 def get_advanced_settings(request):
     denied = _require_staff(request)
@@ -454,7 +346,7 @@ def save_advanced_settings(request, payload: dict = Body(...)):
             field_errors={"advanced": validation_errors},
         )
 
-    settings_data = save_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS, runtime_payload)
+    settings_data = save_setting_group("advanced", get_advanced_settings_defaults(), runtime_payload)
     settings_data["debug_mode"] = get_runtime_advanced_settings()["debug_mode"]
     log_admin_action(
         request,

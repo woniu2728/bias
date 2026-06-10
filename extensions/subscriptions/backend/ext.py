@@ -8,13 +8,6 @@ from apps.core.extensions import (
     SearchDriverExtender,
 )
 from apps.core.extensions.types import ExtensionEventListenerDefinition, ExtensionSearchDriverDefinition
-from apps.core.forum_events import (
-    DiscussionCreatedEvent,
-    PostApprovedEvent,
-    PostCreatedEvent,
-    PostDeletedEvent,
-    PostHiddenEvent,
-)
 from apps.core.forum_registry_types import (
     DiscussionListFilterDefinition,
     NotificationTypeDefinition,
@@ -53,7 +46,7 @@ def extend():
         ).route(
             "/following",
             "following",
-            "DiscussionListView",
+            "extensions/discussions/frontend/forum/DiscussionListView.vue",
             title="关注的讨论",
             description="查看你关注的讨论和最新回复。",
             order=20,
@@ -212,37 +205,37 @@ def discussion_resource_endpoint_definitions():
 def subscription_event_listener_definitions():
     return (
         ExtensionEventListenerDefinition(
-            event_type=DiscussionCreatedEvent,
+            event_type="extensions.discussions.backend.events.DiscussionCreatedEvent",
             handler=handle_discussion_created_follow_after_create,
             description="讨论创建后按用户偏好自动关注新讨论。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostCreatedEvent,
+            event_type="extensions.posts.backend.events.PostCreatedEvent",
             handler=handle_post_created_discussion_reply_notification,
             description="已发布回复后为讨论作者和关注者派发讨论回复通知。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostCreatedEvent,
+            event_type="extensions.posts.backend.events.PostCreatedEvent",
             handler=handle_post_created_follow_after_reply,
             description="已发布回复后按用户偏好自动关注参与的讨论。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostApprovedEvent,
+            event_type="extensions.posts.backend.events.PostApprovedEvent",
             handler=handle_post_approved_discussion_reply_notification,
             description="回复审核通过后为讨论作者和关注者派发讨论回复通知。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostApprovedEvent,
+            event_type="extensions.posts.backend.events.PostApprovedEvent",
             handler=handle_post_approved_follow_after_reply,
             description="回复审核通过后按用户偏好自动关注参与的讨论。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostHiddenEvent,
+            event_type="extensions.posts.backend.events.PostHiddenEvent",
             handler=handle_post_hidden_discussion_reply_notifications,
             description="回复隐藏后清理该回复产生的关注讨论通知。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostDeletedEvent,
+            event_type="extensions.posts.backend.events.PostDeletedEvent",
             handler=handle_post_deleted_discussion_reply_notifications,
             description="回复删除后清理该回复产生的关注讨论通知。",
         ),

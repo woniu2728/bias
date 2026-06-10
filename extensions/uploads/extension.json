@@ -1,0 +1,40 @@
+{
+  "id": "uploads",
+  "name": "Uploads",
+  "version": "0.1.0",
+  "description": "提供 Composer 附件上传和上传策略接口。",
+  "icon": "fas fa-paperclip",
+  "category": "feature",
+  "authors": [
+    "Bias"
+  ],
+  "dependencies": [
+    "core"
+  ],
+  "provides": [
+    "composer-uploads",
+    "upload-policy"
+  ],
+  "backend_entry": "extensions.uploads.backend.ext",
+  "frontend_admin_entry": "extensions/uploads/frontend/admin/index.js",
+  "frontend_forum_entry": "extensions/uploads/frontend/forum/index.js",
+  "compatibility": {
+    "bias_version": "^1.0.0",
+    "api_version": "1.0",
+    "api_stability": "experimental",
+    "api_stability_label": "实验性",
+    "breaking_change_policy": "扩展协议调整会随 Bias 主版本升级同步说明。"
+  },
+  "security": {
+    "support_email": "",
+    "capabilities_notice": "该扩展允许已登录用户上传 Composer 附件，并读取运行时上传策略。"
+  },
+  "distribution": {
+    "channel": "private",
+    "channel_label": "私有分发"
+  },
+  "extra": {
+    "auto_install": true,
+    "auto_enable": true
+  }
+}

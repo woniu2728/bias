@@ -214,6 +214,7 @@ def _serialize_frontend_routes_for_manifest(routes) -> list[dict]:
     output = []
     for route in routes or ():
         frontend = str(getattr(route, "frontend", "") or "forum").strip() or "forum"
+        order = getattr(route, "order", 100)
         output.append({
             "path": str(getattr(route, "path", "") or "").strip(),
             "name": str(getattr(route, "name", "") or "").strip(),
@@ -223,7 +224,7 @@ def _serialize_frontend_routes_for_manifest(routes) -> list[dict]:
             "title": str(getattr(route, "title", "") or "").strip(),
             "description": str(getattr(route, "description", "") or "").strip(),
             "requires_auth": bool(getattr(route, "requires_auth", False)),
-            "order": int(getattr(route, "order", 100) or 100),
+            "order": int(order if order is not None and order != "" else 100),
             "removed": bool(getattr(route, "removed", False)),
         })
     return [

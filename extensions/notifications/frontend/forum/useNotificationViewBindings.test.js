@@ -1,6 +1,7 @@
+import { ref } from '@bias/core'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { ref } from '@bias/forum'
+
 import { createNotificationViewBindings } from './useNotificationViewBindings.js'
 
 test('notification view bindings expose sidebar, hero, filter and list props', () => {

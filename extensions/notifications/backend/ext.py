@@ -7,15 +7,10 @@ from apps.core.extensions import (
     LifecycleExtender,
     ModelExtender,
     NotificationsExtender,
+    ServiceProviderExtender,
     SignalExtender,
 )
 from apps.core.extensions.types import ExtensionEventListenerDefinition
-from apps.core.forum_events import (
-    PostCreatedEvent,
-    PostLikedEvent,
-    UserSuspendedEvent,
-    UserUnsuspendedEvent,
-)
 from apps.core.forum_registry_types import NotificationTypeDefinition, UserPreferenceDefinition
 from apps.core.resource_registry import ResourceEndpointDefinition
 from extensions.notifications.backend.handlers import (
@@ -32,7 +27,6 @@ from extensions.notifications.backend.handlers import (
 from extensions.notifications.backend.models import Notification
 from extensions.notifications.backend.listeners import (
     handle_post_created_direct_reply_notification,
-    handle_post_liked_notification,
     handle_user_suspended_notification,
     handle_user_unsuspended_notification,
 )
@@ -41,6 +35,7 @@ from extensions.notifications.backend.resources import (
     notification_resource_field_definitions,
     notification_resource_relationship_definitions,
 )
+from extensions.notifications.backend.runtime import notification_service_provider
 from extensions.notifications.backend.signals import (
     invalidate_unread_count_on_delete,
     invalidate_unread_count_on_save,
@@ -78,6 +73,10 @@ def extend():
         .endpoints(notification_resource_endpoints),
         EventListenersExtender(
             listeners=notification_event_listener_definitions(),
+        ),
+        ServiceProviderExtender(
+            key="notifications.service",
+            provider=notification_service_provider,
         ),
         SignalExtender()
         .connect(
@@ -260,22 +259,17 @@ def notification_resource_endpoints():
 def notification_event_listener_definitions():
     return (
         ExtensionEventListenerDefinition(
-            event_type=PostCreatedEvent,
+            event_type="extensions.posts.backend.events.PostCreatedEvent",
             handler=handle_post_created_direct_reply_notification,
             description="回复发布后通知被回复楼层作者。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=PostLikedEvent,
-            handler=handle_post_liked_notification,
-            description="回复被点赞后通知作者。",
-        ),
-        ExtensionEventListenerDefinition(
-            event_type=UserSuspendedEvent,
+            event_type="extensions.users.backend.events.UserSuspendedEvent",
             handler=handle_user_suspended_notification,
             description="账号封禁后通知用户。",
         ),
         ExtensionEventListenerDefinition(
-            event_type=UserUnsuspendedEvent,
+            event_type="extensions.users.backend.events.UserUnsuspendedEvent",
             handler=handle_user_unsuspended_notification,
             description="账号解除封禁后通知用户。",
         ),
@@ -314,24 +308,4 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Notifications 扩展已卸载。",
-    }
-
-
-def run_migrations(context):
-    return _migration_hook_result(context, "run_migrations", "Notifications 扩展迁移已执行。")
-
-
-def rollback_migrations(context):
-    return _migration_hook_result(context, "rollback_migrations", "Notifications 扩展迁移已回滚。")
-
-
-def _migration_hook_result(context, hook: str, message: str):
-    return {
-        "hook": hook,
-        "status": "ok",
-        "status_label": "已执行",
-        "message": message,
-        "details": {
-            "migration_namespace": context.migration_namespace,
-        },
     }

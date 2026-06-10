@@ -1,17 +1,24 @@
 """帖子系统业务逻辑层。"""
-from typing import List, Optional, Tuple
+from __future__ import annotations
+
+from typing import Any, List, Optional, Tuple
 
 from django.db import IntegrityError
 
 from apps.core.db import sqlite_write_retry
 from apps.core.domain_events import get_forum_event_bus
 from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
+from apps.core.extensions.runtime_access import (
+    lock_runtime_discussion_for_post_number,
+    refresh_runtime_discussion_approved_stats,
+    validate_runtime_replyable_discussion,
+)
 from apps.core.forum_registry import get_forum_registry
-from extensions.discussions.backend.models import Discussion
 from extensions.posts.backend import post_query_service, service_lifecycle, service_moderation
 from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
-from extensions.users.backend.services import UserService
+from apps.core.extensions.runtime_access import (
+    has_runtime_forum_permission,
+)
 
 
 def _get_forum_registry():
@@ -43,11 +50,11 @@ class PostService:
     POST_NUMBER_CONFLICT_RETRY_ATTEMPTS = 3
 
     @staticmethod
-    def _can_view_post(post: Post, user: Optional[User]) -> bool:
+    def _can_view_post(post: Post, user: Optional[Any]) -> bool:
         return post_query_service.can_view_post(post, user)
 
     @staticmethod
-    def apply_visibility_filters(queryset, user: Optional[User] = None):
+    def apply_visibility_filters(queryset, user: Optional[Any] = None):
         return post_query_service.apply_visibility_filters(queryset, user)
 
     @staticmethod
@@ -55,7 +62,7 @@ class PostService:
     def create_post(
         discussion_id: int,
         content: str,
-        user: User,
+        user: Any,
         reply_to_post_id: Optional[int] = None,
     ) -> Post:
         """
@@ -89,7 +96,7 @@ class PostService:
         discussion_id: int,
         page: int = 1,
         limit: int = 20,
-        user: Optional[User] = None,
+        user: Optional[Any] = None,
         preload=None,
     ) -> Tuple[List[Post], int]:
         """
@@ -117,7 +124,7 @@ class PostService:
     @staticmethod
     def _build_visible_post_queryset(
         discussion_id: int,
-        user: Optional[User] = None,
+        user: Optional[Any] = None,
         preload=None,
     ):
         return post_query_service.build_visible_post_queryset(
@@ -136,7 +143,7 @@ class PostService:
         near: Optional[int] = None,
         before: Optional[int] = None,
         after: Optional[int] = None,
-        user: Optional[User] = None,
+        user: Optional[Any] = None,
         preload=None,
     ) -> PostStreamWindow:
         return post_query_service.get_post_window(
@@ -156,7 +163,7 @@ class PostService:
         discussion_id: int,
         near: int,
         limit: int = 20,
-        user: Optional[User] = None,
+        user: Optional[Any] = None,
     ) -> int:
         return post_query_service.get_page_for_near_post(
             discussion_id,
@@ -169,7 +176,7 @@ class PostService:
     @staticmethod
     def get_post_by_id(
         post_id: int,
-        user: Optional[User] = None,
+        user: Optional[Any] = None,
         preload=None,
     ) -> Optional[Post]:
         """
@@ -192,7 +199,7 @@ class PostService:
     @staticmethod
     def update_post(
         post_id: int,
-        user: User,
+        user: Any,
         content: str,
     ) -> Post:
         """
@@ -218,7 +225,7 @@ class PostService:
         )
 
     @staticmethod
-    def delete_post(post_id: int, user: User) -> bool:
+    def delete_post(post_id: int, user: Any) -> bool:
         """
         删除帖子
 
@@ -242,7 +249,7 @@ class PostService:
         )
 
     @staticmethod
-    def set_hidden_state(post: Post, admin_user: User, is_hidden: bool) -> Post:
+    def set_hidden_state(post: Post, admin_user: Any, is_hidden: bool) -> Post:
         return service_lifecycle.set_hidden_state(
             post,
             admin_user,
@@ -255,22 +262,22 @@ class PostService:
     @staticmethod
     def _validate_replyable_discussion(
         discussion_id: int,
-        user: User,
+        user: Any,
         *,
-        discussion: Optional[Discussion] = None,
-    ) -> Discussion:
-        return service_lifecycle.validate_replyable_discussion(
+        discussion=None,
+    ):
+        return validate_runtime_replyable_discussion(
             discussion_id,
             user,
             discussion=discussion,
         )
 
     @staticmethod
-    def _lock_discussion_for_post_number(discussion_id: int) -> Discussion:
-        return Discussion.objects.select_for_update().get(id=discussion_id)
+    def _lock_discussion_for_post_number(discussion_id: int):
+        return lock_runtime_discussion_for_post_number(discussion_id)
 
     @staticmethod
-    def _allocate_next_post_number(discussion: Discussion) -> int:
+    def _allocate_next_post_number(discussion) -> int:
         last_post = (
             Post.objects.filter(discussion=discussion)
             .order_by("-number")
@@ -292,14 +299,14 @@ class PostService:
         )
 
     @staticmethod
-    def _refresh_discussion_approved_stats(discussion: Discussion) -> Discussion:
-        return service_lifecycle.refresh_discussion_approved_stats(
+    def _refresh_discussion_approved_stats(discussion):
+        return refresh_runtime_discussion_approved_stats(
             discussion,
             discussion_counted_post_types=_get_discussion_counted_post_types(),
         )
 
     @staticmethod
-    def approve_post(post: Post, admin_user: User, note: str = "") -> Post:
+    def approve_post(post: Post, admin_user: Any, note: str = "") -> Post:
         return service_moderation.approve_post(
             post,
             admin_user,
@@ -310,7 +317,7 @@ class PostService:
         )
 
     @staticmethod
-    def reject_post(post: Post, admin_user: User, note: str = "") -> Post:
+    def reject_post(post: Post, admin_user: Any, note: str = "") -> Post:
         return service_moderation.reject_post(
             post,
             admin_user,
@@ -321,17 +328,17 @@ class PostService:
         )
 
     @staticmethod
-    def can_edit_post(post: Post, user: User) -> bool:
+    def can_edit_post(post: Post, user: Any) -> bool:
         """检查用户是否可以编辑帖子"""
         if not user or not user.is_authenticated:
             return False
         if user.is_suspended:
             return False
         allowed = False
-        if UserService.has_forum_permission(user, "discussion.edit"):
+        if has_runtime_forum_permission(user, "discussion.edit"):
             allowed = True
         elif post.user_id == user.id:
-            allowed = UserService.has_forum_permission(user, "discussion.editOwn")
+            allowed = has_runtime_forum_permission(user, "discussion.editOwn")
         return bool(evaluate_extension_policy(
             "post.edit",
             default=allowed,
@@ -340,17 +347,17 @@ class PostService:
         ))
 
     @staticmethod
-    def can_delete_post(post: Post, user: User) -> bool:
+    def can_delete_post(post: Post, user: Any) -> bool:
         """检查用户是否可以删除帖子"""
         if not user or not user.is_authenticated:
             return False
         if user.is_suspended:
             return False
         allowed = False
-        if UserService.has_forum_permission(user, "discussion.delete"):
+        if has_runtime_forum_permission(user, "discussion.delete"):
             allowed = True
         elif post.user_id == user.id:
-            allowed = UserService.has_forum_permission(user, "discussion.deleteOwn")
+            allowed = has_runtime_forum_permission(user, "discussion.deleteOwn")
         return bool(evaluate_extension_policy(
             "post.delete",
             default=allowed,
@@ -371,3 +378,5 @@ class PostService:
         """
         from apps.core.markdown_service import MarkdownService
         return MarkdownService.render(content, sanitize=True)
+
+

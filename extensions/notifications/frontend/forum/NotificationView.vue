@@ -181,7 +181,12 @@
 
 <script setup>
 import {
-  DiscussionListSidebarStartButton,
+  useAuthStore } from '@bias/users'
+import { useRouter,
+  useRoute,
+  useModalStore
+} from '@bias/core'
+import {
   ForumHeroPanel,
   ForumInlineMessage,
   ForumPageWithSidebar,
@@ -189,13 +194,10 @@ import {
   ForumPrimaryNav,
   ForumSearchFilterNav,
   ForumStateBlock,
-  useAuthStore,
   useComposerStore,
-  useForumStore,
-  useModalStore,
-  useRoute,
-  useRouter,
+  useForumStore
 } from '@bias/forum'
+import { DiscussionListSidebarStartButton } from '@bias/discussions'
 import NotificationList from './NotificationList.vue'
 import { useNotificationViewModel } from './useNotificationViewModel.js'
 import { useNotificationStore } from './store.js'

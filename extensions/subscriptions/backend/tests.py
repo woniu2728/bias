@@ -1,11 +1,38 @@
 from django.test import TestCase
 from ninja_jwt.tokens import RefreshToken
 
-from extensions.discussions.backend.models import DiscussionUser
-from extensions.discussions.backend.services import DiscussionService
-from extensions.posts.backend.services import PostService
-from extensions.users.backend.models import User
-from extensions.notifications.backend.models import Notification
+from apps.core.extensions.runtime_access import (
+    create_runtime_discussion,
+    get_runtime_discussion_state_model,
+)
+from apps.core.extensions.runtime_access import get_runtime_notification_model
+from apps.core.extensions.runtime_access import (
+    create_runtime_post,
+    delete_runtime_post,
+    set_runtime_post_hidden_state,
+)
+from apps.core.extensions.runtime_access import (
+    get_runtime_user_model,
+)
+
+
+class RuntimeModelProxy:
+    def __init__(self, resolver):
+        self._resolver = resolver
+
+    def __getattr__(self, name):
+        return getattr(self._resolver(), name)
+
+
+User = RuntimeModelProxy(get_runtime_user_model)
+
+
+def discussion_state_model():
+    return get_runtime_discussion_state_model()
+
+
+def notification_model():
+    return get_runtime_notification_model()
 
 
 class SubscriptionsExtensionTests(TestCase):
@@ -45,7 +72,7 @@ class SubscriptionsExtensionTests(TestCase):
             any(
                 route["path"] == "/following"
                 and route["name"] == "following"
-                and route["component"] == "DiscussionListView"
+                and route["component"] == "extensions/discussions/frontend/forum/DiscussionListView.vue"
                 and route["requires_auth"]
                 for route in payload["frontend_routes"]
             )
@@ -76,13 +103,13 @@ class SubscriptionsExtensionTests(TestCase):
         self.author.save(update_fields=["preferences"])
 
         with self.captureOnCommitCallbacks(execute=True):
-            discussion = DiscussionService.create_discussion(
+            discussion = create_runtime_discussion(
                 title="Auto follow started discussion",
                 content="Initial post",
                 user=self.author,
             )
 
-        state = DiscussionUser.objects.get(discussion=discussion, user=self.author)
+        state = discussion_state_model().objects.get(discussion=discussion, user=self.author)
         self.assertTrue(state.is_subscribed)
         self.assertEqual(state.last_read_post_number, 1)
 
@@ -90,44 +117,44 @@ class SubscriptionsExtensionTests(TestCase):
         self.author.preferences = {"follow_after_reply": True}
         self.author.save(update_fields=["preferences"])
 
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Auto follow discussion",
             content="First post",
             user=self.author,
         )
-        DiscussionUser.objects.filter(discussion=discussion, user=self.author).update(
+        discussion_state_model().objects.filter(discussion=discussion, user=self.author).update(
             last_read_post_number=1,
             is_subscribed=False,
         )
 
         with self.captureOnCommitCallbacks(execute=True):
-            reply = PostService.create_post(
+            reply = create_runtime_post(
                 discussion_id=discussion.id,
                 content="My followed reply",
                 user=self.author,
             )
 
-        state = DiscussionUser.objects.get(discussion=discussion, user=self.author)
+        state = discussion_state_model().objects.get(discussion=discussion, user=self.author)
         self.assertEqual(state.last_read_post_number, reply.number)
         self.assertTrue(state.is_subscribed)
 
     def test_discussion_list_following_filter_uses_registered_filter_code(self):
-        followed = DiscussionService.create_discussion(
+        followed = create_runtime_discussion(
             title="关注过滤 API",
             content="关注过滤内容",
             user=self.author,
         )
-        other = DiscussionService.create_discussion(
+        other = create_runtime_discussion(
             title="未关注过滤 API",
             content="未关注过滤内容",
             user=self.author,
         )
-        DiscussionUser.objects.update_or_create(
+        discussion_state_model().objects.update_or_create(
             discussion=followed,
             user=self.reader,
             defaults={"is_subscribed": True, "last_read_post_number": 1},
         )
-        DiscussionUser.objects.update_or_create(
+        discussion_state_model().objects.update_or_create(
             discussion=other,
             user=self.reader,
             defaults={"is_subscribed": False, "last_read_post_number": 1},
@@ -142,7 +169,7 @@ class SubscriptionsExtensionTests(TestCase):
         self.assertEqual([item["id"] for item in following_response.json()["data"]], [followed.id])
 
     def test_discussion_list_exposes_following_filter_route(self):
-        DiscussionService.create_discussion(
+        create_runtime_discussion(
             title="关注过滤器元数据",
             content="用于验证扩展过滤器",
             user=self.author,
@@ -160,22 +187,22 @@ class SubscriptionsExtensionTests(TestCase):
         self.assertTrue(any(item["code"] == "following" and item["requires_authenticated_user"] for item in payload["available_filters"]))
 
     def test_search_api_supports_registered_following_filter(self):
-        followed = DiscussionService.create_discussion(
+        followed = create_runtime_discussion(
             title="关注搜索命中讨论",
             content="关注搜索过滤关键字",
             user=self.author,
         )
-        other = DiscussionService.create_discussion(
+        other = create_runtime_discussion(
             title="关注搜索未命中讨论",
             content="关注搜索过滤关键字",
             user=self.author,
         )
-        DiscussionUser.objects.update_or_create(
+        discussion_state_model().objects.update_or_create(
             discussion=followed,
             user=self.reader,
             defaults={"is_subscribed": True, "last_read_post_number": 1},
         )
-        DiscussionUser.objects.update_or_create(
+        discussion_state_model().objects.update_or_create(
             discussion=other,
             user=self.reader,
             defaults={"is_subscribed": False, "last_read_post_number": 1},
@@ -197,17 +224,17 @@ class SubscriptionsExtensionTests(TestCase):
         self.assertIn("is:following", {item["syntax"] for item in response.json()["filters"]})
 
     def test_delete_post_cleans_discussion_reply_notifications(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Notification cleanup discussion",
             content="First post",
             user=self.author,
         )
-        reply = PostService.create_post(
+        reply = create_runtime_post(
             discussion_id=discussion.id,
             content="带通知的回复",
             user=self.reader,
         )
-        notification = Notification.objects.create(
+        notification = notification_model().objects.create(
             user=self.author,
             from_user=self.reader,
             type="discussionReply",
@@ -221,22 +248,22 @@ class SubscriptionsExtensionTests(TestCase):
         )
 
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.delete_post(reply.id, self.reader)
+            delete_runtime_post(reply.id, self.reader)
 
-        self.assertFalse(Notification.objects.filter(id=notification.id).exists())
+        self.assertFalse(notification_model().objects.filter(id=notification.id).exists())
 
     def test_hiding_post_cleans_discussion_reply_notifications(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Hidden notification cleanup discussion",
             content="First post",
             user=self.author,
         )
-        post = PostService.create_post(
+        post = create_runtime_post(
             discussion_id=discussion.id,
             content="会被隐藏的回复",
             user=self.author,
         )
-        notification = Notification.objects.create(
+        notification = notification_model().objects.create(
             user=self.reader,
             from_user=self.author,
             type="discussionReply",
@@ -250,6 +277,8 @@ class SubscriptionsExtensionTests(TestCase):
         )
 
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.set_hidden_state(post, self.admin, True)
+            set_runtime_post_hidden_state(post, self.admin, True)
 
-        self.assertFalse(Notification.objects.filter(id=notification.id).exists())
+        self.assertFalse(notification_model().objects.filter(id=notification.id).exists())
+
+

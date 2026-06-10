@@ -68,7 +68,7 @@
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import ForumNavList from '@/components/forum/ForumNavList.vue'
-import { useAuthStore } from '../../stores/auth'
+import { useAuthStore } from '@bias/users'
 import { getAdminNavSections, isAdminPathActive } from '../navigation'
 
 defineProps({

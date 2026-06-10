@@ -1,7 +1,7 @@
 import {
   hasTrackedDiscussionId as resolveTrackedDiscussionId,
   shouldRefreshForumEvent,
-} from '@bias/forum'
+} from '@bias/realtime'
 
 export function createTagsRealtimeState({
   hasTrackedDiscussionId = resolveTrackedDiscussionId,

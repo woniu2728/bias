@@ -9,6 +9,7 @@ from django.conf import settings
 from apps.core.extensions.definition_assembler import resolve_extension_discovery_result
 from apps.core.extensions.exceptions import ExtensionManifestError
 from apps.core.extensions.types import (
+    ExtensionAuthorDefinition,
     ExtensionAdminActionDefinition,
     ExtensionCompatibilityDefinition,
     ExtensionDiscoveryResult,
@@ -114,7 +115,7 @@ class ExtensionManifestLoader:
             description=str(payload.get("description") or "").strip(),
             icon=str(payload.get("icon") or "fas fa-puzzle-piece").strip(),
             category=str(payload.get("category") or "feature").strip(),
-            authors=tuple(str(item).strip() for item in payload.get("authors", []) if str(item).strip()),
+            authors=self._build_authors(payload.get("authors")),
             homepage=str(payload.get("homepage") or "").strip(),
             documentation_url=str(payload.get("documentation_url") or "").strip(),
             dependencies=tuple(str(item).strip() for item in payload.get("dependencies", []) if str(item).strip()),
@@ -131,12 +132,12 @@ class ExtensionManifestLoader:
             operations_profile=dict(payload.get("operations_profile") or {}) if isinstance(payload.get("operations_profile"), dict) else {},
             compatibility=self._build_compatibility(payload.get("compatibility")),
             security=self._build_security(payload.get("security")),
-            distribution=self._build_distribution(payload.get("distribution")),
+            distribution=self._build_distribution(payload.get("distribution"), manifest_payload=payload),
             runtime_actions=tuple(self._build_runtime_action(item) for item in payload.get("runtime_actions", []) if isinstance(item, dict)),
             settings_schema=tuple(self._build_settings_field(item) for item in payload.get("settings_schema", []) if isinstance(item, dict)),
-            migration_namespace=str(payload.get("migration_namespace") or "").strip(),
+            migration_namespace=self._resolve_migration_namespace(manifest_path, extension_id, payload),
             django_app_config=str(payload.get("django_app_config") or "").strip(),
-            django_migration_module=str(payload.get("django_migration_module") or "").strip(),
+            django_app_label=str(payload.get("django_app_label") or "").strip(),
             source="filesystem",
             path=str(manifest_path.parent),
             extra=dict(payload.get("extra") or {}),
@@ -164,6 +165,16 @@ class ExtensionManifestLoader:
                 "extra": extra,
             }
         )
+
+    def _resolve_migration_namespace(self, manifest_path: Path, extension_id: str, payload: dict) -> str:
+        explicit_namespace = str(payload.get("migration_namespace") or "").strip()
+        if explicit_namespace:
+            return explicit_namespace
+
+        migration_dir = manifest_path.parent / "backend" / "migrations"
+        if not migration_dir.exists():
+            return ""
+        return f"extensions.{extension_id.replace('-', '_')}.backend.migrations"
 
     def _deduplicate_manifests(self, manifests: list[ExtensionManifest]) -> list[ExtensionManifest]:
         by_id: dict[str, ExtensionManifest] = {}
@@ -196,6 +207,26 @@ class ExtensionManifestLoader:
             order=int(payload.get("order", 100) or 100),
         )
 
+    def _build_authors(self, payload) -> tuple[ExtensionAuthorDefinition, ...]:
+        authors = []
+        for item in payload if isinstance(payload, list) else []:
+            if isinstance(item, dict):
+                name = str(item.get("name") or "").strip()
+                homepage = str(item.get("homepage") or item.get("url") or "").strip()
+                email = str(item.get("email") or "").strip()
+            else:
+                name = str(item or "").strip()
+                homepage = ""
+                email = ""
+            if not name:
+                continue
+            authors.append(ExtensionAuthorDefinition(
+                name=name,
+                homepage=homepage,
+                email=email,
+            ))
+        return tuple(authors)
+
     def _build_compatibility(self, payload: dict | None) -> ExtensionCompatibilityDefinition:
         data = payload if isinstance(payload, dict) else {}
         return ExtensionCompatibilityDefinition(
@@ -214,13 +245,31 @@ class ExtensionManifestLoader:
             capabilities_notice=str(data.get("capabilities_notice") or "").strip(),
         )
 
-    def _build_distribution(self, payload: dict | None) -> ExtensionDistributionDefinition:
+    def _build_distribution(self, payload: dict | None, *, manifest_payload: dict | None = None) -> ExtensionDistributionDefinition:
         data = payload if isinstance(payload, dict) else {}
+        manifest_data = manifest_payload if isinstance(manifest_payload, dict) else {}
+        abandoned_value = data.get("abandoned", manifest_data.get("abandoned", False))
+        replacement = str(
+            data.get("replacement")
+            or data.get("replacement_package")
+            or manifest_data.get("replacement")
+            or manifest_data.get("replacement_package")
+            or ""
+        ).strip()
+        if isinstance(abandoned_value, str):
+            abandoned_text = abandoned_value.strip()
+            abandoned = bool(abandoned_text)
+            if abandoned and not replacement and abandoned_text.lower() not in {"1", "true", "yes", "on"}:
+                replacement = abandoned_text
+        else:
+            abandoned = bool(abandoned_value)
         return ExtensionDistributionDefinition(
             channel=str(data.get("channel") or "private").strip() or "private",
             channel_label=str(data.get("channel_label") or "").strip(),
             signing_key_id=str(data.get("signing_key_id") or "").strip(),
             signature_url=str(data.get("signature_url") or "").strip(),
+            abandoned=abandoned,
+            replacement=replacement,
         )
 
     def _build_runtime_action(self, payload: dict) -> ExtensionManifestRuntimeActionDefinition:

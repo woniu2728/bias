@@ -73,7 +73,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from '@bias/core'
 import {
   adminApi,
   AdminActionNoteModal,

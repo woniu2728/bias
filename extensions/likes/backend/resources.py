@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from django.db.models import Prefetch
 
+from apps.core.extensions.runtime_access import serialize_runtime_user
 from extensions.likes.backend.models import PostLike
-from extensions.users.backend.resources import serialize_user_payload
 
 
 def post_like_preload_resolver(context: dict):
@@ -47,7 +47,8 @@ def resolve_post_likes(post, context: dict) -> list[dict]:
     cached = getattr(post, "likes_cache", None)
     likes = cached if cached is not None else PostLike.objects.filter(post_id=post.id).select_related("user")
     return [
-        serialize_user_payload(like.user, resource="post_user")
+        serialize_runtime_user(like.user, resource="post_user", context=context)
         for like in likes
         if getattr(like, "user", None)
     ]
+

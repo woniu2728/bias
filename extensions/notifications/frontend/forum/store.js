@@ -1,12 +1,17 @@
-import { defineStore } from '@bias/forum'
-import { computed, ref } from '@bias/forum'
-import { getNotificationPresentationModel } from './notificationRuntime.js'
+
+
 import {
-  forumApi as api,
+  useAuthStore } from '@bias/users'
+import {
+  api,
+  ref,
+  defineStore,
+  computed,
   unwrapList,
-  useAuthStore,
-  useResourceStore,
-} from '@bias/forum'
+  useResourceStore
+} from '@bias/core'
+import {
+  getNotificationPresentationModel } from './notificationRuntime.js'
 
 export const useNotificationStore = defineStore('notification', () => {
   const resourceStore = useResourceStore()

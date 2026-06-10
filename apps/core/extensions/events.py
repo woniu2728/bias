@@ -43,6 +43,7 @@ class ExtensionUninstalledEvent(ExtensionLifecycleEvent):
 
 @dataclass(frozen=True)
 class ExtensionPackagesSyncedEvent(DomainEvent):
+    created: tuple[str, ...] = ()
     updated: tuple[str, ...] = ()
     pruned: tuple[str, ...] = ()
     reason: str = "extension_packages_synced"

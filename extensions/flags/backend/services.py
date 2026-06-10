@@ -1,24 +1,33 @@
-from typing import Optional
+from typing import Any, Optional
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils import timezone
 
 from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.extensions.runtime_access import apply_runtime_model_visibility
-from apps.core.forum_events import PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
-from extensions.posts.backend import post_query_service
-from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
-from extensions.users.backend.services import UserService
+from apps.core.extensions.runtime_access import (
+    apply_runtime_model_visibility,
+)
+from extensions.flags.backend.events import PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
 from extensions.flags.backend.models import PostFlag
+from apps.core.extensions.runtime_access import (
+    can_runtime_view_post,
+    get_runtime_post_by_id,
+)
+from apps.core.extensions.runtime_access import (
+    ensure_runtime_user_not_suspended,
+    has_runtime_forum_permission,
+)
 
 
-def report_post(post_id: int, user: User, reason: str, message: str = "") -> PostFlag:
-    UserService.ensure_not_suspended(user, "举报帖子")
-    post = Post.objects.select_related("user", "discussion").get(id=post_id)
-    if not post_query_service.can_view_post(post, user):
-        raise PermissionDenied("没有权限查看此帖子")
+def report_post(post_id: int, user: Any, reason: str, message: str = "") -> PostFlag:
+    ensure_runtime_user_not_suspended(user, "举报帖子")
+    post = get_runtime_post_by_id(
+        post_id,
+        user=user,
+        require_visible=True,
+        select_related=("user", "discussion"),
+    )
 
     if not user or not user.is_authenticated:
         raise PermissionDenied("请先登录")
@@ -55,7 +64,7 @@ def report_post(post_id: int, user: User, reason: str, message: str = "") -> Pos
         return flag
 
 
-def get_flag_list(status: Optional[str] = None, page: int = 1, limit: int = 20, *, user: User | None = None):
+def get_flag_list(status: Optional[str] = None, page: int = 1, limit: int = 20, *, user: Any | None = None):
     queryset = PostFlag.objects.select_related(
         "post",
         "post__discussion",
@@ -79,7 +88,7 @@ def get_flag_list(status: Optional[str] = None, page: int = 1, limit: int = 20, 
     return list(queryset[offset:offset + limit]), total
 
 
-def resolve_flag(flag_id: int, admin_user: User, status: str, resolution_note: str = "") -> PostFlag:
+def resolve_flag(flag_id: int, admin_user: Any, status: str, resolution_note: str = "") -> PostFlag:
     if status not in {PostFlag.STATUS_RESOLVED, PostFlag.STATUS_IGNORED}:
         raise ValueError("无效的处理状态")
 
@@ -101,7 +110,7 @@ def resolve_flag(flag_id: int, admin_user: User, status: str, resolution_note: s
     return flag
 
 
-def resolve_post_flags(post_id: int, admin_user: User, status: str, resolution_note: str = "") -> int:
+def resolve_post_flags(post_id: int, admin_user: Any, status: str, resolution_note: str = "") -> int:
     if not admin_user.is_staff:
         raise PermissionDenied("只有管理员可以处理举报")
     if status not in {PostFlag.STATUS_RESOLVED, PostFlag.STATUS_IGNORED}:
@@ -135,11 +144,11 @@ def resolve_post_flags(post_id: int, admin_user: User, status: str, resolution_n
     return len(open_flags)
 
 
-def delete_post_flags(post_id: int, user: User) -> int:
-    post = Post.objects.select_related("discussion").get(id=post_id)
-    if not post_query_service.can_view_post(post, user):
+def delete_post_flags(post_id: int, user: Any) -> int:
+    post = get_runtime_post_by_id(post_id, select_related=("discussion",))
+    if not can_runtime_view_post(post, user):
         raise PermissionDenied("没有权限查看此帖子")
-    if not UserService.has_forum_permission(user, "admin.flag.view"):
+    if not has_runtime_forum_permission(user, "admin.flag.view"):
         raise PermissionDenied("无权查看举报")
 
     with transaction.atomic():
@@ -163,3 +172,5 @@ def _can_flag_own_post() -> bool:
 
     settings = get_extension_settings("flags")
     return bool(settings.get("can_flag_own", False))
+
+

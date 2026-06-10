@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from django.db.models import Subquery
 
+from apps.core.extensions.runtime_access import (
+    get_runtime_discussion_model,
+    get_runtime_post_model,
+)
 from apps.core.resource_registry import ResourceFieldDefinition
 
 
@@ -28,11 +32,10 @@ def admin_stats_resource_field_definitions():
 
 
 def resolve_admin_pending_approvals(stats, context: dict) -> int:
-    from extensions.discussions.backend.models import Discussion
-    from extensions.posts.backend.models import Post
-
-    pending_discussions = Discussion.objects.filter(approval_status=Discussion.APPROVAL_PENDING)
-    pending_posts = Post.objects.filter(approval_status=Post.APPROVAL_PENDING).exclude(
+    discussion_model = get_runtime_discussion_model()
+    post_model = get_runtime_post_model()
+    pending_discussions = discussion_model.objects.filter(approval_status=discussion_model.APPROVAL_PENDING)
+    pending_posts = post_model.objects.filter(approval_status=post_model.APPROVAL_PENDING).exclude(
         id__in=Subquery(pending_discussions.values("first_post_id"))
     )
     return pending_discussions.count() + pending_posts.count()
@@ -90,3 +93,4 @@ def _normalized_lines(content: str | None) -> list[str]:
         for line in (content or "").splitlines()
         if line.strip()
     ]
+

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from django.core.management import call_command
 from django.test import TestCase, override_settings
@@ -6,18 +7,54 @@ from ninja_jwt.tokens import RefreshToken
 from io import StringIO
 from unittest.mock import Mock, patch
 
-from extensions.discussions.backend.services import DiscussionService
+from apps.core.domain_events import get_forum_event_bus
+from apps.core.extensions.bootstrap import bootstrap_extension_application, reset_extension_application_bootstrap_state
 from apps.core.extensions.lifecycle import rebuild_runtime_urlconf, reset_extension_runtime_state
-from apps.core.models import AuditLog
-from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
+from apps.core.extensions.registry import ExtensionRegistry
+from apps.core.forum_registry import get_forum_registry
+from apps.core.extensions.runtime_access import (
+    approve_runtime_discussion,
+    create_runtime_discussion,
+    delete_runtime_discussion,
+    set_runtime_discussion_hidden_state,
+    update_runtime_discussion,
+)
+from extensions.discussions.backend.events import DiscussionCreatedEvent
+from extensions.posts.backend.events import PostCreatedEvent, PostHiddenEvent
+from apps.core.models import AuditLog, ExtensionInstallation
+from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry, get_resource_registry
 from apps.core.settings_service import clear_runtime_setting_caches
-from extensions.posts.backend.models import Post
+from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.tags.backend.events import DiscussionTaggedEvent, TagStatsRefreshRequestedEvent
-from extensions.tags.backend.models import DiscussionTag, Tag
+from extensions.tags.backend.models import Tag
+from apps.core.extensions.runtime_access import get_runtime_discussion_tag_model
 from extensions.tags.backend.services import TagService
-from extensions.users.backend.models import User
-from extensions.users.backend.models import Group, Permission
 from extensions.tags.backend.ext import tag_resource_endpoints
+from apps.core.extensions.runtime_access import (
+    create_runtime_post,
+    get_runtime_post_model,
+    set_runtime_post_hidden_state,
+)
+from apps.core.extensions.runtime_access import (
+    get_runtime_group_model,
+    get_runtime_permission_model,
+    get_runtime_user_model,
+)
+
+
+class RuntimeModelProxy:
+    def __init__(self, resolver):
+        self._resolver = resolver
+
+    def __getattr__(self, name):
+        return getattr(self._resolver(), name)
+
+
+User = RuntimeModelProxy(get_runtime_user_model)
+Group = RuntimeModelProxy(get_runtime_group_model)
+Permission = RuntimeModelProxy(get_runtime_permission_model)
+Post = RuntimeModelProxy(get_runtime_post_model)
+DiscussionTag = RuntimeModelProxy(get_runtime_discussion_tag_model)
 
 
 def discussion_tags_payload(tag_ids):
@@ -48,6 +85,48 @@ def discussion_resource_payload(*, title=None, content=None, tag_ids=None):
     return payload
 
 
+class TagsExtensionRuntimeTests(ExtensionRuntimeTestMixin, TestCase):
+    def test_tags_extension_registers_extension_settings_page(self):
+        registry = ExtensionRegistry(extensions_path=Path.cwd() / "extensions")
+        extension = registry.get_extension("tags")
+
+        self.assertEqual(extension.source, "filesystem")
+        self.assertEqual(extension.manifest.frontend_admin_entry, "")
+        self.assertEqual(extension.frontend_admin_entry, "extensions/tags/frontend/admin/index.js")
+        self.assertEqual(extension.settings_pages, ("/admin/extensions/tags/settings",))
+
+    def test_tags_extension_registers_runtime_service_provider(self):
+        application = self.bootstrap_extensions("tags")
+        service = application.get_service("tags.service")
+
+        self.assertIn("tags.service", application.get_service_provider_keys(extension_id="tags"))
+        self.assertEqual(service["model"].__name__, "Tag")
+        self.assertEqual(service["relationship_model"].__name__, "DiscussionTag")
+        for key in (
+            "summaries_by_slugs",
+            "create_tag",
+            "move_tag",
+            "delete_tag",
+            "filter_tags_for_user",
+            "dispatch_refresh_tag_stats",
+            "refresh_discussion_tag_stats",
+            "refresh_tag_stats",
+            "ensure_can_start_discussion",
+        ):
+            self.assertTrue(callable(service[key]), key)
+
+    def test_tags_capabilities_are_filtered_when_extension_disabled(self):
+        self.disable_extension_for_test("tags")
+
+        resource_registry = get_resource_registry()
+        forum_registry = get_forum_registry()
+
+        self.assertFalse(any(item.module_id == "tags" for item in resource_registry.get_fields("discussion")))
+        self.assertFalse(any(item.module_id == "tags" for item in resource_registry.get_relationships("discussion")))
+        self.assertIsNone(resource_registry.get_dispatch_endpoint("tag", "index", "GET", {}))
+        self.assertFalse(any(item.module_id == "tags" for item in forum_registry.get_search_filters()))
+
+
 class TagStatsTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -64,14 +143,14 @@ class TagStatsTests(TestCase):
 
     def test_create_discussion_refreshes_tag_count(self):
         with self.captureOnCommitCallbacks(execute=True):
-            DiscussionService.create_discussion(
+            create_runtime_discussion(
                 title="生活讨论 1",
                 content="第一条生活内容",
                 user=self.user,
                 extension_payload=discussion_tags_payload([self.tag.id]),
             )
         with self.captureOnCommitCallbacks(execute=True):
-            DiscussionService.create_discussion(
+            create_runtime_discussion(
                 title="生活讨论 2",
                 content="第二条生活内容",
                 user=self.user,
@@ -84,7 +163,7 @@ class TagStatsTests(TestCase):
         self.assertIsNotNone(self.tag.last_posted_discussion)
 
     def test_refresh_tag_stats_repairs_existing_discussion_count(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="历史讨论",
             content="历史内容",
             user=self.user,
@@ -98,7 +177,7 @@ class TagStatsTests(TestCase):
         self.assertEqual(self.tag.discussion_count, 1)
 
     def test_refresh_tag_stats_extension_command_repairs_all_tags(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="命令刷新统计",
             content="命令刷新内容",
             user=self.user,
@@ -138,7 +217,7 @@ class TagStatsTests(TestCase):
         )
 
         with self.captureOnCommitCallbacks(execute=True):
-            discussion = DiscussionService.create_discussion(
+            discussion = create_runtime_discussion(
                 title="待审核标签讨论",
                 content="等待审核",
                 user=self.user,
@@ -149,7 +228,7 @@ class TagStatsTests(TestCase):
         self.assertIsNone(self.tag.last_posted_discussion)
 
         with self.captureOnCommitCallbacks(execute=True):
-            DiscussionService.approve_discussion(discussion, admin)
+            approve_runtime_discussion(discussion, admin)
         self.tag.refresh_from_db()
         self.assertEqual(self.tag.discussion_count, 1)
         self.assertEqual(self.tag.last_posted_discussion_id, discussion.id)
@@ -167,7 +246,7 @@ class TagStatsTests(TestCase):
 
     def test_reply_refreshes_tag_last_posted_at(self):
         with self.captureOnCommitCallbacks(execute=True):
-            discussion = DiscussionService.create_discussion(
+            discussion = create_runtime_discussion(
                 title="标签回复刷新",
                 content="首帖",
                 user=self.user,
@@ -176,9 +255,8 @@ class TagStatsTests(TestCase):
         self.tag.refresh_from_db()
         initial_last_posted_at = self.tag.last_posted_at
 
-        from extensions.posts.backend.services import PostService
         with self.captureOnCommitCallbacks(execute=True):
-            PostService.create_post(
+            create_runtime_post(
                 discussion_id=discussion.id,
                 content="新的回复",
                 user=self.user,
@@ -243,7 +321,7 @@ class TagAccessApiTests(TestCase):
 
     def test_tag_detail_exposes_registered_resource_fields(self):
         with self.captureOnCommitCallbacks(execute=True):
-            discussion = DiscussionService.create_discussion(
+            discussion = create_runtime_discussion(
                 title="标签详情附加字段",
                 content="用于验证资源注册输出",
                 user=self.admin,
@@ -262,7 +340,7 @@ class TagAccessApiTests(TestCase):
         self.assertEqual(payload["last_posted_discussion"]["id"], discussion.id)
 
     def test_tag_detail_supports_resource_field_selection(self):
-        DiscussionService.create_discussion(
+        create_runtime_discussion(
             title="标签字段裁剪",
             content="用于裁剪",
             user=self.admin,
@@ -282,7 +360,7 @@ class TagAccessApiTests(TestCase):
         self.assertNotIn("last_posted_discussion", payload)
 
     def test_tag_detail_supports_resource_include_for_last_posted_discussion(self):
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="标签 include 讨论",
             content="用于 include",
             user=self.admin,
@@ -531,7 +609,7 @@ class TagSearchApiTests(TestCase):
             start_discussion_scope=Tag.ACCESS_STAFF,
             reply_scope=Tag.ACCESS_STAFF,
         )
-        DiscussionService.create_discussion(
+        create_runtime_discussion(
             title="搜索内网讨论",
             content="这里有搜索关键字",
             user=admin,
@@ -554,13 +632,13 @@ class TagSearchApiTests(TestCase):
     def test_search_api_supports_registered_tag_filter_syntax(self):
         target_tag = Tag.objects.create(name="扩展搜索标签", slug="extension-search-tag")
         other_tag = Tag.objects.create(name="其他标签", slug="other-search-tag")
-        matched = DiscussionService.create_discussion(
+        matched = create_runtime_discussion(
             title="模块搜索过滤命中",
             content="使用注册式过滤器检索标签。",
             user=self.user,
             extension_payload=discussion_tags_payload([target_tag.id]),
         )
-        DiscussionService.create_discussion(
+        create_runtime_discussion(
             title="模块搜索过滤未命中",
             content="同样包含搜索关键字，但标签不同。",
             user=self.user,
@@ -608,13 +686,13 @@ class TagDiscussionForumApiTests(TestCase):
         life_tag = Tag.objects.create(name="生活", slug="life", color="#4d698e")
         tech_tag = Tag.objects.create(name="技术", slug="tech", color="#3498db")
 
-        life_discussion = DiscussionService.create_discussion(
+        life_discussion = create_runtime_discussion(
             title="Life discussion",
             content="Only belongs to life.",
             user=self.author,
             extension_payload=discussion_tags_payload([life_tag.id]),
         )
-        DiscussionService.create_discussion(
+        create_runtime_discussion(
             title="Tech discussion",
             content="Only belongs to tech.",
             user=self.author,
@@ -632,7 +710,7 @@ class TagDiscussionForumApiTests(TestCase):
 
     def test_discussion_detail_field_selection_keeps_tags_relationship(self):
         tag = Tag.objects.create(name="字段裁剪标签", slug="field-selection-tag", color="#4d698e")
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="字段裁剪讨论",
             content="用于验证 fields",
             user=self.author,
@@ -663,7 +741,7 @@ class TagDiscussionForumApiTests(TestCase):
             email="discussion-admin@example.com",
             password="password123",
         )
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="仅管理员可见",
             content="内部讨论",
             user=admin,
@@ -722,7 +800,7 @@ class TagDiscussionForumApiTests(TestCase):
             start_discussion_scope=Tag.ACCESS_PUBLIC,
             reply_scope=Tag.ACCESS_STAFF,
         )
-        restricted_discussion = DiscussionService.create_discussion(
+        restricted_discussion = create_runtime_discussion(
             title="限制回复讨论",
             content="只有管理员能回复",
             user=admin,
@@ -742,7 +820,7 @@ class TagDiscussionForumApiTests(TestCase):
     def test_update_discussion_dispatches_tag_stats_refresh_request_event(self):
         tag_a = Tag.objects.create(name="标签A", slug="tag-a", color="#3498db")
         tag_b = Tag.objects.create(name="标签B", slug="tag-b", color="#2ecc71")
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Tag stats event discussion",
             content="Initial post",
             user=self.author,
@@ -752,7 +830,7 @@ class TagDiscussionForumApiTests(TestCase):
         mocked_bus = Mock()
         with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
             with self.captureOnCommitCallbacks(execute=True):
-                DiscussionService.update_discussion(
+                update_runtime_discussion(
                     discussion_id=discussion.id,
                     user=self.author,
                     extension_payload=discussion_tags_payload([tag_b.id]),
@@ -778,7 +856,7 @@ class TagDiscussionForumApiTests(TestCase):
             color="#e67e22",
             parent=parent_tag,
         )
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Discussion tagged event",
             content="Initial post",
             user=self.author,
@@ -788,7 +866,7 @@ class TagDiscussionForumApiTests(TestCase):
         mocked_bus = Mock()
         with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
             with self.captureOnCommitCallbacks(execute=True):
-                DiscussionService.update_discussion(
+                update_runtime_discussion(
                     discussion_id=discussion.id,
                     user=self.author,
                     extension_payload=discussion_tags_payload([parent_tag.id, new_child_tag.id]),
@@ -811,7 +889,7 @@ class TagDiscussionForumApiTests(TestCase):
 
         original_tag = Tag.objects.create(name="后端", slug="backend", color="#2980b9")
         new_tag = Tag.objects.create(name="前端", slug="frontend", color="#e67e22")
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Retag me",
             content="Original content",
             user=self.author,
@@ -849,7 +927,7 @@ class TagDiscussionForumApiTests(TestCase):
             password="password123",
         )
         tag = Tag.objects.create(name="删除刷新标签", slug="delete-refresh-tag", color="#4d698e")
-        discussion = DiscussionService.create_discussion(
+        discussion = create_runtime_discussion(
             title="Delete tagged discussion",
             content="Refresh tag stats after delete",
             user=admin,
@@ -859,7 +937,7 @@ class TagDiscussionForumApiTests(TestCase):
         mocked_bus = Mock()
         with patch("apps.core.domain_events.get_forum_event_bus", return_value=mocked_bus):
             with self.captureOnCommitCallbacks(execute=True):
-                DiscussionService.delete_discussion(discussion.id, admin)
+                delete_runtime_discussion(discussion.id, admin)
 
         events = [call.args[0] for call in mocked_bus.dispatch.call_args_list]
         refresh_event = next(
@@ -1148,9 +1226,9 @@ class AdminTagManagementApiTests(TestCase):
         self.assertEqual(self.child_tag.position, 1)
         self.assertEqual(self.parent_tag.position, 0)
 
-    @patch("extensions.tags.backend.admin_api.TagService.dispatch_refresh_tag_stats")
-    def test_admin_can_refresh_tag_stats(self, dispatch_refresh_tag_stats):
-        dispatch_refresh_tag_stats.return_value = {
+    @patch("extensions.tags.backend.admin_api.dispatch_runtime_tag_stats_refresh")
+    def test_admin_can_refresh_tag_stats(self, dispatch_runtime_tag_stats_refresh):
+        dispatch_runtime_tag_stats_refresh.return_value = {
             "mode": "sync",
             "tag_ids": None,
             "message": "标签统计已同步刷新",
@@ -1162,8 +1240,169 @@ class AdminTagManagementApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200, response.content)
-        dispatch_refresh_tag_stats.assert_called_once_with()
+        dispatch_runtime_tag_stats_refresh.assert_called_once_with()
         self.assertEqual(response.json()["message"], "标签统计已同步刷新")
         audit_log = AuditLog.objects.get(action="admin.tag.refresh_stats")
         self.assertEqual(audit_log.target_type, "tag")
         self.assertEqual(audit_log.data["mode"], "sync")
+
+
+@override_settings(
+    CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
+)
+class TagRealtimeIntegrationTests(TestCase):
+    def setUp(self):
+        trusted_group = Group.objects.create(
+            name="RealtimeTrusted",
+            name_singular="RealtimeTrusted",
+            name_plural="RealtimeTrusted",
+            color="#4d698e",
+        )
+        Permission.objects.create(group=trusted_group, permission="startDiscussion")
+        Permission.objects.create(group=trusted_group, permission="startDiscussionWithoutApproval")
+        Permission.objects.create(group=trusted_group, permission="viewForum")
+        Permission.objects.create(group=trusted_group, permission="discussion.reply")
+        Permission.objects.create(group=trusted_group, permission="replyWithoutApproval")
+
+        self.author = User.objects.create_user(
+            username="realtime-author",
+            email="realtime-author@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        self.author.user_groups.add(trusted_group)
+        self.admin = User.objects.create_superuser(
+            username="realtime-admin",
+            email="realtime-admin@example.com",
+            password="password123",
+        )
+        self.tag = Tag.objects.create(
+            name="实时标签",
+            slug="realtime-tag",
+            color="#4d698e",
+        )
+        self.discussion = create_runtime_discussion(
+            title="实时讨论",
+            content="首帖内容",
+            user=self.author,
+            extension_payload=discussion_tags_payload([self.tag.id]),
+        )
+        for extension_id in ("users", "posts", "discussions", "tags"):
+            ExtensionInstallation.objects.update_or_create(
+                extension_id=extension_id,
+                defaults={
+                    "version": "0.1.0",
+                    "source": "filesystem",
+                    "enabled": True,
+                    "installed": True,
+                    "booted": True,
+                },
+            )
+        reset_extension_runtime_state()
+        self.extension_app = bootstrap_extension_application(force=True)
+
+    def tearDown(self):
+        get_forum_event_bus().clear()
+        reset_extension_application_bootstrap_state()
+        super().tearDown()
+
+    def test_hidden_discussion_is_not_visible_to_anonymous_realtime_viewer(self):
+        from apps.core.visibility import can_view_model_instance
+
+        set_runtime_discussion_hidden_state(self.discussion, self.admin, True)
+
+        self.discussion.refresh_from_db()
+        self.assertFalse(can_view_model_instance(self.discussion.__class__, self.discussion, user=None, ability="view"))
+
+    def test_visible_discussion_is_accessible_to_authenticated_realtime_viewer(self):
+        from apps.core.visibility import can_view_model_instance
+
+        self.discussion.refresh_from_db()
+        self.assertTrue(can_view_model_instance(self.discussion.__class__, self.discussion, user=self.author, ability="view"))
+
+    @patch("extensions.discussions.backend.realtime.broadcast_realtime_discussion_event")
+    def test_visible_post_event_broadcasts_discussion_post_and_tag_payload(self, broadcast_discussion_event):
+        post = create_runtime_post(
+            discussion_id=self.discussion.id,
+            content="新增回复",
+            user=self.author,
+        )
+        self.extension_app.event_bus.dispatch(PostCreatedEvent(
+            post_id=post.id,
+            discussion_id=self.discussion.id,
+            actor_user_id=self.author.id,
+            is_approved=True,
+        ))
+
+        self.assertTrue(broadcast_discussion_event.called)
+        discussion_id, event_type, payload = broadcast_discussion_event.call_args.args
+        self.assertEqual(discussion_id, self.discussion.id)
+        self.assertEqual(event_type, "post.created")
+        self.assertEqual(payload["discussion"]["id"], self.discussion.id)
+        self.assertEqual(payload["discussion"]["last_post_number"], post.number)
+        self.assertEqual(payload["post"]["id"], post.id)
+        self.assertEqual(payload["post"]["discussion_id"], self.discussion.id)
+        self.assertEqual([item["id"] for item in payload["users"]], [self.author.id])
+        self.assertEqual([item["id"] for item in payload["tags"]], [self.tag.id])
+        self.assertEqual(payload["tags"][0]["last_posted_discussion"]["id"], self.discussion.id)
+        self.assertEqual(payload["tags"][0]["last_posted_discussion"]["last_post_number"], post.number)
+
+    @patch("extensions.discussions.backend.realtime.broadcast_realtime_discussion_event")
+    def test_discussion_created_event_broadcasts_related_tag_resources(self, broadcast_discussion_event):
+        child_tag = Tag.objects.create(
+            name="实时子标签",
+            slug="realtime-child-tag",
+            color="#e67e22",
+            parent=self.tag,
+        )
+
+        discussion = create_runtime_discussion(
+            title="第二个实时讨论",
+            content="讨论内容",
+            user=self.author,
+            extension_payload=discussion_tags_payload([self.tag.id, child_tag.id]),
+        )
+        self.extension_app.event_bus.dispatch(DiscussionCreatedEvent(
+            discussion_id=discussion.id,
+            actor_user_id=self.author.id,
+            is_approved=True,
+        ))
+
+        discussion_id, event_type, payload = broadcast_discussion_event.call_args.args
+        self.assertEqual(discussion_id, discussion.id)
+        self.assertEqual(event_type, "discussion.created")
+        self.assertEqual(payload["discussion"]["id"], discussion.id)
+        self.assertEqual(payload["post"]["discussion_id"], discussion.id)
+        self.assertEqual([item["id"] for item in payload["users"]], [self.author.id])
+        self.assertEqual(
+            sorted(item["id"] for item in payload["tags"]),
+            sorted([self.tag.id, child_tag.id]),
+        )
+        self.assertTrue(
+            all(item["last_posted_discussion"]["id"] == discussion.id for item in payload["tags"])
+        )
+
+    @patch("extensions.discussions.backend.realtime.broadcast_realtime_discussion_event")
+    def test_hidden_post_event_broadcasts_minimal_signal_only(self, broadcast_discussion_event):
+        post = create_runtime_post(
+            discussion_id=self.discussion.id,
+            content="待隐藏回复",
+            user=self.author,
+        )
+        broadcast_discussion_event.reset_mock()
+
+        set_runtime_post_hidden_state(post, self.admin, True)
+        self.extension_app.event_bus.dispatch(PostHiddenEvent(
+            post_id=post.id,
+            discussion_id=self.discussion.id,
+            actor_user_id=self.admin.id,
+            post_number=post.number,
+            is_hidden=True,
+        ))
+
+        discussion_id, event_type, payload = broadcast_discussion_event.call_args.args
+        self.assertEqual(discussion_id, self.discussion.id)
+        self.assertEqual(event_type, "post.hidden")
+        self.assertEqual(payload, {})
+
+

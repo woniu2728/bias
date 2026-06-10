@@ -36,8 +36,15 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from '@bias/forum'
-import { getStateBlock, getUiCopy } from '@bias/forum'
+
+import {
+  watch,
+  computed,
+  nextTick,
+  ref } from '@bias/core'
+import { getStateBlock,
+  getUiCopy
+} from '@bias/forum'
 
 const props = defineProps({
   items: {

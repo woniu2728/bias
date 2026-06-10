@@ -7,19 +7,18 @@ import {
   getComposerSecondaryActions,
   getComposerStatusItems,
   getComposerTools,
+  getComposerUploadHandler,
   getUiCopy,
   runComposerPreviewTransformers,
 } from '@/forum/registry'
 import {
   BASE_COMPOSER_TOOLS,
   buildComposerToolReplacement,
-  buildUploadedFileMarkdown,
   defaultToolCursorOffset,
   fetchComposerPreview,
   getComposerErrorMessage,
   getTextareaCaretCoordinates,
   replaceSelection,
-  uploadComposerFile,
 } from '@/utils/composer'
 
 function sortByOrder(items) {
@@ -373,12 +372,29 @@ export function useComposerRuntime(options = {}) {
     })?.text || `正在上传${asImage ? '图片' : '附件'}：${file.name}`
 
     try {
-      const uploaded = await uploadComposerFile(file)
+      const handlerContext = buildExtensionContext({
+        asImage,
+        file,
+        fileName: file.name,
+      })
+      const handler = getComposerUploadHandler(handlerContext)
+      if (!handler) {
+        throw new Error(getUiCopy({
+          surface: 'composer-upload-unavailable',
+          asImage,
+        })?.text || '上传功能未启用')
+      }
+
+      const uploaded = await handler.upload(handlerContext)
       if (!showComposer.value) return
 
-      const markdown = buildUploadedFileMarkdown(uploaded.original_name || file.name, uploaded.url, {
-        image: asImage,
-      })
+      const markdown = String(uploaded?.markdown || '').trim()
+      if (!markdown) {
+        throw new Error(getUiCopy({
+          surface: 'composer-upload-failed',
+          asImage,
+        })?.text || (asImage ? '图片上传失败' : '附件上传失败'))
+      }
       await insertComposerText(markdown)
       uploadNoticeTone.value = 'success'
       uploadNotice.value = getUiCopy({

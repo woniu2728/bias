@@ -4,9 +4,17 @@ from django.shortcuts import get_object_or_404
 
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
+from apps.core.extensions.runtime_access import (
+    create_runtime_tag,
+    delete_runtime_tag,
+    dispatch_runtime_tag_stats_refresh,
+    get_runtime_tag_scope_label,
+    move_runtime_tag,
+    validate_runtime_tag_parent_assignment,
+    validate_runtime_tag_scope_configuration,
+)
 from apps.core.jwt_auth import AccessTokenAuth
 from extensions.tags.backend.models import Tag
-from extensions.tags.backend.services import TagService
 
 
 router = Router()
@@ -35,9 +43,9 @@ def serialize_admin_tag(tag: Tag):
         "view_scope": tag.view_scope,
         "start_discussion_scope": tag.start_discussion_scope,
         "reply_scope": tag.reply_scope,
-        "view_scope_label": TagService.get_scope_label(tag.view_scope),
-        "start_discussion_scope_label": TagService.get_scope_label(tag.start_discussion_scope),
-        "reply_scope_label": TagService.get_scope_label(tag.reply_scope),
+        "view_scope_label": get_runtime_tag_scope_label(tag.view_scope),
+        "start_discussion_scope_label": get_runtime_tag_scope_label(tag.start_discussion_scope),
+        "reply_scope_label": get_runtime_tag_scope_label(tag.reply_scope),
     }
 
 
@@ -81,7 +89,7 @@ def create_admin_tag(request, payload: dict = Body(...)):
         if not name:
             raise ValueError("标签名称不能为空")
         parent_id = normalized.get("parent_id")
-        tag = TagService.create_tag(
+        tag = create_runtime_tag(
             name=name,
             slug=(normalized.get("slug") or "").strip() or None,
             description=normalized.get("description", ""),
@@ -145,7 +153,7 @@ def update_admin_tag(request, tag_id: int, payload: dict = Body(...)):
                 tag.parent = None
             else:
                 parent = get_object_or_404(Tag, id=parent_id)
-                TagService.validate_parent_assignment(tag, parent)
+                validate_runtime_tag_parent_assignment(tag, parent)
                 tag.parent = parent
         if "is_hidden" in normalized:
             tag.is_hidden = bool(normalized["is_hidden"])
@@ -161,7 +169,7 @@ def update_admin_tag(request, tag_id: int, payload: dict = Body(...)):
             tag.view_scope,
             tag.start_discussion_scope,
             tag.reply_scope,
-        ) = TagService.validate_scope_configuration(
+        ) = validate_runtime_tag_scope_configuration(
             next_view_scope,
             next_start_scope,
             next_reply_scope,
@@ -190,7 +198,7 @@ def move_admin_tag(request, tag_id: int, payload: dict = Body(...)):
 
     try:
         tag = get_object_or_404(Tag, id=tag_id)
-        moved = TagService.move_tag(
+        moved = move_runtime_tag(
             tag_id=tag_id,
             direction=(payload.get("direction") or "").strip(),
             user=request.auth,
@@ -222,7 +230,7 @@ def delete_admin_tag(request, tag_id: int):
     try:
         tag = get_object_or_404(Tag, id=tag_id)
         tag_snapshot = {"name": tag.name, "slug": tag.slug, "parent_id": tag.parent_id}
-        TagService.delete_tag(tag_id, request.auth)
+        delete_runtime_tag(tag_id, request.auth)
         log_admin_action(
             request,
             "admin.tag.delete",
@@ -241,7 +249,7 @@ def refresh_admin_tag_stats(request):
     if denied:
         return denied
 
-    result = TagService.dispatch_refresh_tag_stats()
+    result = dispatch_runtime_tag_stats_refresh()
     log_admin_action(
         request,
         "admin.tag.refresh_stats",

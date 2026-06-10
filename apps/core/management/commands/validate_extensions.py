@@ -45,16 +45,28 @@ class Command(BaseCommand):
 
         loader = ExtensionManifestLoader(extensions_path)
         try:
-            manifests = [item.manifest for item in loader.discover()]
+            manifests = loader.discover_manifests()
         except ExtensionManifestError as exc:
             raise CommandError(str(exc)) from exc
 
+        available_extension_ids = resolve_available_extension_ids(manifests)
         result = validate_extension_manifests_with_available_ids(
             manifests,
-            available_extension_ids=resolve_available_extension_ids(manifests),
+            available_extension_ids=available_extension_ids,
             extensions_base_path=extensions_path,
             strict_runtime_hooks=strict,
         )
+        if result.error_count == 0:
+            try:
+                manifests = [item.manifest for item in loader.discover()]
+            except ExtensionManifestError as exc:
+                raise CommandError(str(exc)) from exc
+            result = validate_extension_manifests_with_available_ids(
+                manifests,
+                available_extension_ids=available_extension_ids,
+                extensions_base_path=extensions_path,
+                strict_runtime_hooks=strict,
+            )
 
         payload = {
             "extensions_path": str(extensions_path),
@@ -63,7 +75,7 @@ class Command(BaseCommand):
                 "manifest_count": len(result.manifests),
                 "error_count": result.error_count,
                 "warning_count": result.warning_count,
-                "ok": result.ok and not (strict and result.warning_count),
+                "ok": result.ok and not (strict and _has_blocking_warnings(result.issues)),
             },
             "manifests": [
                 {
@@ -91,8 +103,8 @@ class Command(BaseCommand):
             self.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2))
             if result.error_count:
                 raise CommandError(f"扩展校验失败，共 {result.error_count} 个错误")
-            if strict and result.warning_count:
-                raise CommandError(f"扩展严格校验失败，共 {result.warning_count} 个警告")
+            if strict and _has_blocking_warnings(result.issues):
+                raise CommandError("扩展严格校验失败，存在阻断性警告")
             return
 
         self.stdout.write(f"已扫描扩展: {len(result.manifests)}")
@@ -100,13 +112,20 @@ class Command(BaseCommand):
             prefix = "[ERROR]" if issue.level == "error" else "[WARN]"
             target = f"{issue.extension_id}" if issue.extension_id else "-"
             field = f" ({issue.field})" if issue.field else ""
-            self.stdout.write(f"{prefix} {target}{field} {issue.message}")
+            self.stdout.write(f"{prefix} {issue.code} {target}{field} {issue.message}")
 
         if result.error_count:
             raise CommandError(f"扩展校验失败，共 {result.error_count} 个错误")
-        if strict and result.warning_count:
-            raise CommandError(f"扩展严格校验失败，共 {result.warning_count} 个警告")
+        if strict and _has_blocking_warnings(result.issues):
+            raise CommandError("扩展严格校验失败，存在阻断性警告")
 
         self.stdout.write(self.style.SUCCESS(
             f"[OK] 扩展校验通过，错误 {result.error_count}，警告 {result.warning_count}"
         ))
+
+
+def _has_blocking_warnings(issues) -> bool:
+    return any(
+        item.level == "warning"
+        for item in issues
+    )

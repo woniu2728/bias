@@ -1,7 +1,8 @@
 import {
+  api } from '@bias/core'
+import {
   extendForum,
-  getUiCopy,
-  forumApi,
+  getUiCopy
 } from '@bias/forum'
 
 export const extend = [
@@ -213,10 +214,10 @@ async function handleToggleSubscription({
   setDiscussionActionPending?.('toggle-subscription', true)
   try {
     if (isSubscribed) {
-      await forumApi.delete(`/discussions/${discussion.id}/subscribe`)
+      await api.delete(`/discussions/${discussion.id}/subscribe`)
       patchDiscussion?.({ is_subscribed: false })
     } else {
-      await forumApi.post(`/discussions/${discussion.id}/subscribe`)
+      await api.post(`/discussions/${discussion.id}/subscribe`)
       patchDiscussion?.({ is_subscribed: true })
     }
   } catch (error) {

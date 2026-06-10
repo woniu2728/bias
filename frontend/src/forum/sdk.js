@@ -10,84 +10,78 @@ export {
   resetForumExtensionAppRuntime,
 } from './extensionApp.js'
 export {
-  forumApi,
+  ForumExtender,
+  extendForum,
+} from '../common/extenders.js'
+export {
+  getComposerNotices,
   getComposerAutocompleteProviders,
+  getComposerDraftMeta,
   getComposerFields,
-  getDiscussionListContexts,
-  getDiscussionListHero,
-  getDiscussionListRequests,
+  getComposerHosts,
+  getComposerUploadHandler,
+  getComposerSecondaryActions,
+  getComposerStatusItems,
+  getComposerTools,
+  runComposerPreviewTransformers,
   getEmptyState,
-  getForumRealtimeEvents,
-  getNotificationRenderers,
-  getSearchModalSections,
+  getFeedbackNote,
+  getForumNavItems,
+  getForumNavSections,
+  getForumSidebarSections,
+  getHeroMetaItems,
+  getPageState,
   getStateBlock,
   getUiCopy,
+  registerComposerNotice,
+  registerComposerSecondaryAction,
   registerComposerAutocompleteProvider,
   registerComposerField,
+  registerComposerHost,
+  registerComposerUploadHandler,
   registerComposerInitialState,
   registerComposerPayloadContributor,
-  registerDiscussionListContext,
-  registerDiscussionListHero,
-  registerDiscussionListRequest,
+  registerComposerPreviewTransformer,
+  registerComposerStatusItem,
+  registerComposerSubmitGuard,
+  registerComposerSubmitSuccess,
+  registerComposerTool,
   registerEmptyState,
-  registerForumRealtimeEvent,
-  registerSearchModalSection,
+  registerFeedbackNote,
+  registerForumRuntime,
+  registerForumNavSection,
+  registerForumSidebarSection,
+  registerHeaderItem,
+  registerHeroMeta,
+  registerStateBlock,
+  registerUiCopy,
   runComposerInitialStateContributors,
   runComposerPayloadContributors,
+  runComposerSubmitGuards,
+  runComposerSubmitSuccess,
+  runForumRuntimeHook,
 } from './registry.js'
-export * from './runtimeSdk.js'
-export { default as DiscussionListSidebarStartButton } from '../components/discussion/DiscussionListSidebarStartButton.vue'
-export { default as DiscussionEventPostBase } from '../components/discussion/DiscussionEventPostBase.vue'
 export { default as ModerationActionModal } from '../components/modals/ModerationActionModal.vue'
-export { buildDiscussionHeroColorStyle } from '../composables/useDiscussionDetailPresentation.js'
+export { default as ForumActionMenu } from '../components/forum/ForumActionMenu.vue'
 export { default as ForumHeroPanel } from '../components/forum/ForumHeroPanel.vue'
 export { default as ForumInlineMessage } from '../components/forum/ForumInlineMessage.vue'
+export { default as ForumLoadMoreButton } from '../components/forum/ForumLoadMoreButton.vue'
 export { default as ForumPageWithSidebar } from '../components/forum/ForumPageWithSidebar.vue'
 export { default as ForumPagination } from '../components/forum/ForumPagination.vue'
 export { default as ForumPrimaryNav } from '../components/forum/ForumPrimaryNav.vue'
 export { default as ForumSearchFilterNav } from '../components/forum/ForumSearchFilterNav.vue'
+export { default as ForumStateBadge } from '../components/forum/ForumStateBadge.vue'
 export { default as ForumStateBlock } from '../components/forum/ForumStateBlock.vue'
-export { useAuthStore } from '../stores/auth.js'
 export { useComposerStore } from '../stores/composer.js'
 export { useForumStore } from '../stores/forum.js'
-export { useForumRealtimeStore } from '../stores/forumRealtime.js'
-export { useModalStore } from '../stores/modal.js'
-export { registerResourceNormalizer, useResourceStore } from '../stores/resource.js'
-export { defineStore } from 'pinia'
+export { useForumUiStore } from '../stores/forumUi.js'
 export {
   getTextareaCaretCoordinates,
 } from '../utils/composer.js'
-export {
-  buildDiscussionPath,
-  buildUserPath,
-  formatRelativeTime,
-  getUserAvatarColor,
-  getUserDisplayName,
-  getUserInitial,
-  normalizeDiscussion,
-  normalizePost,
-  normalizeUser,
-  unwrapList,
-} from '../utils/forum.js'
-export {
-  FORUM_REALTIME_REFRESH_EVENT_TYPES,
-  getForumRealtimeEventPolicy,
-  getTrackedDiscussionIdsFromDiscussionItems,
-  getTrackedDiscussionIdsFromPostItems,
-  hasTrackedDiscussionId,
-  mergeForumEventPayload,
-  shouldAppendForumRealtimePost,
-  shouldMarkForumEventAsNewReply,
-  shouldRefreshForumEvent,
-  shouldUpsertForumRealtimePost,
-} from '../utils/forumRealtime.js'
-export {
-  highlightSearchText,
-} from '../utils/search.js'
-export {
-  renderTwemojiHtml,
-  renderTwemojiText,
-  setTwemojiBaseUrl,
-  setTwemojiEnabled,
-} from '../utils/twemoji.js'
-export * from '../common/sdk.js'
+export { useComposerRuntime } from '../composables/useComposerRuntime.js'
+export { default as ComposerActionBar } from '../components/composer/ComposerActionBar.vue'
+export { default as ComposerAutocompleteOutlet } from '../components/composer/ComposerAutocompleteOutlet.vue'
+export { default as ComposerHeaderBar } from '../components/composer/ComposerHeaderBar.vue'
+export { default as ComposerNoticeStack } from '../components/composer/ComposerNoticeStack.vue'
+export { default as ComposerPreviewPanel } from '../components/composer/ComposerPreviewPanel.vue'
+export { default as ComposerStatusBar } from '../components/composer/ComposerStatusBar.vue'

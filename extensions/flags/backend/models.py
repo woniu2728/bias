@@ -1,7 +1,5 @@
+from django.conf import settings
 from django.db import models
-
-from extensions.posts.backend.models import Post
-from extensions.users.backend.models import User
 
 
 class PostFlag(models.Model):
@@ -18,15 +16,15 @@ class PostFlag(models.Model):
         (STATUS_IGNORED, "已忽略"),
     ]
 
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="flags")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="post_flags")
+    post = models.ForeignKey("posts.Post", on_delete=models.CASCADE, related_name="flags")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_flags")
     reason = models.CharField(max_length=100)
     message = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_OPEN, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     resolved_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

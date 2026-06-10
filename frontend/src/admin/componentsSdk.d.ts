@@ -20,5 +20,4 @@ export declare function getAdminUsersPageCopy(...args: any[]): any
 export declare function resolveApprovalSelectionState(items?: any[], selectedKeys?: Set<any>): any
 export declare function resolveApprovalTemplateOptions(config?: any, context?: Record<string, any>): any[]
 export declare function useAdminSaveFeedback(...args: any[]): any
-export declare function useAuthStore(...args: any[]): any
 export declare function useModalStore(...args: any[]): any

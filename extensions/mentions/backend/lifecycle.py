@@ -1,7 +1,7 @@
 from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.forum_events import UserMentionedEvent
+from apps.core.extensions.runtime_access import list_runtime_users_by_usernames
+from extensions.mentions.backend.events import UserMentionedEvent
 from extensions.mentions.backend.models import PostMentionsUser
-from extensions.users.backend.models import User
 from extensions.mentions.backend.parser import extract_mentioned_usernames
 
 
@@ -49,7 +49,7 @@ def _sync_post_mentions(post, content: str, *, replace_existing: bool) -> tuple[
         return ()
 
     mentioned_user_ids: list[int] = []
-    mentioned_users = User.objects.filter(username__in=mentions)
+    mentioned_users = list_runtime_users_by_usernames(mentions)
     for mentioned_user in mentioned_users:
         _, created = PostMentionsUser.objects.get_or_create(
             post=post,
@@ -69,3 +69,4 @@ def _sync_post_mentions(post, content: str, *, replace_existing: bool) -> tuple[
             )
 
     return tuple(mentioned_user_ids)
+

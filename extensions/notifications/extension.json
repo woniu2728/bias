@@ -10,6 +10,10 @@
   ],
   "dependencies": [
     "core",
+    "discussions",
+    "emoji",
+    "posts",
+    "realtime",
     "users"
   ],
   "provides": [
@@ -19,8 +23,7 @@
   ],
   "backend_entry": "extensions.notifications.backend.ext",
   "django_app_config": "extensions.notifications.backend.apps.NotificationsExtensionConfig",
-  "django_migration_module": "apps.notifications.migrations",
-  "migration_namespace": "extensions.notifications.backend.migrations",
+  "django_app_label": "notifications",
   "frontend_forum_entry": "extensions/notifications/frontend/forum/index.js",
   "compatibility": {
     "bias_version": "^1.0.0",

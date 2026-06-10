@@ -12,6 +12,8 @@ from apps.core.version import APP_VERSION
 
 SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 EXTENSION_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+PACKAGE_NAME_PATTERN = re.compile(r"^[a-z0-9_.-]+/[a-z0-9_.-]+$")
+DJANGO_APP_LABEL_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 EXPORT_FUNCTION_PATTERN = re.compile(r"export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(")
 EXPORT_DECLARATION_PATTERN = re.compile(r"export\s+(?:const|let|var|class)\s+([A-Za-z0-9_]+)\b")
 VERSION_RANGE_PATTERN = re.compile(r"^(?:\^|~|>=|<=|>|<)?\d+\.\d+\.\d+$")
@@ -21,6 +23,17 @@ MIGRATION_FUNCTION_PATTERN = re.compile(r"^(?:async\s+)?def\s+(apply|run|upgrade
 EXTENSION_SOURCE_SUFFIXES = {".json", ".js", ".jsx", ".ts", ".tsx", ".vue", ".py", ".md", ".css", ".scss", ".less"}
 SKIPPED_SOURCE_DIRS = {"__pycache__", ".pytest_cache", "node_modules", "dist", "build", ".venv", "venv"}
 EXTERNAL_PROJECT_NAME_PATTERN = re.compile(r"\b" + "fla" + "rum" + r"\b", re.IGNORECASE)
+PYTHON_EXTENSION_IMPORT_PATTERN = re.compile(
+    r"^(?:from\s+extensions\.([A-Za-z0-9_]+)([A-Za-z0-9_\.]*)\b|import\s+extensions\.([A-Za-z0-9_]+)([A-Za-z0-9_\.]*)\b)",
+    re.MULTILINE,
+)
+PYTHON_EXTENSION_INTERNAL_IMPORT_PATTERN = re.compile(
+    r"^\s*(?:from\s+extensions\.([A-Za-z0-9_]+)([A-Za-z0-9_\.]*)\b|import\s+extensions\.([A-Za-z0-9_]+)([A-Za-z0-9_\.]*)\b)",
+    re.MULTILINE,
+)
+FORBIDDEN_CROSS_EXTENSION_INTERNAL_IMPORT_RE = re.compile(
+    r"^\.backend\.(?:models|services|tasks|signals|events|visibility|admin|admin_api|api|handlers|resources|resource|listeners)(?:\.|$)"
+)
 FORBIDDEN_EXTENSION_SOURCE_PATTERNS = (
     (
         "forbidden_low_level_resource_extender",
@@ -38,27 +51,21 @@ FORBIDDEN_EXTENSION_SOURCE_PATTERNS = (
         "扩展前端贡献不能声明为 core 模块；请使用当前扩展 ID 作为 moduleId，或省略 moduleId 由扩展运行域归属。",
     ),
     (
-        "forbidden_legacy_forum_frontend_extender",
-        re.compile(r"\bnew\s+Forum(?:Extender)?\s*\("),
-        "扩展前台入口不能使用旧 Forum 构造器；请使用 extendForum(...) 声明前台贡献。",
-    ),
-    (
-        "forbidden_legacy_admin_frontend_extender",
-        re.compile(r"\bnew\s+Admin(?:(?:Dashboard|Page)?Extender|Dashboard|Page)?\s*\("),
-        "扩展后台入口不能使用旧 Admin 构造器；请使用 extendAdmin(...) 声明后台贡献。",
-    ),
-    (
-        "forbidden_legacy_admin_frontend_import",
-        re.compile(
-            r"import\s*\{[^}]*\bAdmin(?:DashboardExtender|PageExtender|Dashboard|Page|Extender)?\b[^}]*\}\s*from\s*['\"]@bias/admin['\"]",
-            re.MULTILINE | re.DOTALL,
-        ),
-        "扩展后台入口不能导入旧 Admin 构造器；请从 @bias/admin 导入 extendAdmin。",
-    ),
-    (
         "forbidden_django_app_entry_import",
         re.compile(r"^\s*(?:from|import)\s+apps\.[A-Za-z0-9_]+(?:\.(?:admin|views|tasks|signals)\b|\s+import\s+(?:admin|views|tasks|signals)\b)", re.MULTILINE),
         "扩展后端不能直接导入 Django app 的 admin/views/tasks/signals 入口；请把运行入口声明到扩展 backend 下。",
+    ),
+)
+FORBIDDEN_EXTENSION_MANIFEST_FIELD_PATTERNS = (
+    (
+        "forbidden_django_migration_module_manifest_field",
+        re.compile(r'"django_migration_module"\s*:'),
+        "扩展清单不能声明 django_migration_module；Django migration 模块由 Bias 根据扩展 ID 内部推导。",
+    ),
+    (
+        "forbidden_migration_namespace_manifest_field",
+        re.compile(r'"migration_namespace"\s*:'),
+        "扩展清单不能声明 migration_namespace；扩展迁移命名空间由 Bias 根据 backend/migrations 目录内部推导。",
     ),
 )
 
@@ -171,6 +178,15 @@ def validate_extension_manifests_with_available_ids(
                     field="conflicts",
                 )
 
+    if base_path is not None:
+        for manifest in manifests:
+            _validate_cross_extension_imports(
+                collector,
+                manifest,
+                base_path,
+                known_extension_ids=known_extension_ids,
+            )
+
     return collector.build()
 
 
@@ -180,6 +196,17 @@ def _resolve_frontend_admin_entry(target: ExtensionManifest) -> str:
 
 def _resolve_frontend_forum_entry(target: ExtensionManifest) -> str:
     return str(getattr(target, "frontend_forum_entry", "") or "").strip()
+
+
+def _expected_frontend_entry(manifest: ExtensionManifest, base_path: Path, frontend: str) -> str:
+    manifest_path = str(getattr(manifest, "path", "") or "").strip()
+    if manifest_path:
+        try:
+            relative_path = (Path(manifest_path) / "frontend" / frontend / "index.js").relative_to(Path(base_path).parent)
+            return relative_path.as_posix()
+        except ValueError:
+            pass
+    return f"extensions/{manifest.id}/frontend/{frontend}/index.js"
 
 
 def inspect_frontend_admin_entry(
@@ -378,7 +405,8 @@ def inspect_backend_entry(
         payload["entry_type"] = "filesystem"
         return payload
 
-    extension_dir = Path(extensions_base_path) / manifest.id
+    manifest_path = str(getattr(manifest, "path", "") or "").strip()
+    extension_dir = Path(manifest_path) if manifest_path else Path(extensions_base_path) / manifest.id
     debug_definition = type("_DebugExtensionDefinition", (), {
         "manifest": type("_DebugManifest", (), {
             "id": manifest.id,
@@ -505,6 +533,7 @@ def _validate_single_manifest(
                 )
 
     if base_path is not None:
+        _validate_manifest_field_contracts(collector, manifest, base_path)
         _validate_extension_source_contracts(collector, manifest, base_path)
         _validate_distribution_signature(collector, manifest, base_path)
         _validate_frontend_admin_entry(collector, manifest, base_path)
@@ -524,16 +553,23 @@ def _validate_single_manifest(
 
 def _validate_django_app_config(collector: ExtensionValidationCollector, manifest: ExtensionManifest) -> None:
     app_config = str(getattr(manifest, "django_app_config", "") or "").strip()
-    migration_module = str(getattr(manifest, "django_migration_module", "") or "").strip()
+    app_label = str(getattr(manifest, "django_app_label", "") or "").strip()
     if not app_config:
-        if migration_module:
+        if app_label:
             collector.add_error(
-                "django_migration_module_without_app_config",
-                "声明 django_migration_module 时必须同时声明 django_app_config",
+                "django_app_label_without_app_config",
+                "声明 django_app_label 时必须同时声明 django_app_config，确保模型归属绑定到扩展 AppConfig。",
                 extension_id=manifest.id,
-                field="django_migration_module",
+                field="django_app_label",
             )
         return
+    if app_label and not DJANGO_APP_LABEL_PATTERN.match(app_label):
+        collector.add_error(
+            "invalid_django_app_label",
+            "django_app_label 必须是合法 Django app label，只能包含字母、数字和下划线，且不能以数字开头。",
+            extension_id=manifest.id,
+            field="django_app_label",
+        )
     expected_prefix = f"extensions.{manifest.id.replace('-', '_')}.backend.apps."
     if not app_config.startswith(expected_prefix):
         collector.add_error(
@@ -541,17 +577,6 @@ def _validate_django_app_config(collector: ExtensionValidationCollector, manifes
             f"django_app_config 必须归属当前扩展命名空间，建议使用 {expected_prefix}...AppConfig",
             extension_id=manifest.id,
             field="django_app_config",
-        )
-    if not migration_module:
-        return
-    expected_extension_module = f"extensions.{manifest.id.replace('-', '_')}.backend.django_migrations"
-    expected_legacy_module = f"apps.{manifest.id.replace('-', '_')}.migrations"
-    if migration_module not in {expected_extension_module, expected_legacy_module}:
-        collector.add_error(
-            "invalid_django_migration_module_namespace",
-            f"django_migration_module 必须指向 {expected_extension_module} 或历史迁移模块 {expected_legacy_module}",
-            extension_id=manifest.id,
-            field="django_migration_module",
         )
 
 
@@ -574,6 +599,30 @@ def _validate_distribution_signature(
         )
 
 
+def _validate_manifest_field_contracts(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+    base_path: Path,
+) -> None:
+    manifest_path = _extension_root_path(manifest, base_path) / "extension.json"
+    if not manifest_path.exists():
+        return
+    try:
+        source = manifest_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return
+
+    relative_path = manifest_path.relative_to(base_path.parent).as_posix()
+    for code, pattern, message in FORBIDDEN_EXTENSION_MANIFEST_FIELD_PATTERNS:
+        if pattern.search(source):
+            collector.add_error(
+                code,
+                f"{message} 文件: {relative_path}",
+                extension_id=manifest.id,
+                field=relative_path,
+            )
+
+
 def _is_remote_url(value: str) -> bool:
     normalized = str(value or "").strip().lower()
     return normalized.startswith(("http://", "https://"))
@@ -586,8 +635,13 @@ def _resolve_extension_local_path(value: str, *, manifest: ExtensionManifest, ba
     path = Path(normalized)
     if path.is_absolute():
         return path
-    root_path = Path(manifest.path) if str(manifest.path or "").strip() else Path(base_path) / manifest.id
+    root_path = _extension_root_path(manifest, base_path)
     return root_path / path
+
+
+def _extension_root_path(manifest: ExtensionManifest, base_path: Path) -> Path:
+    manifest_path = str(getattr(manifest, "path", "") or "").strip()
+    return Path(manifest_path) if manifest_path else Path(base_path) / manifest.id
 
 
 def _validate_extension_source_contracts(
@@ -595,7 +649,7 @@ def _validate_extension_source_contracts(
     manifest: ExtensionManifest,
     base_path: Path,
 ) -> None:
-    extension_dir = Path(base_path) / manifest.id
+    extension_dir = _extension_root_path(manifest, base_path)
     if not extension_dir.exists():
         return
 
@@ -623,6 +677,91 @@ def _iter_extension_source_files(extension_dir: Path):
         if any(part in SKIPPED_SOURCE_DIRS for part in file_path.parts):
             continue
         if file_path.suffix.lower() not in EXTENSION_SOURCE_SUFFIXES:
+            continue
+        yield file_path
+
+
+def _validate_cross_extension_imports(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+    base_path: Path,
+    *,
+    known_extension_ids: set[str],
+) -> None:
+    extension_dir = _extension_root_path(manifest, base_path)
+    if not extension_dir.exists():
+        return
+
+    required_dependencies = set(manifest.dependencies)
+    optional_dependencies = set(manifest.optional_dependencies)
+    declared_dependencies = required_dependencies | optional_dependencies
+    for file_path in _iter_extension_runtime_python_files(extension_dir):
+        try:
+            source = file_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+
+        relative_path = file_path.relative_to(base_path.parent).as_posix()
+        internal_import_spans: set[tuple[int, int]] = set()
+        for match in PYTHON_EXTENSION_INTERNAL_IMPORT_PATTERN.finditer(source):
+            imported_module = str(match.group(1) or match.group(3) or "").strip()
+            imported_tail = str(match.group(2) or match.group(4) or "").strip()
+            imported_extension_id = imported_module.replace("_", "-")
+            if (
+                not imported_extension_id
+                or imported_extension_id == manifest.id
+                or imported_extension_id not in known_extension_ids
+                or not FORBIDDEN_CROSS_EXTENSION_INTERNAL_IMPORT_RE.match(imported_tail)
+            ):
+                continue
+            internal_import_spans.add(match.span())
+            collector.add_error(
+                "forbidden_cross_extension_internal_import",
+                f"扩展源码导入了 {imported_extension_id} 的内部 {imported_tail.lstrip('.')} 模块。"
+                "跨扩展业务协作必须通过宿主 runtime service、事件或公开 extender capability，不能直接依赖其它扩展的内部 backend 模块。",
+                extension_id=manifest.id,
+                field=relative_path,
+            )
+
+        for match in PYTHON_EXTENSION_IMPORT_PATTERN.finditer(source):
+            if match.span() in internal_import_spans:
+                continue
+            imported_module = str(match.group(1) or match.group(3) or "").strip()
+            imported_tail = str(match.group(2) or match.group(4) or "").strip()
+            imported_extension_id = imported_module.replace("_", "-")
+            if (
+                not imported_extension_id
+                or imported_extension_id == manifest.id
+                or imported_extension_id not in known_extension_ids
+            ):
+                continue
+            if imported_extension_id in optional_dependencies:
+                collector.add_error(
+                    "optional_dependency_top_level_import",
+                    f"扩展源码在模块顶层导入了可选依赖 {imported_extension_id}。"
+                    "可选依赖必须通过 ConditionalExtender 与函数内延迟导入表达，避免未启用扩展被硬加载。",
+                    extension_id=manifest.id,
+                    field=relative_path,
+                )
+                continue
+            if imported_extension_id in required_dependencies:
+                continue
+            collector.add_error(
+                "undeclared_cross_extension_import",
+                f"扩展源码导入了 {imported_extension_id}，但未在 dependencies 或 optional_dependencies 中声明。"
+                "请通过扩展依赖显式表达跨扩展耦合。",
+                extension_id=manifest.id,
+                field=relative_path,
+            )
+
+
+def _iter_extension_runtime_python_files(extension_dir: Path):
+    for file_path in extension_dir.rglob("*.py"):
+        if not file_path.is_file():
+            continue
+        if any(part in SKIPPED_SOURCE_DIRS for part in file_path.parts):
+            continue
+        if file_path.name == "tests.py" or file_path.name.startswith("test_") or file_path.name.endswith("_test.py"):
             continue
         yield file_path
 
@@ -816,6 +955,17 @@ def _validate_ecosystem_metadata(
             field="distribution.signature_url",
         )
 
+    if distribution.replacement and not (
+        EXTENSION_ID_PATTERN.match(distribution.replacement)
+        or PACKAGE_NAME_PATTERN.match(distribution.replacement)
+    ):
+        collector.add_error(
+            "invalid_distribution_replacement",
+            "distribution.replacement 必须是 Bias 扩展 ID 或包名形式，例如 vendor/package。",
+            extension_id=manifest.id,
+            field="distribution.replacement",
+        )
+
     if security.support_email and "@" not in security.support_email:
         collector.add_error(
             "invalid_security_support_email",
@@ -961,12 +1111,12 @@ def _validate_backend_entry(
 ) -> None:
     debug_payload = inspect_backend_entry(manifest, extensions_base_path=base_path)
     entry = str(debug_payload["entry"] or "").strip()
-    requires_backend = bool(entry or manifest.migration_namespace or manifest.runtime_actions)
+    requires_backend = bool(entry or manifest.runtime_actions)
 
     if requires_backend and not entry:
         collector.add_error(
             "missing_backend_entry_declaration",
-            "声明 migration_namespace 或 runtime_actions 时必须同时提供 backend_entry",
+            "声明 runtime_actions 时必须同时提供 backend_entry",
             extension_id=manifest.id,
             field="backend_entry",
         )
@@ -1004,14 +1154,6 @@ def _validate_backend_entry(
         return
 
     available_hooks = set(debug_payload["available_hooks"])
-    if manifest.migration_namespace and "run_migrations" not in available_hooks:
-        collector.add_error(
-            "missing_backend_hook",
-            "已声明 migration_namespace，但 backend/ext.py 缺少 run_migrations",
-            extension_id=manifest.id,
-            field="migration_namespace",
-        )
-
     for action in manifest.runtime_actions:
         if action.hook and action.hook not in available_hooks:
             collector.add_error(
@@ -1058,7 +1200,7 @@ def _validate_frontend_admin_entry(
             field="frontend_admin_entry",
         )
         return
-    expected_entry = f"extensions/{manifest.id}/frontend/admin/index.js"
+    expected_entry = _expected_frontend_entry(manifest, base_path, "admin")
     if entry != expected_entry:
         collector.add_error(
             "invalid_frontend_admin_entry_path",
@@ -1138,7 +1280,7 @@ def _validate_frontend_forum_entry(
             field="frontend_forum_entry",
         )
         return
-    expected_entry = f"extensions/{manifest.id}/frontend/forum/index.js"
+    expected_entry = _expected_frontend_entry(manifest, base_path, "forum")
     if entry != expected_entry:
         collector.add_error(
             "invalid_frontend_forum_entry_path",
@@ -1191,7 +1333,7 @@ def _validate_migration_files(
     if not migration_dir.exists():
         collector.add_error(
             "missing_extension_migration_dir",
-            "已声明 migration_namespace，但 backend/migrations 目录不存在",
+            "已推导扩展迁移命名空间，但 backend/migrations 目录不存在",
             extension_id=manifest.id,
             field="migration_namespace",
         )
@@ -1204,7 +1346,7 @@ def _validate_migration_files(
     if not migration_files:
         collector.add_error(
             "missing_extension_migration_files",
-            "已声明 migration_namespace，但 backend/migrations 目录没有可执行迁移文件",
+            "backend/migrations 目录没有可执行迁移文件",
             extension_id=manifest.id,
             field="migration_namespace",
         )

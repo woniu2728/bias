@@ -1,4 +1,12 @@
-from apps.core.extensions import ApiResourceExtender, ForumCapabilitiesExtender, LifecycleExtender, ModelExtender
+from apps.core.extensions import (
+    ApiResourceExtender,
+    FrontendExtender,
+    ForumCapabilitiesExtender,
+    LifecycleExtender,
+    ModelExtender,
+    SearchIndexExtender,
+    ServiceProviderExtender,
+)
 from apps.core.forum_registry_types import PostTypeDefinition
 from extensions.posts.backend.handlers import post_resource_endpoints
 from extensions.posts.backend.models import Post
@@ -7,6 +15,7 @@ from extensions.posts.backend.resources import (
     post_resource_definitions,
     post_resource_field_definitions,
 )
+from extensions.posts.backend.runtime import post_service_provider
 
 
 EXTENSION_ID = "posts"
@@ -14,6 +23,10 @@ EXTENSION_ID = "posts"
 
 def extend():
     return [
+        FrontendExtender(
+            admin_entry="extensions/posts/frontend/admin/index.js",
+            forum_entry="extensions/posts/frontend/forum/index.js",
+        ),
         ForumCapabilitiesExtender(
             post_types=post_type_definitions(),
         ),
@@ -29,6 +42,16 @@ def extend():
             Post,
             description="帖子流与回复记录由 posts 扩展拥有。",
         ),
+        ServiceProviderExtender(
+            key="posts.service",
+            provider=post_service_provider,
+        ),
+        SearchIndexExtender().postgres_index(
+            "posts_content_fts_idx",
+            drop="DROP INDEX CONCURRENTLY IF EXISTS posts_content_fts_idx",
+            create=build_posts_content_search_index_sql,
+            description="为可搜索帖子类型的正文提供 PostgreSQL 全文搜索索引。",
+        ),
         LifecycleExtender(
             install=install,
             enable=enable,
@@ -36,6 +59,20 @@ def extend():
             uninstall=uninstall,
         ),
     ]
+
+
+def build_posts_content_search_index_sql() -> str:
+    searchable_post_types = ", ".join(
+        f"'{definition.code}'"
+        for definition in post_type_definitions()
+        if definition.searchable
+    ) or "'comment'"
+    return f"""
+        CREATE INDEX CONCURRENTLY IF NOT EXISTS posts_content_fts_idx
+        ON posts
+        USING GIN (to_tsvector('simple', coalesce(content, '')))
+        WHERE type IN ({searchable_post_types})
+    """
 
 
 def post_type_definitions():
@@ -99,24 +136,4 @@ def uninstall(context):
         "status": "ok",
         "status_label": "已卸载",
         "message": "Posts 扩展已卸载。",
-    }
-
-
-def run_migrations(context):
-    return _migration_hook_result(context, "run_migrations", "Posts 扩展迁移已执行。")
-
-
-def rollback_migrations(context):
-    return _migration_hook_result(context, "rollback_migrations", "Posts 扩展迁移已回滚。")
-
-
-def _migration_hook_result(context, hook: str, message: str):
-    return {
-        "hook": hook,
-        "status": "ok",
-        "status_label": "已执行",
-        "message": message,
-        "details": {
-            "migration_namespace": context.migration_namespace,
-        },
     }

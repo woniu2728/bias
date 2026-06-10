@@ -12,12 +12,9 @@ def render_tag_mentions_html(html: str) -> str:
     if not slugs:
         return html
 
-    from extensions.tags.backend.models import Tag
+    from apps.core.extensions.runtime_access import get_runtime_tag_summaries_by_slugs
 
-    tag_map = {
-        item["slug"]: item
-        for item in Tag.objects.filter(slug__in=slugs).values("id", "name", "slug")
-    }
+    tag_map = get_runtime_tag_summaries_by_slugs(slugs)
     if not tag_map:
         return html
 

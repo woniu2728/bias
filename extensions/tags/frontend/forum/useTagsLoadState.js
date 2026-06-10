@@ -1,4 +1,4 @@
-import { forumApi, ref } from '@bias/forum'
+import { api, ref } from '@bias/core'
 
 export function createTagsLoadState({
   fetchTags,
@@ -49,7 +49,7 @@ export function useTagsLoadState({
 }) {
   return createTagsLoadState({
     async fetchTags() {
-      return forumApi.get('/tags', {
+      return api.get('/tags', {
         params: {
           include_children: true,
         },

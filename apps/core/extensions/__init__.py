@@ -23,6 +23,7 @@ from apps.core.extensions.extenders import (
     MiddlewareExtender,
     ModelExtender,
     ModelPrivateExtender,
+    RuntimeModel,
     ModelUrlExtender,
     ModelVisibilityExtender,
     NotificationsExtender,
@@ -31,7 +32,6 @@ from apps.core.extensions.extenders import (
     PostExtender,
     PostLifecycleExtender,
     RealtimeExtender,
-    ResourceExtender,
     RoutesExtender,
     SearchDriverExtender,
     SearchIndexExtender,
@@ -44,13 +44,17 @@ from apps.core.extensions.extenders import (
     RuntimeActionsExtender,
     SettingsExtender,
     ViewExtender,
+    WebSocketRoutesExtender,
 )
+from apps.core.authorization import AuthorizationDecision, AuthorizationPolicy, allow, assert_can, can, deny, force_allow, force_deny
 
 __all__ = [
     "AdminNavigationExtender",
     "AdminSurfaceExtender",
     "ApiResourceExtender",
     "ApiRoutesExtender",
+    "AuthorizationDecision",
+    "AuthorizationPolicy",
     "AuthExtender",
     "ConditionalExtender",
     "ConsoleExtender",
@@ -71,6 +75,7 @@ __all__ = [
     "MiddlewareExtender",
     "ModelExtender",
     "ModelPrivateExtender",
+    "RuntimeModel",
     "ModelUrlExtender",
     "ModelVisibilityExtender",
     "NotificationsExtender",
@@ -79,7 +84,6 @@ __all__ = [
     "PostExtender",
     "PostLifecycleExtender",
     "RealtimeExtender",
-    "ResourceExtender",
     "RoutesExtender",
     "SearchDriverExtender",
     "SearchIndexExtender",
@@ -92,6 +96,13 @@ __all__ = [
     "RuntimeActionsExtender",
     "SettingsExtender",
     "ViewExtender",
+    "WebSocketRoutesExtender",
+    "allow",
+    "assert_can",
+    "can",
+    "deny",
+    "force_allow",
+    "force_deny",
     "get_extension_registry",
 ]
 

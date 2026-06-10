@@ -1,4 +1,8 @@
+import json
+
 from ninja import Body, Router
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -6,7 +10,7 @@ from django.shortcuts import get_object_or_404
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
 from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.forum_events import UserSuspendedEvent, UserUnsuspendedEvent
+from extensions.users.backend.events import UserSuspendedEvent, UserUnsuspendedEvent
 from apps.core.forum_registry import get_forum_registry
 from extensions.users.backend.admin_user_helpers import (
     is_builtin_group,
@@ -18,7 +22,9 @@ from extensions.users.backend.admin_user_helpers import (
 )
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.services import PaginationService
+from apps.core.settings_service import get_mail_settings_defaults, get_setting_group
 from extensions.users.backend.models import Group, Permission, User
+from extensions.users.backend.mail import send_test_email
 from extensions.users.backend.services import UserService
 
 
@@ -225,6 +231,53 @@ def save_permissions(request, payload: dict = Body(...)):
         },
     )
     return {"message": "权限保存成功"}
+
+
+@router.post("/mail/test", auth=AccessTokenAuth(), tags=["Admin"])
+def send_admin_test_email(request):
+    denied = _require_staff(request)
+    if denied:
+        return denied
+
+    payload = {}
+    if request.body:
+        raw_body = request.body.decode("utf-8", errors="ignore").strip()
+        content_type = str(request.headers.get("content-type") or "")
+        should_parse_json = "application/json" in content_type or raw_body[:1] in {"{", "["}
+        if should_parse_json:
+            try:
+                payload = json.loads(raw_body) if raw_body else {}
+            except json.JSONDecodeError:
+                return api_error("测试邮件请求格式无效", status=400)
+            if not isinstance(payload, dict):
+                payload = {}
+
+    mail_settings = get_setting_group("mail", get_mail_settings_defaults())
+    to_email = (
+        str(payload.get("to_email") or "").strip()
+        or str(mail_settings.get("mail_test_recipient") or "").strip()
+        or str(request.auth.email or "").strip()
+    )
+    if not to_email:
+        return api_error("请先填写测试收件箱", status=400)
+
+    try:
+        validate_email(to_email)
+    except ValidationError:
+        return api_error("测试收件箱格式无效", status=400)
+
+    try:
+        sent_count = send_test_email(to_email)
+    except Exception as exc:
+        return api_error(str(exc), status=400)
+
+    log_admin_action(
+        request,
+        "admin.mail.test",
+        target_type="mail",
+        data={"to_email": to_email, "sent_count": sent_count},
+    )
+    return {"message": "测试邮件已发送", "sent_count": sent_count, "to_email": to_email}
 
 
 @router.get("/users", auth=AccessTokenAuth(), tags=["Admin"])

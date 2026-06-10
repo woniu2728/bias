@@ -9,7 +9,15 @@ from apps.core.extensions.runtime_access import (
 )
 from apps.core.visibility import apply_model_visibility_scope, apply_related_model_visibility_subquery
 from extensions.discussions.backend.models import Discussion
-from extensions.posts.backend.models import Post
+from apps.core.extensions.runtime_access import (
+    get_runtime_post_approval_approved,
+    get_runtime_post_approval_pending,
+    get_runtime_post_approval_rejected,
+    get_runtime_post_model,
+)
+from apps.core.extensions.runtime_access import (
+    has_runtime_forum_permission,
+)
 
 
 def _field(prefix: str, name: str) -> str:
@@ -89,11 +97,13 @@ def _build_discussion_visibility_q(
 
 
 def build_post_visibility_q(user=None, prefix: str = "") -> Q:
+    Post = get_runtime_post_model()
     can_view_private = can_view_runtime_model_private(Post, user=user)
     return _build_post_visibility_q(user=user, prefix=prefix, include_private=can_view_private)
 
 
 def apply_post_visibility_scope(queryset, user=None):
+    Post = get_runtime_post_model()
     return apply_model_visibility_scope(Post, queryset, user=user, ability="view")
 
 
@@ -115,6 +125,7 @@ def scope_post_view(queryset, context: dict):
         discussion_id__in=Subquery(visible_discussion_ids),
     )
     public_queryset = scoped_queryset.filter(is_private=False)
+    Post = get_runtime_post_model()
     private_queryset = _apply_private_visibility_branch(
         Post,
         scoped_queryset.filter(is_private=True),
@@ -133,7 +144,7 @@ def _build_post_visibility_q(
 ) -> Q:
     approved_q = Q(
         **{
-            _field(prefix, "approval_status"): Post.APPROVAL_APPROVED,
+            _field(prefix, "approval_status"): get_runtime_post_approval_approved(),
         }
     )
     if not include_hidden:
@@ -150,7 +161,7 @@ def _build_post_visibility_q(
     own_pending_q = Q(
         **{
             _field(prefix, "user"): user,
-            _field(prefix, "approval_status"): Post.APPROVAL_PENDING,
+            _field(prefix, "approval_status"): get_runtime_post_approval_pending(),
         }
     )
     if not include_hidden:
@@ -160,7 +171,7 @@ def _build_post_visibility_q(
     own_rejected_q = Q(
         **{
             _field(prefix, "user"): user,
-            _field(prefix, "approval_status"): Post.APPROVAL_REJECTED,
+            _field(prefix, "approval_status"): get_runtime_post_approval_rejected(),
         }
     )
     if not include_private:
@@ -234,12 +245,7 @@ def _is_staff_user(user) -> bool:
 
 
 def _has_forum_permission(user, permission_names) -> bool:
-    try:
-        from extensions.users.backend.services import UserService
-
-        return UserService.has_forum_permission(user, permission_names)
-    except Exception:
-        return False
+    return has_runtime_forum_permission(user, permission_names)
 
 
 def _can_view_forum(user, context: dict | None = None) -> bool:
@@ -248,3 +254,5 @@ def _can_view_forum(user, context: dict | None = None) -> bool:
     if not user or not getattr(user, "is_authenticated", False):
         return True
     return _has_forum_permission(user, "viewForum")
+
+
