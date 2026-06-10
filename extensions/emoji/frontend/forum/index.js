@@ -11,16 +11,16 @@ function resolveEmojiSettings(context = {}) {
   }
 }
 
-export const extend = [
-  extendForum(registerEmojiForum),
-  new EmojiSettingsExtender(),
-]
-
 class EmojiSettingsExtender {
   extend(app) {
     applyEmojiSettings(app)
   }
 }
+
+export const extend = [
+  extendForum(registerEmojiForum),
+  new EmojiSettingsExtender(),
+]
 
 function applyEmojiSettings(app = {}) {
   const emojiSettings = resolveEmojiSettings(app)

@@ -81,7 +81,7 @@ class ApprovalExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
         for key in ("serialize_item", "list_queue", "process_item", "bulk_process"):
             self.assertTrue(callable(service[key]), key)
 
-    def test_inspect_reports_approval_migration_marker(self):
+    def test_inspect_reports_no_approval_django_migration_plan(self):
         stdout = StringIO()
         call_command(
             "inspect_extensions",
@@ -93,10 +93,7 @@ class ApprovalExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
         extension = payload["extensions"][0]
 
         self.assertEqual(extension["id"], "approval")
-        self.assertIn(
-            "0001_record_approval_lifecycle_storage.py",
-            extension["migration_plan"]["pending_files"],
-        )
+        self.assertEqual(extension["migration_plan"]["pending_files"], [])
 
     def test_public_forum_settings_filter_approval_capabilities_when_extension_disabled(self):
         self.disable_extension_for_test("approval")

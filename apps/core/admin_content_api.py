@@ -74,7 +74,8 @@ def list_admin_extensions(request):
     if denied:
         return denied
 
-    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+    summary = str(request.GET.get("summary") or "").strip().lower() in {"1", "true", "yes", "on"}
+    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions(), summary=summary)
 
 
 @router.get("/extensions/bisect", auth=AccessTokenAuth(), tags=["Admin"])
@@ -340,8 +341,11 @@ def uninstall_admin_extension(request, extension_id: str):
     return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
 
 
-def _serialize_admin_extensions_payload(extensions):
-    payload = [_serialize_admin_extension(extension) for extension in extensions]
+def _serialize_admin_extensions_payload(extensions, *, summary: bool = False):
+    payload = [
+        _serialize_admin_extension_summary(extension) if summary else _serialize_admin_extension(extension)
+        for extension in extensions
+    ]
     diagnostics_summary = summarize_extension_diagnostics(payload)
     delivery_summary = summarize_extension_delivery(payload)
 
@@ -367,6 +371,55 @@ def _serialize_admin_extensions_payload(extensions):
             "package_lock": ExtensionService.inspect_extension_packages(),
         },
         "extensions": payload,
+    }
+
+
+def _serialize_admin_extension_summary(extension):
+    runtime_view = _resolve_extension_runtime_record(extension)
+    settings_pages = _resolve_extension_settings_pages(extension, runtime_view)
+    permissions_pages = _resolve_extension_permissions_pages(extension, runtime_view)
+    operations_pages = _resolve_extension_operations_pages(extension, runtime_view)
+    frontend_admin_entry = _resolve_extension_frontend_admin_entry(extension, runtime_view)
+    frontend_outputs = _resolve_extension_frontend_outputs(extension.id)
+    frontend_routes = _build_extension_frontend_routes(runtime_view)
+
+    return {
+        "id": extension.id,
+        "name": extension.name,
+        "version": extension.version,
+        "description": extension.description,
+        "icon": _manifest_attr(extension, "icon", "fas fa-puzzle-piece"),
+        "category": _manifest_attr(extension, "category", "feature"),
+        "frontend_admin_entry": frontend_admin_entry,
+        "frontend_outputs": frontend_outputs,
+        "frontend_routes": frontend_routes,
+        "installed": extension.runtime.installed,
+        "enabled": extension.runtime.enabled,
+        "booted": extension.runtime.booted,
+        "healthy": extension.runtime.healthy,
+        "runtime_status": {
+            "key": extension.runtime.status_key,
+            "label": extension.runtime.status_label,
+        },
+        "source": extension.source,
+        "product_visible": is_product_visible_extension(extension),
+        "protected": is_extension_protected(extension),
+        "module_ids": list(extension.module_ids),
+        "admin_pages": list(extension.admin_pages),
+        "settings_pages": list(settings_pages),
+        "permissions_pages": list(permissions_pages),
+        "operations_pages": list(operations_pages),
+        "action_links": {
+            "detail_page": f"/admin/extensions/{extension.id}",
+            "settings_page": next(iter(settings_pages), ""),
+            "permissions_page": next(iter(permissions_pages), ""),
+            "operations_page": next(iter(operations_pages), ""),
+            "documentation_url": _manifest_attr(extension, "documentation_url"),
+        },
+        "diagnostics": [],
+        "delivery_checks": [],
+        "delivery_assets": [],
+        "runtime_issues": list(extension.runtime.runtime_issues),
     }
 
 

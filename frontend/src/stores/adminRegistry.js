@@ -29,7 +29,9 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
 
     loading.value = true
     try {
-      const extensionsData = await api.get('/admin/extensions')
+      const extensionsData = await api.get('/admin/extensions', {
+        params: { summary: 1 }
+      })
       extensions.value = Array.isArray(extensionsData?.extensions)
         ? extensionsData.extensions.filter(item => item?.product_visible !== false)
         : []

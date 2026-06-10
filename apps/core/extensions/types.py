@@ -596,7 +596,6 @@ class ExtensionManifest:
     distribution: ExtensionDistributionDefinition = ExtensionDistributionDefinition()
     runtime_actions: Tuple[ExtensionManifestRuntimeActionDefinition, ...] = ()
     settings_schema: Tuple[ExtensionManifestSettingFieldDefinition, ...] = ()
-    migration_namespace: str = ""
     django_app_config: str = ""
     django_app_label: str = ""
     source: str = "filesystem"

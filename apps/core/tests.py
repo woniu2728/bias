@@ -52,9 +52,13 @@ from apps.core.extensions.frontend_compiler import (
     copy_frontend_dist_to_static,
     get_extension_frontend_import_map_path,
     get_extension_frontend_output_manifest_path,
+    get_extension_frontend_build_manifest_path,
     get_frontend_vite_manifest_path,
     get_published_frontend_root,
+    inspect_extension_frontend_output_manifest,
+    recompile_extension_frontend_assets,
     write_extension_frontend_import_map,
+    write_extension_frontend_output_manifest,
 )
 from apps.core.extensions.runtime_event_listeners import bootstrap_extension_runtime_event_listeners
 from apps.core.extensions.runtime_access import (
@@ -124,7 +128,7 @@ from apps.core.resource_objects import (
     ResourceSort,
 )
 from apps.core.resource_dispatcher import dispatch_resource_endpoint
-from apps.core.resource_routes import build_resource_route_definitions
+from apps.core.resource_routes import build_resource_path_route_definitions, build_resource_route_definitions
 from apps.core.resource_search import ResourceSearchFilter, ResourceSearchManager, ResourceSearchState
 from apps.core.resource_serializer import ResourceSerializer
 from apps.core.resource_context import ResourceContext
@@ -132,7 +136,13 @@ from apps.core.resource_validation import ResourceValidationError, ResourceValid
 from apps.core.bootstrap_config import load_site_bootstrap, read_site_config
 from apps.core.models import AuditLog, ExtensionInstallation, Setting
 from apps.core.release import build_git_command, ensure_release_versions_aligned
-from apps.core.settings_service import clear_runtime_setting_caches, get_public_forum_settings, get_setting_group
+from apps.core.settings_service import (
+    clear_runtime_setting_caches,
+    get_advanced_settings,
+    get_extension_setting_group_defaults,
+    get_public_forum_settings,
+    get_setting_group,
+)
 from apps.core.test_runner import BiasDiscoverRunner
 from apps.core.websocket_auth import (
     REFRESH_TOKEN_COOKIE_NAME,
@@ -225,7 +235,7 @@ def make_extension_test_base_dir() -> Path:
 def create_alpha_tools_extension(extensions_dir: Path) -> Path:
     manifest_dir = extensions_dir / TEST_EXTENSION_ID
     backend_dir = manifest_dir / "backend"
-    migrations_dir = backend_dir / "migrations"
+    migrations_dir = backend_dir / "django_migrations"
     admin_dir = manifest_dir / "frontend" / "admin"
     forum_dir = manifest_dir / "frontend" / "forum"
     locale_dir = manifest_dir / "locale"
@@ -235,6 +245,17 @@ def create_alpha_tools_extension(extensions_dir: Path) -> Path:
     locale_dir.mkdir(parents=True, exist_ok=True)
     (backend_dir / "__init__.py").write_text("", encoding="utf-8")
     (migrations_dir / "__init__.py").write_text("", encoding="utf-8")
+    (backend_dir / "apps.py").write_text(
+        "from django.apps import AppConfig\n"
+        "\n"
+        "\n"
+        "class AlphaToolsConfig(AppConfig):\n"
+        "    default_auto_field = 'django.db.models.BigAutoField'\n"
+        "    name = 'extensions.alpha_tools.backend'\n"
+        "    label = 'alpha_tools'\n"
+        "    verbose_name = 'Alpha Tools'\n",
+        encoding="utf-8",
+    )
     (manifest_dir / "extension.json").write_text(json.dumps({
         "id": TEST_EXTENSION_ID,
         "name": "Alpha Tools",
@@ -248,6 +269,8 @@ def create_alpha_tools_extension(extensions_dir: Path) -> Path:
         "homepage": "https://bias.local/extensions/alpha-tools",
         "documentation_url": "https://bias.local/docs/alpha-tools",
         "backend_entry": "extensions.alpha_tools.backend.ext",
+        "django_app_config": "extensions.alpha_tools.backend.apps.AlphaToolsConfig",
+        "django_app_label": "alpha_tools",
         "frontend_admin_entry": "extensions/alpha-tools/frontend/admin/index.js",
         "frontend_forum_entry": "extensions/alpha-tools/frontend/forum/index.js",
         "settings_pages": ["/admin/extensions/alpha-tools/settings"],
@@ -331,12 +354,19 @@ def create_alpha_tools_extension(extensions_dir: Path) -> Path:
         "\n"
         "def run_rebuild_cache(context):\n"
         "    return {'status': 'ok', 'status_label': '已刷新'}\n"
-        "\n"
-        "def run_migrations(context):\n"
-        "    return {'status': 'ok', 'status_label': '已执行', 'details': {'applied_steps': ['bootstrap', 'seed']}}\n",
+        "\n",
         encoding="utf-8",
     )
-    (migrations_dir / "0001_bootstrap.py").write_text("def apply():\n    return 'bootstrap'\n", encoding="utf-8")
+    (migrations_dir / "0001_bootstrap.py").write_text(
+        "from django.db import migrations\n"
+        "\n"
+        "\n"
+        "class Migration(migrations.Migration):\n"
+        "    initial = True\n"
+        "    dependencies = []\n"
+        "    operations = []\n",
+        encoding="utf-8",
+    )
     (admin_dir / "index.js").write_text(
         "export function extend() {}\n"
         "export function resolveDetailPage() { return null }\n"
@@ -540,7 +570,7 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertEqual(results[0].manifest.admin_actions[0].key, "details")
             self.assertEqual(results[0].manifest.runtime_actions[0].hook, "run_rebuild_cache")
             self.assertEqual(results[0].manifest.settings_schema[0].key, "theme")
-            self.assertEqual(results[0].manifest.migration_namespace, "")
+            self.assertFalse(hasattr(results[0].manifest, "migration_namespace"))
             self.assertEqual(results[0].manifest.django_app_config, "")
             self.assertEqual(results[0].manifest.compatibility.api_version, "1.0")
             self.assertEqual(results[0].manifest.compatibility.api_stability, "experimental")
@@ -2520,7 +2550,12 @@ class ExtensionManifestLoaderTests(TestCase):
                 self.assertIn("../../../extensions/alpha-tools/frontend/forum/index.js", import_map_source)
                 output_payload = json.loads(output_manifest.read_text(encoding="utf-8"))
                 self.assertIn("alpha-tools", output_payload["extensions"])
+                self.assertTrue(output_payload["input_revision"])
                 self.assertFalse(output_payload["build"]["ran"])
+                inspected = inspect_extension_frontend_output_manifest()
+                self.assertEqual(inspected["input_revision"], output_payload["input_revision"])
+                self.assertEqual(inspected["current_input_revision"], output_payload["input_revision"])
+                self.assertFalse(inspected["input_stale"])
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -2566,6 +2601,7 @@ class ExtensionManifestLoaderTests(TestCase):
 
                 forum_output = output["extensions"]["alpha-tools"]["outputs"]["forum"]
                 self.assertTrue(output["revision"])
+                self.assertTrue(output["input_revision"])
                 self.assertEqual(output["extensions"]["alpha-tools"]["revision"], output["revision"])
                 self.assertEqual(forum_output["revision"], output["revision"])
                 self.assertEqual(forum_output["file"], "assets/alpha-forum.js")
@@ -2579,6 +2615,77 @@ class ExtensionManifestLoaderTests(TestCase):
                 self.assertEqual(forum_output["chunks"][1]["module_id"], "frontend/forum/Page.vue")
                 self.assertEqual(forum_output["chunks"][1]["file"], "assets/page.js")
                 self.assertEqual(forum_output["chunks"][1]["css"], ["assets/page.css"])
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_extension_frontend_output_manifest_detects_stale_extension_inputs(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                first_manifest = {
+                    "extensions": {
+                        "alpha-tools": {
+                            "extension_id": "alpha-tools",
+                            "forum_entry": "extensions/alpha-tools/frontend/forum/index.js",
+                        }
+                    }
+                }
+                second_manifest = {
+                    "extensions": {
+                        "alpha-tools": {
+                            "extension_id": "alpha-tools",
+                            "forum_entry": "extensions/alpha-tools/frontend/forum/changed.js",
+                        }
+                    }
+                }
+                output = build_extension_frontend_output_manifest(first_manifest)
+                write_extension_frontend_output_manifest(output)
+                build_manifest_path = get_extension_frontend_build_manifest_path()
+                build_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+                build_manifest_path.write_text(json.dumps(second_manifest, ensure_ascii=False), encoding="utf-8")
+
+                inspected = inspect_extension_frontend_output_manifest()
+
+                self.assertTrue(inspected["input_revision"])
+                self.assertTrue(inspected["current_input_revision"])
+                self.assertNotEqual(inspected["input_revision"], inspected["current_input_revision"])
+                self.assertTrue(inspected["input_stale"])
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_recompile_extension_frontend_assets_reports_missing_npm(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                extension = SimpleNamespace(
+                    id="alpha-tools",
+                    source="filesystem",
+                    frontend_admin_entry="",
+                    frontend_forum_entry="extensions/alpha-tools/frontend/forum/index.js",
+                    manifest=SimpleNamespace(path=str(Path(temp_dir) / "extensions" / "alpha-tools")),
+                    runtime=SimpleNamespace(enabled=True),
+                    frontend_routes=(),
+                    discover=lambda: SimpleNamespace(
+                        frontend_css=(),
+                        frontend_js_directories=(),
+                        frontend_preloads=(),
+                        frontend_document_attributes=(),
+                        frontend_title_driver=None,
+                        frontend_routes=(),
+                    ),
+                )
+                with patch("apps.core.extensions.frontend_compiler.subprocess.run", side_effect=FileNotFoundError("npm")):
+                    result = recompile_extension_frontend_assets([extension], run_build=True)
+
+                self.assertEqual(result.status, "error")
+                self.assertEqual(result.status_label, "编译环境缺失")
+                self.assertIn("npm", result.message)
+                self.assertTrue(result.input_revision)
+                self.assertTrue(get_extension_frontend_output_manifest_path().exists())
+                payload = json.loads(get_extension_frontend_output_manifest_path().read_text(encoding="utf-8"))
+                self.assertEqual(payload["status"], "error")
+                self.assertEqual(payload["status_label"], "编译环境缺失")
+                self.assertEqual(payload["input_revision"], result.input_revision)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -2836,6 +2943,82 @@ class ExtensionManifestLoaderTests(TestCase):
             self.assertTrue(installation.installed)
             self.assertTrue(installation.enabled)
             self.assertTrue(installation.booted)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_protected_auto_enabled_extension_loads_enabled_from_stale_disabled_record(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                from apps.core.extensions.manager import ExtensionManager
+
+                extensions_dir = Path(temp_dir) / "extensions"
+                manifest_dir = extensions_dir / "discussions"
+                manifest_dir.mkdir(parents=True, exist_ok=False)
+                (manifest_dir / "extension.json").write_text(json.dumps({
+                    "id": "discussions",
+                    "name": "Discussions",
+                    "version": "1.0.0",
+                    "extra": {
+                        "auto_install": True,
+                        "auto_enable": True,
+                        "protected": True,
+                    },
+                }, ensure_ascii=False), encoding="utf-8")
+                ExtensionInstallation.objects.create(
+                    extension_id="discussions",
+                    version="1.0.0",
+                    source="filesystem",
+                    installed=True,
+                    enabled=False,
+                    booted=False,
+                )
+
+                extension = ExtensionManager(extensions_path=extensions_dir).get_extension("discussions")
+
+            self.assertTrue(extension.runtime.installed)
+            self.assertTrue(extension.runtime.enabled)
+            self.assertTrue(extension.runtime.booted)
+            self.assertEqual(extension.runtime.status_key, "active")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_sync_extension_packages_repairs_protected_auto_enabled_disabled_record(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                from apps.core.extensions.manager import ExtensionManager
+
+                extensions_dir = Path(temp_dir) / "extensions"
+                manifest_dir = extensions_dir / "discussions"
+                manifest_dir.mkdir(parents=True, exist_ok=False)
+                (manifest_dir / "extension.json").write_text(json.dumps({
+                    "id": "discussions",
+                    "name": "Discussions",
+                    "version": "1.0.0",
+                    "extra": {
+                        "auto_install": True,
+                        "auto_enable": True,
+                        "protected": True,
+                    },
+                }, ensure_ascii=False), encoding="utf-8")
+                ExtensionInstallation.objects.create(
+                    extension_id="discussions",
+                    version="1.0.0",
+                    source="filesystem",
+                    installed=True,
+                    enabled=False,
+                    booted=False,
+                )
+
+                result = ExtensionManager(extensions_path=extensions_dir).sync_extension_packages()
+                installation = ExtensionInstallation.objects.get(extension_id="discussions")
+
+            self.assertEqual(result["updated"], ["discussions"])
+            self.assertTrue(installation.installed)
+            self.assertTrue(installation.enabled)
+            self.assertTrue(installation.booted)
+            self.assertEqual(installation.meta["sync"]["reason"], "protected_extension_auto_enabled")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -6697,33 +6880,43 @@ class ExtensionRegistryTests(TestCase):
             extension_event_bus_module._extension_event_bus = previous_bus
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    def test_uninstall_runs_declared_migration_rollback(self):
+    def test_uninstall_clears_django_migration_summary(self):
         temp_dir = make_workspace_temp_dir()
         try:
             with override_settings(BASE_DIR=Path(temp_dir)):
                 extensions_dir = Path(temp_dir) / "extensions"
                 manifest_dir = extensions_dir / "alpha-tools"
                 backend_dir = manifest_dir / "backend"
-                migrations_dir = backend_dir / "migrations"
+                migrations_dir = backend_dir / "django_migrations"
                 migrations_dir.mkdir(parents=True, exist_ok=False)
                 (manifest_dir / "extension.json").write_text(json.dumps({
                     "id": "alpha-tools",
                     "name": "Alpha Tools",
                     "version": "1.0.0",
                     "backend_entry": "extensions.alpha_tools.backend.ext",
+                    "django_app_config": "extensions.alpha_tools.backend.apps.AlphaToolsConfig",
+                    "django_app_label": "alpha_tools",
                 }, ensure_ascii=False), encoding="utf-8")
                 (backend_dir / "ext.py").write_text("def extend():\n    return []\n", encoding="utf-8")
+                (backend_dir / "apps.py").write_text(
+                    "from django.apps import AppConfig\n"
+                    "\n"
+                    "\n"
+                    "class AlphaToolsConfig(AppConfig):\n"
+                    "    default_auto_field = 'django.db.models.BigAutoField'\n"
+                    "    name = 'extensions.alpha_tools.backend'\n"
+                    "    label = 'alpha_tools'\n",
+                    encoding="utf-8",
+                )
                 (migrations_dir / "__init__.py").write_text("", encoding="utf-8")
                 (migrations_dir / "0001_bootstrap.py").write_text(
-                    "from pathlib import Path\n"
+                    "from django.db import migrations\n"
                     "\n"
-                    "def apply():\n"
-                    "    Path('migration-up.txt').write_text('up', encoding='utf-8')\n"
-                    "    return 'up'\n"
                     "\n"
-                    "def rollback():\n"
-                    "    Path('migration-down.txt').write_text('down', encoding='utf-8')\n"
-                    "    return 'down'\n",
+                    "class Migration(migrations.Migration):\n"
+                    "    initial = True\n"
+                    "    dependencies = []\n"
+                    "    operations = []\n",
                     encoding="utf-8",
                 )
 
@@ -6746,12 +6939,7 @@ class ExtensionRegistryTests(TestCase):
                 self.assertEqual(uninstalled.runtime.backend_hooks["rollback_migrations"]["details"]["direction"], "down")
                 installation = ExtensionInstallation.objects.get(extension_id="alpha-tools")
                 self.assertEqual(installation.meta["applied_migration_files"], [])
-                self.assertTrue((Path.cwd() / "migration-up.txt").exists())
-                self.assertTrue((Path.cwd() / "migration-down.txt").exists())
         finally:
-            for path in (Path.cwd() / "migration-up.txt", Path.cwd() / "migration-down.txt"):
-                if path.exists():
-                    path.unlink()
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     def test_registry_exposes_filesystem_extensions_only(self):
@@ -7789,7 +7977,7 @@ class ExtensionServiceTests(TestCase):
         self.assertEqual(installed.runtime.migration_label, "最近已执行")
         self.assertEqual(installed.runtime.migration_execution["state"], "applied")
         self.assertIn("0001_bootstrap.py", installed.runtime.migration_execution["details"]["migration_files"])
-        self.assertIn("bootstrap", installed.runtime.migration_execution["details"]["applied_steps"])
+        self.assertIn("0001_bootstrap", installed.runtime.migration_execution["details"]["applied_steps"])
         installation = ExtensionInstallation.objects.get(extension_id="alpha-tools")
         self.assertIn("0001_bootstrap.py", installation.meta["applied_migration_files"])
 
@@ -7840,9 +8028,9 @@ class ExtensionServiceTests(TestCase):
         self.assertIn("0001_bootstrap.py", updated.runtime.migration_execution["details"]["skipped_migration_files"])
 
     def test_run_extension_migrations_refreshes_auto_installed_extension(self):
-        updated = ExtensionService.run_extension_migrations("approval")
+        updated = ExtensionService.run_extension_migrations("users")
 
-        self.assertEqual(updated.id, "approval")
+        self.assertEqual(updated.id, "users")
         self.assertEqual(updated.runtime.backend_hooks["run_migrations"]["status"], "ok")
         self.assertEqual(updated.runtime.migration_state, "applied")
 
@@ -12545,6 +12733,97 @@ class ResourceRegistryTests(TestCase):
 
         self.assertEqual(routes[("post", "like", ("DELETE", "POST"))], "/posts/{object_id}/like")
 
+    def test_resource_path_routes_group_same_path_operations(self):
+        registry = ResourceRegistry()
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="shared_item",
+                endpoint="create",
+                module_id="shared",
+                handler=lambda context: {"method": "POST"},
+                methods=("POST",),
+                path="/shared-items",
+                absolute_path=True,
+            )
+        )
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="shared_item",
+                endpoint="index",
+                module_id="shared",
+                handler=lambda context: {"method": "GET"},
+                methods=("GET",),
+                path="/shared-items",
+                absolute_path=True,
+            )
+        )
+
+        routes = {
+            route.path: route
+            for route in build_resource_path_route_definitions(registry)
+        }
+
+        route = routes["/shared-items"]
+        self.assertEqual(route.methods, ("GET", "POST"))
+        self.assertEqual(
+            {(operation.endpoint, operation.methods) for operation in route.operations},
+            {("create", ("POST",)), ("index", ("GET",))},
+        )
+
+    def test_resource_endpoint_router_dispatches_same_path_by_method(self):
+        registry = ResourceRegistry()
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="shared_item",
+                endpoint="create",
+                module_id="shared",
+                handler=lambda context: {"endpoint": context["endpoint"], "method": context["method"]},
+                methods=("POST",),
+                path="/shared-items",
+                absolute_path=True,
+            )
+        )
+        registry.register_endpoint(
+            ResourceEndpointDefinition(
+                resource="shared_item",
+                endpoint="index",
+                module_id="shared",
+                handler=lambda context: {"endpoint": context["endpoint"], "method": context["method"]},
+                methods=("GET",),
+                path="/shared-items",
+                absolute_path=True,
+            )
+        )
+        host = SimpleNamespace(
+            resources=registry,
+            make=lambda key, default=None: SimpleNamespace(get_mounts=lambda: ()) if key == "routes" else default,
+        )
+        api = build_api_application(extension_host=host, urls_namespace=f"same-path-resource-test-api-{uuid.uuid4().hex}")
+        api_urls = api.urls
+        urlconf_name = "apps.core.tests_same_path_resource_urls"
+        urlconf = ModuleType(urlconf_name)
+        urlconf.urlpatterns = [path("api/", api_urls)]
+        sys.modules[urlconf_name] = urlconf
+
+        try:
+            clear_url_caches()
+            with override_settings(ROOT_URLCONF=urlconf_name):
+                with patch("apps.core.resource_dispatcher.get_runtime_resource_registry", return_value=registry):
+                    get_response = self.client.get("/api/shared-items")
+                    post_response = self.client.post(
+                        "/api/shared-items",
+                        data=json.dumps({}),
+                        content_type="application/json",
+                    )
+        finally:
+            clear_url_caches()
+            sys.modules.pop(urlconf_name, None)
+
+        self.assertEqual(get_response.status_code, 200, get_response.content)
+        self.assertEqual(get_response.json(), {"endpoint": "index", "method": "GET"})
+        self.assertEqual(post_response.status_code, 200, post_response.content)
+        self.assertEqual(post_response.json(), {"endpoint": "create", "method": "POST"})
+
     def test_resource_endpoint_routes_are_registered_on_api_application(self):
         registry = ResourceRegistry()
 
@@ -14253,6 +14532,14 @@ class BootstrapConfigFallbackTests(TestCase):
 
 
 class SettingsServiceFallbackTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        clear_runtime_setting_caches()
+
+    def tearDown(self):
+        clear_runtime_setting_caches()
+        super().tearDown()
+
     def test_get_setting_group_returns_defaults_when_settings_table_is_unavailable(self):
         defaults = {"log_queries": False, "maintenance_mode": False}
 
@@ -14260,6 +14547,27 @@ class SettingsServiceFallbackTests(TestCase):
             values = get_setting_group("advanced", defaults)
 
         self.assertEqual(values, defaults)
+
+    def test_extension_setting_defaults_do_not_force_rebuild_on_hot_path(self):
+        host = SimpleNamespace(
+            get_runtime_extensions=lambda: (),
+            get_extension_views=lambda: (),
+        )
+
+        with patch("apps.core.extensions.bootstrap.get_extension_host", return_value=host) as get_host:
+            self.assertEqual(get_extension_setting_group_defaults("advanced"), {})
+            self.assertEqual(get_extension_setting_group_defaults("advanced"), {})
+
+        get_host.assert_called_once_with()
+
+    def test_advanced_settings_are_cached_until_runtime_settings_are_cleared(self):
+        with patch("apps.core.settings_service.get_extension_setting_group_defaults", return_value={}) as get_defaults:
+            first = get_advanced_settings()
+            second = get_advanced_settings()
+
+        self.assertEqual(first["maintenance_mode_key"], "none")
+        self.assertEqual(second["maintenance_mode_key"], "none")
+        get_defaults.assert_called_once_with("advanced")
 
 
 class EnsureAdminCommandTests(TestCase):

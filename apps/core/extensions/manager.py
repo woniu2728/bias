@@ -25,7 +25,10 @@ from apps.core.extensions.runtime_event_listeners import bootstrap_extension_run
 from apps.core.extensions.lifecycle import reset_extension_runtime_state
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.migration_repository import ExtensionMigrationRepository
-from apps.core.extensions.migrations import run_extension_migrations as run_filesystem_extension_migrations
+from apps.core.extensions.migrations import (
+    has_django_extension_migrations,
+    run_extension_migrations as sync_django_extension_migrations,
+)
 from apps.core.extensions.product import (
     get_extension_protected_reason,
     is_extension_auto_enabled,
@@ -371,9 +374,9 @@ class ExtensionManager:
                 code="extension_migrations_not_installed",
                 details={"extension_id": extension.id},
             )
-        if not str(extension.manifest.migration_namespace or "").strip():
+        if not has_django_extension_migrations(extension):
             raise ExtensionStateError(
-                f"扩展 {extension.id} 未声明迁移命名空间",
+                f"扩展 {extension.id} 未声明 Django 迁移资源",
                 code="extension_migrations_not_declared",
                 details={"extension_id": extension.id},
             )
@@ -472,6 +475,30 @@ class ExtensionManager:
                 created.append(extension_id)
                 continue
             changed_fields = []
+            installed, enabled, booted = _coerce_installation_runtime_state(
+                extension,
+                installed=installation.installed,
+                enabled=installation.enabled,
+                booted=installation.booted,
+            )
+            if (
+                installation.installed != installed
+                or installation.enabled != enabled
+                or installation.booted != booted
+            ):
+                installation.installed = installed
+                installation.enabled = enabled
+                installation.booted = booted
+                installation.meta = self._merge_installation_meta(
+                    installation.meta,
+                    {
+                        "sync": {
+                            "protected_auto_enabled": True,
+                            "reason": "protected_extension_auto_enabled",
+                        },
+                    },
+                )
+                changed_fields.extend(["installed", "enabled", "booted", "meta"])
             if installation.version != extension.version:
                 installation.version = extension.version
                 changed_fields.append("version")
@@ -479,7 +506,7 @@ class ExtensionManager:
                 installation.source = extension.source
                 changed_fields.append("source")
             if changed_fields:
-                installation.save(update_fields=[*changed_fields, "updated_at"])
+                installation.save(update_fields=[*dict.fromkeys(changed_fields), "updated_at"])
                 updated.append(extension_id)
 
         if prune_missing:
@@ -726,13 +753,19 @@ class ExtensionManager:
         if installation is None:
             extension = self._build_uninstalled_extension(extension)
         else:
-            extension.runtime = ExtensionRuntimeState(
+            installed, enabled, booted = _coerce_installation_runtime_state(
+                extension,
                 installed=installation.installed,
                 enabled=installation.enabled,
                 booted=installation.booted,
+            )
+            extension.runtime = ExtensionRuntimeState(
+                installed=installed,
+                enabled=enabled,
+                booted=booted,
                 healthy=extension.runtime.healthy,
-                status_key=_build_extension_status_key(installation.installed, installation.enabled),
-                status_label=_build_extension_status_label(installation.installed, installation.enabled),
+                status_key=_build_extension_status_key(installed, enabled),
+                status_label=_build_extension_status_label(installed, enabled),
                 migration_state=extension.runtime.migration_state,
                 migration_label=extension.runtime.migration_label,
                 dependency_state=extension.runtime.dependency_state,
@@ -997,7 +1030,7 @@ class ExtensionManager:
         )
 
     def _run_install_migrations_if_declared(self, extension) -> dict | None:
-        if not str(extension.manifest.migration_namespace or "").strip():
+        if not has_django_extension_migrations(extension):
             return None
         return self._run_declared_extension_migrations(
             extension,
@@ -1005,7 +1038,7 @@ class ExtensionManager:
         )
 
     def _run_uninstall_migrations_if_declared(self, extension) -> dict | None:
-        if not str(extension.manifest.migration_namespace or "").strip():
+        if not has_django_extension_migrations(extension):
             return None
         return self._run_declared_extension_migrations(
             extension,
@@ -1015,7 +1048,7 @@ class ExtensionManager:
 
     def _run_declared_extension_migrations(self, extension, *, action: str, direction: str = "up") -> dict:
         migration_record = ExtensionMigrationRepository().get_record(extension.id)
-        base_result = run_filesystem_extension_migrations(
+        base_result = sync_django_extension_migrations(
             extension,
             applied_steps=list(migration_record.applied_steps),
             applied_migration_files=list(migration_record.applied_files),
@@ -1111,6 +1144,12 @@ class ExtensionManager:
             },
         )
 
+        installed, enabled, booted = _coerce_installation_runtime_state(
+            extension,
+            installed=installed,
+            enabled=enabled,
+            booted=booted,
+        )
         installation.version = extension.version
         installation.source = extension.source
         installation.enabled = bool(enabled)
@@ -1427,6 +1466,21 @@ def _build_extension_status_key(installed: bool, enabled: bool) -> str:
     return "disabled"
 
 
+def _coerce_installation_runtime_state(
+    extension: Extension,
+    *,
+    installed: bool,
+    enabled: bool,
+    booted: bool,
+) -> tuple[bool, bool, bool]:
+    installed = bool(installed)
+    enabled = bool(enabled)
+    booted = bool(booted)
+    if is_extension_protected(extension) and is_extension_auto_enabled(extension):
+        return True, True, True
+    return installed, enabled, booted
+
+
 def _build_extension_status_label(installed: bool, enabled: bool) -> str:
     if not installed:
         return "待安装"
@@ -1527,7 +1581,7 @@ def _build_manifest_runtime_actions(extension: Extension) -> tuple[ExtensionRunt
 def _build_migration_runtime_action(extension: Extension) -> ExtensionRuntimeActionDefinition | None:
     if not extension.runtime.installed:
         return None
-    if not str(extension.manifest.migration_namespace or "").strip():
+    if not has_django_extension_migrations(extension):
         return None
     return ExtensionRuntimeActionDefinition(
         key="migrations",

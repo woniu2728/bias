@@ -186,25 +186,57 @@ export async function loadEnabledForumExtensions({
   })
 
   const initializedApps = []
+  const extensionErrors = []
   for (const extension of extensions) {
     const extensionId = String(extension?.id || '').trim()
     if (!extensionId || loadedIds.has(extensionId)) {
       continue
     }
-    const runtimeExtension = withRuntimeApplication(extension, application)
-    registerExtensionFrontendOutput(application, extensionId, 'common', runtimeExtension?.frontend_outputs?.common)
-    registerExtensionFrontendOutput(application, extensionId, 'forum', runtimeExtension?.frontend_outputs?.forum)
 
-    const registeredRoutes = registerExtensionForumRoutes(router, runtimeExtension, {
-      app: application,
-      components: routeComponents || forumRouteComponents,
-      importers,
-    })
-    let app = null
-    const commonEntryPath = normalizeExtensionForumEntry(extension?.frontend_common_entry)
-    if (commonEntryPath) {
-      const commonModule = await loadExtensionForumEntryModule(commonEntryPath, { importers })
-      validateCommonExtensionModule(commonModule, extensionId)
+    try {
+      const runtimeExtension = withRuntimeApplication(extension, application)
+      registerExtensionFrontendOutput(application, extensionId, 'common', runtimeExtension?.frontend_outputs?.common)
+      registerExtensionFrontendOutput(application, extensionId, 'forum', runtimeExtension?.frontend_outputs?.forum)
+
+      const registeredRoutes = registerExtensionForumRoutes(router, runtimeExtension, {
+        app: application,
+        components: routeComponents || forumRouteComponents,
+        importers,
+      })
+      let app = null
+      const commonEntryPath = normalizeExtensionForumEntry(extension?.frontend_common_entry)
+      if (commonEntryPath) {
+        const commonModule = await loadExtensionForumEntryModule(commonEntryPath, { importers })
+        validateCommonExtensionModule(commonModule, extensionId)
+        app = createForumExtensionApp({
+          app: application,
+          forumStore,
+          extension: runtimeExtension,
+          loadedExtensionIds: loadedIds,
+          registry,
+          router,
+          registeredRoutes,
+        })
+        registerLoadedExtensionModule(extensionId, commonModule, {
+          app: application,
+          extension: runtimeExtension,
+          frontend: 'common',
+          entryPath: commonEntryPath,
+        })
+        await bootModuleExtenders(application, extensionId, commonModule, app)
+      }
+
+      const entryPath = normalizeExtensionForumEntry(extension?.frontend_forum_entry)
+      if (!entryPath) {
+        if (app) {
+          initializedApps.push({ app, extensionId })
+        }
+        loadedIds.add(extensionId)
+        continue
+      }
+
+      const module = await loadExtensionForumEntryModule(entryPath, { importers })
+      validateForumExtensionModule(module, extensionId)
       app = createForumExtensionApp({
         app: application,
         forumStore,
@@ -214,44 +246,19 @@ export async function loadEnabledForumExtensions({
         router,
         registeredRoutes,
       })
-      registerLoadedExtensionModule(extensionId, commonModule, {
+      registerLoadedExtensionModule(extensionId, module, {
         app: application,
         extension: runtimeExtension,
-        frontend: 'common',
-        entryPath: commonEntryPath,
+        frontend: 'forum',
+        entryPath,
       })
-      await bootModuleExtenders(application, extensionId, commonModule, app)
-    }
-
-    const entryPath = normalizeExtensionForumEntry(extension?.frontend_forum_entry)
-    if (!entryPath) {
-      if (app) {
-        initializedApps.push({ app, extensionId })
-      }
+      await bootModuleExtenders(application, extensionId, module, app)
+      initializedApps.push({ app, extensionId })
       loadedIds.add(extensionId)
-      continue
+    } catch (error) {
+      extensionErrors.push({ extensionId, error })
+      handleExtensionRuntimeError(error, extensionId, 'forum-entry')
     }
-
-    const module = await loadExtensionForumEntryModule(entryPath, { importers })
-    validateForumExtensionModule(module, extensionId)
-    app = createForumExtensionApp({
-      app: application,
-      forumStore,
-      extension: runtimeExtension,
-      loadedExtensionIds: loadedIds,
-      registry,
-      router,
-      registeredRoutes,
-    })
-    registerLoadedExtensionModule(extensionId, module, {
-      app: application,
-      extension: runtimeExtension,
-      frontend: 'forum',
-      entryPath,
-    })
-    await bootModuleExtenders(application, extensionId, module, app)
-    initializedApps.push({ app, extensionId })
-    loadedIds.add(extensionId)
   }
 
   if (initializedApps.length) {
@@ -265,6 +272,7 @@ export async function loadEnabledForumExtensions({
   return {
     payload,
     extensionDocument,
+    extensionErrors,
     loadedExtensionIds: loadedIds,
   }
 }

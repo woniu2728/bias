@@ -4,6 +4,12 @@ from pathlib import Path
 from typing import Any
 
 from apps.core.extensions.extension_runtime import Extension
+from apps.core.extensions.migrations import (
+    list_django_extension_migration_files,
+    resolve_django_extension_app_label,
+    resolve_django_extension_migration_dir,
+    resolve_django_extension_migration_module,
+)
 from apps.core.extensions.module_loader import resolve_extension_backend_file
 from apps.core.extensions.types import ExtensionDeliveryCheckDefinition
 from apps.core.extensions.validation import resolve_bias_version_compatibility
@@ -141,26 +147,37 @@ def _build_frontend_admin_check(root_path: Path | None, extension: Extension) ->
 
 
 def _build_migration_check(root_path: Path | None, extension: Extension) -> ExtensionDeliveryCheckDefinition:
-    migration_namespace = str(extension.manifest.migration_namespace or "").strip()
-    migration_dir = root_path / "backend" / "migrations" if root_path else None
+    migration_dir = resolve_django_extension_migration_dir(extension)
+    migration_module = resolve_django_extension_migration_module(extension)
+    legacy_migration_dir = root_path / "backend" / "migrations" if root_path else None
+    has_legacy_migration_dir = bool(legacy_migration_dir and legacy_migration_dir.exists())
     has_migration_dir = bool(migration_dir and migration_dir.exists())
 
-    if migration_namespace and has_migration_dir:
+    if has_legacy_migration_dir:
+        return ExtensionDeliveryCheckDefinition(
+            key="migrations",
+            label="迁移资源",
+            status="attention",
+            status_label="旧目录",
+            message="发现 legacy backend/migrations 目录；扩展迁移必须使用 backend/django_migrations。",
+            path=str(legacy_migration_dir),
+        )
+    if migration_module and has_migration_dir:
         return ExtensionDeliveryCheckDefinition(
             key="migrations",
             label="迁移资源",
             status="ready",
             status_label="已就绪",
-            message="已发现扩展迁移目录并推导迁移命名空间。",
+            message="已发现扩展 Django 迁移目录。",
             path=str(migration_dir),
         )
-    if migration_namespace and not has_migration_dir:
+    if migration_module and not has_migration_dir:
         return ExtensionDeliveryCheckDefinition(
             key="migrations",
             label="迁移资源",
             status="attention",
             status_label="缺失",
-            message="已推导扩展迁移命名空间，但 backend/migrations 目录不存在。",
+            message="manifest 已声明 Django AppConfig，但 backend/django_migrations 目录不存在。",
             path=str(migration_dir or ""),
         )
     if has_migration_dir:
@@ -169,7 +186,7 @@ def _build_migration_check(root_path: Path | None, extension: Extension) -> Exte
             label="迁移资源",
             status="ready",
             status_label="已就绪",
-            message="已发现扩展迁移目录。",
+            message="已发现扩展 Django 迁移目录。",
             path=str(migration_dir),
         )
     return ExtensionDeliveryCheckDefinition(
@@ -177,7 +194,7 @@ def _build_migration_check(root_path: Path | None, extension: Extension) -> Exte
         label="迁移资源",
         status="pending",
         status_label="未声明",
-        message="当前扩展尚未声明数据库迁移资源。",
+        message="当前扩展尚未声明 Django 数据库迁移资源。",
         optional=True,
     )
 
@@ -343,8 +360,8 @@ def _build_uninstall_warnings(
         "卸载后会移除扩展后台入口、运行能力和相关启停状态。",
     ]
 
-    migration_dir = root_path / "backend" / "migrations" if root_path else None
-    has_migrations = bool(str(extension.manifest.migration_namespace or "").strip()) or bool(migration_dir and migration_dir.exists())
+    migration_dir = resolve_django_extension_migration_dir(extension)
+    has_migrations = bool(resolve_django_extension_migration_module(extension)) or bool(migration_dir and migration_dir.exists())
     if has_migrations:
         warnings.append("如果该扩展已经执行过数据库迁移，需要由开发者或运维显式处理回滚/清理策略。")
 
@@ -360,13 +377,16 @@ def _build_uninstall_warnings(
 
 
 def _build_migration_summary(root_path: Path | None, extension: Extension) -> tuple[str, str]:
-    migration_namespace = str(extension.manifest.migration_namespace or "").strip()
-    migration_dir = root_path / "backend" / "migrations" if root_path else None
+    migration_dir = resolve_django_extension_migration_dir(extension)
+    migration_module = resolve_django_extension_migration_module(extension)
+    legacy_migration_dir = root_path / "backend" / "migrations" if root_path else None
+    if legacy_migration_dir and legacy_migration_dir.exists():
+        return "attention", "旧迁移目录"
     has_migration_dir = bool(migration_dir and migration_dir.exists())
 
-    if migration_namespace and has_migration_dir:
+    if migration_module and has_migration_dir:
         return "ready", "已发现迁移"
-    if migration_namespace and not has_migration_dir:
+    if migration_module and not has_migration_dir:
         return "attention", "迁移目录缺失"
     if has_migration_dir:
         return "ready", "已发现迁移"
@@ -410,24 +430,22 @@ def _build_migration_execution_summary(extension: Extension) -> dict[str, Any]:
 
 
 def _build_migration_plan_summary(root_path: Path | None, extension: Extension) -> dict[str, Any]:
-    migration_dir = root_path / "backend" / "migrations" if root_path else None
-    if not migration_dir or not migration_dir.exists():
+    declared_files = list_django_extension_migration_files(extension)
+    if not declared_files:
         return {
+            "django_app_label": resolve_django_extension_app_label(extension),
+            "django_migration_module": resolve_django_extension_migration_module(extension),
             "declared_files": [],
             "applied_files": [],
             "pending_files": [],
         }
-
-    declared_files = sorted(
-        item.name
-        for item in migration_dir.glob("*.py")
-        if item.name != "__init__.py"
-    )
     applied_files = list(extension.runtime.applied_migration_files or ())
 
     applied_file_set = set(applied_files)
     pending_files = [item for item in declared_files if item not in applied_file_set]
     return {
+        "django_app_label": resolve_django_extension_app_label(extension),
+        "django_migration_module": resolve_django_extension_migration_module(extension),
         "declared_files": declared_files,
         "applied_files": applied_files,
         "pending_files": pending_files,

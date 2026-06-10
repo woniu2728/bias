@@ -80,7 +80,9 @@ class Command(BaseCommand):
             clear_marker=rebuild,
             publish_dist=publish,
         )
-        if not rebuild:
+        if rebuild and result.status == "error":
+            mark_extension_runtime_requires_rebuild("extension_frontend_rebuild_failed")
+        elif not rebuild:
             mark_extension_runtime_requires_rebuild("extension_frontend_manifest_built")
 
         if output_format == "json":

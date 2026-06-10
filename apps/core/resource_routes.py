@@ -20,18 +20,62 @@ class ResourceRouteDefinition:
     module_id: str = ""
 
 
+@dataclass(frozen=True)
+class ResourceRouteOperation:
+    resource: str
+    endpoint: str
+    methods: tuple[str, ...]
+    module_id: str = ""
+
+
+@dataclass(frozen=True)
+class ResourcePathRouteDefinition:
+    path: str
+    methods: tuple[str, ...]
+    operations: tuple[ResourceRouteOperation, ...]
+    object_id_param: str = ""
+
+
 def build_resource_endpoint_router(registry: ResourceRegistry | None = None) -> Router:
     resolved_registry = registry or get_runtime_resource_registry()
     router = Router()
-    for route in build_resource_route_definitions(resolved_registry):
+    for route in build_resource_path_route_definitions(resolved_registry):
         router.add_api_operation(
             route.path,
             list(route.methods),
             _make_resource_endpoint_view(route),
             tags=["Resources"],
-            url_name=f"resource_{route.resource}_{route.endpoint}".replace("-", "_"),
+            url_name=f"resource_{_route_url_name(route)}".replace("-", "_"),
         )
     return router
+
+
+def build_resource_path_route_definitions(registry: ResourceRegistry) -> list[ResourcePathRouteDefinition]:
+    grouped: dict[str, list[ResourceRouteDefinition]] = {}
+    for route in build_resource_route_definitions(registry):
+        grouped.setdefault(route.path, []).append(route)
+
+    routes: list[ResourcePathRouteDefinition] = []
+    for path, route_group in grouped.items():
+        operations = tuple(
+            ResourceRouteOperation(
+                resource=route.resource,
+                endpoint=route.endpoint,
+                methods=route.methods,
+                module_id=route.module_id,
+            )
+            for route in route_group
+        )
+        methods = tuple(sorted({method for route in route_group for method in route.methods}))
+        routes.append(
+            ResourcePathRouteDefinition(
+                path=path,
+                methods=methods,
+                operations=operations,
+                object_id_param=_object_id_param(path),
+            )
+        )
+    return routes
 
 
 def build_resource_route_definitions(registry: ResourceRegistry) -> list[ResourceRouteDefinition]:
@@ -66,25 +110,43 @@ def route_definition_for_endpoint(definition: ResourceEndpointDefinition) -> Res
     )
 
 
-def _make_resource_endpoint_view(route: ResourceRouteDefinition):
+def _make_resource_endpoint_view(route: ResourcePathRouteDefinition):
     if route.object_id_param:
         def view(request, object_id: str):
+            operation = _resolve_route_operation(route, request)
             return dispatch_resource_endpoint(
                 request,
-                resource=route.resource,
-                endpoint=route.endpoint,
+                resource=operation.resource,
+                endpoint=operation.endpoint,
                 object_id=str(object_id),
             )
     else:
         def view(request):
+            operation = _resolve_route_operation(route, request)
             return dispatch_resource_endpoint(
                 request,
-                resource=route.resource,
-                endpoint=route.endpoint,
+                resource=operation.resource,
+                endpoint=operation.endpoint,
             )
 
-    view.__name__ = f"dispatch_resource_{route.resource}_{route.endpoint}".replace("-", "_")
+    view.__name__ = f"dispatch_resource_{_route_url_name(route)}".replace("-", "_")
     return view
+
+
+def _resolve_route_operation(route: ResourcePathRouteDefinition, request) -> ResourceRouteOperation:
+    method = str(getattr(request, "method", "GET") or "GET").upper()
+    for operation in route.operations:
+        if method in operation.methods:
+            return operation
+    return route.operations[0]
+
+
+def _route_url_name(route: ResourcePathRouteDefinition) -> str:
+    if len(route.operations) == 1:
+        operation = route.operations[0]
+        return f"{operation.resource}_{operation.endpoint}"
+    normalized = route.path.strip("/").replace("/", "_").replace("{", "").replace("}", "") or "root"
+    return normalized
 
 
 def _endpoint_route_path(definition: ResourceEndpointDefinition) -> str:

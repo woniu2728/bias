@@ -28,6 +28,7 @@ class ExtensionFrontendCompileResult:
     import_map_path: Path
     output_manifest_path: Path
     extension_count: int
+    input_revision: str = ""
     command: tuple[str, ...] = ()
     returncode: int | None = None
     stdout: str = ""
@@ -43,6 +44,7 @@ class ExtensionFrontendCompileResult:
             "import_map_path": str(self.import_map_path),
             "output_manifest_path": str(self.output_manifest_path),
             "extension_count": self.extension_count,
+            "input_revision": self.input_revision,
             "command": list(self.command),
             "returncode": self.returncode,
             "stdout": self.stdout,
@@ -97,18 +99,37 @@ def recompile_extension_frontend_assets(
     manifest = write_extension_frontend_manifest(extensions)
     import_map_path = write_extension_frontend_import_map(manifest)
     output_manifest_path = get_extension_frontend_output_manifest_path()
+    input_revision = _build_extension_input_revision(manifest)
 
     command: tuple[str, ...] = ()
     completed = None
     if run_build:
         command = tuple(npm_command)
-        completed = subprocess.run(
-            list(command),
-            cwd=str(get_frontend_root()),
-            text=True,
-            capture_output=True,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                list(command),
+                cwd=str(get_frontend_root()),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            result = ExtensionFrontendCompileResult(
+                status="error",
+                status_label="编译环境缺失",
+                message=f"扩展前端资产编译命令不可用: {command[0]}",
+                manifest_path=get_extension_frontend_build_manifest_path(),
+                import_map_path=import_map_path,
+                output_manifest_path=output_manifest_path,
+                extension_count=len(manifest["extensions"]),
+                input_revision=input_revision,
+                command=command,
+                returncode=None,
+                stdout="",
+                stderr=str(exc),
+            )
+            write_extension_frontend_output_manifest(result.to_dict())
+            return result
         if completed.returncode != 0:
             result = ExtensionFrontendCompileResult(
                 status="error",
@@ -118,6 +139,7 @@ def recompile_extension_frontend_assets(
                 import_map_path=import_map_path,
                 output_manifest_path=output_manifest_path,
                 extension_count=len(manifest["extensions"]),
+                input_revision=input_revision,
                 command=command,
                 returncode=completed.returncode,
                 stdout=completed.stdout,
@@ -155,6 +177,7 @@ def recompile_extension_frontend_assets(
         import_map_path=import_map_path,
         output_manifest_path=output_manifest_path,
         extension_count=len(manifest["extensions"]),
+        input_revision=input_revision,
         command=command,
         returncode=completed.returncode if completed is not None else None,
         stdout=completed.stdout if completed is not None else "",
@@ -229,9 +252,11 @@ def write_extension_frontend_import_map(manifest: dict) -> Path:
 def build_extension_frontend_output_manifest(manifest: dict) -> dict:
     vite_manifest = _read_json(get_frontend_vite_manifest_path())
     revision = _build_frontend_revision(vite_manifest)
+    input_revision = _build_extension_input_revision(manifest)
     output = {
         "generated_at": timezone.now().isoformat(),
         "revision": revision,
+        "input_revision": input_revision,
         "extensions": {},
         "vite_manifest_path": str(get_frontend_vite_manifest_path()),
         "vite_manifest_exists": bool(vite_manifest),
@@ -262,10 +287,16 @@ def write_extension_frontend_output_manifest(payload: dict) -> Path:
 def inspect_extension_frontend_output_manifest() -> dict:
     path = get_extension_frontend_output_manifest_path()
     payload = _read_json(path)
+    build_manifest = _read_json(get_extension_frontend_build_manifest_path())
+    current_input_revision = _build_extension_input_revision(build_manifest) if build_manifest else ""
+    input_revision = str(payload.get("input_revision") or "")
     return {
         "path": str(path),
         "exists": bool(payload),
         "generated_at": str(payload.get("generated_at") or ""),
+        "input_revision": input_revision,
+        "current_input_revision": current_input_revision,
+        "input_stale": bool(payload and current_input_revision and input_revision != current_input_revision),
         "vite_manifest_path": str(payload.get("vite_manifest_path") or get_frontend_vite_manifest_path()),
         "vite_manifest_exists": bool(payload.get("vite_manifest_exists")),
         "extension_count": len(payload.get("extensions") or {}),
@@ -608,6 +639,11 @@ def _build_frontend_revision(vite_manifest: dict) -> str:
     if not vite_manifest:
         return ""
     payload = json.dumps(vite_manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _build_extension_input_revision(manifest: dict) -> str:
+    payload = json.dumps(manifest.get("extensions") or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 

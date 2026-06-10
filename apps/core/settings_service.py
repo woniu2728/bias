@@ -28,6 +28,8 @@ from apps.core.forum_registry import get_forum_registry
 
 ADVANCED_SETTINGS_CACHE_KEY = "settings.group.advanced"
 PUBLIC_FORUM_SETTINGS_CACHE_KEY = "settings.public.forum"
+ADVANCED_SETTINGS_CACHE_TIMEOUT_SECONDS = 60
+_EXTENSION_SETTING_GROUP_DEFAULTS_CACHE: dict[str, dict] = {}
 
 
 def _get_forum_registry():
@@ -180,6 +182,9 @@ def get_advanced_settings_defaults() -> dict:
 
 def get_extension_setting_group_defaults(prefix: str) -> dict:
     normalized_prefix = str(prefix or "").strip()
+    if normalized_prefix in _EXTENSION_SETTING_GROUP_DEFAULTS_CACHE:
+        return _EXTENSION_SETTING_GROUP_DEFAULTS_CACHE[normalized_prefix].copy()
+
     defaults = {}
 
     def collect(definitions) -> None:
@@ -192,7 +197,7 @@ def get_extension_setting_group_defaults(prefix: str) -> dict:
     try:
         from apps.core.extensions.bootstrap import get_extension_host
 
-        host = get_extension_host(force=True)
+        host = get_extension_host()
         if host is not None:
             extension_map = {
                 extension.id: extension
@@ -203,10 +208,12 @@ def get_extension_setting_group_defaults(prefix: str) -> dict:
                 if extension is None or not getattr(extension.runtime, "enabled", False):
                     continue
                 collect(getattr(runtime_view, "settings_defaults", ()) or ())
+            _EXTENSION_SETTING_GROUP_DEFAULTS_CACHE[normalized_prefix] = defaults.copy()
             return defaults
     except Exception:
         pass
 
+    loaded_from_manager = False
     try:
         from apps.core.extensions.manager import get_extension_manager
 
@@ -214,8 +221,11 @@ def get_extension_setting_group_defaults(prefix: str) -> dict:
             if not getattr(extension.runtime, "enabled", False):
                 continue
             collect(getattr(extension, "settings_defaults", ()) or ())
+        loaded_from_manager = True
     except Exception:
         pass
+    if loaded_from_manager:
+        _EXTENSION_SETTING_GROUP_DEFAULTS_CACHE[normalized_prefix] = defaults.copy()
     return defaults
 
 
@@ -252,6 +262,7 @@ def sync_mail_settings_to_site_config(mail_settings: dict) -> str | None:
 
 
 def clear_runtime_setting_caches():
+    _EXTENSION_SETTING_GROUP_DEFAULTS_CACHE.clear()
     _cache_delete(ADVANCED_SETTINGS_CACHE_KEY)
     _cache_delete(PUBLIC_FORUM_SETTINGS_CACHE_KEY)
 
@@ -301,6 +312,10 @@ def _is_valid_public_forum_settings_cache(payload) -> bool:
 
 
 def get_advanced_settings() -> dict:
+    cached = _cache_get(ADVANCED_SETTINGS_CACHE_KEY)
+    if isinstance(cached, dict):
+        return cached.copy()
+
     advanced_settings = get_setting_group("advanced", get_advanced_settings_defaults())
     advanced_settings["cache_driver"] = (
         "redis" if "redis" in settings.CACHES.get("default", {}).get("BACKEND", "").lower() else "file"
@@ -316,7 +331,8 @@ def get_advanced_settings() -> dict:
     advanced_settings["maintenance_mode_key"] = mode
     advanced_settings["maintenance_mode"] = mode != "none"
     advanced_settings["maintenance_mode_label"] = get_maintenance_mode_label(mode)
-    return advanced_settings
+    _cache_set(ADVANCED_SETTINGS_CACHE_KEY, advanced_settings, ADVANCED_SETTINGS_CACHE_TIMEOUT_SECONDS)
+    return advanced_settings.copy()
 
 
 def get_cache_lifetime() -> int:

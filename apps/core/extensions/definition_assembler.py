@@ -36,7 +36,6 @@ def resolve_extension_discovery_result(manifest: ExtensionManifest) -> Extension
         distribution=manifest.distribution,
         runtime_actions=tuple(record.runtime_actions) or manifest.runtime_actions,
         settings_schema=tuple(record.settings_schema) or manifest.settings_schema,
-        migration_namespace=manifest.migration_namespace,
         django_app_config=manifest.django_app_config,
         django_app_label=manifest.django_app_label,
         source=manifest.source,

@@ -19,7 +19,6 @@ EXPORT_DECLARATION_PATTERN = re.compile(r"export\s+(?:const|let|var|class)\s+([A
 VERSION_RANGE_PATTERN = re.compile(r"^(?:\^|~|>=|<=|>|<)?\d+\.\d+\.\d+$")
 API_VERSION_PATTERN = re.compile(r"^\d+\.\d+$")
 MIGRATION_FILE_PATTERN = re.compile(r"^\d{4}_[a-z0-9_]+\.py$")
-MIGRATION_FUNCTION_PATTERN = re.compile(r"^(?:async\s+)?def\s+(apply|run|upgrade)\s*\(", re.MULTILINE)
 EXTENSION_SOURCE_SUFFIXES = {".json", ".js", ".jsx", ".ts", ".tsx", ".vue", ".py", ".md", ".css", ".scss", ".less"}
 SKIPPED_SOURCE_DIRS = {"__pycache__", ".pytest_cache", "node_modules", "dist", "build", ".venv", "venv"}
 EXTERNAL_PROJECT_NAME_PATTERN = re.compile(r"\b" + "fla" + "rum" + r"\b", re.IGNORECASE)
@@ -65,7 +64,7 @@ FORBIDDEN_EXTENSION_MANIFEST_FIELD_PATTERNS = (
     (
         "forbidden_migration_namespace_manifest_field",
         re.compile(r'"migration_namespace"\s*:'),
-        "扩展清单不能声明 migration_namespace；扩展迁移命名空间由 Bias 根据 backend/migrations 目录内部推导。",
+        "扩展清单不能声明 migration_namespace；扩展迁移必须通过 django_app_config 与 backend/django_migrations 接入。",
     ),
 )
 
@@ -1316,26 +1315,44 @@ def _validate_migration_files(
     manifest: ExtensionManifest,
     base_path: Path,
 ) -> None:
-    migration_namespace = str(manifest.migration_namespace or "").strip()
-    if not migration_namespace:
-        return
-    expected_namespace = f"extensions.{manifest.id.replace('-', '_')}.backend.migrations"
-    if migration_namespace != expected_namespace:
+    extension_root = _extension_root_path(manifest, base_path)
+    legacy_migration_dir = extension_root / "backend" / "migrations"
+    if legacy_migration_dir.exists():
         collector.add_error(
-            "invalid_migration_namespace",
-            f"migration_namespace 必须指向当前扩展的标准迁移命名空间: {expected_namespace}",
+            "legacy_extension_migration_dir",
+            "扩展不能继续使用 legacy backend/migrations；请迁移到 backend/django_migrations 并通过 django_app_config 接入 Django。",
             extension_id=manifest.id,
-            field="migration_namespace",
+            field="django_app_config",
+        )
+
+    django_app_config = str(manifest.django_app_config or "").strip()
+    migration_dir = extension_root / "backend" / "django_migrations"
+    if not django_app_config:
+        if migration_dir.exists():
+            collector.add_error(
+                "django_migrations_without_app_config",
+                "扩展提供了 backend/django_migrations，但 manifest 未声明 django_app_config。",
+                extension_id=manifest.id,
+                field="django_app_config",
+            )
+        return
+
+    if not migration_dir.exists():
+        collector.add_error(
+            "missing_extension_django_migration_dir",
+            "manifest 已声明 django_app_config，但 backend/django_migrations 目录不存在",
+            extension_id=manifest.id,
+            field="django_app_config",
         )
         return
 
-    migration_dir = Path(base_path) / manifest.id / "backend" / "migrations"
-    if not migration_dir.exists():
+    init_file = migration_dir / "__init__.py"
+    if not init_file.exists():
         collector.add_error(
-            "missing_extension_migration_dir",
-            "已推导扩展迁移命名空间，但 backend/migrations 目录不存在",
+            "missing_extension_django_migration_package",
+            "backend/django_migrations 缺少 __init__.py",
             extension_id=manifest.id,
-            field="migration_namespace",
+            field="django_app_config",
         )
         return
 
@@ -1344,12 +1361,6 @@ def _validate_migration_files(
         if item.name != "__init__.py"
     )
     if not migration_files:
-        collector.add_error(
-            "missing_extension_migration_files",
-            "backend/migrations 目录没有可执行迁移文件",
-            extension_id=manifest.id,
-            field="migration_namespace",
-        )
         return
 
     for file_path in migration_files:
@@ -1358,16 +1369,7 @@ def _validate_migration_files(
                 "invalid_extension_migration_filename",
                 f"迁移文件命名建议使用四位编号前缀，例如 0001_initial.py：{file_path.name}",
                 extension_id=manifest.id,
-                field="migration_namespace",
-            )
-
-        source = file_path.read_text(encoding="utf-8")
-        if not MIGRATION_FUNCTION_PATTERN.search(source):
-            collector.add_error(
-                "missing_extension_migration_entrypoint",
-                f"迁移文件缺少可执行入口函数 apply/run/upgrade：{file_path.name}",
-                extension_id=manifest.id,
-                field="migration_namespace",
+                field="django_app_config",
             )
 
 

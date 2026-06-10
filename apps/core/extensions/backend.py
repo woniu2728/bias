@@ -28,7 +28,9 @@ class ExtensionBackendContext:
     extension_path: str
     manifest_path: str
     backend_entry: str
-    migration_namespace: str
+    django_app_config: str
+    django_app_label: str
+    django_migration_module: str
     installed: bool
     enabled: bool
     booted: bool
@@ -50,12 +52,20 @@ def build_backend_context(
         extension_path=extension_path,
         manifest_path=manifest_path,
         backend_entry=str(definition.manifest.backend_entry or "").strip(),
-        migration_namespace=str(definition.manifest.migration_namespace or "").strip(),
+        django_app_config=str(definition.manifest.django_app_config or "").strip(),
+        django_app_label=str(definition.manifest.django_app_label or definition.id.replace("-", "_")).strip(),
+        django_migration_module=_resolve_django_migration_module(definition),
         installed=bool(definition.runtime.installed),
         enabled=bool(definition.runtime.enabled),
         booted=bool(definition.runtime.booted),
         meta=dict(meta or {}),
     )
+
+
+def _resolve_django_migration_module(definition: Extension) -> str:
+    if not str(definition.manifest.django_app_config or "").strip():
+        return ""
+    return f"extensions.{definition.id.replace('-', '_')}.backend.django_migrations"
 
 
 def inspect_extension_backend_entry(definition: Extension) -> dict[str, Any]:

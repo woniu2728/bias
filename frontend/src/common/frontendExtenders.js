@@ -205,6 +205,15 @@ export class ForumExtender {
   constructor(context = '') {
     this.context = normalizeKey(context)
     this.items = []
+    this.configurators = []
+    this.configured = false
+  }
+
+  configure(callback) {
+    if (typeof callback === 'function') {
+      this.configurators.push(callback)
+    }
+    return this
   }
 
   register(method, definition) {
@@ -271,6 +280,7 @@ export class ForumExtender {
   runtime(definition) { return this.register('registerForumRuntime', definition) }
 
   extend(app, extension = {}) {
+    this.applyConfigurators()
     const targetApp = resolveApplication(app)
     const registry = resolveRegistry(app)
     const extensionId = normalizeKey(extension.name || app?.extension?.id || app?.application?.extension?.id || this.context)
@@ -290,6 +300,20 @@ export class ForumExtender {
       register(definition)
     }
   }
+
+  applyConfigurators() {
+    if (this.configured) {
+      return this
+    }
+    this.configured = true
+    for (const configure of this.configurators) {
+      const result = configure(this)
+      if (result instanceof ForumExtender && result !== this) {
+        this.items.push(...result.items)
+      }
+    }
+    return this
+  }
 }
 
 export function extendForum(context = '', callback = null) {
@@ -301,10 +325,7 @@ export function extendForum(context = '', callback = null) {
   }
   const forum = new ForumExtender(resolvedContext)
   if (typeof configure === 'function') {
-    const result = configure(forum)
-    if (result instanceof ForumExtender) {
-      return result
-    }
+    forum.configure(configure)
   }
   return forum
 }
@@ -325,6 +346,15 @@ export class AdminExtender {
     this.generalIndexes = []
     this.dashboardItems = []
     this.pageItems = []
+    this.configurators = []
+    this.configured = false
+  }
+
+  configure(callback) {
+    if (typeof callback === 'function') {
+      this.configurators.push(callback)
+    }
+    return this
   }
 
   route(route) {
@@ -457,6 +487,7 @@ export class AdminExtender {
   pageNoteTemplate(pageKey, definition) { return this.registerPageContribution('registerAdminPageNoteTemplate', pageKey, definition) }
 
   extend(app, extension = {}) {
+    this.applyConfigurators()
     const targetApp = resolveApplication(app)
     const registry = resolveRegistry(app)
     const router = app?.router || targetApp?.router
@@ -580,6 +611,32 @@ export class AdminExtender {
       applyAdminRegistry()
     }
   }
+
+  applyConfigurators() {
+    if (this.configured) {
+      return this
+    }
+    this.configured = true
+    for (const configure of this.configurators) {
+      const result = configure(this)
+      if (result instanceof AdminExtender && result !== this) {
+        this.routes.push(...result.routes)
+        this.settings.push(...result.settings)
+        this.settingReplacements.push(...result.settingReplacements)
+        this.settingPriorityChanges.push(...result.settingPriorityChanges)
+        this.settingRemovals.push(...result.settingRemovals)
+        this.permissions.push(...result.permissions)
+        this.permissionReplacements.push(...result.permissionReplacements)
+        this.permissionPriorityChanges.push(...result.permissionPriorityChanges)
+        this.permissionRemovals.push(...result.permissionRemovals)
+        this.permissionScopes.push(...result.permissionScopes)
+        this.generalIndexes.push(...result.generalIndexes)
+        this.dashboardItems.push(...result.dashboardItems)
+        this.pageItems.push(...result.pageItems)
+      }
+    }
+    return this
+  }
 }
 
 export function extendAdmin(context = '', callback = null) {
@@ -591,10 +648,7 @@ export function extendAdmin(context = '', callback = null) {
   }
   const admin = new AdminExtender(resolvedContext)
   if (typeof configure === 'function') {
-    const result = configure(admin)
-    if (result instanceof AdminExtender) {
-      return result
-    }
+    admin.configure(configure)
   }
   return admin
 }

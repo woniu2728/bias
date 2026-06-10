@@ -217,7 +217,7 @@ class Command(BaseCommand):
             "- Django AppConfig：`backend/apps.py` 绑定扩展 app label，确保模型与迁移归属能被审计。\n"
             "- 前端入口：`frontend/admin/index.js` 与 `frontend/forum/index.js` 导出 `extend`，由 Bias 前端扩展注册中心加载。\n"
             "- API 资源：如需扩展 JSON:API 资源，请在 `backend/ext.py` 中加入 `ApiResourceExtender(...)`。\n"
-            "- 迁移：如需扩展迁移，请添加到 `backend/django_migrations`；Bias 会按扩展 app label 注册迁移命名空间。\n"
+            "- 迁移：如需扩展迁移，请添加到 `backend/django_migrations`；Bias 会按扩展 app label 注册 Django migration 模块。\n"
             "- 模型归属：如需拥有模型，请在 `backend/ext.py` 中使用 `ModelExtender().owns(...)` 声明，并通过 `python manage.py inspect_extensions --extension-id "
             f"{extension_id}` 查看模型归属审计。\n"
             "- 校验命令：`python manage.py validate_extensions --strict`\n"

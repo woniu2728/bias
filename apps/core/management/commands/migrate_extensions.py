@@ -8,6 +8,11 @@ from django.core.management.base import CommandParser
 from apps.core.extension_service import ExtensionService
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
 from apps.core.extensions.manager import get_extension_manager
+from apps.core.extensions.migrations import (
+    has_django_extension_migrations,
+    resolve_django_extension_app_label,
+    resolve_django_extension_migration_module,
+)
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
 
 
@@ -17,7 +22,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument("extension_id", nargs="?", help="要迁移的扩展 ID。")
-        parser.add_argument("--all", action="store_true", help="迁移所有已安装且声明迁移命名空间的扩展。")
+        parser.add_argument("--all", action="store_true", help="同步所有已安装且提供 Django 迁移资源的扩展。")
         parser.add_argument("--dry-run", action="store_true", help="只输出将要执行的扩展迁移，不修改安装状态。")
         parser.add_argument("--format", choices=("text", "json"), default="text")
 
@@ -65,7 +70,7 @@ class Command(BaseCommand):
             extension
             for extension in manager.get_extensions()
             if extension.runtime.installed
-            and str(extension.manifest.migration_namespace or "").strip()
+            and has_django_extension_migrations(extension)
         ]
 
     def _build_dry_run_result(self, extension) -> dict:
@@ -74,20 +79,21 @@ class Command(BaseCommand):
         if not extension.runtime.installed:
             status = "error"
             message = "扩展尚未安装，无法执行迁移。"
-        elif not str(extension.manifest.migration_namespace or "").strip():
+        elif not has_django_extension_migrations(extension):
             status = "skipped"
-            message = "扩展未声明迁移命名空间。"
+            message = "扩展未声明 Django 迁移资源。"
         else:
             status = "ok"
             pending_count = len(migration_plan.get("pending_files") or [])
-            message = f"将检查 {pending_count} 个待执行迁移文件。"
+            message = f"将同步 {pending_count} 个待记录 Django 迁移文件。"
 
         return {
             "id": extension.id,
             "name": extension.name,
             "status": status,
             "message": message,
-            "migration_namespace": str(extension.manifest.migration_namespace or ""),
+            "django_app_label": resolve_django_extension_app_label(extension),
+            "django_migration_module": resolve_django_extension_migration_module(extension),
             "migration_plan": migration_plan,
         }
 
@@ -112,7 +118,8 @@ class Command(BaseCommand):
             "name": extension.name,
             "status": str(hook.get("status") or "ok"),
             "message": str(hook.get("message") or ""),
-            "migration_namespace": str(extension.manifest.migration_namespace or ""),
+            "django_app_label": resolve_django_extension_app_label(extension),
+            "django_migration_module": resolve_django_extension_migration_module(extension),
             "details": dict(hook.get("details") or {}),
         }
 

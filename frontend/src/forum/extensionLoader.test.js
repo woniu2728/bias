@@ -1331,6 +1331,49 @@ test('common extenders export unified frontend extension entry', () => {
   assert.equal(scopedForum.context, 'demo-extension')
 })
 
+test('callback extenders run during extension boot instead of module evaluation', async () => {
+  const forumNavItems = []
+  const adminRoutes = []
+  const runtimeApp = createRuntimeApplication({
+    kind: 'forum',
+    registry: {
+      registerForumNavItem(item) {
+        forumNavItems.push(item)
+      },
+      registerAdminRoute(route) {
+        adminRoutes.push(route)
+      },
+      registerPage(route) {
+        adminRoutes.push(route)
+      },
+    },
+  })
+
+  const forumExtender = extendForum('lazy-forum', forum => forum.navItem({
+    key: forumNavKey,
+    label: 'Lazy forum',
+  }))
+  const adminExtender = extendAdmin('lazy-admin', admin => admin.route({
+    name: adminRouteName,
+    path: '/admin/lazy',
+  }))
+  const forumNavKey = 'lazy-nav'
+  const adminRouteName = 'lazy-admin-route'
+
+  assert.deepEqual(forumExtender.items, [])
+  assert.deepEqual(adminExtender.routes, [])
+
+  await runtimeApp.bootExtensions({
+    forumLazy: { extend: [forumExtender] },
+    adminLazy: { extend: [adminExtender] },
+  })
+  await runtimeApp.runBeforeMount()
+
+  assert.equal(forumNavItems[0].key, forumNavKey)
+  assert.equal(forumNavItems[0].extensionId, 'forumLazy')
+  assert.equal(adminRoutes.some(route => route.name === adminRouteName), true)
+})
+
 test('approval extension owns pending composer submit alerts', async () => {
   const {
     registerApprovalComposerCopy,
@@ -1533,6 +1576,62 @@ test('loadEnabledForumExtensions runs initializers after all entries load', asyn
   })
 
   assert.deepEqual(calls, ['first:extend', 'second:extend', 'first:init', 'second:init'])
+})
+
+test('loadEnabledForumExtensions isolates failing entry modules and continues booting routes', async () => {
+  clearExtensionRuntimeErrors()
+  const routes = []
+  const router = {
+    addRoute(route) {
+      routes.push(route)
+    },
+    hasRoute() {
+      return false
+    },
+  }
+  const calls = []
+
+  const result = await loadEnabledForumExtensions({
+    router,
+    fetchPayload: async () => ({
+      enabled_extensions: [
+        {
+          id: 'broken',
+          frontend_forum_entry: 'extensions/broken/frontend/forum/index.js',
+        },
+        {
+          id: 'discussions',
+          frontend_forum_entry: 'extensions/discussions/frontend/forum/index.js',
+          frontend_routes: [{
+            name: 'home',
+            path: '/',
+            component: './DiscussionListView.vue',
+            frontend: 'forum',
+          }],
+        },
+      ],
+    }),
+    importers: {
+      '../../../extensions/broken/frontend/forum/index.js': async () => {
+        throw new Error('broken entry')
+      },
+      '../../../extensions/discussions/frontend/forum/index.js': async () => {
+        calls.push('discussions')
+        return { extend: [] }
+      },
+      'discussions:./DiscussionListView.vue': async () => ({ default: { name: 'DiscussionListView' } }),
+    },
+  })
+
+  assert.equal(result.extensionErrors.length, 1)
+  assert.equal(result.extensionErrors[0].extensionId, 'broken')
+  assert.equal(result.loadedExtensionIds.has('broken'), false)
+  assert.equal(result.loadedExtensionIds.has('discussions'), true)
+  assert.deepEqual(calls, ['discussions'])
+  assert.equal(routes.length, 1)
+  assert.equal(routes[0].name, 'home')
+  assert.equal(getExtensionRuntimeErrors().some(item => item.extensionId === 'broken' && item.operation === 'forum-entry'), true)
+  clearExtensionRuntimeErrors()
 })
 
 test('extension runtime supports lazy module patching and error dedupe', () => {

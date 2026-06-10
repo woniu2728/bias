@@ -135,7 +135,6 @@ class ExtensionManifestLoader:
             distribution=self._build_distribution(payload.get("distribution"), manifest_payload=payload),
             runtime_actions=tuple(self._build_runtime_action(item) for item in payload.get("runtime_actions", []) if isinstance(item, dict)),
             settings_schema=tuple(self._build_settings_field(item) for item in payload.get("settings_schema", []) if isinstance(item, dict)),
-            migration_namespace=self._resolve_migration_namespace(manifest_path, extension_id, payload),
             django_app_config=str(payload.get("django_app_config") or "").strip(),
             django_app_label=str(payload.get("django_app_label") or "").strip(),
             source="filesystem",
@@ -165,16 +164,6 @@ class ExtensionManifestLoader:
                 "extra": extra,
             }
         )
-
-    def _resolve_migration_namespace(self, manifest_path: Path, extension_id: str, payload: dict) -> str:
-        explicit_namespace = str(payload.get("migration_namespace") or "").strip()
-        if explicit_namespace:
-            return explicit_namespace
-
-        migration_dir = manifest_path.parent / "backend" / "migrations"
-        if not migration_dir.exists():
-            return ""
-        return f"extensions.{extension_id.replace('-', '_')}.backend.migrations"
 
     def _deduplicate_manifests(self, manifests: list[ExtensionManifest]) -> list[ExtensionManifest]:
         by_id: dict[str, ExtensionManifest] = {}
