@@ -379,4 +379,11 @@ class PostService:
         from apps.core.markdown_service import MarkdownService
         return MarkdownService.render(content, sanitize=True)
 
+    @staticmethod
+    def resolve_content_html(post: Post) -> str:
+        content_html = str(getattr(post, "content_html", "") or "").strip()
+        if content_html:
+            return content_html
+        return PostService._render_markdown(getattr(post, "content", "") or "")
+
 

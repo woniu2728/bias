@@ -591,6 +591,30 @@ class PostApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["user"]["primary_group"]["name"], group.name)
 
+    def test_post_detail_renders_missing_content_html_from_content(self):
+        self.post.content = "正文 **加粗**"
+        self.post.content_html = ""
+        self.post.save(update_fields=["content", "content_html"])
+
+        response = self.client.get(f"/api/posts/{self.post.id}")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertIn("正文", payload["content_html"])
+        self.assertIn("<strong>加粗</strong>", payload["content_html"])
+
+    def test_discussion_post_list_renders_missing_content_html_from_content(self):
+        self.post.content = "列表正文"
+        self.post.content_html = ""
+        self.post.save(update_fields=["content", "content_html"])
+
+        response = self.client.get(f"/api/discussions/{self.discussion.id}/posts")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        item = next(post for post in payload["data"] if post["id"] == self.post.id)
+        self.assertIn("列表正文", item["content_html"])
+
     def test_post_detail_supports_resource_field_selection(self):
         response = self.client.get(
             f"/api/posts/{self.post.id}",

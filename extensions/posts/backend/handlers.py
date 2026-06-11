@@ -35,7 +35,7 @@ def serialize_post(post, user=None, resource_options=None, default_includes=()):
         "number": post.number,
         "type": post.type,
         "content": post.content,
-        "content_html": post.content_html,
+        "content_html": PostService.resolve_content_html(post),
         "created_at": post.created_at,
         "updated_at": post.updated_at,
         "edited_at": post.edited_at,

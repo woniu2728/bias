@@ -108,6 +108,11 @@ test('node test runtime resolves public Bias SDK package aliases', async () => {
   assert.equal(typeof notifications.getNotificationRenderers, 'function')
   assert.equal(typeof notifications.registerNotificationRenderer, 'function')
   assert.equal(typeof posts.normalizePost, 'function')
+  const normalizedPost = posts.normalizePost({
+    content: '正文 <script>alert(1)</script>\n第二行',
+    content_html: '',
+  })
+  assert.equal(normalizedPost.content_html, '正文 &lt;script&gt;alert(1)&lt;/script&gt;<br>第二行')
   assert.equal(typeof realtime.useForumRealtimeStore, 'function')
   assert.equal(typeof realtime.shouldRefreshForumEvent, 'function')
   assert.equal(typeof realtime.getTrackedDiscussionIdsFromDiscussionItems, 'function')
