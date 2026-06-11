@@ -3,6 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from django.db import DEFAULT_DB_ALIAS, connections
+from django.db.migrations.recorder import MigrationRecorder
+
 
 def has_django_extension_migrations(extension_definition) -> bool:
     return bool(resolve_django_extension_migration_dir(extension_definition))
@@ -36,6 +39,26 @@ def list_django_extension_migration_files(extension_definition) -> list[str]:
         for item in migration_dir.glob("*.py")
         if item.name != "__init__.py"
     )
+
+
+def list_applied_django_extension_migration_files(extension_definition, *, database: str = DEFAULT_DB_ALIAS) -> list[str]:
+    app_label = resolve_django_extension_app_label(extension_definition)
+    if not app_label:
+        return []
+    connection = connections[database]
+    recorder = MigrationRecorder(connection)
+    applied = recorder.applied_migrations()
+    return sorted(
+        f"{migration_name}.py"
+        for migration_app_label, migration_name in applied
+        if migration_app_label == app_label
+    )
+
+
+def list_unapplied_django_extension_migration_files(extension_definition, *, database: str = DEFAULT_DB_ALIAS) -> list[str]:
+    declared_files = list_django_extension_migration_files(extension_definition)
+    applied_files = set(list_applied_django_extension_migration_files(extension_definition, database=database))
+    return [item for item in declared_files if item not in applied_files]
 
 
 def run_extension_migrations(

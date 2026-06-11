@@ -255,9 +255,6 @@ class ExtensionManager:
                 installed=True,
                 enabled=True,
                 booted=True,
-                meta_updates={
-                    "migration_execution": dict(migration_result or {}),
-                } if migration_result is not None else None,
             )
             hook_result = self._run_lifecycle_extenders(
                 extension,

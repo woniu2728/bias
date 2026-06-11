@@ -17,7 +17,8 @@ from django.core.cache import cache
 from django.core.checks import run_checks
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command, CommandError
-from django.db import OperationalError
+from django.db import OperationalError, connection
+from django.db.migrations.recorder import MigrationRecorder
 from django.http import HttpResponse, JsonResponse
 from django.test import RequestFactory
 from django.test import TestCase, override_settings
@@ -7967,6 +7968,9 @@ class ExtensionServiceTests(TestCase):
         reset_extension_runtime_state()
         shutil.rmtree(self.extension_base_dir, ignore_errors=True)
 
+    def _record_alpha_tools_django_migration(self):
+        MigrationRecorder(connection).record_applied("alpha_tools", "0001_bootstrap")
+
     def test_install_and_uninstall_transition_filesystem_extension(self):
         installed = ExtensionService.install_extension("alpha-tools")
         self.assertTrue(installed.runtime.installed)
@@ -8063,6 +8067,7 @@ class ExtensionServiceTests(TestCase):
 
     def test_migrate_extensions_command_executes_single_extension(self):
         ExtensionService.install_extension("alpha-tools")
+        self._record_alpha_tools_django_migration()
 
         stdout = StringIO()
         call_command("migrate_extensions", "alpha-tools", "--format", "json", stdout=stdout)
@@ -8074,7 +8079,14 @@ class ExtensionServiceTests(TestCase):
         self.assertEqual(payload["extensions"][0]["status"], "ok")
         self.assertIn("0001_bootstrap.py", payload["extensions"][0]["details"]["skipped_migration_files"])
 
+    def test_migrate_extensions_command_blocks_when_django_migration_is_unapplied(self):
+        ExtensionService.install_extension("alpha-tools")
+
+        with self.assertRaisesMessage(CommandError, "Django 数据库迁移尚未应用"):
+            call_command("migrate_extensions", "alpha-tools")
+
     def test_migrate_extensions_command_dry_run_all_does_not_persist_state(self):
+        self._record_alpha_tools_django_migration()
         installation = ExtensionInstallation.objects.create(
             extension_id="alpha-tools",
             version="0.1.0",
