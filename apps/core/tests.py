@@ -1,6 +1,7 @@
 import importlib
 import json
 import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
@@ -213,9 +214,7 @@ def resolve_test_username(instance, context):
 
 
 def make_workspace_temp_dir() -> Path:
-    path = Path.cwd() / f"tmp-test-{uuid.uuid4().hex}"
-    path.mkdir(parents=True, exist_ok=False)
-    return path
+    return Path(tempfile.mkdtemp(prefix=f"bias-test-{uuid.uuid4().hex}-"))
 
 
 TEST_EXTENSION_ID = "alpha-tools"
@@ -3259,7 +3258,7 @@ class ExtensionManifestLoaderTests(TestCase):
                 "\n"
                 "def extend():\n"
                 "    return [EventListenersExtender(listeners=(ExtensionEventListenerDefinition(\n"
-                "        event_type='apps.core.tests.AlphaStringEvent',\n"
+                f"        event_type='{AlphaStringEvent.__module__}.{AlphaStringEvent.__name__}',\n"
                 "        handler=record_alpha,\n"
                 "        description='String event listener',\n"
                 "    ),))]\n",
@@ -4203,7 +4202,8 @@ class ExtensionValidationTests(TestCase):
             self.assertEqual(payload["entry_type"], "filesystem")
             self.assertTrue(payload["exists"])
             self.assertIn("install", payload["available_hooks"])
-            self.assertIn("run_migrations", payload["available_hooks"])
+            self.assertIn("run_rebuild_cache", payload["available_hooks"])
+            self.assertNotIn("run_migrations", payload["available_hooks"])
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -5564,7 +5564,7 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    def test_validate_extension_manifests_reports_missing_migration_files(self):
+    def test_validate_extension_manifests_reports_legacy_migration_dir_without_files(self):
         temp_dir = make_workspace_temp_dir()
         try:
             manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
@@ -5584,11 +5584,11 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
             result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
 
             self.assertFalse(result.ok)
-            self.assertTrue(any(item.code == "missing_extension_migration_files" for item in result.issues))
+            self.assertTrue(any(item.code == "legacy_extension_migration_dir" for item in result.issues))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    def test_validate_extension_manifests_reports_invalid_migration_file_contract(self):
+    def test_validate_extension_manifests_reports_legacy_migration_dir_with_invalid_file_contract(self):
         temp_dir = make_workspace_temp_dir()
         try:
             manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
@@ -5612,8 +5612,7 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
             result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
 
             self.assertFalse(result.ok)
-            self.assertTrue(any(item.code == "invalid_extension_migration_filename" for item in result.issues))
-            self.assertTrue(any(item.code == "missing_extension_migration_entrypoint" for item in result.issues))
+            self.assertTrue(any(item.code == "legacy_extension_migration_dir" for item in result.issues))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
