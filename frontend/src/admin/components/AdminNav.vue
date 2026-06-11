@@ -266,6 +266,18 @@ function handleLogout() {
   color: #22384f;
 }
 
+.AdminNav-section--extensions :deep(.AdminNav-item i) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--admin-extension-icon-bg, #eef2f7);
+  color: var(--admin-extension-icon-color, #5f748b);
+  font-size: 13px;
+}
+
 .AdminNav :deep(.AdminNav-item span) {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -292,6 +304,11 @@ function handleLogout() {
 .AdminNav :deep(.AdminNav-item.active i) {
   font-weight: 700;
   color: inherit;
+}
+
+.AdminNav-section--extensions :deep(.AdminNav-item.active i) {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 .AdminNav :deep(.AdminNav-description) {

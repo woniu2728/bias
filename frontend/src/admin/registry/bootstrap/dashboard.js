@@ -3,10 +3,44 @@ import {
   registerAdminDashboardAlert,
   registerAdminDashboardConfig,
   registerAdminDashboardCopy,
+  registerAdminDashboardStat,
   registerAdminDashboardStatusBadge,
   registerAdminDashboardStatusItem,
   registerAdminDashboardStatusSummary,
 } from '../dashboard.js'
+
+registerAdminDashboardStat({
+  key: 'users',
+  order: 10,
+  icon: 'fas fa-users',
+  moduleId: 'core',
+  resolve: ({ stats, copy }) => ({
+    label: copy?.usersStatLabel || '用户总数',
+    value: stats?.totalUsers || 0,
+  }),
+})
+
+registerAdminDashboardStat({
+  key: 'discussions',
+  order: 20,
+  icon: 'fas fa-comments',
+  moduleId: 'core',
+  resolve: ({ stats, copy }) => ({
+    label: copy?.discussionsStatLabel || '讨论总数',
+    value: stats?.totalDiscussions || 0,
+  }),
+})
+
+registerAdminDashboardStat({
+  key: 'posts',
+  order: 30,
+  icon: 'fas fa-comment',
+  moduleId: 'core',
+  resolve: ({ stats, copy }) => ({
+    label: copy?.postsStatLabel || '帖子总数',
+    value: stats?.totalPosts || 0,
+  }),
+})
 
 registerAdminDashboardStatusSummary({
   key: 'runtime',
@@ -173,6 +207,9 @@ registerAdminDashboardCopy({
     redisUnavailableText: 'Redis 已配置但不可用',
     queueWorkerUndetectedText: '队列未检测',
     authSecretStatusLabel: '认证密钥',
+    usersStatLabel: '用户总数',
+    discussionsStatLabel: '讨论总数',
+    postsStatLabel: '帖子总数',
     pendingApprovalsStatLabel: '待审核内容',
     openFlagsStatLabel: '待处理举报',
     pythonVersionLabel: 'Python 版本',
@@ -225,6 +262,8 @@ registerAdminDashboardConfig({
       debugMode: false,
       maintenanceMode: false,
       totalUsers: 0,
+      totalDiscussions: 0,
+      totalPosts: 0,
       pendingApprovals: 0,
       openFlags: 0,
     },

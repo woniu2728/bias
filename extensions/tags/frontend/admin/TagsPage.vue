@@ -399,6 +399,63 @@ import {
 } from '@bias/admin/components'
 
 const PAGE_KEY = 'tags.index'
+const DEFAULT_COLOR_PRESETS = [
+  '#3c78d8',
+  '#4d698e',
+  '#0e7490',
+  '#0f766e',
+  '#2f855a',
+  '#65a30d',
+  '#ca8a04',
+  '#ea580c',
+  '#dc2626',
+  '#c026d3',
+  '#7c3aed',
+  '#475569',
+]
+const DEFAULT_SCOPE_OPTIONS = [
+  { value: 'public', label: '所有人' },
+  { value: 'members', label: '已登录用户' },
+  { value: 'staff', label: '仅管理员' },
+]
+const DEFAULT_ICON_OPTIONS = [
+  { value: 'fas fa-comments', label: '讨论' },
+  { value: 'fas fa-comment-dots', label: '对话' },
+  { value: 'fas fa-code', label: '代码' },
+  { value: 'fas fa-terminal', label: '终端' },
+  { value: 'fas fa-bug', label: '问题' },
+  { value: 'fas fa-lightbulb', label: '想法' },
+  { value: 'fas fa-rocket', label: '发布' },
+  { value: 'fas fa-book', label: '文档' },
+  { value: 'fas fa-graduation-cap', label: '教程' },
+  { value: 'fas fa-wrench', label: '工具' },
+  { value: 'fas fa-cubes', label: '框架' },
+  { value: 'fas fa-plug', label: '插件' },
+  { value: 'fas fa-cloud', label: '云服务' },
+  { value: 'fas fa-server', label: '服务端' },
+  { value: 'fas fa-database', label: '数据库' },
+  { value: 'fas fa-shield-alt', label: '安全' },
+  { value: 'fas fa-mobile-alt', label: '移动端' },
+  { value: 'fas fa-desktop', label: '桌面端' },
+  { value: 'fas fa-image', label: '图片' },
+  { value: 'fas fa-video', label: '视频' },
+  { value: 'fas fa-music', label: '音频' },
+  { value: 'fas fa-gamepad', label: '游戏' },
+  { value: 'fas fa-briefcase', label: '工作' },
+  { value: 'fas fa-chart-line', label: '增长' },
+  { value: 'fas fa-bullhorn', label: '公告' },
+  { value: 'fas fa-fire', label: '热门' },
+  { value: 'fas fa-star', label: '精选' },
+  { value: 'fas fa-heart', label: '喜欢' },
+  { value: 'fas fa-users', label: '社区' },
+  { value: 'fas fa-user-shield', label: '管理' },
+  { value: 'fas fa-tags', label: '标签' },
+  { value: 'fas fa-thumbtack', label: '置顶' },
+  { value: 'fas fa-lock', label: '锁定' },
+  { value: 'fas fa-language', label: '语言' },
+  { value: 'fas fa-globe', label: '全球' },
+  { value: 'fas fa-seedling', label: '新手' },
+]
 const tags = ref([])
 const loading = ref(true)
 const loadError = ref('')
@@ -413,9 +470,9 @@ const modalStore = useModalStore()
 const tagsCopy = computed(() => getAdminPageCopy(PAGE_KEY))
 const tagsConfig = computed(() => getAdminPageConfig(PAGE_KEY))
 const tagsActionMeta = computed(() => getAdminPageActionMeta(PAGE_KEY))
-const tagColorPresets = computed(() => tagsConfig.value?.colorPresets || [])
-const tagScopeOptions = computed(() => tagsConfig.value?.scopeOptions || [])
-const tagIconOptions = computed(() => tagsConfig.value?.iconOptions || [])
+const tagColorPresets = computed(() => resolveConfiguredList(tagsConfig.value?.colorPresets, DEFAULT_COLOR_PRESETS))
+const tagScopeOptions = computed(() => resolveConfiguredList(tagsConfig.value?.scopeOptions, DEFAULT_SCOPE_OPTIONS))
+const tagIconOptions = computed(() => resolveConfiguredList(tagsConfig.value?.iconOptions, DEFAULT_ICON_OPTIONS))
 
 const formData = ref(getEmptyForm())
 
@@ -711,6 +768,10 @@ function getEmptyForm(overrides = {}) {
     reply_scope: 'members',
     ...overrides,
   }
+}
+
+function resolveConfiguredList(value, fallback) {
+  return Array.isArray(value) && value.length ? value : fallback
 }
 
 function normalizeColor(value) {

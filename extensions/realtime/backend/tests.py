@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -14,7 +15,32 @@ from apps.core.queue_service import QueueService
 from apps.core.settings_service import clear_runtime_setting_caches
 from extensions.notifications.backend.events import NotificationCreatedEvent
 from extensions.realtime.backend.ext import dispatch_notification_batch
+from extensions.realtime.backend.websocket_service import WebSocketService
 from extensions.users.backend.models import User
+
+
+class RealtimeWebSocketPayloadTests(TestCase):
+    def test_discussion_event_payload_converts_datetime_before_channel_send(self):
+        class DummyChannelLayer:
+            def __init__(self):
+                self.calls = []
+
+            async def group_send(self, group_name, payload):
+                self.calls.append((group_name, payload))
+
+        channel_layer = DummyChannelLayer()
+        created_at = datetime(2026, 6, 11, 15, 19, 37, tzinfo=timezone.utc)
+
+        with patch("extensions.realtime.backend.websocket_service.get_channel_layer", return_value=channel_layer):
+            WebSocketService.broadcast_discussion_event(
+                7,
+                "post.created",
+                {"post": {"id": 3, "created_at": created_at}},
+            )
+
+        self.assertEqual(channel_layer.calls[0][0], "discussion_7")
+        payload = channel_layer.calls[0][1]
+        self.assertEqual(payload["event"]["payload"]["post"]["created_at"], "2026-06-11T15:19:37Z")
 
 
 class RealtimeNotificationDispatchTests(TestCase):

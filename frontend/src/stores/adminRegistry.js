@@ -90,6 +90,32 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
     extensionScopes.value = deriveExtensionScopes(nextExtensions)
   }
 
+  function applyExtensionUpdate(extensionId, update) {
+    const normalized = String(extensionId || update?.id || '').trim()
+    if (!normalized || !update || typeof update !== 'object') {
+      return
+    }
+
+    const currentExtensions = Array.isArray(extensions.value) ? extensions.value : []
+    const index = currentExtensions.findIndex(item => String(item?.id || '').trim() === normalized)
+    const nextExtension = {
+      ...(index >= 0 ? currentExtensions[index] : {}),
+      ...update,
+      id: normalized,
+    }
+
+    if (index >= 0) {
+      extensions.value = currentExtensions.map((item, itemIndex) => (
+        itemIndex === index ? nextExtension : item
+      ))
+    } else if (nextExtension.product_visible !== false) {
+      extensions.value = [...currentExtensions, nextExtension]
+    }
+
+    extensionScopes.value = deriveExtensionScopes(extensions.value)
+    loaded.value = true
+  }
+
   return {
     extensionScopes,
     extensions,
@@ -101,6 +127,7 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
     isModuleEnabled,
     applyExtensionScopes,
     applyExtensions,
+    applyExtensionUpdate,
   }
 })
 

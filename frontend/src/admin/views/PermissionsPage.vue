@@ -248,22 +248,22 @@
                 <span>{{ permissionsCopy?.groupHiddenLabel || '隐藏用户组' }}</span>
               </label>
             </div>
+          </div>
 
-            <div class="GroupModal-actions">
-              <button
-                v-if="editingGroup && canDeleteGroup(editingGroup)"
-                type="button"
-                class="Button Button--danger"
-                :disabled="groupSaving || deletingGroup"
-                @click="deleteGroup"
-              >
-                {{ deletingGroup ? (permissionsCopy?.deletingGroupLabel || '删除中...') : (permissionsCopy?.deleteGroupLabel || '删除用户组') }}
-              </button>
-              <span v-else-if="editingGroup" class="Modal-footerNote">{{ permissionsCopy?.deleteGroupBlockedText || '系统默认用户组不允许删除' }}</span>
-              <button type="button" class="Button Button--primary GroupModal-saveButton" :disabled="groupSaving || deletingGroup" @click="saveGroup">
-                {{ groupSaving ? (permissionsCopy?.savingGroupLabel || '保存中...') : (permissionsCopy?.saveGroupLabel || '保存') }}
-              </button>
-            </div>
+          <div class="GroupModal-actions">
+            <button
+              v-if="editingGroup && canDeleteGroup(editingGroup)"
+              type="button"
+              class="Button Button--danger"
+              :disabled="groupSaving || deletingGroup"
+              @click="deleteGroup"
+            >
+              {{ deletingGroup ? (permissionsCopy?.deletingGroupLabel || '删除中...') : (permissionsCopy?.deleteGroupLabel || '删除用户组') }}
+            </button>
+            <span v-else-if="editingGroup" class="Modal-footerNote">{{ permissionsCopy?.deleteGroupBlockedText || '系统默认用户组不允许删除' }}</span>
+            <button type="button" class="Button Button--primary GroupModal-saveButton" :disabled="groupSaving || deletingGroup" @click="saveGroup">
+              {{ groupSaving ? (permissionsCopy?.savingGroupLabel || '保存中...') : (permissionsCopy?.saveGroupLabel || '保存') }}
+            </button>
           </div>
         </div>
       </div>
@@ -892,6 +892,7 @@ function getEmptyGroupForm() {
 #admin-app .Modal-content.Modal-content--group {
   width: min(470px, calc(100vw - 24px));
   min-width: min(470px, calc(100vw - 24px));
+  max-height: calc(100dvh - 40px);
   background: #eef3fa;
   border-radius: 8px;
   box-shadow: 0 22px 54px rgba(15, 23, 42, 0.22);
@@ -903,7 +904,9 @@ function getEmptyGroupForm() {
 }
 
 #admin-app .Modal-content.Modal-content--group .Modal-body {
-  overflow: visible;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .Form-group--groupCompact {
@@ -1026,14 +1029,21 @@ function getEmptyGroupForm() {
 .GroupModal-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 12px;
-  margin-top: 0;
+  flex-shrink: 0;
+  padding: 22px 38px 26px;
+  border-top: 1px solid #d6deea;
+  background: #eef3fa;
+}
+
+.GroupModal-actions .Modal-footerNote {
+  margin-right: auto;
 }
 
 .GroupModal-saveButton {
-  min-width: 162px;
-  min-height: 44px;
+  min-width: 112px;
+  min-height: 40px;
   justify-content: center;
 }
 
@@ -1060,11 +1070,21 @@ function getEmptyGroupForm() {
 
   #admin-app .Modal-content.Modal-content--group {
     min-width: 0;
+    max-height: calc(100dvh - 8px);
   }
 
   #admin-app .Modal-content.Modal-content--group .Modal-header,
   #admin-app .Modal-content.Modal-content--group .Modal-body {
     padding: 22px;
+  }
+
+  .GroupModal-actions {
+    justify-content: flex-end;
+    padding: 18px 22px 22px;
+  }
+
+  .GroupModal-saveButton {
+    width: auto;
   }
 
   .GroupHiddenToggle {

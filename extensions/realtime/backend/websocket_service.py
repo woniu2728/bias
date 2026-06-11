@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from asgiref.sync import async_to_sync
+from django.core.serializers.json import DjangoJSONEncoder
 from channels.layers import get_channel_layer
+
+
+def make_channel_payload_safe(payload: dict[str, Any]) -> dict[str, Any]:
+    return json.loads(json.dumps(payload, cls=DjangoJSONEncoder))
 
 
 class WebSocketService:
@@ -13,7 +19,7 @@ class WebSocketService:
         if channel_layer is None:
             return
 
-        async_to_sync(channel_layer.group_send)(group_name, payload)
+        async_to_sync(channel_layer.group_send)(group_name, make_channel_payload_safe(payload))
 
     @staticmethod
     def send_notification_to_user(user_id: int, notification_data: dict[Any, Any]) -> None:

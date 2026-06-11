@@ -669,9 +669,12 @@ export function registerPostType(definition) {
     return null
   }
 
+  const existingDefinition = postTypeDefinitions.find(item => item.type === type)
   const normalizedDefinition = normalizeRegisteredItem({
     order: 100,
+    component: existingDefinition?.component || null,
     ...definition,
+    component: definition?.component || existingDefinition?.component || null,
     type,
     key: definition?.key || type,
     isDefault: Boolean(definition?.is_default ?? definition?.isDefault),

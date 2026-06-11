@@ -10,5 +10,7 @@ export {
   registerPostFlagPanel,
   registerPostReviewBanner,
   registerPostStateBadge,
+  registerPostType,
   runPostAction,
+  syncPostTypes,
 } from './postFrontendRegistry.js'

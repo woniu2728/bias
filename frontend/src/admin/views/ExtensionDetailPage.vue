@@ -6,9 +6,11 @@
     :description="extension?.description || '查看扩展设置、权限与运行状态。'"
   >
     <AdminStateBlock v-if="loading" tone="subtle">加载扩展详情中...</AdminStateBlock>
-    <AdminStateBlock v-else-if="errorMessage" tone="danger">{{ errorMessage }}</AdminStateBlock>
+    <AdminStateBlock v-else-if="errorMessage && !extension" tone="danger">{{ errorMessage }}</AdminStateBlock>
 
     <div v-else-if="extension" class="ExtensionDetailPage-content">
+      <AdminStateBlock v-if="errorMessage" tone="danger">{{ errorMessage }}</AdminStateBlock>
+
       <AdminStateBlock v-if="recoveryNotice" :tone="recoveryNotice.tone">
         {{ recoveryNotice.text }}
       </AdminStateBlock>
@@ -17,43 +19,43 @@
       </AdminStateBlock>
 
       <section class="ExtensionDetailPage-header">
-        <div class="ExtensionDetailPage-headerTitleRow">
-          <div class="ExtensionDetailPage-headerTopItems">
-            <span class="ExtensionDetailPage-version">{{ extension.version || '0.0.0' }}</span>
-          </div>
-        </div>
-
-        <div class="ExtensionDetailPage-headerItems">
-          <button
-            v-if="primaryToggleAction"
-            type="button"
-            class="ExtensionDetailToggle"
-            :class="extension.enabled ? 'is-enabled' : 'is-disabled'"
-            :disabled="actionLoading"
-            @click="runRuntimeAction(primaryToggleAction)"
-          >
-            <span class="ExtensionDetailToggle-track">
-              <span class="ExtensionDetailToggle-thumb"></span>
-            </span>
-            <span>{{ extension.enabled ? '已启用' : '未启用' }}</span>
-          </button>
-
-          <span v-else class="ExtensionDetailPage-status" :class="runtimeStatusClass">
-            {{ extension.runtime_status?.label || (extension.enabled ? '已启用' : '未启用') }}
-          </span>
-
-          <div v-if="infoLinks.length" class="ExtensionDetailPage-links">
-            <a
-              v-for="link in infoLinks"
-              :key="link.key"
-              :href="link.target"
-              class="ExtensionDetailPage-link"
-              target="_blank"
-              rel="noreferrer noopener"
+        <div class="ExtensionDetailPage-summaryBar">
+          <div class="ExtensionDetailPage-summaryMain">
+            <button
+              v-if="primaryToggleAction"
+              type="button"
+              class="ExtensionDetailToggle"
+              :class="extension.enabled ? 'is-enabled' : 'is-disabled'"
+              :disabled="actionLoading"
+              @click="runRuntimeAction(primaryToggleAction)"
             >
-              <i :class="link.icon"></i>
-              <span>{{ link.label }}</span>
-            </a>
+              <span class="ExtensionDetailToggle-track">
+                <span class="ExtensionDetailToggle-thumb"></span>
+              </span>
+              <span>{{ extension.enabled ? '已启用' : '未启用' }}</span>
+            </button>
+
+            <span v-else class="ExtensionDetailPage-status" :class="runtimeStatusClass">
+              {{ extension.runtime_status?.label || (extension.enabled ? '已启用' : '未启用') }}
+            </span>
+          </div>
+
+          <div class="ExtensionDetailPage-summaryMeta">
+            <span class="ExtensionDetailPage-version">v{{ extension.version || '0.0.0' }}</span>
+
+            <div v-if="infoLinks.length" class="ExtensionDetailPage-links">
+              <a
+                v-for="link in infoLinks"
+                :key="link.key"
+                :href="link.target"
+                class="ExtensionDetailPage-link"
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                <i :class="link.icon"></i>
+                <span>{{ link.label }}</span>
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -345,12 +347,19 @@ watch(
   }
 )
 
-async function loadExtension() {
-  loading.value = true
-  errorMessage.value = ''
-  detailComponent.value = null
-  settingsComponent.value = null
-  permissionsComponent.value = null
+async function loadExtension(options = {}) {
+  const { showLoading = true, clearError = true } = options
+  if (showLoading) {
+    loading.value = true
+  }
+  if (clearError) {
+    errorMessage.value = ''
+  }
+  if (showLoading) {
+    detailComponent.value = null
+    settingsComponent.value = null
+    permissionsComponent.value = null
+  }
 
   try {
     const extensionId = String(route.params.extensionId || '').trim()
@@ -374,9 +383,11 @@ async function loadExtension() {
     syncExtensionScopesFromExtension(extension.value)
   } catch (error) {
     console.error('加载扩展详情失败:', error)
-    errorMessage.value = error.response?.data?.error || '加载扩展详情失败，请稍后重试'
+    errorMessage.value = extractApiErrorMessage(error, '加载扩展详情失败，请稍后重试')
   } finally {
-    loading.value = false
+    if (showLoading) {
+      loading.value = false
+    }
   }
 }
 
@@ -396,16 +407,21 @@ async function runRuntimeAction(action) {
     }
   }
 
+  const previousExtension = cloneExtensionState(extension.value)
   actionLoading.value = true
   errorMessage.value = ''
+  applyRuntimeActionState(action)
 
   try {
+    let data = null
     if (action.action.startsWith('hook:')) {
-      await api.post(`/admin/extensions/${extension.value.id}/runtime-hooks/${action.action.slice(5)}`)
+      data = await api.post(`/admin/extensions/${extension.value.id}/runtime-hooks/${action.action.slice(5)}`)
     } else {
-      await api.post(`/admin/extensions/${extension.value.id}/${action.action}`)
+      data = await api.post(`/admin/extensions/${extension.value.id}/${action.action}`)
     }
-    await loadExtension()
+    handleExtensionUpdated(data)
+    applyRuntimeActionState(action)
+    refreshExtensionDetailsSilently(action)
     if (action.success_message) {
       await modalStore.alert({
         title: action.label,
@@ -414,8 +430,12 @@ async function runRuntimeAction(action) {
       })
     }
   } catch (error) {
+    if (previousExtension) {
+      extension.value = previousExtension
+      syncExtensionScopesFromExtension(extension.value)
+    }
     console.error('执行扩展运行操作失败:', error)
-    errorMessage.value = error.response?.data?.error || '执行扩展运行操作失败，请稍后重试'
+    errorMessage.value = extractApiErrorMessage(error, '执行扩展运行操作失败，请稍后重试')
   } finally {
     actionLoading.value = false
   }
@@ -445,6 +465,20 @@ function syncExtensionScopesFromExtension(currentExtension) {
       enabled: currentExtension.enabled !== false,
     }))
   )
+  adminRegistryStore.applyExtensionUpdate(currentExtension.id, {
+    id: currentExtension.id,
+    name: currentExtension.name,
+    description: currentExtension.description,
+    icon: currentExtension.icon,
+    enabled: currentExtension.enabled !== false,
+    installed: currentExtension.installed,
+    booted: currentExtension.booted,
+    healthy: currentExtension.healthy,
+    runtime_status: currentExtension.runtime_status,
+    module_ids: Array.isArray(currentExtension.module_ids) ? [...currentExtension.module_ids] : [],
+    product_visible: currentExtension.product_visible,
+    protected: currentExtension.protected,
+  })
 }
 
 function handleExtensionUpdated(payload) {
@@ -452,16 +486,163 @@ function handleExtensionUpdated(payload) {
     return
   }
   if (payload.extension && typeof payload.extension === 'object') {
-    extension.value = payload.extension
+    extension.value = mergeExtensionUpdate(extension.value, payload.extension)
     syncExtensionScopesFromExtension(extension.value)
     return
   }
   if (Array.isArray(payload.extensions) && extension.value?.id) {
     const updated = payload.extensions.find(item => item.id === extension.value.id)
     if (updated) {
-      extension.value = updated
+      extension.value = mergeExtensionUpdate(extension.value, updated)
       syncExtensionScopesFromExtension(extension.value)
     }
+  }
+}
+
+function mergeExtensionUpdate(currentExtension, updatedExtension) {
+  if (!currentExtension || !updatedExtension || typeof updatedExtension !== 'object') {
+    return updatedExtension || currentExtension
+  }
+  return {
+    ...currentExtension,
+    ...updatedExtension,
+    links: updatedExtension.links || currentExtension.links,
+    readme: updatedExtension.readme || currentExtension.readme,
+    settings_schema: updatedExtension.settings_schema || currentExtension.settings_schema,
+    settings_values: updatedExtension.settings_values || currentExtension.settings_values,
+    permission_sections: updatedExtension.permission_sections || currentExtension.permission_sections,
+    permissions: updatedExtension.permissions || currentExtension.permissions,
+    admin_actions: updatedExtension.admin_actions || currentExtension.admin_actions,
+    runtime_actions: updatedExtension.runtime_actions || currentExtension.runtime_actions,
+  }
+}
+
+function applyRuntimeActionState(action) {
+  if (!extension.value || !['enable', 'disable', 'install', 'uninstall'].includes(action?.action)) {
+    return
+  }
+
+  const nextExtension = {
+    ...extension.value,
+  }
+  if (action.action === 'enable' || action.action === 'install') {
+    nextExtension.installed = true
+    nextExtension.enabled = true
+    nextExtension.booted = true
+    nextExtension.runtime_status = { key: 'active', label: '已启用' }
+    nextExtension.runtime_actions = buildRuntimeActionsForEnabledState(nextExtension, true)
+  } else if (action.action === 'disable') {
+    nextExtension.enabled = false
+    nextExtension.booted = false
+    nextExtension.runtime_status = { key: 'disabled', label: '已停用' }
+    nextExtension.runtime_actions = buildRuntimeActionsForEnabledState(nextExtension, false)
+  } else if (action.action === 'uninstall') {
+    nextExtension.installed = false
+    nextExtension.enabled = false
+    nextExtension.booted = false
+    nextExtension.runtime_status = { key: 'pending_install', label: '未安装' }
+    nextExtension.runtime_actions = [{
+      key: 'install',
+      label: '安装扩展',
+      action: 'install',
+      tone: 'primary',
+      confirm_title: '安装扩展',
+      confirm_message: `确定安装 ${nextExtension.name || '该扩展'} 吗？当前版本会登记为已安装并默认启用。`,
+      confirm_text: '安装',
+      success_message: '扩展已安装并启用。',
+      requires_installed: false,
+      order: 10,
+    }]
+  }
+
+  extension.value = nextExtension
+  syncExtensionScopesFromExtension(extension.value)
+}
+
+function buildRuntimeActionsForEnabledState(currentExtension, enabled) {
+  const actions = Array.isArray(currentExtension.runtime_actions)
+    ? currentExtension.runtime_actions.filter(item => !['enable', 'disable', 'install', 'uninstall'].includes(item?.action))
+    : []
+  if (enabled) {
+    if (!currentExtension.protected) {
+      actions.push({
+        key: 'disable',
+        label: '停用扩展',
+        action: 'disable',
+        tone: 'danger',
+        confirm_title: '停用扩展',
+        confirm_message: `确定停用 ${currentExtension.name || '该扩展'} 吗？相关后台入口和运行能力会立即隐藏。`,
+        confirm_text: '停用',
+        success_message: '扩展已停用。',
+        requires_installed: true,
+        order: 20,
+      })
+    }
+  } else {
+    actions.push({
+      key: 'enable',
+      label: '启用扩展',
+      action: 'enable',
+      tone: 'primary',
+      confirm_title: '启用扩展',
+      confirm_message: `确定启用 ${currentExtension.name || '该扩展'} 吗？依赖校验通过后会立即恢复能力。`,
+      confirm_text: '启用',
+      success_message: '扩展已启用。',
+      requires_installed: true,
+      order: 10,
+    })
+    if (!currentExtension.protected) {
+      actions.push({
+        key: 'uninstall',
+        label: '卸载扩展',
+        action: 'uninstall',
+        tone: 'danger',
+        confirm_title: '卸载扩展',
+        confirm_message: `确定卸载 ${currentExtension.name || '该扩展'} 吗？扩展会从当前站点移除，相关运行能力会停用。`,
+        confirm_text: '卸载',
+        success_message: '扩展已卸载。',
+        requires_installed: true,
+        order: 30,
+      })
+    }
+  }
+  return actions.sort((left, right) => (left.order || 0) - (right.order || 0))
+}
+
+async function refreshExtensionDetailsSilently(action) {
+  const extensionId = String(extension.value?.id || '').trim()
+  if (!extensionId) {
+    return
+  }
+
+  try {
+    const data = await api.get(`/admin/extensions/${extensionId}`)
+    handleExtensionUpdated(data)
+    applyRuntimeActionState(action)
+  } catch (error) {
+    console.warn('后台刷新扩展详情失败:', error)
+  }
+}
+
+function cloneExtensionState(currentExtension) {
+  if (!currentExtension || typeof currentExtension !== 'object') {
+    return currentExtension
+  }
+  return {
+    ...currentExtension,
+    links: currentExtension.links ? { ...currentExtension.links } : currentExtension.links,
+    readme: currentExtension.readme ? { ...currentExtension.readme } : currentExtension.readme,
+    runtime_status: currentExtension.runtime_status ? { ...currentExtension.runtime_status } : currentExtension.runtime_status,
+    action_links: currentExtension.action_links ? { ...currentExtension.action_links } : currentExtension.action_links,
+    runtime_actions: Array.isArray(currentExtension.runtime_actions)
+      ? currentExtension.runtime_actions.map(item => ({ ...item }))
+      : currentExtension.runtime_actions,
+    admin_actions: Array.isArray(currentExtension.admin_actions)
+      ? currentExtension.admin_actions.map(item => ({ ...item }))
+      : currentExtension.admin_actions,
+    module_ids: Array.isArray(currentExtension.module_ids)
+      ? [...currentExtension.module_ids]
+      : currentExtension.module_ids,
   }
 }
 
@@ -476,6 +657,24 @@ function isInlineSurfaceSupported(currentExtension, surface) {
     return Array.isArray(currentExtension.permission_sections) && currentExtension.permission_sections.length > 0
   }
   return false
+}
+
+function extractApiErrorMessage(error, fallback) {
+  const data = error?.response?.data
+  const directMessage = data?.error || data?.detail || data?.message || error?.message
+  if (directMessage) {
+    return String(directMessage)
+  }
+  const fieldErrors = data?.field_errors || data?.errors
+  if (fieldErrors && typeof fieldErrors === 'object') {
+    const first = Object.values(fieldErrors)
+      .flatMap(value => Array.isArray(value) ? value : [value])
+      .find(Boolean)
+    if (first) {
+      return String(first)
+    }
+  }
+  return fallback
 }
 </script>
 
@@ -500,19 +699,22 @@ function isInlineSurfaceSupported(currentExtension, surface) {
 }
 
 .ExtensionDetailPage-header {
-  padding: 18px 20px 16px;
-  background: var(--forum-bg-subtle);
+  padding: 18px 20px;
+  border: 1px solid var(--forum-border-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--forum-bg-subtle) 80%, white);
 }
 
-.ExtensionDetailPage-headerTitleRow {
+.ExtensionDetailPage-summaryBar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 16px;
+  min-height: 42px;
 }
 
-.ExtensionDetailPage-headerItems,
+.ExtensionDetailPage-summaryMain,
+.ExtensionDetailPage-summaryMeta,
 .ExtensionDetailPage-links,
 .ExtensionDetailPage-actions {
   display: flex;
@@ -521,17 +723,19 @@ function isInlineSurfaceSupported(currentExtension, surface) {
   gap: 10px 12px;
 }
 
-.ExtensionDetailPage-headerTopItems {
+.ExtensionDetailPage-summaryMeta {
+  justify-content: flex-end;
   margin-left: auto;
 }
 
 .ExtensionDetailPage-version {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
+  min-height: 28px;
   color: var(--forum-text-soft);
   font-size: 13px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .ExtensionDetailPage-status {
@@ -632,6 +836,15 @@ function isInlineSurfaceSupported(currentExtension, surface) {
   color: var(--forum-text-soft);
 }
 
+.ExtensionDetailPage-link:hover,
+.ExtensionDetailAction:hover,
+.ExtensionDetailSection-link:hover {
+  border-color: #c9d7e6;
+  background: #f7fafd;
+  color: #365a7b;
+  text-decoration: none;
+}
+
 .ExtensionDetailAction--primary,
 .ExtensionDetailSection-link {
   border-color: #dbe5f0;
@@ -707,6 +920,23 @@ function isInlineSurfaceSupported(currentExtension, surface) {
 
 .ExtensionDetailPage-pluginDetail {
   width: 100%;
+}
+
+@media (max-width: 700px) {
+  .ExtensionDetailPage-summaryBar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ExtensionDetailPage-summaryMeta {
+    width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
+  }
+
+  .ExtensionDetailPage-links {
+    justify-content: flex-end;
+  }
 }
 
 :deep(.ExtensionGeneratedSurface-panel),

@@ -12,6 +12,7 @@
             :is="item.href ? 'a' : 'router-link'"
             :to="item.href ? undefined : item.to"
             :href="item.href || undefined"
+            :style="item.style || undefined"
             :class="['forum-nav-list__item', itemClass, { active: item.active, 'is-muted': item.muted }]"
             @click="$emit('select', item)"
           >

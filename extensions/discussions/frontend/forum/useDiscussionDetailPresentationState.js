@@ -4,6 +4,7 @@ import { getUiCopy } from '@bias/forum'
 import { useDiscussionDetailInteractions } from './useDiscussionDetailInteractions'
 import { useDiscussionDetailMenus } from './useDiscussionDetailMenus'
 import { useDiscussionDetailPresentation } from './useDiscussionDetailPresentation'
+import DiscussionPostItem from './components/DiscussionPostItem.vue'
 
 export function useDiscussionDetailPresentationState({
   activePostMenuId,
@@ -89,7 +90,7 @@ export function useDiscussionDetailPresentationState({
   })
 
   function resolvePostComponent(post) {
-    return getPostTypeDefinition(post?.type)?.component
+    return getPostTypeDefinition(post?.type)?.component || DiscussionPostItem
   }
 
   return {

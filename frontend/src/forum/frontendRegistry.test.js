@@ -32,6 +32,7 @@ import {
   getStateBlock,
   getUiCopy,
   getPostFlagPanel,
+  getPostTypeDefinition,
   getPostReviewBanner,
   getPostStateBadges,
   registerComposerAutocompleteProvider,
@@ -68,6 +69,7 @@ import {
   registerPostReviewBanner,
   registerAuthModalProvider,
   registerPostStateBadge,
+  registerPostType,
   registerSearchModalProvider,
   registerSearchModalSection,
   registerSearchSource,
@@ -77,6 +79,7 @@ import {
   runComposerPreviewTransformers,
   runComposerSubmitSuccess,
   runForumRuntimeHook,
+  syncPostTypes,
 } from './frontendRegistry.js'
 import { getForumRealtimeEventPolicy } from '../../../extensions/realtime/frontend/forum/forumRealtime.js'
 import {
@@ -386,6 +389,27 @@ test('post state badges are ordered and filtered by surface', () => {
   assert.equal(profileBadges.some(item => item.key === profileKey), true)
   assert.equal(profileBadges.some(item => item.key === detailKey), false)
   assert.equal(detailBadges.find(item => item.key === detailKey).label, '3 pending')
+})
+
+test('synced post type metadata preserves registered components', () => {
+  const type = uniqueKey('comment-component')
+  const component = { name: 'RegisteredPostComponent' }
+
+  registerPostType({
+    type,
+    label: 'Registered comment',
+    component,
+    isDefault: true,
+  })
+  syncPostTypes([{
+    code: type,
+    label: 'Backend comment',
+    is_default: true,
+  }])
+
+  const definition = getPostTypeDefinition(type)
+  assert.equal(definition.label, 'Backend comment')
+  assert.equal(definition.component, component)
 })
 
 test('hero meta resolves ordered surface-specific items', () => {

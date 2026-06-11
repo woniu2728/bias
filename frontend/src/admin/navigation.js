@@ -63,6 +63,7 @@ export function getAdminNavSections() {
       moduleId: '',
       navOrder: Number(item.display_order || item.order || 1000),
       activeWhen: item.active_when || '',
+      style: buildExtensionIconStyle(item),
     }))
     .sort((left, right) => {
       if (left.navOrder !== right.navOrder) {
@@ -80,6 +81,26 @@ export function getAdminNavSections() {
   }
 
   return filteredSections
+}
+
+function buildExtensionIconStyle(extension) {
+  const palette = [
+    ['#f28c28', '#fff3e5'],
+    ['#31a36b', '#e9f7f0'],
+    ['#d84fa0', '#fdebf5'],
+    ['#4f80c8', '#edf4ff'],
+    ['#8b63d8', '#f2edff'],
+    ['#d9a321', '#fff7df'],
+    ['#2f9aa0', '#e8f7f8'],
+    ['#6b778d', '#eef2f7'],
+  ]
+  const key = String(extension?.id || extension?.name || '')
+  const index = [...key].reduce((total, char) => total + char.charCodeAt(0), 0) % palette.length
+  const [color, background] = palette[index]
+  return {
+    '--admin-extension-icon-color': color,
+    '--admin-extension-icon-bg': background,
+  }
 }
 
 export function getAdminRouteMeta(currentPath) {

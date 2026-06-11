@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, RawPostDataException
 
 from apps.core.auth import get_optional_user
 from apps.core.extensions.runtime_access import get_runtime_resource_registry
@@ -105,7 +105,16 @@ def dispatch_resource_endpoint(
 def _parse_request_payload(request):
     if str(getattr(request, "method", "GET") or "GET").upper() in {"GET", "HEAD", "OPTIONS"}:
         return None
-    body = getattr(request, "body", b"") or b""
+
+    content_type = str(getattr(request, "content_type", "") or getattr(request, "META", {}).get("CONTENT_TYPE", "") or "")
+    if content_type.startswith(("multipart/form-data", "application/x-www-form-urlencoded")):
+        return _params_to_dict(getattr(request, "POST", None))
+
+    try:
+        body = getattr(request, "body", b"") or b""
+    except RawPostDataException:
+        return _params_to_dict(getattr(request, "POST", None))
+
     if not body:
         return {}
     try:
