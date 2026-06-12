@@ -29,6 +29,8 @@ class UserService:
         "discussion.typing",
         "discussion.editOwn",
         "discussion.deleteOwn",
+        "post.editOwn",
+        "post.deleteOwn",
     }
 
     STAFF_BASE_FORUM_PERMISSIONS = {
@@ -44,6 +46,10 @@ class UserService:
         "discussion.deleteOwn",
         "discussion.edit",
         "discussion.delete",
+        "post.editOwn",
+        "post.deleteOwn",
+        "post.edit",
+        "post.delete",
         "discussion.hide",
         "discussion.rename",
         "discussion.lock",

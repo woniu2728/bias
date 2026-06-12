@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+
+logger = logging.getLogger(__name__)
 
 FORCE_DENY = "force_deny"
 FORCE_ALLOW = "force_allow"
@@ -160,7 +163,7 @@ def can(user, ability: str, model=None, *, default=False, **context):
         if has_forum_permission(user, ability):
             return True
     except Exception:
-        pass
+        logger.warning("Forum permission fallback failed for ability %s.", ability, exc_info=True)
     return bool(default)
 
 

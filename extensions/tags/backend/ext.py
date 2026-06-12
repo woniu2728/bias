@@ -242,12 +242,7 @@ def extend():
             key="tags.service",
             provider=tag_service_provider,
         ),
-        LifecycleExtender(
-            install=install,
-            enable=enable,
-            disable=disable,
-            uninstall=uninstall,
-        ),
+        LifecycleExtender(),
     ]
 
 
@@ -743,38 +738,3 @@ def tag_event_listener_definitions():
             description="调度标签统计刷新任务。",
         ),
     )
-
-
-def install(context):
-    return {
-        "status": "ok",
-        "status_label": "已安装",
-        "message": "Tags 扩展已安装。",
-        "details": {
-            "extension_id": context.extension_id,
-        },
-    }
-
-
-def enable(context):
-    return {
-        "status": "ok",
-        "status_label": "已启用",
-        "message": "Tags 扩展已启用。",
-    }
-
-
-def disable(context):
-    return {
-        "status": "ok",
-        "status_label": "已停用",
-        "message": "Tags 扩展已停用。",
-    }
-
-
-def uninstall(context):
-    return {
-        "status": "ok",
-        "status_label": "已卸载",
-        "message": "Tags 扩展已卸载。",
-    }

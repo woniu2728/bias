@@ -120,12 +120,7 @@ def extend():
             prepare_delete=prepare_post_delete_flags,
             description="帖子删除前清理关联举报并派发举报删除事件。",
         ),
-        LifecycleExtender(
-            install=install,
-            enable=enable,
-            disable=disable,
-            uninstall=uninstall,
-        ),
+        LifecycleExtender(),
     ]
 
 
@@ -364,38 +359,3 @@ def _visible_to_forum_flag_moderators(forum, context: dict) -> bool:
 def _visible_to_self(user, context: dict) -> bool:
     actor = context.get("user")
     return bool(actor and actor.is_authenticated and user and actor.id == user.id)
-
-
-def install(context):
-    return {
-        "status": "ok",
-        "status_label": "已安装",
-        "message": "Flags 扩展已安装。",
-        "details": {
-            "extension_id": context.extension_id,
-        },
-    }
-
-
-def enable(context):
-    return {
-        "status": "ok",
-        "status_label": "已启用",
-        "message": "Flags 扩展已启用。",
-    }
-
-
-def disable(context):
-    return {
-        "status": "ok",
-        "status_label": "已停用",
-        "message": "Flags 扩展已停用。",
-    }
-
-
-def uninstall(context):
-    return {
-        "status": "ok",
-        "status_label": "已卸载",
-        "message": "Flags 扩展已卸载。",
-    }

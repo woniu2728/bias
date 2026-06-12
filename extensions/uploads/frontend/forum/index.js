@@ -1,7 +1,10 @@
 import {
   api,
 } from '@bias/core'
-import { extendForum } from '@bias/forum'
+import {
+  createUiTextCopy,
+  extendForum,
+} from '@bias/forum'
 
 export const extend = [
   extendForum('uploads', registerUploadsForum),
@@ -54,7 +57,7 @@ function registerUploadsForum(forum) {
 
 function uploadsCopyDefinitions() {
   return [
-    textCopy('composer-notice-upload-label', 646, '上传'),
+    createUiTextCopy('composer-notice-upload-label', 646, '上传'),
     {
       key: 'composer-upload-progress',
       order: 646,
@@ -119,13 +122,4 @@ function sanitizeMarkdownLabel(value, fallback) {
 
 function stripFileExtension(fileName) {
   return String(fileName || '').replace(/\.[^.]+$/, '')
-}
-
-function textCopy(key, order, text) {
-  return {
-    key,
-    order,
-    surfaces: [key],
-    resolve: () => ({ text }),
-  }
 }

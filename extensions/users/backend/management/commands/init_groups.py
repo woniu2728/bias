@@ -92,6 +92,8 @@ class Command(BaseCommand):
             'discussion.typing',
             'discussion.editOwn',
             'discussion.deleteOwn',
+            'post.editOwn',
+            'post.deleteOwn',
             'viewUserList',
             'searchUsers',
         ]

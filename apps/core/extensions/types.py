@@ -537,11 +537,11 @@ class ExtensionLifecycleDefinition:
 
 @dataclass(frozen=True)
 class ExtensionCompatibilityDefinition:
-    bias_version: str = ""
+    bias_version: str = "^1.0.0"
     api_version: str = "1.0"
     api_stability: str = "experimental"
     api_stability_label: str = "实验性"
-    breaking_change_policy: str = ""
+    breaking_change_policy: str = "扩展协议调整会随 Bias 主版本升级同步说明。"
 
 
 @dataclass(frozen=True)

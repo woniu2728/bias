@@ -212,7 +212,8 @@ class QueueService:
         allowing deployed worker stacks to take the expensive path off-request.
         """
         task_name = getattr(task, "name", repr(task))
-        if QueueService.should_enqueue():
+        should_enqueue = QueueService.should_enqueue()
+        if should_enqueue:
             if QueueService._should_skip_live_task_enqueue(task):
                 if fallback is not None:
                     result = fallback()
@@ -238,7 +239,7 @@ class QueueService:
 
         if fallback is not None:
             result = fallback()
-            if not QueueService.should_enqueue():
+            if not should_enqueue:
                 QueueService._record_metric("sync", task_name)
             return result
 

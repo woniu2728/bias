@@ -27,20 +27,9 @@
   "backend_entry": "extensions.tags.backend.ext",
   "django_app_config": "extensions.tags.backend.apps.TagsExtensionConfig",
   "django_app_label": "tags",
-  "compatibility": {
-    "bias_version": "^1.0.0",
-    "api_version": "1.0",
-    "api_stability": "experimental",
-    "api_stability_label": "实验性",
-    "breaking_change_policy": "扩展协议调整会随 Bias 主版本升级同步说明。"
-  },
   "security": {
     "support_email": "",
     "capabilities_notice": "该扩展影响讨论标签展示、标签筛选、标签访问范围和标签管理接口。"
-  },
-  "distribution": {
-    "channel": "private",
-    "channel_label": "私有分发"
   },
   "extra": {
     "auto_install": true,

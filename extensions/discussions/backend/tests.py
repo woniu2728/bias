@@ -459,6 +459,35 @@ class DiscussionApiTests(TestCase):
         self.assertEqual(len(callbacks), 1)
         self.assertEqual(mocked_bus.dispatch.call_args.args[0].discussion_id, discussion.id)
 
+    def test_approve_discussion_applies_runtime_lifecycle_on_first_approval(self):
+        admin = User.objects.create_superuser(
+            username="discussion-runtime-approver",
+            email="discussion-runtime-approver@example.com",
+            password="password123",
+        )
+        discussion = DiscussionService.create_discussion(
+            title="Pending lifecycle discussion",
+            content="Needs lifecycle approval",
+            user=self.author,
+        )
+        discussion.approval_status = Discussion.APPROVAL_PENDING
+        discussion.save(update_fields=["approval_status"])
+        lifecycle = Mock()
+        lifecycle.apply_approved.return_value = {}
+
+        with patch(
+            "extensions.discussions.backend.service_lifecycle.get_runtime_discussion_lifecycle_service",
+            return_value=lifecycle,
+        ):
+            DiscussionService.approve_discussion(discussion, admin, note="ok")
+
+        lifecycle.apply_approved.assert_called_once()
+        _, kwargs = lifecycle.apply_approved.call_args
+        self.assertEqual(kwargs["discussion"].id, discussion.id)
+        self.assertEqual(kwargs["context"]["admin_user_id"], admin.id)
+        self.assertFalse(kwargs["context"]["was_counted"])
+        self.assertEqual(kwargs["context"]["previous_status"], Discussion.APPROVAL_PENDING)
+
     def test_create_discussion_accepts_bearer_token(self):
         response = self.client.post(
             "/api/discussions/",
@@ -1325,6 +1354,36 @@ class DiscussionApiTests(TestCase):
                 "is_locked": True,
             },
         )
+
+    def test_updating_discussion_title_and_locked_state_persists_both_changes(self):
+        discussion = DiscussionService.create_discussion(
+            title="Patch title and lock",
+            content="Original content",
+            user=self.author,
+        )
+        admin = User.objects.create_superuser(
+            username="discussion-patch-title-lock-admin",
+            email="discussion-patch-title-lock-admin@example.com",
+            password="password123",
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.patch(
+                f"/api/discussions/{discussion.id}",
+                data=json.dumps({
+                    "title": "Updated locked title",
+                    "is_locked": True,
+                }),
+                content_type="application/json",
+                **self.auth_header(admin),
+            )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        discussion.refresh_from_db()
+        self.assertEqual(discussion.title, "Updated locked title")
+        self.assertTrue(discussion.is_locked)
+        self.assertTrue(Post.objects.filter(discussion=discussion, type="discussionRenamed").exists())
+        self.assertTrue(Post.objects.filter(discussion=discussion, type="discussionLocked").exists())
 
     def test_sticky_discussion_creates_discussion_sticky_event_post(self):
         discussion = DiscussionService.create_discussion(

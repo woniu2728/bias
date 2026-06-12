@@ -99,6 +99,15 @@ class PostsExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
         self.assertNotIn("comment", registry.get_stream_post_type_codes())
         self.assertNotIn("comment", registry.get_searchable_post_type_codes())
 
+    def test_posts_extension_registers_reply_permission_codes(self):
+        application = self.bootstrap_extensions("posts")
+        permission_codes = {item.code for item in application.forum_registry.get_all_permissions()}
+
+        self.assertIn("post.editOwn", permission_codes)
+        self.assertIn("post.deleteOwn", permission_codes)
+        self.assertIn("post.edit", permission_codes)
+        self.assertIn("post.delete", permission_codes)
+
     def test_inspect_reports_posts_model_as_extension_owned(self):
         stdout = StringIO()
         call_command(
@@ -122,7 +131,8 @@ class PostsExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
             and item["target_app_label_source"] == "manifest"
             for item in audit["items"]
         ))
-        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+        self.assertIn("0001_initial.py", extension["migration_plan"]["pending_files"])
+        self.assertIn("0005_transfer_extension_owned_models_state.py", extension["migration_plan"]["pending_files"])
 
 
 class PostRegistryTests(TestCase):
@@ -993,7 +1003,7 @@ class PostApiTests(TestCase):
     def test_owner_with_delete_own_permission_can_delete_reply(self):
         member_group = Group.objects.create(name="ReplyAuthorDeleteOwn", color="#4d698e")
         Permission.objects.create(group=member_group, permission="discussion.reply")
-        Permission.objects.create(group=member_group, permission="discussion.deleteOwn")
+        Permission.objects.create(group=member_group, permission="post.deleteOwn")
         self.reporter.user_groups.add(member_group)
 
         reply = PostService.create_post(
@@ -1011,6 +1021,49 @@ class PostApiTests(TestCase):
         self.assertFalse(Post.objects.filter(id=reply.id).exists())
         self.assertFalse(AuditLog.objects.filter(action="admin.post.delete").exists())
 
+    def test_legacy_discussion_delete_own_permission_can_delete_reply(self):
+        member_group = Group.objects.create(name="ReplyAuthorLegacyDeleteOwn", color="#4d698e")
+        Permission.objects.create(group=member_group, permission="discussion.reply")
+        Permission.objects.create(group=member_group, permission="discussion.deleteOwn")
+        self.reporter.user_groups.add(member_group)
+
+        reply = PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="旧权限仍允许删除自己的回复",
+            user=self.reporter,
+        )
+
+        response = self.client.delete(
+            f"/api/posts/{reply.id}",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertFalse(Post.objects.filter(id=reply.id).exists())
+
+    def test_owner_with_edit_own_permission_can_edit_reply(self):
+        member_group = Group.objects.create(name="ReplyAuthorEditOwn", color="#4d698e")
+        Permission.objects.create(group=member_group, permission="discussion.reply")
+        Permission.objects.create(group=member_group, permission="post.editOwn")
+        self.reporter.user_groups.add(member_group)
+
+        reply = PostService.create_post(
+            discussion_id=self.discussion.id,
+            content="允许编辑自己的回复",
+            user=self.reporter,
+        )
+
+        response = self.client.patch(
+            f"/api/posts/{reply.id}",
+            data='{"content":"已经修改"}',
+            content_type="application/json",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        reply.refresh_from_db()
+        self.assertEqual(reply.content, "已经修改")
+
     def test_user_with_global_delete_permission_can_delete_others_reply(self):
         moderator = User.objects.create_user(
             username="reply-moderator",
@@ -1019,7 +1072,7 @@ class PostApiTests(TestCase):
             is_email_confirmed=True,
         )
         moderator_group = Group.objects.create(name="ReplyDeleteModerator", color="#4d698e")
-        Permission.objects.create(group=moderator_group, permission="discussion.delete")
+        Permission.objects.create(group=moderator_group, permission="post.delete")
         moderator.user_groups.add(moderator_group)
 
         reply = PostService.create_post(

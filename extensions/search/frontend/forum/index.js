@@ -1,6 +1,7 @@
 import {
   formatRelativeTime } from '@bias/core'
 import {
+  createUiTextCopy,
   extendForum,
   getUiCopy
 } from '@bias/forum'
@@ -251,11 +252,11 @@ function registerSearchCopy(forum) {
 
 function searchCopyDefinitions() {
   return [
-    textCopy('header-search-placeholder', 130, '搜索论坛'),
-    textCopy('search-modal-close-label', 430, '关闭搜索'),
-    textCopy('search-modal-title', 440, '搜索'),
-    textCopy('search-modal-description', 450, '按讨论、帖子、用户快速定位内容。'),
-    textCopy('search-modal-input-placeholder', 460, '输入关键词搜索讨论、帖子和用户'),
+    createUiTextCopy('header-search-placeholder', 130, '搜索论坛'),
+    createUiTextCopy('search-modal-close-label', 430, '关闭搜索'),
+    createUiTextCopy('search-modal-title', 440, '搜索'),
+    createUiTextCopy('search-modal-description', 450, '按讨论、帖子、用户快速定位内容。'),
+    createUiTextCopy('search-modal-input-placeholder', 460, '输入关键词搜索讨论、帖子和用户'),
     {
       key: 'search-modal-full-results',
       order: 470,
@@ -264,8 +265,8 @@ function searchCopyDefinitions() {
         text: `查看${activeTabLabel || '全部'}完整结果`,
       }),
     },
-    textCopy('search-modal-section-link', 475, '只看{label}'),
-    textCopy('search-modal-recent-title', 476, '最近搜索'),
+    createUiTextCopy('search-modal-section-link', 475, '只看{label}'),
+    createUiTextCopy('search-modal-recent-title', 476, '最近搜索'),
     {
       key: 'search-modal-recent-subtitle',
       order: 476,
@@ -274,9 +275,9 @@ function searchCopyDefinitions() {
         text: `只看${activeTabLabel || '当前分类'}`,
       }),
     },
-    textCopy('search-modal-recent-all-subtitle', 476, '搜索全部内容'),
-    textCopy('search-modal-syntax-title', 476, '搜索语法'),
-    textCopy('search-page-hero-pill', 478, '全局搜索'),
+    createUiTextCopy('search-modal-recent-all-subtitle', 476, '搜索全部内容'),
+    createUiTextCopy('search-modal-syntax-title', 476, '搜索语法'),
+    createUiTextCopy('search-page-hero-pill', 478, '全局搜索'),
     {
       key: 'mobile-drawer-search-label',
       order: 490,
@@ -331,7 +332,7 @@ function searchCopyDefinitions() {
         text: hasQuery ? `查看“${query}”相关的讨论、回复和用户结果。` : '搜索论坛中的讨论、回复和用户。',
       }),
     },
-    textCopy('search-result-section-show-more', 479, '查看全部'),
+    createUiTextCopy('search-result-section-show-more', 479, '查看全部'),
     {
       key: 'search-page-stats-label',
       order: 479,
@@ -340,7 +341,7 @@ function searchCopyDefinitions() {
         text: itemKey === 'posts' ? '帖子' : itemKey === 'users' ? '用户' : '讨论',
       }),
     },
-    textCopy('search-section-discussions-title', 479, '讨论'),
+    createUiTextCopy('search-section-discussions-title', 479, '讨论'),
     {
       key: 'search-discussion-result-replies',
       order: 479,
@@ -349,9 +350,9 @@ function searchCopyDefinitions() {
         text: `${count || 0} 回复`,
       }),
     },
-    textCopy('search-section-posts-title', 479, '帖子'),
-    textCopy('search-result-unknown-user', 479, '未知用户'),
-    textCopy('search-section-users-title', 479, '用户'),
+    createUiTextCopy('search-section-posts-title', 479, '帖子'),
+    createUiTextCopy('search-result-unknown-user', 479, '未知用户'),
+    createUiTextCopy('search-section-users-title', 479, '用户'),
     {
       key: 'search-user-result-discussions',
       order: 479,
@@ -368,7 +369,7 @@ function searchCopyDefinitions() {
         text: `${count || 0} 回复`,
       }),
     },
-    textCopy('search-filter-all-label', 479, '全部'),
+    createUiTextCopy('search-filter-all-label', 479, '全部'),
     {
       key: 'search-filter-item-label',
       order: 479,
@@ -385,8 +386,8 @@ function searchCopyDefinitions() {
         text: label || '',
       }),
     },
-    textCopy('search-filter-catalog-load-error', 479, '加载搜索过滤目录失败'),
-    textCopy('search-results-load-error', 479, '加载搜索结果失败，请稍后重试'),
+    createUiTextCopy('search-filter-catalog-load-error', 479, '加载搜索过滤目录失败'),
+    createUiTextCopy('search-results-load-error', 479, '加载搜索结果失败，请稍后重试'),
     {
       key: 'search-results-total-count',
       order: 479,
@@ -403,18 +404,9 @@ function searchCopyDefinitions() {
         text: String(Number(count || 0)),
       }),
     },
-    textCopy('header-search-open-label', 1060, '打开全局搜索'),
-    textCopy('header-search-clear-label', 1070, '清除搜索'),
+    createUiTextCopy('header-search-open-label', 1060, '打开全局搜索'),
+    createUiTextCopy('header-search-clear-label', 1070, '清除搜索'),
   ]
-}
-
-function textCopy(key, order, text) {
-  return {
-    key,
-    order,
-    surfaces: [key],
-    resolve: () => ({ text }),
-  }
 }
 
 function buildSearchTextHtml(value, query, limit) {

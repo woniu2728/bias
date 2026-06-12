@@ -111,12 +111,7 @@ def extend():
         .owns(AccessToken, description="用户访问令牌由 users 扩展拥有。")
         .owns(EmailToken, description="邮箱验证令牌由 users 扩展拥有。")
         .owns(PasswordToken, description="密码重置令牌由 users 扩展拥有。"),
-        LifecycleExtender(
-            install=install,
-            enable=enable,
-            disable=disable,
-            uninstall=uninstall,
-        ),
+        LifecycleExtender(),
         build_user_settings_extender(),
         build_human_verification_settings_extender(),
         ForumPermissionExtender().checker(
@@ -268,38 +263,3 @@ def admin_page_definitions():
             description="查看、编辑、分组与封禁论坛用户。",
         ),
     )
-
-
-def install(context):
-    return {
-        "status": "ok",
-        "status_label": "已安装",
-        "message": "Users 扩展已安装。",
-        "details": {
-            "extension_id": context.extension_id,
-        },
-    }
-
-
-def enable(context):
-    return {
-        "status": "ok",
-        "status_label": "已启用",
-        "message": "Users 扩展已启用。",
-    }
-
-
-def disable(context):
-    return {
-        "status": "ok",
-        "status_label": "已停用",
-        "message": "Users 扩展已停用。",
-    }
-
-
-def uninstall(context):
-    return {
-        "status": "ok",
-        "status_label": "已卸载",
-        "message": "Users 扩展已卸载。",
-    }

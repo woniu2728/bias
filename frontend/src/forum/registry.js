@@ -5,6 +5,7 @@ import {
   runPostAction,
 } from '@/forum/discussionActionRuntime'
 import {
+  createUiTextCopy,
   getAuthModalProvider,
   getComposerNotices,
   getComposerFields,
@@ -104,6 +105,7 @@ export { registerSearchFilter } from './searchFilters'
 
 export {
   getAuthModalProvider,
+  createUiTextCopy,
   getForumNavItems,
   getForumNavSections,
   getForumSidebarSections,

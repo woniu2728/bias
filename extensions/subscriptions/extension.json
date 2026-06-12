@@ -21,20 +21,9 @@
   ],
   "backend_entry": "extensions.subscriptions.backend.ext",
   "frontend_forum_entry": "extensions/subscriptions/frontend/forum/index.js",
-  "compatibility": {
-    "bias_version": "^1.0.0",
-    "api_version": "1.0",
-    "api_stability": "experimental",
-    "api_stability_label": "实验性",
-    "breaking_change_policy": "扩展协议调整会随 Bias 主版本升级同步说明。"
-  },
   "security": {
     "support_email": "",
     "capabilities_notice": "该扩展影响讨论关注状态字段、关注讨论过滤、关注行为偏好和关注讨论新回复通知。"
-  },
-  "distribution": {
-    "channel": "private",
-    "channel_label": "私有分发"
   },
   "extra": {
     "auto_install": true,

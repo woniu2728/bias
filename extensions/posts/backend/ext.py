@@ -1,4 +1,5 @@
 from apps.core.extensions import (
+    AdminSurfaceExtender,
     ApiResourceExtender,
     FrontendExtender,
     ForumCapabilitiesExtender,
@@ -7,7 +8,7 @@ from apps.core.extensions import (
     SearchIndexExtender,
     ServiceProviderExtender,
 )
-from apps.core.forum_registry_types import PostTypeDefinition
+from apps.core.forum_registry_types import PermissionDefinition, PostTypeDefinition
 from extensions.posts.backend.handlers import post_resource_endpoints
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.resources import (
@@ -29,6 +30,9 @@ def extend():
         ),
         ForumCapabilitiesExtender(
             post_types=post_type_definitions(),
+        ),
+        AdminSurfaceExtender(
+            permissions=permission_definitions(),
         ),
         ApiResourceExtender("post")
         .endpoints_with(*post_resource_endpoints())
@@ -52,12 +56,7 @@ def extend():
             create=build_posts_content_search_index_sql,
             description="为可搜索帖子类型的正文提供 PostgreSQL 全文搜索索引。",
         ),
-        LifecycleExtender(
-            install=install,
-            enable=enable,
-            disable=disable,
-            uninstall=uninstall,
-        ),
+        LifecycleExtender(),
     ]
 
 
@@ -104,36 +103,46 @@ def post_type_definitions():
     )
 
 
-def install(context):
-    return {
-        "status": "ok",
-        "status_label": "已安装",
-        "message": "Posts 扩展已安装。",
-        "details": {
-            "extension_id": context.extension_id,
-        },
-    }
-
-
-def enable(context):
-    return {
-        "status": "ok",
-        "status_label": "已启用",
-        "message": "Posts 扩展已启用。",
-    }
-
-
-def disable(context):
-    return {
-        "status": "ok",
-        "status_label": "已停用",
-        "message": "Posts 扩展已停用。",
-    }
-
-
-def uninstall(context):
-    return {
-        "status": "ok",
-        "status_label": "已卸载",
-        "message": "Posts 扩展已卸载。",
-    }
+def permission_definitions():
+    return (
+        PermissionDefinition(
+            code="post.editOwn",
+            label="编辑自己的回复",
+            section="reply",
+            section_label="回复权限",
+            module_id=EXTENSION_ID,
+            icon="fas fa-pencil-alt",
+            description="允许作者编辑自己的普通回复。",
+            required_permissions=("discussion.reply",),
+        ),
+        PermissionDefinition(
+            code="post.deleteOwn",
+            label="删除自己的回复",
+            section="reply",
+            section_label="回复权限",
+            module_id=EXTENSION_ID,
+            icon="fas fa-times",
+            description="允许作者删除自己的普通回复。",
+            required_permissions=("discussion.reply",),
+        ),
+        PermissionDefinition(
+            code="post.edit",
+            label="编辑任意回复",
+            section="moderate",
+            section_label="内容管理",
+            module_id=EXTENSION_ID,
+            icon="fas fa-pencil-alt",
+            description="允许管理任意普通回复内容。",
+            required_permissions=("viewForum",),
+        ),
+        PermissionDefinition(
+            code="post.delete",
+            label="删除任意回复",
+            section="moderate",
+            section_label="内容管理",
+            module_id=EXTENSION_ID,
+            icon="fas fa-trash",
+            description="允许删除任意普通回复。",
+            required_permissions=("discussion.hide",),
+        ),
+    )

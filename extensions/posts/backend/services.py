@@ -335,10 +335,16 @@ class PostService:
         if user.is_suspended:
             return False
         allowed = False
-        if has_runtime_forum_permission(user, "discussion.edit"):
+        if (
+            has_runtime_forum_permission(user, "post.edit")
+            or has_runtime_forum_permission(user, "discussion.edit")
+        ):
             allowed = True
         elif post.user_id == user.id:
-            allowed = has_runtime_forum_permission(user, "discussion.editOwn")
+            allowed = (
+                has_runtime_forum_permission(user, "post.editOwn")
+                or has_runtime_forum_permission(user, "discussion.editOwn")
+            )
         return bool(evaluate_extension_policy(
             "post.edit",
             default=allowed,
@@ -354,10 +360,16 @@ class PostService:
         if user.is_suspended:
             return False
         allowed = False
-        if has_runtime_forum_permission(user, "discussion.delete"):
+        if (
+            has_runtime_forum_permission(user, "post.delete")
+            or has_runtime_forum_permission(user, "discussion.delete")
+        ):
             allowed = True
         elif post.user_id == user.id:
-            allowed = has_runtime_forum_permission(user, "discussion.deleteOwn")
+            allowed = (
+                has_runtime_forum_permission(user, "post.deleteOwn")
+                or has_runtime_forum_permission(user, "discussion.deleteOwn")
+            )
         return bool(evaluate_extension_policy(
             "post.delete",
             default=allowed,

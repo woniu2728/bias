@@ -93,12 +93,7 @@ def extend():
             dispatch_uid="notifications.invalidate_unread_count_on_delete",
             description="通知删除后清除用户未读数缓存。",
         ),
-        LifecycleExtender(
-            install=install,
-            enable=enable,
-            disable=disable,
-            uninstall=uninstall,
-        ),
+        LifecycleExtender(),
     ]
 
 
@@ -274,38 +269,3 @@ def notification_event_listener_definitions():
             description="账号解除封禁后通知用户。",
         ),
     )
-
-
-def install(context):
-    return {
-        "status": "ok",
-        "status_label": "已安装",
-        "message": "Notifications 扩展已安装。",
-        "details": {
-            "extension_id": context.extension_id,
-        },
-    }
-
-
-def enable(context):
-    return {
-        "status": "ok",
-        "status_label": "已启用",
-        "message": "Notifications 扩展已启用。",
-    }
-
-
-def disable(context):
-    return {
-        "status": "ok",
-        "status_label": "已停用",
-        "message": "Notifications 扩展已停用。",
-    }
-
-
-def uninstall(context):
-    return {
-        "status": "ok",
-        "status_label": "已卸载",
-        "message": "Notifications 扩展已卸载。",
-    }

@@ -78,12 +78,7 @@ def extend():
         .filters(post_resource_filter_definitions)
         .endpoints(post_resource_endpoints)
         .add_default_include(("index", "show"), ("likes",)),
-        LifecycleExtender(
-            install=install,
-            enable=enable,
-            disable=disable,
-            uninstall=uninstall,
-        ),
+        LifecycleExtender(),
     ]
 
 
@@ -250,38 +245,3 @@ def post_resource_endpoints():
             auth_required=True,
         ),
     )
-
-
-def install(context):
-    return {
-        "status": "ok",
-        "status_label": "已安装",
-        "message": "Likes 扩展已安装。",
-        "details": {
-            "extension_id": context.extension_id,
-        },
-    }
-
-
-def enable(context):
-    return {
-        "status": "ok",
-        "status_label": "已启用",
-        "message": "Likes 扩展已启用。",
-    }
-
-
-def disable(context):
-    return {
-        "status": "ok",
-        "status_label": "已停用",
-        "message": "Likes 扩展已停用。",
-    }
-
-
-def uninstall(context):
-    return {
-        "status": "ok",
-        "status_label": "已卸载",
-        "message": "Likes 扩展已卸载。",
-    }

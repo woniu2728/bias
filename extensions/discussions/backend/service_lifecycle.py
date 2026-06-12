@@ -345,13 +345,10 @@ def update_discussion(
                     },
                 )
 
-        should_persist_discussion = True
-
         if is_locked is not None:
             if not user.is_staff:
                 raise PermissionDenied("没有权限锁定/解锁讨论")
             set_locked_state_cb(discussion, user, is_locked)
-            should_persist_discussion = False
 
         if is_sticky is not None:
             if not user.is_staff:
@@ -386,10 +383,7 @@ def update_discussion(
                 )
             )
 
-        if should_persist_discussion:
-            discussion.save()
-        else:
-            discussion.save(update_fields=["is_private"])
+        discussion.save()
 
         if title is not None and title != previous_title:
             dispatch_forum_event_after_commit(
@@ -519,15 +513,15 @@ def approve_discussion(
                     note=note,
                 )
             )
-        else:
-            _apply_discussion_approved_extensions(
-                get_runtime_discussion_lifecycle_service(),
-                discussion=discussion,
-                context={
-                    "admin_user_id": admin_user.id,
-                    "was_counted": was_counted,
-                },
-            )
+        _apply_discussion_approved_extensions(
+            get_runtime_discussion_lifecycle_service(),
+            discussion=discussion,
+            context={
+                "admin_user_id": admin_user.id,
+                "was_counted": was_counted,
+                "previous_status": previous_status,
+            },
+        )
 
     discussion.refresh_from_db()
     return discussion

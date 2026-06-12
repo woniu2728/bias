@@ -31,12 +31,7 @@ def extend():
         .reset_frontend_cache_for("cdn_url")
         .theme_variable("bias-emoji-cdn", "cdn_url"),
         FormatterExtender().parse(parse_emoticons),
-        LifecycleExtender(
-            install=install,
-            enable=enable,
-            disable=disable,
-            uninstall=uninstall,
-        ),
+        LifecycleExtender(),
     ]
 
 
@@ -56,38 +51,3 @@ EMOJI_MAP = {
 
 def parse_emoticons(text: str) -> str:
     return EMOJI_PATTERN.sub(lambda match: EMOJI_MAP.get(match.group(1), match.group(1)), text or "")
-
-
-def install(context):
-    return {
-        "status": "ok",
-        "status_label": "已安装",
-        "message": "Emoji 扩展已安装。",
-        "details": {
-            "extension_id": context.extension_id,
-        },
-    }
-
-
-def enable(context):
-    return {
-        "status": "ok",
-        "status_label": "已启用",
-        "message": "Emoji 扩展已启用。",
-    }
-
-
-def disable(context):
-    return {
-        "status": "ok",
-        "status_label": "已停用",
-        "message": "Emoji 扩展已停用。",
-    }
-
-
-def uninstall(context):
-    return {
-        "status": "ok",
-        "status_label": "已卸载",
-        "message": "Emoji 扩展已卸载。",
-    }

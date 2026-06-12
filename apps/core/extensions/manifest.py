@@ -218,12 +218,13 @@ class ExtensionManifestLoader:
 
     def _build_compatibility(self, payload: dict | None) -> ExtensionCompatibilityDefinition:
         data = payload if isinstance(payload, dict) else {}
+        defaults = ExtensionCompatibilityDefinition()
         return ExtensionCompatibilityDefinition(
-            bias_version=str(data.get("bias_version") or "").strip(),
-            api_version=str(data.get("api_version") or "1.0").strip() or "1.0",
-            api_stability=str(data.get("api_stability") or "experimental").strip() or "experimental",
-            api_stability_label=str(data.get("api_stability_label") or "").strip(),
-            breaking_change_policy=str(data.get("breaking_change_policy") or "").strip(),
+            bias_version=str(data.get("bias_version") or defaults.bias_version).strip() or defaults.bias_version,
+            api_version=str(data.get("api_version") or defaults.api_version).strip() or defaults.api_version,
+            api_stability=str(data.get("api_stability") or defaults.api_stability).strip() or defaults.api_stability,
+            api_stability_label=str(data.get("api_stability_label") or defaults.api_stability_label).strip(),
+            breaking_change_policy=str(data.get("breaking_change_policy") or defaults.breaking_change_policy).strip(),
         )
 
     def _build_security(self, payload: dict | None) -> ExtensionSecurityDefinition:
@@ -237,6 +238,7 @@ class ExtensionManifestLoader:
     def _build_distribution(self, payload: dict | None, *, manifest_payload: dict | None = None) -> ExtensionDistributionDefinition:
         data = payload if isinstance(payload, dict) else {}
         manifest_data = manifest_payload if isinstance(manifest_payload, dict) else {}
+        defaults = ExtensionDistributionDefinition()
         abandoned_value = data.get("abandoned", manifest_data.get("abandoned", False))
         replacement = str(
             data.get("replacement")
@@ -253,8 +255,8 @@ class ExtensionManifestLoader:
         else:
             abandoned = bool(abandoned_value)
         return ExtensionDistributionDefinition(
-            channel=str(data.get("channel") or "private").strip() or "private",
-            channel_label=str(data.get("channel_label") or "").strip(),
+            channel=str(data.get("channel") or defaults.channel).strip() or defaults.channel,
+            channel_label=str(data.get("channel_label") or defaults.channel_label).strip(),
             signing_key_id=str(data.get("signing_key_id") or "").strip(),
             signature_url=str(data.get("signature_url") or "").strip(),
             abandoned=abandoned,

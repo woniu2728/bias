@@ -19,20 +19,9 @@
   "django_app_config": "extensions.likes.backend.apps.LikesExtensionConfig",
   "django_app_label": "likes",
   "frontend_forum_entry": "extensions/likes/frontend/forum/index.js",
-  "compatibility": {
-    "bias_version": "^1.0.0",
-    "api_version": "1.0",
-    "api_stability": "experimental",
-    "api_stability_label": "实验性",
-    "breaking_change_policy": "扩展协议调整会随 Bias 主版本升级同步说明。"
-  },
   "security": {
     "support_email": "",
     "capabilities_notice": "该扩展影响帖子点赞、点赞状态字段和点赞通知偏好。"
-  },
-  "distribution": {
-    "channel": "private",
-    "channel_label": "私有分发"
   },
   "extra": {
     "auto_install": true,

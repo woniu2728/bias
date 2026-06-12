@@ -22,20 +22,9 @@
   "backend_entry": "extensions.approval.backend.ext",
   "frontend_admin_entry": "extensions/approval/frontend/admin/index.js",
   "frontend_forum_entry": "extensions/approval/frontend/forum/index.js",
-  "compatibility": {
-    "bias_version": "^1.0.0",
-    "api_version": "1.0",
-    "api_stability": "experimental",
-    "api_stability_label": "实验性",
-    "breaking_change_policy": "扩展协议调整会随 Bias 主版本升级同步说明。"
-  },
   "security": {
     "support_email": "",
     "capabilities_notice": "该扩展影响内容审核队列、审核权限、审核通知和审核系统事件帖。"
-  },
-  "distribution": {
-    "channel": "private",
-    "channel_label": "私有分发"
   },
   "extra": {
     "auto_install": true,

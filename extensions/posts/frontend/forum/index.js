@@ -1,4 +1,5 @@
 import {
+  createUiTextCopy,
   extendForum,
   getUiCopy
 } from '@bias/forum'
@@ -263,13 +264,13 @@ function registerPostsCopy(forum) {
 
 function postsCopyDefinitions() {
   return [
-    textCopy('post-action-edit-label', 479, '编辑'),
-    textCopy('post-action-edit-description', 479, '修改这条回复内容。'),
-    textCopy('post-action-delete-label', 479, '删除'),
-    textCopy('post-action-delete-description', 479, '永久删除这条回复。'),
-    textCopy('post-action-delete-confirm-title', 479, '删除回复'),
-    textCopy('post-action-delete-confirm-message', 479, '确定要删除这条回复吗？此操作不可恢复。'),
-    textCopy('post-action-delete-confirm-confirm', 479, '删除'),
+    createUiTextCopy('post-action-edit-label', 479, '编辑'),
+    createUiTextCopy('post-action-edit-description', 479, '修改这条回复内容。'),
+    createUiTextCopy('post-action-delete-label', 479, '删除'),
+    createUiTextCopy('post-action-delete-description', 479, '永久删除这条回复。'),
+    createUiTextCopy('post-action-delete-confirm-title', 479, '删除回复'),
+    createUiTextCopy('post-action-delete-confirm-message', 479, '确定要删除这条回复吗？此操作不可恢复。'),
+    createUiTextCopy('post-action-delete-confirm-confirm', 479, '删除'),
     {
       key: 'post-action-toggle-hide-label',
       order: 479,
@@ -318,7 +319,7 @@ function postsCopyDefinitions() {
         text: isHidden ? `隐藏了第 ${targetPostNumber} 楼回复` : `恢复显示第 ${targetPostNumber} 楼回复`,
       }),
     },
-    textCopy('post-composer-content-placeholder', 620, '输入你的回复... 支持 Markdown、@用户名 和代码块'),
+    createUiTextCopy('post-composer-content-placeholder', 620, '输入你的回复... 支持 Markdown、@用户名 和代码块'),
     {
       key: 'post-composer-submit',
       order: 630,
@@ -393,8 +394,8 @@ function postsCopyDefinitions() {
           : '确定要关闭回复框吗？当前内容会保留在本地草稿中。',
       }),
     },
-    textCopy('post-composer-close-confirm', 636, '关闭'),
-    textCopy('post-composer-close-cancel', 637, '继续编辑'),
+    createUiTextCopy('post-composer-close-confirm', 636, '关闭'),
+    createUiTextCopy('post-composer-close-cancel', 637, '继续编辑'),
     {
       key: 'post-composer-draft-restored',
       order: 638,
@@ -405,10 +406,10 @@ function postsCopyDefinitions() {
           : '已恢复本地回复草稿。',
       }),
     },
-    textCopy('post-composer-draft-restore-error', 639, '回复草稿恢复失败。'),
-    textCopy('post-composer-draft-emptied', 640, '回复草稿已清空。'),
-    textCopy('post-composer-draft-saved', 641, '回复草稿已保存。'),
-    textCopy('post-composer-draft-cleared-local', 642, '已清除本地回复草稿。'),
+    createUiTextCopy('post-composer-draft-restore-error', 639, '回复草稿恢复失败。'),
+    createUiTextCopy('post-composer-draft-emptied', 640, '回复草稿已清空。'),
+    createUiTextCopy('post-composer-draft-saved', 641, '回复草稿已保存。'),
+    createUiTextCopy('post-composer-draft-cleared-local', 642, '已清除本地回复草稿。'),
     {
       key: 'post-composer-unsaved-exit-message',
       order: 642,
@@ -420,13 +421,4 @@ function postsCopyDefinitions() {
       }),
     },
   ]
-}
-
-function textCopy(key, order, text) {
-  return {
-    key,
-    order,
-    surfaces: [key],
-    resolve: () => ({ text }),
-  }
 }

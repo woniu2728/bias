@@ -820,6 +820,15 @@ export function registerUiCopy(item) {
   return upsertByKey(uiCopies, normalizedItem.key, normalizedItem)
 }
 
+export function createUiTextCopy(key, order, text) {
+  return {
+    key,
+    order,
+    surfaces: [key],
+    resolve: () => ({ text }),
+  }
+}
+
 export function registerForumRuntime(item) {
   const normalizedItem = normalizeRegisteredItem(item)
   return upsertByKey(forumRuntimeHooks, normalizedItem.key, normalizedItem)

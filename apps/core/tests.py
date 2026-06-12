@@ -497,6 +497,33 @@ class ExtensionManifestLoaderTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_loader_applies_default_compatibility_and_distribution_metadata(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            manifest_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+            }, ensure_ascii=False), encoding="utf-8")
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifest = loader.discover_manifests()[0]
+
+            self.assertEqual(manifest.compatibility.bias_version, "^1.0.0")
+            self.assertEqual(manifest.compatibility.api_version, "1.0")
+            self.assertEqual(manifest.compatibility.api_stability, "experimental")
+            self.assertEqual(manifest.compatibility.api_stability_label, "实验性")
+            self.assertEqual(
+                manifest.compatibility.breaking_change_policy,
+                "扩展协议调整会随 Bias 主版本升级同步说明。",
+            )
+            self.assertEqual(manifest.distribution.channel, "private")
+            self.assertEqual(manifest.distribution.channel_label, "私有分发")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_loader_reads_extension_manifest_from_extensions_directory(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -4279,6 +4306,11 @@ class ExtensionPolicyIntegrationTests(TestCase):
         with patch("apps.core.extensions.policy_runtime_service.evaluate_model_policy", return_value=None):
             with patch("apps.core.forum_permissions.has_forum_permission", return_value=False):
                 self.assertFalse(can("actor", "discussion.edit", "discussion"))
+        with patch("apps.core.extensions.policy_runtime_service.evaluate_model_policy", return_value=None):
+            with patch("apps.core.forum_permissions.has_forum_permission", side_effect=RuntimeError("permission backend down")):
+                with self.assertLogs("apps.core.authorization", level="WARNING") as logs:
+                    self.assertFalse(can("actor", "discussion.edit", "discussion"))
+        self.assertTrue(any("Forum permission fallback failed" in message for message in logs.output))
 
         class DiscussionPolicy(AuthorizationPolicy):
             def discussion_edit(self, user, model, **context):
@@ -4676,6 +4708,20 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
             self.assertTrue(any(item.code == "missing_frontend_admin_entry" for item in result.issues))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_admin_content_validation_logs_extension_registry_failures(self):
+        from apps.core.admin_content_api import _resolve_available_extension_ids_for_validation
+
+        registry = Mock()
+        registry.get_extensions.side_effect = RuntimeError("registry unavailable")
+
+        with patch("apps.core.admin_content_api.get_core_module_ids", return_value=("core",)):
+            with patch("apps.core.admin_content_api.get_extension_registry", return_value=registry):
+                with self.assertLogs("apps.core.admin_content_api", level="WARNING") as logs:
+                    extension_ids = _resolve_available_extension_ids_for_validation()
+
+        self.assertEqual(extension_ids, {"core"})
+        self.assertTrue(any("Failed to resolve installed extension ids" in message for message in logs.output))
 
     def test_validate_extension_manifests_rejects_optional_dependency_top_level_imports(self):
         temp_dir = make_workspace_temp_dir()
@@ -14127,6 +14173,25 @@ class QueueServiceTests(TestCase):
         self.assertEqual(metrics["enqueued_count"], 0)
         self.assertEqual(metrics["fallback_count"], 0)
 
+    def test_queue_dispatch_records_sync_from_initial_queue_state(self):
+        from apps.core.queue_service import QueueService
+
+        class DummyTask:
+            name = "tests.initial_sync_task"
+
+            def delay(self):
+                raise AssertionError("queue should be disabled")
+
+        QueueService.reset_metrics()
+        with patch("apps.core.queue_service.QueueService.should_enqueue", side_effect=[False]) as should_enqueue:
+            result = QueueService.dispatch_celery_task(DummyTask(), fallback=lambda: "sync")
+
+        metrics = QueueService.get_metrics()
+        self.assertEqual(result, "sync")
+        self.assertEqual(should_enqueue.call_count, 1)
+        self.assertEqual(metrics["sync_count"], 1)
+        self.assertEqual(metrics["fallback_count"], 0)
+
 
 class InstallForumCommandTests(TestCase):
     def _success_result(self, args):
@@ -14613,6 +14678,14 @@ class EnsureAdminCommandTests(TestCase):
         self.assertTrue(set(get_registry_staff_managed_admin_permission_codes()).issubset(permissions))
         self.assertIn("admin.approval.view", permissions)
         self.assertIn("admin.flag.view", permissions)
+        self.assertIn("post.edit", permissions)
+        self.assertIn("post.delete", permissions)
+
+        member_permissions = set(
+            Permission.objects.filter(group_id=3).values_list("permission", flat=True)
+        )
+        self.assertIn("post.editOwn", member_permissions)
+        self.assertIn("post.deleteOwn", member_permissions)
 
 
 class UpgradeForumCommandTests(TestCase):
@@ -15254,6 +15327,8 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("discussion.edit", admin_permissions)
         self.assertIn("discussion.editOwn", admin_permissions)
         self.assertIn("discussion.deleteOwn", admin_permissions)
+        self.assertIn("post.edit", admin_permissions)
+        self.assertIn("post.delete", admin_permissions)
 
     def test_permissions_api_preserves_staff_runtime_baseline_when_saving_admin_group(self):
         admin_group = Group.objects.get(id=1)
@@ -15274,6 +15349,8 @@ class AdminPermissionsApiTests(TestCase):
         self.assertIn("discussion.edit", saved_permissions)
         self.assertIn("discussion.editOwn", saved_permissions)
         self.assertIn("discussion.deleteOwn", saved_permissions)
+        self.assertIn("post.edit", saved_permissions)
+        self.assertIn("post.delete", saved_permissions)
 
     def test_permissions_api_rejects_unknown_codes_on_save(self):
         response = self.client.post(

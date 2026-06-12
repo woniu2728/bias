@@ -361,7 +361,6 @@ def dispatch_post_update(context):
             user=context["user"],
             content=payload.content,
         )
-        post = PostService.get_post_by_id(post.id, context["user"])
         return serialize_post(post, context["user"])
     except Post.DoesNotExist:
         return api_error("帖子不存在", status=404)

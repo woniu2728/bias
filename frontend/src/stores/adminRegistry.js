@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import api from '@/api'
+import api from '@/api/index.js'
 
 export const useAdminRegistryStore = defineStore('adminRegistry', () => {
   const extensionScopes = ref([])
@@ -84,10 +84,12 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
       extensions.value = []
       extensionRuntime.value = {}
       extensionScopes.value = deriveExtensionScopes([])
+      loaded.value = true
       return
     }
     extensions.value = nextExtensions.filter(item => item?.product_visible !== false)
     extensionScopes.value = deriveExtensionScopes(nextExtensions)
+    loaded.value = true
   }
 
   function applyExtensionUpdate(extensionId, update) {
@@ -134,9 +136,6 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
 function deriveExtensionScopes(extensions) {
   const byId = new Map([
     ['core', { id: 'core', enabled: true }],
-    ['users', { id: 'users', enabled: true }],
-    ['discussions', { id: 'discussions', enabled: true }],
-    ['posts', { id: 'posts', enabled: true }],
   ])
 
   for (const extension of extensions || []) {

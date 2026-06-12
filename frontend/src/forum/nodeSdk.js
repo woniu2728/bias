@@ -9,6 +9,7 @@ export {
   getComposerDraftMeta,
   getComposerHosts,
   getComposerUploadHandler,
+  createUiTextCopy,
   runComposerPreviewTransformers,
   getComposerStatusItems,
   getComposerTools,

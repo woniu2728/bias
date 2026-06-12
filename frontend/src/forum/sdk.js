@@ -20,6 +20,7 @@ export {
   getComposerFields,
   getComposerHosts,
   getComposerUploadHandler,
+  createUiTextCopy,
   getComposerSecondaryActions,
   getComposerStatusItems,
   getComposerTools,

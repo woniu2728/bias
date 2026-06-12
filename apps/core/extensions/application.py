@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -59,6 +60,9 @@ from apps.core.forum_registry_types import (
     SearchFilterDefinition,
     UserPreferenceDefinition,
 )
+
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from apps.core.extensions.extension_runtime import Extension
@@ -2946,7 +2950,7 @@ class ExtensionApplication:
 
             set_realtime_service(self.realtime)
         except Exception:
-            pass
+            logger.warning("Failed to bind extension realtime service to forum runtime.", exc_info=True)
 
     def booting(self, callback: LifecycleCallback) -> None:
         if callable(callback):

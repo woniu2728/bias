@@ -1,3 +1,5 @@
+import logging
+
 from ninja import Body, Router
 from pathlib import Path
 
@@ -42,6 +44,7 @@ from apps.core.extensions.runtime_access import get_runtime_resource_registry
 
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 def _require_staff(request):
@@ -2224,7 +2227,7 @@ def _resolve_available_extension_ids_for_validation() -> set[str]:
     try:
         extension_ids.update(item.id for item in get_extension_registry().get_extensions())
     except Exception:
-        pass
+        logger.warning("Failed to resolve installed extension ids for admin content validation.", exc_info=True)
     return extension_ids
 
 

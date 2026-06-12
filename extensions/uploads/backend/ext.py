@@ -21,12 +21,7 @@ def extend():
         .default("attachment_max_size_mb", 10),
         SettingsExtender(generated_page=False)
         .default("advanced.upload_site_asset_max_size_mb", 2),
-        LifecycleExtender(
-            install=install,
-            enable=enable,
-            disable=disable,
-            uninstall=uninstall,
-        ),
+        LifecycleExtender(),
     ]
 
 
@@ -51,35 +46,3 @@ def setting_definitions():
             "order": 10,
         }),
     )
-
-
-def install(context):
-    return {
-        "status": "ok",
-        "status_label": "已安装",
-        "message": "Uploads 扩展已安装。",
-    }
-
-
-def enable(context):
-    return {
-        "status": "ok",
-        "status_label": "已启用",
-        "message": "Uploads 扩展已启用。",
-    }
-
-
-def disable(context):
-    return {
-        "status": "ok",
-        "status_label": "已停用",
-        "message": "Uploads 扩展已停用。",
-    }
-
-
-def uninstall(context):
-    return {
-        "status": "ok",
-        "status_label": "已卸载",
-        "message": "Uploads 扩展已卸载。",
-    }
