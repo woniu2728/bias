@@ -22,7 +22,7 @@ def _env_flag(value: str | None, default: bool = False) -> bool:
 
 
 class Command(BaseCommand):
-    help = "执行论坛版本升级：系统检查、迁移、默认组同步、版本同步与缓存清理。"
+    help = "执行论坛版本升级：系统检查、迁移、扩展同步、默认组同步、版本同步与缓存清理。"
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
@@ -32,6 +32,9 @@ class Command(BaseCommand):
         )
         parser.add_argument("--skip-check", action="store_true", help="跳过 Django 系统检查")
         parser.add_argument("--skip-migrate", action="store_true", help="跳过数据库迁移")
+        parser.add_argument("--skip-sync-extensions", action="store_true", help="跳过同步扩展安装记录")
+        parser.add_argument("--skip-extension-migrations", action="store_true", help="跳过同步扩展迁移摘要")
+        parser.add_argument("--skip-extension-frontend", action="store_true", help="跳过生成扩展前端构建清单")
         parser.add_argument("--skip-init-groups", action="store_true", help="跳过默认用户组与权限同步")
         parser.add_argument("--skip-clear-cache", action="store_true", help="跳过运行时缓存清理")
         parser.add_argument("--skip-collectstatic", action="store_true", help="跳过静态资源收集")
@@ -56,11 +59,17 @@ class Command(BaseCommand):
             steps.append(("Django 系统检查", ["check"]))
         if not options["skip_migrate"]:
             steps.append(("数据库迁移", ["migrate", "--noinput"]))
+        if not options["skip_sync_extensions"]:
+            steps.append(("扩展状态同步", ["sync_extensions"]))
+        if not options["skip_extension_migrations"]:
+            steps.append(("扩展迁移摘要同步", ["migrate_extensions", "--all"]))
         if not options["skip_init_groups"]:
             steps.append(("默认用户组与权限同步", ["init_groups"]))
         steps.append(("写入安装版本", ["sync_forum_version"]))
         if not options["skip_clear_cache"]:
             steps.append(("运行时缓存清理", ["clear_runtime_cache"]))
+        if not options["skip_extension_frontend"]:
+            steps.append(("扩展前端构建清单生成", ["build_extension_frontend"]))
         if not options["skip_collectstatic"]:
             steps.append(("静态资源收集", ["collectstatic", "--noinput"]))
 

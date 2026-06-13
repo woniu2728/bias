@@ -118,7 +118,7 @@ def assert_database_connection(config: SiteBootstrapConfig) -> None:
 
 
 class Command(BaseCommand):
-    help = "初始化论坛：写入站点配置、执行迁移、初始化默认用户组并创建管理员。"
+    help = "初始化论坛：写入站点配置、执行迁移、同步扩展、初始化默认用户组并创建管理员。"
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
@@ -133,6 +133,9 @@ class Command(BaseCommand):
         )
         parser.add_argument("--overwrite", action="store_true", help="覆盖已有站点配置")
         parser.add_argument("--skip-migrate", action="store_true", help="跳过执行 migrate")
+        parser.add_argument("--skip-sync-extensions", action="store_true", help="跳过同步扩展安装记录")
+        parser.add_argument("--skip-extension-migrations", action="store_true", help="跳过同步扩展迁移摘要")
+        parser.add_argument("--skip-extension-frontend", action="store_true", help="跳过生成扩展前端构建清单")
         parser.add_argument("--skip-admin", action="store_true", help="跳过创建或更新管理员账号")
         parser.add_argument("--skip-collectstatic", action="store_true", help="跳过执行 collectstatic")
         parser.add_argument("--admin-username", help="管理员用户名")
@@ -191,8 +194,23 @@ class Command(BaseCommand):
             else:
                 self.stdout.write("[SKIP] 已跳过 migrate")
 
+            if not options["skip_sync_extensions"]:
+                self._run_manage_step("扩展状态同步", ["sync_extensions"], command_env)
+            else:
+                self.stdout.write("[SKIP] 已跳过 sync_extensions")
+
+            if not options["skip_extension_migrations"]:
+                self._run_manage_step("扩展迁移摘要同步", ["migrate_extensions", "--all"], command_env)
+            else:
+                self.stdout.write("[SKIP] 已跳过 migrate_extensions --all")
+
             self._run_manage_step("默认用户组与权限初始化", ["init_groups"], command_env)
             self._run_manage_step("写入安装版本", ["sync_forum_version"], command_env)
+
+            if not options["skip_extension_frontend"]:
+                self._run_manage_step("扩展前端构建清单生成", ["build_extension_frontend"], command_env)
+            else:
+                self.stdout.write("[SKIP] 已跳过 build_extension_frontend")
 
             if not options["skip_collectstatic"]:
                 self._run_manage_step("静态资源收集", ["collectstatic", "--noinput"], command_env)

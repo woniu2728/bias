@@ -14260,13 +14260,16 @@ class InstallForumCommandTests(TestCase):
             self.assertTrue(config.secret_key)
             self.assertTrue(config.jwt_secret_key)
 
-            self.assertEqual(mock_run_manage_py.call_count, 4)
+            self.assertEqual(mock_run_manage_py.call_count, 7)
             invoked_steps = [call.args[0] for call in mock_run_manage_py.call_args_list]
             self.assertEqual(
                 invoked_steps,
                 [
+                    ["sync_extensions"],
+                    ["migrate_extensions", "--all"],
                     ["init_groups"],
                     ["sync_forum_version"],
+                    ["build_extension_frontend"],
                     ["collectstatic", "--noinput"],
                     [
                         "ensure_admin",
@@ -14281,7 +14284,7 @@ class InstallForumCommandTests(TestCase):
             )
 
             first_args, first_env = mock_run_manage_py.call_args_list[0].args
-            self.assertEqual(first_args, ["init_groups"])
+            self.assertEqual(first_args, ["sync_extensions"])
             self.assertEqual(
                 first_env["BIAS_SITE_CONFIG"],
                 str(config_path),
@@ -14335,8 +14338,8 @@ class InstallForumCommandTests(TestCase):
             self.assertEqual(config.db_port, "5433")
             self.assertEqual(config.resolved_frontend_url(), "http://forum.example.com")
 
-            self.assertEqual(mock_run_manage_py.call_count, 3)
-            group_args, group_env = mock_run_manage_py.call_args_list[0].args
+            self.assertEqual(mock_run_manage_py.call_count, 6)
+            group_args, group_env = mock_run_manage_py.call_args_list[2].args
             self.assertEqual(group_args, ["init_groups"])
             self.assertEqual(group_env["BIAS_SITE_CONFIG"], str(config_path))
         finally:
@@ -14752,16 +14755,19 @@ class UpgradeForumCommandTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        self.assertEqual(mock_run_manage_py.call_count, 6)
+        self.assertEqual(mock_run_manage_py.call_count, 9)
         invoked_steps = [call.args[0] for call in mock_run_manage_py.call_args_list]
         self.assertEqual(
             invoked_steps,
             [
                 ["check"],
                 ["migrate", "--noinput"],
+                ["sync_extensions"],
+                ["migrate_extensions", "--all"],
                 ["init_groups"],
                 ["sync_forum_version"],
                 ["clear_runtime_cache"],
+                ["build_extension_frontend"],
                 ["collectstatic", "--noinput"],
             ],
         )
@@ -15296,6 +15302,91 @@ class SystemStatusApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["state"], "ready")
         self.assertIn("current_version", payload)
+
+
+class DoctorCommandTests(TestCase):
+    def test_doctor_command_reports_ok_payload_as_json(self):
+        stdout = StringIO()
+
+        call_command(
+            "doctor",
+            "--format",
+            "json",
+            "--skip-frontend",
+            "--skip-extensions",
+            stdout=stdout,
+        )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["summary"]["error_count"], 0)
+        check_names = {item["name"] for item in payload["checks"]}
+        self.assertIn("runtime_status", check_names)
+        self.assertIn("database", check_names)
+        self.assertIn("migrations", check_names)
+        self.assertIn("cache", check_names)
+
+    @patch("apps.core.management.commands.doctor.MigrationExecutor")
+    def test_doctor_command_fails_when_migrations_are_pending(self, executor_mock):
+        migration = SimpleNamespace(app_label="core", name="9999_pending")
+        executor = executor_mock.return_value
+        executor.loader.graph.leaf_nodes.return_value = [("core", "9999_pending")]
+        executor.migration_plan.return_value = [(migration, False)]
+
+        with self.assertRaisesMessage(CommandError, "doctor 检查失败"):
+            call_command(
+                "doctor",
+                "--skip-frontend",
+                "--skip-extensions",
+                stdout=StringIO(),
+            )
+
+    @patch("apps.core.management.commands.doctor.get_extension_manager")
+    def test_doctor_command_reports_extension_drift(self, get_manager):
+        manager = get_manager.return_value
+        manager.inspect_extension_packages.return_value = {
+            "summary": {
+                "discovered_count": 1,
+                "installed_count": 1,
+                "installation_record_count": 1,
+            },
+            "missing": [],
+            "version_drift": ["alpha-tools"],
+            "source_drift": [],
+            "unmanaged_discovered": [],
+            "lock": {"stale_ids": []},
+        }
+
+        with self.assertRaisesMessage(CommandError, "doctor 检查失败"):
+            call_command(
+                "doctor",
+                "--skip-frontend",
+                stdout=StringIO(),
+            )
+
+    @patch("apps.core.management.commands.doctor.inspect_extension_frontend_output_manifest")
+    @patch("apps.core.management.commands.doctor.get_frontend_vite_manifest_path")
+    @patch("apps.core.management.commands.doctor.get_frontend_dist_root")
+    def test_doctor_command_reports_missing_frontend_dist(self, get_dist_root, get_vite_manifest_path, inspect_manifest):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            dist_root = Path(temp_dir) / "frontend" / "dist"
+            get_dist_root.return_value = dist_root
+            get_vite_manifest_path.return_value = dist_root / ".vite" / "manifest.json"
+            inspect_manifest.return_value = {
+                "exists": True,
+                "input_stale": False,
+                "vite_manifest_exists": True,
+            }
+
+            with self.assertRaisesMessage(CommandError, "doctor 检查失败"):
+                call_command(
+                    "doctor",
+                    "--skip-extensions",
+                    stdout=StringIO(),
+                )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 class AdminPermissionsApiTests(TestCase):
