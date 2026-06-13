@@ -33,6 +33,7 @@ ResourceFieldResolver = Callable[[Any, dict], Any]
 ResourceBaseFieldResolver = Callable[[Any, dict], dict]
 ResourceRelationshipResolver = Callable[[Any, dict], Any]
 ResourcePreloadResolver = Callable[[dict], tuple[tuple[str, ...], tuple[Any, ...]]]
+ResourceAnnotateResolver = Callable[[dict], dict[str, Any]]
 ResourceEndpointHandler = Callable[[dict], Any]
 _JSONAPI_SKIP = object()
 
@@ -47,6 +48,7 @@ class ResourceFieldDefinition:
     select_related: Tuple[str, ...] = ()
     prefetch_related: Tuple[Any, ...] = ()
     preload_resolver: ResourcePreloadResolver | None = None
+    annotate_resolver: ResourceAnnotateResolver | None = None
     visible: Callable[[Any, dict], bool] | bool = True
     writable: Callable[[Any, dict], bool] | bool = False
     required_on_create: bool = False
@@ -194,6 +196,7 @@ class ResourcePreloadPlan:
     select_related: tuple[str, ...] = ()
     prefetch_related: tuple[Any, ...] = ()
     prefetch_where: tuple[tuple[str, Callable[[Any, dict], Any]], ...] = ()
+    annotations: tuple[tuple[str, Any], ...] = ()
 
 
 class ResourceRegistry:
@@ -909,8 +912,10 @@ class ResourceRegistry:
         select_related: list[str] = []
         prefetch_related: list[Any] = []
         prefetch_where: list[tuple[str, Callable[[Any, dict], Any]]] = []
+        annotations: list[tuple[str, Any]] = []
         seen_select: set[str] = set()
         seen_prefetch: set[str] = set()
+        seen_annotations: set[str] = set()
 
         selected_fields = set(only or [])
         for definition in self.get_effective_fields(resource, resolved_context):
@@ -924,6 +929,8 @@ class ResourceRegistry:
                 seen_select,
                 seen_prefetch,
                 prefetch_where,
+                annotations,
+                seen_annotations,
             )
 
         include_tree = self._build_include_tree(include or ())
@@ -943,6 +950,8 @@ class ResourceRegistry:
                 seen_select,
                 seen_prefetch,
                 prefetch_where,
+                annotations,
+                seen_annotations,
                 include=include,
             )
             nested_include = include_tree.get(definition.relationship) or {}
@@ -970,6 +979,7 @@ class ResourceRegistry:
             select_related=tuple(select_related),
             prefetch_related=tuple(prefetch_related),
             prefetch_where=tuple(prefetch_where),
+            annotations=tuple(annotations),
         )
 
     def apply_preload_plan(
@@ -991,6 +1001,8 @@ class ResourceRegistry:
             queryset = queryset.select_related(*plan.select_related)
         if plan.prefetch_related:
             queryset = queryset.prefetch_related(*plan.prefetch_related)
+        if plan.annotations:
+            queryset = queryset.annotate(**dict(plan.annotations))
         return queryset
 
     def build_endpoint_preload_plan(
@@ -1022,8 +1034,10 @@ class ResourceRegistry:
         select_related = list(plan.select_related)
         prefetch_related = list(plan.prefetch_related)
         prefetch_where = list(plan.prefetch_where)
+        annotations = list(plan.annotations)
         seen_select = set(select_related)
         seen_prefetch = {self._prefetch_key(item) for item in prefetch_related}
+        seen_annotations = {name for name, _value in annotations}
 
         self._merge_preload_definition(
             definition,
@@ -1033,12 +1047,15 @@ class ResourceRegistry:
             seen_select,
             seen_prefetch,
             prefetch_where,
+            annotations,
+            seen_annotations,
             include=include,
         )
         return ResourcePreloadPlan(
             select_related=tuple(select_related),
             prefetch_related=tuple(prefetch_related),
             prefetch_where=tuple(prefetch_where),
+            annotations=tuple(annotations),
         )
 
     def apply_resource_payload(
@@ -2335,6 +2352,8 @@ class ResourceRegistry:
         seen_select: set[str],
         seen_prefetch: set[str],
         prefetch_where: list[tuple[str, Callable[[Any, dict], Any]]] | None = None,
+        annotations: list[tuple[str, Any]] | None = None,
+        seen_annotations: set[str] | None = None,
         include: Tuple[str, ...] | List[str] | None = None,
     ) -> None:
         for item in getattr(definition, "select_related", ()) or ():
@@ -2361,6 +2380,15 @@ class ResourceRegistry:
                 if prefetch_key and prefetch_key not in seen_prefetch:
                     seen_prefetch.add(prefetch_key)
                     prefetch_related.append(item)
+
+        annotate_resolver = getattr(definition, "annotate_resolver", None)
+        if annotate_resolver is not None and annotations is not None and seen_annotations is not None:
+            for name, expression in (annotate_resolver(context) or {}).items():
+                normalized = str(name or "").strip()
+                if not normalized or normalized in seen_annotations:
+                    continue
+                seen_annotations.add(normalized)
+                annotations.append((normalized, expression))
 
         for item in getattr(definition, "eager_load", ()) or ():
             prefetch_key = self._prefetch_key(item)
@@ -2536,6 +2564,7 @@ class ResourceRegistry:
             select_related=field.select_related,
             prefetch_related=field.prefetch_related,
             preload_resolver=field.preload_resolver,
+            annotate_resolver=getattr(field, "annotate_resolver", None),
             visible=field.visible,
             writable=field.writable,
             required_on_create=field.required_on_create,

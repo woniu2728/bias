@@ -28,6 +28,8 @@ export const generatedAdminExtensionModules = {
 }
 
 export const generatedForumExtensionModules = {
+  "../../../extensions/ai/frontend/forum/index.js": () => import("../../../extensions/ai/frontend/forum/index.js"),
+  "ai": () => import("../../../extensions/ai/frontend/forum/index.js"),
   "../../../extensions/approval/frontend/forum/index.js": () => import("../../../extensions/approval/frontend/forum/index.js"),
   "approval": () => import("../../../extensions/approval/frontend/forum/index.js"),
   "../../../extensions/discussions/frontend/forum/index.js": () => import("../../../extensions/discussions/frontend/forum/index.js"),
@@ -58,6 +60,8 @@ export const generatedForumExtensionModules = {
   "../../../extensions/notifications/frontend/forum/NotificationView.vue": () => import("../../../extensions/notifications/frontend/forum/NotificationView.vue"),
   "notifications:./NotificationView.vue": () => import("../../../extensions/notifications/frontend/forum/NotificationView.vue"),
   "notifications:extensions/notifications/frontend/forum/NotificationView.vue": () => import("../../../extensions/notifications/frontend/forum/NotificationView.vue"),
+  "../../../extensions/points/frontend/forum/index.js": () => import("../../../extensions/points/frontend/forum/index.js"),
+  "points": () => import("../../../extensions/points/frontend/forum/index.js"),
   "../../../extensions/posts/frontend/forum/index.js": () => import("../../../extensions/posts/frontend/forum/index.js"),
   "posts": () => import("../../../extensions/posts/frontend/forum/index.js"),
   "../../../extensions/realtime/frontend/forum/index.js": () => import("../../../extensions/realtime/frontend/forum/index.js"),

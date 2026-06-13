@@ -68,7 +68,6 @@ export const useNotificationStore = defineStore('notification', () => {
     ws.value.onopen = () => {
       didOpen = true
       consecutiveConnectFailures = 0
-      console.log('WebSocket连接成功')
 
       if (reconnectTimer) {
         clearTimeout(reconnectTimer)
@@ -121,8 +120,6 @@ export const useNotificationStore = defineStore('notification', () => {
     }
 
     ws.value.onclose = () => {
-      console.log('WebSocket连接关闭')
-
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer)
         heartbeatTimer = null

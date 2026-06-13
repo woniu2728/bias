@@ -71,7 +71,7 @@ class LikesExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
         owned_item = audit["items"][0]
 
         self.assertEqual(extension["id"], "likes")
-        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+        self.assertIn("0001_state_post_like.py", extension["migration_plan"]["pending_files"])
         self.assertEqual(audit["extension_native_count"], 1)
         self.assertEqual(audit["app_label_migration_required_count"], 0)
         self.assertEqual(audit["app_label_migration_plan_required_count"], 0)
@@ -142,6 +142,41 @@ class LikesExtensionTests(TestCase):
         self.assertTrue(any(item["module_id"] == "likes" and item["relationship"] == "likes" for item in payload["resource_relationships"]))
         self.assertTrue(any(item["module_id"] == "likes" and item["filter"] == "likedBy" for item in payload["resource_filters"]))
         self.assertTrue(any(item["code"] == "postLiked" for item in payload["notification_types"]))
+
+    def test_post_like_preload_uses_count_annotation_without_loading_all_likes(self):
+        registry = get_resource_registry()
+
+        default_plan = registry.build_preload_plan("post", {"user": self.liker})
+        default_prefetch_targets = {
+            getattr(item, "to_attr", "")
+            for item in default_plan.prefetch_related
+        }
+        include_plan = registry.build_preload_plan("post", {"user": self.liker}, include=("likes",))
+        include_prefetch_targets = {
+            getattr(item, "to_attr", "")
+            for item in include_plan.prefetch_related
+        }
+        default_annotation_names = {name for name, _expression in default_plan.annotations}
+
+        self.assertIn("likes_count", default_annotation_names)
+        self.assertIn("viewer_likes_cache", default_prefetch_targets)
+        self.assertNotIn("likes_cache", default_prefetch_targets)
+        self.assertIn("likes_cache", include_prefetch_targets)
+
+    def test_post_global_index_reports_likes_from_annotation(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            like_runtime_post(self.post.id, self.liker)
+        token = RefreshToken.for_user(self.liker).access_token
+
+        response = self.client.get(
+            "/api/posts",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = next(item for item in response.json()["data"] if item["id"] == self.post.id)
+        self.assertEqual(payload["like_count"], 1)
+        self.assertTrue(payload["is_liked"])
 
     def test_duplicate_like_raises_value_error_not_integrity_error(self):
         with self.captureOnCommitCallbacks(execute=True):

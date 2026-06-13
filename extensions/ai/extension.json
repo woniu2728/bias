@@ -1,0 +1,34 @@
+{
+  "id": "ai",
+  "name": "AI 助手",
+  "version": "1.0.0",
+  "description": "为论坛提供 AI 角色召唤、提问教练、悬赏裁判和讨论摘要能力。",
+  "icon": "fas fa-sparkles",
+  "category": "feature",
+  "authors": [
+    "Bias"
+  ],
+  "dependencies": [
+    "core",
+    "discussions",
+    "posts",
+    "users"
+  ],
+  "optional_dependencies": [
+    "points"
+  ],
+  "provides": [
+    "ai-assistant",
+    "ai-discussion-summary"
+  ],
+  "backend_entry": "extensions.ai.backend.ext",
+  "frontend_forum_entry": "extensions/ai/frontend/forum/index.js",
+  "security": {
+    "support_email": "",
+    "capabilities_notice": "该扩展会把用户主动提交的标题、正文或讨论可见回复发送到管理员配置的 OpenAI 兼容 AI 服务。"
+  },
+  "extra": {
+    "auto_install": true,
+    "auto_enable": true
+  }
+}

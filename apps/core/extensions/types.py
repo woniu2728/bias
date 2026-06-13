@@ -219,6 +219,7 @@ class ExtensionResourceFieldDefinition:
     select_related: Tuple[str, ...] = ()
     prefetch_related: Tuple[Any, ...] = ()
     preload_resolver: Callable[[dict], tuple[tuple[str, ...], tuple[Any, ...]]] | None = None
+    annotate_resolver: Callable[[dict], dict[str, Any]] | None = None
     visible: Callable[[Any, dict], bool] | bool = True
     writable: Callable[[Any, dict], bool] | bool = False
     required_on_create: bool = False

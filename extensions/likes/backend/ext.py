@@ -22,7 +22,9 @@ from extensions.likes.backend.events import PostLikedEvent
 from extensions.likes.backend.handlers import dispatch_post_like_mutation
 from extensions.likes.backend.listeners import handle_post_liked_notification
 from extensions.likes.backend.resources import (
+    post_like_count_annotate_resolver,
     post_like_preload_resolver,
+    post_likes_relationship_preload_resolver,
     resolve_post_likes,
     resolve_post_is_liked,
     resolve_post_like_count,
@@ -185,7 +187,7 @@ def post_resource_field_definitions():
             module_id=EXTENSION_ID,
             resolver=resolve_post_like_count,
             description="当前回复的点赞数量。",
-            preload_resolver=post_like_preload_resolver,
+            annotate_resolver=post_like_count_annotate_resolver,
         ),
         ResourceFieldDefinition(
             resource="post",
@@ -213,7 +215,7 @@ def post_resource_relationship_definitions():
             module_id=EXTENSION_ID,
             resolver=resolve_post_likes,
             description="点赞该回复的用户列表。",
-            preload_resolver=post_like_preload_resolver,
+            preload_resolver=post_likes_relationship_preload_resolver,
             resource_type="post_user",
             many=True,
         ),

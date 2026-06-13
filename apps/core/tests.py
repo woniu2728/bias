@@ -8371,6 +8371,33 @@ class ResourceRegistryTests(TestCase):
         payload = registry.serialize("discussion", Target(), {"suffix": "ok"})
         self.assertEqual(payload, {"summary": "3:ok"})
 
+    def test_preload_plan_applies_resource_field_annotations(self):
+        registry = ResourceRegistry()
+
+        class QuerySet:
+            def __init__(self):
+                self.annotations = None
+
+            def annotate(self, **annotations):
+                self.annotations = annotations
+                return self
+
+        registry.register_field(
+            ResourceFieldDefinition(
+                resource="post",
+                field="like_count",
+                module_id="likes",
+                resolver=lambda instance, context: 0,
+                annotate_resolver=lambda context: {"likes_count": "COUNT(likes)"},
+            )
+        )
+
+        plan = registry.build_preload_plan("post", {})
+        queryset = registry.apply_preload_plan(QuerySet(), "post", {})
+
+        self.assertEqual(plan.annotations, (("likes_count", "COUNT(likes)"),))
+        self.assertEqual(queryset.annotations, {"likes_count": "COUNT(likes)"})
+
     def test_resource_definition_mutators_raise_for_invalid_return_type(self):
         registry = ResourceRegistry()
         registry.register_field(

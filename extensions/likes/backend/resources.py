@@ -1,20 +1,14 @@
 from __future__ import annotations
 
-from django.db.models import Prefetch
+from django.db.models import Count, Prefetch
 
 from apps.core.extensions.runtime_access import serialize_runtime_user
 from extensions.likes.backend.models import PostLike
 
 
 def post_like_preload_resolver(context: dict):
+    prefetches = []
     user = context.get("user")
-    prefetches = [
-        Prefetch(
-            "likes",
-            queryset=PostLike.objects.select_related("user"),
-            to_attr="likes_cache",
-        )
-    ]
     if user and user.is_authenticated:
         prefetches.append(
             Prefetch(
@@ -26,7 +20,24 @@ def post_like_preload_resolver(context: dict):
     return (), tuple(prefetches)
 
 
+def post_likes_relationship_preload_resolver(context: dict):
+    return (), (
+        Prefetch(
+            "likes",
+            queryset=PostLike.objects.select_related("user"),
+            to_attr="likes_cache",
+        ),
+    )
+
+
+def post_like_count_annotate_resolver(context: dict) -> dict:
+    return {"likes_count": Count("likes", distinct=True)}
+
+
 def resolve_post_like_count(post, context: dict) -> int:
+    annotated_count = getattr(post, "likes_count", None)
+    if annotated_count is not None:
+        return int(annotated_count or 0)
     cached = getattr(post, "likes_cache", None)
     if cached is not None:
         return len(cached)
