@@ -37,10 +37,16 @@ class Command(BaseCommand):
             default="text",
             help="输出格式，默认 text，可选 json 便于 CI 消费",
         )
+        parser.add_argument(
+            "--internal",
+            action="store_true",
+            help="以内置扩展模式校验，允许 Bias 内部扩展使用非公开运行时辅助模块",
+        )
 
     def handle(self, *args, **options):
         extensions_path = Path(options.get("extensions_path") or (Path(settings.BASE_DIR) / "extensions"))
         strict = bool(options.get("strict"))
+        internal = bool(options.get("internal"))
         output_format = str(options.get("format") or "text").strip() or "text"
 
         loader = ExtensionManifestLoader(extensions_path)
@@ -55,6 +61,7 @@ class Command(BaseCommand):
             available_extension_ids=available_extension_ids,
             extensions_base_path=extensions_path,
             strict_runtime_hooks=strict,
+            public_sdk_only=not internal,
         )
         if result.error_count == 0:
             try:
@@ -66,11 +73,13 @@ class Command(BaseCommand):
                 available_extension_ids=available_extension_ids,
                 extensions_base_path=extensions_path,
                 strict_runtime_hooks=strict,
+                public_sdk_only=not internal,
             )
 
         payload = {
             "extensions_path": str(extensions_path),
             "strict": strict,
+            "internal": internal,
             "summary": {
                 "manifest_count": len(result.manifests),
                 "error_count": result.error_count,

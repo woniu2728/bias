@@ -1603,4 +1603,3 @@ class AdminGroupManagementApiTests(TestCase):
         self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(response.json()["error"], "系统默认用户组不允许删除")
         self.assertTrue(Group.objects.filter(id=1, name="Admin").exists())
-

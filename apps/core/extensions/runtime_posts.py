@@ -128,6 +128,10 @@ def get_runtime_first_post(discussion: Any):
     return runtime_service_method(require_runtime_post_service(), "get_first_post")(discussion)
 
 
+def resolve_runtime_post_content_html(post: Any) -> str:
+    return str(runtime_service_method(require_runtime_post_service(), "resolve_content_html")(post) or "")
+
+
 def update_runtime_first_post_content(discussion: Any, *, content: str, content_html: str, editor: Any):
     return runtime_service_method(require_runtime_post_service(), "update_first_post_content")(
         discussion,

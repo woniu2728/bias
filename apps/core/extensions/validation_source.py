@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 from apps.core.extensions.types import ExtensionManifest
@@ -8,6 +9,7 @@ from apps.core.extensions.validation_rules import (
     FORBIDDEN_CROSS_EXTENSION_INTERNAL_IMPORT_RE,
     FORBIDDEN_EXTENSION_MANIFEST_FIELD_PATTERNS,
     FORBIDDEN_EXTENSION_SOURCE_PATTERNS,
+    PUBLIC_EXTENSION_IMPORT_MODULES,
     PYTHON_EXTENSION_IMPORT_PATTERN,
     PYTHON_EXTENSION_INTERNAL_IMPORT_PATTERN,
     SKIPPED_SOURCE_DIRS,
@@ -90,6 +92,7 @@ def validate_cross_extension_imports(
     base_path: Path,
     *,
     known_extension_ids: set[str],
+    public_sdk_only: bool = False,
 ) -> None:
     extension_dir = extension_root_path(manifest, base_path)
     if not extension_dir.exists():
@@ -154,6 +157,65 @@ def validate_cross_extension_imports(
                 extension_id=manifest.id,
                 field=relative_path,
             )
+
+        if public_sdk_only:
+            validate_public_sdk_imports(collector, manifest, source, relative_path)
+
+
+def validate_public_sdk_imports(
+    collector: ExtensionValidationCollector,
+    manifest: ExtensionManifest,
+    source: str,
+    relative_path: str,
+) -> None:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return
+
+    for imported_path in iter_core_import_paths(tree):
+        if imported_path == "apps.core":
+            collector.add_error(
+                "forbidden_core_internal_import",
+                "扩展源码不能直接导入 apps.core 根包；请只使用 apps.core.extensions 暴露的公共 SDK 接口。",
+                extension_id=manifest.id,
+                field=relative_path,
+            )
+            continue
+        if imported_path in PUBLIC_EXTENSION_IMPORT_MODULES:
+            continue
+        collector.add_error(
+            "forbidden_core_internal_import",
+            "扩展源码不能直接导入 apps.core 内部模块；请只使用 apps.core.extensions 暴露的公共 SDK 接口。",
+            extension_id=manifest.id,
+            field=relative_path,
+        )
+
+
+def iter_core_import_paths(tree: ast.AST):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                name = str(alias.name or "").strip()
+                if name == "apps.core" or name.startswith("apps.core."):
+                    yield normalize_core_public_import_path(name)
+        elif isinstance(node, ast.ImportFrom):
+            if getattr(node, "level", 0):
+                continue
+            module = str(node.module or "").strip()
+            if module == "apps.core":
+                yield "apps.core"
+            elif module.startswith("apps.core."):
+                yield normalize_core_public_import_path(module)
+
+
+def normalize_core_public_import_path(module: str) -> str:
+    parts = str(module or "").strip().split(".")
+    if len(parts) <= 2:
+        return "apps.core"
+    if parts[:3] == ["apps", "core", "extensions"] and len(parts) >= 4:
+        return ".".join(parts[:4])
+    return ".".join(parts[:3])
 
 
 def iter_extension_source_files(extension_dir: Path):

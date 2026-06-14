@@ -54,6 +54,7 @@ def validate_extension_manifests_with_available_ids(
     available_extension_ids: set[str] | None,
     extensions_base_path: Path | None = None,
     strict_runtime_hooks: bool = False,
+    public_sdk_only: bool = False,
 ) -> ExtensionValidationResult:
     collector = ExtensionValidationCollector()
     collector.manifests.extend(manifests)
@@ -97,6 +98,7 @@ def validate_extension_manifests_with_available_ids(
                 manifest,
                 base_path,
                 known_extension_ids=known_extension_ids,
+                public_sdk_only=public_sdk_only,
             )
 
     return collector.build()

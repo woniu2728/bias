@@ -203,11 +203,4 @@ __all__ = [
     "deny",
     "force_allow",
     "force_deny",
-    "get_extension_registry",
 ]
-
-
-def get_extension_registry():
-    from apps.core.extensions.registry import get_extension_registry as _get_extension_registry
-
-    return _get_extension_registry()

@@ -644,7 +644,7 @@ class ReleaseVersionControlTests(TestCase):
                 }
                 with override_settings(BASE_DIR=base_dir):
                     call_command("prepare_release", "--tag", "v1.2.3")
-                validate_mock.assert_called_once_with("validate_extensions", "--strict")
+                validate_mock.assert_called_once_with("validate_extensions", "--strict", "--internal")
 
             self.assertEqual((base_dir / "VERSION").read_text(encoding="utf-8").strip(), "1.2.3")
             package_json = json.loads((base_dir / "frontend" / "package.json").read_text(encoding="utf-8"))
@@ -688,7 +688,7 @@ class ReleaseVersionControlTests(TestCase):
                 with override_settings(BASE_DIR=base_dir):
                     with self.assertRaisesMessage(CommandError, "扩展诊断存在 2 个阻断项"):
                         call_command("prepare_release", "--set-version", "1.0.0", "--allow-dirty")
-                validate_mock.assert_called_once_with("validate_extensions", "--strict")
+                validate_mock.assert_called_once_with("validate_extensions", "--strict", "--internal")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -733,7 +733,7 @@ class ReleaseVersionControlTests(TestCase):
                         "--extension-report",
                         str(report_path),
                     )
-                validate_mock.assert_called_once_with("validate_extensions", "--strict")
+                validate_mock.assert_called_once_with("validate_extensions", "--strict", "--internal")
 
             payload = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["summary"]["attention_count"], 0)

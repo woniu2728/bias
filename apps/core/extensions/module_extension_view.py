@@ -14,7 +14,7 @@ from apps.core.extensions.types import (
 
 def resolve_module_extension_definition(module):
     try:
-        from apps.core.extensions import get_extension_registry
+        from apps.core.extensions.registry import get_extension_registry
 
         extension = get_extension_registry().get_extension(module.module_id)
         if extension is not None:

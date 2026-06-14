@@ -8,7 +8,7 @@ from apps.core.models import AuditLog
 from apps.core.services import PaginationService
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
 from apps.core.extensions.bootstrap import get_extension_host
-from apps.core.extensions import get_extension_registry
+from apps.core.extensions.registry import get_extension_registry
 from apps.core.extensions.validation import (
     inspect_backend_entry,
     inspect_frontend_admin_entry,

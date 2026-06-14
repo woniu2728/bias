@@ -100,6 +100,7 @@ from apps.core.extensions.runtime_posts import (
     reject_runtime_post,
     require_runtime_post_service,
     resubmit_runtime_first_post,
+    resolve_runtime_post_content_html,
     serialize_runtime_post,
     serialize_runtime_post_by_id,
     set_runtime_post_hidden_state,
@@ -147,6 +148,7 @@ from apps.core.extensions.runtime_tags import (
 )
 from apps.core.extensions.runtime_users import (
     apply_runtime_user_comment_count_deltas,
+    apply_runtime_user_group_processors,
     ensure_runtime_admin_user,
     ensure_runtime_forum_permission,
     ensure_runtime_user_email_confirmed,
@@ -156,6 +158,7 @@ from apps.core.extensions.runtime_users import (
     get_runtime_user_by_id,
     get_runtime_user_model,
     get_runtime_user_preference,
+    get_runtime_user_preference_transformers,
     get_runtime_user_service,
     get_runtime_username_id_map,
     has_runtime_forum_permission,
@@ -167,6 +170,7 @@ from apps.core.extensions.runtime_users import (
     resolve_runtime_user_by_username,
     serialize_runtime_user,
     serialize_runtime_users_by_ids,
+    verify_runtime_user_password,
 )
 
 __all__ = [
@@ -174,6 +178,7 @@ __all__ = [
     "apply_runtime_discussion_search",
     "apply_runtime_model_visibility",
     "apply_runtime_user_comment_count_deltas",
+    "apply_runtime_user_group_processors",
     "approve_runtime_discussion",
     "approve_runtime_first_post",
     "approve_runtime_post",
@@ -258,6 +263,7 @@ __all__ = [
     "get_runtime_user_by_id",
     "get_runtime_user_model",
     "get_runtime_user_preference",
+    "get_runtime_user_preference_transformers",
     "get_runtime_user_service",
     "get_runtime_username_id_map",
     "get_runtime_view_service",
@@ -299,6 +305,7 @@ __all__ = [
     "requires_runtime_content_approval",
     "resubmit_runtime_first_post",
     "resolve_runtime_model_relation",
+    "resolve_runtime_post_content_html",
     "resolve_runtime_post_flag",
     "resolve_runtime_post_flags",
     "resolve_runtime_user_by_username",
@@ -308,6 +315,7 @@ __all__ = [
     "serialize_runtime_post_by_id",
     "serialize_runtime_user",
     "serialize_runtime_users_by_ids",
+    "verify_runtime_user_password",
     "set_runtime_discussion_hidden_state",
     "set_runtime_discussion_subscription_state",
     "set_runtime_post_hidden_state",

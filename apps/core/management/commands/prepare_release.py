@@ -60,7 +60,7 @@ class Command(BaseCommand):
         if not allow_dirty:
             self._ensure_clean_git_state()
 
-        call_command("validate_extensions", "--strict")
+        call_command("validate_extensions", "--strict", "--internal")
         inspection_payload = self._inspect_extensions()
         summary = inspection_payload.get("summary") or {}
         blocking_count = int(summary.get("blocking_count") or 0)

@@ -57,6 +57,24 @@ def get_runtime_user_preference(user: Any, key: str, fallback: Any = None) -> An
         return fallback
 
 
+def get_runtime_user_preference_transformers() -> dict[str, dict[str, Any]]:
+    from apps.core.extensions.system_runtime import get_runtime_user_preference_transformers as get_transformers
+
+    return dict(get_transformers() or {})
+
+
+def apply_runtime_user_group_processors(user: Any, group_ids: list[Any] | tuple[Any, ...]) -> list[Any]:
+    from apps.core.extensions.system_runtime import apply_runtime_user_group_processors as apply_processors
+
+    return list(apply_processors(user, list(group_ids or [])) or [])
+
+
+def verify_runtime_user_password(user: Any, password: str, *, default_checker: Any = None) -> bool:
+    from apps.core.extensions.system_runtime import verify_runtime_user_password as verify_password
+
+    return bool(verify_password(user, password, default_checker=default_checker))
+
+
 def get_runtime_user_model():
     service = require_runtime_user_service()
     model = service.get("model") if isinstance(service, dict) else getattr(service, "model", None)

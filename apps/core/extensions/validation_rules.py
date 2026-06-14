@@ -23,6 +23,14 @@ PYTHON_EXTENSION_INTERNAL_IMPORT_PATTERN = re.compile(
     r"^\s*(?:from\s+extensions\.([A-Za-z0-9_]+)([A-Za-z0-9_\.]*)\b|import\s+extensions\.([A-Za-z0-9_]+)([A-Za-z0-9_\.]*)\b)",
     re.MULTILINE,
 )
+PUBLIC_EXTENSION_IMPORT_MODULES = {
+    "apps.core.extensions",
+    "apps.core.extensions.runtime",
+    "apps.core.extensions.platform",
+    "apps.core.extensions.forum",
+    "apps.core.extensions.contracts",
+    "apps.core.extensions.sdk",
+}
 FORBIDDEN_CROSS_EXTENSION_INTERNAL_IMPORT_RE = re.compile(
     r"^\.backend\.(?:models|services|tasks|signals|events|visibility|admin|admin_api|api|handlers|resources|resource|listeners)(?:\.|$)"
 )

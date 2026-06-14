@@ -32,7 +32,8 @@ from apps.core.extensions.backend import run_extension_backend_hook
 from apps.core.extensions.exceptions import ExtensionStateError
 from apps.core.extensions.manifest import ExtensionManifestLoader
 from apps.core.extensions.registry import ExtensionRegistry
-from apps.core.extensions import ApiResourceExtender, ConditionalExtender, PostEventExtender, SearchDriverExtender, get_extension_registry
+from apps.core.extensions.registry import get_extension_registry
+from apps.core.extensions import ApiResourceExtender, ConditionalExtender, PostEventExtender, SearchDriverExtender
 from apps.core.extensions.extenders import ResourceExtender
 from apps.core.extensions.extenders import ValidatorExtender, MailExtender
 from apps.core.extensions.bootstrap import (
@@ -781,8 +782,7 @@ class ExtensionManifestLoaderTests(TestCase):
                 "backend_entry": "extensions.alpha_tools.backend.ext",
             }, ensure_ascii=False), encoding="utf-8")
             (backend_dir / "ext.py").write_text(
-                "from apps.core.extensions import SettingsExtender, RuntimeActionsExtender, setting_field\n"
-                "from apps.core.extensions.backend import _build_runtime_action_definition\n"
+                "from apps.core.extensions import SettingsExtender, RuntimeActionsExtender, runtime_action, setting_field\n"
                 "\n"
                 "def extend():\n"
                 "    return [\n"
@@ -790,7 +790,7 @@ class ExtensionManifestLoaderTests(TestCase):
                 "            setting_field({'key': 'cdn_url', 'label': 'CDN', 'type': 'text', 'default': ''}),\n"
                 "        )),\n"
                 "        RuntimeActionsExtender(actions=(\n"
-                "            _build_runtime_action_definition({'key': 'rebuild', 'label': '刷新', 'hook': 'run_rebuild_cache'}),\n"
+                "            runtime_action({'key': 'rebuild', 'label': '刷新', 'hook': 'run_rebuild_cache'}),\n"
                 "        )),\n"
                 "    ]\n",
                 encoding="utf-8",
@@ -4300,6 +4300,51 @@ class ExtensionPublicApiBoundaryTests(TestCase):
 
         self.assertEqual(violations, [])
 
+    def test_builtin_extension_runtime_code_does_not_import_private_core_modules(self):
+        forbidden = (
+            "from apps.core.api_errors",
+            "from apps.core.audit",
+            "from apps.core.auth",
+            "from apps.core.authorization",
+            "from apps.core.domain_events",
+            "from apps.core.extension_settings_service",
+            "from apps.core.extensions.backend",
+            "from apps.core.extensions.extenders",
+            "from apps.core.extensions.policy_runtime_service",
+            "from apps.core.email_service",
+            "from apps.core.file_service",
+            "from apps.core.forum_registry",
+            "from apps.core.forum_runtime",
+            "from apps.core.forum_permissions",
+            "from apps.core.jwt_auth",
+            "from apps.core.mail_drivers",
+            "from apps.core.markdown_service",
+            "from apps.core.models",
+            "from apps.core.online_service",
+            "from apps.core.queue_service",
+            "from apps.core.resource_api",
+            "from apps.core.resource_errors",
+            "from apps.core.resource_objects",
+            "from apps.core.runtime_checks",
+            "from apps.core.schemas",
+            "from apps.core.search_index_service",
+            "from apps.core.services",
+            "from apps.core.settings_service",
+            "from apps.core.storage_service",
+            "from apps.core.visibility",
+        )
+        extensions_root = Path(settings.BASE_DIR) / "extensions"
+        violations = []
+        for path in extensions_root.glob("*/backend/**/*.py"):
+            if path.name == "tests.py" or "django_migrations" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8")
+            for marker in forbidden:
+                if marker in text:
+                    violations.append(f"{path.relative_to(settings.BASE_DIR)}: {marker}")
+
+        self.assertEqual(violations, [])
+
     def test_builtin_extension_runtime_code_uses_platform_facade_for_common_core_helpers(self):
         forbidden = (
             "from apps.core.api_errors",
@@ -4445,7 +4490,12 @@ class ExtensionValidationTests(TestCase):
 
             loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
             manifests = [item.manifest for item in loader.discover()]
-            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+            result = validate_extension_manifests_with_available_ids(
+                manifests,
+                available_extension_ids={"core"},
+                extensions_base_path=Path(temp_dir) / "extensions",
+                public_sdk_only=True,
+            )
 
             self.assertFalse(result.ok)
             self.assertTrue(any(item.code == "missing_frontend_admin_entry_declaration" for item in result.issues))
@@ -4880,7 +4930,12 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
 
             loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
             manifests = [item.manifest for item in loader.discover()]
-            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+            result = validate_extension_manifests_with_available_ids(
+                manifests,
+                available_extension_ids={"core"},
+                extensions_base_path=Path(temp_dir) / "extensions",
+                public_sdk_only=True,
+            )
 
             self.assertFalse(result.ok)
             self.assertTrue(any(item.code == "missing_dependency" for item in result.issues))
@@ -5350,7 +5405,12 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
 
             loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
             manifests = loader.discover_manifests()
-            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+            result = validate_extension_manifests_with_available_ids(
+                manifests,
+                available_extension_ids={"core"},
+                extensions_base_path=Path(temp_dir) / "extensions",
+                public_sdk_only=True,
+            )
 
             self.assertFalse(result.ok)
             self.assertTrue(any(
@@ -5696,7 +5756,12 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
 
             loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
             manifests = loader.discover_manifests()
-            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+            result = validate_extension_manifests_with_available_ids(
+                manifests,
+                available_extension_ids={"core"},
+                extensions_base_path=Path(temp_dir) / "extensions",
+                public_sdk_only=True,
+            )
 
             self.assertFalse(result.ok)
             self.assertTrue(any(item.code == "invalid_django_app_config_namespace" for item in result.issues))
@@ -5718,7 +5783,12 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
 
             loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
             manifests = loader.discover_manifests()
-            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+            result = validate_extension_manifests_with_available_ids(
+                manifests,
+                available_extension_ids={"core"},
+                extensions_base_path=Path(temp_dir) / "extensions",
+                public_sdk_only=True,
+            )
 
             self.assertFalse(result.ok)
             self.assertTrue(any(item.code == "forbidden_django_migration_module_manifest_field" for item in result.issues))
@@ -5739,7 +5809,12 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
 
             loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
             manifests = loader.discover_manifests()
-            result = validate_extension_manifests(manifests, extensions_base_path=Path(temp_dir) / "extensions")
+            result = validate_extension_manifests_with_available_ids(
+                manifests,
+                available_extension_ids={"core"},
+                extensions_base_path=Path(temp_dir) / "extensions",
+                public_sdk_only=True,
+            )
 
             self.assertFalse(result.ok)
             self.assertTrue(any(item.code == "django_app_label_without_app_config" for item in result.issues))
@@ -5786,6 +5861,74 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
 
             self.assertFalse(result.ok)
             self.assertTrue(any(item.code == "forbidden_django_app_entry_import" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extension_manifests_rejects_apps_core_root_imports(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            backend_dir = manifest_dir / "backend"
+            backend_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "from apps.core import signals\n"
+                "\n"
+                "def extend():\n"
+                "    return []\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = loader.discover_manifests()
+            result = validate_extension_manifests_with_available_ids(
+                manifests,
+                available_extension_ids={"core"},
+                extensions_base_path=Path(temp_dir) / "extensions",
+                public_sdk_only=True,
+            )
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "forbidden_core_internal_import" for item in result.issues))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extension_manifests_rejects_apps_core_internal_module_imports(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            backend_dir = manifest_dir / "backend"
+            backend_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "from apps.core.extensions.backend import _build_runtime_action_definition\n"
+                "\n"
+                "def extend():\n"
+                "    return []\n",
+                encoding="utf-8",
+            )
+
+            loader = ExtensionManifestLoader(Path(temp_dir) / "extensions")
+            manifests = loader.discover_manifests()
+            result = validate_extension_manifests_with_available_ids(
+                manifests,
+                available_extension_ids={"core"},
+                extensions_base_path=Path(temp_dir) / "extensions",
+                public_sdk_only=True,
+            )
+
+            self.assertFalse(result.ok)
+            self.assertTrue(any(item.code == "forbidden_core_internal_import" for item in result.issues))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -6203,7 +6346,7 @@ class ExtensionManagementCommandTests(TestCase):
                     encoding="utf-8",
                 )
 
-                with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
+                with self.assertRaisesMessage(CommandError, "扩展校验失败"):
                     call_command(
                         "validate_extensions",
                         "--extensions-path",
@@ -6295,6 +6438,87 @@ class ExtensionManagementCommandTests(TestCase):
                     "--extensions-path",
                     str(Path(temp_dir) / "extensions"),
                 )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_rejects_core_internal_imports_by_default(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            backend_dir = manifest_dir / "backend"
+            backend_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "dependencies": ["core"],
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "from apps.core.models import Setting\n"
+                "from apps.core.extensions.backend import _build_runtime_action_definition\n"
+                "\n"
+                "def extend():\n"
+                "    return []\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesMessage(CommandError, "扩展校验失败"):
+                call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_allows_public_extension_facades_by_default(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            backend_dir = manifest_dir / "backend"
+            backend_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "dependencies": ["core"],
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "from apps.core.extensions import FrontendExtender, runtime_action\n"
+                "from apps.core.extensions.runtime import get_runtime_user_by_id\n"
+                "from apps.core.extensions.platform import api_error\n"
+                "from apps.core.extensions.forum import get_forum_registry\n"
+                "from apps.core.extensions.contracts import PermissionDefinition\n"
+                "\n"
+                "def extend():\n"
+                "    return []\n",
+                encoding="utf-8",
+            )
+
+            call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_validate_extensions_command_internal_mode_allows_core_internal_imports(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            manifest_dir = Path(temp_dir) / "extensions" / "alpha-tools"
+            backend_dir = manifest_dir / "backend"
+            backend_dir.mkdir(parents=True, exist_ok=False)
+            (manifest_dir / "extension.json").write_text(json.dumps({
+                "id": "alpha-tools",
+                "name": "Alpha Tools",
+                "version": "1.0.0",
+                "dependencies": ["core"],
+                "backend_entry": "extensions.alpha_tools.backend.ext",
+            }, ensure_ascii=False), encoding="utf-8")
+            (backend_dir / "ext.py").write_text(
+                "from apps.core.models import Setting\n"
+                "\n"
+                "def extend():\n"
+                "    return []\n",
+                encoding="utf-8",
+            )
+
+            call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"), "--internal")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

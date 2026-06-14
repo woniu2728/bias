@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from apps.core.extensions.runtime import get_runtime_user_preference_transformers
 from apps.core.extensions.forum import get_forum_registry
 
 
@@ -59,8 +60,6 @@ def serialize_user_preferences(user) -> dict:
 
 def _get_preference_transformers() -> dict:
     try:
-        from apps.core.extensions.system_runtime import get_runtime_user_preference_transformers
-
         return get_runtime_user_preference_transformers()
     except Exception:
         return {}

@@ -40,6 +40,7 @@ def post_service_provider() -> dict:
         "create_event_post": _create_event_post,
         "create_first_post": _create_first_post,
         "get_first_post": _get_first_post,
+        "resolve_content_html": PostService.resolve_content_html,
         "update_first_post_content": _update_first_post_content,
         "resubmit_first_post": _resubmit_first_post,
         "approve_first_post": _approve_first_post,
@@ -340,4 +341,3 @@ def _get_post_number(post_id: int):
     from extensions.posts.backend.models import Post
 
     return Post.objects.filter(id=post_id).values_list("number", flat=True).first()
-

@@ -18,7 +18,7 @@ from extensions.discussions.backend.schemas import (
     DiscussionUpdateSchema,
 )
 from extensions.discussions.backend.services import DiscussionService
-from extensions.posts.backend.services import PostService
+from apps.core.extensions.runtime import resolve_runtime_post_content_html
 
 
 def get_resource_registry():
@@ -354,7 +354,7 @@ def dispatch_discussion_show(context):
                 "id": post.id,
                 "number": post.number,
                 "content": post.content,
-                "content_html": PostService.resolve_content_html(post),
+                "content_html": resolve_runtime_post_content_html(post),
                 "user": serialize_runtime_user(post.user, resource="user_summary"),
                 "created_at": post.created_at,
                 "updated_at": post.updated_at,

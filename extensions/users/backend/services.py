@@ -14,6 +14,8 @@ from extensions.users.backend.models import User, Group, Permission, EmailToken,
 from apps.core.extensions.forum import AuditLog
 from apps.core.extensions.platform import evaluate_extension_policy
 from apps.core.extensions.forum import get_registry_staff_managed_admin_permission_codes
+from apps.core.extensions.runtime import apply_runtime_user_group_processors
+from apps.core.extensions.runtime import verify_runtime_user_password
 from extensions.users.backend.mail import queue_password_reset_email, queue_verification_email
 
 
@@ -132,8 +134,6 @@ class UserService:
             group_ids = list(user.user_groups.values_list("id", flat=True))
 
         try:
-            from apps.core.extensions.system_runtime import apply_runtime_user_group_processors
-
             group_ids = apply_runtime_user_group_processors(user, group_ids)
         except Exception:
             pass
@@ -306,8 +306,6 @@ class UserService:
 
     @staticmethod
     def check_user_password(user: User, password: str) -> bool:
-        from apps.core.extensions.system_runtime import verify_runtime_user_password
-
         return verify_runtime_user_password(
             user,
             password,
