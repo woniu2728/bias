@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from apps.core.extensions.application_types import (
     ApplicationNamedRoute,
@@ -10,6 +10,9 @@ from apps.core.extensions.application_types import (
 )
 from apps.core.extensions.container import resolve_container_value
 from apps.core.extensions.types import ExtensionFrontendRouteDefinition
+
+if TYPE_CHECKING:
+    from apps.core.extensions.application import ExtensionHost
 
 
 FRONTEND_UNSET = object()
