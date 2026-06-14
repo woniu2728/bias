@@ -7510,10 +7510,13 @@ class ExtensionRegistryTests(TestCase):
         entries = get_enabled_extension_runtime_entries(product_visible_only=True)
         self.assertTrue(any(item["id"] == "uploads" for item in entries))
 
-        with patch("apps.core.extension_service.reset_extension_runtime_state") as reset_runtime_mock:
+        with patch("apps.core.extension_service.reset_extension_runtime_state") as reset_runtime_mock, patch(
+            "apps.core.extension_service.rebuild_runtime_urlconf"
+        ) as rebuild_urlconf_mock:
             ExtensionService.set_extension_enabled("uploads", False)
 
         reset_runtime_mock.assert_called_once()
+        rebuild_urlconf_mock.assert_called_once()
 
     def test_extension_assembly_service_orders_enabled_extensions_by_dependency(self):
         temp_dir = make_workspace_temp_dir()
@@ -8206,7 +8209,9 @@ class AdminExtensionsApiTests(TestCase):
 
         self.assertEqual(install_response.status_code, 200, install_response.content)
         installed_payload = install_response.json()
-        installed_extension = next(item for item in installed_payload["extensions"] if item["id"] == "alpha-tools")
+        self.assertIn("extension", installed_payload)
+        self.assertNotIn("extensions", installed_payload)
+        installed_extension = installed_payload["extension"]
         self.assertTrue(installed_extension["installed"])
         self.assertTrue(installed_extension["enabled"])
         self.assertEqual(installed_extension["runtime_status"]["key"], "active")
@@ -8228,7 +8233,7 @@ class AdminExtensionsApiTests(TestCase):
 
         self.assertEqual(disable_response.status_code, 200, disable_response.content)
         disabled_payload = disable_response.json()
-        disabled_extension = next(item for item in disabled_payload["extensions"] if item["id"] == "alpha-tools")
+        disabled_extension = disabled_payload["extension"]
         self.assertFalse(disabled_extension["enabled"])
         self.assertEqual(disabled_extension["runtime_status"]["key"], "disabled")
         self.assertTrue(any(item["action"] == "uninstall" for item in disabled_extension["runtime_actions"]))
@@ -8247,7 +8252,7 @@ class AdminExtensionsApiTests(TestCase):
 
         self.assertEqual(enable_response.status_code, 200, enable_response.content)
         enabled_payload = enable_response.json()
-        enabled_extension = next(item for item in enabled_payload["extensions"] if item["id"] == "alpha-tools")
+        enabled_extension = enabled_payload["extension"]
         self.assertTrue(enabled_extension["enabled"])
         self.assertTrue(any(item["hook"] == "run_enable" for item in enabled_extension["backend_hooks"]))
 
@@ -8257,7 +8262,7 @@ class AdminExtensionsApiTests(TestCase):
         )
         self.assertEqual(runtime_hook_response.status_code, 200, runtime_hook_response.content)
         runtime_hook_payload = runtime_hook_response.json()
-        runtime_hook_extension = next(item for item in runtime_hook_payload["extensions"] if item["id"] == "alpha-tools")
+        runtime_hook_extension = runtime_hook_payload["extension"]
         self.assertTrue(any(item["hook"] == "run_rebuild_cache" for item in runtime_hook_extension["backend_hooks"]))
 
         migrations_response = self.client.post(
@@ -8266,7 +8271,7 @@ class AdminExtensionsApiTests(TestCase):
         )
         self.assertEqual(migrations_response.status_code, 200, migrations_response.content)
         migrations_payload = migrations_response.json()
-        migrations_extension = next(item for item in migrations_payload["extensions"] if item["id"] == "alpha-tools")
+        migrations_extension = migrations_payload["extension"]
         self.assertTrue(any(item["hook"] == "run_migrations" for item in migrations_extension["backend_hooks"]))
         self.assertEqual(migrations_extension["migration_label"], "最近已执行")
         self.assertEqual(migrations_extension["migration_execution"]["state"], "applied")
@@ -8288,7 +8293,7 @@ class AdminExtensionsApiTests(TestCase):
         )
         self.assertEqual(uninstall_response.status_code, 200, uninstall_response.content)
         uninstalled_payload = uninstall_response.json()
-        uninstalled_extension = next(item for item in uninstalled_payload["extensions"] if item["id"] == "alpha-tools")
+        uninstalled_extension = uninstalled_payload["extension"]
         self.assertFalse(uninstalled_extension["installed"])
         self.assertFalse(uninstalled_extension["enabled"])
         self.assertEqual(uninstalled_extension["runtime_status"]["key"], "pending_install")
@@ -8325,7 +8330,7 @@ class AdminExtensionsApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
-        sample_extension = next(item for item in payload["extensions"] if item["id"] == "alpha-tools")
+        sample_extension = payload["extension"]
         self.assertTrue(sample_extension["enabled"])
 
     def test_extensions_api_blocks_enable_when_extension_not_installed(self):
@@ -8403,7 +8408,7 @@ class AdminExtensionsApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
-        extension = next(item for item in payload["extensions"] if item["id"] == "alpha-tools")
+        extension = payload["extension"]
         self.assertFalse(extension["installed"])
         self.assertFalse(extension["enabled"])
         hooks = {item["hook"]: item for item in extension["backend_hooks"]}

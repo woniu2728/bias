@@ -263,7 +263,7 @@ def enable_admin_extension(request, extension_id: str):
         return denied
 
     try:
-        ExtensionService.set_extension_enabled(
+        extension = ExtensionService.set_extension_enabled(
             extension_id,
             True,
             actor=request.auth,
@@ -271,7 +271,7 @@ def enable_admin_extension(request, extension_id: str):
         )
     except ExtensionStateError as exc:
         return api_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
-    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+    return _serialize_admin_extension_action_payload(extension)
 
 
 @router.post("/extensions/{extension_id}/install", auth=AccessTokenAuth(), tags=["Admin"])
@@ -281,14 +281,14 @@ def install_admin_extension(request, extension_id: str):
         return denied
 
     try:
-        ExtensionService.install_extension(
+        extension = ExtensionService.install_extension(
             extension_id,
             actor=request.auth,
             request=request,
         )
     except ExtensionStateError as exc:
         return api_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
-    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+    return _serialize_admin_extension_action_payload(extension)
 
 
 @router.post("/extensions/{extension_id}/runtime-hooks/{hook_name}", auth=AccessTokenAuth(), tags=["Admin"])
@@ -298,7 +298,7 @@ def run_admin_extension_runtime_hook(request, extension_id: str, hook_name: str)
         return denied
 
     try:
-        ExtensionService.run_extension_runtime_hook(
+        extension = ExtensionService.run_extension_runtime_hook(
             extension_id,
             hook_name,
             actor=request.auth,
@@ -306,7 +306,7 @@ def run_admin_extension_runtime_hook(request, extension_id: str, hook_name: str)
         )
     except ExtensionStateError as exc:
         return api_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
-    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+    return _serialize_admin_extension_action_payload(extension)
 
 
 @router.post("/extensions/{extension_id}/migrations", auth=AccessTokenAuth(), tags=["Admin"])
@@ -316,14 +316,14 @@ def run_admin_extension_migrations(request, extension_id: str):
         return denied
 
     try:
-        ExtensionService.run_extension_migrations(
+        extension = ExtensionService.run_extension_migrations(
             extension_id,
             actor=request.auth,
             request=request,
         )
     except ExtensionStateError as exc:
         return api_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
-    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+    return _serialize_admin_extension_action_payload(extension)
 
 
 @router.post("/extensions/{extension_id}/disable", auth=AccessTokenAuth(), tags=["Admin"])
@@ -333,7 +333,7 @@ def disable_admin_extension(request, extension_id: str):
         return denied
 
     try:
-        ExtensionService.set_extension_enabled(
+        extension = ExtensionService.set_extension_enabled(
             extension_id,
             False,
             actor=request.auth,
@@ -341,7 +341,7 @@ def disable_admin_extension(request, extension_id: str):
         )
     except ExtensionStateError as exc:
         return api_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
-    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+    return _serialize_admin_extension_action_payload(extension)
 
 
 @router.post("/extensions/{extension_id}/uninstall", auth=AccessTokenAuth(), tags=["Admin"])
@@ -351,14 +351,14 @@ def uninstall_admin_extension(request, extension_id: str):
         return denied
 
     try:
-        ExtensionService.uninstall_extension(
+        extension = ExtensionService.uninstall_extension(
             extension_id,
             actor=request.auth,
             request=request,
         )
     except ExtensionStateError as exc:
         return api_error(str(exc), status=409, code=exc.code, field_errors=exc.details)
-    return _serialize_admin_extensions_payload(get_extension_registry().get_extensions())
+    return _serialize_admin_extension_action_payload(extension)
 
 
 def _serialize_admin_extensions_payload(extensions, *, summary: bool = False):
@@ -391,6 +391,16 @@ def _serialize_admin_extensions_payload(extensions, *, summary: bool = False):
             "package_lock": ExtensionService.inspect_extension_packages(),
         },
         "extensions": payload,
+    }
+
+
+def _serialize_admin_extension_action_payload(extension):
+    return {
+        "runtime": {
+            **_serialize_extension_runtime_rebuild_state(),
+            "recovery": serialize_extension_recovery_state(),
+        },
+        "extension": _serialize_admin_extension(extension),
     }
 
 

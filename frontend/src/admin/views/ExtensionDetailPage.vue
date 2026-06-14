@@ -9,6 +9,7 @@
     <AdminStateBlock v-else-if="errorMessage && !extension" tone="danger">{{ errorMessage }}</AdminStateBlock>
 
     <div v-else-if="extension" class="ExtensionDetailPage-content">
+      <div v-if="actionLoading" class="ExtensionDetailProgress" aria-hidden="true"></div>
       <AdminStateBlock v-if="errorMessage" tone="danger">{{ errorMessage }}</AdminStateBlock>
 
       <AdminStateBlock v-if="recoveryNotice" :tone="recoveryNotice.tone">
@@ -18,21 +19,25 @@
         {{ distributionNotice }}
       </AdminStateBlock>
 
-      <section class="ExtensionDetailPage-header">
+      <section class="ExtensionDetailPage-header" :class="{ 'is-busy': actionLoading }">
         <div class="ExtensionDetailPage-summaryBar">
           <div class="ExtensionDetailPage-summaryMain">
             <button
               v-if="primaryToggleAction"
               type="button"
               class="ExtensionDetailToggle"
-              :class="extension.enabled ? 'is-enabled' : 'is-disabled'"
+              :class="[
+                extension.enabled ? 'is-enabled' : 'is-disabled',
+                { 'is-loading': actionLoading },
+              ]"
               :disabled="actionLoading"
               @click="runRuntimeAction(primaryToggleAction)"
             >
               <span class="ExtensionDetailToggle-track">
                 <span class="ExtensionDetailToggle-thumb"></span>
               </span>
-              <span>{{ extension.enabled ? '已启用' : '未启用' }}</span>
+              <span v-if="actionLoading" class="ExtensionDetailAction-spinner" aria-hidden="true"></span>
+              <span>{{ actionLoading ? currentRuntimeActionLoadingText : (extension.enabled ? '已启用' : '未启用') }}</span>
             </button>
 
             <span v-else class="ExtensionDetailPage-status" :class="runtimeStatusClass">
@@ -157,11 +162,12 @@
             :key="`runtime-${action.key}`"
             type="button"
             class="ExtensionDetailAction"
-            :class="resolveActionToneClass(action)"
+            :class="[resolveActionToneClass(action), { 'is-loading': isRuntimeActionLoading(action) }]"
             :disabled="actionLoading"
             @click="runRuntimeAction(action)"
           >
-            {{ actionLoading ? '处理中...' : action.label }}
+            <span v-if="isRuntimeActionLoading(action)" class="ExtensionDetailAction-spinner" aria-hidden="true"></span>
+            <span>{{ isRuntimeActionLoading(action) ? currentRuntimeActionLoadingText : action.label }}</span>
           </button>
         </div>
       </section>
@@ -187,6 +193,8 @@ const adminRegistryStore = useAdminRegistryStore()
 const modalStore = useModalStore()
 const loading = ref(true)
 const actionLoading = ref(false)
+const currentActionKey = ref('')
+const currentActionName = ref('')
 const errorMessage = ref('')
 const extension = ref(null)
 const detailComponent = ref(null)
@@ -268,6 +276,17 @@ const inlinePermissions = computed(() => (
 const primaryToggleAction = computed(() => (
   runtimeActions.value.find(action => ['enable', 'disable'].includes(action?.action)) || null
 ))
+
+const currentRuntimeActionLoadingText = computed(() => {
+  if (currentActionName.value) {
+    return resolveRuntimeActionLoadingText({ action: currentActionName.value })
+  }
+  const action = runtimeActions.value.find(item => {
+    const key = String(item?.key || item?.action || '')
+    return key && key === currentActionKey.value
+  }) || primaryToggleAction.value
+  return resolveRuntimeActionLoadingText(action)
+})
 
 const visibleRuntimeActions = computed(() => (
   runtimeActions.value.filter(action => action !== primaryToggleAction.value)
@@ -409,6 +428,8 @@ async function runRuntimeAction(action) {
 
   const previousExtension = cloneExtensionState(extension.value)
   actionLoading.value = true
+  currentActionKey.value = String(action.key || action.action || '')
+  currentActionName.value = String(action.action || '')
   errorMessage.value = ''
   applyRuntimeActionState(action)
 
@@ -438,6 +459,8 @@ async function runRuntimeAction(action) {
     errorMessage.value = extractApiErrorMessage(error, '执行扩展运行操作失败，请稍后重试')
   } finally {
     actionLoading.value = false
+    currentActionKey.value = ''
+    currentActionName.value = ''
   }
 }
 
@@ -452,6 +475,34 @@ function resolveActionToneClass(action) {
     return 'ExtensionDetailAction--subtle'
   }
   return ''
+}
+
+function isRuntimeActionLoading(action) {
+  if (!actionLoading.value) {
+    return false
+  }
+  const key = String(action?.key || action?.action || '')
+  return !currentActionKey.value || currentActionKey.value === key
+}
+
+function resolveRuntimeActionLoadingText(action) {
+  const actionName = String(action?.action || '').trim()
+  if (actionName === 'enable') {
+    return '正在启用'
+  }
+  if (actionName === 'disable') {
+    return '正在停用'
+  }
+  if (actionName === 'install') {
+    return '正在安装'
+  }
+  if (actionName === 'uninstall') {
+    return '正在卸载'
+  }
+  if (actionName.startsWith('hook:')) {
+    return '执行操作'
+  }
+  return '处理中'
 }
 
 function syncExtensionScopesFromExtension(currentExtension) {
@@ -680,9 +731,33 @@ function extractApiErrorMessage(error, fallback) {
 
 <style scoped>
 .ExtensionDetailPage-content {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.ExtensionDetailProgress {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  width: 100%;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7f0f9;
+}
+
+.ExtensionDetailProgress::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -35%;
+  width: 35%;
+  height: 100%;
+  border-radius: 999px;
+  background: #3b73a8;
+  animation: extension-detail-progress 1.1s ease-in-out infinite;
 }
 
 .ExtensionDetailPage-header,
@@ -703,6 +778,11 @@ function extractApiErrorMessage(error, fallback) {
   border: 1px solid var(--forum-border-soft);
   border-radius: 8px;
   background: color-mix(in srgb, var(--forum-bg-subtle) 80%, white);
+}
+
+.ExtensionDetailPage-header.is-busy {
+  border-color: #cfe0f2;
+  box-shadow: 0 10px 24px rgb(50 91 133 / 10%);
 }
 
 .ExtensionDetailPage-summaryBar {
@@ -781,6 +861,10 @@ function extractApiErrorMessage(error, fallback) {
   cursor: not-allowed;
 }
 
+.ExtensionDetailToggle.is-loading {
+  cursor: wait;
+}
+
 .ExtensionDetailToggle-track {
   position: relative;
   width: 46px;
@@ -830,6 +914,20 @@ function extractApiErrorMessage(error, fallback) {
 
 .ExtensionDetailAction {
   cursor: pointer;
+}
+
+.ExtensionDetailAction.is-loading {
+  min-width: 92px;
+  cursor: wait;
+}
+
+.ExtensionDetailAction-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: extension-detail-spin 0.75s linear infinite;
 }
 
 .ExtensionDetailPage-link {
@@ -920,6 +1018,29 @@ function extractApiErrorMessage(error, fallback) {
 
 .ExtensionDetailPage-pluginDetail {
   width: 100%;
+}
+
+@keyframes extension-detail-progress {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(390%);
+  }
+}
+
+@keyframes extension-detail-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ExtensionDetailProgress::after,
+  .ExtensionDetailAction-spinner {
+    animation-duration: 1.8s;
+  }
 }
 
 @media (max-width: 700px) {

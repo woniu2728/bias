@@ -102,8 +102,9 @@
           v-for="extension in filteredExtensions"
           :key="extension.id"
           class="ExtensionCard"
-          :class="{ 'is-disabled': !extension.enabled }"
+          :class="{ 'is-disabled': !extension.enabled, 'is-busy': isExtensionActionLoading(extension) }"
         >
+          <div v-if="isExtensionActionLoading(extension)" class="ExtensionCard-progress" aria-hidden="true"></div>
           <div class="ExtensionCard-main">
             <span class="ExtensionCard-icon">
               <i :class="extension.icon || 'fas fa-puzzle-piece'"></i>
@@ -115,6 +116,12 @@
                 <span class="ExtensionBadge">{{ extension.id }}</span>
                 <span class="ExtensionStatus" :class="resolveRuntimeStatusClass(extension)">
                   {{ extension.runtime_status?.label || (extension.enabled ? '已启用' : '未启用') }}
+                </span>
+                <span
+                  v-if="isExtensionActionLoading(extension)"
+                  class="ExtensionStatus is-working"
+                >
+                  {{ resolveRuntimeActionProgressLabel(extension) }}
                 </span>
                 <span
                   v-if="extension.distribution?.abandoned"
@@ -234,11 +241,12 @@
                 :key="`${extension.id}-runtime-${action.key}`"
                 type="button"
                 class="ExtensionAction"
-                :class="resolveActionToneClass(action)"
-                :disabled="actionLoadingId === extension.id"
+                :class="[resolveActionToneClass(action), { 'is-loading': isRuntimeActionLoading(extension, action) }]"
+                :disabled="isExtensionActionLoading(extension)"
                 @click="runRuntimeAction(extension, action)"
               >
-                {{ actionLoadingId === extension.id ? '处理中...' : action.label }}
+                <span v-if="isRuntimeActionLoading(extension, action)" class="ExtensionAction-spinner" aria-hidden="true"></span>
+                <span>{{ resolveRuntimeActionButtonLabel(extension, action) }}</span>
               </button>
             </div>
           </div>
@@ -280,6 +288,7 @@ const sourceFilter = ref('all')
 const statusFilter = ref('all')
 const searchQuery = ref('')
 const actionLoadingId = ref('')
+const actionLoadingKey = ref('')
 const syncLoading = ref(false)
 const orderSyncLoading = ref(false)
 const frontendRebuildLoading = ref(false)
@@ -431,11 +440,17 @@ async function loadExtensions() {
 }
 
 function applyPayload(data) {
-  summary.value = data.summary || {}
-  runtime.value = data.runtime || {}
-  extensions.value = Array.isArray(data.extensions)
-    ? data.extensions.filter(item => item?.product_visible !== false)
-    : []
+  if (data.summary) {
+    summary.value = data.summary
+  }
+  if (data.runtime) {
+    runtime.value = data.runtime
+  }
+  if (Array.isArray(data.extensions)) {
+    extensions.value = data.extensions.filter(item => item?.product_visible !== false)
+  } else if (data.extension && typeof data.extension === 'object') {
+    applySingleExtensionUpdate(data.extension)
+  }
   const moduleEntries = extensions.value.flatMap(extension => {
     const moduleIds = Array.isArray(extension.module_ids) ? extension.module_ids : []
     return moduleIds.map(moduleId => ({
@@ -445,6 +460,33 @@ function applyPayload(data) {
   })
   if (moduleEntries.length) {
     adminRegistryStore.applyExtensionScopes(moduleEntries)
+  }
+}
+
+function applySingleExtensionUpdate(extension) {
+  const currentExtensions = Array.isArray(extensions.value) ? extensions.value : []
+  const extensionId = String(extension.id || '').trim()
+  if (!extensionId) {
+    return
+  }
+
+  const index = currentExtensions.findIndex(item => String(item?.id || '').trim() === extensionId)
+  const nextExtension = {
+    ...(index >= 0 ? currentExtensions[index] : {}),
+    ...extension,
+  }
+
+  if (nextExtension.product_visible === false) {
+    extensions.value = currentExtensions.filter(item => String(item?.id || '').trim() !== extensionId)
+    return
+  }
+
+  if (index >= 0) {
+    extensions.value = currentExtensions.map((item, itemIndex) => (
+      itemIndex === index ? nextExtension : item
+    ))
+  } else {
+    extensions.value = [...currentExtensions, nextExtension]
   }
 }
 
@@ -465,6 +507,7 @@ async function runRuntimeAction(extension, action) {
   }
 
   actionLoadingId.value = extension.id
+  actionLoadingKey.value = String(action.key || action.action || '')
   errorMessage.value = ''
 
   try {
@@ -484,7 +527,58 @@ async function runRuntimeAction(extension, action) {
     errorMessage.value = error.response?.data?.error || '切换扩展状态失败，请稍后重试'
   } finally {
     actionLoadingId.value = ''
+    actionLoadingKey.value = ''
   }
+}
+
+function isExtensionActionLoading(extension) {
+  return Boolean(extension?.id) && actionLoadingId.value === extension.id
+}
+
+function isRuntimeActionLoading(extension, action) {
+  if (!isExtensionActionLoading(extension)) {
+    return false
+  }
+  const key = String(action?.key || action?.action || '')
+  return !actionLoadingKey.value || actionLoadingKey.value === key
+}
+
+function resolveRuntimeActionProgressLabel(extension) {
+  const action = getRuntimeActions(extension).find(item => {
+    const key = String(item?.key || item?.action || '')
+    return key && key === actionLoadingKey.value
+  })
+  return resolveRuntimeActionLoadingText(action)
+}
+
+function resolveRuntimeActionButtonLabel(extension, action) {
+  if (!isRuntimeActionLoading(extension, action)) {
+    return action?.label || '执行'
+  }
+  return resolveRuntimeActionLoadingText(action)
+}
+
+function resolveRuntimeActionLoadingText(action) {
+  const actionName = String(action?.action || '').trim()
+  if (actionName === 'enable') {
+    return '正在启用'
+  }
+  if (actionName === 'disable') {
+    return '正在停用'
+  }
+  if (actionName === 'install') {
+    return '正在安装'
+  }
+  if (actionName === 'uninstall') {
+    return '正在卸载'
+  }
+  if (actionName === 'migrations') {
+    return '执行迁移'
+  }
+  if (actionName.startsWith('hook:')) {
+    return '执行操作'
+  }
+  return '处理中'
 }
 
 async function syncExtensionPackages() {
@@ -741,6 +835,8 @@ function resolveAdminPageLinks(extension) {
 }
 
 .ExtensionCard {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--forum-border-color);
   border-radius: 16px;
   background: var(--forum-bg-elevated);
@@ -749,6 +845,33 @@ function resolveAdminPageLinks(extension) {
 
 .ExtensionCard.is-disabled {
   opacity: 0.8;
+}
+
+.ExtensionCard.is-busy {
+  border-color: #cfe0f2;
+  box-shadow: 0 10px 24px rgb(50 91 133 / 12%);
+}
+
+.ExtensionCard-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  overflow: hidden;
+  background: #e7f0f9;
+}
+
+.ExtensionCard-progress::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -35%;
+  width: 35%;
+  height: 100%;
+  border-radius: 999px;
+  background: #3b73a8;
+  animation: extension-progress 1.1s ease-in-out infinite;
 }
 
 .ExtensionCard-main {
@@ -834,6 +957,11 @@ function resolveAdminPageLinks(extension) {
 .ExtensionStatus.is-warning {
   background: #fff6e8;
   color: #9a5b00;
+}
+
+.ExtensionStatus.is-working {
+  background: #edf4fb;
+  color: #325b85;
 }
 
 .ExtensionCard-description {
@@ -939,6 +1067,20 @@ function resolveAdminPageLinks(extension) {
   text-decoration: none;
 }
 
+.ExtensionAction.is-loading {
+  min-width: 92px;
+  cursor: wait;
+}
+
+.ExtensionAction-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  animation: extension-spin 0.75s linear infinite;
+}
+
 .ExtensionAction--primary {
   background: #edf4fb;
   border-color: #d6e4f3;
@@ -970,6 +1112,29 @@ function resolveAdminPageLinks(extension) {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+@keyframes extension-progress {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(390%);
+  }
+}
+
+@keyframes extension-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ExtensionCard-progress::after,
+  .ExtensionAction-spinner {
+    animation-duration: 1.8s;
+  }
 }
 
 @media (max-width: 768px) {

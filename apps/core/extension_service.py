@@ -8,6 +8,7 @@ from apps.core.extensions.lifecycle import (
     clear_extension_runtime_rebuild_marker,
     mark_extension_runtime_requires_rebuild,
     mark_extension_runtime_version_changed,
+    rebuild_runtime_urlconf,
     reset_extension_runtime_state,
 )
 from apps.core.extensions.validation import resolve_bias_version_compatibility
@@ -34,6 +35,7 @@ class ExtensionService:
     @staticmethod
     def _refresh_runtime(updated):
         reset_extension_runtime_state()
+        rebuild_runtime_urlconf()
         return get_extension_manager().get_extension(updated.id)
 
     @staticmethod
