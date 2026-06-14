@@ -153,6 +153,12 @@ from apps.core.websocket_auth import (
 )
 
 
+def call_command_quietly(*args, **kwargs):
+    kwargs.setdefault("stdout", StringIO())
+    kwargs.setdefault("stderr", StringIO())
+    return call_command(*args, **kwargs)
+
+
 class RuntimeModelProxy:
     def __init__(self, app_label, model_name):
         self._app_label = app_label
@@ -6153,13 +6159,13 @@ class ExtensionManagementCommandTests(TestCase):
         temp_dir = make_workspace_temp_dir()
         try:
             with override_settings(BASE_DIR=Path(temp_dir)):
-                call_command("create_extension", "alpha-tools")
-                call_command("create_extension", "beta-tools")
+                call_command_quietly("create_extension", "alpha-tools")
+                call_command_quietly("create_extension", "beta-tools")
                 beta_manifest_path = Path(temp_dir) / "extensions" / "beta_tools" / "extension.json"
                 beta_manifest = json.loads(beta_manifest_path.read_text(encoding="utf-8"))
                 beta_manifest["dependencies"] = ["alpha-tools"]
                 beta_manifest_path.write_text(json.dumps(beta_manifest, ensure_ascii=False), encoding="utf-8")
-                call_command(
+                call_command_quietly(
                     "validate_extensions",
                     "--extensions-path",
                     str(Path(temp_dir) / "extensions"),
@@ -6174,7 +6180,7 @@ class ExtensionManagementCommandTests(TestCase):
         temp_dir = make_workspace_temp_dir()
         try:
             with override_settings(BASE_DIR=Path(temp_dir)):
-                call_command(
+                call_command_quietly(
                     "create_extension",
                     "alpha-tools",
                     "--name",
@@ -6275,7 +6281,7 @@ class ExtensionManagementCommandTests(TestCase):
         temp_dir = make_workspace_temp_dir()
         try:
             with override_settings(BASE_DIR=Path(temp_dir)):
-                call_command("create_extension", "alpha-tools")
+                call_command_quietly("create_extension", "alpha-tools")
 
                 entry_source = (Path(temp_dir) / "extensions" / "alpha_tools" / "frontend" / "admin" / "index.js").read_text(encoding="utf-8")
                 self.assertIn("export function resolveDetailPage()", entry_source)
@@ -6297,7 +6303,7 @@ class ExtensionManagementCommandTests(TestCase):
             extension_dir.mkdir(parents=True, exist_ok=False)
             with override_settings(BASE_DIR=Path(temp_dir)):
                 with self.assertRaisesMessage(CommandError, f"扩展目录已存在: {extension_dir}。如需覆盖，请传 --force"):
-                    call_command("create_extension", "alpha-tools")
+                    call_command_quietly("create_extension", "alpha-tools")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -6316,7 +6322,7 @@ class ExtensionManagementCommandTests(TestCase):
             }, ensure_ascii=False), encoding="utf-8")
 
             with self.assertRaisesMessage(CommandError, "扩展校验失败，共 2 个错误"):
-                call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+                call_command_quietly("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -6324,8 +6330,8 @@ class ExtensionManagementCommandTests(TestCase):
         temp_dir = make_workspace_temp_dir()
         try:
             with override_settings(BASE_DIR=Path(temp_dir)):
-                call_command("create_extension", "alpha-tools")
-                call_command(
+                call_command_quietly("create_extension", "alpha-tools")
+                call_command_quietly(
                     "validate_extensions",
                     "--extensions-path",
                     str(Path(temp_dir) / "extensions"),
@@ -6338,7 +6344,7 @@ class ExtensionManagementCommandTests(TestCase):
         temp_dir = make_workspace_temp_dir()
         try:
             with override_settings(BASE_DIR=Path(temp_dir)):
-                call_command("create_extension", "alpha-tools")
+                call_command_quietly("create_extension", "alpha-tools")
                 backend_path = Path(temp_dir) / "extensions" / "alpha_tools" / "backend" / "ext.py"
                 backend_path.write_text(
                     backend_path.read_text(encoding="utf-8")
@@ -6347,7 +6353,7 @@ class ExtensionManagementCommandTests(TestCase):
                 )
 
                 with self.assertRaisesMessage(CommandError, "扩展校验失败"):
-                    call_command(
+                    call_command_quietly(
                         "validate_extensions",
                         "--extensions-path",
                         str(Path(temp_dir) / "extensions"),
@@ -6391,6 +6397,7 @@ class ExtensionManagementCommandTests(TestCase):
                     "--extensions-path",
                     str(extensions_dir),
                     stdout=output,
+                    stderr=StringIO(),
                 )
 
             self.assertIn("forbidden_cross_extension_internal_import", output.getvalue())
@@ -6401,7 +6408,7 @@ class ExtensionManagementCommandTests(TestCase):
         temp_dir = make_workspace_temp_dir()
         try:
             with override_settings(BASE_DIR=Path(temp_dir)):
-                call_command("create_extension", "alpha-tools")
+                call_command_quietly("create_extension", "alpha-tools")
                 backend_path = Path(temp_dir) / "extensions" / "alpha_tools" / "backend" / "ext.py"
                 external_project_name = "fla" + "rum"
                 backend_path.write_text(
@@ -6411,7 +6418,7 @@ class ExtensionManagementCommandTests(TestCase):
                 )
 
                 with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
-                    call_command(
+                    call_command_quietly(
                         "validate_extensions",
                         "--extensions-path",
                         str(Path(temp_dir) / "extensions"),
@@ -6423,7 +6430,7 @@ class ExtensionManagementCommandTests(TestCase):
         temp_dir = make_workspace_temp_dir()
         try:
             with override_settings(BASE_DIR=Path(temp_dir)):
-                call_command("create_extension", "alpha-tools")
+                call_command_quietly("create_extension", "alpha-tools")
                 admin_path = Path(temp_dir) / "extensions" / "alpha_tools" / "frontend" / "admin" / "index.js"
                 admin_path.write_text(
                     "export const extend = [\n"
@@ -6433,7 +6440,7 @@ class ExtensionManagementCommandTests(TestCase):
                     encoding="utf-8",
                 )
 
-                call_command(
+                call_command_quietly(
                     "validate_extensions",
                     "--extensions-path",
                     str(Path(temp_dir) / "extensions"),
@@ -6464,7 +6471,7 @@ class ExtensionManagementCommandTests(TestCase):
             )
 
             with self.assertRaisesMessage(CommandError, "扩展校验失败"):
-                call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+                call_command_quietly("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -6493,7 +6500,7 @@ class ExtensionManagementCommandTests(TestCase):
                 encoding="utf-8",
             )
 
-            call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+            call_command_quietly("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -6518,7 +6525,7 @@ class ExtensionManagementCommandTests(TestCase):
                 encoding="utf-8",
             )
 
-            call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"), "--internal")
+            call_command_quietly("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"), "--internal")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -6543,7 +6550,7 @@ class ExtensionManagementCommandTests(TestCase):
             )
 
             with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
-                call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+                call_command_quietly("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -6575,7 +6582,7 @@ class ExtensionManagementCommandTests(TestCase):
                 encoding="utf-8",
             )
 
-            call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+            call_command_quietly("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -6593,7 +6600,7 @@ class ExtensionManagementCommandTests(TestCase):
             }, ensure_ascii=False), encoding="utf-8")
 
             with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
-                call_command("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
+                call_command_quietly("validate_extensions", "--extensions-path", str(Path(temp_dir) / "extensions"))
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -6601,9 +6608,9 @@ class ExtensionManagementCommandTests(TestCase):
         temp_dir = make_workspace_temp_dir()
         try:
             with override_settings(BASE_DIR=Path(temp_dir)):
-                call_command("create_extension", "alpha-tools")
+                call_command_quietly("create_extension", "alpha-tools")
                 stdout = StringIO()
-                call_command(
+                call_command_quietly(
                     "validate_extensions",
                     "--extensions-path",
                     str(Path(temp_dir) / "extensions"),
@@ -6637,7 +6644,7 @@ class ExtensionManagementCommandTests(TestCase):
 
             stdout = StringIO()
             with self.assertRaisesMessage(CommandError, "扩展校验失败，共 2 个错误"):
-                call_command(
+                call_command_quietly(
                     "validate_extensions",
                     "--extensions-path",
                     str(Path(temp_dir) / "extensions"),
@@ -6680,7 +6687,7 @@ class ExtensionManagementCommandTests(TestCase):
             )
 
             with self.assertRaisesMessage(CommandError, "扩展校验失败，共 1 个错误"):
-                call_command(
+                call_command_quietly(
                     "validate_extensions",
                     "--extensions-path",
                     str(Path(temp_dir) / "extensions"),
@@ -14576,10 +14583,12 @@ class QueueServiceTests(TestCase):
             QueueService.dispatch_celery_task(SuccessfulTask(), fallback=lambda: "sync"),
             "queued",
         )
-        self.assertEqual(
-            QueueService.dispatch_celery_task(FailingTask(), fallback=lambda: "fallback"),
-            "fallback",
-        )
+        with self.assertLogs("apps.core.queue_service", level="WARNING") as logs:
+            self.assertEqual(
+                QueueService.dispatch_celery_task(FailingTask(), fallback=lambda: "fallback"),
+                "fallback",
+            )
+        self.assertTrue(any("tests.failing_task" in message for message in logs.output))
         metrics = QueueService.get_metrics()
 
         self.assertEqual(metrics["enqueued_count"], 1)
