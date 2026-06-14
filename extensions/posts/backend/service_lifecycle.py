@@ -6,8 +6,8 @@ from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 
-from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import dispatch_forum_event_after_commit
+from apps.core.extensions.runtime import (
     ensure_runtime_forum_permission,
     ensure_runtime_user_email_confirmed,
     ensure_runtime_user_not_suspended,
@@ -411,5 +411,3 @@ def create_post_with_sequential_number(*, attempts: int, allocate_next_post_numb
     if last_error:
         raise last_error
     raise IntegrityError("帖子楼层分配失败")
-
-

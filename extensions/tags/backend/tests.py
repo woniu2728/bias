@@ -12,7 +12,7 @@ from apps.core.extensions.bootstrap import bootstrap_extension_application, rese
 from apps.core.extensions.lifecycle import rebuild_runtime_urlconf, reset_extension_runtime_state
 from apps.core.extensions.registry import ExtensionRegistry
 from apps.core.forum_registry import get_forum_registry
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     approve_runtime_discussion,
     create_runtime_discussion,
     delete_runtime_discussion,
@@ -22,20 +22,21 @@ from apps.core.extensions.runtime_access import (
 from extensions.discussions.backend.events import DiscussionCreatedEvent
 from extensions.posts.backend.events import PostCreatedEvent, PostHiddenEvent
 from apps.core.models import AuditLog, ExtensionInstallation
-from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry, get_resource_registry
+from apps.core.extensions import ResourceEndpointDefinition
+from extensions.testing import ResourceRegistry, get_resource_registry
 from apps.core.settings_service import clear_runtime_setting_caches
 from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.tags.backend.events import DiscussionTaggedEvent, TagStatsRefreshRequestedEvent
 from extensions.tags.backend.models import Tag
-from apps.core.extensions.runtime_access import get_runtime_discussion_tag_model
+from apps.core.extensions.runtime import get_runtime_discussion_tag_model
 from extensions.tags.backend.services import TagService
 from extensions.tags.backend.ext import tag_resource_endpoints
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_post,
     get_runtime_post_model,
     set_runtime_post_hidden_state,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_group_model,
     get_runtime_permission_model,
     get_runtime_user_model,

@@ -180,7 +180,7 @@ import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
 import { resolveFallbackExtensionPermissionsPage, resolveFallbackExtensionSettingsPage } from '../extensions/fallbacks'
 import { buildExtensionRouteTarget } from '../extensions/diagnostics'
-import { generatedAdminExtensionModules } from '../../generated/extensionImportMap'
+import { generatedAdminExtensionModules } from 'virtual:bias-extension-import-map'
 
 const route = useRoute()
 const adminRegistryStore = useAdminRegistryStore()

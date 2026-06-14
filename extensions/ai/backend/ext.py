@@ -1,5 +1,4 @@
-from apps.core.extensions import ApiRoutesExtender, FrontendExtender, LifecycleExtender, ServiceProviderExtender, SettingsExtender
-from apps.core.extensions.backend import _build_setting_field_definition
+from apps.core.extensions import ApiRoutesExtender, FrontendExtender, LifecycleExtender, ServiceProviderExtender, SettingsExtender, setting_field
 from extensions.ai.backend.api import router as ai_router
 from extensions.ai.backend.runtime import ai_service_provider
 
@@ -38,7 +37,7 @@ def extend():
 
 def setting_definitions():
     return (
-        _build_setting_field_definition({
+        setting_field({
             "key": "enabled",
             "label": "启用 AI 功能",
             "type": "boolean",
@@ -46,7 +45,7 @@ def setting_definitions():
             "help_text": "关闭后前台 AI 入口仍可显示占位反馈，但不会调用远程模型。",
             "order": 5,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "base_url",
             "label": "AI Base URL",
             "type": "text",
@@ -55,7 +54,7 @@ def setting_definitions():
             "help_text": "兼容 OpenAI Chat Completions 协议的服务地址，不包含 /chat/completions。",
             "order": 10,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "api_key",
             "label": "AI API Key",
             "type": "text",
@@ -64,7 +63,7 @@ def setting_definitions():
             "help_text": "用于调用 AI 服务的密钥。当前由站点管理员保存，请注意部署环境访问控制。",
             "order": 20,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "model",
             "label": "模型名称",
             "type": "text",
@@ -72,7 +71,7 @@ def setting_definitions():
             "help_text": "传给 Chat Completions API 的 model 字段。",
             "order": 30,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "timeout_seconds",
             "label": "请求超时（秒）",
             "type": "number",
@@ -80,7 +79,7 @@ def setting_definitions():
             "help_text": "AI 接口请求超时时间，建议 10-60 秒。",
             "order": 40,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "temperature_tenths",
             "label": "创造性（0-15）",
             "type": "number",
@@ -88,7 +87,7 @@ def setting_definitions():
             "help_text": "按十分位配置 temperature，例如 4 表示 0.4。",
             "order": 50,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "fallback_enabled",
             "label": "未配置时启用本地占位反馈",
             "type": "boolean",

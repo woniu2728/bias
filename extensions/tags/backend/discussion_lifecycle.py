@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.core.domain_events import dispatch_forum_event_after_commit
+from apps.core.extensions.platform import dispatch_forum_event_after_commit
 from extensions.tags.backend.events import (
     DiscussionTagStatsRefreshEvent,
     TagStatsRefreshRequestedEvent,

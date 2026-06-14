@@ -7,19 +7,19 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.utils import timezone
 
-from apps.core.db import sqlite_write_retry
-from apps.core.domain_events import get_forum_event_bus
-from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.forum import sqlite_write_retry
+from apps.core.extensions.platform import get_forum_event_bus
+from apps.core.extensions.platform import evaluate_extension_policy
+from apps.core.extensions.runtime import (
     apply_runtime_discussion_search,
     evaluate_runtime_model_policy,
     get_runtime_resource_registry,
 )
-from apps.core.forum_registry import get_forum_registry
+from apps.core.extensions.forum import get_forum_registry
 from extensions.discussions.backend import discussion_tracking, service_lifecycle
 from extensions.discussions.backend.models import Discussion, DiscussionUser
-from apps.core.services import PaginationService
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import PaginationService
+from apps.core.extensions.runtime import (
     has_runtime_forum_permission,
 )
 
@@ -523,7 +523,5 @@ class DiscussionService:
         Returns:
             str: HTML内容
         """
-        from apps.core.markdown_service import MarkdownService
+        from apps.core.extensions.platform import MarkdownService
         return MarkdownService.render(content, sanitize=True)
-
-

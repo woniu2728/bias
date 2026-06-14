@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from django.db.models import Q
 
-from apps.core.api_errors import api_error
-from apps.core.extensions.runtime_access import get_runtime_resource_registry
-from apps.core.resource_api import ResourceQueryOptions, apply_resource_preloads, parse_resource_query_options
-from apps.core.resource_registry import ResourceEndpointDefinition
-from apps.core.services import PaginationService
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.runtime import get_runtime_resource_registry
+from apps.core.extensions.platform import ResourceQueryOptions, apply_resource_preloads, parse_resource_query_options
+from apps.core.extensions import ResourceEndpointDefinition
+from apps.core.extensions.platform import PaginationService
 from extensions.users.backend.avatar_upload import UserAvatarUploadService
 from extensions.users.backend.models import User
 from extensions.users.backend.schemas import PasswordChangeSchema, UserUpdateSchema
@@ -327,4 +327,3 @@ def dispatch_user_upload_avatar(context):
         return serialize_user_detail_payload(user)
     except ValueError as e:
         return api_error(str(e), status=400)
-

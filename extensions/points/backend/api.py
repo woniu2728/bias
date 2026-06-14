@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from ninja import Router
 
-from apps.core.api_errors import api_error
-from apps.core.auth import AuthBearer
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import AuthBearer
 from extensions.points.backend.services import get_account, list_ledger, serialize_account
 
 
@@ -24,4 +24,3 @@ def points_ledger(request, page: int = 1, limit: int = 20):
         return list_ledger(request.auth, page=page, limit=limit)
     except ValueError as exc:
         return api_error(str(exc), status=400)
-

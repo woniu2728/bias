@@ -4,12 +4,12 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     approve_runtime_discussion,
     get_runtime_discussion_model,
     reject_runtime_discussion,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     approve_runtime_post,
     get_runtime_post_model,
     reject_runtime_post,
@@ -173,4 +173,3 @@ def _serialize_user(user) -> dict | None:
         "username": user.username,
         "display_name": user.display_name,
     }
-

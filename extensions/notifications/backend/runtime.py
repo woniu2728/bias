@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     delete_runtime_discussion_reply_notifications_for_post,
     get_runtime_notification_model,
     get_runtime_notification_service,
@@ -62,7 +62,7 @@ def delete_discussion_reply_notifications_for_post(post_id: int) -> int:
 
 
 def dispatch_notification_batch(notification_ids):
-    from apps.core.queue_service import QueueService
+    from apps.core.extensions.platform import QueueService
     from extensions.notifications.backend.tasks import dispatch_notification_batch as dispatch_task
 
     normalized_ids = [int(item) for item in notification_ids or () if item]
@@ -83,7 +83,7 @@ def _send_notification_batch_now(notification_ids):
 
 
 def serialize_realtime_notification(notification) -> dict:
-    from apps.core.extensions.runtime_access import serialize_runtime_user
+    from apps.core.extensions.runtime import serialize_runtime_user
 
     return {
         "id": notification.id,
@@ -108,4 +108,3 @@ def _delete_discussion_reply_for_post(post_id: int) -> int:
         data__post_id=post_id,
     ).delete()
     return deleted_count
-

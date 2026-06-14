@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from ninja import Body, Router
 
-from apps.core.api_errors import api_error
-from apps.core.audit import log_admin_action
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.runtime import (
     get_runtime_post_flag_model,
     has_runtime_forum_permission,
     list_runtime_post_flags,
     resolve_runtime_post_flag,
 )
-from apps.core.jwt_auth import AccessTokenAuth
-from apps.core.services import PaginationService
+from apps.core.extensions.platform import AccessTokenAuth
+from apps.core.extensions.platform import PaginationService
 from extensions.flags.backend.handlers import serialize_flag
 
 
@@ -72,4 +72,3 @@ def resolve_post_flag(request, flag_id: int, payload: dict = Body(...)):
         return api_error("举报记录不存在", status=404)
     except ValueError as exc:
         return api_error(str(exc), status=400)
-

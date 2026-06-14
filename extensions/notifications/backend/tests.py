@@ -11,21 +11,22 @@ from unittest.mock import patch
 
 from apps.core.forum_registry import get_forum_registry
 from apps.core.models import Setting
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_discussion,
     get_runtime_discussion_state_model,
 )
-from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry, get_resource_registry
+from apps.core.extensions import ResourceEndpointDefinition
+from extensions.testing import ResourceRegistry, get_resource_registry
 from apps.core.settings_service import clear_runtime_setting_caches
 from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.notifications.backend.services import NotificationService
 from extensions.notifications.backend.ext import notification_resource_endpoints
-from apps.core.extensions.runtime_access import get_runtime_notification_model
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import get_runtime_notification_model
+from apps.core.extensions.runtime import (
     create_runtime_post,
     like_runtime_post,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_user_model,
 )
 

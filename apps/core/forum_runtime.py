@@ -74,7 +74,7 @@ def _get_realtime_service():
     if _realtime_service is not None:
         return _realtime_service
     try:
-        from apps.core.extensions.runtime_access import get_extension_host_service
+        from apps.core.extensions.runtime import get_extension_host_service
 
         return get_extension_host_service("realtime")
     except Exception:

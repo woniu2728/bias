@@ -12,13 +12,16 @@ from apps.core.extensions import (
     PostLifecycleExtender,
     RuntimeModel,
     ServiceProviderExtender,
+    ExtensionEventListenerDefinition,
+    NotificationTypeDefinition,
+    PermissionDefinition,
+    ResourceFieldDefinition,
+    SearchFilterDefinition,
+    UserPreferenceDefinition,
 )
-from apps.core.extensions.types import ExtensionEventListenerDefinition
 from extensions.mentions.backend.events import UserMentionedEvent
-from apps.core.forum_registry_types import NotificationTypeDefinition, PermissionDefinition, SearchFilterDefinition, UserPreferenceDefinition
-from apps.core.resource_registry import ResourceFieldDefinition
 from extensions.mentions.backend.models import PostMentionsUser
-from apps.core.extensions.runtime_access import has_runtime_forum_permission
+from apps.core.extensions.runtime import has_runtime_forum_permission
 from extensions.mentions.backend.formatter import render_mentions_html
 from extensions.mentions.backend.lifecycle import (
     apply_post_approved_mentions,

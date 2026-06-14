@@ -7,7 +7,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import F
 from django.utils import timezone
 
-from apps.core.visibility import can_view_model_instance
+from apps.core.extensions.platform import can_view_model_instance
 from extensions.discussions.backend.visibility import apply_discussion_visibility_scope
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 
@@ -102,7 +102,7 @@ def dispatch_view_count_flush(
     cache_timeout: int,
     flush_delay_seconds: int,
 ):
-    from apps.core.queue_service import QueueService
+    from apps.core.extensions.platform import QueueService
     from extensions.discussions.backend.tasks import flush_discussion_view_count_task
 
     def fallback():

@@ -20,9 +20,10 @@ from apps.core.extension_settings_service import save_extension_settings
 from apps.core.forum_registry import get_forum_registry
 from apps.core.models import AuditLog, Setting
 from apps.core.jwt_auth import ACCESS_TOKEN_COOKIE_NAME
-from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
+from apps.core.extensions import ResourceEndpointDefinition
+from extensions.testing import ResourceRegistry
 from apps.core.settings_service import clear_runtime_setting_caches
-from apps.core.extensions.runtime_access import get_runtime_notification_model
+from apps.core.extensions.runtime import get_runtime_notification_model
 from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.users.backend.handlers import user_resource_endpoints
 from extensions.users.backend.avatar_upload import UserAvatarUploadService

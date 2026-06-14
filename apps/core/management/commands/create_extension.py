@@ -214,6 +214,7 @@ class Command(BaseCommand):
             f"- 扩展 ID: `{extension_id}`\n"
             "- 用途：通过脚手架生成的 Bias 最小扩展样板。\n"
             "- 后端入口：`backend/ext.py` 的 `extend()` 返回扩展器列表，是扩展接入 Bias 运行时的主入口。\n"
+            "- 后端 SDK：扩展代码只应从 `apps.core.extensions`、`apps.core.extensions.runtime`、`apps.core.extensions.platform`、`apps.core.extensions.forum` 获取宿主能力，不直接 import `apps.core.*` 内部实现。\n"
             "- Django AppConfig：`backend/apps.py` 绑定扩展 app label，确保模型与迁移归属能被审计。\n"
             "- 前端入口：`frontend/admin/index.js` 与 `frontend/forum/index.js` 导出 `extend`，由 Bias 前端扩展注册中心加载。\n"
             "- API 资源：如需扩展 JSON:API 资源，请在 `backend/ext.py` 中加入 `ApiResourceExtender(...)`。\n"

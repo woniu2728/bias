@@ -4,9 +4,9 @@ from collections import OrderedDict
 
 from django.contrib.auth.models import AnonymousUser
 
-from apps.core.extensions.runtime_access import serialize_runtime_post_by_id
-from apps.core.forum_runtime import broadcast_realtime_discussion_event, iter_realtime_included_enrichers
-from apps.core.extensions.runtime_access import serialize_runtime_user
+from apps.core.extensions.runtime import serialize_runtime_post_by_id
+from apps.core.extensions.forum import broadcast_realtime_discussion_event, iter_realtime_included_enrichers
+from apps.core.extensions.runtime import serialize_runtime_user
 
 
 def resolve_visible_discussion_ids(discussion_ids, user) -> list[int]:
@@ -164,4 +164,3 @@ def merge_included_resource(target: OrderedDict, payload: dict) -> None:
         **(target.get(resource_id) or {}),
         **payload,
     }
-

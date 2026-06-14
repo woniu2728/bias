@@ -3,16 +3,16 @@ from __future__ import annotations
 from django.core.exceptions import ValidationError
 from ninja import Body, Router
 
-from apps.core.api_errors import api_error
-from apps.core.audit import log_admin_action
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.runtime import (
     bulk_process_runtime_approval_items,
     has_runtime_forum_permission,
     list_runtime_approval_queue_items,
     process_runtime_approval_item,
 )
-from apps.core.jwt_auth import AccessTokenAuth
-from apps.core.services import PaginationService
+from apps.core.extensions.platform import AccessTokenAuth
+from apps.core.extensions.platform import PaginationService
 
 
 router = Router()
@@ -138,4 +138,3 @@ def _log_processed_approval_item(request, item: dict, action: str, note: str = "
             target_id=item.get("id"),
             data={"note": note, "discussion_id": discussion.get("id")},
         )
-

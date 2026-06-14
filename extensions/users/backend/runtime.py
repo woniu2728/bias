@@ -125,7 +125,7 @@ def serialize_user(user, *, resource: str = "user_detail", context: dict | None 
     if not user:
         return None
 
-    from apps.core.extensions.runtime_access import get_runtime_resource_registry
+    from apps.core.extensions.runtime import get_runtime_resource_registry
 
     return get_runtime_resource_registry().serialize(
         str(resource or "user_detail"),

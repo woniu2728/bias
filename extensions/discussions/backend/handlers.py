@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from django.core.exceptions import PermissionDenied
 
-from apps.core.api_errors import api_error
-from apps.core.audit import log_admin_action
-from apps.core.extensions.runtime_access import get_runtime_resource_registry
-from apps.core.extensions.runtime_access import get_runtime_first_post
-from apps.core.resource_api import ResourceQueryOptions, merge_resource_includes, parse_resource_query_options
-from apps.core.resource_registry import ResourceEndpointDefinition
-from apps.core.services import PaginationService
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.runtime import get_runtime_resource_registry
+from apps.core.extensions.runtime import get_runtime_first_post
+from apps.core.extensions.platform import ResourceQueryOptions, merge_resource_includes, parse_resource_query_options
+from apps.core.extensions import ResourceEndpointDefinition
+from apps.core.extensions.platform import PaginationService
 from extensions.discussions.backend.models import Discussion
-from apps.core.extensions.runtime_access import serialize_runtime_user
+from apps.core.extensions.runtime import serialize_runtime_user
 from extensions.discussions.backend.schemas import (
     DiscussionCreateSchema,
     DiscussionOutSchema,
@@ -524,4 +524,3 @@ def dispatch_discussion_toggle_hide(context):
         return {"message": "操作成功", "is_hidden": discussion.is_hidden}
     except Discussion.DoesNotExist:
         return api_error("讨论不存在", status=404)
-

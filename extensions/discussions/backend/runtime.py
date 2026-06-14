@@ -38,7 +38,7 @@ def discussion_timeline_provider() -> dict:
 
 def _validate_replyable(discussion_id: int, user, *, discussion=None):
     from django.core.exceptions import PermissionDenied
-    from apps.core.extensions.runtime_access import evaluate_runtime_model_policy
+    from apps.core.extensions.runtime import evaluate_runtime_model_policy
     from extensions.discussions.backend.models import Discussion
 
     if discussion is None:
@@ -84,7 +84,7 @@ def _apply_counted_filter(queryset, *, prefix: str = ""):
 
 
 def _refresh_approved_stats(discussion, *, discussion_counted_post_types):
-    from apps.core.extensions.runtime_access import get_runtime_approved_discussion_post_stats
+    from apps.core.extensions.runtime import get_runtime_approved_discussion_post_stats
 
     stats = get_runtime_approved_discussion_post_stats(
         discussion,
@@ -107,7 +107,7 @@ def _refresh_approved_stats(discussion, *, discussion_counted_post_types):
 
 
 def _reply_notification_context(discussion_id: int, post_id: int, from_user):
-    from apps.core.extensions.runtime_access import get_runtime_post_number
+    from apps.core.extensions.runtime import get_runtime_post_number
     from extensions.discussions.backend.models import Discussion, DiscussionUser
 
     try:
@@ -158,7 +158,7 @@ def _is_subscribed(discussion, user) -> bool:
 
 def _set_subscription(discussion_id: int, user, subscribed: bool) -> bool:
     from django.utils import timezone
-    from apps.core.visibility import can_view_model_instance
+    from apps.core.extensions.platform import can_view_model_instance
     from django.core.exceptions import PermissionDenied
     from extensions.discussions.backend.models import Discussion, DiscussionUser
 
@@ -262,4 +262,3 @@ def create_timeline_from_builder(
         build_content,
         update_discussion_last_post=update_discussion_last_post,
     )
-

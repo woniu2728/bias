@@ -3,16 +3,17 @@ from django.db.models.signals import post_delete, post_save
 from apps.core.extensions import (
     ApiResourceExtender,
     EventListenersExtender,
+    ExtensionEventListenerDefinition,
     FrontendExtender,
     LifecycleExtender,
     ModelExtender,
+    NotificationTypeDefinition,
     NotificationsExtender,
+    ResourceEndpointDefinition,
     ServiceProviderExtender,
     SignalExtender,
+    UserPreferenceDefinition,
 )
-from apps.core.extensions.types import ExtensionEventListenerDefinition
-from apps.core.forum_registry_types import NotificationTypeDefinition, UserPreferenceDefinition
-from apps.core.resource_registry import ResourceEndpointDefinition
 from extensions.notifications.backend.handlers import (
     dispatch_notification_delete,
     dispatch_notification_delete_all_read,

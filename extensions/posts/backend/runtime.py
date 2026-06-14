@@ -152,7 +152,7 @@ def _resubmit_first_post(discussion):
 
 
 def _approve_first_post(discussion, *, approved_at, approved_by, note: str = ""):
-    from apps.core.extensions.runtime_access import refresh_runtime_model_private
+    from apps.core.extensions.runtime import refresh_runtime_model_private
     from extensions.posts.backend.models import Post
 
     first_post = Post.objects.filter(id=getattr(discussion, "first_post_id", None)).first()
@@ -178,7 +178,7 @@ def _approve_first_post(discussion, *, approved_at, approved_by, note: str = "")
 
 
 def _reject_first_post(discussion, *, rejected_at, rejected_by, note: str = ""):
-    from apps.core.extensions.runtime_access import refresh_runtime_model_private
+    from apps.core.extensions.runtime import refresh_runtime_model_private
     from extensions.posts.backend.models import Post
 
     first_post = Post.objects.filter(id=getattr(discussion, "first_post_id", None)).first()

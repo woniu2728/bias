@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.extensions.runtime_access import ensure_can_start_discussion_in_runtime_tags
+from apps.core.extensions.platform import dispatch_forum_event_after_commit
+from apps.core.extensions.runtime import ensure_can_start_discussion_in_runtime_tags
 from extensions.tags.backend.events import DiscussionTaggedEvent, TagStatsRefreshRequestedEvent
 from extensions.tags.backend.tag_relationships import replace_discussion_tags
 

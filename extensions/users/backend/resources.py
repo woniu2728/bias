@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.core.resource_registry import (
+from apps.core.extensions import (
     ResourceDefinition,
     ResourceFieldDefinition,
     ResourceRelationshipDefinition,
@@ -185,7 +185,7 @@ def serialize_user_summary(user) -> dict | None:
     if not user:
         return None
 
-    from apps.core.extensions.runtime_access import get_runtime_resource_registry
+    from apps.core.extensions.runtime import get_runtime_resource_registry
 
     return get_runtime_resource_registry().serialize("user_summary", user)
 
@@ -194,7 +194,7 @@ def serialize_user_payload(user, resource: str = "user_detail") -> dict | None:
     if not user:
         return None
 
-    from apps.core.extensions.runtime_access import get_runtime_resource_registry
+    from apps.core.extensions.runtime import get_runtime_resource_registry
 
     return get_runtime_resource_registry().serialize(resource, user)
 

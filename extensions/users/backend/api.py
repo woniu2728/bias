@@ -4,8 +4,8 @@ from ninja_jwt.tokens import RefreshToken
 from django.conf import settings
 from django.http import JsonResponse
 
-from apps.core.api_errors import api_error
-from apps.core.jwt_auth import (
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import (
     ACCESS_TOKEN_COOKIE_NAME,
     ACCESS_TOKEN_COOKIE_PATH,
     AccessTokenAuth,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.core.resource_registry import ResourceDefinition, ResourceFieldDefinition
+from apps.core.extensions import ResourceDefinition, ResourceFieldDefinition
 
 
 def post_resource_definitions():
@@ -92,7 +92,7 @@ def resolve_post_can_delete(post, context: dict) -> bool:
 
 
 def resolve_post_type_definition(post, context: dict) -> dict | None:
-    from apps.core.forum_registry import get_forum_registry
+    from apps.core.extensions.forum import get_forum_registry
 
     definition = get_forum_registry().get_post_type(getattr(post, "type", ""))
     if not definition:
@@ -183,7 +183,7 @@ def resolve_post_event_data(post, context: dict) -> dict | None:
 
 
 def _resolve_registered_post_event_data(post, context: dict) -> dict | None:
-    from apps.core.extensions.runtime_access import get_runtime_post_event_data_service
+    from apps.core.extensions.runtime import get_runtime_post_event_data_service
 
     service = get_runtime_post_event_data_service()
     if service is None or not hasattr(service, "resolve"):
@@ -222,4 +222,3 @@ def _parse_post_target_state_content(content: str | None) -> dict:
         "target_post_id": target_post_id,
         "target_post_number": target_post_number,
     }
-

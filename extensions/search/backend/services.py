@@ -7,8 +7,8 @@ from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from django.db import connection
 from django.db.models import OuterRef, Q, Subquery
 
-from apps.core.forum_registry import get_forum_registry
-from apps.core.services import PaginationService
+from apps.core.extensions.forum import get_forum_registry
+from apps.core.extensions.platform import PaginationService
 
 try:
     import jieba
@@ -33,7 +33,7 @@ def _get_searchable_post_type_codes() -> tuple[str, ...]:
 def _get_search_target(target: str) -> dict[str, Any]:
     normalized = str(target or "").strip()
     try:
-        from apps.core.extensions.runtime_access import get_extension_host_service
+        from apps.core.extensions.runtime import get_extension_host_service
 
         provider = get_extension_host_service(f"search.target.{normalized}")
     except Exception:
@@ -80,7 +80,7 @@ class SearchContext:
 
 def _get_runtime_search_filters(targets: tuple[str, ...] | None = None):
     try:
-        from apps.core.extensions.runtime_access import get_runtime_search_service
+        from apps.core.extensions.runtime import get_runtime_search_service
 
         search_service = get_runtime_search_service()
     except Exception:
@@ -287,7 +287,7 @@ class SearchService:
     @staticmethod
     def _apply_extension_search_mutators(target: str, queryset, context: dict):
         try:
-            from apps.core.extensions.runtime_access import get_runtime_search_service
+            from apps.core.extensions.runtime import get_runtime_search_service
 
             search_service = get_runtime_search_service()
             if search_service is None:
@@ -641,4 +641,3 @@ class SearchService:
     @staticmethod
     def _queryset_has_annotation(queryset, name: str) -> bool:
         return name in getattr(getattr(queryset, "query", None), "annotations", {})
-

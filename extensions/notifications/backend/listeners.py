@@ -1,4 +1,4 @@
-from apps.core.extensions.runtime_access import get_runtime_user_by_id
+from apps.core.extensions.runtime import get_runtime_user_by_id
 
 
 def handle_post_created_direct_reply_notification(event) -> None:

@@ -6,14 +6,14 @@ from typing import Any
 
 import httpx
 
-from apps.core.extension_settings_service import get_extension_settings
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import get_extension_settings
+from apps.core.extensions.runtime import (
     can_runtime_view_post,
     get_extension_host_service,
     get_runtime_discussion_model,
     get_runtime_post_model,
 )
-from apps.core.visibility import can_view_model_instance
+from apps.core.extensions.platform import can_view_model_instance
 
 
 EXTENSION_ID = "ai"

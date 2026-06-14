@@ -2,17 +2,17 @@ from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError
 from typing import Any
 
-from apps.core.authorization import AuthorizationPolicy
-from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
-from apps.core.extension_settings_service import get_extension_settings
+from apps.core.extensions.platform import AuthorizationPolicy
+from apps.core.extensions.platform import dispatch_forum_event_after_commit
+from apps.core.extensions.platform import evaluate_extension_policy
+from apps.core.extensions.platform import get_extension_settings
 from extensions.likes.backend.events import PostLikedEvent
 from extensions.likes.backend.models import PostLike
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     can_runtime_view_post,
     get_runtime_post_by_id,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     ensure_runtime_user_not_suspended,
 )
 
@@ -89,5 +89,3 @@ class LikePostPolicy(AuthorizationPolicy):
 def resolve_post_can_like(post, context: dict) -> bool:
     user = context.get("user")
     return bool(user and can_like_post(post, user))
-
-

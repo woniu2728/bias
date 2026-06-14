@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.core.extensions.runtime_access import get_runtime_post_by_id, get_runtime_user_by_id
+from apps.core.extensions.runtime import get_runtime_post_by_id, get_runtime_user_by_id
 from extensions.points.backend.settings import get_points_settings
 from extensions.points.backend.services import award_points
 

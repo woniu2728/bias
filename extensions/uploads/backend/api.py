@@ -2,11 +2,11 @@ import os
 
 from ninja import Router
 
-from apps.core.api_errors import api_error
-from apps.core.auth import AuthBearer
-from apps.core.audit import log_admin_action
-from apps.core.jwt_auth import AccessTokenAuth
-from apps.core.schemas import UploadFileOutSchema
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import AuthBearer
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.platform import AccessTokenAuth
+from apps.core.extensions.forum import UploadFileOutSchema
 from extensions.uploads.backend.services import UploadService
 
 

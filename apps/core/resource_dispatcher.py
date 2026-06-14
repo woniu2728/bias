@@ -8,7 +8,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, JsonResponse, RawPostDataException
 
 from apps.core.auth import get_optional_user
-from apps.core.extensions.runtime_access import get_runtime_resource_registry
+from apps.core.extensions.runtime import get_runtime_resource_registry
 from apps.core.forum_permissions import has_forum_permission
 from apps.core.resource_api import parse_resource_query_options
 from apps.core.resource_errors import JsonApiError, jsonapi_error_response

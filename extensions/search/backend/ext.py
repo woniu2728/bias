@@ -1,5 +1,11 @@
-from apps.core.extensions import ApiRoutesExtender, ForumCapabilitiesExtender, FrontendExtender, LifecycleExtender, ServiceProviderExtender
-from apps.core.forum_registry_types import SearchFilterDefinition
+from apps.core.extensions import (
+    ApiRoutesExtender,
+    ForumCapabilitiesExtender,
+    FrontendExtender,
+    LifecycleExtender,
+    SearchFilterDefinition,
+    ServiceProviderExtender,
+)
 from extensions.search.backend.admin_api import router as search_admin_router
 from extensions.search.backend.api import router as search_router
 from extensions.search.backend.filters import (

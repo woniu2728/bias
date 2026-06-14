@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.db.models import Count, Prefetch
 
-from apps.core.extensions.runtime_access import serialize_runtime_user
+from apps.core.extensions.runtime import serialize_runtime_user
 from extensions.likes.backend.models import PostLike
 
 

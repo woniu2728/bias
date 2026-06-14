@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from django.core.exceptions import PermissionDenied
 
-from apps.core.api_errors import api_error
-from apps.core.audit import log_admin_action
-from apps.core.extensions.runtime_access import get_runtime_resource_registry
-from apps.core.forum_registry import get_forum_registry
-from apps.core.resource_api import (
+from apps.core.extensions.platform import (
+    PaginationService,
     ResourceQueryOptions,
+    api_error,
     merge_resource_includes,
     parse_resource_query_options,
 )
-from apps.core.resource_errors import BadJsonApiRequest
-from apps.core.resource_registry import ResourceEndpointDefinition
-from apps.core.services import PaginationService
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.runtime import get_runtime_resource_registry
+from apps.core.extensions.forum import get_forum_registry
+from apps.core.extensions.platform import BadJsonApiRequest
+from apps.core.extensions import ResourceEndpointDefinition
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.schemas import PostCreateSchema, PostUpdateSchema
 from extensions.posts.backend.services import PostService
@@ -431,4 +431,3 @@ def dispatch_post_toggle_hide(context):
         return api_error(str(e), status=403)
     except ValueError as e:
         return api_error(str(e), status=400)
-

@@ -5,18 +5,18 @@ from typing import Any, List, Optional, Tuple
 
 from django.db import IntegrityError
 
-from apps.core.db import sqlite_write_retry
-from apps.core.domain_events import get_forum_event_bus
-from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.forum import sqlite_write_retry
+from apps.core.extensions.platform import get_forum_event_bus
+from apps.core.extensions.platform import evaluate_extension_policy
+from apps.core.extensions.runtime import (
     lock_runtime_discussion_for_post_number,
     refresh_runtime_discussion_approved_stats,
     validate_runtime_replyable_discussion,
 )
-from apps.core.forum_registry import get_forum_registry
+from apps.core.extensions.forum import get_forum_registry
 from extensions.posts.backend import post_query_service, service_lifecycle, service_moderation
 from extensions.posts.backend.models import Post
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     has_runtime_forum_permission,
 )
 
@@ -388,7 +388,7 @@ class PostService:
         Returns:
             str: HTML内容
         """
-        from apps.core.markdown_service import MarkdownService
+        from apps.core.extensions.platform import MarkdownService
         return MarkdownService.render(content, sanitize=True)
 
     @staticmethod
@@ -397,5 +397,3 @@ class PostService:
         if content_html:
             return content_html
         return PostService._render_markdown(getattr(post, "content", "") or "")
-
-

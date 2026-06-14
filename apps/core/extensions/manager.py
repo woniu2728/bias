@@ -29,6 +29,19 @@ from apps.core.extensions.migrations import (
     has_django_extension_migrations,
     run_extension_migrations as sync_django_extension_migrations,
 )
+from apps.core.extensions.manager_dependencies import (
+    build_dependency_resolution_payload,
+    get_core_satisfied_dependency_ids,
+    resolve_extension_order,
+)
+from apps.core.extensions.manager_helpers import (
+    build_extension_status_key,
+    build_extension_status_label,
+    coerce_installation_runtime_state,
+    json_dumps,
+    normalize_lifecycle_result,
+)
+from apps.core.extensions.manager_runtime_actions import build_runtime_actions
 from apps.core.extensions.product import (
     get_extension_protected_reason,
     is_extension_auto_enabled,
@@ -42,7 +55,6 @@ from apps.core.extensions.validation import resolve_bias_version_compatibility
 from apps.core.extensions.types import (
     ExtensionAssembly,
     ExtensionBootPlan,
-    ExtensionRuntimeActionDefinition,
     ExtensionRuntimeState,
 )
 from apps.core.models import ExtensionInstallation, Setting
@@ -472,7 +484,7 @@ class ExtensionManager:
                 created.append(extension_id)
                 continue
             changed_fields = []
-            installed, enabled, booted = _coerce_installation_runtime_state(
+            installed, enabled, booted = coerce_installation_runtime_state(
                 extension,
                 installed=installation.installed,
                 enabled=installation.enabled,
@@ -601,7 +613,7 @@ class ExtensionManager:
         }
         discovered_ids = set(discovered.keys())
         installed_ids = set(installations.keys())
-        dependency_resolution = _build_dependency_resolution_payload(list(discovered.values()))
+        dependency_resolution = build_dependency_resolution_payload(list(discovered.values()))
         enabled_order = self.inspect_enabled_extension_order(force=False)
         return {
             "schema": 1,
@@ -639,7 +651,7 @@ class ExtensionManager:
         ]
         resolved = resolve_extension_order(
             enabled_extensions,
-            satisfied_dependency_ids=_get_core_satisfied_dependency_ids(),
+            satisfied_dependency_ids=get_core_satisfied_dependency_ids(),
         )
         resolved_ids = list(resolved.get("order") or [])
         persisted_ids = self._read_persisted_enabled_order()
@@ -721,7 +733,7 @@ class ExtensionManager:
     def sort_extensions_for_boot(self, extensions: list[Extension]) -> list[Extension]:
         resolved = resolve_extension_order(
             extensions,
-            satisfied_dependency_ids=_get_core_satisfied_dependency_ids(),
+            satisfied_dependency_ids=get_core_satisfied_dependency_ids(),
         )
         if resolved["circular_dependencies"]:
             circular = ", ".join(resolved["circular_dependencies"])
@@ -750,7 +762,7 @@ class ExtensionManager:
         if installation is None:
             extension = self._build_uninstalled_extension(extension)
         else:
-            installed, enabled, booted = _coerce_installation_runtime_state(
+            installed, enabled, booted = coerce_installation_runtime_state(
                 extension,
                 installed=installation.installed,
                 enabled=installation.enabled,
@@ -761,8 +773,8 @@ class ExtensionManager:
                 enabled=enabled,
                 booted=booted,
                 healthy=extension.runtime.healthy,
-                status_key=_build_extension_status_key(installed, enabled),
-                status_label=_build_extension_status_label(installed, enabled),
+                status_key=build_extension_status_key(installed, enabled),
+                status_label=build_extension_status_label(installed, enabled),
                 migration_state=extension.runtime.migration_state,
                 migration_label=extension.runtime.migration_label,
                 dependency_state=extension.runtime.dependency_state,
@@ -784,8 +796,8 @@ class ExtensionManager:
                 enabled=auto_enabled,
                 booted=auto_enabled,
                 healthy=extension.runtime.healthy,
-                status_key=_build_extension_status_key(True, auto_enabled),
-                status_label=_build_extension_status_label(True, auto_enabled),
+                status_key=build_extension_status_key(True, auto_enabled),
+                status_label=build_extension_status_label(True, auto_enabled),
                 migration_state=extension.runtime.migration_state,
                 migration_label=extension.runtime.migration_label,
                 dependency_state=extension.runtime.dependency_state,
@@ -850,7 +862,7 @@ class ExtensionManager:
             dependency_state=extension.runtime.dependency_state,
             dependency_state_label=extension.runtime.dependency_state_label,
             runtime_issues=extension.runtime.runtime_issues,
-            runtime_actions=_build_runtime_actions(extension),
+            runtime_actions=build_runtime_actions(extension),
             delivery_checks=extension.runtime.delivery_checks,
             uninstall_warnings=extension.runtime.uninstall_warnings,
             backend_hooks=dict(extension.runtime.backend_hooks or {}),
@@ -937,7 +949,7 @@ class ExtensionManager:
         self._validate_bias_compatibility(extension, action="enable")
 
         extension_map = {item.id: item for item in extensions}
-        satisfied_dependency_ids = _get_core_satisfied_dependency_ids()
+        satisfied_dependency_ids = get_core_satisfied_dependency_ids()
         missing_dependencies = []
         disabled_dependencies = []
         active_conflicts = []
@@ -1141,7 +1153,7 @@ class ExtensionManager:
             },
         )
 
-        installed, enabled, booted = _coerce_installation_runtime_state(
+        installed, enabled, booted = coerce_installation_runtime_state(
             extension,
             installed=installed,
             enabled=enabled,
@@ -1267,7 +1279,7 @@ class ExtensionManager:
                         "handler": callback.__name__ if hasattr(callback, "__name__") else callback.__class__.__name__,
                     },
                 ) from exc
-            normalized_result = _normalize_lifecycle_result(result, hook_name)
+            normalized_result = normalize_lifecycle_result(result, hook_name)
             if normalized_result.get("status") not in ("ok", "skipped"):
                 raise ExtensionStateError(
                     normalized_result.get("message") or f"扩展 {extension.id} 的 {method_name} 生命周期处理器执行失败。",
@@ -1312,136 +1324,6 @@ class ExtensionManager:
         return merged
 
 
-def _normalize_lifecycle_result(result, hook_name: str) -> dict:
-    from django.utils import timezone
-
-    timestamp = timezone.now().isoformat()
-    if result is None:
-        return {
-            "hook": hook_name,
-            "status": "ok",
-            "status_label": "已完成",
-            "message": f"{hook_name} 已执行。",
-            "executed_at": timestamp,
-        }
-    if isinstance(result, dict):
-        payload = dict(result)
-        payload.setdefault("hook", hook_name)
-        payload.setdefault("status", "ok")
-        payload.setdefault("status_label", "已完成")
-        payload.setdefault("executed_at", timestamp)
-        return payload
-    return {
-        "hook": hook_name,
-        "status": "ok",
-        "status_label": "已完成",
-        "message": str(result),
-        "executed_at": timestamp,
-    }
-
-
-def json_dumps(value) -> str:
-    return json.dumps(value, ensure_ascii=False)
-
-
-def _get_core_satisfied_dependency_ids() -> set[str]:
-    try:
-        from apps.core.forum_registry import get_core_module_ids
-
-        return set(get_core_module_ids())
-    except Exception:
-        return {"core"}
-
-
-def resolve_extension_order(extensions: list[Extension], *, satisfied_dependency_ids: set[str] | None = None) -> dict:
-    satisfied_dependency_ids = set(satisfied_dependency_ids or set())
-    extension_map = {extension.id: extension for extension in extensions}
-    sorted_extensions = sorted(extensions, key=lambda item: item.id)
-    graph: dict[str, list[str]] = {}
-    in_degree: dict[str, int] = {extension.id: 0 for extension in sorted_extensions}
-    missing_dependencies: dict[str, list[str]] = {}
-
-    for extension in sorted_extensions:
-        dependencies = list(extension.manifest.dependencies)
-        optional_dependencies = [
-            dependency_id
-            for dependency_id in extension.manifest.optional_dependencies
-            if dependency_id in extension_map
-        ]
-        graph.setdefault(extension.id, [])
-        for dependency_id in [*dependencies, *optional_dependencies]:
-            if dependency_id in satisfied_dependency_ids:
-                continue
-            if dependency_id not in extension_map:
-                if dependency_id in dependencies:
-                    missing_dependencies.setdefault(extension.id, []).append(dependency_id)
-                continue
-            graph.setdefault(dependency_id, [])
-            graph[dependency_id].append(extension.id)
-            in_degree[extension.id] = in_degree.get(extension.id, 0) + 1
-
-    pending = sorted([extension_id for extension_id, count in in_degree.items() if count == 0])
-    output: list[str] = []
-    while pending:
-        active = pending.pop(0)
-        output.append(active)
-        for dependent_id in sorted(graph.get(active, [])):
-            in_degree[dependent_id] -= 1
-            if in_degree[dependent_id] == 0:
-                pending.append(dependent_id)
-
-    circular_dependencies = sorted([
-        extension_id
-        for extension_id, count in in_degree.items()
-        if count > 0
-    ])
-    valid_ids = [
-        extension_id
-        for extension_id in output
-        if extension_id not in missing_dependencies
-    ]
-
-    return {
-        "valid": [extension_map[extension_id] for extension_id in valid_ids],
-        "order": valid_ids,
-        "graph": graph,
-        "missing_dependencies": missing_dependencies,
-        "circular_dependencies": circular_dependencies,
-    }
-
-
-def _build_dependency_resolution_payload(extensions: list[Extension]) -> dict:
-    resolved = resolve_extension_order(
-        extensions,
-        satisfied_dependency_ids=_get_core_satisfied_dependency_ids(),
-    )
-    dependents: dict[str, list[str]] = {extension.id: [] for extension in extensions}
-    for dependency_id, dependent_ids in dict(resolved.get("graph") or {}).items():
-        for dependent_id in dependent_ids:
-            dependents.setdefault(dependency_id, [])
-            if dependent_id not in dependents[dependency_id]:
-                dependents[dependency_id].append(dependent_id)
-    extension_map = {extension.id: extension for extension in extensions}
-    graph = {}
-    for extension in sorted(extensions, key=lambda item: item.id):
-        optional_dependencies = [
-            dependency_id
-            for dependency_id in extension.manifest.optional_dependencies
-            if dependency_id in extension_map
-        ]
-        graph[extension.id] = {
-            "dependencies": list(extension.manifest.dependencies),
-            "optional_dependencies": optional_dependencies,
-            "dependents": sorted(dependents.get(extension.id, [])),
-        }
-    return {
-        "boot_order": list(resolved.get("order") or []),
-        "graph": graph,
-        "missing_dependencies": dict(resolved.get("missing_dependencies") or {}),
-        "circular_dependencies": list(resolved.get("circular_dependencies") or []),
-    }
-
-
 _manager: ExtensionManager | None = None
 
 
@@ -1453,151 +1335,3 @@ def get_extension_manager() -> ExtensionManager:
     elif _manager.extensions_path != default_path:
         _manager = ExtensionManager(extensions_path=default_path)
     return _manager
-
-
-def _build_extension_status_key(installed: bool, enabled: bool) -> str:
-    if not installed:
-        return "pending_install"
-    if enabled:
-        return "active"
-    return "disabled"
-
-
-def _coerce_installation_runtime_state(
-    extension: Extension,
-    *,
-    installed: bool,
-    enabled: bool,
-    booted: bool,
-) -> tuple[bool, bool, bool]:
-    installed = bool(installed)
-    enabled = bool(enabled)
-    booted = bool(booted)
-    if is_extension_protected(extension) and is_extension_auto_enabled(extension):
-        return True, True, True
-    return installed, enabled, booted
-
-
-def _build_extension_status_label(installed: bool, enabled: bool) -> str:
-    if not installed:
-        return "待安装"
-    if enabled:
-        return "已启用"
-    return "已停用"
-
-
-def _build_runtime_actions(extension: Extension) -> tuple[ExtensionRuntimeActionDefinition, ...]:
-    manifest_actions = _build_manifest_runtime_actions(extension)
-    migration_action = _build_migration_runtime_action(extension)
-    protected = is_extension_protected(extension)
-    action_prefix = []
-    if migration_action is not None:
-        action_prefix.append(migration_action)
-    action_prefix.extend(list(manifest_actions))
-
-    if not extension.runtime.installed:
-        return tuple([
-            ExtensionRuntimeActionDefinition(
-                key="install",
-                label="安装扩展",
-                action="install",
-                tone="primary",
-                confirm_title="安装扩展",
-                confirm_message=f"确定安装 {extension.name} 吗？当前版本会登记为已安装并默认启用。",
-                confirm_text="安装",
-                success_message="扩展已安装并启用。",
-                order=10,
-            ),
-            *action_prefix,
-        ])
-
-    actions = list(action_prefix)
-    if extension.runtime.enabled:
-        if not protected:
-            actions.append(ExtensionRuntimeActionDefinition(
-                key="disable",
-                label="停用扩展",
-                action="disable",
-                tone="danger",
-                confirm_title="停用扩展",
-                confirm_message=f"确定停用 {extension.name} 吗？相关后台入口和运行能力会立即隐藏。",
-                confirm_text="停用",
-                success_message="扩展已停用。",
-                requires_installed=True,
-                order=20,
-            ))
-    else:
-        actions.append(ExtensionRuntimeActionDefinition(
-            key="enable",
-            label="启用扩展",
-            action="enable",
-            tone="primary",
-            confirm_title="启用扩展",
-            confirm_message=f"确定启用 {extension.name} 吗？依赖校验通过后会立即恢复能力。",
-            confirm_text="启用",
-            success_message="扩展已启用。",
-            requires_installed=True,
-            order=10,
-        ))
-        if not protected:
-            actions.append(ExtensionRuntimeActionDefinition(
-                key="uninstall",
-                label="卸载扩展",
-                action="uninstall",
-                tone="danger",
-                confirm_title="卸载扩展",
-                confirm_message=_build_uninstall_confirm_message(extension),
-                confirm_text="卸载",
-                success_message="扩展已卸载。",
-                requires_installed=True,
-                order=30,
-            ))
-
-    return tuple(actions)
-
-
-def _build_manifest_runtime_actions(extension: Extension) -> tuple[ExtensionRuntimeActionDefinition, ...]:
-    actions = []
-    for action in sorted(extension.manifest_runtime_actions, key=lambda item: (item.order, item.key)):
-        actions.append(ExtensionRuntimeActionDefinition(
-            key=action.key,
-            label=action.label,
-            action=f"hook:{action.hook}",
-            tone=action.tone,
-            confirm_title=action.confirm_title,
-            confirm_message=action.confirm_message,
-            confirm_text=action.confirm_text,
-            success_message=action.success_message,
-            requires_enabled=action.requires_enabled,
-            requires_installed=action.requires_installed,
-            order=action.order,
-        ))
-    return tuple(actions)
-
-
-def _build_migration_runtime_action(extension: Extension) -> ExtensionRuntimeActionDefinition | None:
-    if not extension.runtime.installed:
-        return None
-    if not has_django_extension_migrations(extension):
-        return None
-    return ExtensionRuntimeActionDefinition(
-        key="migrations",
-        label="执行迁移",
-        action="migrations",
-        tone="default",
-        confirm_title="执行扩展迁移",
-        confirm_message=f"确定执行 {extension.name} 的扩展迁移吗？该操作通常用于安装后补跑或同步迁移摘要。",
-        confirm_text="执行",
-        success_message="扩展迁移已执行。",
-        requires_installed=True,
-        order=15,
-    )
-
-
-def _build_uninstall_confirm_message(extension: Extension) -> str:
-    warnings = list(extension.runtime.uninstall_warnings or ())
-    if not warnings:
-        return f"确定卸载 {extension.name} 吗？"
-
-    body = "；".join(warnings[:2])
-    return f"确定卸载 {extension.name} 吗？{body}"

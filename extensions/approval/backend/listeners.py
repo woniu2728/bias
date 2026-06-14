@@ -1,9 +1,10 @@
-from apps.core.extensions import runtime_access
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
+    create_runtime_timeline_from_builder,
     get_runtime_discussion_model,
     get_runtime_user_by_id,
+    notify_runtime_notification,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_post_model,
 )
 
@@ -14,8 +15,8 @@ def handle_discussion_approved(event) -> None:
     if discussion is None or admin_user is None:
         return
 
-    runtime_access.notify_runtime_notification("notify_discussion_approved", discussion, admin_user, note=event.note)
-    runtime_access.create_runtime_timeline_from_builder(
+    notify_runtime_notification("notify_discussion_approved", discussion, admin_user, note=event.note)
+    create_runtime_timeline_from_builder(
         event,
         "discussion_review",
         extra={
@@ -33,8 +34,8 @@ def handle_discussion_rejected(event) -> None:
     if discussion is None or admin_user is None:
         return
 
-    runtime_access.notify_runtime_notification("notify_discussion_rejected", discussion, admin_user, note=event.note)
-    runtime_access.create_runtime_timeline_from_builder(
+    notify_runtime_notification("notify_discussion_rejected", discussion, admin_user, note=event.note)
+    create_runtime_timeline_from_builder(
         event,
         "discussion_review",
         extra={
@@ -46,7 +47,7 @@ def handle_discussion_rejected(event) -> None:
 
 
 def handle_discussion_resubmitted(event) -> None:
-    runtime_access.create_runtime_timeline_from_builder(
+    create_runtime_timeline_from_builder(
         event,
         "discussion_resubmitted",
         extra={
@@ -62,8 +63,8 @@ def handle_post_approved(event) -> None:
     if post is None or admin_user is None:
         return
 
-    runtime_access.notify_runtime_notification("notify_post_approved", post, admin_user, note=event.note)
-    runtime_access.create_runtime_timeline_from_builder(
+    notify_runtime_notification("notify_post_approved", post, admin_user, note=event.note)
+    create_runtime_timeline_from_builder(
         event,
         "post_review",
         extra={
@@ -81,8 +82,8 @@ def handle_post_rejected(event) -> None:
     if post is None or admin_user is None:
         return
 
-    runtime_access.notify_runtime_notification("notify_post_rejected", post, admin_user, note=event.note)
-    runtime_access.create_runtime_timeline_from_builder(
+    notify_runtime_notification("notify_post_rejected", post, admin_user, note=event.note)
+    create_runtime_timeline_from_builder(
         event,
         "post_review",
         extra={
@@ -99,7 +100,7 @@ def handle_post_resubmitted(event) -> None:
     if post is None:
         return
 
-    runtime_access.create_runtime_timeline_from_builder(
+    create_runtime_timeline_from_builder(
         event,
         "post_resubmitted",
         extra={

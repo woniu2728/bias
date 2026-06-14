@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.core.forum_registry import get_forum_registry
+from apps.core.extensions.forum import get_forum_registry
 
 
 def get_user_preference_definitions(category: str | None = None):

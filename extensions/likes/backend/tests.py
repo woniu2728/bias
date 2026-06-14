@@ -12,18 +12,17 @@ from ninja_jwt.tokens import RefreshToken
 from apps.core.extension_settings_service import save_extension_settings
 from apps.core.extensions.bootstrap import build_extension_application
 from apps.core.extensions.registry import ExtensionRegistry
-from apps.core.resource_registry import get_resource_registry
-from extensions.testing import ExtensionRuntimeTestMixin
-from apps.core.extensions.runtime_access import (
+from extensions.testing import ExtensionRuntimeTestMixin, get_resource_registry
+from apps.core.extensions.runtime import (
     can_runtime_like_post,
     create_runtime_discussion,
     like_runtime_post,
 )
 from apps.core.models import ExtensionInstallation
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_post,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_user_model,
 )
 
@@ -248,7 +247,7 @@ class LikesExtensionTests(TestCase):
         self.assertNotIn(other_post.id, ids)
 
     def test_like_post_dispatches_domain_event_instead_of_direct_notification_call(self):
-        with patch("apps.core.extensions.runtime_access.notify_runtime_notification") as notify_mock:
+        with patch("apps.core.extensions.runtime.notify_runtime_notification") as notify_mock:
             with self.captureOnCommitCallbacks(execute=True):
                 like_runtime_post(self.post.id, self.liker)
 

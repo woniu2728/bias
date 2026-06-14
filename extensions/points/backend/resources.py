@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.core.resource_registry import ResourceFieldDefinition
+from apps.core.extensions import ResourceFieldDefinition
 
 
 def user_detail_resource_field_definitions():

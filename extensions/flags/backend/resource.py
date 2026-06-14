@@ -3,10 +3,10 @@ from __future__ import annotations
 from django.core.exceptions import PermissionDenied
 from django.db.models import Max
 
-from apps.core.resource_errors import JsonApiForbidden, JsonApiValidationError
-from apps.core.resource_objects import DatabaseResource, ResourceEndpoint, ResourceField, ResourceRelationship, ResourceSort
+from apps.core.extensions import DatabaseResource, ResourceEndpoint, ResourceField, ResourceRelationship, ResourceSort
+from apps.core.extensions.platform import JsonApiForbidden, JsonApiValidationError
 from extensions.flags.backend.models import PostFlag
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_post_by_id,
     get_runtime_post_model,
     report_runtime_post_flag,
@@ -169,4 +169,3 @@ def _relationship_identifier(value, *, expected_type: str) -> int | None:
         return int(value.get("id") or 0)
     except (TypeError, ValueError):
         return None
-

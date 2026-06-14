@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 from typing import Dict, List, Tuple
 
@@ -25,6 +26,9 @@ from apps.core.forum_registry_types import (
     UserPreferenceDefinition,
 )
 from apps.core.models import ExtensionInstallation
+
+
+logger = logging.getLogger(__name__)
 
 
 class ForumRegistry:
@@ -515,7 +519,7 @@ def get_forum_registry() -> ForumRegistry:
             if host is not None:
                 return host.forum
         except Exception:
-            pass
+            logger.warning("Failed to resolve extension-backed forum registry.", exc_info=True)
     if _registry is None:
         _registry = ForumRegistry()
         _register_core_modules(_registry)

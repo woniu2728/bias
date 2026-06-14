@@ -11,7 +11,7 @@ import * as forumRegistry from './forum/registry'
 import { useForumStore } from './stores/forum'
 import { useForumUiStore } from './stores/forumUi'
 import { useResourceStore } from './stores/resource'
-import { generatedForumExtensionModules } from './generated/extensionImportMap'
+import { generatedForumExtensionModules } from 'virtual:bias-extension-import-map'
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import './assets/main.css'
 

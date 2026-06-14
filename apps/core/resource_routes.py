@@ -5,7 +5,7 @@ from typing import Any
 
 from ninja import Router
 
-from apps.core.extensions.runtime_access import get_runtime_resource_registry
+from apps.core.extensions.runtime import get_runtime_resource_registry
 from apps.core.resource_dispatcher import dispatch_resource_endpoint
 from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
 

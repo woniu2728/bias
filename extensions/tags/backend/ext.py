@@ -20,17 +20,21 @@ from apps.core.extensions import (
     SearchDriverExtender,
     ServiceProviderExtender,
     SettingsExtender,
-)
-from apps.core.extensions.backend import _build_setting_field_definition
-from apps.core.extensions.types import (
+    AdminPageDefinition,
+    DiscussionListQueryDefinition,
     ExtensionEventListenerDefinition,
     ExtensionModelDefinition,
     ExtensionModelRelationDefinition,
     ExtensionModelVisibilityDefinition,
     ExtensionSearchDriverDefinition,
+    PostTypeDefinition,
+    ResourceDefinition,
+    ResourceEndpointDefinition,
+    ResourceFieldDefinition,
+    ResourceRelationshipDefinition,
+    SearchFilterDefinition,
+    setting_field,
 )
-from apps.core.forum_registry_types import AdminPageDefinition, DiscussionListQueryDefinition, PostTypeDefinition, SearchFilterDefinition
-from apps.core.resource_registry import ResourceDefinition, ResourceEndpointDefinition, ResourceFieldDefinition, ResourceRelationshipDefinition
 from extensions.tags.backend.models import DiscussionTag, Tag
 from extensions.tags.backend.handlers import (
     dispatch_tag_create,
@@ -278,7 +282,7 @@ def post_type_definitions():
 
 def setting_field_definitions():
     return (
-        _build_setting_field_definition({
+        setting_field({
             "key": "min_primary_tags",
             "label": "最少主标签数",
             "type": "number",
@@ -286,7 +290,7 @@ def setting_field_definitions():
             "help_text": "发起讨论时要求选择的最少主标签数。",
             "order": 10,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "max_primary_tags",
             "label": "最多主标签数",
             "type": "number",
@@ -294,7 +298,7 @@ def setting_field_definitions():
             "help_text": "发起讨论时允许选择的最多主标签数。",
             "order": 20,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "min_secondary_tags",
             "label": "最少次标签数",
             "type": "number",
@@ -302,7 +306,7 @@ def setting_field_definitions():
             "help_text": "发起讨论时要求选择的最少次标签数。",
             "order": 30,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "max_secondary_tags",
             "label": "最多次标签数",
             "type": "number",

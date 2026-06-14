@@ -1,6 +1,5 @@
 from extensions.mentions.backend.events import UserMentionedEvent
-from apps.core.extensions import runtime_access
-from apps.core.extensions.runtime_access import get_runtime_user_by_id
+from apps.core.extensions.runtime import get_runtime_user_by_id, notify_runtime_notification
 
 
 def handle_user_mentioned_notification(event: UserMentionedEvent) -> None:
@@ -12,7 +11,7 @@ def handle_user_mentioned_notification(event: UserMentionedEvent) -> None:
     if from_user is None:
         return
 
-    runtime_access.notify_runtime_notification(
+    notify_runtime_notification(
         "notify_user_mentioned",
         post_id=event.post_id,
         mentioned_user=mentioned_user,

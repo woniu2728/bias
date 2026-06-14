@@ -9,7 +9,7 @@ from ninja import Body, Router
 from apps.core import admin_runtime_helpers
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
-from apps.core.extensions.runtime_access import get_runtime_resource_registry
+from apps.core.extensions.runtime import get_runtime_resource_registry
 from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.mail_drivers import (
     can_mail_driver_send,

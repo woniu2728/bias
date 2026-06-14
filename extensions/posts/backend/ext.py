@@ -5,10 +5,11 @@ from apps.core.extensions import (
     ForumCapabilitiesExtender,
     LifecycleExtender,
     ModelExtender,
+    PermissionDefinition,
+    PostTypeDefinition,
     SearchIndexExtender,
     ServiceProviderExtender,
 )
-from apps.core.forum_registry_types import PermissionDefinition, PostTypeDefinition
 from extensions.posts.backend.handlers import post_resource_endpoints
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.resources import (

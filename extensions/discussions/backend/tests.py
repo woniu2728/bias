@@ -16,12 +16,8 @@ from ninja_jwt.tokens import RefreshToken
 
 from apps.core.forum_registry import get_forum_registry
 from apps.core.models import AuditLog
-from apps.core.resource_registry import (
-    ResourceEndpointDefinition,
-    ResourceRelationshipDefinition,
-    ResourceRegistry,
-    ResourceSortDefinition,
-)
+from apps.core.extensions import ResourceEndpointDefinition, ResourceRelationshipDefinition, ResourceSortDefinition
+from extensions.testing import ResourceRegistry
 from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.discussions.backend.visibility import (
     build_discussion_visibility_q,
@@ -32,11 +28,11 @@ from extensions.discussions.backend.handlers import discussion_resource_endpoint
 from extensions.discussions.backend.models import Discussion, DiscussionUser
 from extensions.discussions.backend.schemas import DiscussionCreateSchema, DiscussionUpdateSchema
 from extensions.discussions.backend.services import DiscussionService
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_post,
     get_runtime_post_model,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_group_model,
     get_runtime_permission_model,
     get_runtime_user_model,
@@ -256,7 +252,7 @@ class DiscussionApiTests(TestCase):
             def is_private(self, model, instance, *, default=False):
                 return model is Discussion
 
-        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=RuntimeModelService()):
+        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=RuntimeModelService()):
             discussion = DiscussionService.create_discussion(
                 title="Private runtime discussion",
                 content="Initial post",
@@ -281,7 +277,7 @@ class DiscussionApiTests(TestCase):
         ).extend(app, SimpleNamespace(extension_id="private-runtime"))
         app.make("models")
 
-        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
             discussion = Discussion.objects.create(
                 title="Private saved by signal",
                 user=self.author,
@@ -318,7 +314,7 @@ class DiscussionApiTests(TestCase):
 
     def test_view_private_scoper_allows_matching_private_discussion_visibility(self):
         from apps.core.extensions.application import ExtensionApplication
-        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+        from apps.core.extensions import ExtensionModelVisibilityDefinition
 
         allowed = DiscussionService.create_discussion(
             title="Scoped private allowed",
@@ -350,7 +346,7 @@ class DiscussionApiTests(TestCase):
             ),
         )
 
-        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
             visible_ids = set(
                 DiscussionService.apply_visibility_filters(
                     Discussion.objects.filter(id__in=[allowed.id, denied.id]),
@@ -391,7 +387,7 @@ class DiscussionApiTests(TestCase):
 
     def test_hide_scoper_allows_matching_hidden_discussion_visibility(self):
         from apps.core.extensions.application import ExtensionApplication
-        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+        from apps.core.extensions import ExtensionModelVisibilityDefinition
 
         allowed = DiscussionService.create_discussion(
             title="Scoped hidden allowed",
@@ -423,7 +419,7 @@ class DiscussionApiTests(TestCase):
             ),
         )
 
-        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
             visible_ids = set(
                 DiscussionService.apply_visibility_filters(
                     Discussion.objects.filter(id__in=[allowed.id, denied.id]),

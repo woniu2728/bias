@@ -13,7 +13,7 @@ from apps.core.forum_registry import (
 )
 from apps.core.settings_service import clear_runtime_setting_caches
 from extensions.testing import ExtensionRuntimeTestMixin
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     approve_runtime_discussion,
     create_runtime_discussion,
     get_runtime_discussion_model,
@@ -21,14 +21,14 @@ from apps.core.extensions.runtime_access import (
     reject_runtime_discussion,
 )
 from extensions.approval.backend.resources import resolve_approval_event_data
-from apps.core.extensions.runtime_access import get_runtime_notification_model
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import get_runtime_notification_model
+from apps.core.extensions.runtime import (
     approve_runtime_post,
     create_runtime_post,
     get_runtime_post_model,
     reject_runtime_post,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_group_model,
     get_runtime_permission_model,
     get_runtime_user_model,

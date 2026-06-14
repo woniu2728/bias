@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from extensions.tags.backend.models import Tag
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     can_runtime_reply_in_tag,
     can_runtime_start_discussion_in_tag,
     filter_runtime_tags_for_user,

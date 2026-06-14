@@ -3,10 +3,10 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 
-from apps.core.mail_drivers import can_mail_driver_send, send_with_extension_mail_driver
+from apps.core.extensions.platform import can_mail_driver_send, send_with_extension_mail_driver
 
-from apps.core.email_service import EmailService
-from apps.core.queue_service import QueueService
+from apps.core.extensions.platform import EmailService
+from apps.core.extensions.platform import QueueService
 from extensions.users.backend.mail_templates import (
     DEFAULT_PASSWORD_RESET_HTML,
     DEFAULT_PASSWORD_RESET_SUBJECT,

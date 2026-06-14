@@ -5,17 +5,17 @@ from typing import Any, Optional, List, Tuple
 from django.db.models import Q, Count
 from django.core.cache import cache
 from django.utils import timezone
-from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import dispatch_forum_event_after_commit
+from apps.core.extensions.runtime import (
     get_runtime_discussion_reply_notification_context,
 )
 from extensions.notifications.backend.events import NotificationCreatedEvent
 from extensions.notifications.backend.models import Notification
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_post_notification_context,
     get_runtime_post_reply_notification_context,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_user_preference,
 )
 
@@ -44,7 +44,7 @@ class NotificationService:
         if not user:
             return False
 
-        from apps.core.forum_registry import get_forum_registry
+        from apps.core.extensions.forum import get_forum_registry
 
         definition = get_forum_registry().get_notification_type(type_code)
         if not definition or not definition.preference_key:
@@ -651,5 +651,3 @@ class NotificationService:
             for notification_id in notification_ids
             if notification_id in notification_map
         ]
-
-

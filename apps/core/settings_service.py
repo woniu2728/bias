@@ -552,7 +552,7 @@ def _serialize_extension_runtime_stamp() -> dict:
 
 
 def _serialize_forum_resource_fields(forum_settings: dict, *, user=None) -> dict:
-    from apps.core.extensions.runtime_access import get_runtime_resource_registry
+    from apps.core.extensions.runtime import get_runtime_resource_registry
 
     return get_runtime_resource_registry().serialize(
         "forum",

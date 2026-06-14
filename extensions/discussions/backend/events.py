@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from apps.core.domain_events import DomainEvent
+from apps.core.extensions.platform import DomainEvent
 
 
 @dataclass(frozen=True)

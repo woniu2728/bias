@@ -2,14 +2,13 @@ from apps.core.extensions import (
     ApiResourceExtender,
     ApiRoutesExtender,
     EventListenersExtender,
-    FrontendExtender,
     LifecycleExtender,
     ModelExtender,
     ServiceProviderExtender,
     SettingsExtender,
+    ExtensionEventListenerDefinition,
+    setting_field,
 )
-from apps.core.extensions.backend import _build_setting_field_definition
-from apps.core.extensions.types import ExtensionEventListenerDefinition
 from extensions.points.backend.api import router as points_router
 from extensions.points.backend.listeners import (
     handle_discussion_created,
@@ -29,9 +28,6 @@ EXTENSION_ID = "points"
 
 def extend():
     return [
-        FrontendExtender(
-            forum_entry="extensions/points/frontend/forum/index.js",
-        ),
         ApiRoutesExtender(
             mounts=(("", points_router),),
             tags=("Points",),
@@ -89,7 +85,7 @@ def event_listener_definitions():
 
 def setting_definitions():
     return (
-        _build_setting_field_definition({
+        setting_field({
             "key": "enabled",
             "label": "启用积分系统",
             "type": "boolean",
@@ -97,7 +93,7 @@ def setting_definitions():
             "help_text": "关闭后不再自动发放或消费积分，但历史账本保留。",
             "order": 5,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "discussion_create_reward",
             "label": "发主题奖励",
             "type": "number",
@@ -105,7 +101,7 @@ def setting_definitions():
             "help_text": "审核通过的主题创建后奖励作者的积分。",
             "order": 10,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "reply_create_reward",
             "label": "回复奖励",
             "type": "number",
@@ -113,7 +109,7 @@ def setting_definitions():
             "help_text": "审核通过的回复创建后奖励作者的积分。",
             "order": 20,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "like_received_reward",
             "label": "收到点赞奖励",
             "type": "number",
@@ -121,7 +117,7 @@ def setting_definitions():
             "help_text": "回复被其他用户点赞后奖励作者的积分。",
             "order": 30,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "ai_question_coach_cost",
             "label": "AI 提问教练消耗",
             "type": "number",
@@ -129,7 +125,7 @@ def setting_definitions():
             "help_text": "每次使用 AI 提问教练消耗的积分。",
             "order": 100,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "ai_role_summon_cost",
             "label": "AI 角色召唤消耗",
             "type": "number",
@@ -137,7 +133,7 @@ def setting_definitions():
             "help_text": "每次召唤 AI 书记员、侦探或挑战官消耗的积分。",
             "order": 110,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "ai_bounty_judge_cost",
             "label": "AI 悬赏裁判消耗",
             "type": "number",
@@ -145,7 +141,7 @@ def setting_definitions():
             "help_text": "每次使用 AI 悬赏裁判消耗的积分。",
             "order": 120,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "ai_discussion_summary_cost",
             "label": "AI 讨论纪要消耗",
             "type": "number",

@@ -1,4 +1,4 @@
-from apps.core.extensions.runtime_access import get_runtime_username_id_map
+from apps.core.extensions.runtime import get_runtime_username_id_map
 from extensions.mentions.backend.parser import MENTION_RE, extract_mentioned_usernames
 
 
@@ -26,4 +26,3 @@ def render_mentions_html(html: str) -> str:
             processed_parts.append("<a" + part)
 
     return "".join(processed_parts)
-

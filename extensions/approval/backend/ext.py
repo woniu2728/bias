@@ -10,10 +10,8 @@ from apps.core.extensions import (
     PostEventExtender,
     RealtimeExtender,
     ServiceProviderExtender,
-)
-from apps.core.extensions.types import ExtensionEventListenerDefinition
-from apps.core.forum_registry_types import (
     AdminPageDefinition,
+    ExtensionEventListenerDefinition,
     NotificationTypeDefinition,
     PermissionDefinition,
     PostTypeDefinition,

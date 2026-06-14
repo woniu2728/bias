@@ -12,7 +12,7 @@ def render_tag_mentions_html(html: str) -> str:
     if not slugs:
         return html
 
-    from apps.core.extensions.runtime_access import get_runtime_tag_summaries_by_slugs
+    from apps.core.extensions.runtime import get_runtime_tag_summaries_by_slugs
 
     tag_map = get_runtime_tag_summaries_by_slugs(slugs)
     if not tag_map:

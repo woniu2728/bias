@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from apps.core.extensions.bootstrap import get_extension_host
-from apps.core.extensions.runtime_access import get_runtime_locale_service
+from apps.core.extensions.runtime import get_runtime_locale_service
 
 
 _extension_locale_cache: list[dict] | None = None

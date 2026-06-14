@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from ninja import Body, Router
 
-from apps.core.api_errors import api_error
-from apps.core.auth import AuthBearer
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import AuthBearer
 from extensions.ai.backend.schemas import (
     AiBountyJudgeSchema,
     AiCoachQuestionSchema,

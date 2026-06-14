@@ -11,9 +11,9 @@ from datetime import timedelta, datetime
 import secrets
 
 from extensions.users.backend.models import User, Group, Permission, EmailToken, PasswordToken
-from apps.core.models import AuditLog
-from apps.core.extensions.policy_runtime_service import evaluate_extension_policy
-from apps.core.forum_registry import get_registry_staff_managed_admin_permission_codes
+from apps.core.extensions.forum import AuditLog
+from apps.core.extensions.platform import evaluate_extension_policy
+from apps.core.extensions.forum import get_registry_staff_managed_admin_permission_codes
 from extensions.users.backend.mail import queue_password_reset_email, queue_verification_email
 
 

@@ -10,16 +10,15 @@ from apps.core.extensions import (
     RealtimeExtender,
     SettingsExtender,
     ServiceProviderExtender,
-)
-from apps.core.extensions.backend import _build_setting_field_definition
-from apps.core.extensions.types import ExtensionModelVisibilityDefinition
-from extensions.flags.backend.events import PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
-from apps.core.forum_registry_types import AdminPageDefinition, PermissionDefinition
-from apps.core.resource_registry import (
+    AdminPageDefinition,
+    ExtensionModelVisibilityDefinition,
+    PermissionDefinition,
     ResourceEndpointDefinition,
     ResourceFieldDefinition,
     ResourceRelationshipDefinition,
+    setting_field,
 )
+from extensions.flags.backend.events import PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
 from extensions.flags.backend.models import PostFlag
 from extensions.flags.backend.handlers import (
     dispatch_post_delete_flags,
@@ -126,7 +125,7 @@ def extend():
 
 def setting_definitions():
     return (
-        _build_setting_field_definition({
+        setting_field({
             "key": "guidelines_url",
             "label": "社区规则 URL",
             "type": "text",
@@ -135,7 +134,7 @@ def setting_definitions():
             "help_text": "前台举报原因说明中使用的社区规则链接。",
             "order": 10,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "can_flag_own",
             "label": "允许举报自己的帖子",
             "type": "boolean",

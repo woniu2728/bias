@@ -3,9 +3,9 @@ from __future__ import annotations
 from django.core.exceptions import PermissionDenied
 from pydantic import BaseModel, Field, validator
 
-from apps.core.api_errors import api_error
-from apps.core.audit import log_admin_action
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.runtime import (
     delete_runtime_post_flags,
     get_runtime_post_by_id,
     is_runtime_post_not_found,
@@ -175,4 +175,3 @@ def _post_object_id(context) -> int:
         return int(context.get("object_id") or 0)
     except (TypeError, ValueError):
         return 0
-

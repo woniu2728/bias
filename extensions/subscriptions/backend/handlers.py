@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from django.core.exceptions import PermissionDenied
 
-from apps.core.api_errors import api_error
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.runtime import (
     is_runtime_discussion_not_found,
     set_runtime_discussion_subscription_state,
 )
-from apps.core.extensions.runtime_access import ensure_runtime_user_not_suspended
+from apps.core.extensions.runtime import ensure_runtime_user_not_suspended
 
 
 def dispatch_discussion_subscribe(context):
@@ -43,5 +43,3 @@ def _discussion_object_id(context) -> int:
         return int(context.get("object_id") or 0)
     except (TypeError, ValueError):
         return 0
-
-

@@ -7,18 +7,18 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from apps.core.forum_registry import get_forum_registry
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_discussion,
 )
 from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.mentions.backend.models import PostMentionsUser
-from apps.core.extensions.runtime_access import get_runtime_tag_model
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import get_runtime_tag_model
+from apps.core.extensions.runtime import (
     create_runtime_post,
     set_runtime_post_hidden_state,
     update_runtime_post,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_group_model,
     get_runtime_permission_model,
     get_runtime_user_model,

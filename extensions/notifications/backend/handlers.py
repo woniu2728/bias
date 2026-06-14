@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from apps.core.api_errors import api_error
-from apps.core.extensions.runtime_access import get_runtime_resource_registry
-from apps.core.resource_api import ResourceQueryOptions, parse_resource_query_options
-from apps.core.services import PaginationService
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.runtime import get_runtime_resource_registry
+from apps.core.extensions.platform import ResourceQueryOptions, parse_resource_query_options
+from apps.core.extensions.platform import PaginationService
 from extensions.notifications.backend.services import NotificationService
 
 
@@ -182,4 +182,3 @@ def dispatch_notification_delete(context):
     if not success:
         return api_error("通知不存在", status=404)
     return {"message": "通知已删除"}
-

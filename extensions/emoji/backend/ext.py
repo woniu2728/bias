@@ -1,7 +1,6 @@
 import re
 
-from apps.core.extensions import FormatterExtender, FrontendExtender, LifecycleExtender, LocalesExtender, SettingsExtender
-from apps.core.extensions.backend import _build_setting_field_definition
+from apps.core.extensions import FormatterExtender, FrontendExtender, LifecycleExtender, LocalesExtender, SettingsExtender, setting_field
 
 
 EXTENSION_ID = "emoji"
@@ -16,7 +15,7 @@ def extend():
             "extensions/emoji/locale",
         )),
         SettingsExtender(fields=(
-            _build_setting_field_definition({
+            setting_field({
                 "key": "cdn_url",
                 "label": "Twemoji CDN",
                 "type": "text",

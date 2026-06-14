@@ -4,6 +4,16 @@ from apps.core.extensions.bootstrap import bootstrap_extension_application, rese
 from apps.core.extensions.registry import get_extension_registry
 from apps.core.extensions.lifecycle import reset_extension_runtime_state
 from apps.core.models import ExtensionInstallation
+from apps.core.resource_registry import ResourceRegistry, get_resource_registry
+
+
+__all__ = [
+    "ExtensionRuntimeTestMixin",
+    "ResourceRegistry",
+    "bootstrap_enabled_extension_application",
+    "get_resource_registry",
+    "mark_extension_disabled",
+]
 
 
 class ExtensionRuntimeTestMixin:

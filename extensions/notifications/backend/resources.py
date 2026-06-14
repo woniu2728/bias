@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from apps.core.extensions.runtime_access import serialize_runtime_user
-from apps.core.resource_registry import (
+from apps.core.extensions import (
     ResourceDefinition,
     ResourceFieldDefinition,
     ResourceRelationshipDefinition,
 )
+from apps.core.extensions.runtime import serialize_runtime_user
 
 
 EXTENSION_ID = "notifications"

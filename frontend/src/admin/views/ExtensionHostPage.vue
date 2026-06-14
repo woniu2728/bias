@@ -36,7 +36,7 @@ import {
   resolveFallbackExtensionSettingsPage,
 } from '../extensions/fallbacks'
 import { findAdminRouteByPath } from '../registry'
-import { generatedAdminExtensionModules } from '../../generated/extensionImportMap'
+import { generatedAdminExtensionModules } from 'virtual:bias-extension-import-map'
 
 const route = useRoute()
 const loading = ref(true)

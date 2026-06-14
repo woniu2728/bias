@@ -1,4 +1,4 @@
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_timeline_from_builder,
 )
 from extensions.tags.backend.events import (
@@ -6,7 +6,7 @@ from extensions.tags.backend.events import (
     DiscussionTagStatsRefreshEvent,
     TagStatsRefreshRequestedEvent,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     dispatch_runtime_tag_stats_refresh,
     refresh_runtime_discussion_tag_stats,
     refresh_runtime_tag_stats,

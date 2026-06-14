@@ -2,9 +2,9 @@ from ninja import Body, Router
 from django.db.models import Max
 from django.shortcuts import get_object_or_404
 
-from apps.core.api_errors import api_error
-from apps.core.audit import log_admin_action
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.runtime import (
     create_runtime_tag,
     delete_runtime_tag,
     dispatch_runtime_tag_stats_refresh,
@@ -13,7 +13,7 @@ from apps.core.extensions.runtime_access import (
     validate_runtime_tag_parent_assignment,
     validate_runtime_tag_scope_configuration,
 )
-from apps.core.jwt_auth import AccessTokenAuth
+from apps.core.extensions.platform import AccessTokenAuth
 from extensions.tags.backend.models import Tag
 
 

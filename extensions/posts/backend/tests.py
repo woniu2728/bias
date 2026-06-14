@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from apps.core.forum_registry import get_forum_registry
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_discussion,
     delete_runtime_discussion,
     get_runtime_discussion_model,
@@ -21,7 +21,8 @@ from apps.core.extensions.runtime_access import (
     set_runtime_discussion_hidden_state,
 )
 from apps.core.models import AuditLog
-from apps.core.resource_registry import ResourceEndpointDefinition, ResourceRegistry
+from apps.core.extensions import ResourceEndpointDefinition
+from extensions.testing import ResourceRegistry
 from apps.core.search_index_service import get_search_index_definitions
 from extensions.testing import ExtensionRuntimeTestMixin
 from extensions.posts.backend.resources import resolve_post_event_data
@@ -33,7 +34,7 @@ from extensions.discussions.backend.visibility import (
 from extensions.posts.backend.handlers import post_resource_endpoints
 from extensions.posts.backend.models import Post
 from extensions.posts.backend.services import PostService
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_group_model,
     get_runtime_permission_model,
     get_runtime_user_model,
@@ -289,7 +290,7 @@ class PostPaginationTests(TestCase):
             def is_private(self, model, instance, *, default=False):
                 return model is Post and getattr(instance, "number", 0) > 1
 
-        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=RuntimeModelService()):
+        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=RuntimeModelService()):
             reply = PostService.create_post(
                 discussion_id=discussion.id,
                 content="Private reply",
@@ -325,14 +326,14 @@ class PostPaginationTests(TestCase):
             def is_private(self, model, instance, *, default=False):
                 return model is Post and instance.id == reply.id
 
-        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=RuntimeModelService()):
+        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=RuntimeModelService()):
             approved = PostService.approve_post(reply, admin)
 
         self.assertTrue(approved.is_private)
 
     def test_view_private_scoper_allows_matching_private_post_visibility(self):
         from apps.core.extensions.application import ExtensionApplication
-        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+        from apps.core.extensions import ExtensionModelVisibilityDefinition
 
         discussion_model = get_runtime_discussion_model()
         reader = User.objects.create_user(
@@ -384,7 +385,7 @@ class PostPaginationTests(TestCase):
             ),
         )
 
-        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
             visible_ids = set(
                 PostService.apply_visibility_filters(
                     Post.objects.filter(id__in=[allowed.id, denied.id]),
@@ -397,7 +398,7 @@ class PostPaginationTests(TestCase):
 
     def test_hide_posts_scoper_allows_matching_hidden_post_visibility(self):
         from apps.core.extensions.application import ExtensionApplication
-        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+        from apps.core.extensions import ExtensionModelVisibilityDefinition
 
         discussion_model = get_runtime_discussion_model()
         reader = User.objects.create_user(
@@ -454,7 +455,7 @@ class PostPaginationTests(TestCase):
             ),
         )
 
-        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
             visible_ids = set(
                 PostService.apply_visibility_filters(
                     Post.objects.filter(id__in=[allowed.id, denied.id]),

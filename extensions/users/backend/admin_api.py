@@ -7,11 +7,11 @@ from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
-from apps.core.api_errors import api_error
-from apps.core.audit import log_admin_action
-from apps.core.domain_events import dispatch_forum_event_after_commit
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.platform import dispatch_forum_event_after_commit
 from extensions.users.backend.events import UserSuspendedEvent, UserUnsuspendedEvent
-from apps.core.forum_registry import get_forum_registry
+from apps.core.extensions.forum import get_forum_registry
 from extensions.users.backend.admin_user_helpers import (
     is_builtin_group,
     normalize_permission_code,
@@ -20,9 +20,9 @@ from extensions.users.backend.admin_user_helpers import (
     serialize_group,
     validate_group_payload,
 )
-from apps.core.jwt_auth import AccessTokenAuth
-from apps.core.services import PaginationService
-from apps.core.settings_service import get_mail_settings_defaults, get_setting_group
+from apps.core.extensions.platform import AccessTokenAuth
+from apps.core.extensions.platform import PaginationService
+from apps.core.extensions.platform import get_mail_settings_defaults, get_setting_group
 from extensions.users.backend.models import Group, Permission, User
 from extensions.users.backend.mail import send_test_email
 from extensions.users.backend.services import UserService

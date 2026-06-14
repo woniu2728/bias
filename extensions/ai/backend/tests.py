@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from apps.core.extension_settings_service import save_extension_settings
-from apps.core.extensions.runtime_access import create_runtime_discussion, get_runtime_user_model
+from apps.core.extensions.runtime import create_runtime_discussion, get_runtime_user_model
 from extensions.points.backend.models import PointLedgerEntry
 from extensions.points.backend.services import award_points, get_account, get_balance
 from extensions.ai.backend.services import AiService

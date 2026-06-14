@@ -1,11 +1,12 @@
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     follow_runtime_discussion,
 )
-from apps.core.extensions import runtime_access
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
+    delete_runtime_discussion_reply_notifications_for_post,
     get_runtime_post_number,
+    notify_runtime_notification,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_user_by_id,
     get_runtime_user_preference,
 )
@@ -80,7 +81,7 @@ def _notify_discussion_reply(*, discussion_id: int, post_id: int, actor_user_id:
     if from_user is None:
         return
 
-    runtime_access.notify_runtime_notification(
+    notify_runtime_notification(
         "notify_discussion_reply",
         discussion_id=discussion_id,
         post_id=post_id,
@@ -118,7 +119,4 @@ def _resolve_user_or_none(user_id: int):
 
 
 def _delete_discussion_reply_notifications_for_post(post_id: int) -> None:
-    runtime_access.delete_runtime_discussion_reply_notifications_for_post(post_id)
-
-
-
+    delete_runtime_discussion_reply_notifications_for_post(post_id)

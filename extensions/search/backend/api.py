@@ -3,11 +3,11 @@ from __future__ import annotations
 from django.http import JsonResponse
 from ninja import Router
 
-from apps.core.api_errors import api_error
-from apps.core.auth import get_optional_user
-from apps.core.extensions.runtime_access import get_runtime_resource_registry
-from apps.core.forum_permissions import has_forum_permission
-from apps.core.resource_api import ResourceQueryOptions, apply_resource_preloads, parse_resource_query_options
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import get_optional_user
+from apps.core.extensions.runtime import get_runtime_resource_registry
+from apps.core.extensions.platform import has_forum_permission
+from apps.core.extensions.platform import ResourceQueryOptions, apply_resource_preloads, parse_resource_query_options
 from extensions.search.backend.schemas import SearchFilterCatalogSchema, SearchSuggestionSchema
 from extensions.search.backend.services import SearchService
 
@@ -273,4 +273,3 @@ def get_search_filters(request, target: str = "all"):
             for item in SearchService.get_public_search_filters(targets=targets)
         ],
     }
-

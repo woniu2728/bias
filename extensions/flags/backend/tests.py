@@ -13,24 +13,23 @@ from apps.core.forum_registry import (
     get_registry_staff_managed_admin_permission_codes,
 )
 from apps.core.extensions.bootstrap import bootstrap_extension_host, reset_extension_application_bootstrap_state
-from apps.core.resource_registry import get_resource_registry
 from extensions.flags.backend.events import PostFlagCreatedEvent, PostFlagsDeletedEvent
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_discussion,
     get_runtime_discussion_model,
 )
 from apps.core.models import AuditLog, Setting
 from apps.core.settings_service import clear_runtime_setting_caches
-from extensions.testing import ExtensionRuntimeTestMixin
+from extensions.testing import ExtensionRuntimeTestMixin, get_resource_registry
 from extensions.discussions.backend.visibility import scope_discussion_view, scope_post_view
 from extensions.flags.backend.models import PostFlag
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_post,
     delete_runtime_post,
     get_runtime_post_model,
     report_runtime_post_flag,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_group_model,
     get_runtime_permission_model,
     get_runtime_user_model,
@@ -393,7 +392,7 @@ class FlagsExtensionTests(TestCase):
 
     def test_flag_visibility_uses_post_view_private_scoper(self):
         from apps.core.extensions.application import ExtensionApplication
-        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+        from apps.core.extensions import ExtensionModelVisibilityDefinition
         from extensions.flags.backend.resources import scope_flag_visibility
 
         allowed_flag = report_runtime_post_flag(
@@ -458,7 +457,7 @@ class FlagsExtensionTests(TestCase):
             ),
         )
 
-        with patch("apps.core.extensions.runtime_access.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
             visible_flag_ids = set(
                 scope_flag_visibility(
                     PostFlag.objects.filter(id__in=[allowed_flag.id, denied_flag.id]),

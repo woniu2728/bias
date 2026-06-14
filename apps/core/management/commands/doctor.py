@@ -121,15 +121,22 @@ class Command(BaseCommand):
             return _check("extensions", "error", f"扩展状态检查失败: {exc}")
 
         summary = dict(payload.get("summary") or {})
+        installed_count = int(summary.get("installed_count") or 0)
+        installation_record_count = int(summary.get("installation_record_count") or 0)
+        record_drift = installed_count != installation_record_count
         problems = {
             "missing": list(payload.get("missing") or []),
             "version_drift": list(payload.get("version_drift") or []),
             "source_drift": list(payload.get("source_drift") or []),
             "unmanaged_discovered": list(payload.get("unmanaged_discovered") or []),
             "stale_lock_ids": list((payload.get("lock") or {}).get("stale_ids") or []),
+            "installation_record_drift": {
+                "installed_count": installed_count,
+                "installation_record_count": installation_record_count,
+            } if record_drift else {},
         }
         has_error = bool(problems["missing"] or problems["version_drift"] or problems["source_drift"])
-        has_warning = bool(problems["unmanaged_discovered"] or problems["stale_lock_ids"])
+        has_warning = bool(problems["unmanaged_discovered"] or problems["stale_lock_ids"] or record_drift)
         if has_error:
             return _check("extensions", "error", "扩展包状态存在缺失或版本漂移。", {
                 "summary": summary,

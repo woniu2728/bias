@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 import shutil
 from io import StringIO
-from subprocess import CompletedProcess
 import sys
 from types import ModuleType, SimpleNamespace
 import uuid
@@ -135,9 +134,8 @@ from apps.core.resource_search import ResourceSearchFilter, ResourceSearchManage
 from apps.core.resource_serializer import ResourceSerializer
 from apps.core.resource_context import ResourceContext
 from apps.core.resource_validation import ResourceValidationError, ResourceValidator, ResourceValidatorFactory
-from apps.core.bootstrap_config import load_site_bootstrap, read_site_config
+from apps.core.bootstrap_config import load_site_bootstrap
 from apps.core.models import AuditLog, ExtensionInstallation, Setting
-from apps.core.release import build_git_command, ensure_release_versions_aligned
 from apps.core.settings_service import (
     clear_runtime_setting_caches,
     get_advanced_settings,
@@ -327,16 +325,15 @@ def create_alpha_tools_extension(extensions_dir: Path) -> Path:
     (backend_dir / "ext.py").write_text(
         "from __future__ import annotations\n"
         "\n"
-        "from apps.core.extensions import LifecycleExtender, SettingsExtender\n"
-        "from apps.core.extensions.backend import _build_setting_field_definition\n"
+        "from apps.core.extensions import LifecycleExtender, SettingsExtender, setting_field\n"
         "\n"
         "def extend():\n"
         "    return [\n"
         "        LifecycleExtender(install=install, enable=enable, disable=disable, uninstall=uninstall),\n"
         "        SettingsExtender(fields=(\n"
-        "            _build_setting_field_definition({'key': 'welcome_message', 'label': '欢迎语', 'type': 'text', 'default': '欢迎使用 Alpha Tools'}),\n"
-        "            _build_setting_field_definition({'key': 'card_tone', 'label': '卡片风格', 'type': 'select', 'default': 'primary', 'options': ({'value': 'primary', 'label': '主色'}, {'value': 'warm', 'label': '暖色'})}),\n"
-        "            _build_setting_field_definition({'key': 'show_runtime_tips', 'label': '显示运行提示', 'type': 'boolean', 'default': True}),\n"
+        "            setting_field({'key': 'welcome_message', 'label': '欢迎语', 'type': 'text', 'default': '欢迎使用 Alpha Tools'}),\n"
+        "            setting_field({'key': 'card_tone', 'label': '卡片风格', 'type': 'select', 'default': 'primary', 'options': ({'value': 'primary', 'label': '主色'}, {'value': 'warm', 'label': '暖色'})}),\n"
+        "            setting_field({'key': 'show_runtime_tips', 'label': '显示运行提示', 'type': 'boolean', 'default': True}),\n"
         "        )),\n"
         "    ]\n"
         "\n"
@@ -620,14 +617,13 @@ class ExtensionManifestLoaderTests(TestCase):
                 "backend_entry": "extensions.alpha_tools.backend.ext",
             }, ensure_ascii=False), encoding="utf-8")
             (backend_dir / "ext.py").write_text(
-                "from apps.core.extensions import SettingsExtender\n"
-                "from apps.core.extensions.backend import _build_setting_field_definition\n"
+                "from apps.core.extensions import SettingsExtender, setting_field\n"
                 "\n"
                 "def extend():\n"
                 "    return [\n"
                 "        SettingsExtender(\n"
                 "            fields=(\n"
-                "                _build_setting_field_definition({'key': 'cdn_url', 'label': 'CDN', 'type': 'text', 'default': ''}),\n"
+                "                setting_field({'key': 'cdn_url', 'label': 'CDN', 'type': 'text', 'default': ''}),\n"
                 "            ),\n"
                 "            expose_to_forum=('cdn_url',),\n"
                 "        ),\n"
@@ -657,7 +653,7 @@ class ExtensionManifestLoaderTests(TestCase):
             }, ensure_ascii=False), encoding="utf-8")
             (backend_dir / "ext.py").write_text(
                 "from apps.core.extensions import ForumCapabilitiesExtender, NotificationsExtender\n"
-                "from apps.core.forum_registry_types import NotificationTypeDefinition, UserPreferenceDefinition, SearchFilterDefinition\n"
+                "from apps.core.extensions import NotificationTypeDefinition, UserPreferenceDefinition, SearchFilterDefinition\n"
                 "\n"
                 "def _parse_author(token):\n"
                 "    if token.startswith('author:'):\n"
@@ -747,7 +743,7 @@ class ExtensionManifestLoaderTests(TestCase):
             }, ensure_ascii=False), encoding="utf-8")
             (backend_dir / "ext.py").write_text(
                 "from apps.core.extensions import AdminSurfaceExtender\n"
-                "from apps.core.forum_registry_types import PermissionDefinition, AdminPageDefinition\n"
+                "from apps.core.extensions import PermissionDefinition, AdminPageDefinition\n"
                 "\n"
                 "def extend():\n"
                 "    return [\n"
@@ -785,13 +781,13 @@ class ExtensionManifestLoaderTests(TestCase):
                 "backend_entry": "extensions.alpha_tools.backend.ext",
             }, ensure_ascii=False), encoding="utf-8")
             (backend_dir / "ext.py").write_text(
-                "from apps.core.extensions import SettingsExtender, RuntimeActionsExtender\n"
-                "from apps.core.extensions.backend import _build_setting_field_definition, _build_runtime_action_definition\n"
+                "from apps.core.extensions import SettingsExtender, RuntimeActionsExtender, setting_field\n"
+                "from apps.core.extensions.backend import _build_runtime_action_definition\n"
                 "\n"
                 "def extend():\n"
                 "    return [\n"
                 "        SettingsExtender(fields=(\n"
-                "            _build_setting_field_definition({'key': 'cdn_url', 'label': 'CDN', 'type': 'text', 'default': ''}),\n"
+                "            setting_field({'key': 'cdn_url', 'label': 'CDN', 'type': 'text', 'default': ''}),\n"
                 "        )),\n"
                 "        RuntimeActionsExtender(actions=(\n"
                 "            _build_runtime_action_definition({'key': 'rebuild', 'label': '刷新', 'hook': 'run_rebuild_cache'}),\n"
@@ -1581,7 +1577,7 @@ class ExtensionManifestLoaderTests(TestCase):
             disconnect_runtime_signal_receivers,
             get_runtime_signal_connections,
         )
-        from apps.core.extensions.types import ExtensionSignalDefinition
+        from apps.core.extensions import ExtensionSignalDefinition
 
         proxy_signal = Signal()
         runtime_signal = Signal()
@@ -2049,7 +2045,7 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertTrue(app.models.is_private(DemoModel, SimpleNamespace(is_private=True)))
 
     def test_model_visibility_scoper_matches_subclasses(self):
-        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+        from apps.core.extensions import ExtensionModelVisibilityDefinition
 
         class BaseModel:
             pass
@@ -2074,7 +2070,7 @@ class ExtensionManifestLoaderTests(TestCase):
         )
 
     def test_model_visibility_scopers_follow_parent_wildcard_ability_order(self):
-        from apps.core.extensions.types import ExtensionModelVisibilityDefinition
+        from apps.core.extensions import ExtensionModelVisibilityDefinition
 
         class BaseModel:
             pass
@@ -2156,8 +2152,7 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertFalse(queryset.exists())
 
     def test_theme_extender_contributes_frontend_document_payload(self):
-        from apps.core.extensions import SettingsExtender, ThemeExtender
-        from apps.core.extensions.backend import _build_setting_field_definition
+        from apps.core.extensions import SettingsExtender, ThemeExtender, setting_field
         from apps.core.extensions.frontend_runtime_service import build_enabled_frontend_document_payload
 
         app = ExtensionApplication()
@@ -2170,7 +2165,7 @@ class ExtensionManifestLoaderTests(TestCase):
             .head_tag("meta", {"name": "theme-alpha", "content": "1"}) \
             .extend(app, extension)
         SettingsExtender(fields=(
-            _build_setting_field_definition({
+            setting_field({
                 "key": "accent_color",
                 "label": "Accent",
                 "type": "text",
@@ -2202,15 +2197,14 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertEqual(payload["head_tags"][0]["attributes"]["name"], "theme-alpha")
 
     def test_settings_extender_serializes_forum_settings_with_alias_and_transform(self):
-        from apps.core.extensions import SettingsExtender
-        from apps.core.extensions.backend import _build_setting_field_definition
+        from apps.core.extensions import SettingsExtender, setting_field
         from apps.core.extensions.frontend_runtime_service import _build_extension_forum_settings
 
         app = ExtensionApplication()
         extension = SimpleNamespace(extension_id="alpha-tools")
 
         SettingsExtender(fields=(
-            _build_setting_field_definition({
+            setting_field({
                 "key": "allow_username_format",
                 "label": "Allow username format",
                 "type": "boolean",
@@ -2829,6 +2823,51 @@ class ExtensionManifestLoaderTests(TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_extension_frontend_import_map_deduplicates_keys_globally(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with override_settings(BASE_DIR=Path(temp_dir)):
+                path = write_extension_frontend_import_map({
+                    "extensions": {
+                        "alpha-tools": {
+                            "extension_id": "alpha-tools",
+                            "forum_entry": "extensions/alpha-tools/frontend/forum/index.js",
+                            "routes": [
+                                {
+                                    "path": "/alpha",
+                                    "name": "alpha.page",
+                                    "component": "extensions/shared/frontend/forum/SharedPage.vue",
+                                    "frontend": "forum",
+                                },
+                            ],
+                        },
+                        "beta-tools": {
+                            "extension_id": "beta-tools",
+                            "forum_entry": "extensions/beta-tools/frontend/forum/index.js",
+                            "routes": [
+                                {
+                                    "path": "/beta",
+                                    "name": "beta.page",
+                                    "component": "extensions/shared/frontend/forum/SharedPage.vue",
+                                    "frontend": "forum",
+                                },
+                            ],
+                        },
+                    }
+                })
+
+                source = path.read_text(encoding="utf-8")
+                self.assertEqual(
+                    source.count('"extensions/shared/frontend/forum/SharedPage.vue": () => import("../../../extensions/shared/frontend/forum/SharedPage.vue")'),
+                    1,
+                )
+                self.assertEqual(
+                    source.count('"../../../extensions/shared/frontend/forum/SharedPage.vue": () => import("../../../extensions/shared/frontend/forum/SharedPage.vue")'),
+                    1,
+                )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
     def test_copy_frontend_dist_to_static_publishes_dist(self):
         temp_dir = make_workspace_temp_dir()
         try:
@@ -3276,7 +3315,7 @@ class ExtensionManifestLoaderTests(TestCase):
             }, ensure_ascii=False), encoding="utf-8")
             (backend_dir / "ext.py").write_text(
                 "from apps.core.extensions import EventListenersExtender\n"
-                "from apps.core.extensions.types import ExtensionEventListenerDefinition\n"
+                "from apps.core.extensions import ExtensionEventListenerDefinition\n"
                 "\n"
                 "seen = []\n"
                 "\n"
@@ -3668,8 +3707,8 @@ class ExtensionManifestLoaderTests(TestCase):
             }, ensure_ascii=False), encoding="utf-8")
             (backend_dir / "ext.py").write_text(
                 "from apps.core.extensions import ApiResourceExtender, ConditionalExtender, FrontendExtender, ModelExtender, ModelVisibilityExtender, SearchDriverExtender\n"
-                "from apps.core.extensions.types import ExtensionModelCastDefinition, ExtensionModelDefaultDefinition, ExtensionModelDefinition, ExtensionModelRelationDefinition, ExtensionModelVisibilityDefinition, ExtensionResourceEndpointDefinition, ExtensionResourceFieldDefinition, ExtensionResourceFieldMutatorDefinition, ExtensionResourceRelationshipDefinition, ExtensionResourceSortDefinition, ExtensionSearchDriverDefinition\n"
-                "from apps.core.forum_registry_types import SearchFilterDefinition\n"
+                "from apps.core.extensions import ExtensionModelCastDefinition, ExtensionModelDefaultDefinition, ExtensionModelDefinition, ExtensionModelRelationDefinition, ExtensionModelVisibilityDefinition, ExtensionResourceEndpointDefinition, ExtensionResourceFieldDefinition, ExtensionResourceFieldMutatorDefinition, ExtensionResourceRelationshipDefinition, ExtensionResourceSortDefinition, ExtensionSearchDriverDefinition\n"
+                "from apps.core.extensions import SearchFilterDefinition\n"
                 "from apps.core.resource_objects import Resource, ResourceEndpoint, ResourceField, ResourceSort\n"
                 "\n"
                 "class DemoModel:\n"
@@ -4032,8 +4071,8 @@ class ExtensionManifestLoaderTests(TestCase):
             }, ensure_ascii=False), encoding="utf-8")
             (backend_dir / "ext.py").write_text(
                 "from apps.core.extensions import AdminSurfaceExtender, ApiResourceExtender, EventListenersExtender\n"
-                "from apps.core.extensions.types import ExtensionEventListenerDefinition, ExtensionResourceDefinition\n"
-                "from apps.core.forum_registry_types import PermissionDefinition\n"
+                "from apps.core.extensions import ExtensionEventListenerDefinition, ExtensionResourceDefinition\n"
+                "from apps.core.extensions import PermissionDefinition\n"
                 "\n"
                 "def _serialize(instance, context):\n"
                 "    return {'ok': True}\n"
@@ -4110,7 +4149,7 @@ class ExtensionManifestLoaderTests(TestCase):
                 }, ensure_ascii=False), encoding="utf-8")
                 (backend_dir / "ext.py").write_text(
                     "from apps.core.extensions import AdminSurfaceExtender\n"
-                    "from apps.core.forum_registry_types import PermissionDefinition\n"
+                    "from apps.core.extensions import PermissionDefinition\n"
                     "\n"
                     "def extend():\n"
                     "    return [AdminSurfaceExtender(permissions=(\n"
@@ -4180,6 +4219,146 @@ class ExtensionManifestLoaderTests(TestCase):
                 loader.discover()
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+class ExtensionPublicApiBoundaryTests(TestCase):
+    def test_public_sdk_exports_common_extension_definitions_and_helpers(self):
+        from apps.core.extensions import (
+            ExtensionEventListenerDefinition,
+            ExtensionManifestRuntimeActionDefinition,
+            ExtensionManifestSettingFieldDefinition,
+            PermissionDefinition,
+            ResourceEndpointDefinition,
+            ResourceFieldDefinition,
+            ResourceFieldMutatorDefinition,
+            admin_action,
+            event_listener,
+            runtime_action,
+            setting_field,
+        )
+
+        def handler(event):
+            return event
+
+        setting = setting_field(key="alpha.enabled", label="Alpha", type="boolean", default=True)
+        runtime = runtime_action(key="rebuild", label="Rebuild", hook="run_rebuild_cache")
+        admin = admin_action(key="settings", label="Settings", target="/admin/extensions/alpha")
+        listener = event_listener(event_type=AlphaStringEvent, handler=handler, description="Alpha listener")
+
+        self.assertIsInstance(setting, ExtensionManifestSettingFieldDefinition)
+        self.assertEqual(setting.key, "alpha.enabled")
+        self.assertIsInstance(runtime, ExtensionManifestRuntimeActionDefinition)
+        self.assertEqual(runtime.hook, "run_rebuild_cache")
+        self.assertEqual(admin.target, "/admin/extensions/alpha")
+        self.assertIsInstance(listener, ExtensionEventListenerDefinition)
+        self.assertIs(listener.event_type, AlphaStringEvent)
+        self.assertEqual(PermissionDefinition.__name__, "PermissionDefinition")
+        self.assertEqual(ResourceEndpointDefinition.__name__, "ResourceEndpointDefinition")
+        self.assertEqual(ResourceFieldDefinition.__name__, "ResourceFieldDefinition")
+        self.assertEqual(ResourceFieldMutatorDefinition.__name__, "ResourceFieldMutatorDefinition")
+
+    def test_runtime_facade_exports_extension_runtime_helpers(self):
+        from apps.core.extensions import runtime
+
+        self.assertTrue(callable(runtime.get_runtime_user_by_id))
+        self.assertTrue(callable(runtime.get_runtime_resource_registry))
+        self.assertTrue(callable(runtime.notify_runtime_notification))
+
+    def test_sdk_exports_contracts_without_direct_internal_definition_imports(self):
+        from apps.core.extensions import contracts
+
+        self.assertEqual(contracts.PermissionDefinition.__name__, "PermissionDefinition")
+        self.assertEqual(contracts.ExtensionModelVisibilityDefinition.__name__, "ExtensionModelVisibilityDefinition")
+        self.assertEqual(contracts.ResourceEndpointDefinition.__name__, "ResourceEndpointDefinition")
+
+        sdk_path = Path(settings.BASE_DIR) / "apps" / "core" / "extensions" / "sdk.py"
+        sdk_source = sdk_path.read_text(encoding="utf-8")
+        forbidden = (
+            "from apps.core.extensions.types",
+            "from apps.core.forum_registry_types",
+            "from apps.core.resource_registry",
+        )
+        self.assertFalse(any(marker in sdk_source for marker in forbidden))
+
+    def test_builtin_extension_runtime_code_uses_public_api_facades(self):
+        forbidden = (
+            "from apps.core.extensions.runtime_access",
+            "from apps.core.extensions import runtime_access",
+            "from apps.core.extensions.types",
+            "from apps.core.forum_registry_types",
+            "from apps.core.resource_registry",
+        )
+        extensions_root = Path(settings.BASE_DIR) / "extensions"
+        violations = []
+        for path in extensions_root.glob("*/backend/**/*.py"):
+            if path.name == "tests.py" or "django_migrations" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8")
+            for marker in forbidden:
+                if marker in text:
+                    violations.append(f"{path.relative_to(settings.BASE_DIR)}: {marker}")
+
+        self.assertEqual(violations, [])
+
+    def test_builtin_extension_runtime_code_uses_platform_facade_for_common_core_helpers(self):
+        forbidden = (
+            "from apps.core.api_errors",
+            "from apps.core.audit",
+            "from apps.core.auth",
+            "from apps.core.authorization",
+            "from apps.core.domain_events",
+            "from apps.core.extension_settings_service",
+            "from apps.core.extensions.policy_runtime_service",
+            "from apps.core.email_service",
+            "from apps.core.file_service",
+            "from apps.core.forum_registry",
+            "from apps.core.forum_runtime",
+            "from apps.core.forum_permissions",
+            "from apps.core.jwt_auth",
+            "from apps.core.mail_drivers",
+            "from apps.core.markdown_service",
+            "from apps.core.models",
+            "from apps.core.online_service",
+            "from apps.core.queue_service",
+            "from apps.core.resource_api",
+            "from apps.core.resource_errors",
+            "from apps.core.resource_objects",
+            "from apps.core.runtime_checks",
+            "from apps.core.schemas",
+            "from apps.core.search_index_service",
+            "from apps.core.services",
+            "from apps.core.settings_service",
+            "from apps.core.storage_service",
+            "from apps.core.visibility",
+        )
+        extensions_root = Path(settings.BASE_DIR) / "extensions"
+        violations = []
+        for path in extensions_root.glob("*/backend/**/*.py"):
+            if path.name == "tests.py" or "django_migrations" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8")
+            for marker in forbidden:
+                if marker in text:
+                    violations.append(f"{path.relative_to(settings.BASE_DIR)}: {marker}")
+
+        self.assertEqual(violations, [])
+
+    def test_core_runtime_code_uses_runtime_facade_instead_of_runtime_access_imports(self):
+        forbidden = "from apps.core.extensions.runtime_access"
+        allowed_files = {
+            Path(settings.BASE_DIR) / "apps" / "core" / "extensions" / "runtime_access.py",
+            Path(settings.BASE_DIR) / "apps" / "core" / "tests.py",
+        }
+        core_root = Path(settings.BASE_DIR) / "apps" / "core"
+        violations = []
+        for path in core_root.glob("**/*.py"):
+            if path in allowed_files:
+                continue
+            text = path.read_text(encoding="utf-8")
+            if forbidden in text:
+                violations.append(str(path.relative_to(settings.BASE_DIR)))
+
+        self.assertEqual(violations, [])
 
 
 class ExtensionValidationTests(TestCase):
@@ -5895,6 +6074,7 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertIn("def extend():", backend_source)
                 self.assertIn("FrontendExtender()", backend_source)
                 self.assertIn("extensions/alpha_tools/frontend/admin/index.js", backend_source)
+                self.assertNotIn("from apps.core.", backend_source.replace("from apps.core.extensions", ""))
                 apps_source = (extension_dir / "backend" / "apps.py").read_text(encoding="utf-8")
                 self.assertIn("class AlphaToolsExtensionConfig(AppConfig):", apps_source)
                 self.assertIn('label = "alpha_tools"', apps_source)
@@ -5923,6 +6103,9 @@ class ExtensionManagementCommandTests(TestCase):
                 self.assertIn("validate_extensions --strict", readme_source)
                 self.assertIn("build_extension_frontend --rebuild", readme_source)
                 self.assertIn("ApiResourceExtender(...)", readme_source)
+                self.assertIn("apps.core.extensions.runtime", readme_source)
+                self.assertIn("apps.core.extensions.platform", readme_source)
+                self.assertIn("apps.core.extensions.forum", readme_source)
                 self.assertIn("backend/apps.py", readme_source)
                 self.assertIn("backend/django_migrations", readme_source)
                 self.assertNotIn("migration_namespace", readme_source)
@@ -6571,8 +6754,7 @@ class ExtensionRegistryTests(TestCase):
                 }, ensure_ascii=False), encoding="utf-8")
                 (backend_dir / "ext.py").write_text(
                     "from apps.core.extensions import ApiResourceExtender, EventListenersExtender, FrontendExtender, MiddlewareExtender\n"
-                    "from apps.core.extensions.types import ExtensionEventListenerDefinition\n"
-                    "from apps.core.resource_registry import ResourceEndpointDefinition\n"
+                    "from apps.core.extensions import ExtensionEventListenerDefinition, ResourceEndpointDefinition\n"
                     "\n"
                     "class RuntimeEvent:\n"
                     "    pass\n"
@@ -7585,8 +7767,7 @@ class AdminExtensionsApiTests(TestCase):
         ext_path.write_text(
             "from __future__ import annotations\n"
             "\n"
-            "from apps.core.extensions import FrontendExtender, SettingsExtender, ThemeExtender\n"
-            "from apps.core.extensions.backend import _build_setting_field_definition\n"
+            "from apps.core.extensions import FrontendExtender, SettingsExtender, ThemeExtender, setting_field\n"
             "\n"
             "def is_default(value):\n"
             "    return value == 'primary'\n"
@@ -7597,7 +7778,7 @@ class AdminExtensionsApiTests(TestCase):
             "def extend():\n"
             "    return [\n"
             "        SettingsExtender(fields=(\n"
-            "            _build_setting_field_definition({'key': 'card_tone', 'label': '卡片风格', 'type': 'text', 'default': 'primary'}),\n"
+            "            setting_field({'key': 'card_tone', 'label': '卡片风格', 'type': 'text', 'default': 'primary'}),\n"
             "        ))\n"
             "            .default('card_tone', 'primary')\n"
             "            .reset_when('card_tone', is_default)\n"
@@ -12322,7 +12503,7 @@ class ResourceRegistryTests(TestCase):
 
         app = ExtensionApplication(resource_registry=registry)
         app.search.manager = manager
-        with patch("apps.core.extensions.runtime_access.get_extension_host_service", side_effect=lambda key, default=None: app.search if key == "search" else default):
+        with patch("apps.core.extensions.runtime_search.get_extension_host_service", side_effect=lambda key, default=None: app.search if key == "search" else default):
             payload = registry.dispatch_resource_endpoint(
                 registry.get_dispatch_endpoint("managed_search_item", "index", "GET"),
                 {
@@ -12985,21 +13166,19 @@ class TestRunnerTests(TestCase):
         )
         labels = []
         for app in sorted(app_names):
-            tests_path = Path(settings.BASE_DIR) / app.replace(".", "/") / "tests.py"
-            if tests_path.exists() and "def test_" in tests_path.read_text(encoding="utf-8"):
+            app_path = Path(settings.BASE_DIR) / app.replace(".", "/")
+            tests_path = app_path / "tests.py"
+            if tests_path.exists():
                 labels.append(f"{app}.tests")
-        extension_labels = [
-            f"extensions.{extension_dir.name}.backend.tests"
-            for extension_dir in sorted((Path(settings.BASE_DIR) / "extensions").iterdir(), key=lambda item: item.name)
-            if extension_dir.is_dir()
-            and extension_dir.name.isidentifier()
-            and (extension_dir / "backend" / "tests.py").exists()
-        ]
+            labels.extend(
+                f"{app}.{path.stem}"
+                for path in sorted(app_path.glob("test_*.py"), key=lambda item: item.name)
+                if path.name != "test_runner.py"
+            )
 
         suite = runner.build_suite([])
 
         discovered = set()
-        discovered_extensions = set()
         stack = [suite]
         while stack:
             item = stack.pop()
@@ -13007,16 +13186,27 @@ class TestRunnerTests(TestCase):
                 stack.extend(list(item))
                 continue
             module = item.__class__.__module__
-            module_name = module.split(".")[0:3]
-            if module.startswith("extensions."):
-                discovered_extensions.add(".".join(module.split(".")[:4]))
-            else:
-                discovered.add(".".join(module_name[:2]) + ".tests")
+            discovered.add(module)
 
         for label in labels:
             self.assertIn(label, discovered)
-        for label in extension_labels:
-            self.assertIn(label, discovered_extensions)
+
+    def test_core_app_label_expands_to_core_test_modules(self):
+        runner = BiasDiscoverRunner()
+
+        suite = runner.build_suite(["apps.core"])
+
+        modules = set()
+        stack = [suite]
+        while stack:
+            item = stack.pop()
+            if hasattr(item, "__iter__") and not hasattr(item, "_testMethodName"):
+                stack.extend(list(item))
+                continue
+            modules.add(item.__class__.__module__)
+
+        self.assertIn("apps.core.tests", modules)
+        self.assertIn("apps.core.test_management_commands", modules)
 
     def test_core_product_code_does_not_import_extension_backends(self):
         violations: list[str] = []
@@ -14220,390 +14410,6 @@ class QueueServiceTests(TestCase):
         self.assertEqual(metrics["fallback_count"], 0)
 
 
-class InstallForumCommandTests(TestCase):
-    def _success_result(self, args):
-        return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
-
-    @patch("apps.core.management.commands.install_forum.assert_database_connection")
-    @patch("apps.core.management.commands.install_forum.run_manage_py")
-    def test_install_forum_command_writes_site_config_and_invokes_manage_steps(self, mock_run_manage_py, mock_assert_database_connection):
-        mock_run_manage_py.side_effect = lambda args, env: self._success_result(args)
-        mock_assert_database_connection.return_value = None
-
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            with patch.dict(os.environ, {}, clear=False):
-                with override_settings(BASE_DIR=Path(temp_dir)):
-                    call_command(
-                        "install_forum",
-                        "--database",
-                        "sqlite",
-                        "--config",
-                        str(config_path),
-                        "--skip-migrate",
-                        "--admin-username",
-                        "forum-admin",
-                        "--admin-email",
-                        "forum-admin@example.com",
-                        "--admin-password",
-                        "password123",
-                        "--non-interactive",
-                    )
-
-            self.assertTrue(config_path.exists())
-            config = read_site_config(config_path)
-            self.assertEqual(config.database_mode, "sqlite")
-            self.assertEqual(config.sqlite_name, "db.sqlite3")
-            self.assertFalse(config.use_redis)
-            self.assertEqual(config.resolved_frontend_url(), "http://localhost:5173")
-            self.assertTrue(config.secret_key)
-            self.assertTrue(config.jwt_secret_key)
-
-            self.assertEqual(mock_run_manage_py.call_count, 7)
-            invoked_steps = [call.args[0] for call in mock_run_manage_py.call_args_list]
-            self.assertEqual(
-                invoked_steps,
-                [
-                    ["sync_extensions"],
-                    ["migrate_extensions", "--all"],
-                    ["init_groups"],
-                    ["sync_forum_version"],
-                    ["build_extension_frontend"],
-                    ["collectstatic", "--noinput"],
-                    [
-                        "ensure_admin",
-                        "--username",
-                        "forum-admin",
-                        "--email",
-                        "forum-admin@example.com",
-                        "--password",
-                        "password123",
-                    ],
-                ],
-            )
-
-            first_args, first_env = mock_run_manage_py.call_args_list[0].args
-            self.assertEqual(first_args, ["sync_extensions"])
-            self.assertEqual(
-                first_env["BIAS_SITE_CONFIG"],
-                str(config_path),
-            )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("apps.core.management.commands.install_forum.assert_database_connection")
-    @patch("apps.core.management.commands.install_forum.run_manage_py")
-    def test_install_forum_command_writes_postgres_site_config_values(self, mock_run_manage_py, mock_assert_database_connection):
-        mock_run_manage_py.side_effect = lambda args, env: self._success_result(args)
-        mock_assert_database_connection.return_value = None
-
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            with patch.dict(os.environ, {}, clear=False):
-                with override_settings(BASE_DIR=Path(temp_dir)):
-                    call_command(
-                        "install_forum",
-                        "--database",
-                        "postgres",
-                        "--config",
-                        str(config_path),
-                        "--skip-migrate",
-                        "--skip-admin",
-                        "--db-name",
-                        "community",
-                        "--db-user",
-                        "community_user",
-                        "--db-password",
-                        "community_pass",
-                        "--db-host",
-                        "db.internal",
-                        "--db-port",
-                        "5433",
-                        "--frontend-url",
-                        "http://forum.example.com",
-                        "--non-interactive",
-                    )
-
-            self.assertTrue(config_path.exists())
-            config = read_site_config(config_path)
-            self.assertEqual(config.database_mode, "postgres")
-            self.assertFalse(config.debug)
-            self.assertTrue(config.use_redis)
-            self.assertEqual(config.db_name, "community")
-            self.assertEqual(config.db_user, "community_user")
-            self.assertEqual(config.db_password, "community_pass")
-            self.assertEqual(config.db_host, "db.internal")
-            self.assertEqual(config.db_port, "5433")
-            self.assertEqual(config.resolved_frontend_url(), "http://forum.example.com")
-
-            self.assertEqual(mock_run_manage_py.call_count, 6)
-            group_args, group_env = mock_run_manage_py.call_args_list[2].args
-            self.assertEqual(group_args, ["init_groups"])
-            self.assertEqual(group_env["BIAS_SITE_CONFIG"], str(config_path))
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("apps.core.management.commands.install_forum.assert_database_connection")
-    @patch("apps.core.management.commands.install_forum.run_manage_py")
-    def test_install_forum_command_allows_explicit_redis_override(self, mock_run_manage_py, mock_assert_database_connection):
-        mock_run_manage_py.side_effect = lambda args, env: self._success_result(args)
-        mock_assert_database_connection.return_value = None
-
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            with patch.dict(os.environ, {}, clear=False):
-                with override_settings(BASE_DIR=Path(temp_dir)):
-                    call_command(
-                        "install_forum",
-                        "--database",
-                        "sqlite",
-                        "--redis",
-                        "on",
-                        "--redis-host",
-                        "cache.internal",
-                        "--redis-port",
-                        "6380",
-                        "--redis-db",
-                        "5",
-                        "--config",
-                        str(config_path),
-                        "--skip-migrate",
-                        "--skip-admin",
-                        "--non-interactive",
-                    )
-
-            config = read_site_config(config_path)
-            self.assertTrue(config.use_redis)
-            self.assertEqual(config.redis_host, "cache.internal")
-            self.assertEqual(config.redis_port, "6380")
-            self.assertEqual(config.redis_db, "5")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("apps.core.management.commands.install_forum.assert_database_connection")
-    @patch("apps.core.management.commands.install_forum.run_manage_py")
-    def test_install_forum_overwrite_preserves_existing_secrets(self, mock_run_manage_py, mock_assert_database_connection):
-        mock_run_manage_py.side_effect = lambda args, env: self._success_result(args)
-        mock_assert_database_connection.return_value = None
-
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "installed": True,
-                        "source": "file",
-                        "secret_key": "secret-1",
-                        "jwt_secret_key": "jwt-secret-1",
-                        "database_mode": "postgres",
-                        "db_name": "bias",
-                        "db_user": "postgres",
-                        "db_password": "postgres",
-                        "db_host": "db",
-                        "db_port": "5432",
-                        "use_redis": True,
-                        "redis_host": "redis",
-                        "redis_port": "6379",
-                        "redis_db": "0",
-                        "site_domains": ["old.example.com"],
-                        "site_scheme": "https",
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-
-            with override_settings(BASE_DIR=Path(temp_dir)):
-                call_command(
-                    "install_forum",
-                    "--config",
-                    str(config_path),
-                    "--site-domains",
-                    "bias.chat,www.bias.chat",
-                    "--skip-migrate",
-                    "--skip-admin",
-                    "--overwrite",
-                    "--non-interactive",
-                )
-
-            config = read_site_config(config_path)
-            self.assertEqual(config.secret_key, "secret-1")
-            self.assertEqual(config.jwt_secret_key, "jwt-secret-1")
-            self.assertEqual(config.site_domains, ["bias.chat", "www.bias.chat"])
-            self.assertEqual(config.db_host, "db")
-            self.assertEqual(config.resolved_frontend_url(), "https://bias.chat")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_install_forum_validates_postgres_required_fields(self):
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            with self.assertRaisesMessage(
-                CommandError,
-                "PostgreSQL 模式缺少必要配置: db_name, db_user, db_password",
-            ):
-                with patch.dict(
-                    os.environ,
-                    {
-                        "DB_NAME": "",
-                        "DB_USER": "",
-                        "DB_PASSWORD": "",
-                        "BIAS_SITE_CONFIG": "",
-                    },
-                    clear=False,
-                ), override_settings(BASE_DIR=Path(temp_dir)):
-                    call_command(
-                        "install_forum",
-                        "--database",
-                        "postgres",
-                        "--config",
-                        str(config_path),
-                        "--db-host",
-                        "db.internal",
-                        "--db-port",
-                        "5432",
-                        "--skip-migrate",
-                        "--skip-admin",
-                        "--non-interactive",
-                    )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("psycopg2.connect")
-    @patch("apps.core.management.commands.install_forum._running_in_docker", return_value=True)
-    def test_install_forum_surfaces_old_volume_hint_when_role_missing(self, mock_running_in_docker, mock_connect):
-        import psycopg2
-
-        mock_connect.side_effect = psycopg2.OperationalError('FATAL:  role "woniu" does not exist')
-
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            with patch.dict(
-                os.environ,
-                {
-                    "DB_NAME": "bias",
-                    "DB_USER": "woniu",
-                    "DB_PASSWORD": "woniu@woniu",
-                },
-                clear=False,
-            ):
-                with self.assertRaisesMessage(CommandError, "Docker 复用了旧的 postgres_data 卷"):
-                    with override_settings(BASE_DIR=Path(temp_dir)):
-                        call_command(
-                            "install_forum",
-                            "--database",
-                            "postgres",
-                            "--config",
-                            str(config_path),
-                            "--db-host",
-                            "db",
-                            "--db-port",
-                            "5432",
-                            "--skip-migrate",
-                            "--skip-admin",
-                            "--non-interactive",
-                        )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("psycopg2.connect")
-    @patch("apps.core.management.commands.install_forum._running_in_docker", return_value=False)
-    def test_install_forum_surfaces_native_postgres_hint_when_role_missing(
-        self,
-        mock_running_in_docker,
-        mock_connect,
-    ):
-        import psycopg2
-
-        mock_connect.side_effect = psycopg2.OperationalError('FATAL:  role "bias_user" does not exist')
-
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            with self.assertRaises(CommandError) as captured:
-                with override_settings(BASE_DIR=Path(temp_dir)):
-                    call_command(
-                        "install_forum",
-                        "--database",
-                        "postgres",
-                        "--config",
-                        str(config_path),
-                        "--db-name",
-                        "bias",
-                        "--db-user",
-                        "bias_user",
-                        "--db-password",
-                        "secret",
-                        "--db-host",
-                        "127.0.0.1",
-                        "--db-port",
-                        "5432",
-                        "--skip-migrate",
-                        "--skip-admin",
-                        "--non-interactive",
-                    )
-
-            message = str(captured.exception)
-            self.assertIn("请先在 PostgreSQL 中创建对应用户", message)
-            self.assertNotIn("postgres_data", message)
-            self.assertNotIn(".env", message)
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("psycopg2.connect")
-    @patch("apps.core.management.commands.install_forum._running_in_docker", return_value=True)
-    def test_install_forum_surfaces_old_volume_hint_when_database_missing(
-        self,
-        mock_running_in_docker,
-        mock_connect,
-    ):
-        import psycopg2
-
-        mock_connect.side_effect = psycopg2.OperationalError('FATAL:  database "bias" does not exist')
-
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            with patch.dict(
-                os.environ,
-                {
-                    "DB_NAME": "bias",
-                    "DB_USER": "woniu",
-                    "DB_PASSWORD": "woniu@woniu",
-                },
-                clear=False,
-            ):
-                with self.assertRaises(CommandError) as captured:
-                    with override_settings(BASE_DIR=Path(temp_dir)):
-                        call_command(
-                            "install_forum",
-                            "--database",
-                            "postgres",
-                            "--config",
-                            str(config_path),
-                            "--db-host",
-                            "db",
-                            "--db-port",
-                            "5432",
-                            "--skip-migrate",
-                            "--skip-admin",
-                            "--non-interactive",
-                        )
-
-            message = str(captured.exception)
-            self.assertIn("postgres_data 卷", message)
-            self.assertIn("旧数据库名", message)
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-
 class BootstrapConfigFallbackTests(TestCase):
     def test_load_site_bootstrap_prefers_database_env_when_site_config_missing(self):
         temp_dir = make_workspace_temp_dir()
@@ -14718,582 +14524,6 @@ class EnsureAdminCommandTests(TestCase):
         self.assertIn("post.deleteOwn", member_permissions)
 
 
-class UpgradeForumCommandTests(TestCase):
-    def _success_result(self, args):
-        return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
-
-    @patch("apps.core.management.commands.upgrade_forum.ensure_release_versions_aligned")
-    @patch("apps.core.management.commands.upgrade_forum.run_manage_py")
-    def test_upgrade_forum_runs_default_upgrade_steps(self, mock_run_manage_py, mock_ensure_versions):
-        mock_run_manage_py.side_effect = lambda args, env: self._success_result(args)
-        mock_ensure_versions.return_value = None
-
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "installed": True,
-                        "source": "file",
-                        "database_mode": "sqlite",
-                        "sqlite_name": "db.sqlite3",
-                        "use_redis": False,
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-
-            call_command(
-                "upgrade_forum",
-                "--config",
-                str(config_path),
-                "--non-interactive",
-            )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-        self.assertEqual(mock_run_manage_py.call_count, 9)
-        invoked_steps = [call.args[0] for call in mock_run_manage_py.call_args_list]
-        self.assertEqual(
-            invoked_steps,
-            [
-                ["check"],
-                ["migrate", "--noinput"],
-                ["sync_extensions"],
-                ["migrate_extensions", "--all"],
-                ["init_groups"],
-                ["sync_forum_version"],
-                ["clear_runtime_cache"],
-                ["build_extension_frontend"],
-                ["collectstatic", "--noinput"],
-            ],
-        )
-        self.assertEqual(mock_run_manage_py.call_args_list[0].args[1]["BIAS_SITE_CONFIG"], str(config_path))
-
-    @patch(
-        "apps.core.management.commands.upgrade_forum.ensure_release_versions_aligned",
-        side_effect=ValueError("版本不一致：VERSION 与 frontend/package.json 的 version 必须完全一致"),
-    )
-    def test_upgrade_forum_requires_aligned_release_versions(self, mock_ensure_versions):
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "installed": True,
-                        "source": "file",
-                        "database_mode": "sqlite",
-                        "sqlite_name": "db.sqlite3",
-                        "use_redis": False,
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-
-            with self.assertRaisesMessage(
-                CommandError,
-                "版本校验失败: 版本不一致：VERSION 与 frontend/package.json 的 version 必须完全一致",
-            ):
-                call_command(
-                    "upgrade_forum",
-                    "--config",
-                    str(config_path),
-                    "--non-interactive",
-                )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("apps.core.management.commands.upgrade_forum.run_manage_py")
-    def test_upgrade_forum_dry_run_does_not_execute_steps(self, mock_run_manage_py):
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "installed": True,
-                        "source": "file",
-                        "database_mode": "sqlite",
-                        "sqlite_name": "db.sqlite3",
-                        "use_redis": False,
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-
-            call_command(
-                "upgrade_forum",
-                "--config",
-                str(config_path),
-                "--dry-run",
-                "--non-interactive",
-            )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-        mock_run_manage_py.assert_not_called()
-
-    def test_upgrade_forum_requires_existing_site_config(self):
-        temp_dir = make_workspace_temp_dir()
-        try:
-            missing_config_path = Path(temp_dir) / "instance" / "site.json"
-            with self.assertRaisesMessage(CommandError, f"站点配置不存在: {missing_config_path}。请先执行 python manage.py install_forum"):
-                call_command(
-                    "upgrade_forum",
-                    "--config",
-                    str(missing_config_path),
-                    "--non-interactive",
-                )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_upgrade_forum_validates_postgres_required_fields(self):
-        temp_dir = make_workspace_temp_dir()
-        try:
-            config_path = Path(temp_dir) / "instance" / "site.json"
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "installed": True,
-                        "source": "file",
-                        "database_mode": "postgres",
-                        "db_name": "",
-                        "db_user": "",
-                        "db_host": "",
-                        "db_port": "",
-                        "use_redis": False,
-                    }
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-
-            with self.assertRaisesMessage(CommandError, "PostgreSQL 模式缺少必要配置: db_name, db_user, db_host, db_port"):
-                call_command(
-                    "upgrade_forum",
-                    "--config",
-                    str(config_path),
-                    "--non-interactive",
-                )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-
-class ReleaseVersionControlTests(TestCase):
-    def test_ensure_release_versions_aligned_raises_when_version_mismatch(self):
-        temp_dir = make_workspace_temp_dir()
-        try:
-            base_dir = Path(temp_dir)
-            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
-            (base_dir / "VERSION").write_text("1.0.1\n", encoding="utf-8")
-            (base_dir / "frontend" / "package.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.0.0"}) + "\n",
-                encoding="utf-8",
-            )
-
-            with self.assertRaisesMessage(
-                ValueError,
-                "版本不一致：VERSION 与 frontend/package.json 的 version 必须完全一致",
-            ):
-                ensure_release_versions_aligned(base_dir)
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("apps.core.management.commands.prepare_release.subprocess.run")
-    def test_prepare_release_syncs_version_and_frontend_package_files(self, mock_run):
-        temp_dir = make_workspace_temp_dir()
-        mock_run.return_value = CompletedProcess(
-            args=build_git_command(Path(temp_dir), "status", "--short"),
-            returncode=0,
-            stdout="",
-            stderr="",
-        )
-
-        try:
-            base_dir = Path(temp_dir)
-            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
-            (base_dir / "VERSION").write_text("1.0.0\n", encoding="utf-8")
-            (base_dir / "frontend" / "package.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.0.0"}, ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
-            )
-            (base_dir / "frontend" / "package-lock.json").write_text(
-                json.dumps(
-                    {
-                        "name": "bias-frontend",
-                        "version": "1.0.0",
-                        "packages": {
-                            "": {
-                                "name": "bias-frontend",
-                                "version": "1.0.0",
-                            }
-                        },
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
-                + "\n",
-                encoding="utf-8",
-            )
-
-            with patch("apps.core.management.commands.prepare_release.call_command") as validate_mock, patch(
-                "apps.core.management.commands.prepare_release.Command._inspect_extensions"
-            ) as inspect_mock:
-                inspect_mock.return_value = {
-                    "summary": {
-                        "attention_count": 0,
-                    },
-                    "extensions": [],
-                }
-                with override_settings(BASE_DIR=base_dir):
-                    call_command("prepare_release", "--tag", "v1.2.3")
-                validate_mock.assert_called_once_with("validate_extensions", "--strict")
-
-            self.assertEqual((base_dir / "VERSION").read_text(encoding="utf-8").strip(), "1.2.3")
-            package_json = json.loads((base_dir / "frontend" / "package.json").read_text(encoding="utf-8"))
-            package_lock = json.loads((base_dir / "frontend" / "package-lock.json").read_text(encoding="utf-8"))
-            self.assertEqual(package_json["version"], "1.2.3")
-            self.assertEqual(package_lock["version"], "1.2.3")
-            self.assertEqual(package_lock["packages"][""]["version"], "1.2.3")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_prepare_release_rejects_mismatched_version_and_tag(self):
-        with self.assertRaisesMessage(CommandError, "--set-version 与 --tag 不一致"):
-            call_command("prepare_release", "--set-version", "1.0.1", "--tag", "v1.0.2", "--allow-dirty")
-
-    def test_prepare_release_rejects_extension_attention_by_default(self):
-        temp_dir = make_workspace_temp_dir()
-        try:
-            base_dir = Path(temp_dir)
-            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
-            (base_dir / "VERSION").write_text("1.0.0\n", encoding="utf-8")
-            (base_dir / "frontend" / "package.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.0.0"}) + "\n",
-                encoding="utf-8",
-            )
-            (base_dir / "frontend" / "package-lock.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.0.0", "packages": {"": {"version": "1.0.0"}}}) + "\n",
-                encoding="utf-8",
-            )
-
-            with patch("apps.core.management.commands.prepare_release.call_command") as validate_mock, patch(
-                "apps.core.management.commands.prepare_release.Command._inspect_extensions"
-            ) as inspect_mock:
-                inspect_mock.return_value = {
-                    "summary": {
-                        "blocking_count": 2,
-                        "warning_count": 0,
-                        "attention_count": 2,
-                    },
-                    "extensions": [],
-                }
-                with override_settings(BASE_DIR=base_dir):
-                    with self.assertRaisesMessage(CommandError, "扩展诊断存在 2 个阻断项"):
-                        call_command("prepare_release", "--set-version", "1.0.0", "--allow-dirty")
-                validate_mock.assert_called_once_with("validate_extensions", "--strict")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    def test_prepare_release_can_write_extension_report(self):
-        temp_dir = make_workspace_temp_dir()
-        try:
-            base_dir = Path(temp_dir)
-            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
-            (base_dir / "VERSION").write_text("1.0.0\n", encoding="utf-8")
-            (base_dir / "frontend" / "package.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.0.0"}) + "\n",
-                encoding="utf-8",
-            )
-            (base_dir / "frontend" / "package-lock.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.0.0", "packages": {"": {"version": "1.0.0"}}}) + "\n",
-                encoding="utf-8",
-            )
-            report_path = base_dir / "artifacts" / "extensions-report.json"
-
-            with patch("apps.core.management.commands.prepare_release.call_command") as validate_mock, patch(
-                "apps.core.management.commands.prepare_release.Command._inspect_extensions"
-            ) as inspect_mock:
-                inspect_mock.return_value = {
-                    "summary": {
-                        "blocking_count": 0,
-                        "warning_count": 0,
-                        "attention_count": 0,
-                        "asset_count": 5,
-                        "frontend_bundle_count": 2,
-                        "migration_bundle_count": 1,
-                        "locale_bundle_count": 1,
-                        "signed_extension_count": 0,
-                    },
-                    "extensions": [{"id": "core"}],
-                }
-                with override_settings(BASE_DIR=base_dir):
-                    call_command(
-                        "prepare_release",
-                        "--set-version",
-                        "1.0.0",
-                        "--allow-dirty",
-                        "--extension-report",
-                        str(report_path),
-                    )
-                validate_mock.assert_called_once_with("validate_extensions", "--strict")
-
-            payload = json.loads(report_path.read_text(encoding="utf-8"))
-            self.assertEqual(payload["summary"]["attention_count"], 0)
-            self.assertEqual(payload["summary"]["asset_count"], 5)
-            self.assertEqual(payload["summary"]["frontend_bundle_count"], 2)
-            self.assertEqual(payload["extensions"][0]["id"], "core")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("apps.core.management.commands.prepare_release.subprocess.run")
-    def test_prepare_release_requires_clean_git_state_by_default(self, mock_run):
-        temp_dir = make_workspace_temp_dir()
-        mock_run.return_value = CompletedProcess(
-            args=build_git_command(Path(temp_dir), "status", "--short"),
-            returncode=0,
-            stdout=" M README.md\n",
-            stderr="",
-        )
-        try:
-            base_dir = Path(temp_dir)
-            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
-            (base_dir / "VERSION").write_text("1.0.0\n", encoding="utf-8")
-            (base_dir / "frontend" / "package.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.0.0"}) + "\n",
-                encoding="utf-8",
-            )
-            (base_dir / "frontend" / "package-lock.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.0.0", "packages": {"": {"version": "1.0.0"}}}) + "\n",
-                encoding="utf-8",
-            )
-
-            with override_settings(BASE_DIR=base_dir):
-                with self.assertRaisesMessage(
-                    CommandError,
-                    "Git 工作区不干净，请先提交或 stash 改动；如需跳过请传 --allow-dirty",
-                ):
-                    call_command("prepare_release", "--set-version", "1.0.1")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("apps.core.management.commands.finalize_release.subprocess.run")
-    def test_finalize_release_creates_git_tag_when_versions_match(self, mock_run):
-        temp_dir = make_workspace_temp_dir()
-        base_dir = Path(temp_dir)
-        mock_run.side_effect = [
-            CompletedProcess(args=build_git_command(base_dir, "status", "--short"), returncode=0, stdout="", stderr=""),
-            CompletedProcess(args=build_git_command(base_dir, "tag", "--list", "v1.2.3"), returncode=0, stdout="", stderr=""),
-            CompletedProcess(
-                args=build_git_command(base_dir, "tag", "-a", "v1.2.3", "-m", "Release v1.2.3"),
-                returncode=0,
-                stdout="",
-                stderr="",
-            ),
-        ]
-        try:
-            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
-            (base_dir / "VERSION").write_text("1.2.3\n", encoding="utf-8")
-            (base_dir / "frontend" / "package.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.2.3"}) + "\n",
-                encoding="utf-8",
-            )
-            (base_dir / "frontend" / "package-lock.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.2.3", "packages": {"": {"version": "1.2.3"}}}) + "\n",
-                encoding="utf-8",
-            )
-
-            with override_settings(BASE_DIR=base_dir):
-                call_command("finalize_release", "--tag", "v1.2.3")
-
-            self.assertEqual(
-                mock_run.call_args_list[2].args[0],
-                build_git_command(base_dir, "tag", "-a", "v1.2.3", "-m", "Release v1.2.3"),
-            )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("apps.core.management.commands.finalize_release.subprocess.run")
-    def test_finalize_release_rejects_mismatched_tag_and_version(self, mock_run):
-        temp_dir = make_workspace_temp_dir()
-        try:
-            base_dir = Path(temp_dir)
-            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
-            (base_dir / "VERSION").write_text("1.2.3\n", encoding="utf-8")
-            (base_dir / "frontend" / "package.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.2.3"}) + "\n",
-                encoding="utf-8",
-            )
-            (base_dir / "frontend" / "package-lock.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.2.3", "packages": {"": {"version": "1.2.3"}}}) + "\n",
-                encoding="utf-8",
-            )
-
-            with override_settings(BASE_DIR=base_dir):
-                with self.assertRaisesMessage(
-                    CommandError,
-                    "Git tag 与代码版本不一致：tag=v1.2.4，VERSION=1.2.3",
-                ):
-                    call_command("finalize_release", "--tag", "v1.2.4", "--allow-dirty")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-        mock_run.assert_not_called()
-
-    @patch("apps.core.management.commands.finalize_release.subprocess.run")
-    def test_finalize_release_requires_clean_git_state_by_default(self, mock_run):
-        temp_dir = make_workspace_temp_dir()
-        mock_run.return_value = CompletedProcess(
-            args=build_git_command(Path(temp_dir), "status", "--short"),
-            returncode=0,
-            stdout=" M VERSION\n",
-            stderr="",
-        )
-        try:
-            base_dir = Path(temp_dir)
-            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
-            (base_dir / "VERSION").write_text("1.2.3\n", encoding="utf-8")
-            (base_dir / "frontend" / "package.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.2.3"}) + "\n",
-                encoding="utf-8",
-            )
-            (base_dir / "frontend" / "package-lock.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.2.3", "packages": {"": {"version": "1.2.3"}}}) + "\n",
-                encoding="utf-8",
-            )
-
-            with override_settings(BASE_DIR=base_dir):
-                with self.assertRaisesMessage(
-                    CommandError,
-                    "Git 工作区不干净，请先提交或 stash 改动；如需跳过请传 --allow-dirty",
-                ):
-                    call_command("finalize_release", "--tag", "v1.2.3")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("apps.core.management.commands.finalize_release.subprocess.run")
-    def test_finalize_release_rejects_existing_git_tag(self, mock_run):
-        temp_dir = make_workspace_temp_dir()
-        base_dir = Path(temp_dir)
-        mock_run.side_effect = [
-            CompletedProcess(args=build_git_command(base_dir, "status", "--short"), returncode=0, stdout="", stderr=""),
-            CompletedProcess(
-                args=build_git_command(base_dir, "tag", "--list", "v1.2.3"),
-                returncode=0,
-                stdout="v1.2.3\n",
-                stderr="",
-            ),
-        ]
-        try:
-            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
-            (base_dir / "VERSION").write_text("1.2.3\n", encoding="utf-8")
-            (base_dir / "frontend" / "package.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.2.3"}) + "\n",
-                encoding="utf-8",
-            )
-            (base_dir / "frontend" / "package-lock.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.2.3", "packages": {"": {"version": "1.2.3"}}}) + "\n",
-                encoding="utf-8",
-            )
-
-            with override_settings(BASE_DIR=base_dir):
-                with self.assertRaisesMessage(CommandError, "Git tag 已存在: v1.2.3"):
-                    call_command("finalize_release", "--tag", "v1.2.3")
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-    @patch("apps.core.management.commands.publish_release.subprocess.run")
-    @patch("apps.core.management.commands.publish_release.call_command")
-    def test_publish_release_runs_prepare_then_finalize_in_dry_run(self, mock_call_command, mock_subprocess_run):
-        call_command(
-            "publish_release",
-            "--set-version",
-            "1.2.3",
-            "--dry-run",
-            "--allow-dirty",
-            "--allow-extension-attention",
-            "--extension-report",
-            "artifacts/extensions.json",
-        )
-
-        self.assertEqual(
-            [call.args for call in mock_call_command.call_args_list],
-            [
-                ("prepare_release", "--set-version", "1.2.3", "--tag", "v1.2.3", "--allow-dirty", "--allow-extension-attention", "--dry-run", "--extension-report", "artifacts/extensions.json"),
-                ("finalize_release", "--tag", "v1.2.3", "--dry-run"),
-            ],
-        )
-        mock_subprocess_run.assert_not_called()
-
-    @patch("apps.core.management.commands.publish_release.subprocess.run")
-    @patch("apps.core.management.commands.publish_release.call_command")
-    def test_publish_release_commits_then_tags_and_pushes(self, mock_call_command, mock_subprocess_run):
-        base_dir = settings.BASE_DIR
-        call_command(
-            "publish_release",
-            "--set-version",
-            "1.2.3",
-            "--push",
-        )
-
-        self.assertEqual(
-            [call.args for call in mock_call_command.call_args_list],
-            [
-                ("prepare_release", "--set-version", "1.2.3", "--tag", "v1.2.3"),
-                ("finalize_release", "--tag", "v1.2.3"),
-            ],
-        )
-        self.assertEqual(
-            [call.args[0] for call in mock_subprocess_run.call_args_list],
-            [
-                build_git_command(base_dir, "add", "VERSION", "frontend/package.json", "frontend/package-lock.json"),
-                build_git_command(base_dir, "commit", "-m", "发布 1.2.3"),
-                build_git_command(base_dir, "push", "origin", "main", "--tags"),
-            ],
-        )
-
-    @patch("apps.core.management.commands.finalize_release.subprocess.run")
-    def test_finalize_release_uses_safe_directory_git_commands(self, mock_run):
-        temp_dir = make_workspace_temp_dir()
-        try:
-            base_dir = Path(temp_dir)
-            (base_dir / "frontend").mkdir(parents=True, exist_ok=True)
-            (base_dir / "VERSION").write_text("1.2.3\n", encoding="utf-8")
-            (base_dir / "frontend" / "package.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.2.3"}) + "\n",
-                encoding="utf-8",
-            )
-            (base_dir / "frontend" / "package-lock.json").write_text(
-                json.dumps({"name": "bias-frontend", "version": "1.2.3", "packages": {"": {"version": "1.2.3"}}}) + "\n",
-                encoding="utf-8",
-            )
-            mock_run.side_effect = [
-                CompletedProcess(args=build_git_command(base_dir, "status", "--short"), returncode=0, stdout="", stderr=""),
-                CompletedProcess(args=build_git_command(base_dir, "tag", "--list", "v1.2.3"), returncode=0, stdout="", stderr=""),
-                CompletedProcess(args=build_git_command(base_dir, "tag", "-a", "v1.2.3", "-m", "Release v1.2.3"), returncode=0, stdout="", stderr=""),
-            ]
-
-            with override_settings(BASE_DIR=base_dir):
-                call_command("finalize_release", "--tag", "v1.2.3")
-
-            self.assertEqual(mock_run.call_args_list[0].args[0], build_git_command(base_dir, "status", "--short"))
-            self.assertEqual(mock_run.call_args_list[1].args[0], build_git_command(base_dir, "tag", "--list", "v1.2.3"))
-            self.assertEqual(
-                mock_run.call_args_list[2].args[0],
-                build_git_command(base_dir, "tag", "-a", "v1.2.3", "-m", "Release v1.2.3"),
-            )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
 class SystemStatusApiTests(TestCase):
     def test_system_status_endpoint_returns_ready_state(self):
         response = self.client.get("/api/system/status")
@@ -15302,91 +14532,6 @@ class SystemStatusApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["state"], "ready")
         self.assertIn("current_version", payload)
-
-
-class DoctorCommandTests(TestCase):
-    def test_doctor_command_reports_ok_payload_as_json(self):
-        stdout = StringIO()
-
-        call_command(
-            "doctor",
-            "--format",
-            "json",
-            "--skip-frontend",
-            "--skip-extensions",
-            stdout=stdout,
-        )
-
-        payload = json.loads(stdout.getvalue())
-        self.assertTrue(payload["ok"])
-        self.assertEqual(payload["summary"]["error_count"], 0)
-        check_names = {item["name"] for item in payload["checks"]}
-        self.assertIn("runtime_status", check_names)
-        self.assertIn("database", check_names)
-        self.assertIn("migrations", check_names)
-        self.assertIn("cache", check_names)
-
-    @patch("apps.core.management.commands.doctor.MigrationExecutor")
-    def test_doctor_command_fails_when_migrations_are_pending(self, executor_mock):
-        migration = SimpleNamespace(app_label="core", name="9999_pending")
-        executor = executor_mock.return_value
-        executor.loader.graph.leaf_nodes.return_value = [("core", "9999_pending")]
-        executor.migration_plan.return_value = [(migration, False)]
-
-        with self.assertRaisesMessage(CommandError, "doctor 检查失败"):
-            call_command(
-                "doctor",
-                "--skip-frontend",
-                "--skip-extensions",
-                stdout=StringIO(),
-            )
-
-    @patch("apps.core.management.commands.doctor.get_extension_manager")
-    def test_doctor_command_reports_extension_drift(self, get_manager):
-        manager = get_manager.return_value
-        manager.inspect_extension_packages.return_value = {
-            "summary": {
-                "discovered_count": 1,
-                "installed_count": 1,
-                "installation_record_count": 1,
-            },
-            "missing": [],
-            "version_drift": ["alpha-tools"],
-            "source_drift": [],
-            "unmanaged_discovered": [],
-            "lock": {"stale_ids": []},
-        }
-
-        with self.assertRaisesMessage(CommandError, "doctor 检查失败"):
-            call_command(
-                "doctor",
-                "--skip-frontend",
-                stdout=StringIO(),
-            )
-
-    @patch("apps.core.management.commands.doctor.inspect_extension_frontend_output_manifest")
-    @patch("apps.core.management.commands.doctor.get_frontend_vite_manifest_path")
-    @patch("apps.core.management.commands.doctor.get_frontend_dist_root")
-    def test_doctor_command_reports_missing_frontend_dist(self, get_dist_root, get_vite_manifest_path, inspect_manifest):
-        temp_dir = make_workspace_temp_dir()
-        try:
-            dist_root = Path(temp_dir) / "frontend" / "dist"
-            get_dist_root.return_value = dist_root
-            get_vite_manifest_path.return_value = dist_root / ".vite" / "manifest.json"
-            inspect_manifest.return_value = {
-                "exists": True,
-                "input_stale": False,
-                "vite_manifest_exists": True,
-            }
-
-            with self.assertRaisesMessage(CommandError, "doctor 检查失败"):
-                call_command(
-                    "doctor",
-                    "--skip-extensions",
-                    stdout=StringIO(),
-                )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 class AdminPermissionsApiTests(TestCase):
@@ -15665,5 +14810,3 @@ class ProductionRuntimeCheckTests(TestCase):
         celery_module._enforce_celery_runtime_checks()
 
         enforce_runtime_checks_mock.assert_called_once_with()
-
-

@@ -4,8 +4,8 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import dispatch_forum_event_after_commit
+from apps.core.extensions.runtime import (
     get_runtime_post_lifecycle_service,
     refresh_runtime_model_private,
 )
@@ -14,7 +14,7 @@ from extensions.posts.backend.events import (
     PostRejectedEvent,
 )
 from extensions.posts.backend.models import Post
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     increment_runtime_user_comment_count,
     mark_runtime_discussion_read,
 )
@@ -143,5 +143,3 @@ def reject_post(
                 )
             )
     return post
-
-

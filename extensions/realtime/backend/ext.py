@@ -1,14 +1,15 @@
 from apps.core.extensions import (
     ApiRoutesExtender,
     EventListenersExtender,
+    ExtensionEventListenerDefinition,
     FrontendExtender,
     LifecycleExtender,
     RealtimeExtender,
     SettingsExtender,
     WebSocketRoutesExtender,
+    setting_field,
 )
-from apps.core.extensions.backend import _build_setting_field_definition
-from apps.core.extensions.types import ExtensionEventListenerDefinition
+from apps.core.extensions.runtime import get_runtime_notification_service
 from extensions.realtime.backend.admin_api import router as realtime_admin_router
 from extensions.realtime.backend.consumers import (
     DiscussionConsumer,
@@ -16,7 +17,6 @@ from extensions.realtime.backend.consumers import (
     NotificationConsumer,
     OnlineUsersConsumer,
 )
-from apps.core.extensions.runtime_access import get_runtime_notification_service
 from extensions.realtime.backend.websocket_service import WebSocketService
 
 
@@ -61,7 +61,7 @@ def extend():
 
 def setting_definitions():
     return (
-        _build_setting_field_definition({
+        setting_field({
             "key": "typing_enabled",
             "label": "回复输入提示",
             "type": "boolean",

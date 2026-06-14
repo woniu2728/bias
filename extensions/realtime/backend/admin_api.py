@@ -1,9 +1,9 @@
 from ninja import Router
 
-from apps.core.api_errors import api_error
-from apps.core.audit import log_admin_action
-from apps.core.jwt_auth import AccessTokenAuth
-from apps.core.queue_service import QueueService
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.platform import AccessTokenAuth
+from apps.core.extensions.platform import QueueService
 
 
 router = Router()

@@ -6,15 +6,15 @@ from apps.core.extensions import (
     LifecycleExtender,
     NotificationsExtender,
     SearchDriverExtender,
-)
-from apps.core.extensions.types import ExtensionEventListenerDefinition, ExtensionSearchDriverDefinition
-from apps.core.forum_registry_types import (
     DiscussionListFilterDefinition,
+    ExtensionEventListenerDefinition,
+    ExtensionSearchDriverDefinition,
     NotificationTypeDefinition,
+    ResourceEndpointDefinition,
+    ResourceFieldDefinition,
     SearchFilterDefinition,
     UserPreferenceDefinition,
 )
-from apps.core.resource_registry import ResourceEndpointDefinition, ResourceFieldDefinition
 from extensions.subscriptions.backend.handlers import (
     dispatch_discussion_subscribe,
     dispatch_discussion_unsubscribe,

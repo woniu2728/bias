@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from ninja import Router
 
-from apps.core.api_errors import api_error
-from apps.core.audit import log_admin_action
-from apps.core.jwt_auth import AccessTokenAuth
-from apps.core.models import AuditLog
-from apps.core.runtime_checks import detect_database_label
-from apps.core.search_index_service import SearchIndexService
-from apps.core.queue_service import QueueService
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.platform import AccessTokenAuth
+from apps.core.extensions.forum import AuditLog
+from apps.core.extensions.forum import detect_database_label
+from apps.core.extensions.forum import SearchIndexService
+from apps.core.extensions.platform import QueueService
 
 
 router = Router()

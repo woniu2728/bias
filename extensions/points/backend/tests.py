@@ -5,7 +5,7 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from apps.core.extension_settings_service import save_extension_settings
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_discussion,
     create_runtime_post,
     get_runtime_user_model,

@@ -4,8 +4,8 @@ from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.core.exceptions import PermissionDenied
 from django.utils.text import slugify
-from apps.core.extensions.runtime_access import generate_runtime_model_slug
-from apps.core.extensions.runtime_access import apply_runtime_counted_discussion_filter
+from apps.core.extensions.runtime import generate_runtime_model_slug
+from apps.core.extensions.runtime import apply_runtime_counted_discussion_filter
 from extensions.tags.backend.models import DiscussionTag, Tag
 from extensions.tags.backend.tag_relationships import (
     get_discussion_tag_ids_for_stats,
@@ -652,7 +652,7 @@ class TagService:
             if not normalized_tag_ids:
                 return {"mode": "skipped", "tag_ids": [], "message": "没有需要刷新的标签"}
 
-        from apps.core.queue_service import QueueService
+        from apps.core.extensions.platform import QueueService
         from extensions.tags.backend.tasks import refresh_tag_stats_task
 
         def fallback():
@@ -707,4 +707,3 @@ class TagService:
                 last_posted_at=latest_link.discussion.last_posted_at if latest_link else None,
                 last_posted_discussion=latest_link.discussion if latest_link else None,
             )
-

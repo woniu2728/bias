@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from apps.core.extension_settings_service import get_extension_settings
+from apps.core.extensions.platform import get_extension_settings
 
 
 EXTENSION_ID = "points"
@@ -48,4 +48,3 @@ def get_ai_action_cost(action: str) -> int:
     if normalized == "discussion_summary":
         return settings.ai_discussion_summary_cost
     return 0
-

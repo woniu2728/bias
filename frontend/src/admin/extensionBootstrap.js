@@ -1,4 +1,4 @@
-import { generatedAdminExtensionModules } from '../generated/extensionImportMap.js'
+import { generatedAdminExtensionModules } from 'virtual:bias-extension-import-map'
 import {
   clearAdminRoutesForExtension,
   getAdminRoutes,

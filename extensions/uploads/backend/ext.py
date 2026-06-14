@@ -1,5 +1,4 @@
-from apps.core.extensions import ApiRoutesExtender, FrontendExtender, LifecycleExtender, SettingsExtender
-from apps.core.extensions.backend import _build_setting_field_definition
+from apps.core.extensions import ApiRoutesExtender, FrontendExtender, LifecycleExtender, SettingsExtender, setting_field
 from extensions.uploads.backend.api import router as uploads_router
 
 
@@ -27,7 +26,7 @@ def extend():
 
 def setting_definitions():
     return (
-        _build_setting_field_definition({
+        setting_field({
             "key": "attachments_dir",
             "label": "附件目录",
             "type": "text",
@@ -36,7 +35,7 @@ def setting_definitions():
             "required": True,
             "order": 5,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "attachment_max_size_mb",
             "label": "附件最大体积（MB）",
             "type": "number",

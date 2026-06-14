@@ -8,9 +8,9 @@ from typing import Tuple
 from django.core.files.uploadedfile import UploadedFile
 from PIL import Image
 
-from apps.core.extension_settings_service import get_extension_settings
-from apps.core.file_service import FileUploadService
-from apps.core.storage_service import get_storage_backend
+from apps.core.extensions.platform import get_extension_settings
+from apps.core.extensions.platform import FileUploadService
+from apps.core.extensions.platform import get_storage_backend
 
 
 ALLOWED_AVATAR_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp")

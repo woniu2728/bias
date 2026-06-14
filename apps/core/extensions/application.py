@@ -6,7 +6,40 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 from apps.core.domain_events import DomainEventBus
+from apps.core.extensions.application_services import (
+    ApplicationMailService,
+    ApplicationPostEventDataService,
+    ApplicationSignalService,
+    ApplicationSystemHookService,
+    ApplicationValidatorService,
+    ApplicationViewService,
+)
 from apps.core.extensions.container import import_string, resolve_container_value
+from apps.core.extensions.application_frontend import (
+    ApplicationFrontendExtension,
+    ApplicationFrontendService,
+    ApplicationRouteService,
+    ApplicationServiceProvider,
+    ApplicationServiceProviderRegistry,
+    ApplicationWebSocketRouteService,
+)
+from apps.core.extensions.application_event_helpers import (
+    build_event_bus_listener_key,
+    build_forum_event_listener_definition,
+    event_type_key,
+    event_value_key,
+    resolve_event_name,
+    resolve_event_type,
+    resolve_event_value,
+)
+from apps.core.extensions.application_types import (
+    ApplicationForumPermissionChecker,
+    ApplicationMiddlewareMount,
+    ApplicationNamedRoute,
+    ApplicationPolicyMount,
+    ApplicationRouteMount,
+    ApplicationWebSocketRoute,
+)
 from apps.core.extensions.model_references import model_class, model_matches, resolve_model_reference
 from apps.core.extensions.types import (
     ExtensionAdminActionDefinition,
@@ -52,7 +85,6 @@ from apps.core.forum_registry_types import (
     DiscussionListFilterDefinition,
     DiscussionListQueryDefinition,
     DiscussionSortDefinition,
-    EventListenerDefinition,
     LanguagePackDefinition,
     NotificationTypeDefinition,
     PermissionDefinition,
@@ -76,349 +108,6 @@ ContainerExtender = Callable[["ExtensionHost", Any], Any]
 ResolvingCallback = Callable[[Any, "ExtensionHost"], Any]
 LifecycleCallback = Callable[["ExtensionHost"], None]
 PolicyCallback = Callable[..., bool]
-
-
-@dataclass
-class ApplicationRouteMount:
-    prefix: str
-    router: Any
-    tags: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class ApplicationNamedRoute:
-    app_name: str
-    method: str
-    path: str
-    name: str
-    handler: Any
-    module_id: str = ""
-    tags: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class ApplicationWebSocketRoute:
-    path: str
-    name: str
-    consumer: Any
-    module_id: str = ""
-
-
-@dataclass
-class ApplicationMiddlewareMount:
-    target: str
-    middleware: Any
-    order: int = 100
-
-
-@dataclass
-class ApplicationPolicyMount:
-    key: str
-    handler: PolicyCallback
-    model: Any = None
-    global_policy: bool = False
-    query_policy: bool = False
-
-
-@dataclass(frozen=True)
-class ApplicationForumPermissionChecker:
-    key: str
-    handler: Any
-    description: str = ""
-    module_id: str = ""
-
-
-class ApplicationValidatorService:
-    def __init__(self, host: "ExtensionHost") -> None:
-        self._host = host
-        self._definitions_by_extension: dict[str, tuple[ExtensionValidatorDefinition, ...]] = {}
-
-    def register(self, extension_id: str, definition: ExtensionValidatorDefinition) -> None:
-        normalized = str(extension_id or "").strip()
-        if not normalized:
-            return
-        definitions = tuple([*self._definitions_by_extension.get(normalized, ()), definition])
-        self._definitions_by_extension[normalized] = definitions
-        self._host._get_or_create_runtime_view(normalized).validators = definitions
-
-    def get_definitions(self, *, extension_id: str | None = None, target: Any = "") -> list[ExtensionValidatorDefinition]:
-        if extension_id is not None:
-            definitions = list(self._definitions_by_extension.get(str(extension_id or "").strip(), ()))
-        else:
-            definitions = []
-            for items in self._definitions_by_extension.values():
-                definitions.extend(items)
-        target_keys = self._target_keys(target)
-        if target_keys:
-            definitions = [definition for definition in definitions if definition.target in target_keys]
-        return definitions
-
-    def run(self, target: Any, payload: dict, context: dict | None = None) -> list[Any]:
-        resolved_context = dict(context or {})
-        results = []
-        for definition in self.get_definitions(target=target):
-            results.append(definition.callback(payload, resolved_context))
-        return results
-
-    @staticmethod
-    def _target_keys(target: Any) -> set[str]:
-        if target is None:
-            return set()
-        if isinstance(target, str):
-            return {target.strip()} if target.strip() else set()
-        keys = {
-            str(target).strip(),
-            str(getattr(target, "__name__", "") or "").strip(),
-            str(getattr(target, "__qualname__", "") or "").strip(),
-            f"{getattr(target, '__module__', '')}.{getattr(target, '__qualname__', '')}".strip("."),
-        }
-        return {key for key in keys if key}
-
-
-class ApplicationMailService:
-    def __init__(self, host: "ExtensionHost") -> None:
-        self._host = host
-        self._definitions_by_extension: dict[str, tuple[ExtensionMailDefinition, ...]] = {}
-
-    def register(self, extension_id: str, definition: ExtensionMailDefinition) -> None:
-        normalized = str(extension_id or "").strip()
-        if not normalized:
-            return
-        definitions = tuple([*self._definitions_by_extension.get(normalized, ()), definition])
-        self._definitions_by_extension[normalized] = definitions
-        self._host._get_or_create_runtime_view(normalized).mailers = definitions
-
-    def get_definitions(self, *, extension_id: str | None = None) -> list[ExtensionMailDefinition]:
-        if extension_id is not None:
-            return list(self._definitions_by_extension.get(str(extension_id or "").strip(), ()))
-        definitions: list[ExtensionMailDefinition] = []
-        for items in self._definitions_by_extension.values():
-            definitions.extend(items)
-        return definitions
-
-    def get_driver(self, key: str) -> ExtensionMailDefinition | None:
-        normalized = str(key or "").strip().lower()
-        if not normalized:
-            return None
-        for definition in self.get_definitions():
-            if str(definition.key or "").strip().lower() == normalized:
-                return definition
-        return None
-
-    def send(self, key: str, message: dict, context: dict | None = None) -> Any:
-        definition = self.get_driver(key)
-        if definition is None or not callable(definition.callback):
-            return None
-        return definition.callback(message, dict(context or {}))
-
-
-class ApplicationViewService:
-    def __init__(self, host: "ExtensionHost") -> None:
-        self._host = host
-        self._definitions_by_extension: dict[str, tuple[ExtensionViewNamespaceDefinition, ...]] = {}
-
-    def namespace(self, extension_id: str, definition: ExtensionViewNamespaceDefinition) -> None:
-        normalized = str(extension_id or "").strip()
-        namespace = str(definition.namespace or "").strip()
-        hints = tuple(str(item or "").strip() for item in definition.hints if str(item or "").strip())
-        if not normalized or not namespace or not hints:
-            return
-        definition = replace(
-            definition,
-            namespace=namespace,
-            hints=tuple(self._normalize_hint(item, extension_id=normalized) for item in hints),
-            module_id=definition.module_id or normalized,
-        )
-        current = tuple(
-            item for item in self._definitions_by_extension.get(normalized, ())
-            if not (
-                item.namespace == definition.namespace
-                and item.module_id == definition.module_id
-                and bool(getattr(item, "prepend", False)) == bool(getattr(definition, "prepend", False))
-            )
-        )
-        definitions = tuple([*current, definition])
-        self._definitions_by_extension[normalized] = definitions
-        self._host._get_or_create_runtime_view(normalized).view_namespaces = tuple(
-            self.get_namespaces(extension_id=normalized)
-        )
-
-    def get_namespaces(self, *, extension_id: str | None = None) -> list[ExtensionViewNamespaceDefinition]:
-        if extension_id is not None:
-            definitions = list(self._definitions_by_extension.get(str(extension_id or "").strip(), ()))
-        else:
-            definitions = []
-            for items in self._definitions_by_extension.values():
-                definitions.extend(items)
-        return sorted(
-            definitions,
-            key=lambda item: (
-                not bool(getattr(item, "prepend", False)),
-                int(item.order or 100),
-                item.module_id,
-                item.namespace,
-            ),
-        )
-
-    def get_namespace_hints(self, namespace: str) -> list[str]:
-        normalized = str(namespace or "").strip()
-        if not normalized:
-            return []
-        hints: list[str] = []
-        for definition in self.get_namespaces():
-            if definition.namespace == normalized:
-                hints.extend(definition.hints)
-        return list(dict.fromkeys(hints))
-
-    def resolve_template_path(self, template_name: str) -> Path:
-        namespace, name = self._split_template_name(template_name)
-        for hint in self.get_namespace_hints(namespace):
-            candidate = (Path(hint) / name).resolve()
-            if candidate.is_file():
-                return candidate
-        raise FileNotFoundError(f"扩展模板不存在: {template_name}")
-
-    def get_template(self, template_name: str):
-        from django.template.loader import get_template
-
-        return get_template(template_name)
-
-    def render(self, template_name: str, context: dict | None = None, *, request: Any = None) -> str:
-        return self.get_template(template_name).render(context=dict(context or {}), request=request)
-
-    def _normalize_hint(self, hint: str, *, extension_id: str) -> str:
-        path = Path(str(hint or "").strip())
-        if path.is_absolute():
-            return str(path)
-
-        extension_view = self._host.get_runtime_view(extension_id)
-        extension_path = str(getattr(extension_view, "path", "") or "").strip()
-        if extension_path:
-            candidate = Path(extension_path) / path
-            if candidate.exists():
-                return str(candidate.resolve())
-
-        from django.conf import settings
-
-        return str((Path(settings.BASE_DIR) / path).resolve())
-
-    def _split_template_name(self, template_name: str) -> tuple[str, str]:
-        raw = str(template_name or "").strip()
-        if "::" not in raw:
-            raise ValueError("扩展模板名必须使用 namespace::template 格式")
-        namespace, name = raw.split("::", 1)
-        namespace = namespace.strip()
-        name = name.strip().lstrip("/\\")
-        if not namespace or not name or ".." in Path(name).parts:
-            raise ValueError("扩展模板名非法")
-        return namespace, name
-
-
-class ApplicationSystemHookService:
-    def __init__(self, host: "ExtensionHost", view_field: str) -> None:
-        self._host = host
-        self._view_field = view_field
-        self._definitions_by_extension: dict[str, tuple[ExtensionSystemHookDefinition, ...]] = {}
-
-    def register(self, extension_id: str, definition: ExtensionSystemHookDefinition) -> None:
-        normalized = str(extension_id or "").strip()
-        if not normalized:
-            return
-        definitions = tuple([*self._definitions_by_extension.get(normalized, ()), definition])
-        self._definitions_by_extension[normalized] = definitions
-        setattr(self._host._get_or_create_runtime_view(normalized), self._view_field, definitions)
-
-    def get_definitions(self, *, extension_id: str | None = None) -> list[ExtensionSystemHookDefinition]:
-        if extension_id is not None:
-            definitions = list(self._definitions_by_extension.get(str(extension_id or "").strip(), ()))
-        else:
-            definitions = []
-            for items in self._definitions_by_extension.values():
-                definitions.extend(items)
-        return sorted(definitions, key=lambda item: (int(item.order or 100), item.module_id, item.key))
-
-    def run(self, key: str, payload: dict | None = None, context: dict | None = None) -> list[Any]:
-        normalized = str(key or "").strip()
-        results = []
-        for definition in self.get_definitions():
-            if definition.key != normalized or not callable(definition.callback):
-                continue
-            results.append(definition.callback(dict(payload or {}), dict(context or {})))
-        return results
-
-    def get_payloads(self, key: str) -> list[Any]:
-        normalized = str(key or "").strip()
-        return [
-            definition.callback
-            for definition in self.get_definitions()
-            if definition.key == normalized and not callable(definition.callback)
-        ]
-
-
-class ApplicationSignalService:
-    def __init__(self, host: "ExtensionHost") -> None:
-        self._host = host
-        self._definitions_by_extension: dict[str, tuple[ExtensionSignalDefinition, ...]] = {}
-
-    def register(self, extension_id: str, definition: ExtensionSignalDefinition) -> None:
-        normalized = str(extension_id or "").strip()
-        if not normalized or definition.signal is None or not callable(definition.receiver):
-            return
-
-        from apps.core.extensions.signal_runtime import connect_runtime_signal
-
-        registered_uid = connect_runtime_signal(normalized, definition)
-        if registered_uid:
-            definition = replace(definition, dispatch_uid=registered_uid)
-
-        definitions = tuple([*self._definitions_by_extension.get(normalized, ()), definition])
-        self._definitions_by_extension[normalized] = definitions
-        self._host._get_or_create_runtime_view(normalized).signal_handlers = definitions
-
-    def get_definitions(self, *, extension_id: str | None = None) -> list[ExtensionSignalDefinition]:
-        if extension_id is not None:
-            return list(self._definitions_by_extension.get(str(extension_id or "").strip(), ()))
-        definitions: list[ExtensionSignalDefinition] = []
-        for items in self._definitions_by_extension.values():
-            definitions.extend(items)
-        return sorted(definitions, key=lambda item: (int(item.order or 100), item.module_id, item.dispatch_uid))
-
-
-class ApplicationPostEventDataService:
-    def __init__(self, host: "ExtensionHost") -> None:
-        self._host = host
-        self._definitions_by_extension: dict[str, tuple[ExtensionSystemHookDefinition, ...]] = {}
-
-    def register(self, extension_id: str, definition: ExtensionSystemHookDefinition) -> None:
-        normalized = str(extension_id or "").strip()
-        post_type = str(definition.key or "").strip()
-        if not normalized or not post_type or not callable(definition.callback):
-            return
-        definitions = tuple([*self._definitions_by_extension.get(normalized, ()), definition])
-        self._definitions_by_extension[normalized] = definitions
-
-    def get_definitions(self, *, extension_id: str | None = None, post_type: str = "") -> list[ExtensionSystemHookDefinition]:
-        if extension_id is not None:
-            definitions = list(self._definitions_by_extension.get(str(extension_id or "").strip(), ()))
-        else:
-            definitions = []
-            for items in self._definitions_by_extension.values():
-                definitions.extend(items)
-        normalized_post_type = str(post_type or "").strip()
-        if normalized_post_type:
-            definitions = [definition for definition in definitions if definition.key == normalized_post_type]
-        return sorted(definitions, key=lambda item: (int(item.order or 100), item.module_id, item.key))
-
-    def resolve(self, post, context: dict | None = None) -> dict | None:
-        post_type = str(getattr(post, "type", "") or "").strip()
-        if not post_type:
-            return None
-        resolved_context = dict(context or {})
-        for definition in self.get_definitions(post_type=post_type):
-            result = definition.callback(post, resolved_context)
-            if result is not None:
-                return result
-        return None
 
 
 @dataclass
@@ -706,7 +395,7 @@ class ApplicationModelService:
         def refresh_private_flag(sender, instance, **kwargs):
             if instance is None or not hasattr(instance, "is_private"):
                 return
-            from apps.core.extensions.runtime_access import is_runtime_model_private
+            from apps.core.extensions.runtime import is_runtime_model_private
 
             instance.is_private = is_runtime_model_private(instance, model=sender, default=False)
 
@@ -1102,528 +791,6 @@ class ApplicationSearchService:
         )
 
 
-@dataclass
-class ApplicationFrontendExtension:
-    extension_id: str
-    admin_entry: str = ""
-    forum_entry: str = ""
-    common_entry: str = ""
-    css: tuple[str, ...] = ()
-    js_directories: tuple[str, ...] = ()
-    preloads: tuple[Any, ...] = ()
-    content_callbacks: tuple[Any, ...] = ()
-    document_attributes: tuple[Any, ...] = ()
-    head_tags: tuple[Any, ...] = ()
-    theme_variables: tuple[Any, ...] = ()
-    title_driver: Any = None
-    routes: tuple[ExtensionFrontendRouteDefinition, ...] = ()
-    settings_pages: tuple[str, ...] = ()
-    permissions_pages: tuple[str, ...] = ()
-    operations_pages: tuple[str, ...] = ()
-
-
-@dataclass
-class ApplicationServiceProvider:
-    key: str
-    target: Any
-    singleton: bool = True
-    _resolved_target: Any = field(default=None, init=False, repr=False)
-
-    def register(self, host: "ExtensionHost") -> None:
-        target = self._resolve_target()
-        register = getattr(target, "register", None)
-        if callable(register):
-            register(host)
-            return
-        if callable(target):
-            if self.singleton:
-                host.singleton(self.key, target)
-            else:
-                host.bind(self.key, target)
-
-    def boot(self, host: "ExtensionHost") -> None:
-        target = self._resolve_target()
-        boot = getattr(target, "boot", None)
-        if callable(boot):
-            boot(host)
-
-    def _resolve_target(self) -> Any:
-        if self._resolved_target is not None:
-            return self._resolved_target
-
-        target = resolve_container_value(self.target, None, _skip_container_lookup=True)
-        if isinstance(target, type):
-            target = target()
-        self._resolved_target = target
-        return target
-
-
-class ApplicationRouteService:
-    def __init__(self, host: "ExtensionHost") -> None:
-        self._host = host
-        self._mounts_by_extension: dict[str, tuple[ApplicationRouteMount, ...]] = {}
-        self._routes_by_app: dict[str, tuple[ApplicationNamedRoute, ...]] = {}
-        self._route_names_by_extension: dict[str, tuple[tuple[str, str], ...]] = {}
-        self._removed_by_app: dict[str, tuple[str, ...]] = {}
-
-    def mount(
-        self,
-        extension_id: str,
-        prefix: str,
-        router: Any,
-        *,
-        tags=(),
-    ) -> ApplicationRouteMount | None:
-        normalized_extension_id = str(extension_id or "").strip()
-        normalized_prefix = str(prefix or "").strip()
-        if not normalized_extension_id or router is None:
-            return None
-
-        mount = ApplicationRouteMount(
-            prefix=normalized_prefix,
-            router=router,
-            tags=tuple(tags or ()),
-        )
-        mounts = list(self._mounts_by_extension.get(normalized_extension_id, ()))
-        mounts.append(mount)
-        self._mounts_by_extension[normalized_extension_id] = tuple(mounts)
-        self._host._get_or_create_runtime_view(normalized_extension_id).route_mounts = tuple(
-            self.get_mounts(extension_id=normalized_extension_id)
-        )
-        return mount
-
-    def get_mounts(self, *, extension_id: str | None = None) -> list[ApplicationRouteMount]:
-        if extension_id is not None:
-            return list(self._mounts_by_extension.get(str(extension_id or "").strip(), ()))
-
-        mounts: list[ApplicationRouteMount] = []
-        for items in self._mounts_by_extension.values():
-            mounts.extend(items)
-        return mounts
-
-    def remove_mounts(self, extension_id: str) -> None:
-        normalized = str(extension_id or "").strip()
-        if not normalized:
-            return
-        self._mounts_by_extension.pop(normalized, None)
-        self._host._get_or_create_runtime_view(normalized).route_mounts = ()
-
-    def add_route(
-        self,
-        extension_id: str,
-        app_name: str,
-        method: str,
-        path: str,
-        name: str,
-        handler: Any,
-        *,
-        tags=(),
-    ) -> ApplicationNamedRoute | None:
-        normalized_extension_id = str(extension_id or "").strip()
-        normalized_app = str(app_name or "api").strip() or "api"
-        normalized_method = str(method or "GET").strip().upper() or "GET"
-        normalized_path = "/" + str(path or "").strip().strip("/")
-        normalized_name = str(name or "").strip()
-        if not normalized_extension_id or not normalized_name or handler is None:
-            return None
-
-        route = ApplicationNamedRoute(
-            app_name=normalized_app,
-            method=normalized_method,
-            path=normalized_path,
-            name=normalized_name,
-            handler=handler,
-            module_id=normalized_extension_id,
-            tags=tuple(tags or ()),
-        )
-        routes = [
-            item
-            for item in self._routes_by_app.get(normalized_app, ())
-            if item.name != normalized_name
-        ]
-        routes.append(route)
-        self._routes_by_app[normalized_app] = tuple(routes)
-        removed = [
-            item
-            for item in self._removed_by_app.get(normalized_app, ())
-            if item != normalized_name
-        ]
-        self._removed_by_app[normalized_app] = tuple(removed)
-        route_keys = [
-            item
-            for item in self._route_names_by_extension.get(normalized_extension_id, ())
-            if item != (normalized_app, normalized_name)
-        ]
-        route_keys.append((normalized_app, normalized_name))
-        self._route_names_by_extension[normalized_extension_id] = tuple(route_keys)
-        self._sync_route_view(normalized_extension_id)
-        return route
-
-    def remove_route(self, extension_id: str, app_name: str, name: str) -> None:
-        normalized_extension_id = str(extension_id or "").strip()
-        normalized_app = str(app_name or "api").strip() or "api"
-        normalized_name = str(name or "").strip()
-        if not normalized_extension_id or not normalized_name:
-            return
-
-        self._routes_by_app[normalized_app] = tuple(
-            item
-            for item in self._routes_by_app.get(normalized_app, ())
-            if item.name != normalized_name
-        )
-        removed = list(self._removed_by_app.get(normalized_app, ()))
-        if normalized_name not in removed:
-            removed.append(normalized_name)
-        self._removed_by_app[normalized_app] = tuple(removed)
-        route_keys = [
-            item
-            for item in self._route_names_by_extension.get(normalized_extension_id, ())
-            if item != (normalized_app, normalized_name)
-        ]
-        route_keys.append((normalized_app, normalized_name))
-        self._route_names_by_extension[normalized_extension_id] = tuple(route_keys)
-        self._sync_route_view(normalized_extension_id)
-
-    def get_routes(self, *, app_name: str | None = None) -> list[ApplicationNamedRoute]:
-        if app_name is not None:
-            normalized_app = str(app_name or "").strip()
-            removed = set(self._removed_by_app.get(normalized_app, ()))
-            return [
-                route
-                for route in self._routes_by_app.get(normalized_app, ())
-                if route.name not in removed
-            ]
-
-        routes: list[ApplicationNamedRoute] = []
-        for normalized_app in sorted(self._routes_by_app.keys()):
-            routes.extend(self.get_routes(app_name=normalized_app))
-        return routes
-
-    def get_removed_route_names(self, app_name: str) -> tuple[str, ...]:
-        return tuple(self._removed_by_app.get(str(app_name or "").strip(), ()))
-
-    def _sync_route_view(self, extension_id: str) -> None:
-        view = self._host._get_or_create_runtime_view(extension_id)
-        route_keys = set(self._route_names_by_extension.get(extension_id, ()))
-        view.named_routes = tuple(
-            route
-            for route in self.get_routes()
-            if (route.app_name, route.name) in route_keys
-        )
-
-
-class ApplicationWebSocketRouteService:
-    def __init__(self, host: "ExtensionHost") -> None:
-        self._host = host
-        self._routes: dict[str, ApplicationWebSocketRoute] = {}
-        self._route_names_by_extension: dict[str, tuple[str, ...]] = {}
-
-    def add_route(
-        self,
-        extension_id: str,
-        path: str,
-        name: str,
-        consumer: Any,
-    ) -> ApplicationWebSocketRoute | None:
-        normalized_extension_id = str(extension_id or "").strip()
-        normalized_path = str(path or "").strip()
-        normalized_name = str(name or "").strip()
-        if not normalized_extension_id or not normalized_path or not normalized_name or consumer is None:
-            return None
-
-        route = ApplicationWebSocketRoute(
-            path=normalized_path,
-            name=normalized_name,
-            consumer=consumer,
-            module_id=normalized_extension_id,
-        )
-        self._routes[normalized_name] = route
-        route_names = [
-            item
-            for item in self._route_names_by_extension.get(normalized_extension_id, ())
-            if item != normalized_name
-        ]
-        route_names.append(normalized_name)
-        self._route_names_by_extension[normalized_extension_id] = tuple(route_names)
-        self._sync_route_view(normalized_extension_id)
-        return route
-
-    def remove_routes(self, extension_id: str) -> None:
-        normalized_extension_id = str(extension_id or "").strip()
-        if not normalized_extension_id:
-            return
-        for name in self._route_names_by_extension.pop(normalized_extension_id, ()):
-            self._routes.pop(name, None)
-        self._sync_route_view(normalized_extension_id)
-
-    def get_routes(self, *, extension_id: str | None = None) -> list[ApplicationWebSocketRoute]:
-        if extension_id is not None:
-            route_names = self._route_names_by_extension.get(str(extension_id or "").strip(), ())
-            return [
-                self._routes[name]
-                for name in route_names
-                if name in self._routes
-            ]
-        return [
-            self._routes[name]
-            for name in sorted(self._routes.keys())
-        ]
-
-    def _sync_route_view(self, extension_id: str) -> None:
-        view = self._host._get_or_create_runtime_view(extension_id)
-        view.websocket_routes = tuple(self.get_routes(extension_id=extension_id))
-
-
-class ApplicationFrontendService:
-    def __init__(self, host: "ExtensionHost") -> None:
-        self._host = host
-        self._extensions: dict[str, ApplicationFrontendExtension] = {}
-
-    def register_entries(
-        self,
-        extension_id: str,
-        *,
-        admin_entry: str = "",
-        forum_entry: str = "",
-        common_entry: str = "",
-        css=(),
-        js_directories=(),
-        preloads=(),
-        content_callbacks=(),
-        document_attributes=(),
-        head_tags=(),
-        theme_variables=(),
-        title_driver=None,
-        routes=(),
-    ) -> ApplicationFrontendExtension:
-        frontend = self._get_or_create_extension(extension_id)
-        if admin_entry:
-            frontend.admin_entry = str(admin_entry).strip()
-        if forum_entry:
-            frontend.forum_entry = str(forum_entry).strip()
-        if common_entry:
-            frontend.common_entry = str(common_entry).strip()
-        frontend.css = self._merge_pages(frontend.css, css)
-        frontend.js_directories = self._merge_pages(frontend.js_directories, js_directories)
-        frontend.preloads = tuple([*frontend.preloads, *(preloads or ())])
-        frontend.content_callbacks = tuple([*frontend.content_callbacks, *(content_callbacks or ())])
-        frontend.document_attributes = tuple([*frontend.document_attributes, *(document_attributes or ())])
-        frontend.head_tags = tuple([*frontend.head_tags, *(head_tags or ())])
-        frontend.theme_variables = tuple([*frontend.theme_variables, *(theme_variables or ())])
-        if title_driver is not None:
-            frontend.title_driver = title_driver
-        frontend.routes = self._merge_routes(frontend.routes, routes)
-        view = self._host._get_or_create_runtime_view(frontend.extension_id)
-        view.frontend_admin_entry = frontend.admin_entry
-        view.frontend_forum_entry = frontend.forum_entry
-        view.frontend_common_entry = frontend.common_entry
-        view.frontend_css = frontend.css
-        view.frontend_js_directories = frontend.js_directories
-        view.frontend_preloads = frontend.preloads
-        view.frontend_content_callbacks = frontend.content_callbacks
-        view.frontend_document_attributes = frontend.document_attributes
-        view.frontend_head_tags = frontend.head_tags
-        view.frontend_theme_variables = frontend.theme_variables
-        view.frontend_title_driver = frontend.title_driver
-        view.frontend_routes = frontend.routes
-        return frontend
-
-    def register_pages(
-        self,
-        extension_id: str,
-        *,
-        settings_pages=(),
-        permissions_pages=(),
-        operations_pages=(),
-    ) -> ApplicationFrontendExtension:
-        frontend = self._get_or_create_extension(extension_id)
-        frontend.settings_pages = self._merge_pages(frontend.settings_pages, settings_pages)
-        frontend.permissions_pages = self._merge_pages(frontend.permissions_pages, permissions_pages)
-        frontend.operations_pages = self._merge_pages(frontend.operations_pages, operations_pages)
-        view = self._host._get_or_create_runtime_view(frontend.extension_id)
-        view.settings_pages = frontend.settings_pages
-        view.permissions_pages = frontend.permissions_pages
-        view.operations_pages = frontend.operations_pages
-        return frontend
-
-    def get_extension(self, extension_id: str) -> ApplicationFrontendExtension | None:
-        normalized = str(extension_id or "").strip()
-        if not normalized:
-            return None
-        return self._extensions.get(normalized)
-
-    def get_extensions(self) -> list[ApplicationFrontendExtension]:
-        return list(self._extensions.values())
-
-    def set_extension(
-        self,
-        extension_id: str,
-        *,
-        admin_entry: str | None = None,
-        forum_entry: str | None = None,
-        common_entry: str | None = None,
-        css=None,
-        js_directories=None,
-        preloads=None,
-        content_callbacks=None,
-        document_attributes=None,
-        head_tags=None,
-        theme_variables=None,
-        title_driver=UNSET,
-        routes=None,
-        settings_pages=None,
-        permissions_pages=None,
-        operations_pages=None,
-    ) -> ApplicationFrontendExtension:
-        frontend = self._get_or_create_extension(extension_id)
-        if admin_entry is not None:
-            frontend.admin_entry = str(admin_entry or "").strip()
-        if forum_entry is not None:
-            frontend.forum_entry = str(forum_entry or "").strip()
-        if common_entry is not None:
-            frontend.common_entry = str(common_entry or "").strip()
-        if css is not None:
-            frontend.css = tuple(css or ())
-        if js_directories is not None:
-            frontend.js_directories = tuple(js_directories or ())
-        if preloads is not None:
-            frontend.preloads = tuple(preloads or ())
-        if content_callbacks is not None:
-            frontend.content_callbacks = tuple(content_callbacks or ())
-        if document_attributes is not None:
-            frontend.document_attributes = tuple(document_attributes or ())
-        if head_tags is not None:
-            frontend.head_tags = tuple(head_tags or ())
-        if theme_variables is not None:
-            frontend.theme_variables = tuple(theme_variables or ())
-        if title_driver is not UNSET:
-            frontend.title_driver = title_driver
-        if routes is not None:
-            frontend.routes = tuple(routes or ())
-        if settings_pages is not None:
-            frontend.settings_pages = tuple(settings_pages or ())
-        if permissions_pages is not None:
-            frontend.permissions_pages = tuple(permissions_pages or ())
-        if operations_pages is not None:
-            frontend.operations_pages = tuple(operations_pages or ())
-
-        view = self._host._get_or_create_runtime_view(frontend.extension_id)
-        view.frontend_admin_entry = frontend.admin_entry
-        view.frontend_forum_entry = frontend.forum_entry
-        view.frontend_common_entry = frontend.common_entry
-        view.frontend_css = frontend.css
-        view.frontend_js_directories = frontend.js_directories
-        view.frontend_preloads = frontend.preloads
-        view.frontend_content_callbacks = frontend.content_callbacks
-        view.frontend_document_attributes = frontend.document_attributes
-        view.frontend_head_tags = frontend.head_tags
-        view.frontend_theme_variables = frontend.theme_variables
-        view.frontend_title_driver = frontend.title_driver
-        view.frontend_routes = frontend.routes
-        view.settings_pages = frontend.settings_pages
-        view.permissions_pages = frontend.permissions_pages
-        view.operations_pages = frontend.operations_pages
-        return frontend
-
-    def _get_or_create_extension(self, extension_id: str) -> ApplicationFrontendExtension:
-        normalized = str(extension_id or "").strip()
-        if normalized not in self._extensions:
-            self._extensions[normalized] = ApplicationFrontendExtension(extension_id=normalized)
-        return self._extensions[normalized]
-
-    def _merge_pages(self, current: tuple[str, ...], additions) -> tuple[str, ...]:
-        merged = list(current)
-        for value in additions or ():
-            normalized = str(value or "").strip()
-            if normalized and normalized not in merged:
-                merged.append(normalized)
-        return tuple(merged)
-
-    def _merge_routes(
-        self,
-        current: tuple[ExtensionFrontendRouteDefinition, ...],
-        additions,
-    ) -> tuple[ExtensionFrontendRouteDefinition, ...]:
-        merged = list(current)
-        seen = {(item.frontend, item.name, item.path) for item in merged}
-        for route in additions or ():
-            if route is None:
-                continue
-            key = (route.frontend, route.name, route.path)
-            if key in seen:
-                continue
-            merged.append(route)
-            seen.add(key)
-        return tuple(sorted(merged, key=lambda item: (item.frontend, item.order, item.name)))
-
-
-class ApplicationServiceProviderRegistry:
-    def __init__(self, host: "ExtensionHost") -> None:
-        self._host = host
-        self._providers_by_extension: dict[str, tuple[ApplicationServiceProvider, ...]] = {}
-        self._registered_provider_keys: set[str] = set()
-        self._booted_provider_keys: set[str] = set()
-
-    def register(
-        self,
-        extension_id: str,
-        provider: ApplicationServiceProvider,
-    ) -> str:
-        normalized_extension_id = str(extension_id or "").strip()
-        normalized_key = str(getattr(provider, "key", "") or "").strip()
-        if not normalized_extension_id or not normalized_key:
-            return ""
-
-        providers = list(self._providers_by_extension.get(normalized_extension_id, ()))
-        if any(item.key == normalized_key for item in providers):
-            return normalized_key
-
-        providers.append(provider)
-        self._providers_by_extension[normalized_extension_id] = tuple(providers)
-        if normalized_key not in self._registered_provider_keys:
-            provider.register(self._host)
-            self._registered_provider_keys.add(normalized_key)
-        self._host._get_or_create_runtime_view(normalized_extension_id).service_providers = tuple(
-            self.get_provider_keys(extension_id=normalized_extension_id)
-        )
-        return normalized_key
-
-    def register_provider(
-        self,
-        extension_id: str,
-        key: str,
-        provider: Any,
-        *,
-        singleton: bool = True,
-    ) -> str:
-        return self.register(
-            extension_id,
-            ApplicationServiceProvider(
-                key=key,
-                target=provider,
-                singleton=singleton,
-            ),
-        )
-
-    def boot(self) -> None:
-        for provider in self.get_providers():
-            if provider.key in self._booted_provider_keys:
-                continue
-            provider.boot(self._host)
-            self._booted_provider_keys.add(provider.key)
-
-    def get_providers(self, *, extension_id: str | None = None) -> list[ApplicationServiceProvider]:
-        if extension_id is not None:
-            return list(self._providers_by_extension.get(str(extension_id or "").strip(), ()))
-
-        providers: list[ApplicationServiceProvider] = []
-        for items in self._providers_by_extension.values():
-            providers.extend(items)
-        return providers
-
-    def get_provider_keys(self, *, extension_id: str | None = None) -> list[str]:
-        return [provider.key for provider in self.get_providers(extension_id=extension_id)]
-
 
 class ApplicationLocaleService:
     def __init__(self, host: "ExtensionHost") -> None:
@@ -1967,64 +1134,19 @@ class ApplicationEventService:
         normalized_extension_id = str(extension_id or "").strip()
         if not normalized_extension_id:
             return
-        event_type = self._resolve_event_type(getattr(definition, "event_type", None))
+        event_type = resolve_event_type(getattr(definition, "event_type", None))
         if event_type is None:
             raise RuntimeError(f"无法解析扩展事件类型: {getattr(definition, 'event_type', None)}")
         definition = replace(definition, event_type=event_type)
 
         view = self._host._get_or_create_runtime_view(normalized_extension_id)
         view.event_listeners = tuple([*view.event_listeners, definition])
-        self._host.forum.register_event_listener(self._build_forum_event_listener_definition(normalized_extension_id, definition))
+        self._host.forum.register_event_listener(build_forum_event_listener_definition(normalized_extension_id, definition))
         self._event_bus.register(
             event_type,
             definition.handler,
-            listener_key=self._build_event_bus_listener_key(normalized_extension_id, definition),
+            listener_key=build_event_bus_listener_key(normalized_extension_id, definition),
         )
-
-    @staticmethod
-    def _resolve_event_type(event_type: Any):
-        if isinstance(event_type, str):
-            try:
-                resolved = import_string(event_type)
-            except Exception:
-                return None
-            return resolved if isinstance(resolved, type) else None
-        return event_type if isinstance(event_type, type) else None
-
-    @staticmethod
-    def _build_forum_event_listener_definition(extension_id: str, definition) -> EventListenerDefinition:
-        event_type = getattr(definition, "event_type", None)
-        handler = getattr(definition, "handler", None)
-        event_name = str(getattr(event_type, "__name__", "") or event_type or "").strip()
-        handler_name = str(getattr(handler, "__name__", "") or handler or "").strip()
-        return EventListenerDefinition(
-            event=event_name,
-            listener=handler_name,
-            module_id=extension_id,
-            description=str(getattr(definition, "description", "") or "").strip(),
-        )
-
-    @staticmethod
-    def _build_event_bus_listener_key(extension_id: str, definition) -> tuple[str, str, str]:
-        event_type = getattr(definition, "event_type", None)
-        handler = getattr(definition, "handler", None)
-        event_key = ":".join(
-            item
-            for item in (
-                str(getattr(event_type, "__module__", "") or "").strip(),
-                str(getattr(event_type, "__qualname__", "") or "").strip(),
-            )
-            if item
-        ) or str(event_type)
-        handler_key = ":".join(
-            item
-            for item in (
-                str(getattr(handler, "__module__", "") or "").strip(),
-                str(getattr(handler, "__qualname__", "") or "").strip(),
-            )
-            if item
-        ) or str(handler)
-        return (extension_id, event_key, handler_key)
 
     def get_listeners(self, *, extension_id: str | None = None) -> list[ExtensionEventListenerDefinition]:
         if extension_id is not None:
@@ -2108,8 +1230,8 @@ class ApplicationRealtimeService:
         if not normalized_extension_id:
             return
 
-        event_type = self._resolve_event_type(definition.event_type)
-        event_name_key = self._event_value_key(definition.event_name)
+        event_type = resolve_event_type(definition.event_type)
+        event_name_key = event_value_key(definition.event_name)
         if event_type is None or not event_name_key:
             return
 
@@ -2119,8 +1241,8 @@ class ApplicationRealtimeService:
                 item
                 for item in view.realtime_discussion_broadcasts
                 if not (
-                    self._resolve_event_type(item.event_type) == event_type
-                    and self._event_value_key(item.event_name) == event_name_key
+                    resolve_event_type(item.event_type) == event_type
+                    and event_value_key(item.event_name) == event_name_key
                 )
             ),
             replace(definition, event_type=event_type),
@@ -2133,7 +1255,7 @@ class ApplicationRealtimeService:
             listener_key=(
                 "realtime.discussion",
                 normalized_extension_id,
-                self._event_type_key(event_type),
+                event_type_key(event_type),
                 event_name_key,
             ),
         )
@@ -2197,60 +1319,13 @@ class ApplicationRealtimeService:
             definitions.extend(view.realtime_discussion_broadcasts)
         return definitions
 
-    @staticmethod
-    def _resolve_event_type(event_type: Any):
-        if isinstance(event_type, str):
-            try:
-                resolved = import_string(event_type)
-            except Exception:
-                return None
-            return resolved if isinstance(resolved, type) else None
-        return event_type if isinstance(event_type, type) else None
-
-    @staticmethod
-    def _event_type_key(event_type: Any) -> str:
-        return ":".join(
-            item
-            for item in (
-                str(getattr(event_type, "__module__", "") or "").strip(),
-                str(getattr(event_type, "__qualname__", "") or "").strip(),
-            )
-            if item
-        ) or str(event_type)
-
-    @staticmethod
-    def _event_value_key(value: Any) -> str:
-        if callable(value):
-            return ":".join(
-                item
-                for item in (
-                    str(getattr(value, "__module__", "") or "").strip(),
-                    str(getattr(value, "__qualname__", "") or "").strip(),
-                )
-                if item
-            ) or str(value)
-        return str(value or "").strip()
-
-    @staticmethod
-    def _resolve_event_value(source: Any, event: Any, *, default: Any = None) -> Any:
-        if source is None:
-            return default
-        if callable(source):
-            try:
-                return source(event)
-            except TypeError:
-                return source()
-        if isinstance(source, str):
-            return getattr(event, source, default)
-        return source
-
     def _build_discussion_broadcast_handler(self, definition: ExtensionRealtimeDiscussionBroadcastDefinition):
         def handle(event) -> None:
             condition = getattr(definition, "condition", None)
-            if condition is not None and not bool(self._resolve_event_value(condition, event, default=True)):
+            if condition is not None and not bool(resolve_event_value(condition, event, default=True)):
                 return
 
-            discussion_id = self._resolve_event_value(definition.discussion_id, event)
+            discussion_id = resolve_event_value(definition.discussion_id, event)
             try:
                 normalized_discussion_id = int(discussion_id)
             except (TypeError, ValueError):
@@ -2258,12 +1333,12 @@ class ApplicationRealtimeService:
             if normalized_discussion_id <= 0:
                 return
 
-            event_name = self._resolve_event_name(definition.event_name, event)
+            event_name = resolve_event_name(definition.event_name, event)
             normalized_event_name = str(event_name or "").strip()
             if not normalized_event_name:
                 return
 
-            post_id = self._resolve_event_value(definition.post_id, event)
+            post_id = resolve_event_value(definition.post_id, event)
             if post_id is None and definition.include_post:
                 post_id = getattr(event, "post_id", None)
             try:
@@ -2271,7 +1346,7 @@ class ApplicationRealtimeService:
             except (TypeError, ValueError):
                 normalized_post_id = None
 
-            extension_context = self._resolve_event_value(definition.extension_context, event, default=None)
+            extension_context = resolve_event_value(definition.extension_context, event, default=None)
             broadcaster = self._host.make("realtime.discussion_broadcaster", None)
             if not callable(broadcaster):
                 raise RuntimeError("扩展运行时服务未注册: realtime.discussion_broadcaster")
@@ -2287,15 +1362,6 @@ class ApplicationRealtimeService:
             )
 
         return handle
-
-    @staticmethod
-    def _resolve_event_name(source: Any, event: Any) -> Any:
-        if callable(source):
-            try:
-                return source(event)
-            except TypeError:
-                return source()
-        return source
 
 
 class ApplicationForumPermissionService:

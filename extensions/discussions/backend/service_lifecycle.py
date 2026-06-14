@@ -4,7 +4,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils import timezone
 
-from apps.core.domain_events import dispatch_forum_event_after_commit
+from apps.core.extensions.platform import dispatch_forum_event_after_commit
 from extensions.discussions.backend.events import (
     DiscussionApprovedEvent,
     DiscussionCreatedEvent,
@@ -15,14 +15,14 @@ from extensions.discussions.backend.events import (
     DiscussionResubmittedEvent,
     DiscussionStickyChangedEvent,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_discussion_lifecycle_service,
     get_runtime_post_lifecycle_service,
     get_runtime_resource_registry,
     refresh_runtime_model_private,
 )
 from extensions.discussions.backend.models import Discussion, DiscussionUser
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     approve_runtime_first_post,
     create_runtime_first_post,
     delete_runtime_discussion_posts,
@@ -32,7 +32,7 @@ from apps.core.extensions.runtime_access import (
     resubmit_runtime_first_post,
     update_runtime_first_post_content,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     apply_runtime_user_comment_count_deltas,
     ensure_runtime_forum_permission,
     ensure_runtime_user_email_confirmed,
@@ -702,5 +702,3 @@ def set_sticky_state(discussion: Discussion, actor, is_sticky: bool) -> Discussi
             )
         )
     return discussion
-
-

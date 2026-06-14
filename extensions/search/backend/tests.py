@@ -14,18 +14,18 @@ from apps.core.models import AuditLog
 from apps.core.search_index_service import get_search_index_definitions
 from apps.core.services import PaginationService
 from extensions.testing import ExtensionRuntimeTestMixin
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_discussion,
     get_runtime_discussion_model,
     get_runtime_discussion_state_model,
     list_runtime_discussions,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_post,
     get_runtime_post_model,
 )
 from extensions.search.backend.services import SearchService
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_group_model,
     get_runtime_user_model,
 )
@@ -271,7 +271,7 @@ class ChineseSearchTests(TestCase):
         self.assertTrue({"中文", "搜索"}.intersection(tokens))
 
     def test_search_targets_must_be_registered_by_runtime_provider(self):
-        with patch("apps.core.extensions.runtime_access.get_extension_host_service", return_value=None):
+        with patch("apps.core.extensions.runtime.get_extension_host_service", return_value=None):
             with self.assertRaisesRegex(RuntimeError, "搜索目标未注册: search.target.discussion"):
                 SearchService.search_discussions("中文搜索")
 

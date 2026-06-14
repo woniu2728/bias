@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     apply_runtime_model_visibility,
     evaluate_runtime_model_policy,
     evaluate_runtime_query_model_policy,

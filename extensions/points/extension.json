@@ -18,7 +18,6 @@
   "backend_entry": "extensions.points.backend.ext",
   "django_app_config": "extensions.points.backend.apps.PointsExtensionConfig",
   "django_app_label": "points",
-  "frontend_forum_entry": "extensions/points/frontend/forum/index.js",
   "security": {
     "support_email": "",
     "capabilities_notice": "该扩展会记录用户积分收入和消费账本，用于激励发帖、回复和扩展功能消耗。"
@@ -28,4 +27,3 @@
     "auto_enable": true
   }
 }
-

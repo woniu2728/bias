@@ -2,20 +2,20 @@ from __future__ import annotations
 
 from django.db.models import Q, Subquery
 
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     apply_runtime_model_visibility,
     can_view_runtime_model_private,
     has_runtime_model_visibility,
 )
-from apps.core.visibility import apply_model_visibility_scope, apply_related_model_visibility_subquery
+from apps.core.extensions.platform import apply_model_visibility_scope, apply_related_model_visibility_subquery
 from extensions.discussions.backend.models import Discussion
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_post_approval_approved,
     get_runtime_post_approval_pending,
     get_runtime_post_approval_rejected,
     get_runtime_post_model,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     has_runtime_forum_permission,
 )
 
@@ -254,5 +254,3 @@ def _can_view_forum(user, context: dict | None = None) -> bool:
     if not user or not getattr(user, "is_authenticated", False):
         return True
     return _has_forum_permission(user, "viewForum")
-
-

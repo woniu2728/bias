@@ -6,8 +6,8 @@ from typing import Callable
 
 from django.utils import timezone
 
-from apps.core.extensions.runtime_access import create_runtime_post_event
-from apps.core.extensions.runtime_access import get_runtime_user_by_id
+from apps.core.extensions.runtime import create_runtime_post_event
+from apps.core.extensions.runtime import get_runtime_user_by_id
 from extensions.discussions.backend.models import Discussion
 
 

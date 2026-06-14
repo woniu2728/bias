@@ -27,6 +27,24 @@ from apps.core.extension_django_apps import normalize_extension_django_app_label
 from apps.core.extensions.product import get_extension_protected_reason, is_extension_protected, is_product_visible_extension
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
 from apps.core.extensions.frontend_runtime_service import build_frontend_document_payload
+from apps.core.extensions.admin_assets import (
+    serialize_extension_frontend_asset_state,
+    serialize_extension_frontend_asset_state_for_extension,
+)
+from apps.core.extensions.admin_actions import (
+    build_default_extension_admin_actions,
+    serialize_extension_admin_actions,
+)
+from apps.core.extensions.admin_manifest import (
+    build_extension_author_names as _build_extension_author_names,
+    build_extension_links as _build_extension_links,
+    build_extension_readme as _build_extension_readme,
+    manifest_attr as _manifest_attr,
+    manifest_nested_attr as _manifest_nested_attr,
+    manifest_nested_value as _manifest_nested_value,
+    manifest_sequence as _manifest_sequence,
+    manifest_value as _manifest_value,
+)
 from apps.core.extensions.recovery import (
     advance_extension_bisect,
     get_extension_bisect_state,
@@ -38,9 +56,8 @@ from apps.core.extensions.recovery import (
 )
 from apps.core.audit import log_admin_action
 from apps.core.jwt_auth import AccessTokenAuth
-from apps.core.markdown_service import MarkdownService
 from apps.core.forum_registry import get_core_module_ids, get_forum_registry
-from apps.core.extensions.runtime_access import get_runtime_resource_registry
+from apps.core.extensions.runtime import get_runtime_resource_registry
 
 
 router = Router()
@@ -676,94 +693,6 @@ def _serialize_extension_recovery_status(extension):
         "bisect_current": extension_id in set(bisect.get("current") or []),
         "bisect_candidate": extension_id in set(bisect.get("ids") or []),
         "bisect_culprit": extension_id == str(bisect.get("culprit") or "").strip(),
-    }
-
-
-def _build_extension_links(extension) -> dict:
-    links: dict[str, object] = {}
-    documentation_url = _manifest_attr(extension, "documentation_url")
-    homepage = _manifest_attr(extension, "homepage")
-    support_email = _manifest_nested_attr(extension, "security", "support_email")
-    if documentation_url:
-        links["documentation"] = documentation_url
-    if homepage:
-        links["website"] = homepage
-    if support_email:
-        links["support"] = f"mailto:{support_email}"
-
-    extra_links = dict((_manifest_value(extension, "extra", {}) or {}).get("links") or {})
-    for key, value in extra_links.items():
-        normalized_key = str(key or "").strip()
-        if normalized_key and value:
-            links[normalized_key] = value
-
-    links["authors"] = _build_extension_author_links(extension)
-    return links
-
-
-def _build_extension_author_names(extension) -> list[str]:
-    return [
-        str(getattr(author, "name", "") or "").strip()
-        for author in _manifest_sequence(extension, "authors")
-        if str(getattr(author, "name", "") or "").strip()
-    ]
-
-
-def _build_extension_author_links(extension) -> list[dict[str, str]]:
-    author_links = []
-    for author in _manifest_sequence(extension, "authors"):
-        name = str(getattr(author, "name", "") or "").strip()
-        if not name:
-            continue
-        homepage = str(getattr(author, "homepage", "") or "").strip()
-        email = str(getattr(author, "email", "") or "").strip()
-        link = homepage or (f"mailto:{email}" if email else "")
-        author_links.append({"name": name, "link": link})
-    return author_links
-
-
-def _build_extension_readme(extension) -> dict:
-    if extension.source != "filesystem":
-        return {
-            "available": False,
-            "path": "",
-            "html": "",
-            "source": "",
-        }
-
-    manifest_path = _manifest_attr(extension, "path")
-    root_path = Path(manifest_path) if manifest_path else None
-    if root_path is None:
-        return {
-            "available": False,
-            "path": "",
-            "html": "",
-            "source": "",
-        }
-
-    for candidate in (
-        root_path / "README.md",
-        root_path / "README",
-        root_path / "docs" / "README.md",
-    ):
-        if not candidate.exists() or not candidate.is_file():
-            continue
-        try:
-            source = candidate.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            source = candidate.read_text(encoding="utf-8", errors="replace")
-        return {
-            "available": bool(source.strip()),
-            "path": str(candidate),
-            "html": MarkdownService.render(source, sanitize=True),
-            "source": source,
-        }
-
-    return {
-        "available": False,
-        "path": "",
-        "html": "",
-        "source": "",
     }
 
 
@@ -1479,37 +1408,6 @@ def _resolve_display_model(model):
     return resolve_model_reference(model) or model
 
 
-def _manifest_attr(extension, name: str, default: str = "") -> str:
-    return str(_manifest_value(extension, name, default) or default).strip()
-
-
-def _manifest_value(extension, name: str, default=None):
-    manifest = getattr(extension, "manifest", None)
-    if isinstance(manifest, dict):
-        return manifest.get(name, default)
-    return getattr(manifest, name, default)
-
-
-def _manifest_nested_value(extension, group: str, name: str, default=None):
-    parent = _manifest_value(extension, group, None)
-    if isinstance(parent, dict):
-        return parent.get(name, default)
-    return getattr(parent, name, default)
-
-
-def _manifest_nested_attr(extension, group: str, name: str, default: str = "") -> str:
-    return str(_manifest_nested_value(extension, group, name, default) or default).strip()
-
-
-def _manifest_sequence(extension, name: str) -> list:
-    value = _manifest_value(extension, name, ()) or ()
-    if isinstance(value, list):
-        return value
-    if isinstance(value, tuple):
-        return list(value)
-    return [value]
-
-
 def _model_name(model) -> str:
     resolved_model = _resolve_display_model(model)
     return str(getattr(resolved_model, "__name__", "") or str(resolved_model))
@@ -1792,100 +1690,25 @@ def _build_extension_capability_summary(
 
 
 def _serialize_extension_admin_actions(extension, *, runtime_record=None):
-    declared_actions = tuple(getattr(runtime_record, "admin_actions", ()) or ()) or extension.admin_actions or tuple(_build_default_extension_admin_actions(extension, runtime_record=runtime_record))
-    actions = []
-    for action in sorted(declared_actions, key=lambda item: (item.order, item.key)):
-        if action.requires_enabled and not extension.runtime.enabled:
-            continue
-        actions.append({
-            "key": action.key,
-            "label": action.label,
-            "kind": action.kind,
-            "target": action.target,
-            "icon": action.icon,
-            "tone": action.tone,
-            "opens_in_new_tab": action.opens_in_new_tab,
-            "requires_enabled": action.requires_enabled,
-            "description": action.description,
-            "order": action.order,
-        })
-    return actions
+    return serialize_extension_admin_actions(
+        extension,
+        runtime_record=runtime_record,
+        resolve_settings_pages=_resolve_extension_settings_pages,
+        resolve_permissions_pages=_resolve_extension_permissions_pages,
+        resolve_operations_pages=_resolve_extension_operations_pages,
+        resolve_documentation_url=lambda item: _manifest_attr(item, "documentation_url"),
+    )
 
 
 def _build_default_extension_admin_actions(extension, *, runtime_record=None):
-    settings_pages = _resolve_extension_settings_pages(extension, runtime_record)
-    permissions_pages = _resolve_extension_permissions_pages(extension, runtime_record)
-    operations_pages = _resolve_extension_operations_pages(extension, runtime_record)
-    generated = [
-        {
-            "key": "details",
-            "label": "查看详情",
-            "kind": "route",
-            "target": f"/admin/extensions/{extension.id}",
-            "icon": "fas fa-arrow-right",
-            "tone": "primary",
-            "opens_in_new_tab": False,
-            "requires_enabled": False,
-            "description": "",
-            "order": 10,
-        },
-    ]
-
-    if settings_pages:
-        generated.append({
-            "key": "settings",
-            "label": "设置",
-            "kind": "route",
-            "target": next(iter(settings_pages), ""),
-            "icon": "fas fa-sliders-h",
-            "tone": "default",
-            "opens_in_new_tab": False,
-            "requires_enabled": True,
-            "description": "",
-            "order": 20,
-        })
-    if permissions_pages:
-        generated.append({
-            "key": "permissions",
-            "label": "权限",
-            "kind": "route",
-            "target": next(iter(permissions_pages), ""),
-            "icon": "fas fa-user-shield",
-            "tone": "default",
-            "opens_in_new_tab": False,
-            "requires_enabled": True,
-            "description": "",
-            "order": 30,
-        })
-    if operations_pages:
-        generated.append({
-            "key": "operations",
-            "label": "操作",
-            "kind": "route",
-            "target": next(iter(operations_pages), ""),
-            "icon": "fas fa-screwdriver-wrench",
-            "tone": "default",
-            "opens_in_new_tab": False,
-            "requires_enabled": True,
-            "description": "",
-            "order": 40,
-        })
-    documentation_url = _manifest_attr(extension, "documentation_url")
-    if documentation_url:
-        generated.append({
-            "key": "documentation",
-            "label": "文档",
-            "kind": "link",
-            "target": documentation_url,
-            "icon": "fas fa-book",
-            "tone": "subtle",
-            "opens_in_new_tab": False,
-            "requires_enabled": False,
-            "description": "",
-            "order": 50,
-        })
-
-    return tuple(type("_GeneratedAdminAction", (), item)() for item in generated if item.get("target"))
+    return build_default_extension_admin_actions(
+        extension,
+        runtime_record=runtime_record,
+        resolve_settings_pages=_resolve_extension_settings_pages,
+        resolve_permissions_pages=_resolve_extension_permissions_pages,
+        resolve_operations_pages=_resolve_extension_operations_pages,
+        resolve_documentation_url=lambda item: _manifest_attr(item, "documentation_url"),
+    )
 
 
 def _resolve_api_stability_label(extension):
@@ -2132,6 +1955,11 @@ def _build_extension_frontend_document(runtime_record=None) -> dict:
     try:
         settings_values = get_extension_settings(runtime_record.extension_id)
     except Exception:
+        logger.warning(
+            "Failed to load extension settings for frontend document: %s",
+            runtime_record.extension_id,
+            exc_info=True,
+        )
         settings_values = {}
     return build_frontend_document_payload(runtime_record, settings_values=settings_values)
 
@@ -2268,7 +2096,7 @@ def _serialize_extension_runtime_rebuild_state():
             "urlconf": "",
             "version": runtime_version,
             "stamp": f"{raw_order}:{runtime_version}",
-            "frontend_assets": _serialize_extension_frontend_asset_state(),
+            "frontend_assets": serialize_extension_frontend_asset_state(),
         }
     try:
         payload = json.loads(setting.value or "{}")
@@ -2281,33 +2109,17 @@ def _serialize_extension_runtime_rebuild_state():
         "urlconf": str(payload.get("urlconf") or ""),
         "version": runtime_version or str(payload.get("version") or ""),
         "stamp": f"{raw_order}:{runtime_version or setting.value or ''}",
-        "frontend_assets": _serialize_extension_frontend_asset_state(),
+        "frontend_assets": serialize_extension_frontend_asset_state(),
     }
-
-
-def _serialize_extension_frontend_asset_state():
-    from apps.core.extensions.frontend_compiler import inspect_extension_frontend_output_manifest
-
-    return inspect_extension_frontend_output_manifest()
 
 
 def _serialize_extension_frontend_asset_state_for_extension(extension):
-    state = _serialize_extension_frontend_asset_state()
-    extensions = dict(state.get("extensions") or {})
-    entry = dict(extensions.get(extension.id) or {})
-    runtime = _serialize_extension_runtime_rebuild_state()
-    has_frontend = bool(
-        _resolve_extension_frontend_admin_entry(extension)
-        or _resolve_extension_frontend_forum_entry(extension)
+    return serialize_extension_frontend_asset_state_for_extension(
+        extension,
+        runtime_rebuild_state=_serialize_extension_runtime_rebuild_state(),
+        resolve_admin_entry=_resolve_extension_frontend_admin_entry,
+        resolve_forum_entry=_resolve_extension_frontend_forum_entry,
     )
-    return {
-        "manifest_exists": bool(state.get("exists")),
-        "has_frontend": has_frontend,
-        "compiled": bool(entry.get("outputs")) if has_frontend else True,
-        "requires_rebuild": bool(runtime.get("required")),
-        "outputs": dict(entry.get("outputs") or {}),
-        "generated_at": str(state.get("generated_at") or ""),
-    }
 
 
 def _serialize_extension_migration_execution(extension):

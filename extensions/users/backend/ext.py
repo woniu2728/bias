@@ -1,4 +1,5 @@
 from apps.core.extensions import (
+    AdminPageDefinition,
     ApiResourceExtender,
     ApiRoutesExtender,
     AdminSurfaceExtender,
@@ -6,13 +7,13 @@ from apps.core.extensions import (
     FrontendExtender,
     LifecycleExtender,
     ModelExtender,
+    PermissionDefinition,
     SearchIndexExtender,
     SettingsExtender,
     ServiceProviderExtender,
     UserExtender,
+    setting_field,
 )
-from apps.core.extensions.backend import _build_setting_field_definition
-from apps.core.forum_registry_types import AdminPageDefinition, PermissionDefinition
 from extensions.users.backend.admin_api import router as admin_users_router
 from extensions.users.backend.api import router as users_router
 from extensions.users.backend.handlers import user_resource_endpoints
@@ -159,7 +160,7 @@ def build_mail_settings_extender():
 
 def build_user_settings_extender():
     return SettingsExtender(fields=(
-        _build_setting_field_definition({
+        setting_field({
             "key": "avatars_dir",
             "label": "头像目录",
             "type": "text",
@@ -168,7 +169,7 @@ def build_user_settings_extender():
             "required": True,
             "order": 5,
         }),
-        _build_setting_field_definition({
+        setting_field({
             "key": "avatar_max_size_mb",
             "label": "头像最大体积（MB）",
             "type": "number",

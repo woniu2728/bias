@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.core.extensions.runtime_access import require_extension_host_service
+from apps.core.extensions.runtime import require_extension_host_service
 
 
 def mention_service_provider() -> dict:

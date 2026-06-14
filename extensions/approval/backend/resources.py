@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from django.db.models import Subquery
 
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_discussion_model,
     get_runtime_post_model,
 )
-from apps.core.resource_registry import ResourceFieldDefinition
+from apps.core.extensions import ResourceFieldDefinition
 
 
 APPROVAL_POST_EVENT_TYPES = (
@@ -93,4 +93,3 @@ def _normalized_lines(content: str | None) -> list[str]:
         for line in (content or "").splitlines()
         if line.strip()
     ]
-

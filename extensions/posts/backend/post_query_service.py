@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from math import ceil
 from typing import Any, List, Optional
 
-from apps.core.visibility import apply_model_visibility_scope, can_view_model_instance
+from apps.core.extensions.platform import apply_model_visibility_scope, can_view_model_instance
 from extensions.posts.backend.models import Post
 
 

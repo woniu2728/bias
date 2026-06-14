@@ -1,5 +1,5 @@
 import api from '../api/index.js'
-import { generatedForumExtensionModules } from '../generated/extensionImportMap.js'
+import { generatedForumExtensionModules } from 'virtual:bias-extension-import-map'
 import { createRuntimeApplication, hasExtensionExtenders } from '../common/application.js'
 import {
   applyExtensionDocumentPayload,

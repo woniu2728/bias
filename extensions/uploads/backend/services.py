@@ -1,10 +1,10 @@
 import os
 import uuid
 
-from apps.core.file_service import FileUploadService
-from apps.core.extension_settings_service import get_extension_settings
-from apps.core.settings_service import get_advanced_settings_defaults, get_setting_group
-from apps.core.storage_service import get_storage_backend
+from apps.core.extensions.platform import FileUploadService
+from apps.core.extensions.platform import get_extension_settings
+from apps.core.extensions.platform import get_advanced_settings_defaults, get_setting_group
+from apps.core.extensions.platform import get_storage_backend
 
 
 ALLOWED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp")

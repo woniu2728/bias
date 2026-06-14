@@ -3,10 +3,10 @@ from __future__ import annotations
 from django.db.models import Subquery
 from django.db.models import Prefetch
 
-from apps.core.extensions.runtime_access import get_runtime_post_model
-from apps.core.visibility import apply_related_model_visibility_subquery
+from apps.core.extensions.runtime import get_runtime_post_model
+from apps.core.extensions.platform import apply_related_model_visibility_subquery
 from extensions.flags.backend.models import PostFlag
-from apps.core.extensions.runtime_access import has_runtime_forum_permission
+from apps.core.extensions.runtime import has_runtime_forum_permission
 
 
 def post_flag_preload_resolver(context: dict):
@@ -82,7 +82,7 @@ def resolve_post_can_flag(post, context: dict) -> bool:
     if post.user_id != user.id:
         return True
 
-    from apps.core.extension_settings_service import get_extension_settings
+    from apps.core.extensions.platform import get_extension_settings
 
     settings = get_extension_settings("flags")
     return bool(settings.get("can_flag_own", False))
@@ -177,4 +177,3 @@ def scope_flag_visibility(queryset, context: dict):
         context={"skip_view_forum_gate": True},
     )
     return queryset.filter(post_id__in=Subquery(visible_post_ids))
-

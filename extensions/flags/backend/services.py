@@ -4,17 +4,17 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils import timezone
 
-from apps.core.domain_events import dispatch_forum_event_after_commit
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import dispatch_forum_event_after_commit
+from apps.core.extensions.runtime import (
     apply_runtime_model_visibility,
 )
 from extensions.flags.backend.events import PostFlagCreatedEvent, PostFlagsDeletedEvent, PostFlagsResolvedEvent
 from extensions.flags.backend.models import PostFlag
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     can_runtime_view_post,
     get_runtime_post_by_id,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     ensure_runtime_user_not_suspended,
     has_runtime_forum_permission,
 )
@@ -168,9 +168,7 @@ def delete_post_flags(post_id: int, user: Any) -> int:
 
 
 def _can_flag_own_post() -> bool:
-    from apps.core.extension_settings_service import get_extension_settings
+    from apps.core.extensions.platform import get_extension_settings
 
     settings = get_extension_settings("flags")
     return bool(settings.get("can_flag_own", False))
-
-

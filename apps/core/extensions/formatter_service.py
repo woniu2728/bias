@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from apps.core.extensions.bootstrap import get_extension_host
-from apps.core.extensions.runtime_access import get_runtime_formatter_service
+from apps.core.extensions.runtime import get_runtime_formatter_service
 
 
 _extension_formatter_pipeline_cache: dict[str, list] = {}

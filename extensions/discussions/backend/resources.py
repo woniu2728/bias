@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from apps.core.resource_registry import ResourceDefinition, ResourceFieldDefinition
+from apps.core.extensions import ResourceDefinition, ResourceFieldDefinition
 
 
 def discussion_resource_definitions():

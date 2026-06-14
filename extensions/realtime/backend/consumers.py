@@ -6,10 +6,10 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.contrib.auth.models import AnonymousUser
 
-from apps.core.forum_permissions import has_forum_permission
-from apps.core.forum_runtime import can_view_realtime_discussion, resolve_realtime_visible_discussion_ids
-from apps.core.online_service import OnlineUserService
-from apps.core.extension_settings_service import get_extension_settings
+from apps.core.extensions.platform import has_forum_permission
+from apps.core.extensions.forum import can_view_realtime_discussion, resolve_realtime_visible_discussion_ids
+from apps.core.extensions.forum import OnlineUserService
+from apps.core.extensions.platform import get_extension_settings
 
 
 class NotificationConsumer(AsyncWebsocketConsumer):
@@ -64,7 +64,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def mark_notification_read(self, notification_id: int):
-        from apps.core.extensions.runtime_access import get_runtime_resource_registry
+        from apps.core.extensions.runtime import get_runtime_resource_registry
 
         registry = get_runtime_resource_registry()
         context = {

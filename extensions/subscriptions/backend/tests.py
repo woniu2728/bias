@@ -1,17 +1,17 @@
 from django.test import TestCase
 from ninja_jwt.tokens import RefreshToken
 
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     create_runtime_discussion,
     get_runtime_discussion_state_model,
 )
-from apps.core.extensions.runtime_access import get_runtime_notification_model
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import get_runtime_notification_model
+from apps.core.extensions.runtime import (
     create_runtime_post,
     delete_runtime_post,
     set_runtime_post_hidden_state,
 )
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.runtime import (
     get_runtime_user_model,
 )
 

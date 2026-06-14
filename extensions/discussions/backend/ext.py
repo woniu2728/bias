@@ -1,24 +1,22 @@
 from apps.core.extensions import (
     AdminSurfaceExtender,
-    EventListenersExtender,
     ApiResourceExtender,
+    DiscussionListFilterDefinition,
+    DiscussionSortDefinition,
+    EventListenersExtender,
+    ExtensionEventListenerDefinition,
     ForumCapabilitiesExtender,
     FrontendExtender,
     LifecycleExtender,
     ModelExtender,
     ModelVisibilityExtender,
+    PermissionDefinition,
+    PostTypeDefinition,
     RealtimeExtender,
     RuntimeModel,
     SearchIndexExtender,
     ServiceProviderExtender,
 )
-from apps.core.forum_registry_types import (
-    DiscussionListFilterDefinition,
-    DiscussionSortDefinition,
-    PermissionDefinition,
-    PostTypeDefinition,
-)
-from apps.core.extensions.types import ExtensionEventListenerDefinition
 from extensions.discussions.backend.events import (
     DiscussionCreatedEvent,
     DiscussionHiddenEvent,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from apps.core.settings_service import get_advanced_settings
+from apps.core.extensions.platform import get_advanced_settings
 
 
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from django.core.exceptions import PermissionDenied
 
-from apps.core.api_errors import api_error
-from apps.core.extensions.runtime_access import (
+from apps.core.extensions.platform import api_error
+from apps.core.extensions.runtime import (
     is_runtime_post_not_found,
     like_runtime_post,
     unlike_runtime_post,
@@ -52,4 +52,3 @@ def _post_object_id(context) -> int:
         return int(context.get("object_id") or 0)
     except (TypeError, ValueError):
         return 0
-
