@@ -134,7 +134,7 @@ def _build_runtime_entry(
     settings_definition = {
         "forum_settings_keys": tuple(runtime_view.forum_settings_keys),
         "forum_serializations": tuple(runtime_view.settings_forum_serializations),
-    } if runtime_view.settings_schema else None
+    } if _has_settings_contract(runtime_view) else None
     settings_values = get_extension_settings(runtime_view.extension_id) if settings_definition else {}
     forum_settings = _build_extension_forum_settings(settings_definition, settings_values)
 
@@ -189,7 +189,16 @@ def _is_product_visible_frontend_extension(
 ) -> bool:
     if not is_product_visible_extension(extension):
         return False
-    return bool(admin_entry or forum_entry or common_entry or frontend_routes or runtime_view.settings_schema)
+    return bool(admin_entry or forum_entry or common_entry or frontend_routes or _has_settings_contract(runtime_view))
+
+
+def _has_settings_contract(runtime_view) -> bool:
+    return bool(
+        getattr(runtime_view, "settings_schema", None)
+        or getattr(runtime_view, "settings_defaults", None)
+        or getattr(runtime_view, "settings_forum_serializations", None)
+        or getattr(runtime_view, "forum_settings_keys", None)
+    )
 
 
 def _serialize_frontend_routes(routes) -> list[dict[str, Any]]:

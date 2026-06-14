@@ -409,11 +409,8 @@ function registerUsersUiCopy(forum) {
 }
 
 const usersUiCopyDefinitions = [
-  uiCopy('turnstile-loading', 90, ['auth-turnstile-status'], ({ turnstileLoading }) => ({
-    text: '真人验证加载中...',
-  }), ({ turnstileLoading }) => Boolean(turnstileLoading)),
-  uiCopy('turnstile-required', 100, ['auth-turnstile-status'], () => ({
-    text: '请完成真人验证后再继续。',
+  uiCopy('auth-challenge-required', 100, ['auth-challenge-status'], () => ({
+    text: '请完成验证后再继续。',
   }), ({ humanVerificationRequired, hasToken }) => Boolean(humanVerificationRequired) && !hasToken),
   uiCopy('profile-settings-section-title', 135, ['profile-settings-section-title'], () => ({ text: '个人设置' })),
   uiCopy('profile-settings-section-description', 136, ['profile-settings-section-description'], () => ({ text: '维护你的显示名称、邮箱、个人简介和通知偏好。' })),
@@ -518,8 +515,6 @@ const usersUiCopyDefinitions = [
   uiCopy('auth-register-password-label', 1319, ['auth-register-password-label'], () => ({ text: '密码' })),
   uiCopy('auth-register-password-confirm-label', 1319, ['auth-register-password-confirm-label'], () => ({ text: '确认密码' })),
   uiCopy('auth-forgot-email-label', 1319, ['auth-forgot-email-label'], () => ({ text: '邮箱' })),
-  uiCopy('auth-turnstile-expired-error', 1319, ['auth-turnstile-expired-error'], () => ({ text: '真人验证已过期，请重新完成验证。' })),
-  uiCopy('auth-turnstile-load-error', 1319, ['auth-turnstile-load-error'], () => ({ text: '真人验证加载失败，请稍后重试。' })),
   uiCopy('auth-login-error', 1319, ['auth-login-error'], () => ({ text: '登录失败，请检查用户名和密码' })),
   uiCopy('auth-register-password-mismatch-error', 1319, ['auth-register-password-mismatch-error'], () => ({ text: '两次输入的密码不一致' })),
   uiCopy('auth-register-error', 1319, ['auth-register-error'], () => ({ text: '注册失败，请稍后重试' })),

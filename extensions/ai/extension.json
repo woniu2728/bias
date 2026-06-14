@@ -3,7 +3,7 @@
   "name": "AI 助手",
   "version": "1.0.0",
   "description": "为论坛提供 AI 角色召唤、提问教练、悬赏裁判和讨论摘要能力。",
-  "icon": "fas fa-sparkles",
+  "icon": "fas fa-wand-magic-sparkles",
   "category": "feature",
   "authors": [
     "Bias"

@@ -68,12 +68,16 @@
 
           <div v-if="loginHumanVerificationRequired" class="Form-group">
             <div class="AuthSessionFieldLabel">{{ humanVerificationLabelText }}</div>
-            <div
-              ref="turnstileContainer"
-              class="AuthSessionTurnstile"
-              :class="{ 'AuthSessionTurnstile--loading': turnstileLoading }"
-            ></div>
-            <p v-if="turnstileStatusMessage" class="AuthSessionTurnstileStatus">{{ turnstileStatusMessage }}</p>
+            <component
+              :is="activeAuthChallengeProvider.component"
+              v-if="activeAuthChallengeProvider?.component"
+              ref="authChallengeComponent"
+              v-bind="activeAuthChallengeProps"
+              @update:token="handleAuthChallengeToken"
+              @update:payload="handleAuthChallengePayload"
+              @error="handleAuthChallengeError"
+            />
+            <p v-if="authChallengeStatusMessage" class="AuthSessionChallengeStatus">{{ authChallengeStatusMessage }}</p>
           </div>
 
           <div v-if="errorMessage" class="AuthSessionAlert AuthSessionAlert--error">{{ errorMessage }}</div>
@@ -162,12 +166,16 @@
 
           <div v-if="registerHumanVerificationRequired" class="Form-group">
             <div class="AuthSessionFieldLabel">{{ humanVerificationLabelText }}</div>
-            <div
-              ref="turnstileContainer"
-              class="AuthSessionTurnstile"
-              :class="{ 'AuthSessionTurnstile--loading': turnstileLoading }"
-            ></div>
-            <p v-if="turnstileStatusMessage" class="AuthSessionTurnstileStatus">{{ turnstileStatusMessage }}</p>
+            <component
+              :is="activeAuthChallengeProvider.component"
+              v-if="activeAuthChallengeProvider?.component"
+              ref="authChallengeComponent"
+              v-bind="activeAuthChallengeProps"
+              @update:token="handleAuthChallengeToken"
+              @update:payload="handleAuthChallengePayload"
+              @error="handleAuthChallengeError"
+            />
+            <p v-if="authChallengeStatusMessage" class="AuthSessionChallengeStatus">{{ authChallengeStatusMessage }}</p>
           </div>
 
           <div v-if="errorMessage" class="AuthSessionAlert AuthSessionAlert--error">{{ errorMessage }}</div>
@@ -250,7 +258,9 @@
 <script setup>
 import {
   sanitizeRedirectPath,
-  useAuthStore } from '@bias/users'
+  useAuthStore,
+  getAuthChallengeProvider,
+} from '@bias/users'
 import {
   api,
   watch,
@@ -265,7 +275,6 @@ import {
   getUiCopy,
   useForumStore
 } from '@bias/forum'
-import { ensureTurnstileScript } from './turnstile.js'
 
 const props = defineProps({
   showing: {
@@ -306,7 +315,7 @@ const modalStore = useModalStore()
 const loginIdentificationInput = ref(null)
 const registerUsernameInput = ref(null)
 const forgotPasswordInput = ref(null)
-const turnstileContainer = ref(null)
+const authChallengeComponent = ref(null)
 
 const activeMode = ref(normalizeMode(props.mode))
 const loading = ref(false)
@@ -314,12 +323,10 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const forgotPasswordSuccess = ref(false)
 const debugResetUrl = ref('')
-const turnstileLoading = ref(false)
-const turnstileError = ref('')
-const turnstileToken = ref('')
+const authChallengeError = ref('')
+const authChallengeToken = ref('')
+const authChallengePayload = ref(null)
 let registerSwitchTimer = null
-let turnstileWidgetId = null
-let turnstileRenderNonce = 0
 
 const loginForm = ref({
   identification: props.initialIdentification || '',
@@ -336,30 +343,41 @@ const registerForm = ref({
 
 const forgotPasswordEmail = ref(props.initialEmail || '')
 
-const turnstileProvider = computed(() => forumStore.settings.auth_human_verification_provider || 'off')
-const turnstileSiteKey = computed(() => forumStore.settings.auth_turnstile_site_key || '')
+const authChallengeContext = computed(() => ({
+  forumStore,
+  settings: forumStore.settings || {},
+  mode: activeMode.value,
+  action: activeMode.value,
+  token: authChallengeToken.value,
+  payload: authChallengePayload.value,
+}))
+const activeAuthChallengeProvider = computed(() => getAuthChallengeProvider(authChallengeContext.value))
+const activeAuthChallengeProps = computed(() => ({
+  ...(activeAuthChallengeProvider.value?.componentProps || {}),
+  mode: activeMode.value,
+  action: activeMode.value,
+  settings: forumStore.settings || {},
+  token: authChallengeToken.value,
+  payload: authChallengePayload.value,
+}))
 const loginHumanVerificationRequired = computed(() => (
-  turnstileProvider.value === 'turnstile'
-  && !!turnstileSiteKey.value
-  && !!forumStore.settings.auth_human_verification_login_enabled
+  activeMode.value === 'login' && Boolean(activeAuthChallengeProvider.value)
 ))
 const registerHumanVerificationRequired = computed(() => (
-  turnstileProvider.value === 'turnstile'
-  && !!turnstileSiteKey.value
-  && !!forumStore.settings.auth_human_verification_register_enabled
+  activeMode.value === 'register' && Boolean(activeAuthChallengeProvider.value)
 ))
 const activeHumanVerificationRequired = computed(() => {
   if (activeMode.value === 'login') return loginHumanVerificationRequired.value
   if (activeMode.value === 'register') return registerHumanVerificationRequired.value
   return false
 })
-const turnstileStatusMessage = computed(() => {
-  if (turnstileError.value) return turnstileError.value
+const authChallengeStatusMessage = computed(() => {
+  if (authChallengeError.value) return authChallengeError.value
   const uiCopy = getUiCopy({
-    surface: 'auth-turnstile-status',
-    turnstileLoading: turnstileLoading.value,
+    surface: 'auth-challenge-status',
     humanVerificationRequired: activeHumanVerificationRequired.value,
-    hasToken: Boolean(turnstileToken.value),
+    hasToken: Boolean(authChallengeToken.value),
+    provider: activeAuthChallengeProvider.value,
   })
   if (uiCopy?.text) return uiCopy.text
   return ''
@@ -496,24 +514,18 @@ watch(
   value => {
     if (value) {
       queueFocus()
-      syncTurnstileWidget()
       return
     }
 
-    resetTurnstileWidget()
+    resetAuthChallenge()
   },
   { immediate: true }
 )
 
 watch(
-  () => [
-    activeMode.value,
-    props.showing,
-    activeHumanVerificationRequired.value,
-    turnstileSiteKey.value
-  ],
+  () => [activeMode.value, props.showing, activeAuthChallengeProvider.value?.key],
   () => {
-    syncTurnstileWidget()
+    resetAuthChallenge()
   }
 )
 
@@ -521,7 +533,7 @@ onBeforeUnmount(() => {
   if (registerSwitchTimer) {
     clearTimeout(registerSwitchTimer)
   }
-  resetTurnstileWidget()
+  resetAuthChallenge()
 })
 
 function normalizeMode(value) {
@@ -536,41 +548,33 @@ function resetMessages() {
   loading.value = false
 }
 
-function resetTurnstileWidget(invalidatePendingRender = true) {
-  if (invalidatePendingRender) {
-    turnstileRenderNonce += 1
-  }
-  turnstileToken.value = ''
-  turnstileError.value = ''
-  turnstileLoading.value = false
+function resetAuthChallenge() {
+  authChallengeToken.value = ''
+  authChallengePayload.value = null
+  authChallengeError.value = ''
+  authChallengeComponent.value?.reset?.()
+}
 
-  if (typeof window === 'undefined' || !window.turnstile || turnstileWidgetId === null) {
-    turnstileWidgetId = null
-    return
-  }
+function refreshAuthChallenge() {
+  authChallengeToken.value = ''
+  authChallengePayload.value = null
+  authChallengeError.value = ''
+  authChallengeComponent.value?.reset?.()
+}
 
-  try {
-    window.turnstile.remove(turnstileWidgetId)
-  } catch (error) {
-    console.warn('清理真人验证组件失败:', error)
-  } finally {
-    turnstileWidgetId = null
+function handleAuthChallengeToken(value) {
+  authChallengeToken.value = value || ''
+  if (value) {
+    authChallengeError.value = ''
   }
 }
 
-function refreshTurnstileWidget() {
-  turnstileToken.value = ''
-  turnstileError.value = ''
+function handleAuthChallengePayload(value) {
+  authChallengePayload.value = value && typeof value === 'object' ? value : null
+}
 
-  if (typeof window === 'undefined' || !window.turnstile || turnstileWidgetId === null) {
-    return
-  }
-
-  try {
-    window.turnstile.reset(turnstileWidgetId)
-  } catch (error) {
-    console.warn('重置真人验证组件失败:', error)
-  }
+function handleAuthChallengeError(value) {
+  authChallengeError.value = String(value?.message || value || '')
 }
 
 function queueFocus() {
@@ -592,7 +596,7 @@ function queueFocus() {
 function switchToLogin(payload = {}) {
   activeMode.value = 'login'
   resetMessages()
-  turnstileError.value = ''
+  resetAuthChallenge()
   if (payload.identification) {
     loginForm.value.identification = payload.identification
   } else if (!loginForm.value.identification) {
@@ -604,7 +608,7 @@ function switchToLogin(payload = {}) {
 function switchToRegister() {
   activeMode.value = 'register'
   resetMessages()
-  turnstileError.value = ''
+  resetAuthChallenge()
 
   const identification = loginForm.value.identification.trim()
   if (identification) {
@@ -624,69 +628,11 @@ function switchToRegister() {
 function switchToForgotPassword() {
   activeMode.value = 'forgot-password'
   resetMessages()
-  resetTurnstileWidget()
+  resetAuthChallenge()
   if (!forgotPasswordEmail.value && loginForm.value.identification.includes('@')) {
     forgotPasswordEmail.value = loginForm.value.identification
   }
   queueFocus()
-}
-
-async function syncTurnstileWidget() {
-  const renderNonce = turnstileRenderNonce + 1
-  turnstileRenderNonce = renderNonce
-  resetTurnstileWidget(false)
-
-  if (!props.showing || !activeHumanVerificationRequired.value) {
-    return
-  }
-
-  await nextTick()
-  if (!turnstileContainer.value) {
-    return
-  }
-
-  turnstileLoading.value = true
-  turnstileError.value = ''
-
-  try {
-    const turnstile = await ensureTurnstileScript()
-    if (
-      renderNonce !== turnstileRenderNonce
-      || !turnstile
-      || !turnstileContainer.value
-      || !props.showing
-      || !activeHumanVerificationRequired.value
-    ) {
-      turnstileLoading.value = false
-      return
-    }
-
-    turnstileWidgetId = turnstile.render(turnstileContainer.value, {
-      sitekey: turnstileSiteKey.value,
-      callback(token) {
-        turnstileToken.value = token || ''
-        turnstileError.value = ''
-      },
-      'expired-callback'() {
-        turnstileToken.value = ''
-        turnstileError.value = getUiCopy({
-          surface: 'auth-turnstile-expired-error',
-        })?.text || '真人验证已过期，请重新完成验证。'
-      },
-      'error-callback'() {
-        turnstileToken.value = ''
-        turnstileError.value = getUiCopy({
-          surface: 'auth-turnstile-load-error',
-        })?.text || '真人验证加载失败，请稍后重试。'
-      }
-    })
-  } catch (error) {
-    turnstileError.value = error.message || getUiCopy({
-      surface: 'auth-turnstile-load-error',
-    })?.text || '真人验证加载失败，请稍后重试。'
-  } finally {
-    turnstileLoading.value = false
-  }
 }
 
 async function handleLogin() {
@@ -697,7 +643,7 @@ async function handleLogin() {
     const result = await authStore.login(
       loginForm.value.identification,
       loginForm.value.password,
-      turnstileToken.value
+      buildAuthChallengeSubmission()
     )
     if (!result.success) {
       errorMessage.value = result.error || getUiCopy({
@@ -705,7 +651,7 @@ async function handleLogin() {
       })?.text || '登录失败，请检查用户名和密码'
       loginForm.value.password = ''
       if (loginHumanVerificationRequired.value) {
-        refreshTurnstileWidget()
+        refreshAuthChallenge()
       }
       return
     }
@@ -722,7 +668,7 @@ async function handleLogin() {
     })?.text || '登录失败，请检查用户名和密码'
     loginForm.value.password = ''
     if (loginHumanVerificationRequired.value) {
-      refreshTurnstileWidget()
+      refreshAuthChallenge()
     }
   } finally {
     loading.value = false
@@ -747,7 +693,7 @@ async function handleRegister() {
       registerForm.value.username,
       registerForm.value.email,
       registerForm.value.password,
-      turnstileToken.value
+      buildAuthChallengeSubmission()
     )
 
     if (!result.success) {
@@ -755,7 +701,7 @@ async function handleRegister() {
         surface: 'auth-register-error',
       })?.text || '注册失败，请稍后重试'
       if (registerHumanVerificationRequired.value) {
-        refreshTurnstileWidget()
+        refreshAuthChallenge()
       }
       return
     }
@@ -795,10 +741,43 @@ async function handleRegister() {
       })?.text || '注册失败，请稍后重试'
     }
     if (registerHumanVerificationRequired.value) {
-      refreshTurnstileWidget()
+      refreshAuthChallenge()
     }
   } finally {
     loading.value = false
+  }
+}
+
+function buildAuthChallengeSubmission() {
+  const provider = activeAuthChallengeProvider.value
+  if (!provider) {
+    return {}
+  }
+  if (typeof provider.buildPayload === 'function') {
+    const result = provider.buildPayload({
+      ...authChallengeContext.value,
+      token: authChallengeToken.value,
+      payload: authChallengePayload.value,
+      component: authChallengeComponent.value,
+    })
+    return normalizeAuthChallengeSubmission(result)
+  }
+  return normalizeAuthChallengeSubmission({
+    token: authChallengeToken.value,
+    payload: authChallengePayload.value,
+  })
+}
+
+function normalizeAuthChallengeSubmission(value) {
+  if (!value || typeof value !== 'object') {
+    return {
+      human_verification_token: authChallengeToken.value || undefined,
+      human_verification_payload: authChallengePayload.value || undefined,
+    }
+  }
+  return {
+    human_verification_token: (value.human_verification_token ?? value.token ?? authChallengeToken.value) || undefined,
+    human_verification_payload: value.human_verification_payload ?? value.payload ?? authChallengePayload.value ?? undefined,
   }
 }
 
@@ -987,19 +966,7 @@ async function handleForgotPassword() {
   word-break: break-all;
 }
 
-.AuthSessionTurnstile {
-  min-height: 68px;
-  padding: 8px;
-  border: 1px solid #d7e0e8;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.AuthSessionTurnstile--loading {
-  opacity: 0.75;
-}
-
-.AuthSessionTurnstileStatus {
+.AuthSessionChallengeStatus {
   margin: 8px 0 0;
   color: #708191;
   font-size: 12px;

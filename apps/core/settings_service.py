@@ -78,35 +78,6 @@ ADVANCED_SETTINGS_DEFAULTS = {
     "extension_safe_mode_extensions": [],
     "debug_mode": settings.DEBUG,
     "log_queries": False,
-    "storage_driver": "local",
-    "storage_local_path": str(getattr(settings, "MEDIA_ROOT", "")),
-    "storage_local_base_url": getattr(settings, "MEDIA_URL", "/media/"),
-    "storage_s3_bucket": "",
-    "storage_s3_region": "",
-    "storage_s3_endpoint": "",
-    "storage_s3_access_key_id": "",
-    "storage_s3_secret_access_key": "",
-    "storage_s3_public_url": "",
-    "storage_s3_object_prefix": "",
-    "storage_s3_path_style": False,
-    "storage_r2_bucket": "",
-    "storage_r2_endpoint": "",
-    "storage_r2_access_key_id": "",
-    "storage_r2_secret_access_key": "",
-    "storage_r2_public_url": "",
-    "storage_r2_object_prefix": "",
-    "storage_oss_bucket": "",
-    "storage_oss_endpoint": "",
-    "storage_oss_access_key_id": "",
-    "storage_oss_access_key_secret": "",
-    "storage_oss_public_url": "",
-    "storage_oss_object_prefix": "",
-    "storage_imagebed_endpoint": "",
-    "storage_imagebed_method": "POST",
-    "storage_imagebed_file_field": "file",
-    "storage_imagebed_headers": "{}",
-    "storage_imagebed_form_data": "{}",
-    "storage_imagebed_url_path": "data.url",
 }
 
 
@@ -323,7 +294,6 @@ def get_advanced_settings() -> dict:
     advanced_settings["queue_driver"] = (
         "redis" if "redis" in getattr(settings, "CELERY_BROKER_URL", "").lower() else "sync"
     )
-    advanced_settings["storage_local_path"] = str(getattr(settings, "MEDIA_ROOT", ""))
     advanced_settings["debug_mode"] = settings.DEBUG
     mode = normalize_maintenance_mode(
         advanced_settings.get("maintenance_mode_key", advanced_settings.get("maintenance_mode"))
@@ -491,6 +461,7 @@ def get_public_forum_settings(user=None) -> dict:
 
     forum_settings["extension_runtime"] = _serialize_extension_runtime_stamp()
     forum_settings["extension_recovery"] = serialize_extension_recovery_state()
+    enabled_extension_entries = get_enabled_extension_runtime_entries(product_visible_only=True)
     forum_settings["enabled_extensions"] = [
         {
             "id": extension["id"],
@@ -509,12 +480,12 @@ def get_public_forum_settings(user=None) -> dict:
             "settings_values": extension["settings_values"],
             "forum_settings": extension["forum_settings"],
         }
-        for extension in get_enabled_extension_runtime_entries(product_visible_only=True)
+        for extension in enabled_extension_entries
         if str(extension["frontend_forum_entry"] or "").strip()
         or str(extension.get("frontend_common_entry", "") or "").strip()
         or any(route.get("frontend") == "forum" for route in extension.get("frontend_routes", []))
     ]
-    forum_settings.update(_serialize_extension_forum_settings(forum_settings["enabled_extensions"]))
+    forum_settings.update(_serialize_extension_forum_settings(enabled_extension_entries))
 
     forum_settings["extension_locales"] = get_enabled_extension_locales()
     forum_settings["extension_document"] = build_enabled_frontend_document_payload()

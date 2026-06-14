@@ -16,6 +16,7 @@
     "points-ledger"
   ],
   "backend_entry": "extensions.points.backend.ext",
+  "frontend_forum_entry": "extensions/points/frontend/forum/index.js",
   "django_app_config": "extensions.points.backend.apps.PointsExtensionConfig",
   "django_app_label": "points",
   "security": {

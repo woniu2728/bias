@@ -6,6 +6,14 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+class RuntimeHumanVerificationError(ValueError):
+    status_code = 400
+
+
+class RuntimeHumanVerificationUnavailableError(RuntimeHumanVerificationError):
+    status_code = 503
+
+
 def get_runtime_system_service(key: str):
     from apps.core.extensions.runtime import get_extension_host_service
 
@@ -138,6 +146,40 @@ def verify_runtime_user_password(user: Any, password: str, *, default_checker: A
         if result is False:
             return False
     return False
+
+
+def verify_runtime_human_verification(request: Any, action: str, token: Any = None, *, context: dict | None = None) -> None:
+    payload = {
+        "request": request,
+        "action": str(action or "").strip(),
+        "token": token,
+        "payload": {},
+    }
+    payload.update(context or {})
+    for identifier, verifier in get_runtime_human_verification_handlers().items():
+        if not callable(verifier):
+            continue
+        try:
+            result = verifier(request, payload["action"], token)
+        except RuntimeHumanVerificationError:
+            raise
+        except TypeError:
+            result = verifier(payload, dict(context or {}))
+        if result is False:
+            raise RuntimeHumanVerificationError("真人验证失败，请重试")
+
+
+def get_runtime_human_verification_handlers() -> dict[str, Any]:
+    handlers: dict[str, Any] = {}
+    for definition in _get_system_definitions("auth", "human_verification"):
+        payload = _resolve_system_payload(definition)
+        if not isinstance(payload, dict):
+            continue
+        identifier = str(payload.get("identifier") or "").strip()
+        verifier = payload.get("verifier")
+        if identifier and verifier is not None:
+            handlers[identifier] = verifier
+    return handlers
 
 
 def get_runtime_password_checkers(*, default_checker: Any = None) -> dict[str, Any]:

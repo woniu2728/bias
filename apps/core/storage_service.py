@@ -10,11 +10,11 @@ from urllib.parse import urlsplit
 import httpx
 from django.conf import settings
 
-from apps.core.settings_service import ADVANCED_SETTINGS_DEFAULTS, get_setting_group
+from apps.core.settings_service import get_advanced_settings_defaults, get_setting_group
 
 
 def get_runtime_storage_settings() -> dict:
-    return get_setting_group("advanced", ADVANCED_SETTINGS_DEFAULTS)
+    return get_setting_group("advanced", get_advanced_settings_defaults())
 
 
 class BaseStorageBackend:

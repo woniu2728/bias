@@ -228,6 +228,7 @@ export class ForumExtender {
   navSection(definition) { return this.register('registerForumNavSection', definition) }
   sidebarSection(definition) { return this.register('registerForumSidebarSection', definition) }
   profilePanel(definition) { return this.register('registerProfilePanel', definition) }
+  authChallengeProvider(definition) { return this.register('registerAuthChallengeProvider', definition) }
   searchSource(definition) { return this.register('registerSearchSource', definition) }
   heroMeta(definition) { return this.register('registerHeroMeta', definition) }
   discussionListContext(definition) { return this.register('registerDiscussionListContext', definition) }

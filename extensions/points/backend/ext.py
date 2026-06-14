@@ -2,6 +2,7 @@ from apps.core.extensions import (
     ApiResourceExtender,
     ApiRoutesExtender,
     EventListenersExtender,
+    FrontendExtender,
     LifecycleExtender,
     ModelExtender,
     ServiceProviderExtender,
@@ -31,6 +32,9 @@ def extend():
         ApiRoutesExtender(
             mounts=(("", points_router),),
             tags=("Points",),
+        ),
+        FrontendExtender(
+            forum_entry="extensions/points/frontend/forum/index.js",
         ),
         EventListenersExtender(
             listeners=event_listener_definitions(),

@@ -3,7 +3,8 @@ Pydantic schemas for User API
 """
 from ninja import Schema
 from datetime import datetime
-from typing import Optional, List, Dict
+from pydantic import Field
+from typing import Any, Optional, List, Dict
 
 
 class UserRegisterSchema(Schema):
@@ -12,6 +13,7 @@ class UserRegisterSchema(Schema):
     email: str
     password: str
     human_verification_token: Optional[str] = None
+    human_verification_payload: Dict[str, Any] = Field(default_factory=dict)
 
 
 class UserLoginSchema(Schema):
@@ -19,6 +21,7 @@ class UserLoginSchema(Schema):
     identification: str  # 用户名或邮箱
     password: str
     human_verification_token: Optional[str] = None
+    human_verification_payload: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TokenSchema(Schema):

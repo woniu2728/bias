@@ -18,8 +18,7 @@ def extend():
         SettingsExtender(fields=setting_definitions())
         .default("attachments_dir", "attachments")
         .default("attachment_max_size_mb", 10),
-        SettingsExtender(generated_page=False)
-        .default("advanced.upload_site_asset_max_size_mb", 2),
+        build_storage_settings_extender(),
         LifecycleExtender(),
     ]
 
@@ -44,4 +43,40 @@ def setting_definitions():
             "required": True,
             "order": 10,
         }),
+    )
+
+
+def build_storage_settings_extender():
+    return (
+        SettingsExtender(generated_page=False)
+        .default("advanced.storage_driver", "local")
+        .default("advanced.storage_local_path", "")
+        .default("advanced.storage_local_base_url", "/media/")
+        .default("advanced.storage_s3_bucket", "")
+        .default("advanced.storage_s3_region", "")
+        .default("advanced.storage_s3_endpoint", "")
+        .default("advanced.storage_s3_access_key_id", "")
+        .default("advanced.storage_s3_secret_access_key", "")
+        .default("advanced.storage_s3_public_url", "")
+        .default("advanced.storage_s3_object_prefix", "")
+        .default("advanced.storage_s3_path_style", False)
+        .default("advanced.storage_r2_bucket", "")
+        .default("advanced.storage_r2_endpoint", "")
+        .default("advanced.storage_r2_access_key_id", "")
+        .default("advanced.storage_r2_secret_access_key", "")
+        .default("advanced.storage_r2_public_url", "")
+        .default("advanced.storage_r2_object_prefix", "")
+        .default("advanced.storage_oss_bucket", "")
+        .default("advanced.storage_oss_endpoint", "")
+        .default("advanced.storage_oss_access_key_id", "")
+        .default("advanced.storage_oss_access_key_secret", "")
+        .default("advanced.storage_oss_public_url", "")
+        .default("advanced.storage_oss_object_prefix", "")
+        .default("advanced.storage_imagebed_endpoint", "")
+        .default("advanced.storage_imagebed_method", "POST")
+        .default("advanced.storage_imagebed_file_field", "file")
+        .default("advanced.storage_imagebed_headers", "{}")
+        .default("advanced.storage_imagebed_form_data", "{}")
+        .default("advanced.storage_imagebed_url_path", "data.url")
+        .default("advanced.upload_site_asset_max_size_mb", 2)
     )

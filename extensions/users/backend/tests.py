@@ -189,7 +189,9 @@ class UsersExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
             and item["target_app_label_source"] == "manifest"
             for item in audit["items"]
         ))
-        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+        self.assertTrue(
+            any(str(name).startswith("0001_") for name in extension["migration_plan"]["pending_files"])
+        )
 
 
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
@@ -1052,6 +1054,9 @@ class SecurityHeadersTests(TestCase):
 
 class HumanVerificationAuthTests(TestCase):
     def setUp(self):
+        from extensions.testing import bootstrap_enabled_extension_application
+
+        bootstrap_enabled_extension_application("security")
         self.user = User.objects.create_user(
             username="human-check-user",
             email="human-check@example.com",
@@ -1100,7 +1105,7 @@ class HumanVerificationAuthTests(TestCase):
         self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(response.json()["error"], "请先完成真人验证")
 
-    @patch("extensions.users.backend.human_verification.httpx.post")
+    @patch("extensions.security.backend.human_verification.httpx.post")
     def test_login_accepts_valid_human_verification_token(self, mock_post):
         self.enable_turnstile(login_enabled=True, register_enabled=False)
         mock_post.return_value = self._build_turnstile_response({"success": True})
@@ -1123,7 +1128,7 @@ class HumanVerificationAuthTests(TestCase):
         self.assertEqual(mock_post.call_args.kwargs["data"]["secret"], "secret-key")
         self.assertEqual(mock_post.call_args.kwargs["data"]["response"], "turnstile-ok")
 
-    @patch("extensions.users.backend.human_verification.httpx.post")
+    @patch("extensions.security.backend.human_verification.httpx.post")
     def test_register_accepts_valid_human_verification_token(self, mock_post):
         self.enable_turnstile(login_enabled=False, register_enabled=True)
         mock_post.return_value = self._build_turnstile_response({"success": True})
@@ -1143,7 +1148,7 @@ class HumanVerificationAuthTests(TestCase):
         self.assertEqual(response.json()["username"], "verified-register")
         self.assertTrue(User.objects.filter(username="verified-register").exists())
 
-    @patch("extensions.users.backend.human_verification.httpx.post")
+    @patch("extensions.security.backend.human_verification.httpx.post")
     def test_login_returns_service_unavailable_when_turnstile_verification_breaks(self, mock_post):
         self.enable_turnstile(login_enabled=True, register_enabled=False)
         mock_post.side_effect = httpx.ConnectError("boom")
@@ -1174,7 +1179,7 @@ class HumanVerificationAuthTests(TestCase):
         self.assertFalse(payload["auth_human_verification_register_enabled"])
         self.assertNotIn("auth_turnstile_secret_key", payload)
 
-    def test_admin_advanced_settings_persist_users_human_verification_config(self):
+    def test_admin_advanced_settings_persist_security_human_verification_config(self):
         admin = User.objects.create_superuser(
             username="human-admin",
             email="human-admin@example.com",

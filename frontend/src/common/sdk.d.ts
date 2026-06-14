@@ -248,6 +248,7 @@ export declare class ForumExtender {
   navSection(definition: Record<string, any>): this
   sidebarSection(definition: Record<string, any>): this
   profilePanel(definition: Record<string, any>): this
+  authChallengeProvider(definition: Record<string, any>): this
   searchSource(definition: Record<string, any>): this
   heroMeta(definition: Record<string, any>): this
   discussionListContext(definition: Record<string, any>): this

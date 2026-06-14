@@ -10,10 +10,12 @@ import {
 const profilePanels = getFrontendRegistrySlot('users.profilePanels')
 const userBadges = getFrontendRegistrySlot('users.badges')
 const authModalProviders = getFrontendRegistrySlot('users.authModalProviders')
+const authChallengeProviders = getFrontendRegistrySlot('users.authChallengeProviders')
 const registryTargets = [
   profilePanels,
   userBadges,
   authModalProviders,
+  authChallengeProviders,
 ]
 
 export function clearUserRegistryExtensions(extensionId = '') {
@@ -51,4 +53,18 @@ export function getAuthModalProvider(context = {}) {
   return orderedRegisteredItems(authModalProviders)
     .map(item => resolveRegisteredItem(item, context))
     .find(item => typeof item?.open === 'function' || item?.component) || null
+}
+
+export function registerAuthChallengeProvider(item) {
+  const normalizedItem = normalizeRegisteredItem(item, {
+    tokenField: 'human_verification_token',
+    payloadField: 'human_verification_payload',
+  })
+  return upsertByKey(authChallengeProviders, normalizedItem.key, normalizedItem)
+}
+
+export function getAuthChallengeProvider(context = {}) {
+  return orderedRegisteredItems(authChallengeProviders)
+    .map(item => resolveRegisteredItem(item, context))
+    .find(item => item?.component || typeof item?.buildPayload === 'function') || null
 }

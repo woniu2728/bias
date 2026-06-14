@@ -31,6 +31,7 @@ EXTENSION_ID = "search"
 def extend():
     return [
         FrontendExtender(
+            admin_entry="extensions/search/frontend/admin/index.js",
             forum_entry="extensions/search/frontend/forum/index.js",
         ).route(
             "/search",

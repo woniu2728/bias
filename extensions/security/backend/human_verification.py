@@ -3,17 +3,13 @@ from __future__ import annotations
 import httpx
 
 from apps.core.extensions.platform import get_advanced_settings
+from apps.core.extensions.runtime import (
+    RuntimeHumanVerificationError,
+    RuntimeHumanVerificationUnavailableError,
+)
 
 
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
-
-
-class HumanVerificationError(ValueError):
-    status_code = 400
-
-
-class HumanVerificationUnavailableError(HumanVerificationError):
-    status_code = 503
 
 
 def get_human_verification_settings() -> dict:
@@ -57,7 +53,7 @@ def verify_human_verification(request, action: str, token: str | None) -> None:
 
     verification_token = str(token or "").strip()
     if not verification_token:
-        raise HumanVerificationError("请先完成真人验证")
+        raise RuntimeHumanVerificationError("请先完成真人验证")
 
     config = get_human_verification_settings()
     _verify_turnstile_token(
@@ -105,13 +101,13 @@ def _verify_turnstile_token(secret_key: str, token: str, remote_ip: str = "") ->
         response.raise_for_status()
         result = response.json()
     except (httpx.HTTPError, ValueError) as exc:
-        raise HumanVerificationUnavailableError("真人验证服务暂时不可用，请稍后再试") from exc
+        raise RuntimeHumanVerificationUnavailableError("真人验证服务暂时不可用，请稍后再试") from exc
 
     if result.get("success"):
         return
 
     error_codes = result.get("error-codes") or []
     if "timeout-or-duplicate" in error_codes:
-        raise HumanVerificationError("真人验证已过期，请重新完成验证")
+        raise RuntimeHumanVerificationError("真人验证已过期，请重新完成验证")
 
-    raise HumanVerificationError("真人验证失败，请重试")
+    raise RuntimeHumanVerificationError("真人验证失败，请重试")

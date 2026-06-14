@@ -6,6 +6,7 @@ import {
   getDiscussionListContexts,
   getDiscussionListHero,
   getDiscussionListRequests,
+  getAuthChallengeProvider,
   getAuthModalProvider,
   getComposerAutocompleteProviders,
   getComposerDraftMeta,
@@ -54,6 +55,7 @@ import {
   registerForumRealtimeEvent,
   registerForumRuntime,
   registerHeaderItem,
+  registerAuthChallengeProvider,
   registerDiscussionReplyState,
   registerDiscussionReviewBanner,
   registerEmptyState,
@@ -114,6 +116,38 @@ test('discussion reply state returns the first visible item by order', () => {
 
   assert.equal(result.key, lowOrderKey)
   assert.equal(result.message, 'low')
+})
+
+test('auth challenge provider resolves generic verification component and payload builder', () => {
+  const key = uniqueKey('auth-challenge')
+  const component = { name: 'GenericChallenge' }
+
+  registerAuthChallengeProvider({
+    key,
+    order: 10,
+    component,
+    componentProps: ({ mode }) => ({ mode, purpose: 'auth' }),
+    isVisible: ({ mode }) => mode === 'login',
+    buildPayload: ({ token, payload }) => ({
+      token,
+      payload,
+    }),
+  })
+
+  const provider = getAuthChallengeProvider({
+    mode: 'login',
+    token: 'token-a',
+    payload: { answer: '42' },
+  })
+
+  assert.equal(provider.key, key)
+  assert.equal(provider.component, component)
+  assert.deepEqual(provider.componentProps, { mode: 'login', purpose: 'auth' })
+  assert.deepEqual(provider.buildPayload({ token: 'token-a', payload: { answer: '42' } }), {
+    token: 'token-a',
+    payload: { answer: '42' },
+  })
+  assert.equal(getAuthChallengeProvider({ mode: 'register' })?.key === key, false)
 })
 
 test('discussion list context and request registrations resolve by surface', () => {

@@ -48,7 +48,7 @@
         </div>
       </div>
 
-      <div class="Form-section">
+      <div v-if="showSearchIndexSection" class="Form-section">
         <h3 class="Section-title">{{ advancedCopy?.dependencyHealthTitle || '依赖健康' }}</h3>
 
         <div class="RuntimeSnapshot">
@@ -83,7 +83,7 @@
         </div>
       </div>
 
-      <div class="Form-section">
+      <div v-if="showStorageSection" class="Form-section">
         <h3 class="Section-title">{{ advancedCopy?.cacheSectionTitle || '缓存设置' }}</h3>
 
         <div class="Form-group">
@@ -826,6 +826,8 @@ const { saveSuccess, saveError, saveErrorMessage, resetSaveFeedback, showSaveSuc
 const cacheDriverOptions = computed(() => advancedConfig.value?.cacheDriverOptions || [])
 const queueDriverOptions = computed(() => advancedConfig.value?.queueDriverOptions || [])
 const showHumanVerificationSection = computed(() => Boolean(advancedConfig.value?.enableHumanVerificationSection))
+const showSearchIndexSection = computed(() => Boolean(advancedConfig.value?.enableSearchIndexSection))
+const showStorageSection = computed(() => Boolean(advancedConfig.value?.enableStorageSection))
 const showUploadPolicySection = computed(() => Boolean(advancedConfig.value?.enableUploadPolicySection))
 const humanVerificationProviderOptions = computed(() => advancedConfig.value?.humanVerificationProviderOptions || [])
 const storageDriverOptions = computed(() => advancedConfig.value?.storageDriverOptions || [])
@@ -893,35 +895,6 @@ function defaultSettings() {
     extension_safe_mode_extensions: [],
     debug_mode: false,
     log_queries: false,
-    storage_driver: 'local',
-    storage_local_path: '',
-    storage_local_base_url: '/media/',
-    storage_s3_bucket: '',
-    storage_s3_region: '',
-    storage_s3_endpoint: '',
-    storage_s3_access_key_id: '',
-    storage_s3_secret_access_key: '',
-    storage_s3_public_url: '',
-    storage_s3_object_prefix: '',
-    storage_s3_path_style: false,
-    storage_r2_bucket: '',
-    storage_r2_endpoint: '',
-    storage_r2_access_key_id: '',
-    storage_r2_secret_access_key: '',
-    storage_r2_public_url: '',
-    storage_r2_object_prefix: '',
-    storage_oss_bucket: '',
-    storage_oss_endpoint: '',
-    storage_oss_access_key_id: '',
-    storage_oss_access_key_secret: '',
-    storage_oss_public_url: '',
-    storage_oss_object_prefix: '',
-    storage_imagebed_endpoint: '',
-    storage_imagebed_method: 'POST',
-    storage_imagebed_file_field: 'file',
-    storage_imagebed_headers: '{}',
-    storage_imagebed_form_data: '{}',
-    storage_imagebed_url_path: 'data.url',
     ...(advancedConfig.value?.defaultSettings || {}),
   }
 }
@@ -931,7 +904,7 @@ onMounted(async () => {
   await Promise.all([
     loadAdvancedSettings(),
     loadAdminStats(),
-    loadSearchIndexStatus(),
+    showSearchIndexSection.value ? loadSearchIndexStatus() : Promise.resolve(),
   ])
   refreshRuntimeErrors()
 })
@@ -1086,8 +1059,8 @@ function createSettingsSnapshot(value) {
     queue_enabled: Boolean(value.queue_enabled),
     queue_driver: value.queue_driver,
     log_queries: Boolean(value.log_queries),
-    storage_driver: value.storage_driver,
-    upload_site_asset_max_size_mb: normalizeUploadSize(value.upload_site_asset_max_size_mb),
+    ...(showStorageSection.value ? { storage_driver: value.storage_driver } : {}),
+    ...(showUploadPolicySection.value ? { upload_site_asset_max_size_mb: normalizeUploadSize(value.upload_site_asset_max_size_mb) } : {}),
   }
 }
 

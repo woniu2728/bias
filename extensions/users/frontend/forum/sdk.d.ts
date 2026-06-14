@@ -16,8 +16,10 @@ export declare function getUserDisplayName(user?: any): any
 export declare function getUserInitial(user?: any): any
 export declare function normalizeUser(user?: any): any
 export declare function getAuthModalProvider(context?: Record<string, any>): any
+export declare function getAuthChallengeProvider(context?: Record<string, any>): any
 export declare function getProfilePanels(context?: Record<string, any>): any[]
 export declare function registerAuthModalProvider(definition?: Record<string, any>): any
+export declare function registerAuthChallengeProvider(definition?: Record<string, any>): any
 export declare function registerProfilePanel(definition?: Record<string, any>): any
 export declare function getUserBadges(context?: Record<string, any>): any[]
 export declare function registerUserBadge(definition?: Record<string, any>): any

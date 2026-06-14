@@ -2233,6 +2233,29 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertEqual(payload["allow_username_format"], "1")
         self.assertTrue(payload["allowUsernameMentionFormat"])
 
+    def test_frontend_runtime_treats_default_only_forum_settings_as_visible(self):
+        from apps.core.extensions.frontend_runtime_service import _is_product_visible_frontend_extension
+
+        extension = SimpleNamespace(source="filesystem", manifest=SimpleNamespace(extra={}))
+        runtime_view = SimpleNamespace(
+            settings_schema=(),
+            settings_defaults=(SimpleNamespace(key="advanced.auth_human_verification_provider", value="off"),),
+            settings_forum_serializations=(SimpleNamespace(
+                attribute="auth_human_verification_provider",
+                key="advanced.auth_human_verification_provider",
+            ),),
+            forum_settings_keys=(),
+        )
+
+        self.assertTrue(_is_product_visible_frontend_extension(
+            extension,
+            admin_entry="",
+            forum_entry="",
+            common_entry="",
+            frontend_routes=(),
+            runtime_view=runtime_view,
+        ))
+
     def test_validator_extender_runs_during_resource_payload_application(self):
         from apps.core.resource_registry import ResourceRegistry
         from apps.core.resource_objects import Resource, ResourceField

@@ -14,7 +14,7 @@ from apps.core.extensions.platform import (
     access_token_max_age,
     refresh_token_max_age,
 )
-from extensions.users.backend.human_verification import HumanVerificationError, verify_human_verification
+from apps.core.extensions.runtime import RuntimeHumanVerificationError, verify_runtime_human_verification
 from extensions.users.backend.preferences import normalize_user_preferences, normalize_user_ui_preferences, serialize_user_preferences
 from extensions.users.backend.schemas import (
     EmailVerifySchema,
@@ -80,13 +80,18 @@ def _clear_refresh_token_cookie(response: JsonResponse) -> JsonResponse:
 @router.post("/register", response=UserOutSchema, tags=["Auth"])
 def register(request, payload: UserRegisterSchema):
     try:
-        verify_human_verification(request, "register", payload.human_verification_token)
+        verify_runtime_human_verification(
+            request,
+            "register",
+            payload.human_verification_token,
+            context={"payload": payload.human_verification_payload or {}},
+        )
         return UserService.create_user(
             username=payload.username,
             email=payload.email,
             password=payload.password,
         )
-    except HumanVerificationError as e:
+    except RuntimeHumanVerificationError as e:
         return api_error(str(e), status=e.status_code)
     except ValueError as e:
         return api_error(str(e), status=400)
@@ -95,7 +100,12 @@ def register(request, payload: UserRegisterSchema):
 @router.post("/login", response=TokenSchema, tags=["Auth"])
 def login(request, payload: UserLoginSchema):
     try:
-        verify_human_verification(request, "login", payload.human_verification_token)
+        verify_runtime_human_verification(
+            request,
+            "login",
+            payload.human_verification_token,
+            context={"payload": payload.human_verification_payload or {}},
+        )
         user = UserService.authenticate_user(
             identification=payload.identification,
             password=payload.password,
@@ -106,7 +116,7 @@ def login(request, payload: UserLoginSchema):
         response = JsonResponse({"access": access_token})
         response = _set_access_token_cookie(response, access_token)
         return _set_refresh_token_cookie(response, refresh)
-    except HumanVerificationError as e:
+    except RuntimeHumanVerificationError as e:
         return api_error(str(e), status=e.status_code)
     except ValueError as e:
         return api_error(str(e), status=401)

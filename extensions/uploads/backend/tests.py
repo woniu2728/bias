@@ -10,6 +10,7 @@ from ninja_jwt.tokens import RefreshToken
 
 from apps.core.extension_settings_service import save_extension_settings
 from apps.core.models import Setting
+from apps.core.settings_service import clear_runtime_setting_caches
 from extensions.uploads.backend.services import UploadService
 from extensions.users.backend.models import User
 
@@ -178,6 +179,16 @@ class AdminAppearanceUploadApiTests(TestCase):
 
 
 class UploadStorageSettingsTests(TestCase):
+    def setUp(self):
+        from extensions.testing import bootstrap_enabled_extension_application
+
+        bootstrap_enabled_extension_application("uploads")
+        clear_runtime_setting_caches()
+
+    def tearDown(self):
+        clear_runtime_setting_caches()
+        super().tearDown()
+
     def test_attachment_upload_respects_custom_local_storage_settings(self):
         tmpdir = Path.cwd() / "media" / f"storage-test-{uuid.uuid4().hex}"
         tmpdir.mkdir(parents=True, exist_ok=True)

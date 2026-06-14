@@ -172,6 +172,12 @@ from apps.core.extensions.runtime_users import (
     serialize_runtime_users_by_ids,
     verify_runtime_user_password,
 )
+from apps.core.extensions.system_runtime import (
+    RuntimeHumanVerificationError,
+    RuntimeHumanVerificationUnavailableError,
+    get_runtime_human_verification_handlers,
+    verify_runtime_human_verification,
+)
 
 __all__ = [
     "apply_runtime_counted_discussion_filter",
@@ -304,6 +310,10 @@ __all__ = [
     "require_runtime_user_service",
     "requires_runtime_content_approval",
     "resubmit_runtime_first_post",
+    "RuntimeHumanVerificationError",
+    "RuntimeHumanVerificationUnavailableError",
+    "get_runtime_human_verification_handlers",
+    "verify_runtime_human_verification",
     "resolve_runtime_model_relation",
     "resolve_runtime_post_content_html",
     "resolve_runtime_post_flag",

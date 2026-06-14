@@ -8,13 +8,14 @@ export const useAuthStore = defineStore('auth', () => {
   const forumPermissions = computed(() => Array.isArray(user.value?.forum_permissions) ? user.value.forum_permissions : [])
   const canStartDiscussion = computed(() => hasPermission('startDiscussion'))
 
-  async function login(identification, password, humanVerificationToken = '') {
+  async function login(identification, password, humanVerification = '') {
     try {
       isRestoringSession.value = true
+      const challenge = normalizeHumanVerificationSubmission(humanVerification)
       await api.post('/users/login', {
         identification,
         password,
-        human_verification_token: humanVerificationToken || undefined,
+        ...challenge,
       })
 
       await fetchUser()
@@ -29,13 +30,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function register(username, email, password, humanVerificationToken = '') {
+  async function register(username, email, password, humanVerification = '') {
     try {
+      const challenge = normalizeHumanVerificationSubmission(humanVerification)
       await api.post('/users/register', {
         username,
         email,
         password,
-        human_verification_token: humanVerificationToken || undefined,
+        ...challenge,
       })
 
       return { success: true }
@@ -44,6 +46,18 @@ export const useAuthStore = defineStore('auth', () => {
         success: false,
         error: error.response?.data?.error || '注册失败',
       }
+    }
+  }
+
+  function normalizeHumanVerificationSubmission(value = '') {
+    if (value && typeof value === 'object') {
+      return {
+        human_verification_token: value.human_verification_token ?? value.token ?? undefined,
+        human_verification_payload: value.human_verification_payload ?? value.payload ?? undefined,
+      }
+    }
+    return {
+      human_verification_token: value || undefined,
     }
   }
 

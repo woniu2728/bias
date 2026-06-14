@@ -31,9 +31,11 @@ export {
 } from './userRuntime.js'
 export {
   getAuthModalProvider,
+  getAuthChallengeProvider,
   getProfilePanels,
   getUserBadges,
   registerAuthModalProvider,
+  registerAuthChallengeProvider,
   registerProfilePanel,
   registerUserBadge,
 } from './userFrontendRegistry.js'

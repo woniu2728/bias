@@ -205,6 +205,13 @@ class AuthExtender(SystemHookExtender):
             "identifier": str(identifier or "").strip(),
         }, order=order)
 
+    def human_verification(self, identifier: str, verifier: Any, *, description: str = "", order: int = 100) -> "AuthExtender":
+        return self._with_definition("human_verification", {
+            "identifier": str(identifier or "").strip(),
+            "verifier": verifier,
+            "description": str(description or "").strip(),
+        }, order=order)
+
     def _with_definition(self, key: str, payload: Any, *, order: int = 100) -> "AuthExtender":
         return AuthExtender(tuple([*self.definitions, ExtensionSystemHookDefinition(
             key=key,

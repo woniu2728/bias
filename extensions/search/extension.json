@@ -21,6 +21,7 @@
     "search-filter-syntax"
   ],
   "backend_entry": "extensions.search.backend.ext",
+  "frontend_admin_entry": "extensions/search/frontend/admin/index.js",
   "frontend_forum_entry": "extensions/search/frontend/forum/index.js",
   "security": {
     "support_email": "",

@@ -17,7 +17,6 @@ from apps.core.extensions import (
 from extensions.users.backend.admin_api import router as admin_users_router
 from extensions.users.backend.api import router as users_router
 from extensions.users.backend.handlers import user_resource_endpoints
-from extensions.users.backend.human_verification import serialize_public_human_verification_setting
 from extensions.users.backend.mail_templates import mail_setting_defaults
 from extensions.users.backend.models import AccessToken, EmailToken, Group, PasswordToken, Permission, User
 from extensions.users.backend.resources import (
@@ -114,7 +113,6 @@ def extend():
         .owns(PasswordToken, description="密码重置令牌由 users 扩展拥有。"),
         LifecycleExtender(),
         build_user_settings_extender(),
-        build_human_verification_settings_extender(),
         ForumPermissionExtender().checker(
             "users.forum-permissions",
             UserService.has_forum_permission,
@@ -179,37 +177,6 @@ def build_user_settings_extender():
             "order": 10,
         }),
     )).default("avatars_dir", "avatars").default("avatar_max_size_mb", 2)
-
-
-def build_human_verification_settings_extender():
-    return (
-        SettingsExtender(generated_page=False)
-        .default("advanced.auth_human_verification_provider", "off")
-        .default("advanced.auth_turnstile_site_key", "")
-        .default("advanced.auth_turnstile_secret_key", "")
-        .default("advanced.auth_human_verification_login_enabled", True)
-        .default("advanced.auth_human_verification_register_enabled", True)
-        .serialize_to_forum(
-            "auth_human_verification_provider",
-            "advanced.auth_human_verification_provider",
-            serialize_public_human_verification_setting("auth_human_verification_provider"),
-        )
-        .serialize_to_forum(
-            "auth_turnstile_site_key",
-            "advanced.auth_turnstile_site_key",
-            serialize_public_human_verification_setting("auth_turnstile_site_key"),
-        )
-        .serialize_to_forum(
-            "auth_human_verification_login_enabled",
-            "advanced.auth_human_verification_login_enabled",
-            serialize_public_human_verification_setting("auth_human_verification_login_enabled"),
-        )
-        .serialize_to_forum(
-            "auth_human_verification_register_enabled",
-            "advanced.auth_human_verification_register_enabled",
-            serialize_public_human_verification_setting("auth_human_verification_register_enabled"),
-        )
-    )
 
 
 def permission_definitions():

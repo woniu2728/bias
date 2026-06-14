@@ -20,7 +20,13 @@ def get_enabled_extension_settings_definitions(*, include_disabled: bool = True)
             continue
         if not include_disabled and not (extension.runtime.installed and extension.runtime.enabled):
             continue
-        if not runtime_view.settings_schema:
+        has_settings_contract = bool(
+            runtime_view.settings_schema
+            or runtime_view.settings_defaults
+            or runtime_view.settings_forum_serializations
+            or runtime_view.forum_settings_keys
+        )
+        if not has_settings_contract:
             continue
 
         fields = tuple(sorted(runtime_view.settings_schema, key=lambda item: (item.order, item.key)))
@@ -68,7 +74,13 @@ def _build_registry_settings_definitions(*, include_disabled: bool) -> dict[str,
     for extension in manager.get_extensions():
         if not include_disabled and not (extension.runtime.installed and extension.runtime.enabled):
             continue
-        if not extension.settings_schema:
+        has_settings_contract = bool(
+            extension.settings_schema
+            or extension.settings_defaults
+            or extension.settings_forum_serializations
+            or extension.forum_settings_keys
+        )
+        if not has_settings_contract:
             continue
         fields = tuple(sorted(extension.settings_schema, key=lambda item: (item.order, item.key)))
         defaults = {
