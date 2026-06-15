@@ -61,6 +61,18 @@ test('loadExtensionAdminEntryModule loads filesystem importer entries', async ()
   assert.equal(typeof loaded.resolveDetailPage, 'function')
 })
 
+test('loadExtensionAdminEntryModule resolves relative importer path variants', async () => {
+  const loaded = await loadExtensionAdminEntryModule('../../../../extensions/alpha-tools/frontend/admin/index.js', {
+    importers: {
+      '../../../extensions/alpha-tools/frontend/admin/index.js': async () => ({
+        resolveSettingsPage: () => 'settings',
+      }),
+    },
+  })
+
+  assert.equal(loaded.resolveSettingsPage(), 'settings')
+})
+
 test('resolveFallbackAdminComponent returns the first matching fallback component', async () => {
   const component = await resolveFallbackAdminComponent(
     { id: 'demo' },

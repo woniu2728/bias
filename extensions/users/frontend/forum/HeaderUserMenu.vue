@@ -26,8 +26,8 @@
           @click="$emit('item-click', item, $event)"
         >
           <i v-if="item.icon" :class="item.icon"></i>
-          <span>{{ item.label }}</span>
-          <strong v-if="item.badge" class="dropdown-badge">{{ item.badge }}</strong>
+          <span>{{ resolveItemValue(item.label, item) }}</span>
+          <strong v-if="hasBadge(item)" class="dropdown-badge">{{ resolveItemValue(item.badge, item) }}</strong>
         </component>
       </template>
     </div>
@@ -35,7 +35,7 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   authStore: {
     type: Object,
     required: true
@@ -59,6 +59,15 @@ defineProps({
 })
 
 defineEmits(['toggle', 'item-click'])
+
+function resolveItemValue(value, item = null) {
+  return typeof value === 'function' ? value({ item, authStore: props.authStore }) : value
+}
+
+function hasBadge(item) {
+  const value = resolveItemValue(item?.badge, item)
+  return value !== undefined && value !== null && value !== ''
+}
 </script>
 
 <style scoped>

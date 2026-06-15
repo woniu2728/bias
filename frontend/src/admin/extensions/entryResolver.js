@@ -87,10 +87,48 @@ export async function loadExtensionAdminEntryModule(
     return null
   }
 
-  const importer = importers[entryPath]
+  const importer = resolveExtensionAdminImporter(entryPath, importers)
   if (!importer) {
     throw new Error(`找不到扩展后台入口: ${entryPath}`)
   }
 
   return importer()
+}
+
+function resolveExtensionAdminImporter(entryPath, importers) {
+  const normalized = String(entryPath || '').replace(/\\/g, '/').trim()
+  if (!normalized) return null
+
+  const direct = importers[normalized]
+  if (typeof direct === 'function') return direct
+
+  for (const candidate of buildExtensionAdminImporterCandidates(normalized)) {
+    const importer = importers[candidate]
+    if (typeof importer === 'function') {
+      return importer
+    }
+  }
+
+  return null
+}
+
+function buildExtensionAdminImporterCandidates(entryPath) {
+  const candidates = new Set()
+  const normalized = String(entryPath || '').replace(/\\/g, '/').trim()
+  if (!normalized) return candidates
+
+  candidates.add(normalized)
+  const withoutParentPrefixes = normalized.replace(/^(\.\.\/)+/, '')
+  if (withoutParentPrefixes) {
+    candidates.add(withoutParentPrefixes)
+    candidates.add(`../${withoutParentPrefixes}`)
+    candidates.add(`../../${withoutParentPrefixes}`)
+    candidates.add(`../../../${withoutParentPrefixes}`)
+    candidates.add(`../../../../${withoutParentPrefixes}`)
+  }
+  if (normalized.startsWith('../')) {
+    candidates.add(normalized.replace(/^\.\.\//, './'))
+  }
+
+  return candidates
 }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from apps.core.extensions.platform import get_advanced_settings
+from apps.core.extensions.platform import get_extension_settings
 from apps.core.extensions.runtime import (
     RuntimeHumanVerificationError,
     RuntimeHumanVerificationUnavailableError,
@@ -13,13 +13,30 @@ TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverif
 
 
 def get_human_verification_settings() -> dict:
-    advanced_settings = get_advanced_settings()
+    extension_settings = get_extension_settings("security")
     return {
-        "provider": str(advanced_settings.get("auth_human_verification_provider") or "off").strip().lower(),
-        "turnstile_site_key": str(advanced_settings.get("auth_turnstile_site_key") or "").strip(),
-        "turnstile_secret_key": str(advanced_settings.get("auth_turnstile_secret_key") or "").strip(),
-        "login_enabled": bool(advanced_settings.get("auth_human_verification_login_enabled", True)),
-        "register_enabled": bool(advanced_settings.get("auth_human_verification_register_enabled", True)),
+        "provider": str(
+            extension_settings.get("auth_human_verification_provider")
+            or "off"
+        ).strip().lower(),
+        "turnstile_site_key": str(
+            extension_settings.get("auth_turnstile_site_key")
+            or ""
+        ).strip(),
+        "turnstile_secret_key": str(
+            extension_settings.get("auth_turnstile_secret_key")
+            or ""
+        ).strip(),
+        "login_enabled": bool(
+            extension_settings.get("auth_human_verification_login_enabled")
+            if "auth_human_verification_login_enabled" in extension_settings
+            else True
+        ),
+        "register_enabled": bool(
+            extension_settings.get("auth_human_verification_register_enabled")
+            if "auth_human_verification_register_enabled" in extension_settings
+            else True
+        ),
     }
 
 

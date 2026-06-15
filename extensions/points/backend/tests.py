@@ -9,6 +9,7 @@ from apps.core.extensions.runtime import (
     create_runtime_discussion,
     create_runtime_post,
     get_runtime_user_model,
+    get_runtime_resource_registry,
 )
 from extensions.points.backend.models import PointLedgerEntry
 from extensions.points.backend.services import (
@@ -56,6 +57,44 @@ class PointsExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
 
         self.assertEqual(extension["id"], "points")
         self.assertFalse(any(item["level"] == "error" for item in issues))
+
+    def test_points_balance_is_registered_on_all_user_resources(self):
+        application = self.bootstrap_extensions("points")
+        runtime_view = application.get_runtime_view("points")
+
+        fields = {
+            (definition.resource, definition.field)
+            for definition in runtime_view.resource_fields
+        }
+
+        self.assertTrue({
+            ("user_detail", "points_balance"),
+            ("user_summary", "points_balance"),
+            ("discussion_user", "points_balance"),
+            ("post_user", "points_balance"),
+            ("search_user", "points_balance"),
+        }.issubset(fields))
+
+    def test_points_balance_serializes_on_user_summary_resources(self):
+        self.bootstrap_extensions("points")
+        user = User.objects.create_user(
+            username="points-resource-user",
+            email="points-resource-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        award_points(
+            user,
+            12,
+            reason="manual_award",
+            idempotency_key="manual:resource:award",
+        )
+        registry = get_runtime_resource_registry()
+
+        for resource in ("user_detail", "user_summary", "discussion_user", "post_user", "search_user"):
+            with self.subTest(resource=resource):
+                payload = registry.serialize(resource, user)
+                self.assertEqual(payload["points_balance"], 12)
 
 
 class PointsServiceTests(TestCase):

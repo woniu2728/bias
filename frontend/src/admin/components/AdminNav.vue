@@ -23,7 +23,7 @@
         />
       </div>
 
-      <div v-if="extensionSections.length" class="AdminNav-section AdminNav-section--extensions">
+      <div v-if="hasExtensionSection" class="AdminNav-section AdminNav-section--extensions">
         <div class="AdminNav-search">
           <label class="sr-only" for="admin-extension-search">搜索扩展</label>
           <span class="AdminNav-searchIcon" aria-hidden="true">
@@ -38,6 +38,7 @@
           />
         </div>
         <ForumNavList
+          v-if="extensionSections.length"
           :sections="extensionSections"
           root-class="AdminNav-sections"
           section-title-class="AdminNav-title"
@@ -48,6 +49,7 @@
           item-badge-class="AdminNav-badge"
           @select="$emit('close')"
         />
+        <p v-else class="AdminNav-empty">没有匹配的扩展</p>
       </div>
 
       <div class="AdminNav-mobileFooter">
@@ -95,6 +97,7 @@ const navSections = computed(() => getAdminNavSections()
   .filter(section => section.items.length))
 const coreSections = computed(() => navSections.value.filter(section => section.key !== 'extensions'))
 const extensionSections = computed(() => navSections.value.filter(section => section.key === 'extensions'))
+const hasExtensionSection = computed(() => getAdminNavSections().some(section => section.key === 'extensions'))
 
 function filterSectionItems(section) {
   const items = Array.isArray(section?.items) ? section.items : []

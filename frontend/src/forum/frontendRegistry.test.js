@@ -842,6 +842,37 @@ test('admin header entry remains visible for staff even when forum modules are f
   assert.equal(mobileUserItems.some(item => item.key === mobileKey), true)
 })
 
+test('header items preserve function labels and zero badges', () => {
+  const key = uniqueKey('header-function-label')
+
+  registerHeaderItem({
+    key,
+    placement: 'user-menu',
+    order: 15,
+    label: ({ authStore }) => `积分 ${Number(authStore?.user?.points_balance || 0)}`,
+    badge: ({ authStore }) => Number(authStore?.user?.points_balance || 0),
+    isVisible: ({ authStore }) => Boolean(authStore?.user),
+  })
+
+  const items = getHeaderItems({
+    authStore: {
+      user: {
+        id: 1,
+        username: 'tester',
+        points_balance: 0,
+      },
+    },
+    state: {
+      icon: 'fas fa-coins',
+      label: '积分',
+    },
+  }, 'user-menu')
+
+  const item = items.find(entry => entry.key === key)
+  assert.equal(item?.label, '积分 0')
+  assert.equal(item?.badge, 0)
+})
+
 test('post review banner prefers matching surface-specific item', () => {
   const fallbackKey = uniqueKey('post-review-fallback')
   const scopedKey = uniqueKey('post-review-scoped')

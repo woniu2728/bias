@@ -1,59 +1,31 @@
 import { extendAdmin } from '@bias/admin'
+import UploadsSettingsPage from './UploadsSettingsPage.vue'
 
-const ADVANCED_PAGE_KEY = 'core.advanced'
 const APPEARANCE_PAGE_KEY = 'core.appearance'
+const UPLOADS_PAGE_KEY = 'uploads.settings'
 
 export const extend = [
   extendAdmin(admin => admin
-    .pageCopy(ADVANCED_PAGE_KEY, {
-      key: 'uploads-advanced-copy',
+    .pageCopy(UPLOADS_PAGE_KEY, {
+      key: 'uploads-settings-copy',
       moduleId: 'uploads',
       order: 30,
       resolve: () => ({
-        storageSectionTitle: '文件存储',
-        storageDriverLabel: '存储驱动',
-        storageDriverHelpText: '上传扩展、头像和附件能力都会读取这里的运行时存储配置。',
-        storageObjectDirectoryHelpText: '附件和头像对象目录由对应扩展管理。',
-        uploadPolicyTitle: '上传策略',
-        uploadPolicyDescription: '限制核心站点资源上传大小；头像和附件上传策略由对应扩展管理。',
-        uploadSiteAssetMaxSizeLabel: '站点资源最大体积（MB）',
-        uploadSizeHelpText: 'Logo/Favicon 默认 2MB。',
-        localPathLabel: '本地保存目录',
-        localPathHelpText: '可填写绝对路径，也可填写相对项目根目录的路径',
-        localBaseUrlLabel: '本地访问基地址',
-        localBaseUrlHelpText: '上传完成后生成给前台的 URL 前缀',
-        bucketLabel: 'Bucket',
-        regionLabel: 'Region',
-        endpointLabel: 'Endpoint',
-        publicUrlLabel: '公共访问 URL',
-        publicUrlCdnLabel: '公共访问 URL / CDN 域名',
-        s3EndpointHelpText: '使用 MinIO、Wasabi 等兼容服务时填写自定义 Endpoint',
-        s3PublicUrlHelpText: '如留空，系统会按标准 S3 域名尝试拼接',
-        accessKeyIdLabel: 'Access Key ID',
-        secretAccessKeyLabel: 'Secret Access Key',
-        accessKeySecretLabel: 'Access Key Secret',
-        objectPrefixLabel: '对象前缀',
-        pathStyleLabel: '使用 Path Style',
-        pathStyleHelpText: '兼容部分 S3 服务或自建对象存储',
-        r2PublicUrlHelpText: 'R2 通常需要单独的公开域名，否则前台生成的附件链接不可访问',
-        ossPublicUrlHelpText: '如留空，将按 Bucket + Endpoint 生成标准 OSS 访问地址',
-        imagebedEndpointLabel: '上传接口地址',
-        imagebedMethodLabel: '请求方法',
-        imagebedFileFieldLabel: '文件字段名',
-        imagebedUrlPathLabel: '响应 URL 路径',
-        imagebedUrlPathHelpText: '支持点路径，例如 `data.url`、`result.images.0.url`',
-        imagebedHeadersLabel: '请求头 JSON',
-        imagebedFormDataLabel: '额外表单参数 JSON',
+        pageTitle: '上传设置',
+        pageDescription: '配置附件、站点资源和存储驱动。',
       }),
     })
-    .pageConfig(ADVANCED_PAGE_KEY, {
-      key: 'uploads-advanced-config',
+    .pageConfig(UPLOADS_PAGE_KEY, {
+      key: 'uploads-settings-config',
       moduleId: 'uploads',
       order: 30,
       resolve: () => ({
-        enableStorageSection: true,
-        enableUploadPolicySection: true,
         defaultSettings: {
+          attachments_dir: 'attachments',
+          attachment_max_size_mb: 10,
+          upload_site_asset_max_size_mb: 2,
+          avatars_dir: 'avatars',
+          avatar_max_size_mb: 2,
           storage_driver: 'local',
           storage_local_path: '',
           storage_local_base_url: '/media/',
@@ -83,7 +55,6 @@ export const extend = [
           storage_imagebed_headers: '{}',
           storage_imagebed_form_data: '{}',
           storage_imagebed_url_path: 'data.url',
-          upload_site_asset_max_size_mb: 2,
         },
         placeholders: {
           storageLocalPath: 'D:\\data\\bias\\media',
@@ -100,6 +71,7 @@ export const extend = [
           imagebedUrlPath: 'data.url',
           imagebedHeaders: '{\"Authorization\":\"Bearer token\"}',
           imagebedFormData: '{\"album\":\"forum\"}',
+          attachmentsDir: 'attachments',
         },
         storageDriverOptions: [
           { value: 'local', label: '本地存储' },
@@ -114,7 +86,39 @@ export const extend = [
           { value: 'PATCH', label: 'PATCH' },
         ],
         sensitiveLabels: {
+          attachments_dir: '附件目录',
+          attachment_max_size_mb: '附件最大体积',
+          avatars_dir: '头像目录',
+          avatar_max_size_mb: '头像最大体积',
           storage_driver: '文件存储驱动',
+          storage_local_path: '本地保存目录',
+          storage_local_base_url: '本地访问基地址',
+          storage_s3_bucket: 'S3 Bucket',
+          storage_s3_region: 'S3 Region',
+          storage_s3_endpoint: 'S3 Endpoint',
+          storage_s3_access_key_id: 'S3 Access Key ID',
+          storage_s3_secret_access_key: 'S3 Secret Access Key',
+          storage_s3_public_url: 'S3 公共访问 URL',
+          storage_s3_object_prefix: 'S3 对象前缀',
+          storage_s3_path_style: 'S3 Path Style',
+          storage_r2_bucket: 'R2 Bucket',
+          storage_r2_endpoint: 'R2 Endpoint',
+          storage_r2_access_key_id: 'R2 Access Key ID',
+          storage_r2_secret_access_key: 'R2 Secret Access Key',
+          storage_r2_public_url: 'R2 公共访问 URL',
+          storage_r2_object_prefix: 'R2 对象前缀',
+          storage_oss_bucket: 'OSS Bucket',
+          storage_oss_endpoint: 'OSS Endpoint',
+          storage_oss_access_key_id: 'OSS Access Key ID',
+          storage_oss_access_key_secret: 'OSS Access Key Secret',
+          storage_oss_public_url: 'OSS 公共访问 URL',
+          storage_oss_object_prefix: 'OSS 对象前缀',
+          storage_imagebed_endpoint: '图床上传接口地址',
+          storage_imagebed_method: '图床请求方法',
+          storage_imagebed_file_field: '图床文件字段名',
+          storage_imagebed_headers: '图床请求头',
+          storage_imagebed_form_data: '图床额外表单参数',
+          storage_imagebed_url_path: '图床响应 URL 路径',
           upload_site_asset_max_size_mb: '站点资源上传上限',
         },
       }),
@@ -187,3 +191,7 @@ export const extend = [
       }),
     }))
 ]
+
+export function resolveSettingsPage() {
+  return UploadsSettingsPage
+}

@@ -12,7 +12,6 @@ from apps.core.extensions.platform import get_extension_settings
 from apps.core.extensions.platform import FileUploadService
 from apps.core.extensions.platform import get_storage_backend
 
-
 ALLOWED_AVATAR_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp")
 AVATAR_SIZES = {
     "small": (50, 50),
@@ -30,7 +29,7 @@ class UserAvatarUploadService:
 
         ext = os.path.splitext(file.name)[1].lower()
         filename = f"{uuid.uuid4().hex}{ext}"
-        backend = get_storage_backend()
+        backend = get_storage_backend(get_extension_settings("uploads"))
 
         original_bytes = FileUploadService.read_uploaded_file(file)
         avatars_dir = UserAvatarUploadService.get_avatars_dir()
@@ -56,7 +55,7 @@ class UserAvatarUploadService:
 
     @staticmethod
     def delete_avatar(file_url: str) -> bool:
-        backend = get_storage_backend()
+        backend = get_storage_backend(get_extension_settings("uploads"))
         deleted = backend.delete(file_url)
 
         base, ext = os.path.splitext(file_url)
@@ -86,7 +85,7 @@ class UserAvatarUploadService:
 
     @staticmethod
     def get_avatar_upload_limit_mb() -> int:
-        settings_data = get_extension_settings("users")
+        settings_data = get_extension_settings("uploads")
         return FileUploadService._normalize_upload_size_mb(
             settings_data.get("avatar_max_size_mb"),
             UserAvatarUploadService.MAX_AVATAR_SIZE,
@@ -98,7 +97,7 @@ class UserAvatarUploadService:
 
     @staticmethod
     def get_avatars_dir() -> str:
-        settings_data = get_extension_settings("users")
+        settings_data = get_extension_settings("uploads")
         return UserAvatarUploadService._normalize_dir(settings_data.get("avatars_dir") or "avatars")
 
     @staticmethod

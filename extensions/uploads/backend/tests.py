@@ -167,7 +167,7 @@ class AdminAppearanceUploadApiTests(TestCase):
 
     def test_site_asset_upload_limit_is_saved_through_advanced_settings(self):
         response = self.client.post(
-            "/api/admin/advanced",
+            "/api/admin/extensions/uploads/settings",
             data=json.dumps({"upload_site_asset_max_size_mb": 4}),
             content_type="application/json",
             **self.auth_header(),
@@ -193,19 +193,12 @@ class UploadStorageSettingsTests(TestCase):
         tmpdir = Path.cwd() / "media" / f"storage-test-{uuid.uuid4().hex}"
         tmpdir.mkdir(parents=True, exist_ok=True)
         try:
-            Setting.objects.update_or_create(
-                key="advanced.storage_driver",
-                defaults={"value": json.dumps("local")},
-            )
-            Setting.objects.update_or_create(
-                key="advanced.storage_local_path",
-                defaults={"value": json.dumps(str(tmpdir))},
-            )
-            Setting.objects.update_or_create(
-                key="advanced.storage_local_base_url",
-                defaults={"value": json.dumps("/uploads/")},
-            )
-            save_extension_settings("uploads", {"attachments_dir": "forum-files"})
+            save_extension_settings("uploads", {
+                "storage_driver": "local",
+                "storage_local_path": str(tmpdir),
+                "storage_local_base_url": "/uploads/",
+                "attachments_dir": "forum-files",
+            })
 
             file = SimpleUploadedFile("guide.txt", b"hello storage", content_type="text/plain")
 

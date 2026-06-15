@@ -17,7 +17,7 @@ export function getAdminNavSections() {
   const visibleRoutes = routes.filter(route => route.showInNavigation !== false)
   const coreModuleIds = new Set(
     visibleRoutes
-      .filter(route => !route.redirect)
+      .filter(route => !route.redirect && !isExtensionOwnedRoute(route))
       .map(route => String(route.moduleId || 'core').trim())
       .filter(Boolean)
   )
@@ -101,6 +101,10 @@ function buildExtensionIconStyle(extension) {
     '--admin-extension-icon-color': color,
     '--admin-extension-icon-bg': background,
   }
+}
+
+function isExtensionOwnedRoute(route) {
+  return Boolean(String(route?.extensionId || route?.extension_id || '').trim())
 }
 
 export function getAdminRouteMeta(currentPath) {

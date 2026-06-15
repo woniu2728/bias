@@ -101,7 +101,8 @@ export function findAdminRouteByPath(path, options = {}) {
 export function getAdminNavSections(options = {}) {
   const sections = {
     core: { key: 'core', title: '核心', items: [] },
-    feature: { key: 'feature', title: '功能', items: [] }
+    feature: { key: 'feature', title: '功能', items: [] },
+    extensions: { key: 'extensions', title: '扩展', items: [] },
   }
 
   for (const route of getAdminRoutes(options)) {
@@ -109,7 +110,9 @@ export function getAdminNavSections(options = {}) {
       continue
     }
 
-    const section = sections[route.navSection] || sections.feature
+    const routeExtensionId = String(route.extensionId || route.extension_id || '').trim()
+    const sectionKey = routeExtensionId && route.navSection !== 'core' ? 'extensions' : route.navSection
+    const section = sections[sectionKey] || sections.feature
     section.items.push({
       path: route.path,
       icon: route.icon,

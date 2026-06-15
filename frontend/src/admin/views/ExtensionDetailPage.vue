@@ -267,6 +267,7 @@ const runtimeActions = computed(() => (
 
 const inlineSettings = computed(() => (
   isInlineSurfaceSupported(extension.value, 'settings')
+  || hasExtensionSettingsPage(extension.value)
 ))
 
 const inlinePermissions = computed(() => (
@@ -708,6 +709,10 @@ function isInlineSurfaceSupported(currentExtension, surface) {
     return Array.isArray(currentExtension.permission_sections) && currentExtension.permission_sections.length > 0
   }
   return false
+}
+
+function hasExtensionSettingsPage(currentExtension) {
+  return Array.isArray(currentExtension?.settings_pages) && currentExtension.settings_pages.length > 0
 }
 
 function extractApiErrorMessage(error, fallback) {

@@ -3,29 +3,26 @@ from __future__ import annotations
 from apps.core.extensions import ResourceFieldDefinition
 
 
-def user_detail_resource_field_definitions():
-    return (
+USER_POINT_RESOURCES = (
+    "user_detail",
+    "user_summary",
+    "discussion_user",
+    "post_user",
+    "search_user",
+)
+
+
+def user_points_resource_field_definitions():
+    return tuple(
         ResourceFieldDefinition(
-            resource="user_detail",
+            resource=resource,
             field="points_balance",
             module_id="points",
             resolver=resolve_user_points_balance,
             description="用户当前积分余额。",
             select_related=("point_account",),
-        ),
-    )
-
-
-def user_summary_resource_field_definitions():
-    return (
-        ResourceFieldDefinition(
-            resource="user_summary",
-            field="points_balance",
-            module_id="points",
-            resolver=resolve_user_points_balance,
-            description="用户当前积分余额。",
-            select_related=("point_account",),
-        ),
+        )
+        for resource in USER_POINT_RESOURCES
     )
 
 

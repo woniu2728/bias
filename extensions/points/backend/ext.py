@@ -18,8 +18,7 @@ from extensions.points.backend.listeners import (
 )
 from extensions.points.backend.models import PointAccount, PointLedgerEntry
 from extensions.points.backend.resources import (
-    user_detail_resource_field_definitions,
-    user_summary_resource_field_definitions,
+    user_points_resource_field_definitions,
 )
 from extensions.points.backend.runtime import points_service_provider
 
@@ -61,8 +60,7 @@ def extend():
         ModelExtender()
         .owns(PointAccount, description="用户积分账户由 points 扩展拥有。")
         .owns(PointLedgerEntry, description="用户积分账本由 points 扩展拥有。"),
-        ApiResourceExtender("user_detail").fields(user_detail_resource_field_definitions),
-        ApiResourceExtender("user_summary").fields(user_summary_resource_field_definitions),
+        ApiResourceExtender().fields(user_points_resource_field_definitions),
         LifecycleExtender(),
     ]
 

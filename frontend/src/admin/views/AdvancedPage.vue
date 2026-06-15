@@ -3,7 +3,7 @@
     class-name="AdvancedPage"
     icon="fas fa-cog"
     :title="advancedCopy?.pageTitle || '高级设置'"
-    :description="advancedCopy?.pageDescription || '配置缓存、队列、维护模式与文件存储'"
+    :description="advancedCopy?.pageDescription || '配置缓存、队列、维护模式与扩展恢复'"
   >
     <div class="AdvancedPage-content">
       <div class="RuntimeNotice">
@@ -48,7 +48,7 @@
         </div>
       </div>
 
-      <div v-if="showSearchIndexSection" class="Form-section">
+      <div v-if="runtimeDependencyChecks.length || runtimeDependencyActions.length" class="Form-section">
         <h3 class="Section-title">{{ advancedCopy?.dependencyHealthTitle || '依赖健康' }}</h3>
 
         <div class="RuntimeSnapshot">
@@ -59,7 +59,7 @@
               class="RuntimeSnapshot-item"
             >
               <div class="RuntimeSnapshot-label">{{ item.label }}</div>
-              <div class="RuntimeSnapshot-value">{{ item.status_label || advancedCopy?.searchStatusLoadingText || '加载中...' }}</div>
+              <div class="RuntimeSnapshot-value">{{ item.status_label || advancedCopy?.dependencyStatusLoadingText || '加载中...' }}</div>
               <p class="RuntimeSnapshot-help">
                 {{ item.message || advancedCopy?.dependencyHealthHelpText || '查看当前依赖运行状态与修复建议。' }}
               </p>
@@ -83,7 +83,7 @@
         </div>
       </div>
 
-      <div v-if="showStorageSection" class="Form-section">
+      <div class="Form-section">
         <h3 class="Section-title">{{ advancedCopy?.cacheSectionTitle || '缓存设置' }}</h3>
 
         <div class="Form-group">
@@ -118,85 +118,6 @@
       </div>
 
       <div class="Form-section">
-        <h3 class="Section-title">{{ advancedCopy?.searchSectionTitle || '搜索索引' }}</h3>
-
-        <div class="RuntimeSnapshot">
-          <div class="RuntimeSnapshot-grid">
-            <div class="RuntimeSnapshot-item">
-              <div class="RuntimeSnapshot-label">{{ advancedCopy?.searchStatusLabel || '当前状态' }}</div>
-              <div class="RuntimeSnapshot-value">
-                {{ searchIndexStatus?.label || advancedCopy?.searchStatusLoadingText || '加载中...' }}
-              </div>
-              <p class="RuntimeSnapshot-help">
-                {{ searchIndexStatus?.message || searchIndexStatusError || advancedCopy?.searchStatusHintText || '查看当前索引与队列运行状态。' }}
-              </p>
-            </div>
-
-            <div class="RuntimeSnapshot-item">
-              <div class="RuntimeSnapshot-label">{{ advancedCopy?.searchDatabaseLabel || '当前数据库' }}</div>
-              <div class="RuntimeSnapshot-value">
-                {{ searchIndexStatus?.databaseLabel || advancedCopy?.searchStatusLoadingText || '加载中...' }}
-              </div>
-            </div>
-
-            <div class="RuntimeSnapshot-item">
-              <div class="RuntimeSnapshot-label">{{ advancedCopy?.searchLastRebuildLabel || '最近重建' }}</div>
-              <div class="RuntimeSnapshot-value">
-                {{ formatSearchRebuildTime(searchIndexStatus?.lastRebuild?.created_at) }}
-              </div>
-              <p v-if="searchIndexStatus?.lastRebuild?.duration_ms" class="RuntimeSnapshot-help">
-                {{ formatSearchRebuildDuration(searchIndexStatus.lastRebuild.duration_ms) }}
-              </p>
-            </div>
-
-            <div class="RuntimeSnapshot-item">
-              <div class="RuntimeSnapshot-label">{{ advancedCopy?.searchQueueStatusLabel || '索引队列状态' }}</div>
-              <div class="RuntimeSnapshot-value">
-                {{ searchIndexStatus?.queueWorkerLabel || advancedCopy?.searchStatusLoadingText || '加载中...' }}
-              </div>
-              <p class="RuntimeSnapshot-help">
-                {{ searchIndexStatus?.queueWorkerMessage || advancedCopy?.searchQueueStatusHelpText || '当前重建按钮仍是请求内执行，后续异步索引任务会复用这里的队列运行状态。' }}
-              </p>
-            </div>
-          </div>
-
-          <div
-            v-if="Array.isArray(searchIndexStatus?.missing_indexes) && searchIndexStatus.missing_indexes.length > 0"
-            class="RuntimeSnapshot-tags"
-          >
-            <span class="RuntimeSnapshot-tagsLabel">{{ advancedCopy?.searchMissingIndexesLabel || '缺失索引' }}</span>
-            <code
-              v-for="indexName in searchIndexStatus.missing_indexes"
-              :key="indexName"
-              class="RuntimeSnapshot-tag"
-            >
-              {{ indexName }}
-            </code>
-          </div>
-        </div>
-
-        <div class="Form-group">
-          <label>{{ advancedCopy?.searchIndexLabel || 'PostgreSQL 全文索引' }}</label>
-          <p class="Form-help">{{ advancedCopy?.searchIndexHelpText || '用于英文、数字关键词的讨论、回复和用户搜索。数据量较大时请在低峰期执行。' }}</p>
-        </div>
-
-        <AdminInlineMessage v-if="searchIndexStatusError" tone="danger">
-          {{ searchIndexStatusError }}
-        </AdminInlineMessage>
-
-        <div class="Form-actions">
-          <button
-            type="button"
-            class="Button"
-            :disabled="rebuildingSearchIndexes || searchIndexStatus?.supported === false"
-            @click="rebuildSearchIndexes"
-          >
-            {{ rebuildingSearchIndexes ? (advancedCopy?.rebuildingSearchIndexesLabel || '重建中...') : (advancedCopy?.rebuildSearchIndexesLabel || '重建搜索索引') }}
-          </button>
-        </div>
-      </div>
-
-      <div class="Form-section">
         <h3 class="Section-title">{{ advancedCopy?.queueSectionTitle || '队列设置' }}</h3>
 
         <div class="Form-group">
@@ -224,456 +145,6 @@
           <p class="Form-help">{{ advancedCopy?.queueEnabledHelpText || '关闭时强制同步执行。开启后，已接入任务会入队执行；入队失败时会同步回退，避免影响主流程。' }}</p>
         </div>
 
-      </div>
-
-      <div v-if="showHumanVerificationSection" class="Form-section">
-        <h3 class="Section-title">{{ advancedCopy?.humanVerificationSectionTitle || '安全与真人验证' }}</h3>
-
-        <div class="Form-group">
-          <label for="advanced-human-verification-provider">{{ advancedCopy?.humanVerificationProviderLabel || '验证提供方' }}</label>
-          <AdminSelectMenu
-            input-id="advanced-human-verification-provider"
-            v-model="settings.auth_human_verification_provider"
-            :options="humanVerificationProviderOptions"
-            :aria-label="advancedCopy?.humanVerificationProviderLabel || '验证提供方'"
-          />
-          <p class="Form-help">{{ advancedCopy?.humanVerificationProviderHelpText || '建议正式环境开启，优先拦截登录和注册机器人。' }}</p>
-        </div>
-
-        <template v-if="settings.auth_human_verification_provider === 'turnstile'">
-          <div class="Form-grid">
-            <div class="Form-group">
-              <label for="advanced-turnstile-site-key">{{ advancedCopy?.turnstileSiteKeyLabel || 'Site Key' }}</label>
-              <input
-                id="advanced-turnstile-site-key"
-                v-model="settings.auth_turnstile_site_key"
-                name="auth_turnstile_site_key"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.turnstileSiteKey || '0x4AAAA...'"
-              />
-            </div>
-
-            <div class="Form-group">
-              <label for="advanced-turnstile-secret-key">{{ advancedCopy?.turnstileSecretKeyLabel || 'Secret Key' }}</label>
-              <input
-                id="advanced-turnstile-secret-key"
-                v-model="settings.auth_turnstile_secret_key"
-                name="auth_turnstile_secret_key"
-                type="password"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.turnstileSecretKey || '0x4AAAA...'"
-              />
-            </div>
-          </div>
-
-          <div class="Form-grid">
-            <div class="Form-group Form-group--checkbox">
-              <label>
-                <input
-                  id="advanced-human-verification-login-enabled"
-                  v-model="settings.auth_human_verification_login_enabled"
-                  name="auth_human_verification_login_enabled"
-                  type="checkbox"
-                  class="FormControl-checkbox"
-                />
-                {{ advancedCopy?.turnstileLoginEnabledLabel || '登录时启用真人验证' }}
-              </label>
-            </div>
-
-            <div class="Form-group Form-group--checkbox">
-              <label>
-                <input
-                  id="advanced-human-verification-register-enabled"
-                  v-model="settings.auth_human_verification_register_enabled"
-                  name="auth_human_verification_register_enabled"
-                  type="checkbox"
-                  class="FormControl-checkbox"
-                />
-                {{ advancedCopy?.turnstileRegisterEnabledLabel || '注册时启用真人验证' }}
-              </label>
-            </div>
-          </div>
-
-          <p v-if="turnstileMisconfigured" class="Form-warning">
-            {{ advancedCopy?.turnstileMisconfiguredText || '已选择 Turnstile，但 Site Key 或 Secret Key 仍为空，当前不会真正启用验证。' }}
-          </p>
-        </template>
-      </div>
-
-      <div class="Form-section">
-        <h3 class="Section-title">{{ advancedCopy?.storageSectionTitle || '文件存储' }}</h3>
-
-        <div class="Form-group">
-          <label for="advanced-storage-driver">{{ advancedCopy?.storageDriverLabel || '存储驱动' }}</label>
-          <AdminSelectMenu
-            input-id="advanced-storage-driver"
-            v-model="settings.storage_driver"
-            :options="storageDriverOptions"
-            :aria-label="advancedCopy?.storageDriverLabel || '存储驱动'"
-          />
-          <p class="Form-help">{{ advancedCopy?.storageDriverHelpText || 'Composer 上传、头像上传和后续附件能力都会读取这里的运行时配置' }}</p>
-        </div>
-
-        <p class="Form-help">{{ advancedCopy?.storageObjectDirectoryHelpText || '附件和头像对象目录由对应扩展管理。' }}</p>
-
-        <div v-if="showUploadPolicySection" class="Form-section Form-section--nested">
-          <div class="Form-sectionHeader">
-            <h4>{{ advancedCopy?.uploadPolicyTitle || '上传策略' }}</h4>
-            <p>{{ advancedCopy?.uploadPolicyDescription || '限制上传大小，扩展名白名单仍由服务端固定控制。' }}</p>
-          </div>
-
-          <div class="Form-grid">
-            <div class="Form-group">
-              <label for="advanced-upload-site-asset-max-size">{{ advancedCopy?.uploadSiteAssetMaxSizeLabel || '站点资源最大体积（MB）' }}</label>
-              <input
-                id="advanced-upload-site-asset-max-size"
-                v-model.number="settings.upload_site_asset_max_size_mb"
-                name="upload_site_asset_max_size_mb"
-                type="number"
-                min="1"
-                max="100"
-                class="FormControl"
-              />
-            </div>
-          </div>
-
-          <p class="Form-help">{{ advancedCopy?.uploadSizeHelpText || '头像默认 2MB，Composer 附件默认 10MB，Logo/Favicon 默认 2MB。' }}</p>
-        </div>
-
-        <template v-if="settings.storage_driver === 'local'">
-          <div class="Form-grid">
-            <div class="Form-group">
-              <label for="advanced-storage-local-path">{{ advancedCopy?.localPathLabel || '本地保存目录' }}</label>
-              <input
-                id="advanced-storage-local-path"
-                v-model="settings.storage_local_path"
-                name="storage_local_path"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageLocalPath || 'D:\\data\\bias\\media'"
-              />
-              <p class="Form-help">{{ advancedCopy?.localPathHelpText || '可填写绝对路径，也可填写相对项目根目录的路径' }}</p>
-            </div>
-
-            <div class="Form-group">
-              <label for="advanced-storage-local-base-url">{{ advancedCopy?.localBaseUrlLabel || '本地访问基地址' }}</label>
-              <input
-                id="advanced-storage-local-base-url"
-                v-model="settings.storage_local_base_url"
-                name="storage_local_base_url"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageLocalBaseUrl || '/media/'"
-              />
-              <p class="Form-help">{{ advancedCopy?.localBaseUrlHelpText || '上传完成后生成给前台的 URL 前缀' }}</p>
-            </div>
-          </div>
-        </template>
-
-        <template v-if="settings.storage_driver === 's3'">
-          <div class="Form-grid">
-            <div class="Form-group">
-              <label for="advanced-storage-s3-bucket">{{ advancedCopy?.bucketLabel || 'Bucket' }}</label>
-              <input
-                id="advanced-storage-s3-bucket"
-                v-model="settings.storage_s3_bucket"
-                name="storage_s3_bucket"
-                type="text"
-                class="FormControl"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-s3-region">{{ advancedCopy?.regionLabel || 'Region' }}</label>
-              <input
-                id="advanced-storage-s3-region"
-                v-model="settings.storage_s3_region"
-                name="storage_s3_region"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageS3Region || 'ap-southeast-1'"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-s3-endpoint">{{ advancedCopy?.endpointLabel || 'Endpoint' }}</label>
-              <input
-                id="advanced-storage-s3-endpoint"
-                v-model="settings.storage_s3_endpoint"
-                name="storage_s3_endpoint"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageS3Endpoint || 'https://s3.amazonaws.com'"
-              />
-              <p class="Form-help">{{ advancedCopy?.s3EndpointHelpText || '使用 MinIO、Wasabi 等兼容服务时填写自定义 Endpoint' }}</p>
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-s3-public-url">{{ advancedCopy?.publicUrlLabel || '公共访问 URL' }}</label>
-              <input
-                id="advanced-storage-s3-public-url"
-                v-model="settings.storage_s3_public_url"
-                name="storage_s3_public_url"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageS3PublicUrl || 'https://cdn.example.com'"
-              />
-              <p class="Form-help">{{ advancedCopy?.s3PublicUrlHelpText || '如留空，系统会按标准 S3 域名尝试拼接' }}</p>
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-s3-access-key-id">{{ advancedCopy?.accessKeyIdLabel || 'Access Key ID' }}</label>
-              <input
-                id="advanced-storage-s3-access-key-id"
-                v-model="settings.storage_s3_access_key_id"
-                name="storage_s3_access_key_id"
-                type="text"
-                class="FormControl"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-s3-secret-access-key">{{ advancedCopy?.secretAccessKeyLabel || 'Secret Access Key' }}</label>
-              <input
-                id="advanced-storage-s3-secret-access-key"
-                v-model="settings.storage_s3_secret_access_key"
-                name="storage_s3_secret_access_key"
-                type="password"
-                class="FormControl"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-s3-object-prefix">{{ advancedCopy?.objectPrefixLabel || '对象前缀' }}</label>
-              <input
-                id="advanced-storage-s3-object-prefix"
-                v-model="settings.storage_s3_object_prefix"
-                name="storage_s3_object_prefix"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageObjectPrefix || 'bias'"
-              />
-            </div>
-            <div class="Form-group Form-group--checkbox">
-              <label>
-                <input
-                  id="advanced-storage-s3-path-style"
-                  v-model="settings.storage_s3_path_style"
-                  name="storage_s3_path_style"
-                  type="checkbox"
-                  class="FormControl-checkbox"
-                />
-                {{ advancedCopy?.pathStyleLabel || '使用 Path Style' }}
-              </label>
-              <p class="Form-help">{{ advancedCopy?.pathStyleHelpText || '兼容部分 S3 服务或自建对象存储' }}</p>
-            </div>
-          </div>
-        </template>
-
-        <template v-if="settings.storage_driver === 'r2'">
-          <div class="Form-grid">
-            <div class="Form-group">
-              <label for="advanced-storage-r2-bucket">{{ advancedCopy?.bucketLabel || 'Bucket' }}</label>
-              <input
-                id="advanced-storage-r2-bucket"
-                v-model="settings.storage_r2_bucket"
-                name="storage_r2_bucket"
-                type="text"
-                class="FormControl"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-r2-endpoint">{{ advancedCopy?.endpointLabel || 'Endpoint' }}</label>
-              <input
-                id="advanced-storage-r2-endpoint"
-                v-model="settings.storage_r2_endpoint"
-                name="storage_r2_endpoint"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageR2Endpoint || 'https://<accountid>.r2.cloudflarestorage.com'"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-r2-public-url">{{ advancedCopy?.publicUrlCdnLabel || '公共访问 URL / CDN 域名' }}</label>
-              <input
-                id="advanced-storage-r2-public-url"
-                v-model="settings.storage_r2_public_url"
-                name="storage_r2_public_url"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageR2PublicUrl || 'https://pub-xxx.r2.dev'"
-              />
-              <p class="Form-help">{{ advancedCopy?.r2PublicUrlHelpText || 'R2 通常需要单独的公开域名，否则前台生成的附件链接不可访问' }}</p>
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-r2-access-key-id">{{ advancedCopy?.accessKeyIdLabel || 'Access Key ID' }}</label>
-              <input
-                id="advanced-storage-r2-access-key-id"
-                v-model="settings.storage_r2_access_key_id"
-                name="storage_r2_access_key_id"
-                type="text"
-                class="FormControl"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-r2-secret-access-key">{{ advancedCopy?.secretAccessKeyLabel || 'Secret Access Key' }}</label>
-              <input
-                id="advanced-storage-r2-secret-access-key"
-                v-model="settings.storage_r2_secret_access_key"
-                name="storage_r2_secret_access_key"
-                type="password"
-                class="FormControl"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-r2-object-prefix">{{ advancedCopy?.objectPrefixLabel || '对象前缀' }}</label>
-              <input
-                id="advanced-storage-r2-object-prefix"
-                v-model="settings.storage_r2_object_prefix"
-                name="storage_r2_object_prefix"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageObjectPrefix || 'bias'"
-              />
-            </div>
-          </div>
-        </template>
-
-        <template v-if="settings.storage_driver === 'oss'">
-          <div class="Form-grid">
-            <div class="Form-group">
-              <label for="advanced-storage-oss-bucket">{{ advancedCopy?.bucketLabel || 'Bucket' }}</label>
-              <input
-                id="advanced-storage-oss-bucket"
-                v-model="settings.storage_oss_bucket"
-                name="storage_oss_bucket"
-                type="text"
-                class="FormControl"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-oss-endpoint">{{ advancedCopy?.endpointLabel || 'Endpoint' }}</label>
-              <input
-                id="advanced-storage-oss-endpoint"
-                v-model="settings.storage_oss_endpoint"
-                name="storage_oss_endpoint"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageOssEndpoint || 'oss-cn-hangzhou.aliyuncs.com'"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-oss-public-url">{{ advancedCopy?.publicUrlLabel || '公共访问 URL' }}</label>
-              <input
-                id="advanced-storage-oss-public-url"
-                v-model="settings.storage_oss_public_url"
-                name="storage_oss_public_url"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageS3PublicUrl || 'https://cdn.example.com'"
-              />
-              <p class="Form-help">{{ advancedCopy?.ossPublicUrlHelpText || '如留空，将按 Bucket + Endpoint 生成标准 OSS 访问地址' }}</p>
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-oss-access-key-id">{{ advancedCopy?.accessKeyIdLabel || 'Access Key ID' }}</label>
-              <input
-                id="advanced-storage-oss-access-key-id"
-                v-model="settings.storage_oss_access_key_id"
-                name="storage_oss_access_key_id"
-                type="text"
-                class="FormControl"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-oss-access-key-secret">{{ advancedCopy?.accessKeySecretLabel || 'Access Key Secret' }}</label>
-              <input
-                id="advanced-storage-oss-access-key-secret"
-                v-model="settings.storage_oss_access_key_secret"
-                name="storage_oss_access_key_secret"
-                type="password"
-                class="FormControl"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-oss-object-prefix">{{ advancedCopy?.objectPrefixLabel || '对象前缀' }}</label>
-              <input
-                id="advanced-storage-oss-object-prefix"
-                v-model="settings.storage_oss_object_prefix"
-                name="storage_oss_object_prefix"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.storageObjectPrefix || 'bias'"
-              />
-            </div>
-          </div>
-        </template>
-
-        <template v-if="settings.storage_driver === 'imagebed'">
-          <div class="Form-grid">
-            <div class="Form-group">
-              <label for="advanced-storage-imagebed-endpoint">{{ advancedCopy?.imagebedEndpointLabel || '上传接口地址' }}</label>
-              <input
-                id="advanced-storage-imagebed-endpoint"
-                v-model="settings.storage_imagebed_endpoint"
-                name="storage_imagebed_endpoint"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.imagebedEndpoint || 'https://example.com/api/upload'"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-imagebed-method">{{ advancedCopy?.imagebedMethodLabel || '请求方法' }}</label>
-              <AdminSelectMenu
-                input-id="advanced-storage-imagebed-method"
-                v-model="settings.storage_imagebed_method"
-                :options="imagebedMethodOptions"
-                :aria-label="advancedCopy?.imagebedMethodLabel || '请求方法'"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-imagebed-file-field">{{ advancedCopy?.imagebedFileFieldLabel || '文件字段名' }}</label>
-              <input
-                id="advanced-storage-imagebed-file-field"
-                v-model="settings.storage_imagebed_file_field"
-                name="storage_imagebed_file_field"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.imagebedFileField || 'file'"
-              />
-            </div>
-            <div class="Form-group">
-              <label for="advanced-storage-imagebed-url-path">{{ advancedCopy?.imagebedUrlPathLabel || '响应 URL 路径' }}</label>
-              <input
-                id="advanced-storage-imagebed-url-path"
-                v-model="settings.storage_imagebed_url_path"
-                name="storage_imagebed_url_path"
-                type="text"
-                class="FormControl"
-                :placeholder="advancedConfig?.placeholders?.imagebedUrlPath || 'data.url'"
-              />
-              <p class="Form-help">{{ advancedCopy?.imagebedUrlPathHelpText || '支持点路径，例如 `data.url`、`result.images.0.url`' }}</p>
-            </div>
-          </div>
-
-          <div class="Form-group">
-            <label for="advanced-storage-imagebed-headers">{{ advancedCopy?.imagebedHeadersLabel || '请求头 JSON' }}</label>
-            <textarea
-              id="advanced-storage-imagebed-headers"
-              v-model="settings.storage_imagebed_headers"
-              name="storage_imagebed_headers"
-              class="FormControl"
-              rows="4"
-              :placeholder="advancedConfig?.placeholders?.imagebedHeaders || '{&quot;Authorization&quot;:&quot;Bearer token&quot;}'"
-            ></textarea>
-          </div>
-
-          <div class="Form-group">
-            <label for="advanced-storage-imagebed-form-data">{{ advancedCopy?.imagebedFormDataLabel || '额外表单参数 JSON' }}</label>
-            <textarea
-              id="advanced-storage-imagebed-form-data"
-              v-model="settings.storage_imagebed_form_data"
-              name="storage_imagebed_form_data"
-              class="FormControl"
-              rows="4"
-              :placeholder="advancedConfig?.placeholders?.imagebedFormData || '{&quot;album&quot;:&quot;forum&quot;}'"
-            ></textarea>
-          </div>
-        </template>
       </div>
 
       <div class="Form-section">
@@ -812,26 +283,16 @@ const advancedCopy = computed(() => getAdminAdvancedPageCopy())
 const advancedConfig = computed(() => getAdminAdvancedPageConfig())
 const advancedActionMeta = computed(() => getAdminAdvancedPageActionMeta())
 const settings = ref({})
-const searchIndexStatus = ref(null)
-const searchIndexStatusError = ref('')
 const adminStats = ref(null)
 const extensionRuntimeErrors = ref([])
 
 const saving = ref(false)
 const clearing = ref(false)
-const rebuildingSearchIndexes = ref(false)
 const loadedSettingsSnapshot = ref(null)
 const modalStore = useModalStore()
 const { saveSuccess, saveError, saveErrorMessage, resetSaveFeedback, showSaveSuccess, showSaveError } = useAdminSaveFeedback()
 const cacheDriverOptions = computed(() => advancedConfig.value?.cacheDriverOptions || [])
 const queueDriverOptions = computed(() => advancedConfig.value?.queueDriverOptions || [])
-const showHumanVerificationSection = computed(() => Boolean(advancedConfig.value?.enableHumanVerificationSection))
-const showSearchIndexSection = computed(() => Boolean(advancedConfig.value?.enableSearchIndexSection))
-const showStorageSection = computed(() => Boolean(advancedConfig.value?.enableStorageSection))
-const showUploadPolicySection = computed(() => Boolean(advancedConfig.value?.enableUploadPolicySection))
-const humanVerificationProviderOptions = computed(() => advancedConfig.value?.humanVerificationProviderOptions || [])
-const storageDriverOptions = computed(() => advancedConfig.value?.storageDriverOptions || [])
-const imagebedMethodOptions = computed(() => advancedConfig.value?.imagebedMethodOptions || [])
 const maintenanceModeOptions = computed(() => advancedConfig.value?.maintenanceModeOptions || [
   { value: 'none', label: '关闭' },
   { value: 'low', label: '低维护' },
@@ -855,10 +316,6 @@ const extensionRecoveryNotice = computed(() => {
   }
   return ''
 })
-const turnstileMisconfigured = computed(() => (
-  settings.value.auth_human_verification_provider === 'turnstile'
-  && (!settings.value.auth_turnstile_site_key || !settings.value.auth_turnstile_secret_key)
-))
 const extensionSafeModeExtensionsText = computed({
   get() {
     return Array.isArray(settings.value.extension_safe_mode_extensions)
@@ -904,7 +361,6 @@ onMounted(async () => {
   await Promise.all([
     loadAdvancedSettings(),
     loadAdminStats(),
-    showSearchIndexSection.value ? loadSearchIndexStatus() : Promise.resolve(),
   ])
   refreshRuntimeErrors()
 })
@@ -916,18 +372,6 @@ async function loadAdvancedSettings() {
     loadedSettingsSnapshot.value = createSettingsSnapshot(settings.value)
   } catch (error) {
     console.error('加载高级设置失败:', error)
-  }
-}
-
-async function loadSearchIndexStatus() {
-  searchIndexStatusError.value = ''
-  try {
-    searchIndexStatus.value = await api.get('/admin/search-indexes/status')
-  } catch (error) {
-    console.error('加载搜索索引状态失败:', error)
-    searchIndexStatusError.value = error.response?.data?.error
-      || advancedActionMeta.value?.loadSearchStatusErrorText
-      || '加载搜索索引状态失败，请稍后重试'
   }
 }
 
@@ -1014,39 +458,6 @@ async function clearCache() {
   }
 }
 
-async function rebuildSearchIndexes() {
-  const confirmed = await modalStore.confirm({
-    title: advancedActionMeta.value?.rebuildSearchConfirmTitle || '重建搜索索引',
-    message: advancedActionMeta.value?.rebuildSearchConfirmMessage || '确定在后台重建 PostgreSQL 全文搜索索引吗？数据量较大时可能耗时较长，建议在低峰期执行。',
-    confirmText: advancedActionMeta.value?.rebuildSearchConfirmText || '重建',
-    cancelText: advancedActionMeta.value?.rebuildSearchCancelText || '取消',
-    tone: 'warning'
-  })
-  if (!confirmed) {
-    return
-  }
-
-  rebuildingSearchIndexes.value = true
-  try {
-    const response = await api.post('/admin/search-indexes/rebuild')
-    await loadAdminStats()
-    await loadSearchIndexStatus()
-    await modalStore.alert({
-      title: advancedActionMeta.value?.rebuildSearchSuccessTitle || '搜索索引已重建',
-      message: advancedActionMeta.value?.rebuildSearchSuccessMessage?.(response) || '已重建讨论、回复和用户搜索索引。',
-      tone: 'success'
-    })
-  } catch (error) {
-    await modalStore.alert({
-      title: advancedActionMeta.value?.rebuildSearchFailedTitle || '重建搜索索引失败',
-      message: error.response?.data?.error || error.message || advancedActionMeta.value?.unknownErrorText || '未知错误',
-      tone: 'danger'
-    })
-  } finally {
-    rebuildingSearchIndexes.value = false
-  }
-}
-
 function createSettingsSnapshot(value) {
   const normalized = normalizeAdvancedSettings(value)
   return {
@@ -1059,8 +470,6 @@ function createSettingsSnapshot(value) {
     queue_enabled: Boolean(value.queue_enabled),
     queue_driver: value.queue_driver,
     log_queries: Boolean(value.log_queries),
-    ...(showStorageSection.value ? { storage_driver: value.storage_driver } : {}),
-    ...(showUploadPolicySection.value ? { upload_site_asset_max_size_mb: normalizeUploadSize(value.upload_site_asset_max_size_mb) } : {}),
   }
 }
 
@@ -1085,40 +494,6 @@ function getSensitiveSettingChanges() {
   return Object.keys(labels).filter(key => previous[key] !== current[key]).map(key => labels[key])
 }
 
-function normalizeUploadSize(value) {
-  const parsed = Number.parseInt(value, 10)
-  if (!Number.isFinite(parsed)) {
-    return 1
-  }
-  return Math.min(100, Math.max(1, parsed))
-}
-
-function formatSearchRebuildTime(value) {
-  if (!value) {
-    return advancedCopy.value?.searchNeverRebuiltText || '尚未重建'
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}
-
-function formatSearchRebuildDuration(durationMs) {
-  const normalized = Number(durationMs || 0)
-  if (!normalized) {
-    return advancedCopy.value?.searchLastRebuildDurationFallback || '最近一次重建未记录耗时。'
-  }
-  return advancedCopy.value?.searchLastRebuildDurationText?.(normalized) || `最近一次耗时 ${normalized} ms`
-}
 </script>
 
 <style scoped>

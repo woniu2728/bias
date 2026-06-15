@@ -24,6 +24,8 @@
   },
   "extra": {
     "auto_install": true,
-    "auto_enable": true
+    "auto_enable": true,
+    "protected": true,
+    "protected_reason": "该扩展承载上传、头像、站点资源和附件存储基础能力，不能在后台停用或卸载。"
   }
 }

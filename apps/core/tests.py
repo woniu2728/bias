@@ -2239,10 +2239,10 @@ class ExtensionManifestLoaderTests(TestCase):
         extension = SimpleNamespace(source="filesystem", manifest=SimpleNamespace(extra={}))
         runtime_view = SimpleNamespace(
             settings_schema=(),
-            settings_defaults=(SimpleNamespace(key="advanced.auth_human_verification_provider", value="off"),),
+            settings_defaults=(SimpleNamespace(key="extensions.security.auth_human_verification_provider", value="off"),),
             settings_forum_serializations=(SimpleNamespace(
                 attribute="auth_human_verification_provider",
-                key="advanced.auth_human_verification_provider",
+                key="extensions.security.auth_human_verification_provider",
             ),),
             forum_settings_keys=(),
         )
@@ -7531,12 +7531,12 @@ class ExtensionRegistryTests(TestCase):
     def test_extension_runtime_state_refreshes_after_enable_toggle(self):
         reset_extension_runtime_state()
         entries = get_enabled_extension_runtime_entries(product_visible_only=True)
-        self.assertTrue(any(item["id"] == "uploads" for item in entries))
+        self.assertTrue(any(item["id"] == "ai" for item in entries))
 
         with patch("apps.core.extension_service.reset_extension_runtime_state") as reset_runtime_mock, patch(
             "apps.core.extension_service.rebuild_runtime_urlconf"
         ) as rebuild_urlconf_mock:
-            ExtensionService.set_extension_enabled("uploads", False)
+            ExtensionService.set_extension_enabled("ai", False)
 
         reset_runtime_mock.assert_called_once()
         rebuild_urlconf_mock.assert_called_once()
@@ -13584,7 +13584,8 @@ class AdminSettingsApiTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
         self.assertIn("cache_driver", payload)
-        self.assertIn("storage_driver", payload)
+        self.assertIn("queue_driver", payload)
+        self.assertNotIn("storage_driver", payload)
 
         response = self.client.post(
             "/api/admin/cache/clear",
@@ -13593,36 +13594,6 @@ class AdminSettingsApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.json()["message"], "缓存已清除")
-
-    def test_advanced_settings_persist_storage_config(self):
-        response = self.client.post(
-            "/api/admin/advanced",
-            data=json.dumps({
-                "storage_driver": "r2",
-                "storage_local_path": "custom-media",
-                "storage_r2_bucket": "forum-assets",
-                "storage_r2_endpoint": "https://example.r2.cloudflarestorage.com",
-                "storage_r2_public_url": "https://cdn.example.com",
-            }),
-            content_type="application/json",
-            **self.auth_header(),
-        )
-
-        self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(
-            json.loads(Setting.objects.get(key="advanced.storage_driver").value),
-            "r2",
-        )
-        response = self.client.get(
-            "/api/admin/advanced",
-            **self.auth_header(),
-        )
-
-        self.assertEqual(response.status_code, 200, response.content)
-        payload = response.json()
-        self.assertEqual(payload["storage_driver"], "r2")
-        self.assertEqual(payload["storage_r2_bucket"], "forum-assets")
-        self.assertEqual(payload["storage_r2_public_url"], "https://cdn.example.com")
 
     def test_appearance_settings_persist_head_and_footer_html(self):
         response = self.client.post(

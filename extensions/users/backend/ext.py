@@ -12,7 +12,6 @@ from apps.core.extensions import (
     SettingsExtender,
     ServiceProviderExtender,
     UserExtender,
-    setting_field,
 )
 from extensions.users.backend.admin_api import router as admin_users_router
 from extensions.users.backend.api import router as users_router
@@ -112,7 +111,6 @@ def extend():
         .owns(EmailToken, description="邮箱验证令牌由 users 扩展拥有。")
         .owns(PasswordToken, description="密码重置令牌由 users 扩展拥有。"),
         LifecycleExtender(),
-        build_user_settings_extender(),
         ForumPermissionExtender().checker(
             "users.forum-permissions",
             UserService.has_forum_permission,
@@ -154,29 +152,6 @@ def build_mail_settings_extender():
     for key, value in mail_setting_defaults().items():
         extender = extender.default(f"mail.{key}", value)
     return extender
-
-
-def build_user_settings_extender():
-    return SettingsExtender(fields=(
-        setting_field({
-            "key": "avatars_dir",
-            "label": "头像目录",
-            "type": "text",
-            "default": "avatars",
-            "help_text": "头像和缩略图对象保存目录，支持多级路径。",
-            "required": True,
-            "order": 5,
-        }),
-        setting_field({
-            "key": "avatar_max_size_mb",
-            "label": "头像最大体积（MB）",
-            "type": "number",
-            "default": 2,
-            "help_text": "限制用户头像上传大小，允许范围 1-100MB。",
-            "required": True,
-            "order": 10,
-        }),
-    )).default("avatars_dir", "avatars").default("avatar_max_size_mb", 2)
 
 
 def permission_definitions():

@@ -3,7 +3,6 @@ import uuid
 
 from apps.core.extensions.platform import FileUploadService
 from apps.core.extensions.platform import get_extension_settings
-from apps.core.extensions.platform import get_advanced_settings_defaults, get_setting_group
 from apps.core.extensions.platform import get_storage_backend
 
 
@@ -50,7 +49,7 @@ class UploadService:
 
         ext = os.path.splitext(file.name)[1].lower()
         filename = f"{uuid.uuid4().hex}{ext}"
-        backend = get_storage_backend()
+        backend = get_upload_storage_backend()
         content = FileUploadService.read_uploaded_file(file)
         object_key = backend.build_user_key(UploadService.get_attachments_dir(), user_id, filename)
         file_url = backend.save_bytes(
@@ -90,7 +89,7 @@ class UploadService:
         )
 
         filename = f"{uuid.uuid4().hex}{ext}"
-        backend = get_storage_backend()
+        backend = get_upload_storage_backend()
         content = FileUploadService.read_uploaded_file(file)
         object_key = backend.join_key("appearance", normalized_type, filename)
         file_url = backend.save_bytes(
@@ -121,7 +120,7 @@ class UploadService:
 
     @staticmethod
     def get_site_asset_upload_limit_mb() -> int:
-        settings_data = get_setting_group("advanced", get_advanced_settings_defaults())
+        settings_data = get_uploads_settings()
         return FileUploadService._normalize_upload_size_mb(
             settings_data.get("upload_site_asset_max_size_mb"),
             UploadService.MAX_SITE_ASSET_SIZE,
@@ -159,3 +158,11 @@ class UploadService:
         if file.size > max_size:
             max_size_mb = max_size / (1024 * 1024)
             raise ValueError(f"文件大小超过限制（最大{max_size_mb}MB）")
+
+
+def get_uploads_settings() -> dict:
+    return get_extension_settings("uploads")
+
+
+def get_upload_storage_backend():
+    return get_storage_backend(get_uploads_settings())

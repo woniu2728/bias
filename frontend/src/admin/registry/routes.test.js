@@ -211,3 +211,50 @@ test('admin routes can match first-class core admin pages directly', () => {
   assert.equal(findAdminRouteByPath('/admin/extension-demo-c')?.name, 'admin-extension-demo-c')
   assert.equal(findAdminRouteByPath('/admin/docs')?.name, 'admin-core-docs')
 })
+
+test('admin navigation keeps extension section visible when extension-owned routes exist', () => {
+  registerAdminRoute({
+    path: '/admin/extensions/alpha-tools',
+    name: 'admin-extension-alpha-tools',
+    label: 'Alpha Tools',
+    moduleId: 'alpha-tools',
+    extensionId: 'alpha-tools',
+    navSection: 'feature',
+    navOrder: 900,
+    showInNavigation: true,
+  })
+
+  registerAdminRoute({
+    path: '/admin/extensions/alpha-tools/settings',
+    name: 'admin-extension-alpha-tools-settings',
+    label: 'Alpha Tools Settings',
+    moduleId: 'alpha-tools',
+    extensionId: 'alpha-tools',
+    showInNavigation: false,
+  })
+
+  const sections = getAdminNavSections({ isModuleEnabled: () => true })
+  const extensionSection = sections.find(section => section.key === 'extensions')
+
+  assert.equal(Boolean(extensionSection), true)
+  assert.equal(extensionSection.items.some(item => item.path === '/admin/extensions/alpha-tools'), true)
+})
+
+test('admin navigation keeps extension-owned first-class admin pages in core sections', () => {
+  registerAdminRoute({
+    path: '/admin/users-test',
+    name: 'admin-users-test',
+    label: '用户管理',
+    moduleId: 'users',
+    extensionId: 'users',
+    navSection: 'core',
+    navOrder: 80,
+    showInNavigation: true,
+  })
+
+  const sections = getAdminNavSections({ isModuleEnabled: () => true })
+  const coreSection = sections.find(section => section.key === 'core')
+
+  assert.equal(Boolean(coreSection), true)
+  assert.equal(coreSection.items.some(item => item.path === '/admin/users-test'), true)
+})

@@ -23,6 +23,9 @@
   "backend_entry": "extensions.search.backend.ext",
   "frontend_admin_entry": "extensions/search/frontend/admin/index.js",
   "frontend_forum_entry": "extensions/search/frontend/forum/index.js",
+  "settings_pages": [
+    "/admin/extensions/search/settings"
+  ],
   "security": {
     "support_email": "",
     "capabilities_notice": "该扩展负责注册论坛搜索过滤语法，不直接拥有用户内容数据。"

@@ -1,30 +1,23 @@
 import { extendAdmin } from '@bias/admin'
 
-const ADVANCED_PAGE_KEY = 'core.advanced'
+const SECURITY_PAGE_KEY = 'security.settings'
 
 export const extend = [
   extendAdmin(admin => admin
-    .pageCopy(ADVANCED_PAGE_KEY, {
-      key: 'security-human-verification-advanced-copy',
+    .pageCopy(SECURITY_PAGE_KEY, {
+      key: 'security-human-verification-settings-copy',
       moduleId: 'security',
       order: 20,
       resolve: () => ({
-        humanVerificationSectionTitle: '安全与真人验证',
-        humanVerificationProviderLabel: '验证提供方',
-        humanVerificationProviderHelpText: '建议正式环境开启，优先拦截登录和注册机器人。',
-        turnstileSiteKeyLabel: 'Site Key',
-        turnstileSecretKeyLabel: 'Secret Key',
-        turnstileLoginEnabledLabel: '登录时启用真人验证',
-        turnstileRegisterEnabledLabel: '注册时启用真人验证',
-        turnstileMisconfiguredText: '已选择 Turnstile，但 Site Key 或 Secret Key 仍为空，当前不会真正启用验证。',
+        pageTitle: '安全设置',
+        pageDescription: '配置登录和注册真人验证。',
       }),
     })
-    .pageConfig(ADVANCED_PAGE_KEY, {
-      key: 'security-human-verification-advanced-config',
+    .pageConfig(SECURITY_PAGE_KEY, {
+      key: 'security-human-verification-settings-config',
       moduleId: 'security',
       order: 20,
       resolve: () => ({
-        enableHumanVerificationSection: true,
         defaultSettings: {
           auth_human_verification_provider: 'off',
           auth_turnstile_site_key: '',
@@ -40,10 +33,21 @@ export const extend = [
           { value: 'off', label: '关闭' },
           { value: 'turnstile', label: 'Cloudflare Turnstile' },
         ],
+        sensitiveLabels: {
+          auth_human_verification_provider: '真人验证提供方',
+          auth_turnstile_site_key: 'Turnstile Site Key',
+          auth_turnstile_secret_key: 'Turnstile Secret Key',
+          auth_human_verification_login_enabled: '登录时启用真人验证',
+          auth_human_verification_register_enabled: '注册时启用真人验证',
+        },
       }),
     }))
 ]
 
 export function resolveDetailPage() {
+  return null
+}
+
+export function resolveSettingsPage() {
   return null
 }

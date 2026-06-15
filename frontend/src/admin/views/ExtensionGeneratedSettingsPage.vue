@@ -138,6 +138,6 @@ function buildSubmitPayload() {
 
 .ExtensionGeneratedSettings-actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 </style>

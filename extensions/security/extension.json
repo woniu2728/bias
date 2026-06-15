@@ -19,6 +19,9 @@
   "backend_entry": "extensions.security.backend.ext",
   "frontend_admin_entry": "extensions/security/frontend/admin/index.js",
   "frontend_forum_entry": "extensions/security/frontend/forum/index.js",
+  "settings_pages": [
+    "/admin/extensions/security/settings"
+  ],
   "security": {
     "support_email": "",
     "capabilities_notice": "该扩展可在登录和注册流程中调用 Cloudflare Turnstile 验证接口，用于拦截自动化请求。"

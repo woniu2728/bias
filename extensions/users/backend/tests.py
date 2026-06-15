@@ -22,6 +22,7 @@ from apps.core.models import AuditLog, Setting
 from apps.core.jwt_auth import ACCESS_TOKEN_COOKIE_NAME
 from apps.core.extensions import ResourceEndpointDefinition
 from extensions.testing import ResourceRegistry
+from extensions.testing import bootstrap_enabled_extension_application
 from apps.core.settings_service import clear_runtime_setting_caches
 from apps.core.extensions.runtime import get_runtime_notification_model
 from extensions.testing import ExtensionRuntimeTestMixin
@@ -415,6 +416,7 @@ class PasswordResetApiTests(TestCase):
 
 class AvatarUploadApiTests(TestCase):
     def setUp(self):
+        bootstrap_enabled_extension_application("uploads")
         self.user = User.objects.create_user(
             username="avatar-user",
             email="avatar@example.com",
@@ -461,8 +463,8 @@ class AvatarUploadApiTests(TestCase):
         self.assertIsNone(self.other_user.avatar_url)
         upload_avatar.assert_not_called()
 
-    def test_avatar_upload_limit_comes_from_users_extension_settings(self):
-        save_extension_settings("users", {"avatar_max_size_mb": 3, "avatars_dir": "profile-images"})
+    def test_avatar_upload_limit_comes_from_uploads_extension_settings(self):
+        save_extension_settings("uploads", {"avatar_max_size_mb": 3, "avatars_dir": "profile-images"})
 
         self.assertEqual(UserAvatarUploadService.get_avatar_upload_limit_mb(), 3)
         self.assertEqual(UserAvatarUploadService.get_avatar_upload_limit_bytes(), 3 * 1024 * 1024)
@@ -1068,26 +1070,13 @@ class HumanVerificationAuthTests(TestCase):
         super().tearDown()
 
     def enable_turnstile(self, *, login_enabled=True, register_enabled=True):
-        Setting.objects.update_or_create(
-            key="advanced.auth_human_verification_provider",
-            defaults={"value": json.dumps("turnstile")},
-        )
-        Setting.objects.update_or_create(
-            key="advanced.auth_turnstile_site_key",
-            defaults={"value": json.dumps("site-key")},
-        )
-        Setting.objects.update_or_create(
-            key="advanced.auth_turnstile_secret_key",
-            defaults={"value": json.dumps("secret-key")},
-        )
-        Setting.objects.update_or_create(
-            key="advanced.auth_human_verification_login_enabled",
-            defaults={"value": json.dumps(login_enabled)},
-        )
-        Setting.objects.update_or_create(
-            key="advanced.auth_human_verification_register_enabled",
-            defaults={"value": json.dumps(register_enabled)},
-        )
+        save_extension_settings("security", {
+            "auth_human_verification_provider": "turnstile",
+            "auth_turnstile_site_key": "site-key",
+            "auth_turnstile_secret_key": "secret-key",
+            "auth_human_verification_login_enabled": login_enabled,
+            "auth_human_verification_register_enabled": register_enabled,
+        })
         clear_runtime_setting_caches()
 
     def test_login_requires_human_verification_when_enabled(self):
@@ -1179,7 +1168,7 @@ class HumanVerificationAuthTests(TestCase):
         self.assertFalse(payload["auth_human_verification_register_enabled"])
         self.assertNotIn("auth_turnstile_secret_key", payload)
 
-    def test_admin_advanced_settings_persist_security_human_verification_config(self):
+    def test_security_extension_settings_persist_human_verification_config(self):
         admin = User.objects.create_superuser(
             username="human-admin",
             email="human-admin@example.com",
@@ -1196,7 +1185,7 @@ class HumanVerificationAuthTests(TestCase):
         access = response.json()["access"]
 
         response = self.client.post(
-            "/api/admin/advanced",
+            "/api/admin/extensions/security/settings",
             data=json.dumps({
                 "auth_human_verification_provider": "turnstile",
                 "auth_turnstile_site_key": "site-key",
@@ -1209,16 +1198,17 @@ class HumanVerificationAuthTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["settings"]["auth_human_verification_provider"], "turnstile")
         self.assertEqual(
-            json.loads(Setting.objects.get(key="advanced.auth_human_verification_provider").value),
+            json.loads(Setting.objects.get(key="extensions.security.auth_human_verification_provider").value),
             "turnstile",
         )
         self.assertEqual(
-            json.loads(Setting.objects.get(key="advanced.auth_turnstile_site_key").value),
+            json.loads(Setting.objects.get(key="extensions.security.auth_turnstile_site_key").value),
             "site-key",
         )
         self.assertEqual(
-            json.loads(Setting.objects.get(key="advanced.auth_human_verification_register_enabled").value),
+            json.loads(Setting.objects.get(key="extensions.security.auth_human_verification_register_enabled").value),
             False,
         )
 

@@ -83,6 +83,18 @@ test('loadExtensionForumEntryModule loads filesystem importer entries', async ()
   assert.equal(loaded.boot, true)
 })
 
+test('loadExtensionForumEntryModule resolves Vite glob importer path variants', async () => {
+  const loaded = await loadExtensionForumEntryModule('../../../extensions/points/frontend/forum/index.js', {
+    importers: {
+      '../../extensions/points/frontend/forum/index.js': async () => ({
+        loaded: 'points',
+      }),
+    },
+  })
+
+  assert.equal(loaded.loaded, 'points')
+})
+
 test('validateForumExtensionModule allows initializer-only modules', () => {
   assert.doesNotThrow(() => validateForumExtensionModule({}))
   assert.doesNotThrow(() => validateForumExtensionModule({ extend: [] }))
