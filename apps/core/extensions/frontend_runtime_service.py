@@ -4,7 +4,11 @@ from typing import Any
 
 from apps.core.extension_settings_service import get_extension_settings
 from apps.core.extensions.bootstrap import get_extension_host
-from apps.core.extensions.frontend_serialization import serialize_frontend_value, serialize_frontend_values
+from apps.core.extensions.frontend_serialization import (
+    serialize_frontend_routes,
+    serialize_frontend_value,
+    serialize_frontend_values,
+)
 from apps.core.extensions.product import is_product_visible_extension
 
 
@@ -61,7 +65,7 @@ def bootstrap_extension_frontend_runtime() -> None:
             "frontend_forum_entry": forum_entry,
             "frontend_common_entry": common_entry,
             "frontend_outputs": dict(frontend_outputs.get(extension_id) or {}),
-            "frontend_routes": _serialize_frontend_routes(frontend_routes),
+            "frontend_routes": serialize_frontend_routes(frontend_routes),
             "frontend_document": _build_frontend_document_payload(runtime_view),
             "settings_pages": list((frontend.settings_pages if frontend else runtime_view.settings_pages) or ()),
             "permissions_pages": list((frontend.permissions_pages if frontend else runtime_view.permissions_pages) or ()),
@@ -148,7 +152,7 @@ def _build_runtime_entry(
         "frontend_forum_entry": forum_entry,
         "frontend_common_entry": common_entry,
         "frontend_outputs": dict(frontend_outputs),
-        "frontend_routes": _serialize_frontend_routes(frontend_routes),
+        "frontend_routes": serialize_frontend_routes(frontend_routes),
         "frontend_document": _build_frontend_document_payload(runtime_view, settings_values=settings_values),
         "settings_pages": list((frontend.settings_pages if frontend else runtime_view.settings_pages) or ()),
         "permissions_pages": list((frontend.permissions_pages if frontend else runtime_view.permissions_pages) or ()),
@@ -200,34 +204,6 @@ def _has_settings_contract(runtime_view) -> bool:
         or getattr(runtime_view, "settings_forum_serializations", None)
         or getattr(runtime_view, "forum_settings_keys", None)
     )
-
-
-def _serialize_frontend_routes(routes) -> list[dict[str, Any]]:
-    output = []
-    for route in routes or ():
-        frontend = str(getattr(route, "frontend", "") or "forum").strip() or "forum"
-        removed = bool(getattr(route, "removed", False))
-        order = getattr(route, "order", 100)
-        output.append({
-            "path": str(getattr(route, "path", "") or "").strip(),
-            "name": str(getattr(route, "name", "") or "").strip(),
-            "component": str(getattr(route, "component", "") or "").strip(),
-            "frontend": frontend,
-            "module_id": str(getattr(route, "module_id", "") or "").strip(),
-            "title": str(getattr(route, "title", "") or "").strip(),
-            "description": str(getattr(route, "description", "") or "").strip(),
-            "preloads": serialize_frontend_values(getattr(route, "preloads", ()) or ()),
-            "document_attributes": serialize_frontend_values(getattr(route, "document_attributes", ()) or ()),
-            "head_tags": serialize_frontend_values(getattr(route, "head_tags", ()) or ()),
-            "requires_auth": bool(getattr(route, "requires_auth", False)),
-            "order": int(order if order is not None and order != "" else 100),
-            "removed": removed,
-        })
-    return [
-        item
-        for item in output
-        if item["name"] and (item["removed"] or (item["path"] and item["component"]))
-    ]
 
 
 def build_enabled_frontend_document_payload() -> dict[str, Any]:

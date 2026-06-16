@@ -326,7 +326,7 @@ class AdminApprovalQueueApiTests(TestCase):
         self.assertIn("请至少选择一条待审核内容", response.json()["error"])
 
     def test_admin_without_approval_permissions_is_denied_for_bulk_processing(self):
-        with patch("extensions.approval.backend.admin_api.has_runtime_forum_permission", return_value=False):
+        with patch("apps.core.extensions.platform.has_forum_permission", return_value=False):
             response = self.client.post(
                 "/api/admin/approval-queue/bulk/approve",
                 data=json.dumps({
@@ -376,7 +376,7 @@ class AdminApprovalQueueApiTests(TestCase):
         self.assertEqual(bulk_response.status_code, 403, bulk_response.content)
 
     def test_admin_without_approval_permissions_is_denied(self):
-        with patch("extensions.approval.backend.admin_api.has_runtime_forum_permission", return_value=False):
+        with patch("apps.core.extensions.platform.has_forum_permission", return_value=False):
             list_response = self.client.get(
                 "/api/admin/approval-queue",
                 **self.auth_header(),
@@ -1118,5 +1118,4 @@ class ApprovalPostEventResourceTests(TestCase):
                 "target_post_number": 3,
             },
         )
-
 

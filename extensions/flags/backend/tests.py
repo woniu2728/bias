@@ -781,7 +781,7 @@ class AdminFlagManagementApiTests(TestCase):
         self.assertEqual(audit_log.data["status"], "resolved")
 
     def test_admin_without_flag_permission_is_denied(self):
-        with patch("extensions.flags.backend.admin_api.has_runtime_forum_permission", return_value=False):
+        with patch("apps.core.extensions.platform.has_forum_permission", return_value=False):
             list_response = self.client.get(
                 "/api/admin/flags",
                 **self.auth_header(),
@@ -798,5 +798,4 @@ class AdminFlagManagementApiTests(TestCase):
                 **self.auth_header(),
             )
             self.assertEqual(resolve_response.status_code, 403, resolve_response.content)
-
 

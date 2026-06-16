@@ -4,6 +4,7 @@ from apps.core.audit import log_admin_action
 from apps.core.extensions.exceptions import ExtensionStateError
 from apps.core.extensions.frontend_compiler import recompile_extension_frontend_assets
 from apps.core.extensions.manager import get_extension_manager
+from apps.core.extensions.compatibility_guard import validate_bias_compatibility
 from apps.core.extensions.lifecycle import (
     clear_extension_runtime_rebuild_marker,
     mark_extension_runtime_requires_rebuild,
@@ -11,27 +12,9 @@ from apps.core.extensions.lifecycle import (
     rebuild_runtime_urlconf,
     reset_extension_runtime_state,
 )
-from apps.core.extensions.validation import resolve_bias_version_compatibility
 
 
 class ExtensionService:
-    @staticmethod
-    def _validate_bias_compatibility(extension, *, action: str) -> None:
-        compatibility = resolve_bias_version_compatibility(extension.manifest)
-        if compatibility["compatible"]:
-            return
-
-        action_label = "安装" if action == "install" else "启用"
-        raise ExtensionStateError(
-            f"无法{action_label}扩展 {extension.id}。{compatibility['message']}",
-            code=f"extension_{action}_incompatible_bias_version",
-            details={
-                "extension_id": extension.id,
-                "current_bias_version": compatibility["current_version"],
-                "required_bias_version": compatibility["required_range"],
-            },
-        )
-
     @staticmethod
     def _refresh_runtime(updated):
         reset_extension_runtime_state()
@@ -151,7 +134,7 @@ class ExtensionService:
     @staticmethod
     def install_extension(extension_id: str, *, actor=None, request=None):
         extension = get_extension_manager().get_extension(extension_id)
-        ExtensionService._validate_bias_compatibility(extension, action="install")
+        validate_bias_compatibility(extension, action="install")
         updated = get_extension_manager().install_extension(extension_id)
         updated = ExtensionService._refresh_runtime(updated)
 
@@ -203,7 +186,7 @@ class ExtensionService:
             )
         if enabled:
             extension = get_extension_manager().get_extension(extension_id)
-            ExtensionService._validate_bias_compatibility(extension, action="enable")
+            validate_bias_compatibility(extension, action="enable")
         updated = get_extension_manager().set_extension_enabled(extension_id, enabled)
         updated = ExtensionService._refresh_runtime(updated)
 

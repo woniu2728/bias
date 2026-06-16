@@ -24,6 +24,10 @@ from apps.core.extensions.runtime import (
 )
 
 
+# Keep discussions independent from the users extension at runtime.
+User = Any
+
+
 def _get_forum_registry():
     return get_forum_registry()
 

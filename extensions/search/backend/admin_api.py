@@ -2,27 +2,22 @@ from __future__ import annotations
 
 from ninja import Router
 
+from apps.core.extensions.platform import AccessTokenAuth
+from apps.core.extensions.platform import QueueService
 from apps.core.extensions.platform import api_error
 from apps.core.extensions.platform import log_admin_action
-from apps.core.extensions.platform import AccessTokenAuth
+from apps.core.extensions.platform import require_staff
 from apps.core.extensions.forum import AuditLog
 from apps.core.extensions.forum import detect_database_label
 from apps.core.extensions.forum import SearchIndexService
-from apps.core.extensions.platform import QueueService
 
 
 router = Router()
 
 
-def _require_staff(request):
-    if not request.auth or not request.auth.is_staff:
-        return api_error("需要管理员权限", status=403)
-    return None
-
-
 @router.get("/search-indexes/status", auth=AccessTokenAuth(), tags=["Admin"])
 def get_search_index_status(request):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -52,7 +47,7 @@ def get_search_index_status(request):
 
 @router.post("/search-indexes/rebuild", auth=AccessTokenAuth(), tags=["Admin"])
 def rebuild_search_indexes(request):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 

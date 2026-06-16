@@ -24,6 +24,57 @@ def refresh_token_max_age() -> int:
     return int(lifetime.total_seconds() if hasattr(lifetime, "total_seconds") else lifetime)
 
 
+def auth_cookie_secure() -> bool:
+    return bool(
+        getattr(settings, "SESSION_COOKIE_SECURE", not settings.DEBUG)
+        or getattr(settings, "CSRF_COOKIE_SECURE", False)
+    )
+
+
+def set_access_token_cookie(response, access_token: str):
+    response.set_cookie(
+        ACCESS_TOKEN_COOKIE_NAME,
+        access_token,
+        max_age=access_token_max_age(),
+        path=ACCESS_TOKEN_COOKIE_PATH,
+        secure=auth_cookie_secure(),
+        httponly=True,
+        samesite="Lax",
+    )
+    return response
+
+
+def set_refresh_token_cookie(response, refresh_token: str):
+    response.set_cookie(
+        REFRESH_TOKEN_COOKIE_NAME,
+        refresh_token,
+        max_age=refresh_token_max_age(),
+        path=REFRESH_TOKEN_COOKIE_PATH,
+        secure=auth_cookie_secure(),
+        httponly=True,
+        samesite="Lax",
+    )
+    return response
+
+
+def clear_access_token_cookie(response):
+    response.delete_cookie(
+        ACCESS_TOKEN_COOKIE_NAME,
+        path=ACCESS_TOKEN_COOKIE_PATH,
+        samesite="Lax",
+    )
+    return response
+
+
+def clear_refresh_token_cookie(response):
+    response.delete_cookie(
+        REFRESH_TOKEN_COOKIE_NAME,
+        path=REFRESH_TOKEN_COOKIE_PATH,
+        samesite="Lax",
+    )
+    return response
+
+
 def resolve_user_from_access_token(token: str):
     if not token:
         return None

@@ -2,8 +2,10 @@ from ninja import Body, Router
 from django.db.models import Max
 from django.shortcuts import get_object_or_404
 
+from apps.core.extensions.platform import AccessTokenAuth
 from apps.core.extensions.platform import api_error
 from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.platform import require_staff
 from apps.core.extensions.runtime import (
     create_runtime_tag,
     delete_runtime_tag,
@@ -13,17 +15,10 @@ from apps.core.extensions.runtime import (
     validate_runtime_tag_parent_assignment,
     validate_runtime_tag_scope_configuration,
 )
-from apps.core.extensions.platform import AccessTokenAuth
 from extensions.tags.backend.models import Tag
 
 
 router = Router()
-
-
-def _require_staff(request):
-    if not request.auth or not request.auth.is_staff:
-        return api_error("需要管理员权限", status=403)
-    return None
 
 
 def serialize_admin_tag(tag: Tag):
@@ -69,7 +64,7 @@ def normalize_tag_position(payload, parent_id=None, current_tag: Tag = None) -> 
 
 @router.get("/tags", auth=AccessTokenAuth(), tags=["Admin"])
 def list_admin_tags(request):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -79,7 +74,7 @@ def list_admin_tags(request):
 
 @router.post("/tags", auth=AccessTokenAuth(), tags=["Admin"])
 def create_admin_tag(request, payload: dict = Body(...)):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -121,7 +116,7 @@ def create_admin_tag(request, payload: dict = Body(...)):
 
 @router.put("/tags/{tag_id}", auth=AccessTokenAuth(), tags=["Admin"])
 def update_admin_tag(request, tag_id: int, payload: dict = Body(...)):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -192,7 +187,7 @@ def update_admin_tag(request, tag_id: int, payload: dict = Body(...)):
 
 @router.post("/tags/{tag_id}/move", auth=AccessTokenAuth(), tags=["Admin"])
 def move_admin_tag(request, tag_id: int, payload: dict = Body(...)):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -223,7 +218,7 @@ def move_admin_tag(request, tag_id: int, payload: dict = Body(...)):
 
 @router.delete("/tags/{tag_id}", auth=AccessTokenAuth(), tags=["Admin"])
 def delete_admin_tag(request, tag_id: int):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -245,7 +240,7 @@ def delete_admin_tag(request, tag_id: int):
 
 @router.post("/tags/stats/refresh", auth=AccessTokenAuth(), tags=["Admin"])
 def refresh_admin_tag_stats(request):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 

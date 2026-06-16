@@ -8,8 +8,12 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
 from apps.core.extensions.platform import api_error
-from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.platform import AccessTokenAuth
+from apps.core.extensions.platform import PaginationService
 from apps.core.extensions.platform import dispatch_forum_event_after_commit
+from apps.core.extensions.platform import get_mail_settings_defaults, get_setting_group
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.platform import require_staff
 from extensions.users.backend.events import UserSuspendedEvent, UserUnsuspendedEvent
 from apps.core.extensions.forum import get_forum_registry
 from extensions.users.backend.admin_user_helpers import (
@@ -20,9 +24,6 @@ from extensions.users.backend.admin_user_helpers import (
     serialize_group,
     validate_group_payload,
 )
-from apps.core.extensions.platform import AccessTokenAuth
-from apps.core.extensions.platform import PaginationService
-from apps.core.extensions.platform import get_mail_settings_defaults, get_setting_group
 from extensions.users.backend.models import Group, Permission, User
 from extensions.users.backend.mail import send_test_email
 from extensions.users.backend.services import UserService
@@ -31,15 +32,9 @@ from extensions.users.backend.services import UserService
 router = Router()
 
 
-def _require_staff(request):
-    if not request.auth or not request.auth.is_staff:
-        return api_error("需要管理员权限", status=403)
-    return None
-
-
 @router.get("/groups", auth=AccessTokenAuth(), tags=["Admin"])
 def list_groups(request):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -49,7 +44,7 @@ def list_groups(request):
 
 @router.post("/groups", auth=AccessTokenAuth(), tags=["Admin"])
 def create_group(request, payload: dict = Body(...)):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -70,7 +65,7 @@ def create_group(request, payload: dict = Body(...)):
 
 @router.put("/groups/{group_id}", auth=AccessTokenAuth(), tags=["Admin"])
 def update_group(request, group_id: int, payload: dict = Body(...)):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -97,7 +92,7 @@ def update_group(request, group_id: int, payload: dict = Body(...)):
 
 @router.delete("/groups/{group_id}", auth=AccessTokenAuth(), tags=["Admin"])
 def delete_group(request, group_id: int):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -120,7 +115,7 @@ def delete_group(request, group_id: int):
 
 @router.get("/permissions/meta", auth=AccessTokenAuth(), tags=["Admin"])
 def get_permissions_meta(request):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -141,7 +136,7 @@ def get_permissions_meta(request):
 
 @router.get("/permissions", auth=AccessTokenAuth(), tags=["Admin"])
 def get_permissions(request):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -172,7 +167,7 @@ def get_permissions(request):
 
 @router.post("/permissions", auth=AccessTokenAuth(), tags=["Admin"])
 def save_permissions(request, payload: dict = Body(...)):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -235,7 +230,7 @@ def save_permissions(request, payload: dict = Body(...)):
 
 @router.post("/mail/test", auth=AccessTokenAuth(), tags=["Admin"])
 def send_admin_test_email(request):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -282,7 +277,7 @@ def send_admin_test_email(request):
 
 @router.get("/users", auth=AccessTokenAuth(), tags=["Admin"])
 def list_admin_users(request, page: int = 1, limit: int = 20, q: str = None):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -310,7 +305,7 @@ def list_admin_users(request, page: int = 1, limit: int = 20, q: str = None):
 
 @router.get("/users/{user_id}", auth=AccessTokenAuth(), tags=["Admin"])
 def get_admin_user(request, user_id: int):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -320,7 +315,7 @@ def get_admin_user(request, user_id: int):
 
 @router.put("/users/{user_id}", auth=AccessTokenAuth(), tags=["Admin"])
 def update_admin_user(request, user_id: int, payload: dict = Body(...)):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 
@@ -420,7 +415,7 @@ def update_admin_user(request, user_id: int, payload: dict = Body(...)):
 
 @router.delete("/users/{user_id}", auth=AccessTokenAuth(), tags=["Admin"])
 def delete_admin_user(request, user_id: int):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 

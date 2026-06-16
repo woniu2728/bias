@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from django.conf import settings
+
 from apps.core.audit import log_admin_action
 from apps.core.auth import AuthBearer, get_optional_user
+from apps.core.admin_auth import require_staff
 from apps.core.authorization import (
     AuthorizationDecision,
     AuthorizationPolicy,
@@ -36,7 +39,12 @@ from apps.core.jwt_auth import (
     REFRESH_TOKEN_COOKIE_PATH,
     AccessTokenAuth,
     access_token_max_age,
+    auth_cookie_secure,
+    clear_access_token_cookie,
+    clear_refresh_token_cookie,
     refresh_token_max_age,
+    set_access_token_cookie,
+    set_refresh_token_cookie,
 )
 from apps.core.resource_api import (
     ResourceQueryOptions,
@@ -70,6 +78,24 @@ from apps.core.visibility import (
     apply_related_model_visibility_subquery,
     can_view_model_instance,
 )
+
+
+def is_debug_mode() -> bool:
+    return bool(settings.DEBUG)
+
+
+def get_frontend_url() -> str:
+    return str(getattr(settings, "FRONTEND_URL", "") or "")
+
+
+def require_forum_permission(request, permission_code, message: str):
+    denied = require_staff(request)
+    if denied:
+        return denied
+    if not has_forum_permission(request.auth, permission_code):
+        return api_error(message, status=403, code="permission_denied")
+    return None
+
 
 __all__ = [
     "AccessTokenAuth",
@@ -105,6 +131,9 @@ __all__ = [
     "can",
     "can_view_model_instance",
     "can_mail_driver_send",
+    "auth_cookie_secure",
+    "clear_access_token_cookie",
+    "clear_refresh_token_cookie",
     "deny",
     "dispatch_forum_event_after_commit",
     "evaluate_extension_policy",
@@ -113,19 +142,25 @@ __all__ = [
     "get_extension_settings",
     "get_advanced_settings",
     "get_advanced_settings_defaults",
+    "get_frontend_url",
     "get_forum_event_bus",
     "get_mail_settings_defaults",
     "get_optional_user",
     "get_setting_group",
     "get_storage_backend",
     "has_forum_permission",
+    "is_debug_mode",
     "jsonapi_error_response",
     "log_admin_action",
     "merge_resource_includes",
     "parse_csv_param",
     "parse_resource_query_options",
     "refresh_token_max_age",
+    "require_forum_permission",
+    "require_staff",
     "save_extension_settings",
     "send_with_extension_mail_driver",
     "serialize_extension_settings_schema",
+    "set_access_token_cookie",
+    "set_refresh_token_cookie",
 ]

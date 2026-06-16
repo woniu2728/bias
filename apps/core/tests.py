@@ -4337,6 +4337,42 @@ class ExtensionPublicApiBoundaryTests(TestCase):
         self.assertTrue(callable(runtime.get_runtime_resource_registry))
         self.assertTrue(callable(runtime.notify_runtime_notification))
 
+    def test_platform_sdk_exports_auth_and_cookie_helpers(self):
+        from apps.core.extensions import platform
+
+        expected = (
+            "auth_cookie_secure",
+            "clear_access_token_cookie",
+            "clear_refresh_token_cookie",
+            "require_forum_permission",
+            "require_staff",
+            "set_access_token_cookie",
+            "set_refresh_token_cookie",
+        )
+
+        for name in expected:
+            self.assertIn(name, platform.__all__)
+            self.assertTrue(callable(getattr(platform, name)))
+
+    def test_builtin_extension_admin_code_uses_platform_staff_guard(self):
+        extensions_root = Path(settings.BASE_DIR) / "extensions"
+        violations = []
+        forbidden = (
+            "def _require_staff",
+            "not request.auth or not request.auth.is_staff",
+            "request.auth.is_staff",
+        )
+
+        for path in extensions_root.glob("*/backend/**/*.py"):
+            if path.name == "tests.py" or "django_migrations" in path.parts:
+                continue
+            text = path.read_text(encoding="utf-8")
+            for marker in forbidden:
+                if marker in text:
+                    violations.append(f"{path.relative_to(settings.BASE_DIR)}: {marker}")
+
+        self.assertEqual(violations, [])
+
     def test_sdk_exports_contracts_without_direct_internal_definition_imports(self):
         from apps.core.extensions import contracts
 
@@ -5041,15 +5077,15 @@ class ExtensionMiddlewareIntegrationTests(TestCase):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     def test_admin_content_validation_logs_extension_registry_failures(self):
-        from apps.core.admin_content_api import _resolve_available_extension_ids_for_validation
+        from apps.core.extension_validation_context import resolve_available_extension_ids_for_validation
 
         registry = Mock()
         registry.get_extensions.side_effect = RuntimeError("registry unavailable")
 
-        with patch("apps.core.admin_content_api.get_core_module_ids", return_value=("core",)):
-            with patch("apps.core.admin_content_api.get_extension_registry", return_value=registry):
-                with self.assertLogs("apps.core.admin_content_api", level="WARNING") as logs:
-                    extension_ids = _resolve_available_extension_ids_for_validation()
+        with patch("apps.core.extension_validation_context.get_core_module_ids", return_value=("core",)):
+            with patch("apps.core.extension_validation_context.get_extension_registry", return_value=registry):
+                with self.assertLogs("apps.core.extension_validation_context", level="WARNING") as logs:
+                    extension_ids = resolve_available_extension_ids_for_validation()
 
         self.assertEqual(extension_ids, {"core"})
         self.assertTrue(any("Failed to resolve installed extension ids" in message for message in logs.output))
@@ -8449,7 +8485,7 @@ class AdminExtensionsApiTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["code"], "extension_enable_not_installed")
 
-    @patch("apps.core.extension_service.resolve_bias_version_compatibility")
+    @patch("apps.core.extensions.compatibility_guard.resolve_bias_version_compatibility")
     def test_extensions_api_blocks_install_when_bias_version_incompatible(self, resolve_bias_version_compatibility_mock):
         resolve_bias_version_compatibility_mock.return_value = {
             "compatible": False,
@@ -8732,7 +8768,7 @@ class ExtensionServiceTests(TestCase):
         self.assertEqual(uninstalled.runtime.backend_hooks["run_disable"]["status"], "ok")
         self.assertEqual(uninstalled.runtime.backend_hooks["run_uninstall"]["status"], "ok")
 
-    @patch("apps.core.extension_service.resolve_bias_version_compatibility")
+    @patch("apps.core.extensions.compatibility_guard.resolve_bias_version_compatibility")
     def test_install_raises_when_bias_version_incompatible(self, resolve_bias_version_compatibility_mock):
         resolve_bias_version_compatibility_mock.return_value = {
             "compatible": False,
@@ -8745,6 +8781,26 @@ class ExtensionServiceTests(TestCase):
             ExtensionService.install_extension("alpha-tools")
 
         self.assertEqual(context.exception.code, "extension_install_incompatible_bias_version")
+        self.assertEqual(context.exception.details["required_bias_version"], "^2.0.0")
+
+    @patch("apps.core.extensions.compatibility_guard.resolve_bias_version_compatibility")
+    def test_bias_compatibility_guard_normalizes_enable_errors(self, resolve_bias_version_compatibility_mock):
+        from apps.core.extensions.compatibility_guard import validate_bias_compatibility
+
+        resolve_bias_version_compatibility_mock.return_value = {
+            "compatible": False,
+            "current_version": "1.0.0",
+            "required_range": "^2.0.0",
+            "message": "当前 Bias 版本 1.0.0 不满足扩展声明的兼容范围 ^2.0.0。",
+        }
+        extension = SimpleNamespace(id="alpha-tools", manifest=SimpleNamespace())
+
+        with self.assertRaises(ExtensionStateError) as context:
+            validate_bias_compatibility(extension, action="enable")
+
+        self.assertEqual(context.exception.code, "extension_enable_incompatible_bias_version")
+        self.assertEqual(context.exception.details["extension_id"], "alpha-tools")
+        self.assertEqual(context.exception.details["current_bias_version"], "1.0.0")
         self.assertEqual(context.exception.details["required_bias_version"], "^2.0.0")
 
 
@@ -14062,7 +14118,92 @@ class AdminSettingsApiTests(TestCase):
         self.assertIn('target="_blank"', html)
 
 
+class AdminAuthTests(TestCase):
+    def test_require_staff_rejects_non_staff_auth(self):
+        from apps.core.admin_auth import require_staff
+
+        request = SimpleNamespace(auth=SimpleNamespace(is_staff=False))
+
+        response = require_staff(request)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json.loads(response.content)["message"], "需要管理员权限")
+
+    def test_require_staff_allows_staff_auth(self):
+        from apps.core.admin_auth import require_staff
+
+        request = SimpleNamespace(auth=SimpleNamespace(is_staff=True))
+
+        self.assertIsNone(require_staff(request))
+
+
 class SecretValidationTests(TestCase):
+    def test_runtime_diagnostics_keeps_admin_helper_compatibility_imports(self):
+        from apps.core import admin_runtime_helpers, runtime_diagnostics
+
+        self.assertIs(
+            admin_runtime_helpers.build_runtime_risks,
+            runtime_diagnostics.build_runtime_risks,
+        )
+        self.assertIs(
+            admin_runtime_helpers.probe_cache_connection,
+            runtime_diagnostics.probe_cache_connection,
+        )
+
+    @override_settings(WEB_CONCURRENCY=1)
+    def test_runtime_diagnostics_accepts_explicit_web_concurrency(self):
+        from apps.core import runtime_diagnostics
+
+        risks = runtime_diagnostics.build_runtime_risks(
+            debug_mode=False,
+            database_label="SQLite (db.sqlite3)",
+            cache_driver="内存",
+            realtime_driver="In-memory",
+            queue_enabled=False,
+            queue_driver="sync",
+            queue_worker_status={"available": False, "message": ""},
+            redis_enabled=False,
+            cache_connection={"enabled": False, "available": None},
+            realtime_connection={"enabled": False, "available": None},
+            queue_broker_connection={"enabled": False, "available": None},
+            auth_secret_risks=[],
+            web_concurrency=2,
+        )
+
+        risk_codes = {item["code"] for item in risks}
+        self.assertIn("locmem-cache-multiprocess", risk_codes)
+        self.assertIn("realtime-inmemory-multiprocess", risk_codes)
+
+    def test_frontend_route_serialization_supports_runtime_and_manifest_contracts(self):
+        from apps.core.extensions.frontend_serialization import serialize_frontend_routes
+
+        route = SimpleNamespace(
+            path="",
+            name="alpha",
+            component="AlphaPage",
+            frontend="forum",
+            module_id="alpha-tools",
+            title="Alpha",
+            description="Alpha route",
+            preloads=("loadAlpha",),
+            document_attributes=({"data-alpha": "1"},),
+            head_tags=({"name": "alpha"},),
+            requires_auth=True,
+            order=20,
+            removed=False,
+        )
+
+        runtime_routes = serialize_frontend_routes((route,))
+        manifest_routes = serialize_frontend_routes(
+            (route,),
+            require_path=False,
+            include_document_payload=False,
+        )
+
+        self.assertEqual(runtime_routes, [])
+        self.assertEqual(manifest_routes[0]["name"], "alpha")
+        self.assertNotIn("preloads", manifest_routes[0])
+
     def test_placeholder_runtime_secrets_are_detected_consistently(self):
         from apps.core.secret_validation import build_auth_secret_risks, looks_like_placeholder_secret
 
@@ -14148,7 +14289,7 @@ class AdminDashboardStatsApiTests(TestCase):
         SECRET_KEY="dashboard-secret-key-12345678901234567890",
         NINJA_JWT={"ALGORITHM": "HS256", "SIGNING_KEY": "dashboard-jwt-secret-key-123456789012345"},
     )
-    @patch("apps.core.admin_runtime_summary.runtime_probe_redis_ping")
+    @patch("apps.core.admin_runtime_summary.probe_redis_ping")
     @patch("apps.core.admin_runtime_summary.cache.get", return_value="ok")
     @patch("apps.core.admin_runtime_summary.cache.set", return_value=None)
     @patch("apps.core.admin_settings_api.QueueService.get_worker_status")
@@ -14299,7 +14440,7 @@ class AdminDashboardStatsApiTests(TestCase):
         CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {}}},
         CELERY_BROKER_URL="memory://",
     )
-    @patch("apps.core.admin_runtime_summary.runtime_probe_redis_ping")
+    @patch("apps.core.admin_runtime_summary.probe_redis_ping")
     def test_admin_stats_reports_realtime_backend_misconfigured(self, _probe_redis_ping):
         response = self.client.get("/api/admin/stats", **self.auth_header())
 
@@ -14352,7 +14493,7 @@ class AdminDashboardStatsApiTests(TestCase):
     )
     @patch("apps.core.admin_runtime_summary.cache.get", return_value="ok")
     @patch("apps.core.admin_runtime_summary.cache.set", return_value=None)
-    @patch("apps.core.admin_runtime_summary.runtime_probe_redis_ping")
+    @patch("apps.core.admin_runtime_summary.probe_redis_ping")
     @patch("apps.core.admin_settings_api.QueueService.get_worker_status")
     def test_admin_stats_reports_unreachable_realtime_and_queue_broker(
         self,
@@ -14405,7 +14546,7 @@ class AdminDashboardStatsApiTests(TestCase):
     )
     @patch("apps.core.admin_runtime_summary.cache.get", return_value="ok")
     @patch("apps.core.admin_runtime_summary.cache.set", return_value=None)
-    @patch("apps.core.admin_runtime_summary.runtime_probe_redis_ping")
+    @patch("apps.core.admin_runtime_summary.probe_redis_ping")
     @patch("apps.core.admin_settings_api.QueueService.get_worker_status")
     def test_admin_stats_reports_protocol_error_for_realtime_and_queue_broker(
         self,
@@ -14773,6 +14914,27 @@ class QueueServiceTests(TestCase):
 
 
 class BootstrapConfigFallbackTests(TestCase):
+    def test_cors_origins_include_local_development_hosts_only_in_debug(self):
+        production_config = SiteBootstrapConfig(
+            debug=False,
+            frontend_url="https://forum.example.com",
+            site_domains=["forum.example.com"],
+            site_scheme="https",
+        )
+        debug_config = SiteBootstrapConfig(
+            debug=True,
+            frontend_url="http://localhost:8080",
+            site_domains=["localhost:8080"],
+            site_scheme="http",
+        )
+
+        production_origins = production_config.resolved_cors_origins()
+        debug_origins = debug_config.resolved_cors_origins()
+
+        self.assertEqual(production_origins, ["https://forum.example.com"])
+        self.assertIn("http://localhost:3000", debug_origins)
+        self.assertIn("http://localhost:5173", debug_origins)
+
     def test_env_bootstrap_with_database_only_is_not_installed(self):
         temp_dir = make_workspace_temp_dir()
         try:

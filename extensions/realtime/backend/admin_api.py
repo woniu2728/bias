@@ -1,23 +1,17 @@
 from ninja import Router
 
-from apps.core.extensions.platform import api_error
-from apps.core.extensions.platform import log_admin_action
 from apps.core.extensions.platform import AccessTokenAuth
 from apps.core.extensions.platform import QueueService
+from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.platform import require_staff
 
 
 router = Router()
 
 
-def _require_staff(request):
-    if not request.auth or not request.auth.is_staff:
-        return api_error("需要管理员权限", status=403)
-    return None
-
-
 @router.post("/queue/metrics/reset", auth=AccessTokenAuth(), tags=["Admin"])
 def reset_queue_metrics(request):
-    denied = _require_staff(request)
+    denied = require_staff(request)
     if denied:
         return denied
 

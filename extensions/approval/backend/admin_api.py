@@ -4,26 +4,22 @@ from django.core.exceptions import ValidationError
 from ninja import Body, Router
 
 from apps.core.extensions.platform import api_error
+from apps.core.extensions.platform import AccessTokenAuth
+from apps.core.extensions.platform import PaginationService
 from apps.core.extensions.platform import log_admin_action
+from apps.core.extensions.platform import require_forum_permission
 from apps.core.extensions.runtime import (
     bulk_process_runtime_approval_items,
-    has_runtime_forum_permission,
     list_runtime_approval_queue_items,
     process_runtime_approval_item,
 )
-from apps.core.extensions.platform import AccessTokenAuth
-from apps.core.extensions.platform import PaginationService
 
 
 router = Router()
 
 
 def _require_admin_permission(request, permission_code: str, message: str):
-    if not request.auth or not request.auth.is_staff:
-        return api_error("需要管理员权限", status=403)
-    if not has_runtime_forum_permission(request.auth, permission_code):
-        return api_error(message, status=403, code="permission_denied")
-    return None
+    return require_forum_permission(request, permission_code, message)
 
 
 @router.get("/approval-queue", auth=AccessTokenAuth(), tags=["Admin"])

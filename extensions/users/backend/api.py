@@ -1,18 +1,18 @@
 from ninja import Router
 from ninja_jwt.exceptions import TokenError
 from ninja_jwt.tokens import RefreshToken
-from django.conf import settings
 from django.http import JsonResponse
 
 from apps.core.extensions.platform import api_error
 from apps.core.extensions.platform import (
-    ACCESS_TOKEN_COOKIE_NAME,
-    ACCESS_TOKEN_COOKIE_PATH,
     AccessTokenAuth,
     REFRESH_TOKEN_COOKIE_NAME,
-    REFRESH_TOKEN_COOKIE_PATH,
-    access_token_max_age,
-    refresh_token_max_age,
+    clear_access_token_cookie,
+    clear_refresh_token_cookie,
+    get_frontend_url,
+    is_debug_mode,
+    set_access_token_cookie,
+    set_refresh_token_cookie,
 )
 from apps.core.extensions.runtime import RuntimeHumanVerificationError, verify_runtime_human_verification
 from extensions.users.backend.auth_rate_limit import (
@@ -39,57 +39,6 @@ from extensions.users.backend.services import UserService
 router = Router()
 GENERIC_PASSWORD_RESET_MESSAGE = "重置密码邮件已发送"
 GENERIC_LOGIN_ERROR_MESSAGE = "用户名或密码错误"
-
-
-def _auth_cookie_secure() -> bool:
-    return bool(
-        getattr(settings, "SESSION_COOKIE_SECURE", not settings.DEBUG)
-        or getattr(settings, "CSRF_COOKIE_SECURE", False)
-    )
-
-
-def _set_refresh_token_cookie(response: JsonResponse, refresh: RefreshToken) -> JsonResponse:
-    response.set_cookie(
-        REFRESH_TOKEN_COOKIE_NAME,
-        str(refresh),
-        max_age=refresh_token_max_age(),
-        path=REFRESH_TOKEN_COOKIE_PATH,
-        secure=_auth_cookie_secure(),
-        httponly=True,
-        samesite="Lax",
-    )
-    return response
-
-
-def _set_access_token_cookie(response: JsonResponse, access_token: str) -> JsonResponse:
-    response.set_cookie(
-        ACCESS_TOKEN_COOKIE_NAME,
-        access_token,
-        max_age=access_token_max_age(),
-        path=ACCESS_TOKEN_COOKIE_PATH,
-        secure=_auth_cookie_secure(),
-        httponly=True,
-        samesite="Lax",
-    )
-    return response
-
-
-def _clear_access_token_cookie(response: JsonResponse) -> JsonResponse:
-    response.delete_cookie(
-        ACCESS_TOKEN_COOKIE_NAME,
-        path=ACCESS_TOKEN_COOKIE_PATH,
-        samesite="Lax",
-    )
-    return response
-
-
-def _clear_refresh_token_cookie(response: JsonResponse) -> JsonResponse:
-    response.delete_cookie(
-        REFRESH_TOKEN_COOKIE_NAME,
-        path=REFRESH_TOKEN_COOKIE_PATH,
-        samesite="Lax",
-    )
-    return response
 
 
 @router.post("/register", response=UserOutSchema, tags=["Auth"])
@@ -134,9 +83,9 @@ def login(request, payload: UserLoginSchema):
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
         response = JsonResponse({"access": access_token})
-        response = _set_access_token_cookie(response, access_token)
+        response = set_access_token_cookie(response, access_token)
         clear_auth_rate_limit("login", request, payload.identification)
-        return _set_refresh_token_cookie(response, refresh)
+        return set_refresh_token_cookie(response, str(refresh))
     except AuthRateLimitExceeded as e:
         return api_error(str(e), status=429)
     except RuntimeHumanVerificationError as e:
@@ -157,18 +106,18 @@ def refresh_access_token(request):
         refresh = RefreshToken(refresh_token)
         access_token = str(refresh.access_token)
         response = JsonResponse({"access": access_token})
-        return _set_access_token_cookie(response, access_token)
+        return set_access_token_cookie(response, access_token)
     except TokenError:
         response = api_error("登录状态已过期，请重新登录", status=401)
-        response = _clear_access_token_cookie(response)
-        return _clear_refresh_token_cookie(response)
+        response = clear_access_token_cookie(response)
+        return clear_refresh_token_cookie(response)
 
 
 @router.post("/logout", tags=["Auth"])
 def logout(request):
     response = JsonResponse({"message": "登出成功"})
-    response = _clear_access_token_cookie(response)
-    return _clear_refresh_token_cookie(response)
+    response = clear_access_token_cookie(response)
+    return clear_refresh_token_cookie(response)
 
 
 @router.post("/verify-email", response=UserOutSchema, tags=["Auth"])
@@ -185,9 +134,9 @@ def resend_email_verification(request):
         email_token = UserService.resend_email_verification(request.auth)
         response = {"message": "验证邮件已重新发送"}
 
-        if settings.DEBUG:
+        if is_debug_mode():
             response["debug_token"] = email_token.token
-            response["debug_verify_url"] = f"{settings.FRONTEND_URL}/verify-email?token={email_token.token}"
+            response["debug_verify_url"] = f"{get_frontend_url()}/verify-email?token={email_token.token}"
 
         return response
     except ValueError as e:
@@ -202,9 +151,9 @@ def forgot_password(request, payload: PasswordResetRequestSchema):
         password_token = UserService.create_password_reset_token(payload.email)
         response = {"message": GENERIC_PASSWORD_RESET_MESSAGE}
 
-        if settings.DEBUG:
+        if is_debug_mode():
             response["debug_token"] = password_token.token
-            response["debug_reset_url"] = f"{settings.FRONTEND_URL}/reset-password?token={password_token.token}"
+            response["debug_reset_url"] = f"{get_frontend_url()}/reset-password?token={password_token.token}"
 
         return response
     except AuthRateLimitExceeded as e:

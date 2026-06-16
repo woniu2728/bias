@@ -9,6 +9,7 @@ from django.db import transaction
 
 from apps.core.extensions.backend import run_extension_backend_hook
 from apps.core.extensions.assets import publish_extension_assets, unpublish_extension_assets
+from apps.core.extensions.compatibility_guard import validate_bias_compatibility
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
 from apps.core.extensions.extension_runtime import Extension
 from apps.core.extensions.event_bus import get_extension_event_bus
@@ -51,7 +52,6 @@ from apps.core.extensions.product import (
 )
 from apps.core.extensions.recovery import is_extension_allowed_in_safe_mode
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
-from apps.core.extensions.validation import resolve_bias_version_compatibility
 from apps.core.extensions.types import (
     ExtensionAssembly,
     ExtensionBootPlan,
@@ -135,7 +135,7 @@ class ExtensionManager:
                 details={"extension_id": extension.id},
         )
 
-        self._validate_bias_compatibility(extension, action="install")
+        validate_bias_compatibility(extension, action="install")
         self._dispatch_extension_lifecycle_event(ExtensionEnablingEvent(extension_id=extension.id))
         migration_result = self._run_install_migrations_if_declared(extension)
         migration_meta = self._build_migration_meta_updates(extension.id, migration_result)
@@ -946,7 +946,7 @@ class ExtensionManager:
                 details={"extension_id": extension.id},
             )
 
-        self._validate_bias_compatibility(extension, action="enable")
+            validate_bias_compatibility(extension, action="enable")
 
         extension_map = {item.id: item for item in extensions}
         satisfied_dependency_ids = get_core_satisfied_dependency_ids()
@@ -1021,22 +1021,6 @@ class ExtensionManager:
                     "blocking_dependents": blocking_dependents,
                 },
             )
-
-    def _validate_bias_compatibility(self, extension, *, action: str) -> None:
-        compatibility = resolve_bias_version_compatibility(extension.manifest)
-        if compatibility["compatible"]:
-            return
-
-        action_label = "安装" if action == "install" else "启用"
-        raise ExtensionStateError(
-            f"无法{action_label}扩展 {extension.id}。{compatibility['message']}",
-            code=f"extension_{action}_incompatible_bias_version",
-            details={
-                "extension_id": extension.id,
-                "current_bias_version": compatibility["current_version"],
-                "required_bias_version": compatibility["required_range"],
-            },
-        )
 
     def _run_install_migrations_if_declared(self, extension) -> dict | None:
         if not has_django_extension_migrations(extension):

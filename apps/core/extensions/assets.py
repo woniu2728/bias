@@ -8,7 +8,11 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
-from apps.core.extensions.frontend_serialization import serialize_frontend_value, serialize_frontend_values
+from apps.core.extensions.frontend_serialization import (
+    serialize_frontend_routes,
+    serialize_frontend_value,
+    serialize_frontend_values,
+)
 
 
 def get_extension_assets_root() -> Path:
@@ -116,7 +120,11 @@ def build_extension_frontend_manifest(extensions) -> dict:
             "preloads": serialize_frontend_values(getattr(extension.discover(), "frontend_preloads", ()) or ()),
             "document_attributes": serialize_frontend_values(getattr(extension.discover(), "frontend_document_attributes", ()) or ()),
             "title_driver": serialize_frontend_value(getattr(extension.discover(), "frontend_title_driver", None)),
-            "routes": _serialize_frontend_routes_for_manifest(getattr(extension.discover(), "frontend_routes", ()) or ()),
+            "routes": serialize_frontend_routes(
+                getattr(extension.discover(), "frontend_routes", ()) or (),
+                require_path=False,
+                include_document_payload=False,
+            ),
             "inputs": {},
         }
         if admin_entry:
@@ -191,30 +199,6 @@ def _build_frontend_cache_key(inputs: dict) -> str:
         hasher.update(str(key).encode("utf-8"))
         hasher.update(str(inputs[key]).encode("utf-8"))
     return hasher.hexdigest()[:16]
-
-
-def _serialize_frontend_routes_for_manifest(routes) -> list[dict]:
-    output = []
-    for route in routes or ():
-        frontend = str(getattr(route, "frontend", "") or "forum").strip() or "forum"
-        order = getattr(route, "order", 100)
-        output.append({
-            "path": str(getattr(route, "path", "") or "").strip(),
-            "name": str(getattr(route, "name", "") or "").strip(),
-            "component": str(getattr(route, "component", "") or "").strip(),
-            "frontend": frontend,
-            "module_id": str(getattr(route, "module_id", "") or "").strip(),
-            "title": str(getattr(route, "title", "") or "").strip(),
-            "description": str(getattr(route, "description", "") or "").strip(),
-            "requires_auth": bool(getattr(route, "requires_auth", False)),
-            "order": int(order if order is not None and order != "" else 100),
-            "removed": bool(getattr(route, "removed", False)),
-        })
-    return [
-        item
-        for item in output
-        if item["name"] and (item["removed"] or item["component"])
-    ]
 
 
 def _result(extension_id: str, status: str, status_label: str, message: str, *, details: dict | None = None) -> dict:

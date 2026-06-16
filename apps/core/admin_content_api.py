@@ -4,6 +4,7 @@ from ninja import Body, Router
 from pathlib import Path
 
 from apps.core.api_errors import api_error
+from apps.core.admin_auth import require_staff
 from apps.core.models import AuditLog
 from apps.core.services import PaginationService
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
@@ -36,6 +37,7 @@ from apps.core.extensions.admin_actions import (
     build_default_extension_admin_actions,
     serialize_extension_admin_actions,
 )
+from apps.core.extension_validation_context import resolve_available_extension_ids_for_validation
 from apps.core.extensions.admin_manifest import (
     build_extension_author_names as _build_extension_author_names,
     build_extension_links as _build_extension_links,
@@ -65,10 +67,7 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 
-def _require_staff(request):
-    if not request.auth or not request.auth.is_staff:
-        return api_error("需要管理员权限", status=403)
-    return None
+_require_staff = require_staff
 
 
 def _serialize_audit_log(log: AuditLog):
@@ -1802,7 +1801,7 @@ def _build_extension_debug_info(extension):
     if extension.source == "filesystem":
         validation_result = validate_extension_manifests_with_available_ids(
             [extension.manifest],
-            available_extension_ids=_resolve_available_extension_ids_for_validation(),
+            available_extension_ids=resolve_available_extension_ids_for_validation(),
             extensions_base_path=extensions_base_path,
             strict_runtime_hooks=True,
         )
@@ -2077,15 +2076,6 @@ def _serialize_debug_value(value):
     if isinstance(value, (list, tuple)):
         return [_serialize_debug_value(item) for item in value]
     return getattr(value, "__name__", str(value))
-
-
-def _resolve_available_extension_ids_for_validation() -> set[str]:
-    extension_ids = set(get_core_module_ids())
-    try:
-        extension_ids.update(item.id for item in get_extension_registry().get_extensions())
-    except Exception:
-        logger.warning("Failed to resolve installed extension ids for admin content validation.", exc_info=True)
-    return extension_ids
 
 
 def _serialize_extension_backend_hooks(extension):

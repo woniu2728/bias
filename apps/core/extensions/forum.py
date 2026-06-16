@@ -13,7 +13,7 @@ from apps.core.forum_runtime import (
 )
 from apps.core.models import AuditLog
 from apps.core.online_service import OnlineUserService
-from apps.core.runtime_checks import detect_database_label
+from apps.core.runtime_diagnostics import detect_database_label
 from apps.core.schemas import UploadFileOutSchema
 from apps.core.search_index_service import SearchIndexService
 

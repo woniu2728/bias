@@ -6,7 +6,8 @@ from django.core.cache import cache
 
 from ninja import Body, Router
 
-from apps.core import admin_runtime_helpers
+from apps.core import runtime_diagnostics
+from apps.core.admin_auth import require_staff
 from apps.core.api_errors import api_error
 from apps.core.audit import log_admin_action
 from apps.core.extensions.runtime import get_runtime_resource_registry
@@ -20,7 +21,7 @@ from apps.core.mail_drivers import (
 )
 from apps.core.models import AuditLog
 from apps.core.queue_service import QueueService
-from apps.core.runtime_checks import (
+from apps.core.runtime_diagnostics import (
     build_runtime_dependency_checks,
     detect_cache_driver,
     detect_database_label,
@@ -50,19 +51,16 @@ from apps.core.settings_service import (
 router = Router()
 
 
-def _require_staff(request):
-    if not request.auth or not request.auth.is_staff:
-        return api_error("需要管理员权限", status=403)
-    return None
+_require_staff = require_staff
 
 
 def _build_auth_secret_risks() -> list[dict]:
-    secret_key = admin_runtime_helpers.normalize_secret_value(settings.SECRET_KEY)
+    secret_key = runtime_diagnostics.normalize_secret_value(settings.SECRET_KEY)
     jwt_algorithm = str(settings.NINJA_JWT.get("ALGORITHM") or "").strip().upper()
-    jwt_signing_key = admin_runtime_helpers.normalize_secret_value(
+    jwt_signing_key = runtime_diagnostics.normalize_secret_value(
         settings.NINJA_JWT.get("SIGNING_KEY") or settings.SECRET_KEY
     )
-    return admin_runtime_helpers.build_auth_secret_risks(
+    return runtime_diagnostics.build_auth_secret_risks(
         secret_key=secret_key,
         jwt_algorithm=jwt_algorithm,
         jwt_signing_key=jwt_signing_key,
@@ -70,7 +68,7 @@ def _build_auth_secret_risks() -> list[dict]:
 
 
 def _build_auth_secret_status() -> dict:
-    return admin_runtime_helpers.build_auth_secret_status(risks=_build_auth_secret_risks())
+    return runtime_diagnostics.build_auth_secret_status(risks=_build_auth_secret_risks())
 
 
 def _build_runtime_risks(
@@ -86,7 +84,7 @@ def _build_runtime_risks(
     realtime_connection: dict,
     queue_broker_connection: dict,
 ) -> list[dict]:
-    return admin_runtime_helpers.build_runtime_risks(
+    return runtime_diagnostics.build_runtime_risks(
         debug_mode=settings.DEBUG,
         database_label=database_label,
         cache_driver=cache_driver,
@@ -99,6 +97,7 @@ def _build_runtime_risks(
         realtime_connection=realtime_connection,
         queue_broker_connection=queue_broker_connection,
         auth_secret_risks=_build_auth_secret_risks(),
+        web_concurrency=getattr(settings, "WEB_CONCURRENCY", 1),
     )
 
 
@@ -125,7 +124,7 @@ def _build_mail_settings_response(admin_email: str = "") -> dict:
 
 
 def _validate_advanced_runtime_settings(payload: dict) -> list[str]:
-    return admin_runtime_helpers.validate_advanced_runtime_settings(
+    return runtime_diagnostics.validate_advanced_runtime_settings(
         payload,
         database_label=detect_database_label(),
         realtime_driver=detect_realtime_driver(),

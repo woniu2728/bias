@@ -5,28 +5,28 @@ import django
 from django.conf import settings
 from django.core.cache import cache
 
-from apps.core import admin_runtime_helpers
+from apps.core import runtime_diagnostics
 from apps.core.queue_service import QueueService
-from apps.core.runtime_checks import (
-    _probe_redis_ping as runtime_probe_redis_ping,
+from apps.core.runtime_diagnostics import (
     build_runtime_dependency_checks,
     detect_cache_driver,
     detect_database_label,
     detect_queue_driver_label,
     detect_realtime_driver,
     is_redis_enabled,
+    probe_redis_ping,
 )
 from apps.core.settings_service import get_advanced_settings
 
 
 def probe_cache_connection() -> dict[str, Any]:
-    return admin_runtime_helpers.probe_cache_connection(settings_obj=settings, cache_backend=cache)
+    return runtime_diagnostics.probe_cache_connection(settings_obj=settings, cache_backend=cache)
 
 
 def probe_realtime_connection() -> dict[str, Any]:
-    return admin_runtime_helpers.probe_realtime_connection(
+    return runtime_diagnostics.probe_realtime_connection(
         settings_obj=settings,
-        redis_probe=lambda host, port, label, password="": runtime_probe_redis_ping(
+        redis_probe=lambda host, port, label, password="": probe_redis_ping(
             host,
             port,
             label=label,
@@ -36,11 +36,11 @@ def probe_realtime_connection() -> dict[str, Any]:
 
 
 def probe_queue_broker_connection(queue_enabled: bool, queue_driver: str) -> dict[str, Any]:
-    return admin_runtime_helpers.probe_queue_broker_connection(
+    return runtime_diagnostics.probe_queue_broker_connection(
         settings_obj=settings,
         queue_enabled=queue_enabled,
         queue_driver=queue_driver,
-        redis_probe=lambda host, port, label, password="": runtime_probe_redis_ping(
+        redis_probe=lambda host, port, label, password="": probe_redis_ping(
             host,
             port,
             label=label,
