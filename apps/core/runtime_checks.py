@@ -9,16 +9,12 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.checks import Critical, Tags, Warning, register
 
+from apps.core import admin_runtime_helpers
 from apps.core.bootstrap_config import _is_test_process
 from apps.core.queue_service import QueueService
 from apps.core.settings_service import get_advanced_settings
 
 
-MIN_HS256_KEY_LENGTH = 32
-KNOWN_PLACEHOLDER_SECRETS = {
-    "django-insecure-change-this-in-production",
-    "jwt-secret-key-change-this",
-}
 NETWORK_PROBE_TIMEOUT_SECONDS = 0.3
 PRODUCTION_RUNTIME_CHECK_TAG = "bias_runtime"
 
@@ -138,7 +134,15 @@ def _probe_tcp_endpoint(host: str | None, port: int | None, *, label: str) -> di
         }
 
 
-def _probe_redis_ping(host: str | None, port: int | None, *, label: str) -> dict[str, Any]:
+def _redis_command(*parts: str) -> bytes:
+    encoded = [part.encode("utf-8") for part in parts]
+    command = f"*{len(encoded)}\r\n".encode("ascii")
+    for part in encoded:
+        command += f"${len(part)}\r\n".encode("ascii") + part + b"\r\n"
+    return command
+
+
+def _probe_redis_ping(host: str | None, port: int | None, *, label: str, password: str = "") -> dict[str, Any]:
     normalized_host = str(host or "").strip()
     normalized_port = int(port or 0)
     if not normalized_host or normalized_port <= 0:
@@ -152,7 +156,17 @@ def _probe_redis_ping(host: str | None, port: int | None, *, label: str) -> dict
     try:
         with socket.create_connection((normalized_host, normalized_port), timeout=NETWORK_PROBE_TIMEOUT_SECONDS) as connection:
             connection.settimeout(NETWORK_PROBE_TIMEOUT_SECONDS)
-            connection.sendall(b"*1\r\n$4\r\nPING\r\n")
+            if password:
+                connection.sendall(_redis_command("AUTH", password))
+                auth_response = connection.recv(64)
+                if not auth_response.startswith(b"+OK"):
+                    return {
+                        "available": False,
+                        "status": "auth-error",
+                        "label": "认证失败",
+                        "message": f"{label} 已建立连接，但 Redis AUTH 未通过。",
+                    }
+            connection.sendall(_redis_command("PING"))
             response = connection.recv(64)
     except OSError as exc:
         return {
@@ -212,7 +226,12 @@ def _probe_realtime_connection() -> dict[str, Any]:
         host = None
         port = None
 
-    connectivity = _probe_redis_ping(host, port, label="Redis Channel Layer")
+    connectivity = _probe_redis_ping(
+        host,
+        port,
+        label="Redis Channel Layer",
+        password=getattr(settings, "REDIS_PASSWORD", ""),
+    )
     return {
         "enabled": True,
         "available": connectivity["available"],
@@ -262,7 +281,12 @@ def _probe_queue_broker_connection(queue_enabled: bool, queue_driver: str) -> di
             "message": "Redis broker 缺少主机配置。",
         }
 
-    connectivity = _probe_redis_ping(parsed.hostname, parsed.port or 6379, label="Redis broker")
+    connectivity = _probe_redis_ping(
+        parsed.hostname,
+        parsed.port or 6379,
+        label="Redis broker",
+        password=parsed.password or getattr(settings, "REDIS_PASSWORD", ""),
+    )
     return {
         "enabled": True,
         "available": connectivity["available"],
@@ -272,78 +296,21 @@ def _probe_queue_broker_connection(queue_enabled: bool, queue_driver: str) -> di
     }
 
 
-def _normalize_secret_value(value: Any) -> str:
-    return str(value or "").strip()
-
-
-def _looks_like_placeholder_secret(value: str) -> bool:
-    normalized = value.lower()
-    return normalized in KNOWN_PLACEHOLDER_SECRETS or "change-this" in normalized
-
-
-def _jwt_key_length_requirement(algorithm: str) -> int:
-    normalized = str(algorithm or "").strip().upper()
-    if normalized.startswith("HS"):
-        return MIN_HS256_KEY_LENGTH
-    return 0
-
-
 def build_auth_secret_risks() -> list[dict[str, Any]]:
-    risks: list[dict[str, Any]] = []
-
-    secret_key = _normalize_secret_value(settings.SECRET_KEY)
+    secret_key = admin_runtime_helpers.normalize_secret_value(settings.SECRET_KEY)
     jwt_algorithm = str(settings.NINJA_JWT.get("ALGORITHM") or "").strip().upper()
-    jwt_signing_key = _normalize_secret_value(settings.NINJA_JWT.get("SIGNING_KEY") or settings.SECRET_KEY)
-    jwt_required_length = _jwt_key_length_requirement(jwt_algorithm)
-
-    if _looks_like_placeholder_secret(secret_key):
-        risks.append(
-            {
-                "code": "django-secret-placeholder",
-                "level": "danger",
-                "title": "Django SECRET_KEY 仍为默认占位值",
-                "message": "当前 SECRET_KEY 仍带有开发占位标记，生产环境必须替换为独立高强度密钥。",
-            }
-        )
-
-    if _looks_like_placeholder_secret(jwt_signing_key):
-        risks.append(
-            {
-                "code": "jwt-secret-placeholder",
-                "level": "danger",
-                "title": "JWT 签名密钥仍为默认占位值",
-                "message": "当前 JWT 签名密钥仍带有开发占位标记，生产环境必须替换为独立高强度密钥。",
-            }
-        )
-
-    if jwt_required_length and len(jwt_signing_key) < jwt_required_length:
-        risks.append(
-            {
-                "code": "jwt-secret-too-short",
-                "level": "danger",
-                "title": "JWT 签名密钥长度不足",
-                "message": f"当前 {jwt_algorithm or 'JWT'} 签名密钥长度小于 {jwt_required_length} 字节，存在被弱密钥攻击的风险。",
-            }
-        )
-
-    return risks
+    jwt_signing_key = admin_runtime_helpers.normalize_secret_value(
+        settings.NINJA_JWT.get("SIGNING_KEY") or settings.SECRET_KEY
+    )
+    return admin_runtime_helpers.build_auth_secret_risks(
+        secret_key=secret_key,
+        jwt_algorithm=jwt_algorithm,
+        jwt_signing_key=jwt_signing_key,
+    )
 
 
 def build_auth_secret_status() -> dict[str, Any]:
-    risks = build_auth_secret_risks()
-    if risks:
-        highest_level = "danger" if any(item.get("level") == "danger" for item in risks) else "warning"
-        return {
-            "status": highest_level,
-            "label": "存在风险",
-            "message": "；".join(item.get("title") or "" for item in risks if item.get("title")),
-        }
-
-    return {
-        "status": "healthy",
-        "label": "健康",
-        "message": "Django 与 JWT 密钥未发现默认占位值或长度不足问题。",
-    }
+    return admin_runtime_helpers.build_auth_secret_status(risks=build_auth_secret_risks())
 
 
 def build_runtime_risks(
@@ -360,113 +327,22 @@ def build_runtime_risks(
     realtime_connection: dict[str, Any],
     queue_broker_connection: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    risks: list[dict[str, Any]] = []
     normalized_database_label = str(database_label or "").lower()
-    normalized_cache_driver = str(cache_driver or "").lower()
-    normalized_realtime_driver = str(realtime_driver or "").lower()
-    normalized_queue_driver = str(queue_driver or "").lower()
-
-    if debug_mode:
-        risks.append(
-            {
-                "code": "debug-enabled",
-                "level": "warning",
-                "title": "DEBUG 模式仍处于开启状态",
-                "message": "生产环境应关闭 DEBUG，避免泄露调试信息并影响缓存与异常处理行为。",
-            }
-        )
-
+    risks = admin_runtime_helpers.build_runtime_risks(
+        debug_mode=debug_mode,
+        database_label=database_label,
+        cache_driver=cache_driver,
+        realtime_driver=realtime_driver,
+        queue_enabled=queue_enabled,
+        queue_driver=queue_driver,
+        queue_worker_status=queue_worker_status,
+        redis_enabled=redis_enabled,
+        cache_connection=cache_connection,
+        realtime_connection=realtime_connection,
+        queue_broker_connection=queue_broker_connection,
+        auth_secret_risks=build_auth_secret_risks(),
+    )
     is_production_like = "postgresql" in normalized_database_label
-    if is_production_like and not redis_enabled:
-        risks.append(
-            {
-                "code": "redis-disabled-production",
-                "level": "danger",
-                "title": "生产形态下未启用 Redis",
-                "message": "当前使用 PostgreSQL，但缓存、实时层与队列未形成 Redis 底座，不符合路线图中的生产约束要求。",
-            }
-        )
-
-    if is_production_like and "内存" in cache_driver:
-        risks.append(
-            {
-                "code": "locmem-cache-production",
-                "level": "danger",
-                "title": "生产形态下仍在使用内存缓存",
-                "message": "LocMemCache 只适合开发环境，多进程部署下会导致缓存割裂与状态不一致。",
-            }
-        )
-
-    if queue_enabled and normalized_queue_driver == "redis" and not queue_worker_status.get("available"):
-        risks.append(
-            {
-                "code": "queue-worker-unavailable",
-                "level": "danger",
-                "title": "队列已启用但没有可用 worker",
-                "message": queue_worker_status.get("message") or "当前队列会持续回退到同步执行，后台异步任务无法稳定处理。",
-            }
-        )
-
-    if cache_connection.get("enabled") and cache_connection.get("available") is False:
-        risks.append(
-            {
-                "code": "cache-backend-unavailable",
-                "level": "danger",
-                "title": "缓存后端不可用",
-                "message": cache_connection.get("message") or "当前缓存后端无法正常访问。",
-            }
-        )
-
-    if realtime_connection.get("enabled") and realtime_connection.get("available") is False:
-        risks.append(
-            {
-                "code": "realtime-backend-unavailable",
-                "level": "warning",
-                "title": "实时层配置不完整",
-                "message": realtime_connection.get("message") or "当前实时层无法确认 Redis Channel Layer 可用。",
-            }
-        )
-
-    if queue_broker_connection.get("enabled") and queue_broker_connection.get("available") is False:
-        risks.append(
-            {
-                "code": "queue-broker-unavailable",
-                "level": "danger",
-                "title": "队列 broker 不可用",
-                "message": queue_broker_connection.get("message") or "当前队列 broker 无法使用。",
-            }
-        )
-
-    if queue_enabled and normalized_queue_driver != "redis":
-        risks.append(
-            {
-                "code": "queue-driver-nonredis",
-                "level": "warning",
-                "title": "队列已启用但未使用 Redis 驱动",
-                "message": "当前 worker 健康检测与稳定异步链路主要围绕 Redis/Celery 设计，其他驱动暂未形成完整生产闭环。",
-            }
-        )
-
-    if is_production_like and normalized_realtime_driver == "in-memory":
-        risks.append(
-            {
-                "code": "realtime-inmemory-production",
-                "level": "warning",
-                "title": "实时层仍使用内存通道",
-                "message": "In-memory Channel Layer 不适合多实例部署，WebSocket 消息无法跨进程共享。",
-            }
-        )
-
-    if is_production_like and normalized_cache_driver not in {"redis", "memcached"}:
-        risks.append(
-            {
-                "code": "cache-driver-nonshared",
-                "level": "warning",
-                "title": "缓存驱动不是共享缓存",
-                "message": "当前缓存驱动缺少跨实例共享能力，生产环境下容易出现配置和统计状态不一致。",
-            }
-        )
-
     if is_production_like:
         frontend_url = str(getattr(settings, "FRONTEND_URL", "") or "").strip()
         if not frontend_url:
@@ -490,7 +366,6 @@ def build_runtime_risks(
                 }
             )
 
-    risks.extend(build_auth_secret_risks())
     return risks
 
 

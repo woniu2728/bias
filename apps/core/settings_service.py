@@ -233,9 +233,12 @@ def sync_mail_settings_to_site_config(mail_settings: dict) -> str | None:
 
 
 def clear_runtime_setting_caches():
+    from apps.core.runtime_state import clear_runtime_status_cache
+
     _EXTENSION_SETTING_GROUP_DEFAULTS_CACHE.clear()
     _cache_delete(ADVANCED_SETTINGS_CACHE_KEY)
     _cache_delete(PUBLIC_FORUM_SETTINGS_CACHE_KEY)
+    clear_runtime_status_cache()
 
 
 def _cache_get(key, default=None):

@@ -67,15 +67,18 @@ def probe_realtime_connection(*, settings_obj, redis_probe) -> dict[str, Any]:
     if isinstance(first_host, (list, tuple)):
         host = first_host[0] if len(first_host) > 0 else None
         port = first_host[1] if len(first_host) > 1 else 6379
+        password = getattr(settings_obj, "REDIS_PASSWORD", "")
     elif isinstance(first_host, str):
         parsed = urlparse(first_host if "://" in first_host else f"redis://{first_host}")
         host = parsed.hostname
         port = parsed.port or 6379
+        password = parsed.password or getattr(settings_obj, "REDIS_PASSWORD", "")
     else:
         host = None
         port = None
+        password = ""
 
-    connectivity = redis_probe(host, port, label="Redis Channel Layer")
+    connectivity = redis_probe(host, port, label="Redis Channel Layer", password=password)
     return {
         "enabled": True,
         "available": connectivity["available"],
@@ -131,7 +134,12 @@ def probe_queue_broker_connection(
             "message": "Redis broker 缺少主机配置。",
         }
 
-    connectivity = redis_probe(parsed.hostname, parsed.port or 6379, label="Redis broker")
+    connectivity = redis_probe(
+        parsed.hostname,
+        parsed.port or 6379,
+        label="Redis broker",
+        password=parsed.password or getattr(settings_obj, "REDIS_PASSWORD", ""),
+    )
     return {
         "enabled": True,
         "available": connectivity["available"],
@@ -146,7 +154,12 @@ def normalize_secret_value(value: Any) -> str:
 
 
 def looks_like_placeholder_secret(value: str) -> bool:
-    return value.lower() in KNOWN_PLACEHOLDER_SECRETS
+    normalized = value.lower()
+    return (
+        normalized in KNOWN_PLACEHOLDER_SECRETS
+        or "change-this" in normalized
+        or normalized.startswith("replace-with")
+    )
 
 
 def jwt_key_length_requirement(algorithm: str) -> int:

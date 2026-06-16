@@ -135,7 +135,7 @@ from apps.core.resource_search import ResourceSearchFilter, ResourceSearchManage
 from apps.core.resource_serializer import ResourceSerializer
 from apps.core.resource_context import ResourceContext
 from apps.core.resource_validation import ResourceValidationError, ResourceValidator, ResourceValidatorFactory
-from apps.core.bootstrap_config import load_site_bootstrap
+from apps.core.bootstrap_config import SiteBootstrapConfig, load_site_bootstrap
 from apps.core.models import AuditLog, ExtensionInstallation, Setting
 from apps.core.settings_service import (
     clear_runtime_setting_caches,
@@ -2528,6 +2528,33 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Setting.objects.filter(key=RUNTIME_REBUILD_MARKER_KEY).exists())
         rebuild_runtime.assert_called_once_with()
+
+    def test_maintenance_mode_exemption_skips_jwt_resolution_without_token(self):
+        from apps.core.middleware import MaintenanceModeMiddleware
+
+        request = RequestFactory().post("/api/discussions/")
+        middleware = MaintenanceModeMiddleware(lambda current_request: HttpResponse("ok"))
+
+        with patch("apps.core.middleware.resolve_authenticated_user") as resolve_user:
+            exempt = middleware._is_exempt(request, mode="high")
+
+        self.assertFalse(exempt)
+        resolve_user.assert_not_called()
+
+    def test_maintenance_mode_exemption_checks_jwt_when_token_present(self):
+        from apps.core.jwt_auth import ACCESS_TOKEN_COOKIE_NAME
+        from apps.core.middleware import MaintenanceModeMiddleware
+
+        request = RequestFactory().post("/api/discussions/")
+        request.COOKIES[ACCESS_TOKEN_COOKIE_NAME] = "token"
+        middleware = MaintenanceModeMiddleware(lambda current_request: HttpResponse("ok"))
+        staff = SimpleNamespace(is_staff=True)
+
+        with patch("apps.core.middleware.resolve_authenticated_user", return_value=staff) as resolve_user:
+            exempt = middleware._is_exempt(request, mode="high")
+
+        self.assertTrue(exempt)
+        resolve_user.assert_called_once_with(request)
 
     @override_settings(BIAS_EXTENSION_AUTO_FRONTEND_REBUILD=True, BIAS_EXTENSION_AUTO_FRONTEND_PUBLISH=True)
     def test_extension_runtime_invalidation_can_auto_rebuild_frontend_assets(self):
@@ -14018,6 +14045,8 @@ class AdminDashboardStatsApiTests(TestCase):
         CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "dashboard-test"}},
         CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
         CELERY_BROKER_URL="memory://",
+        SECRET_KEY="dashboard-secret-key-12345678901234567890",
+        NINJA_JWT={"ALGORITHM": "HS256", "SIGNING_KEY": "dashboard-jwt-secret-key-123456789012345"},
     )
     def test_admin_stats_returns_python_runtime_status(self):
         response = self.client.get("/api/admin/stats", **self.auth_header())
@@ -14051,6 +14080,8 @@ class AdminDashboardStatsApiTests(TestCase):
         CACHES={"default": {"BACKEND": "django_redis.cache.RedisCache", "LOCATION": "redis://localhost:6379/0"}},
         CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {"hosts": [("localhost", 6379)]}}},
         CELERY_BROKER_URL="redis://localhost:6379/1",
+        SECRET_KEY="dashboard-secret-key-12345678901234567890",
+        NINJA_JWT={"ALGORITHM": "HS256", "SIGNING_KEY": "dashboard-jwt-secret-key-123456789012345"},
     )
     @patch("apps.core.admin_runtime_summary.runtime_probe_redis_ping")
     @patch("apps.core.admin_runtime_summary.cache.get", return_value="ok")
@@ -14102,6 +14133,8 @@ class AdminDashboardStatsApiTests(TestCase):
         CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "dashboard-test"}},
         CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
         CELERY_BROKER_URL="redis://localhost:6379/1",
+        SECRET_KEY="dashboard-secret-key-12345678901234567890",
+        NINJA_JWT={"ALGORITHM": "HS256", "SIGNING_KEY": "dashboard-jwt-secret-key-123456789012345"},
     )
     def test_admin_stats_does_not_mark_redis_enabled_from_idle_broker_config(self):
         Setting.objects.update_or_create(
@@ -14446,21 +14479,16 @@ class HealthCheckApiTests(TestCase):
         SECRET_KEY="health-check-secret-key-1234567890123456",
         NINJA_JWT={"ALGORITHM": "HS256", "SIGNING_KEY": "health-check-jwt-secret-key-1234567890"},
     )
-    def test_health_check_exposes_runtime_readiness_summary(self):
+    def test_health_check_exposes_minimal_runtime_status(self):
         response = self.client.get("/api/health")
 
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["state"], "ready")
-        self.assertIn("readiness", payload)
-        self.assertEqual(payload["readiness"]["cache_driver"], "内存")
-        self.assertEqual(payload["readiness"]["realtime_driver"], "In-memory")
-        self.assertEqual(payload["readiness"]["queue_driver"], "sync")
-        self.assertFalse(payload["readiness"]["queue_enabled"])
-        self.assertEqual(payload["readiness"]["queue_worker_status"]["status"], "disabled")
-        self.assertEqual(payload["readiness"]["auth_secret_status"]["status"], "healthy")
-        self.assertEqual(payload["readiness"]["runtime_risks"], [])
+        self.assertNotIn("readiness", payload)
+        self.assertNotIn("database_label", payload)
+        self.assertNotIn("cache_driver", payload)
 
     @override_settings(
         DEBUG=False,
@@ -14475,17 +14503,13 @@ class HealthCheckApiTests(TestCase):
     )
     @patch.object(settings.BOOTSTRAP, "installed", True)
     @patch("apps.core.runtime_checks._is_test_process", return_value=False)
-    def test_health_check_reports_production_runtime_risks(self, _is_test_process):
+    def test_health_check_hides_production_runtime_risks(self, _is_test_process):
         response = self.client.get("/api/health")
 
         self.assertEqual(response.status_code, 200, response.content)
         payload = response.json()
-        risk_codes = {item["code"] for item in payload["readiness"]["runtime_risks"]}
-        self.assertIn("django-secret-placeholder", risk_codes)
-        self.assertIn("jwt-secret-too-short", risk_codes)
-        self.assertIn("redis-disabled-production", risk_codes)
-        self.assertIn("frontend-url-missing-production", risk_codes)
-        self.assertIn("email-backend-development-production", risk_codes)
+        self.assertEqual(payload["status"], "ok")
+        self.assertNotIn("readiness", payload)
 
 
 class QueueServiceTests(TestCase):
@@ -14667,7 +14691,7 @@ class QueueServiceTests(TestCase):
 
 
 class BootstrapConfigFallbackTests(TestCase):
-    def test_load_site_bootstrap_prefers_database_env_when_site_config_missing(self):
+    def test_env_bootstrap_with_database_only_is_not_installed(self):
         temp_dir = make_workspace_temp_dir()
         try:
             with patch("apps.core.bootstrap_config._is_test_process", return_value=False):
@@ -14683,12 +14707,15 @@ class BootstrapConfigFallbackTests(TestCase):
                         "REDIS_HOST": "redis",
                         "REDIS_PORT": "6379",
                         "REDIS_DB": "0",
+                        "SECRET_KEY": "",
+                        "JWT_SECRET_KEY": "",
+                        "FRONTEND_URL": "",
                     },
                     clear=False,
                 ):
                     config = load_site_bootstrap(temp_dir)
 
-            self.assertTrue(config.installed)
+            self.assertFalse(config.installed)
             self.assertEqual(config.source, "env")
             self.assertEqual(config.database_mode, "postgres")
             self.assertEqual(config.db_name, "bias")
@@ -14697,6 +14724,98 @@ class BootstrapConfigFallbackTests(TestCase):
             self.assertTrue(config.use_redis)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_env_bootstrap_is_installed_with_runtime_secrets_and_origin(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with patch("apps.core.bootstrap_config._is_test_process", return_value=False):
+                with patch.dict(
+                    os.environ,
+                    {
+                        "BIAS_SITE_CONFIG": "",
+                        "DB_NAME": "bias",
+                        "DB_USER": "postgres",
+                        "DB_PASSWORD": "postgres",
+                        "SECRET_KEY": "a" * 50,
+                        "JWT_SECRET_KEY": "b" * 50,
+                        "FRONTEND_URL": "http://localhost:8080",
+                    },
+                    clear=False,
+                ):
+                    config = load_site_bootstrap(temp_dir)
+
+            self.assertTrue(config.installed)
+            self.assertEqual(config.source, "env")
+            self.assertEqual(config.frontend_url, "http://localhost:8080")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_env_bootstrap_rejects_placeholder_runtime_secrets(self):
+        temp_dir = make_workspace_temp_dir()
+        try:
+            with patch("apps.core.bootstrap_config._is_test_process", return_value=False):
+                with patch.dict(
+                    os.environ,
+                    {
+                        "BIAS_SITE_CONFIG": "",
+                        "DB_NAME": "bias",
+                        "DB_USER": "postgres",
+                        "DB_PASSWORD": "postgres",
+                        "SECRET_KEY": "replace-with-django-secret-key",
+                        "JWT_SECRET_KEY": "replace-with-jwt-secret-key",
+                        "FRONTEND_URL": "http://localhost:8080",
+                    },
+                    clear=False,
+                ):
+                    config = load_site_bootstrap(temp_dir)
+
+            self.assertFalse(config.installed)
+            self.assertEqual(config.source, "env")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+class RuntimeStatusCacheTests(TestCase):
+    def tearDown(self):
+        from apps.core.runtime_state import clear_runtime_status_cache
+
+        clear_runtime_status_cache()
+        super().tearDown()
+
+    def test_runtime_status_uses_short_process_cache(self):
+        from apps.core.runtime_state import clear_runtime_status_cache, get_runtime_status
+
+        clear_runtime_status_cache()
+        Setting.objects.update_or_create(
+            key="system.version",
+            defaults={"value": json.dumps("1.0.0")},
+        )
+        bootstrap = SiteBootstrapConfig(installed=True, source="file", database_mode="sqlite")
+
+        with self.assertNumQueries(1):
+            first = get_runtime_status(bootstrap)
+            second = get_runtime_status(bootstrap)
+
+        self.assertEqual(first.state, "ready")
+        self.assertEqual(second.state, "ready")
+
+    def test_clear_runtime_setting_caches_clears_runtime_status_cache(self):
+        from apps.core.runtime_state import clear_runtime_status_cache, get_runtime_status
+
+        clear_runtime_status_cache()
+        Setting.objects.update_or_create(
+            key="system.version",
+            defaults={"value": json.dumps("1.0.0")},
+        )
+        bootstrap = SiteBootstrapConfig(installed=True, source="file", database_mode="sqlite")
+        get_runtime_status(bootstrap)
+
+        clear_runtime_setting_caches()
+
+        with self.assertNumQueries(1):
+            status = get_runtime_status(bootstrap)
+
+        self.assertEqual(status.state, "ready")
 
 
 class SettingsServiceFallbackTests(TestCase):
@@ -14995,6 +15114,28 @@ class ProductionRuntimeCheckTests(TestCase):
         enforce_production_runtime_checks()
 
         run_checks_mock.assert_not_called()
+
+    @override_settings(DEBUG=False)
+    @patch.object(settings.BOOTSTRAP, "installed", True)
+    @patch("apps.core.runtime_checks._is_test_process", return_value=False)
+    @patch("apps.core.startup_guard.run_checks")
+    def test_startup_guard_allows_installation_with_development_email_backend(
+        self,
+        run_checks_mock,
+        _is_test_process,
+    ):
+        from django.core.checks import Critical
+        from apps.core.startup_guard import enforce_production_runtime_checks
+
+        run_checks_mock.return_value = [
+            Critical(
+                "development email backend",
+                id="bias.email-backend-development-production",
+            ),
+        ]
+
+        with patch.dict(os.environ, {"BIAS_INSTALLING": "1"}):
+            enforce_production_runtime_checks()
 
     @patch("apps.core.startup_guard.enforce_production_runtime_checks")
     @patch("django.core.management.execute_from_command_line")

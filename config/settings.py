@@ -182,21 +182,59 @@ CORS_ALLOWED_ORIGINS = BOOTSTRAP.resolved_cors_origins()
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = BOOTSTRAP.resolved_csrf_origins()
-CSRF_COOKIE_SECURE = not DEBUG
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https")
+    if os.getenv("SECURE_PROXY_SSL_HEADER", "1").strip().lower() not in {"0", "false", "no", "off"}
+    else None
+)
+SESSION_COOKIE_SECURE = (
+    os.getenv("SESSION_COOKIE_SECURE", "1" if (not DEBUG and BOOTSTRAP.site_scheme == "https") else "0")
+    .strip()
+    .lower()
+    in {"1", "true", "yes", "on"}
+)
+CSRF_COOKIE_SECURE = (
+    os.getenv("CSRF_COOKIE_SECURE", "1" if (not DEBUG and BOOTSTRAP.site_scheme == "https") else "0")
+    .strip()
+    .lower()
+    in {"1", "true", "yes", "on"}
+)
 CSRF_COOKIE_SAMESITE = "Lax"
+SECURE_SSL_REDIRECT = (
+    os.getenv("SECURE_SSL_REDIRECT", "1" if (not DEBUG and BOOTSTRAP.site_scheme == "https") else "0")
+    .strip()
+    .lower()
+    in {"1", "true", "yes", "on"}
+)
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000" if (not DEBUG and BOOTSTRAP.site_scheme == "https") else "0"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = (
+    os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "1" if SECURE_HSTS_SECONDS else "0")
+    .strip()
+    .lower()
+    in {"1", "true", "yes", "on"}
+)
+SECURE_HSTS_PRELOAD = (
+    os.getenv("SECURE_HSTS_PRELOAD", "1" if SECURE_HSTS_SECONDS else "0")
+    .strip()
+    .lower()
+    in {"1", "true", "yes", "on"}
+)
 
 # Redis Configuration
 REDIS_HOST = BOOTSTRAP.redis_host or 'localhost'
 REDIS_PORT = BOOTSTRAP.redis_port or '6379'
 REDIS_DB = BOOTSTRAP.redis_db or '0'
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "").strip()
 USE_REDIS = BOOTSTRAP.use_redis
+REDIS_AUTH = f":{REDIS_PASSWORD}@" if REDIS_PASSWORD else ""
+REDIS_CACHE_URL = f"redis://{REDIS_AUTH}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
 # Cache Configuration
 CACHES = (
     {
         'default': {
             'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
+            'LOCATION': REDIS_CACHE_URL,
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             }
@@ -213,15 +251,16 @@ CACHES = (
 
 # Celery Configuration
 CELERY_BROKER_URL = BOOTSTRAP.celery_broker_url or (
-    f'redis://{REDIS_HOST}:{REDIS_PORT}/1' if USE_REDIS else 'memory://'
+    f'redis://{REDIS_AUTH}{REDIS_HOST}:{REDIS_PORT}/1' if USE_REDIS else 'memory://'
 )
 CELERY_RESULT_BACKEND = BOOTSTRAP.celery_result_backend or (
-    f'redis://{REDIS_HOST}:{REDIS_PORT}/2' if USE_REDIS else 'cache+memory://'
+    f'redis://{REDIS_AUTH}{REDIS_HOST}:{REDIS_PORT}/2' if USE_REDIS else 'cache+memory://'
 )
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 # Channels Configuration
 CHANNEL_LAYERS = (
@@ -229,7 +268,7 @@ CHANNEL_LAYERS = (
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
             'CONFIG': {
-                'hosts': [(REDIS_HOST, int(REDIS_PORT))],
+                'hosts': [REDIS_CACHE_URL],
             },
         },
     }
@@ -300,7 +339,10 @@ LOGGING = {
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
 
 # Debug Toolbar (only in DEBUG mode)
-ENABLE_DEBUG_TOOLBAR = DEBUG and False
+ENABLE_DEBUG_TOOLBAR = (
+    DEBUG
+    and os.getenv("DEBUG_TOOLBAR", "0").strip().lower() in {"1", "true", "yes", "on"}
+)
 
 if ENABLE_DEBUG_TOOLBAR:
     INSTALLED_APPS += ['debug_toolbar']

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from django.core.checks import Critical, run_checks
 from django.core.exceptions import ImproperlyConfigured
 
@@ -12,6 +14,12 @@ def enforce_production_runtime_checks() -> None:
 
     messages = run_checks(tags=[PRODUCTION_RUNTIME_CHECK_TAG])
     criticals = [message for message in messages if isinstance(message, Critical)]
+    if os.getenv("BIAS_INSTALLING") == "1":
+        criticals = [
+            message
+            for message in criticals
+            if message.id != "bias.email-backend-development-production"
+        ]
     if not criticals:
         return
 

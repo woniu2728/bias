@@ -4,6 +4,7 @@ from io import StringIO
 import httpx
 from unittest.mock import Mock, patch
 
+from django.core.cache import cache
 from django.core import mail
 from django.core.management import call_command
 from django.db import connection
@@ -817,6 +818,106 @@ class SuspendedUserAuthTests(TestCase):
         self.assertEqual(response.status_code, 401, response.content)
         self.assertIn("账号已被封禁", response.json()["error"])
         self.assertIn("请联系管理员申诉", response.json()["error"])
+
+
+class AuthRateLimitTests(TestCase):
+    remote_addr = "203.0.113.80"
+
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(
+            username="rate-limit-user",
+            email="rate-limit@example.com",
+            password="password123",
+        )
+
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
+
+    def test_login_rate_limits_repeated_failures_by_identifier(self):
+        for _ in range(5):
+            response = self.client.post(
+                "/api/users/login",
+                data=json.dumps({
+                    "identification": "rate-limit-user",
+                    "password": "wrong-password",
+                }),
+                content_type="application/json",
+                REMOTE_ADDR=self.remote_addr,
+            )
+            self.assertEqual(response.status_code, 401, response.content)
+            self.assertEqual(response.json()["error"], "用户名或密码错误")
+
+        response = self.client.post(
+            "/api/users/login",
+            data=json.dumps({
+                "identification": "rate-limit-user",
+                "password": "wrong-password",
+            }),
+            content_type="application/json",
+            REMOTE_ADDR=self.remote_addr,
+        )
+
+        self.assertEqual(response.status_code, 429, response.content)
+
+    def test_register_rate_limits_repeated_validation_failures(self):
+        for _ in range(5):
+            response = self.client.post(
+                "/api/users/register",
+                data=json.dumps({
+                    "username": "rate-limit-user",
+                    "email": "rate-limit@example.com",
+                    "password": "password123",
+                }),
+                content_type="application/json",
+                REMOTE_ADDR=self.remote_addr,
+            )
+            self.assertEqual(response.status_code, 400, response.content)
+
+        response = self.client.post(
+            "/api/users/register",
+            data=json.dumps({
+                "username": "rate-limit-user",
+                "email": "rate-limit@example.com",
+                "password": "password123",
+            }),
+            content_type="application/json",
+            REMOTE_ADDR=self.remote_addr,
+        )
+
+        self.assertEqual(response.status_code, 429, response.content)
+
+    def test_forgot_password_hides_unknown_email(self):
+        response = self.client.post(
+            "/api/users/forgot-password",
+            data=json.dumps({"email": "missing@example.com"}),
+            content_type="application/json",
+            REMOTE_ADDR=self.remote_addr,
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["message"], "重置密码邮件已发送")
+        self.assertFalse(PasswordToken.objects.exists())
+
+    def test_forgot_password_rate_limits_repeated_requests(self):
+        for _ in range(5):
+            response = self.client.post(
+                "/api/users/forgot-password",
+                data=json.dumps({"email": self.user.email}),
+                content_type="application/json",
+                REMOTE_ADDR=self.remote_addr,
+            )
+            self.assertEqual(response.status_code, 200, response.content)
+
+        response = self.client.post(
+            "/api/users/forgot-password",
+            data=json.dumps({"email": self.user.email}),
+            content_type="application/json",
+            REMOTE_ADDR=self.remote_addr,
+        )
+
+        self.assertEqual(response.status_code, 429, response.content)
 
 
 @override_settings(DEBUG=False, CSRF_COOKIE_SECURE=True)

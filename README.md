@@ -20,12 +20,32 @@ cd bias
 cp .env.example .env
 ```
 
-至少填写 `.env` 中的数据库配置：
+至少填写 `.env` 中的数据库和访问地址配置：
 
 ```env
 DB_NAME=your_bias_db
 DB_USER=your_bias_user
 DB_PASSWORD=your_strong_password
+FRONTEND_URL=http://localhost:8080
+SITE_SCHEME=http
+```
+
+首次安装时 `SECRET_KEY`、`JWT_SECRET_KEY` 可以留空，安装命令会生成随机强密钥并写入 `instance/site.json`。已安装站点不要随意修改这个文件里的密钥，否则现有登录态和签名数据会失效。
+
+本地 `http://localhost:8080` 演示环境保持 `CSRF_COOKIE_SECURE=0`、`SESSION_COOKIE_SECURE=0`。正式 HTTPS 部署时把 `FRONTEND_URL`/`SITE_SCHEME` 改成 `https`，并开启这两个 secure cookie 开关。
+
+`WEB_CONCURRENCY` 和 `CELERY_CONCURRENCY` 默认均为 2，可按服务器 CPU、内存和实际流量调大。
+
+生产邮件建议配置 SMTP：
+
+```env
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_USE_TLS=1
+EMAIL_HOST_USER=your-smtp-user
+EMAIL_HOST_PASSWORD=your-smtp-password
+DEFAULT_FROM_EMAIL=noreply@example.com
 ```
 
 如果这台机器之前运行过同名 Bias 容器，首次安装前建议先清理旧卷，避免 PostgreSQL 复用历史账号：

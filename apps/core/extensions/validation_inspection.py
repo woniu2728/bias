@@ -8,6 +8,12 @@ from apps.core.extensions.types import ExtensionManifest
 from apps.core.extensions.validation_rules import EXPORT_DECLARATION_PATTERN, EXPORT_FUNCTION_PATTERN
 
 
+def _path_for_payload(path: Path | str | None) -> str:
+    if not path:
+        return ""
+    return Path(path).as_posix()
+
+
 def resolve_frontend_admin_entry(target: ExtensionManifest) -> str:
     return str(getattr(target, "frontend_admin_entry", "") or "").strip()
 
@@ -65,7 +71,7 @@ def inspect_frontend_admin_entry(
     payload.update({
         "entry_type": "filesystem",
         "exists": absolute_path.exists(),
-        "resolved_path": str(absolute_path),
+        "resolved_path": _path_for_payload(absolute_path),
     })
 
     if not absolute_path.exists():
@@ -184,7 +190,7 @@ def inspect_frontend_forum_entry(
     payload.update({
         "entry_type": "filesystem",
         "exists": absolute_path.exists(),
-        "resolved_path": str(absolute_path),
+        "resolved_path": _path_for_payload(absolute_path),
     })
 
     if not absolute_path.exists():
@@ -235,6 +241,7 @@ def inspect_backend_entry(
     })()
     inspection = inspect_extension_backend_entry(debug_definition)
     payload.update(inspection)
+    payload["resolved_path"] = _path_for_payload(payload.get("resolved_path"))
     return payload
 
 

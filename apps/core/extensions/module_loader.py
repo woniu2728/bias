@@ -10,6 +10,12 @@ from types import ModuleType
 BACKEND_FUNCTION_PATTERN = re.compile(r"^(?:async\s+)?def\s+([A-Za-z0-9_]+)\s*\(", re.MULTILINE)
 
 
+def _path_for_payload(path: Path | str | None) -> str:
+    if not path:
+        return ""
+    return Path(path).as_posix()
+
+
 def resolve_extension_backend_file(definition) -> Path | None:
     if definition.source == "python-package":
         return None
@@ -74,7 +80,7 @@ def inspect_extension_backend_module(definition) -> dict:
     payload.update({
         "entry_type": "filesystem",
         "exists": bool(backend_file and backend_file.exists()),
-        "resolved_path": str(backend_file or ""),
+        "resolved_path": _path_for_payload(backend_file),
     })
     if backend_file is None or not backend_file.exists():
         return payload

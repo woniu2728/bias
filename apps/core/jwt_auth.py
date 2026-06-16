@@ -1,8 +1,12 @@
+import logging
+
 from django.conf import settings
 from django.http import HttpRequest
 from ninja.security import HttpBearer
 from ninja_jwt.authentication import JWTAuth, JWTBaseAuthentication
 
+
+logger = logging.getLogger(__name__)
 
 ACCESS_TOKEN_COOKIE_NAME = "bias_access_token"
 ACCESS_TOKEN_COOKIE_PATH = "/"
@@ -28,7 +32,8 @@ def resolve_user_from_access_token(token: str):
         auth = JWTBaseAuthentication()
         validated_token = auth.get_validated_token(token)
         return auth.get_user(validated_token)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to resolve JWT access token: %s", exc, exc_info=True)
         return None
 
 
@@ -39,7 +44,8 @@ def resolve_authenticated_user(request: HttpRequest):
         if token:
             try:
                 user = JWTAuth().authenticate(request, token)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Failed to authenticate bearer token: %s", exc, exc_info=True)
                 user = None
             if getattr(user, "is_authenticated", False):
                 return user

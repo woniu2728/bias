@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from ninja import NinjaAPI, Router
 
-from apps.core.runtime_checks import collect_runtime_readiness
 from apps.core.runtime_state import get_runtime_status
 from apps.core.version import APP_VERSION
 
@@ -74,25 +73,12 @@ def _register_health_route(api: NinjaAPI) -> None:
     @api.get("/health", tags=["System"])
     def health_check(request):
         runtime = get_runtime_status()
-        readiness = collect_runtime_readiness()
         return {
             "status": "ok" if runtime.state == "ready" else "degraded",
             "message": "Bias API is running",
             "state": runtime.state,
             "current_version": runtime.current_version,
             "installed_version": runtime.installed_version,
-            "readiness": {
-                "database_label": readiness["database_label"],
-                "cache_driver": readiness["cache_driver"],
-                "realtime_driver": readiness["realtime_driver"],
-                "queue_driver": readiness["queue_driver"],
-                "queue_enabled": readiness["queue_enabled"],
-                "queue_worker_status": readiness["queue_worker_status"],
-                "redis_enabled": readiness["redis_enabled"],
-                "auth_secret_status": readiness["auth_secret_status"],
-                "runtime_risks": readiness["runtime_risks"],
-                "runtime_dependency_checks": readiness["runtime_dependency_checks"],
-            },
         }
 
 

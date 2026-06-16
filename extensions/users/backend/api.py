@@ -15,6 +15,12 @@ from apps.core.extensions.platform import (
     refresh_token_max_age,
 )
 from apps.core.extensions.runtime import RuntimeHumanVerificationError, verify_runtime_human_verification
+from extensions.users.backend.auth_rate_limit import (
+    AuthRateLimitExceeded,
+    check_auth_rate_limit,
+    clear_auth_rate_limit,
+    record_auth_rate_limit_failure,
+)
 from extensions.users.backend.preferences import normalize_user_preferences, normalize_user_ui_preferences, serialize_user_preferences
 from extensions.users.backend.schemas import (
     EmailVerifySchema,
@@ -31,6 +37,15 @@ from extensions.users.backend.services import UserService
 
 
 router = Router()
+GENERIC_PASSWORD_RESET_MESSAGE = "重置密码邮件已发送"
+GENERIC_LOGIN_ERROR_MESSAGE = "用户名或密码错误"
+
+
+def _auth_cookie_secure() -> bool:
+    return bool(
+        getattr(settings, "SESSION_COOKIE_SECURE", not settings.DEBUG)
+        or getattr(settings, "CSRF_COOKIE_SECURE", False)
+    )
 
 
 def _set_refresh_token_cookie(response: JsonResponse, refresh: RefreshToken) -> JsonResponse:
@@ -39,7 +54,7 @@ def _set_refresh_token_cookie(response: JsonResponse, refresh: RefreshToken) -> 
         str(refresh),
         max_age=refresh_token_max_age(),
         path=REFRESH_TOKEN_COOKIE_PATH,
-        secure=not settings.DEBUG,
+        secure=_auth_cookie_secure(),
         httponly=True,
         samesite="Lax",
     )
@@ -52,7 +67,7 @@ def _set_access_token_cookie(response: JsonResponse, access_token: str) -> JsonR
         access_token,
         max_age=access_token_max_age(),
         path=ACCESS_TOKEN_COOKIE_PATH,
-        secure=not settings.DEBUG,
+        secure=_auth_cookie_secure(),
         httponly=True,
         samesite="Lax",
     )
@@ -80,6 +95,7 @@ def _clear_refresh_token_cookie(response: JsonResponse) -> JsonResponse:
 @router.post("/register", response=UserOutSchema, tags=["Auth"])
 def register(request, payload: UserRegisterSchema):
     try:
+        check_auth_rate_limit("register", request, payload.email)
         verify_runtime_human_verification(
             request,
             "register",
@@ -91,15 +107,19 @@ def register(request, payload: UserRegisterSchema):
             email=payload.email,
             password=payload.password,
         )
+    except AuthRateLimitExceeded as e:
+        return api_error(str(e), status=429)
     except RuntimeHumanVerificationError as e:
         return api_error(str(e), status=e.status_code)
     except ValueError as e:
+        record_auth_rate_limit_failure("register", request, payload.email)
         return api_error(str(e), status=400)
 
 
 @router.post("/login", response=TokenSchema, tags=["Auth"])
 def login(request, payload: UserLoginSchema):
     try:
+        check_auth_rate_limit("login", request, payload.identification)
         verify_runtime_human_verification(
             request,
             "login",
@@ -115,11 +135,16 @@ def login(request, payload: UserLoginSchema):
         access_token = str(refresh.access_token)
         response = JsonResponse({"access": access_token})
         response = _set_access_token_cookie(response, access_token)
+        clear_auth_rate_limit("login", request, payload.identification)
         return _set_refresh_token_cookie(response, refresh)
+    except AuthRateLimitExceeded as e:
+        return api_error(str(e), status=429)
     except RuntimeHumanVerificationError as e:
         return api_error(str(e), status=e.status_code)
     except ValueError as e:
-        return api_error(str(e), status=401)
+        message = str(e) if "账号已被封禁" in str(e) else GENERIC_LOGIN_ERROR_MESSAGE
+        record_auth_rate_limit_failure("login", request, payload.identification)
+        return api_error(message, status=401)
 
 
 @router.post("/token/refresh", response=TokenSchema, tags=["Auth"])
@@ -172,16 +197,20 @@ def resend_email_verification(request):
 @router.post("/forgot-password", tags=["Auth"])
 def forgot_password(request, payload: PasswordResetRequestSchema):
     try:
+        check_auth_rate_limit("forgot_password", request, payload.email)
+        record_auth_rate_limit_failure("forgot_password", request, payload.email)
         password_token = UserService.create_password_reset_token(payload.email)
-        response = {"message": "重置密码邮件已发送"}
+        response = {"message": GENERIC_PASSWORD_RESET_MESSAGE}
 
         if settings.DEBUG:
             response["debug_token"] = password_token.token
             response["debug_reset_url"] = f"{settings.FRONTEND_URL}/reset-password?token={password_token.token}"
 
         return response
-    except ValueError as e:
-        return api_error(str(e), status=400)
+    except AuthRateLimitExceeded as e:
+        return api_error(str(e), status=429)
+    except ValueError:
+        return {"message": GENERIC_PASSWORD_RESET_MESSAGE}
 
 
 @router.post("/reset-password", response=UserOutSchema, tags=["Auth"])

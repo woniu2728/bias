@@ -16,6 +16,7 @@ from django.core.management import CommandError, call_command
 from django.test import TestCase, override_settings
 
 from apps.core.bootstrap_config import read_site_config
+from apps.core.models import Setting
 from apps.core.release import build_git_command, ensure_release_versions_aligned
 
 
@@ -62,6 +63,7 @@ class InstallForumCommandTests(TestCase):
             self.assertEqual(config.resolved_frontend_url(), "http://localhost:5173")
             self.assertTrue(config.secret_key)
             self.assertTrue(config.jwt_secret_key)
+            self.assertFalse(Setting.objects.filter(key="advanced.queue_enabled").exists())
 
             self.assertEqual(mock_run_manage_py.call_count, 7)
             invoked_steps = [call.args[0] for call in mock_run_manage_py.call_args_list]
@@ -92,14 +94,31 @@ class InstallForumCommandTests(TestCase):
                 first_env["BIAS_SITE_CONFIG"],
                 str(config_path),
             )
+            self.assertEqual(first_env["BIAS_INSTALLING"], "1")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    @patch("apps.core.management.commands.install_forum.Command._write_install_settings")
     @patch("apps.core.management.commands.install_forum.assert_database_connection")
     @patch("apps.core.management.commands.install_forum.run_manage_py")
-    def test_install_forum_command_writes_postgres_site_config_values(self, mock_run_manage_py, mock_assert_database_connection):
-        mock_run_manage_py.side_effect = lambda args, env: self._success_result(args)
+    def test_install_forum_command_writes_postgres_site_config_values(
+        self,
+        mock_run_manage_py,
+        mock_assert_database_connection,
+        mock_write_install_settings,
+    ):
+        call_sequence = []
+
+        def record_manage_step(args, env):
+            call_sequence.append(("manage", tuple(args)))
+            return self._success_result(args)
+
+        def record_install_settings(settings_map):
+            call_sequence.append(("settings", tuple(settings_map.keys())))
+
+        mock_run_manage_py.side_effect = record_manage_step
         mock_assert_database_connection.return_value = None
+        mock_write_install_settings.side_effect = record_install_settings
 
         temp_dir = make_workspace_temp_dir()
         try:
@@ -112,7 +131,6 @@ class InstallForumCommandTests(TestCase):
                         "postgres",
                         "--config",
                         str(config_path),
-                        "--skip-migrate",
                         "--skip-admin",
                         "--db-name",
                         "community",
@@ -140,11 +158,35 @@ class InstallForumCommandTests(TestCase):
             self.assertEqual(config.db_host, "db.internal")
             self.assertEqual(config.db_port, "5433")
             self.assertEqual(config.resolved_frontend_url(), "http://forum.example.com")
+            mock_write_install_settings.assert_called_once_with(
+                {
+                    "advanced.queue_enabled": json.dumps(True, ensure_ascii=False),
+                    "advanced.queue_driver": json.dumps("redis", ensure_ascii=False),
+                }
+            )
 
-            self.assertEqual(mock_run_manage_py.call_count, 6)
-            group_args, group_env = mock_run_manage_py.call_args_list[2].args
+            self.assertEqual(mock_run_manage_py.call_count, 7)
+            invoked_steps = [call.args[0] for call in mock_run_manage_py.call_args_list]
+            self.assertEqual(
+                invoked_steps,
+                [
+                    ["migrate", "--noinput"],
+                    ["sync_extensions"],
+                    ["migrate_extensions", "--all"],
+                    ["init_groups"],
+                    ["sync_forum_version"],
+                    ["build_extension_frontend"],
+                    ["collectstatic", "--noinput"],
+                ],
+            )
+            group_args, group_env = mock_run_manage_py.call_args_list[3].args
             self.assertEqual(group_args, ["init_groups"])
             self.assertEqual(group_env["BIAS_SITE_CONFIG"], str(config_path))
+            self.assertEqual(call_sequence[0], ("manage", ("migrate", "--noinput")))
+            self.assertEqual(
+                call_sequence[1],
+                ("settings", ("advanced.queue_enabled", "advanced.queue_driver")),
+            )
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -183,6 +225,7 @@ class InstallForumCommandTests(TestCase):
             self.assertEqual(config.redis_host, "cache.internal")
             self.assertEqual(config.redis_port, "6380")
             self.assertEqual(config.redis_db, "5")
+            self.assertFalse(Setting.objects.filter(key="advanced.queue_enabled").exists())
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

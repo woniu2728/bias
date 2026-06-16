@@ -9,8 +9,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${DB_PORT:-5432}:5432"
+    expose:
+      - "5432"
     networks:
       - bias_network
     healthcheck:
@@ -23,15 +23,22 @@ services:
     image: redis:7-alpine
     container_name: bias_redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: >
+      sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then
+               redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD";
+             else
+               redis-server --appendonly yes;
+             fi'
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     networks:
       - bias_network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "if [ -n \"$${REDIS_PASSWORD}\" ]; then redis-cli -a \"$${REDIS_PASSWORD}\" ping; else redis-cli ping; fi"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -42,7 +49,11 @@ services:
       dockerfile: Dockerfile
     container_name: bias_web
     restart: unless-stopped
-    command: daphne -b 0.0.0.0 -p 8000 config.asgi:application
+    command: >
+      gunicorn config.asgi:application
+      -k uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --workers ${WEB_CONCURRENCY:-2}
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
@@ -59,11 +70,32 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - SECRET_KEY=${SECRET_KEY:-}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8080}
+      - SITE_SCHEME=${SITE_SCHEME:-http}
+      - CSRF_COOKIE_SECURE=${CSRF_COOKIE_SECURE:-0}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-0}
+      - WEB_CONCURRENCY=${WEB_CONCURRENCY:-2}
+      - EMAIL_BACKEND=${EMAIL_BACKEND:-}
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-1}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).read()\nPY"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
     networks:
       - bias_network
 
@@ -73,7 +105,7 @@ services:
     restart: unless-stopped
     working_dir: /app/frontend
     command: >
-      sh -c "npm install &&
+      sh -c "if [ -f package-lock.json ]; then npm ci; else npm install; fi &&
              npm run build &&
              tail -f /dev/null"
     volumes:
@@ -93,7 +125,10 @@ services:
       dockerfile: Dockerfile
     container_name: bias_celery
     restart: unless-stopped
-    command: celery -A config worker -l info
+    command: >
+      celery -A config worker -l info
+      --concurrency=${CELERY_CONCURRENCY:-2}
+      --max-tasks-per-child=${CELERY_MAX_TASKS_PER_CHILD:-200}
     volumes:
       - .:/app
     environment:
@@ -106,11 +141,31 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - SECRET_KEY=${SECRET_KEY:-}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8080}
+      - SITE_SCHEME=${SITE_SCHEME:-http}
+      - CSRF_COOKIE_SECURE=${CSRF_COOKIE_SECURE:-0}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-0}
+      - EMAIL_BACKEND=${EMAIL_BACKEND:-}
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-1}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping -d celery@$${HOSTNAME} --timeout=5 | grep -q pong"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
     networks:
       - bias_network
 
@@ -120,16 +175,21 @@ services:
     restart: unless-stopped
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - .:/app:ro
+      - ./frontend/dist:/app/frontend/dist:ro
       - static_volume:/app/staticfiles:ro
       - media_volume:/app/media:ro
     ports:
       - "8080:80"
     depends_on:
       web:
-        condition: service_started
+        condition: service_healthy
       frontend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
     networks:
       - bias_network
 

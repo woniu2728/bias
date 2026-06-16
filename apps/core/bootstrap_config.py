@@ -32,6 +32,19 @@ def _env_first(*keys: str) -> str:
     return ""
 
 
+def _looks_like_placeholder_secret(value: str) -> bool:
+    normalized = (value or "").strip().lower()
+    return (
+        not normalized
+        or "change-this" in normalized
+        or normalized.startswith("replace-with")
+        or normalized in {
+            "django-insecure-change-this-in-production",
+            "jwt-secret-key-change-this",
+        }
+    )
+
+
 def _normalize_frontend_url(value: str, scheme: str, domains: list[str]) -> str:
     raw = (value or "").strip()
     if raw:
@@ -110,7 +123,10 @@ class SiteBootstrapConfig:
         return hosts
 
     def resolved_cors_origins(self) -> list[str]:
-        origins = ["http://localhost:3000", "http://localhost:5173"]
+        origins = []
+        if self.debug:
+            origins.extend(["http://localhost:3000", "http://localhost:5173"])
+
         frontend = self.resolved_frontend_url()
         if frontend and frontend not in origins:
             origins.append(frontend)
@@ -209,12 +225,19 @@ def _load_env_bootstrap() -> SiteBootstrapConfig | None:
     else:
         default_scheme = _env_first("SITE_SCHEME") or ("https" if site_domains else "http")
 
+    env_secret_key = _env_first("SECRET_KEY")
+    env_jwt_secret_key = _env_first("JWT_SECRET_KEY") or env_secret_key
+    has_required_runtime_secrets = not (
+        _looks_like_placeholder_secret(env_secret_key)
+        or _looks_like_placeholder_secret(env_jwt_secret_key)
+    )
+    has_required_runtime_origin = bool(_env_first("FRONTEND_URL") or site_domains)
     config = SiteBootstrapConfig(
-        installed=True,
+        installed=has_required_runtime_secrets and has_required_runtime_origin,
         source="env",
         debug=_env_flag(os.getenv("DEBUG"), default=False),
-        secret_key=_env_first("SECRET_KEY") or "bias-dev-secret-key-change-this-32bytes-min",
-        jwt_secret_key=_env_first("JWT_SECRET_KEY") or _env_first("SECRET_KEY") or "bias-dev-jwt-secret-key-change-this-32b",
+        secret_key=env_secret_key or "bias-dev-secret-key-change-this-32bytes-min",
+        jwt_secret_key=env_jwt_secret_key or "bias-dev-jwt-secret-key-change-this-32b",
         jwt_algorithm=_env_first("JWT_ALGORITHM") or "HS256",
         jwt_access_token_lifetime=int(_env_first("JWT_ACCESS_TOKEN_LIFETIME") or 900),
         jwt_refresh_token_lifetime=int(_env_first("JWT_REFRESH_TOKEN_LIFETIME") or 86400),

@@ -4,6 +4,7 @@ from typing import Any
 
 from apps.core.extension_settings_service import get_extension_settings
 from apps.core.extensions.bootstrap import get_extension_host
+from apps.core.extensions.frontend_serialization import serialize_frontend_value, serialize_frontend_values
 from apps.core.extensions.product import is_product_visible_extension
 
 
@@ -215,9 +216,9 @@ def _serialize_frontend_routes(routes) -> list[dict[str, Any]]:
             "module_id": str(getattr(route, "module_id", "") or "").strip(),
             "title": str(getattr(route, "title", "") or "").strip(),
             "description": str(getattr(route, "description", "") or "").strip(),
-            "preloads": _serialize_frontend_values(getattr(route, "preloads", ()) or ()),
-            "document_attributes": _serialize_frontend_values(getattr(route, "document_attributes", ()) or ()),
-            "head_tags": _serialize_frontend_values(getattr(route, "head_tags", ()) or ()),
+            "preloads": serialize_frontend_values(getattr(route, "preloads", ()) or ()),
+            "document_attributes": serialize_frontend_values(getattr(route, "document_attributes", ()) or ()),
+            "head_tags": serialize_frontend_values(getattr(route, "head_tags", ()) or ()),
             "requires_auth": bool(getattr(route, "requires_auth", False)),
             "order": int(order if order is not None and order != "" else 100),
             "removed": removed,
@@ -281,22 +282,22 @@ def build_enabled_frontend_document_payload() -> dict[str, Any]:
 def build_frontend_document_payload(runtime_view, *, settings_values: dict[str, Any] | None = None) -> dict[str, Any]:
     theme_document = _build_theme_document_payload(runtime_view)
     return {
-        "preloads": _serialize_frontend_values(getattr(runtime_view, "frontend_preloads", ()) or ()),
-        "document_attributes": _serialize_frontend_values([
+        "preloads": serialize_frontend_values(getattr(runtime_view, "frontend_preloads", ()) or ()),
+        "document_attributes": serialize_frontend_values([
             *(getattr(runtime_view, "frontend_document_attributes", ()) or ()),
             *theme_document["document_attributes"],
         ]),
-        "head_tags": _serialize_frontend_values([
+        "head_tags": serialize_frontend_values([
             *(getattr(runtime_view, "frontend_head_tags", ()) or ()),
             *theme_document["head_tags"],
         ]),
-        "theme_variables": _serialize_frontend_values([
+        "theme_variables": serialize_frontend_values([
             *(getattr(runtime_view, "frontend_theme_variables", ()) or ()),
             _build_settings_theme_variables(runtime_view, settings_values or {}),
             *theme_document["theme_variables"],
         ]),
-        "title_driver": _serialize_frontend_value(getattr(runtime_view, "frontend_title_driver", None)),
-        "content_callbacks": _serialize_frontend_values(getattr(runtime_view, "frontend_content_callbacks", ()) or ()),
+        "title_driver": serialize_frontend_value(getattr(runtime_view, "frontend_title_driver", None)),
+        "content_callbacks": serialize_frontend_values(getattr(runtime_view, "frontend_content_callbacks", ()) or ()),
     }
 
 
@@ -355,32 +356,13 @@ def _build_theme_document_payload(runtime_view) -> dict[str, list[Any]]:
 def _normalize_content_callback_payload(callback) -> dict[str, Any]:
     if isinstance(callback, dict):
         return {
-            "callback": _serialize_frontend_value(callback.get("callback")),
+            "callback": serialize_frontend_value(callback.get("callback")),
             "priority": int(callback.get("priority") or 0),
         }
     return {
-        "callback": _serialize_frontend_value(callback),
+        "callback": serialize_frontend_value(callback),
         "priority": 0,
     }
-
-
-def _serialize_frontend_values(values) -> list:
-    return [_serialize_frontend_value(value) for value in values]
-
-
-def _serialize_frontend_value(value):
-    if value is None:
-        return ""
-    if isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, dict):
-        return {
-            str(key): _serialize_frontend_value(item)
-            for key, item in value.items()
-        }
-    if isinstance(value, (list, tuple)):
-        return [_serialize_frontend_value(item) for item in value]
-    return getattr(value, "__name__", str(value))
 
 
 def _build_extension_forum_settings(

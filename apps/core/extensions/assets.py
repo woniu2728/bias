@@ -8,6 +8,8 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
+from apps.core.extensions.frontend_serialization import serialize_frontend_value, serialize_frontend_values
+
 
 def get_extension_assets_root() -> Path:
     return Path(settings.BASE_DIR) / "static" / "extensions"
@@ -111,9 +113,9 @@ def build_extension_frontend_manifest(extensions) -> dict:
             "forum_entry": forum_entry,
             "css": list(getattr(extension.discover(), "frontend_css", ()) or ()),
             "js_directories": list(getattr(extension.discover(), "frontend_js_directories", ()) or ()),
-            "preloads": _serialize_frontend_values(getattr(extension.discover(), "frontend_preloads", ()) or ()),
-            "document_attributes": _serialize_frontend_values(getattr(extension.discover(), "frontend_document_attributes", ()) or ()),
-            "title_driver": _serialize_frontend_value(getattr(extension.discover(), "frontend_title_driver", None)),
+            "preloads": serialize_frontend_values(getattr(extension.discover(), "frontend_preloads", ()) or ()),
+            "document_attributes": serialize_frontend_values(getattr(extension.discover(), "frontend_document_attributes", ()) or ()),
+            "title_driver": serialize_frontend_value(getattr(extension.discover(), "frontend_title_driver", None)),
             "routes": _serialize_frontend_routes_for_manifest(getattr(extension.discover(), "frontend_routes", ()) or ()),
             "inputs": {},
         }
@@ -176,9 +178,9 @@ def _build_frontend_asset_manifest(extension) -> dict:
         "forum_entry": str(extension.frontend_forum_entry or ""),
         "css": list(getattr(runtime_view, "frontend_css", ()) or ()),
         "js_directories": list(getattr(runtime_view, "frontend_js_directories", ()) or ()),
-        "preloads": _serialize_frontend_values(getattr(runtime_view, "frontend_preloads", ()) or ()),
-        "document_attributes": _serialize_frontend_values(getattr(runtime_view, "frontend_document_attributes", ()) or ()),
-        "title_driver": _serialize_frontend_value(getattr(runtime_view, "frontend_title_driver", None)),
+        "preloads": serialize_frontend_values(getattr(runtime_view, "frontend_preloads", ()) or ()),
+        "document_attributes": serialize_frontend_values(getattr(runtime_view, "frontend_document_attributes", ()) or ()),
+        "title_driver": serialize_frontend_value(getattr(runtime_view, "frontend_title_driver", None)),
         "cache_busting": True,
     }
 
@@ -189,25 +191,6 @@ def _build_frontend_cache_key(inputs: dict) -> str:
         hasher.update(str(key).encode("utf-8"))
         hasher.update(str(inputs[key]).encode("utf-8"))
     return hasher.hexdigest()[:16]
-
-
-def _serialize_frontend_values(values) -> list:
-    return [_serialize_frontend_value(value) for value in values]
-
-
-def _serialize_frontend_value(value):
-    if value is None:
-        return ""
-    if isinstance(value, (str, int, float, bool)):
-        return value
-    if isinstance(value, dict):
-        return {
-            str(key): _serialize_frontend_value(item)
-            for key, item in value.items()
-        }
-    if isinstance(value, (list, tuple)):
-        return [_serialize_frontend_value(item) for item in value]
-    return getattr(value, "__name__", str(value))
 
 
 def _serialize_frontend_routes_for_manifest(routes) -> list[dict]:

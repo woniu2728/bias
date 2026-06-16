@@ -6,7 +6,7 @@ from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.utils.html import escape
 from apps.core.extensions.bootstrap import get_extension_application
-from apps.core.jwt_auth import resolve_authenticated_user
+from apps.core.jwt_auth import ACCESS_TOKEN_COOKIE_NAME, resolve_authenticated_user
 from apps.core.runtime_state import get_runtime_status
 from apps.core.settings_service import (
     get_maintenance_mode,
@@ -489,6 +489,11 @@ class MaintenanceModeMiddleware:
         user = getattr(request, "user", None)
         if getattr(user, "is_authenticated", False) and getattr(user, "is_staff", False):
             return True
+
+        authorization = str(request.headers.get("Authorization", "") or "")
+        has_bearer_token = authorization.startswith("Bearer ") and bool(authorization.split(" ", 1)[1].strip())
+        if not has_bearer_token and not request.COOKIES.get(ACCESS_TOKEN_COOKIE_NAME):
+            return False
 
         auth_user = resolve_authenticated_user(request)
         return bool(getattr(auth_user, "is_staff", False))

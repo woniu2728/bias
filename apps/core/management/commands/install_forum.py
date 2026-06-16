@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Dict
@@ -16,6 +17,7 @@ from apps.core.bootstrap_config import (
     write_site_config,
 )
 from apps.core.management.command_utils import build_manage_env, run_manage_py
+from apps.core.models import Setting
 
 
 def _running_in_docker() -> bool:
@@ -159,6 +161,13 @@ class Command(BaseCommand):
         parser.add_argument("--redis-host", help="Redis 主机")
         parser.add_argument("--redis-port", help="Redis 端口")
         parser.add_argument("--redis-db", help="Redis 数据库编号")
+        parser.add_argument("--email-backend", help="Django 邮件后端")
+        parser.add_argument("--email-host", help="SMTP 主机")
+        parser.add_argument("--email-port", type=int, help="SMTP 端口")
+        parser.add_argument("--email-use-tls", choices=["auto", "on", "off"], default="auto", help="是否启用 SMTP TLS")
+        parser.add_argument("--email-host-user", help="SMTP 用户名")
+        parser.add_argument("--email-host-password", help="SMTP 密码")
+        parser.add_argument("--default-from-email", help="默认发件人邮箱")
         parser.add_argument("--non-interactive", action="store_true", help="使用非交互模式执行")
 
     def handle(self, *args, **options):
@@ -186,13 +195,16 @@ class Command(BaseCommand):
         )
 
         write_site_config(config_path, config)
-        command_env = build_manage_env(config_path=config_path)
+        install_settings = self._build_advanced_runtime_defaults(config)
+        command_env = build_manage_env({"BIAS_INSTALLING": "1"}, config_path=config_path)
 
         try:
             if not options["skip_migrate"]:
                 self._run_manage_step("数据库迁移", ["migrate", "--noinput"], command_env)
             else:
                 self.stdout.write("[SKIP] 已跳过 migrate")
+
+            self._write_install_settings(install_settings)
 
             if not options["skip_sync_extensions"]:
                 self._run_manage_step("扩展状态同步", ["sync_extensions"], command_env)
@@ -324,13 +336,29 @@ class Command(BaseCommand):
             ),
             celery_broker_url=existing_config.celery_broker_url if existing_config else "",
             celery_result_backend=existing_config.celery_result_backend if existing_config else "",
-            email_backend=existing_config.email_backend if existing_config else "django.core.mail.backends.console.EmailBackend",
-            email_host=existing_config.email_host if existing_config else "smtp.gmail.com",
-            email_port=existing_config.email_port if existing_config else 587,
-            email_use_tls=existing_config.email_use_tls if existing_config else True,
-            email_host_user=existing_config.email_host_user if existing_config else "",
-            email_host_password=existing_config.email_host_password if existing_config else "",
-            default_from_email=existing_config.default_from_email if existing_config else "noreply@bias.local",
+            email_backend=options.get("email_backend") or (
+                existing_config.email_backend
+                if existing_config
+                else _first_env("EMAIL_BACKEND") or "django.core.mail.backends.console.EmailBackend"
+            ),
+            email_host=options.get("email_host") or (
+                existing_config.email_host if existing_config else _first_env("EMAIL_HOST") or "smtp.gmail.com"
+            ),
+            email_port=options.get("email_port") or (
+                existing_config.email_port if existing_config else int(_first_env("EMAIL_PORT") or 587)
+            ),
+            email_use_tls=self._resolve_email_use_tls(options.get("email_use_tls"), existing_config),
+            email_host_user=options.get("email_host_user") or (
+                existing_config.email_host_user if existing_config else _first_env("EMAIL_HOST_USER")
+            ),
+            email_host_password=options.get("email_host_password") or (
+                existing_config.email_host_password if existing_config else _first_env("EMAIL_HOST_PASSWORD")
+            ),
+            default_from_email=options.get("default_from_email") or (
+                existing_config.default_from_email
+                if existing_config
+                else _first_env("DEFAULT_FROM_EMAIL") or "noreply@bias.local"
+            ),
             media_url=existing_config.media_url if existing_config else "/media/",
             static_url=existing_config.static_url if existing_config else "/static/",
         )
@@ -373,6 +401,22 @@ class Command(BaseCommand):
             return existing_config.use_redis
         return database == "postgres"
 
+    def _resolve_email_use_tls(
+        self,
+        email_use_tls: str | None,
+        existing_config: SiteBootstrapConfig | None = None,
+    ) -> bool:
+        if email_use_tls == "on":
+            return True
+        if email_use_tls == "off":
+            return False
+        if existing_config is not None:
+            return existing_config.email_use_tls
+        raw_env = _first_env("EMAIL_USE_TLS")
+        if raw_env:
+            return raw_env.lower() in {"1", "true", "yes", "on"}
+        return True
+
     def _build_admin_command_args(self, options: Dict[str, str], non_interactive: bool) -> list[str]:
         username = options.get("admin_username")
         email = options.get("admin_email")
@@ -395,6 +439,18 @@ class Command(BaseCommand):
             "--password",
             password,
         ]
+
+    def _build_advanced_runtime_defaults(self, config: SiteBootstrapConfig) -> dict[str, str]:
+        if config.database_mode != "postgres" or not config.use_redis:
+            return {}
+        return {
+            "advanced.queue_enabled": json.dumps(True, ensure_ascii=False),
+            "advanced.queue_driver": json.dumps("redis", ensure_ascii=False),
+        }
+
+    def _write_install_settings(self, settings_map: dict[str, str]) -> None:
+        for key, value in settings_map.items():
+            Setting.objects.update_or_create(key=key, defaults={"value": value})
 
     def _run_manage_step(self, label: str, args: list[str], env: Dict[str, str]) -> None:
         self.stdout.write(f"执行{label}...")

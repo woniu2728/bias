@@ -26,7 +26,12 @@ def probe_cache_connection() -> dict[str, Any]:
 def probe_realtime_connection() -> dict[str, Any]:
     return admin_runtime_helpers.probe_realtime_connection(
         settings_obj=settings,
-        redis_probe=lambda host, port, label: runtime_probe_redis_ping(host, port, label=label),
+        redis_probe=lambda host, port, label, password="": runtime_probe_redis_ping(
+            host,
+            port,
+            label=label,
+            password=password,
+        ),
     )
 
 
@@ -35,7 +40,12 @@ def probe_queue_broker_connection(queue_enabled: bool, queue_driver: str) -> dic
         settings_obj=settings,
         queue_enabled=queue_enabled,
         queue_driver=queue_driver,
-        redis_probe=lambda host, port, label: runtime_probe_redis_ping(host, port, label=label),
+        redis_probe=lambda host, port, label, password="": runtime_probe_redis_ping(
+            host,
+            port,
+            label=label,
+            password=password,
+        ),
     )
 
 
