@@ -4538,6 +4538,12 @@ class ExtensionPublicApiBoundaryTests(TestCase):
 
         self.assertEqual(violations, [])
 
+    def test_extension_serialization_does_not_import_admin_private_serializers(self):
+        source = (Path(settings.BASE_DIR) / "apps" / "core" / "extension_serialization.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("import _serialize_admin_extension", source)
+        self.assertNotIn("import _serialize_admin_extensions_payload", source)
+
 
 class ExtensionValidationTests(TestCase):
     def test_resolve_bias_version_compatibility_supports_simple_ranges(self):
@@ -14292,7 +14298,7 @@ class AdminDashboardStatsApiTests(TestCase):
     @patch("apps.core.admin_runtime_summary.probe_redis_ping")
     @patch("apps.core.admin_runtime_summary.cache.get", return_value="ok")
     @patch("apps.core.admin_runtime_summary.cache.set", return_value=None)
-    @patch("apps.core.admin_settings_api.QueueService.get_worker_status")
+    @patch("apps.core.admin_stats_api.QueueService.get_worker_status")
     def test_admin_stats_marks_redis_and_queue_status(self, get_worker_status, _cache_set, _cache_get, probe_redis_ping):
         probe_redis_ping.return_value = {
             "available": True,
@@ -14458,8 +14464,8 @@ class AdminDashboardStatsApiTests(TestCase):
         CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
         CELERY_BROKER_URL="memory://",
     )
-    @patch("apps.core.admin_settings_api.QueueService.get_worker_status")
-    @patch("apps.core.admin_settings_api.get_runtime_advanced_settings")
+    @patch("apps.core.admin_stats_api.QueueService.get_worker_status")
+    @patch("apps.core.admin_stats_api.get_runtime_advanced_settings")
     def test_admin_stats_reports_queue_broker_misconfigured(self, get_runtime_advanced_settings, get_worker_status):
         get_runtime_advanced_settings.return_value = {
             "queue_enabled": True,
@@ -14494,7 +14500,7 @@ class AdminDashboardStatsApiTests(TestCase):
     @patch("apps.core.admin_runtime_summary.cache.get", return_value="ok")
     @patch("apps.core.admin_runtime_summary.cache.set", return_value=None)
     @patch("apps.core.admin_runtime_summary.probe_redis_ping")
-    @patch("apps.core.admin_settings_api.QueueService.get_worker_status")
+    @patch("apps.core.admin_stats_api.QueueService.get_worker_status")
     def test_admin_stats_reports_unreachable_realtime_and_queue_broker(
         self,
         get_worker_status,
@@ -14547,7 +14553,7 @@ class AdminDashboardStatsApiTests(TestCase):
     @patch("apps.core.admin_runtime_summary.cache.get", return_value="ok")
     @patch("apps.core.admin_runtime_summary.cache.set", return_value=None)
     @patch("apps.core.admin_runtime_summary.probe_redis_ping")
-    @patch("apps.core.admin_settings_api.QueueService.get_worker_status")
+    @patch("apps.core.admin_stats_api.QueueService.get_worker_status")
     def test_admin_stats_reports_protocol_error_for_realtime_and_queue_broker(
         self,
         get_worker_status,

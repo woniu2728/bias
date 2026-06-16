@@ -5,8 +5,6 @@ from pathlib import Path
 
 from apps.core.api_errors import api_error
 from apps.core.admin_auth import require_staff
-from apps.core.models import AuditLog
-from apps.core.services import PaginationService
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
 from apps.core.extensions.bootstrap import get_extension_host
 from apps.core.extensions.registry import get_extension_registry
@@ -46,20 +44,16 @@ from apps.core.extensions.admin_manifest import (
     manifest_nested_attr as _manifest_nested_attr,
     manifest_nested_value as _manifest_nested_value,
     manifest_sequence as _manifest_sequence,
-    manifest_value as _manifest_value,
 )
 from apps.core.extensions.recovery import (
-    advance_extension_bisect,
     get_extension_bisect_state,
     get_extension_safe_mode_extension_ids,
     is_extension_safe_mode_enabled,
     serialize_extension_recovery_state,
-    start_extension_bisect,
-    stop_extension_bisect,
 )
 from apps.core.audit import log_admin_action
 from apps.core.jwt_auth import AccessTokenAuth
-from apps.core.forum_registry import get_core_module_ids, get_forum_registry
+from apps.core.forum_registry import get_forum_registry
 from apps.core.extensions.runtime import get_runtime_resource_registry
 
 
@@ -70,24 +64,6 @@ logger = logging.getLogger(__name__)
 _require_staff = require_staff
 
 
-def _serialize_audit_log(log: AuditLog):
-    return {
-        "id": log.id,
-        "action": log.action,
-        "target_type": log.target_type,
-        "target_id": log.target_id,
-        "ip_address": log.ip_address,
-        "user_agent": log.user_agent,
-        "data": log.data,
-        "created_at": log.created_at,
-        "user": {
-            "id": log.user.id,
-            "username": log.user.username,
-            "display_name": log.user.display_name,
-        } if log.user else None,
-    }
-
-
 @router.get("/extensions", auth=AccessTokenAuth(), tags=["Admin"])
 def list_admin_extensions(request):
     denied = _require_staff(request)
@@ -96,44 +72,6 @@ def list_admin_extensions(request):
 
     summary = str(request.GET.get("summary") or "").strip().lower() in {"1", "true", "yes", "on"}
     return _serialize_admin_extensions_payload(get_extension_registry().get_extensions(), summary=summary)
-
-
-@router.get("/extensions/bisect", auth=AccessTokenAuth(), tags=["Admin"])
-def get_admin_extension_bisect(request):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-    return {"bisect": get_extension_bisect_state()}
-
-
-@router.post("/extensions/bisect/start", auth=AccessTokenAuth(), tags=["Admin"])
-def start_admin_extension_bisect(request, payload: dict = Body(default={})):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-    requested_ids = payload.get("extension_ids")
-    if requested_ids is None:
-        requested_ids = [
-            extension.id
-            for extension in get_extension_registry().get_enabled_extensions()
-        ]
-    return {"bisect": start_extension_bisect(requested_ids)}
-
-
-@router.post("/extensions/bisect/step", auth=AccessTokenAuth(), tags=["Admin"])
-def step_admin_extension_bisect(request, payload: dict = Body(...)):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-    return {"bisect": advance_extension_bisect(bool(payload.get("issue_present")))}
-
-
-@router.post("/extensions/bisect/stop", auth=AccessTokenAuth(), tags=["Admin"])
-def stop_admin_extension_bisect(request):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-    return {"bisect": stop_extension_bisect()}
 
 
 @router.post("/extensions/sync", auth=AccessTokenAuth(), tags=["Admin"])
@@ -404,6 +342,10 @@ def _serialize_admin_extensions_payload(extensions, *, summary: bool = False):
         },
         "extensions": payload,
     }
+
+
+def serialize_admin_extensions_payload(extensions, *, summary: bool = False):
+    return _serialize_admin_extensions_payload(extensions, summary=summary)
 
 
 def _serialize_admin_extension_action_payload(extension):
@@ -701,6 +643,13 @@ def _serialize_admin_extension(
     }
     payload["diagnostics"] = classify_extension_diagnostics(payload)
     return payload
+
+
+def serialize_admin_extension(extension, *, include_permission_details: bool = False):
+    return _serialize_admin_extension(
+        extension,
+        include_permission_details=include_permission_details,
+    )
 
 
 def _resolve_extension_runtime_record(extension):
@@ -2162,43 +2111,4 @@ def _serialize_extension_migration_plan(extension):
         "declared_files": list(payload.get("declared_files") or []),
         "applied_files": list(payload.get("applied_files") or []),
         "pending_files": list(payload.get("pending_files") or []),
-    }
-
-
-@router.get("/audit-logs", auth=AccessTokenAuth(), tags=["Admin"])
-def list_audit_logs(
-    request,
-    page: int = 1,
-    limit: int = 20,
-    action: str = "",
-    target_type: str = "",
-    user_id: int = None,
-):
-    denied = _require_staff(request)
-    if denied:
-        return denied
-
-    page, limit = PaginationService.normalize(page, limit)
-    queryset = (
-        AuditLog.objects.select_related("user")
-        .filter(action__startswith="admin.")
-        .order_by("-created_at", "-id")
-    )
-
-    if action:
-        queryset = queryset.filter(action=action)
-    if target_type:
-        queryset = queryset.filter(target_type=target_type)
-    if user_id:
-        queryset = queryset.filter(user_id=user_id)
-
-    total = queryset.count()
-    offset = (page - 1) * limit
-    logs = queryset[offset:offset + limit]
-
-    return {
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "data": [_serialize_audit_log(log) for log in logs],
     }
