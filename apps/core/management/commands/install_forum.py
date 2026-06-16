@@ -387,6 +387,17 @@ class Command(BaseCommand):
         if missing:
             raise CommandError(f"PostgreSQL 模式缺少必要配置: {', '.join(missing)}")
 
+        # Postgres 生产模式下，console 邮件后端会导致 startup_guard 拒绝启动，
+        # 提醒用户通过 EMAIL_BACKEND 环境变量或 --email-backend 参数配置真实邮件后端
+        if "console" in (config.email_backend or ""):
+            self.stdout.write(
+                self.style.WARNING(
+                    "⚠️  生产模式(postgres)下邮件后端仍为 console，启动自检会拒绝启动。\n"
+                    "    请设置环境变量 EMAIL_BACKEND=smtp 或通过 --email-backend 参数指定。\n"
+                    "    安装阶段已通过 BIAS_INSTALLING 标志暂时放行，但安装完成后必须配置。"
+                )
+            )
+
     def _resolve_redis_enabled(
         self,
         database: str,
