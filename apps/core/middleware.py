@@ -531,27 +531,39 @@ class SecurityHeadersMiddleware:
         if self._is_async:
             return self.__acall__(request)
 
+        request.csp_nonce = _generate_csp_nonce()
         response = self.get_response(request)
-        return self._apply_headers(response)
+        return self._apply_headers(request, response)
 
     async def __acall__(self, request):
+        request.csp_nonce = _generate_csp_nonce()
         response = await self.get_response(request)
-        return self._apply_headers(response)
+        return self._apply_headers(request, response)
 
-    def _apply_headers(self, response):
-        response.setdefault(
-            "Content-Security-Policy",
+    def _apply_headers(self, request, response):
+        nonce = getattr(request, "csp_nonce", "")
+        nonce_directive = f" 'nonce-{nonce}'" if nonce else ""
+        # 注：style-src 暂时保留 'unsafe-inline' 以兼容 Django admin 内联样式；
+        # 同时提供 'nonce-{value}' 以便自定义模板逐步迁移到 nonce 方式。
+        # 若项目不依赖 Django admin 可移除 'unsafe-inline'。
+        csp = (
             "default-src 'self'; "
             "img-src 'self' data: blob:; "
-            "style-src 'self' 'unsafe-inline'; "
-            "script-src 'self'; "
+            f"style-src 'self' 'unsafe-inline'{nonce_directive}; "
+            f"script-src 'self'{nonce_directive}; "
             "font-src 'self' data:; "
             "connect-src 'self' ws: wss:; "
             "object-src 'none'; "
             "base-uri 'self'; "
-            "frame-ancestors 'none'",
+            "frame-ancestors 'none'"
         )
+        response.setdefault("Content-Security-Policy", csp)
         response.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.setdefault("X-Content-Type-Options", "nosniff")
         response.setdefault("X-Frame-Options", "DENY")
         return response
+
+
+def _generate_csp_nonce() -> str:
+    import secrets
+    return secrets.token_urlsafe(24)

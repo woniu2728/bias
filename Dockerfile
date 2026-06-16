@@ -21,6 +21,12 @@ COPY . .
 # Create media and static directories
 RUN mkdir -p media static
 
+# 创建非 root 用户运行应用（遵循最小权限原则）
+RUN useradd -m -u 1000 -s /bin/bash bias && \
+    chown -R bias:bias /app
+
+USER bias
+
 EXPOSE 8000
 
 CMD ["gunicorn", "config.asgi:application", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--workers", "2"]

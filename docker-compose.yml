@@ -125,6 +125,9 @@ services:
       dockerfile: Dockerfile
     container_name: bias_celery
     restart: unless-stopped
+    # celery 容器仅在显式开启队列时启动：docker compose --profile queue up -d
+    profiles:
+      - queue
     command: >
       celery -A config worker -l info
       --concurrency=${CELERY_CONCURRENCY:-2}

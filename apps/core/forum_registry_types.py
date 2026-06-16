@@ -6,6 +6,10 @@ from typing import Any, Callable, Tuple
 from apps.core.version import APP_VERSION
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# 通用框架类型：权限、管理页、通知、偏好、语言包、生命周期
+# ══════════════════════════════════════════════════════════════════════════════
+
 @dataclass(frozen=True)
 class PermissionDefinition:
     code: str
@@ -72,76 +76,6 @@ class EventListenerDefinition:
 
 
 @dataclass(frozen=True)
-class PostTypeDefinition:
-    code: str
-    label: str
-    module_id: str
-    description: str = ""
-    icon: str = "far fa-comment"
-    is_default: bool = False
-    is_stream_visible: bool = True
-    counts_toward_discussion: bool = True
-    counts_toward_user: bool = True
-    searchable: bool = True
-
-
-SearchFilterParser = Callable[[str], Any | None]
-SearchFilterApplier = Callable[[Any, Any, dict], Any]
-DiscussionListQueryApplier = Callable[[Any, dict], Any]
-DiscussionSortApplier = Callable[[Any, dict], Any]
-DiscussionListFilterApplier = Callable[[Any, dict], Any]
-
-
-@dataclass(frozen=True)
-class SearchFilterDefinition:
-    code: str
-    label: str
-    module_id: str
-    target: str
-    parser: SearchFilterParser
-    applier: SearchFilterApplier
-    syntax: str = ""
-    description: str = ""
-
-
-@dataclass(frozen=True)
-class DiscussionSortDefinition:
-    code: str
-    label: str
-    module_id: str
-    applier: DiscussionSortApplier
-    description: str = ""
-    icon: str = "fas fa-sort"
-    is_default: bool = False
-    order: int = 100
-    toolbar_visible: bool = True
-
-
-@dataclass(frozen=True)
-class DiscussionListQueryDefinition:
-    key: str
-    module_id: str
-    applier: DiscussionListQueryApplier
-    description: str = ""
-    order: int = 100
-
-
-@dataclass(frozen=True)
-class DiscussionListFilterDefinition:
-    code: str
-    label: str
-    module_id: str
-    applier: DiscussionListFilterApplier
-    description: str = ""
-    icon: str = "fas fa-filter"
-    is_default: bool = False
-    requires_authenticated_user: bool = False
-    order: int = 100
-    sidebar_visible: bool = True
-    route_path: str = "/"
-
-
-@dataclass(frozen=True)
 class ModuleLifecyclePhaseDefinition:
     key: str
     label: str
@@ -188,6 +122,92 @@ class ModuleLifecycleDefinition:
     supports_disable: bool = False
     supports_teardown: bool = False
     phases: Tuple[ModuleLifecyclePhaseDefinition, ...] = DEFAULT_MODULE_LIFECYCLE_PHASES
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 论坛领域类型：帖子、讨论排序/过滤/查询、搜索过滤
+# 注：这些类型属于论坛业务领域，长期方向是下沉到 extensions/forum/，
+#     当前放在 core 以确保 core 不依赖 extensions 的架构约束。
+# ══════════════════════════════════════════════════════════════════════════════
+
+SearchFilterParser = Callable[[str], Any | None]
+SearchFilterApplier = Callable[[Any, Any, dict], Any]
+DiscussionListQueryApplier = Callable[[Any, dict], Any]
+DiscussionSortApplier = Callable[[Any, dict], Any]
+DiscussionListFilterApplier = Callable[[Any, dict], Any]
+
+
+@dataclass(frozen=True)
+class PostTypeDefinition:
+    """帖子类型定义 — 如普通帖、公告、置顶等。"""
+    code: str
+    label: str
+    module_id: str
+    description: str = ""
+    icon: str = "far fa-comment"
+    is_default: bool = False
+    is_stream_visible: bool = True
+    counts_toward_discussion: bool = True
+    counts_toward_user: bool = True
+    searchable: bool = True
+
+
+@dataclass(frozen=True)
+class SearchFilterDefinition:
+    """搜索过滤器定义 — 全文搜索时的过滤条件。"""
+    code: str
+    label: str
+    module_id: str
+    target: str
+    parser: SearchFilterParser
+    applier: SearchFilterApplier
+    syntax: str = ""
+    description: str = ""
+
+
+@dataclass(frozen=True)
+class DiscussionSortDefinition:
+    """讨论排序方式定义 — 如最新回复、最多点赞等。"""
+    code: str
+    label: str
+    module_id: str
+    applier: DiscussionSortApplier
+    description: str = ""
+    icon: str = "fas fa-sort"
+    is_default: bool = False
+    order: int = 100
+    toolbar_visible: bool = True
+
+
+@dataclass(frozen=True)
+class DiscussionListQueryDefinition:
+    """讨论列表查询定义 — 自定义查询范围（如仅关注、仅订阅等）。"""
+    key: str
+    module_id: str
+    applier: DiscussionListQueryApplier
+    description: str = ""
+    order: int = 100
+
+
+@dataclass(frozen=True)
+class DiscussionListFilterDefinition:
+    """讨论列表过滤器定义 — 侧边栏/工具栏的筛选条件。"""
+    code: str
+    label: str
+    module_id: str
+    applier: DiscussionListFilterApplier
+    description: str = ""
+    icon: str = "fas fa-filter"
+    is_default: bool = False
+    requires_authenticated_user: bool = False
+    order: int = 100
+    sidebar_visible: bool = True
+    route_path: str = "/"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 模块定义
+# ══════════════════════════════════════════════════════════════════════════════
 
 
 @dataclass(frozen=True)

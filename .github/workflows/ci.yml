@@ -32,11 +32,18 @@ jobs:
       - name: Validate extensions
         run: python manage.py validate_extensions --strict
 
-      - name: Run pytest
-        run: pytest
+      - name: Run pytest with coverage
+        run: pytest --cov --cov-report=term --cov-report=xml --cov-fail-under=70
 
       - name: Run Django test runner
         run: python manage.py test
+
+      - name: Upload coverage to Codecov (optional)
+        if: success() || failure()
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
 
   frontend:
     runs-on: ubuntu-latest

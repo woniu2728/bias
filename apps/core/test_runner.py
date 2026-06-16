@@ -43,6 +43,14 @@ def _app_test_module_labels(app_name: str) -> list[str]:
     tests_py = app_path / "tests.py"
     if tests_py.exists():
         labels.append(f"{app_name}.tests")
+    # 同样发现 tests/ 包内的测试模块（如 tests/test_*.py）
+    tests_dir = app_path / "tests"
+    if tests_dir.is_dir():
+        labels.extend(
+            f"{app_name}.tests.{path.stem}"
+            for path in sorted(tests_dir.glob("test_*.py"), key=lambda item: item.name)
+            if path.name != "test_runner.py"
+        )
     labels.extend(
         f"{app_name}.{path.stem}"
         for path in sorted(app_path.glob("test_*.py"), key=lambda item: item.name)
