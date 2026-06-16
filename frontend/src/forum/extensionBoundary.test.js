@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { discoverExtensionSdkAliases } from '../../extensionSdkAliases.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const extensionRoot = resolve(repoRoot, 'extensions')
@@ -11,13 +12,7 @@ const allowedPublicPackageImports = new Set([
   '@bias/admin',
   '@bias/admin/components',
   '@bias/core',
-  '@bias/discussions',
-  '@bias/emoji',
-  '@bias/notifications',
-  '@bias/posts',
-  '@bias/realtime',
-  '@bias/search',
-  '@bias/users',
+  ...discoverExtensionSdkAliases().map(([alias]) => alias),
 ])
 
 function listFrontendFiles(directory) {
@@ -79,6 +74,9 @@ test('extension frontend imports only public app APIs', () => {
     for (const importPath of extractImports(source)) {
       if (allowedPublicPackageImports.has(importPath)) {
         continue
+      }
+      if (importPath.startsWith('@bias/')) {
+        offenders.push(`${relative(repoRoot, path)} imports unknown public SDK ${importPath}`)
       }
       if (importPath === 'vue' || importPath === 'vue-router') {
         offenders.push(`${relative(repoRoot, path)} imports ${importPath}`)
@@ -486,6 +484,105 @@ test('feature sdks expose their owned runtime APIs', () => {
   for (const symbol of ['getStartDiscussionProvider', 'registerStartDiscussionProvider', 'useStartDiscussionAction']) {
     assert.equal(discussionsSdk.includes(symbol), true, symbol)
   }
+})
+
+test('ai and points expose reusable runtime APIs through their owning sdks', () => {
+  const forumSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8')
+  const aiSdkSource = readFileSync(resolve(extensionRoot, 'ai/frontend/forum/sdk.js'), 'utf8')
+  const aiRuntimeSource = readFileSync(resolve(extensionRoot, 'ai/frontend/forum/aiRuntime.js'), 'utf8')
+  const aiPanelSource = readExtensionForumFileSource('ai', 'AiAssistantPanel.vue')
+  const pointsSdkSource = readFileSync(resolve(extensionRoot, 'points/frontend/forum/sdk.js'), 'utf8')
+  const pointsRuntimeSource = readFileSync(resolve(extensionRoot, 'points/frontend/forum/pointsRuntime.js'), 'utf8')
+  const pointsForumSource = readExtensionForumSource('points')
+
+  for (const symbol of [
+    'formatAiResultMarkdown',
+    'getAiResultTitle',
+    'getAiModeLabel',
+    'getAiPointsCost',
+    'wasAiPointsCharged',
+  ]) {
+    assert.equal(aiSdkSource.includes(symbol), true, symbol)
+    assert.equal(aiRuntimeSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+  }
+  assert.equal(aiPanelSource.includes('formatResultMarkdown'), false)
+  assert.equal(aiPanelSource.includes('formatAiResultMarkdown'), true)
+
+  for (const symbol of [
+    'buildUserPointsPath',
+    'formatPointsBalance',
+    'formatPointsLabel',
+    'getUserPointsBalance',
+    'normalizePointsLedgerEntry',
+  ]) {
+    assert.equal(pointsSdkSource.includes(symbol), true, symbol)
+    assert.equal(pointsRuntimeSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+  }
+  assert.equal(pointsForumSource.includes("from './pointsRuntime.js'"), true)
+})
+
+test('other extension sdks expose their owned runtime APIs through their owning sdks', () => {
+  const forumSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8')
+  const approvalSdkSource = readFileSync(resolve(extensionRoot, 'approval/frontend/forum/sdk.js'), 'utf8')
+  const flagsSdkSource = readFileSync(resolve(extensionRoot, 'flags/frontend/forum/sdk.js'), 'utf8')
+  const flagsNodeSdkSource = readFileSync(resolve(extensionRoot, 'flags/frontend/forum/nodeSdk.js'), 'utf8')
+  const likesSdkSource = readFileSync(resolve(extensionRoot, 'likes/frontend/forum/sdk.js'), 'utf8')
+  const mentionsSdkSource = readFileSync(resolve(extensionRoot, 'mentions/frontend/forum/sdk.js'), 'utf8')
+  const uploadsSdkSource = readFileSync(resolve(extensionRoot, 'uploads/frontend/forum/sdk.js'), 'utf8')
+  const securitySdkSource = readFileSync(resolve(extensionRoot, 'security/frontend/forum/sdk.js'), 'utf8')
+  const subscriptionsSdkSource = readFileSync(resolve(extensionRoot, 'subscriptions/frontend/forum/sdk.js'), 'utf8')
+  const tagsSdkSource = readFileSync(resolve(extensionRoot, 'tags/frontend/forum/sdk.js'), 'utf8')
+  const tagsNodeSdkSource = readFileSync(resolve(extensionRoot, 'tags/frontend/forum/nodeSdk.js'), 'utf8')
+
+  for (const symbol of ['getApprovalComposerState']) {
+    assert.equal(approvalSdkSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+  }
+
+  for (const symbol of [
+    'buildPostFlagPanel',
+    'canModeratePostFlags',
+    'getPostOpenFlagCount',
+    'hasViewerOpenFlag',
+    'normalizePostFlag',
+  ]) {
+    assert.equal(flagsSdkSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+  }
+  assert.equal(flagsNodeSdkSource.includes('PostReportModal = null'), true)
+
+  for (const symbol of ['buildLikeSummary', 'canLikePost', 'getPostLikeCount', 'isPostLiked']) {
+    assert.equal(likesSdkSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+  }
+
+  for (const symbol of ['buildMentionReplacement', 'buildMentionTrigger', 'detectMentionQuery']) {
+    assert.equal(mentionsSdkSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+  }
+
+  for (const symbol of ['buildUploadedFileMarkdown', 'sanitizeMarkdownLabel', 'stripFileExtension']) {
+    assert.equal(uploadsSdkSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+  }
+
+  for (const symbol of ['buildHumanVerificationPayload', 'shouldUseTurnstile']) {
+    assert.equal(securitySdkSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+  }
+
+  for (const symbol of ['getSubscriptionActionDescription', 'getSubscriptionActionLabel', 'isDiscussionSubscribed', 'shouldFollowAfterReply']) {
+    assert.equal(subscriptionsSdkSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+  }
+
+  for (const symbol of ['buildTagPath', 'flattenTags', 'normalizeTag', 'unwrapTagList']) {
+    assert.equal(tagsSdkSource.includes(symbol), true, symbol)
+    assert.equal(forumSdkSource.includes(symbol), false, symbol)
+  }
+  assert.equal(tagsNodeSdkSource.includes('TagModel = null'), true)
 })
 
 test('mentions extension owns composer autocomplete provider and toolbar tool registration', () => {

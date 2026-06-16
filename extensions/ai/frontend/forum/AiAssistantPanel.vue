@@ -50,6 +50,10 @@
 <script setup>
 import { api, computed, ref } from '@bias/core'
 import AiResultCard from './AiResultCard.vue'
+import {
+  formatAiResultMarkdown,
+  getAiResultTitle,
+} from './aiRuntime.js'
 
 const props = defineProps({
   title: {
@@ -95,9 +99,7 @@ const error = ref('')
 const result = ref(null)
 
 const resultTitle = computed(() => {
-  if (result.value?.action === 'question_coach') return '提问教练'
-  if (String(result.value?.action || '').startsWith('role_')) return 'AI 角色反馈'
-  return 'AI 反馈'
+  return getAiResultTitle(result.value)
 })
 
 async function runCoach() {
@@ -130,7 +132,7 @@ async function runRequest(url, payload) {
 
 async function insertResult() {
   if (!props.insertText || !result.value) return
-  const text = formatResultMarkdown(result.value)
+  const text = formatAiResultMarkdown(result.value)
   const prefix = props.content?.trim() ? '\n\n' : ''
   await props.insertText(`${prefix}${text}`, {
     start: props.selectionStart,
@@ -138,23 +140,6 @@ async function insertResult() {
     cursor: props.selectionStart + prefix.length + text.length,
   })
   props.setToolPopoverVisible?.(false)
-}
-
-function formatResultMarkdown(payload) {
-  const lines = ['> AI 助手建议', '']
-  if (payload.text) {
-    lines.push(String(payload.text).trim(), '')
-  }
-  for (const card of Array.isArray(payload.cards) ? payload.cards : []) {
-    const title = String(card?.title || '').trim()
-    if (title) lines.push(`**${title}**`)
-    for (const item of Array.isArray(card?.items) ? card.items : []) {
-      const value = String(item || '').trim()
-      if (value) lines.push(`- ${value}`)
-    }
-    lines.push('')
-  }
-  return lines.join('\n').trim()
 }
 </script>
 

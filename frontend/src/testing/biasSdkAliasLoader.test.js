@@ -11,14 +11,32 @@ test('public extension SDK aliases are discovered from extension manifests', () 
   const nodeAliases = createNodeSdkAliasMap()
   const jsconfigPaths = createJsconfigSdkPaths()
 
-  for (const extensionId of ['discussions', 'emoji', 'notifications', 'posts', 'realtime', 'search', 'users']) {
+  for (const extensionId of [
+    'ai',
+    'approval',
+    'discussions',
+    'emoji',
+    'flags',
+    'likes',
+    'mentions',
+    'notifications',
+    'points',
+    'posts',
+    'realtime',
+    'search',
+    'security',
+    'subscriptions',
+    'tags',
+    'uploads',
+    'users',
+  ]) {
     const alias = `@bias/${extensionId}`
     assert.match(browserAliases.get(alias), new RegExp(`extensions[/\\\\]${extensionId}[/\\\\]frontend[/\\\\]forum[/\\\\]sdk\\.js$`))
     assert.match(nodeAliases.get(alias), new RegExp(`extensions[/\\\\]${extensionId}[/\\\\]frontend[/\\\\]forum[/\\\\]nodeSdk\\.js$`))
     assert.deepEqual(jsconfigPaths[alias], [`../extensions/${extensionId}/frontend/forum/sdk.js`])
   }
 
-  assert.equal(browserAliases.has('@bias/uploads'), false)
+  assert.equal(browserAliases.has('@bias/core'), false)
 })
 
 test('node test runtime resolves public Bias SDK package aliases', async () => {
@@ -26,12 +44,22 @@ test('node test runtime resolves public Bias SDK package aliases', async () => {
   const admin = await import('@bias/admin')
   const adminComponents = await import('@bias/admin/components')
   const core = await import('@bias/core')
+  const ai = await import('@bias/ai')
+  const approval = await import('@bias/approval')
   const discussions = await import('@bias/discussions')
   const emoji = await import('@bias/emoji')
+  const flags = await import('@bias/flags')
+  const likes = await import('@bias/likes')
+  const mentions = await import('@bias/mentions')
   const notifications = await import('@bias/notifications')
+  const points = await import('@bias/points')
   const posts = await import('@bias/posts')
   const realtime = await import('@bias/realtime')
   const search = await import('@bias/search')
+  const security = await import('@bias/security')
+  const subscriptions = await import('@bias/subscriptions')
+  const tags = await import('@bias/tags')
+  const uploads = await import('@bias/uploads')
   const users = await import('@bias/users')
 
   assert.equal(typeof forum.extendForum, 'function')
@@ -107,6 +135,17 @@ test('node test runtime resolves public Bias SDK package aliases', async () => {
   assert.equal(typeof emoji.searchEmojiItems, 'function')
   assert.equal(typeof notifications.getNotificationRenderers, 'function')
   assert.equal(typeof notifications.registerNotificationRenderer, 'function')
+  assert.equal(ai.AiResultCard, null)
+  assert.equal(typeof ai.getAiResultTitle, 'function')
+  assert.equal(typeof ai.formatAiResultMarkdown, 'function')
+  assert.equal(typeof approval.getApprovalComposerState, 'function')
+  assert.equal(flags.PostReportModal, null)
+  assert.equal(typeof flags.buildPostFlagPanel, 'function')
+  assert.equal(typeof likes.buildLikeSummary, 'function')
+  assert.equal(mentions.ComposerMentionAutocomplete, null)
+  assert.equal(typeof mentions.detectMentionQuery, 'function')
+  assert.equal(typeof points.buildUserPointsPath, 'function')
+  assert.equal(typeof points.formatPointsLabel, 'function')
   assert.equal(typeof posts.normalizePost, 'function')
   const normalizedPost = posts.normalizePost({
     content: '正文 <script>alert(1)</script>\n第二行',
@@ -119,6 +158,13 @@ test('node test runtime resolves public Bias SDK package aliases', async () => {
   assert.equal(typeof search.highlightSearchText, 'function')
   assert.equal(typeof search.resolveSearchMetaPayload, 'function')
   assert.equal(typeof search.useSearchFilterCatalog, 'function')
+  assert.equal(security.TurnstileChallenge, null)
+  assert.equal(typeof security.shouldUseTurnstile, 'function')
+  assert.equal(typeof subscriptions.isDiscussionSubscribed, 'function')
+  assert.equal(tags.TagBadge, null)
+  assert.equal(typeof tags.buildTagPath, 'function')
+  assert.equal(typeof tags.normalizeTag, 'function')
+  assert.equal(typeof uploads.buildUploadedFileMarkdown, 'function')
   assert.equal(typeof users.resolveProfileMetaPayload, 'function')
   assert.equal(typeof users.getUserPrimaryGroupLabel, 'function')
   assert.equal(typeof users.buildUserPath, 'function')

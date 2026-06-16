@@ -5,6 +5,12 @@ import {
 import { extendForum,
   getUiCopy
 } from '@bias/forum'
+import {
+  buildLikeSummary,
+  canLikePost,
+  getPostLikeCount,
+  isPostLiked,
+} from './likeRuntime.js'
 
 export const extend = [
   extendForum(registerLikesForum),
@@ -25,7 +31,7 @@ function registerLikesForum(forum) {
       action: 'toggle-post-like',
       label: getUiCopy({ surface: 'discussion-post-like-action' })?.text || '赞',
       icon: 'fas fa-thumbs-up',
-      active: Boolean(post?.is_liked),
+      active: isPostLiked(post),
       disabled: isPending(post),
       order: 10,
     }),
@@ -37,7 +43,7 @@ function registerLikesForum(forum) {
     moduleId: 'likes',
     order: 10,
     surfaces: ['discussion-post-feedback'],
-    isVisible: ({ post }) => Number(post?.like_count || 0) > 0,
+    isVisible: ({ post }) => getPostLikeCount(post) > 0,
     resolve: ({ authStore, isSuspended, post }) => {
       const canInteract = Boolean(authStore?.isAuthenticated && !isSuspended && canLikePost(post))
       return {
@@ -45,7 +51,7 @@ function registerLikesForum(forum) {
         action: 'toggle-post-like',
         label: formatLikeSummary(post),
         icon: 'fas fa-thumbs-up',
-        active: Boolean(post?.is_liked),
+        active: isPostLiked(post),
         disabled: isPending(post),
         readonly: !canInteract,
         order: 10,
@@ -101,8 +107,8 @@ async function handleTogglePostLike({
     return
   }
 
-  const previousLiked = Boolean(post.is_liked)
-  const previousLikeCount = Number(post.like_count || 0)
+  const previousLiked = isPostLiked(post)
+  const previousLikeCount = getPostLikeCount(post)
   setPending(post, true)
 
   try {
@@ -132,10 +138,6 @@ async function handleTogglePostLike({
   }
 }
 
-function canLikePost(post) {
-  return Boolean(post?.can_like ?? false)
-}
-
 function isPending(post) {
   return pendingPostIds.value.includes(post?.id)
 }
@@ -152,12 +154,12 @@ function setPending(post, value) {
 }
 
 function formatLikeSummary(post) {
-  const count = Number(post?.like_count || 0)
+  const count = getPostLikeCount(post)
   return getUiCopy({
     surface: 'discussion-detail-like-summary',
     count,
-    isLiked: Boolean(post?.is_liked),
-  })?.text || ''
+    isLiked: isPostLiked(post),
+  })?.text || buildLikeSummary(post)
 }
 
 function registerLikesUiCopy(forum) {

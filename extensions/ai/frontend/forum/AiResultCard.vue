@@ -18,6 +18,11 @@
 
 <script setup>
 import { computed } from '@bias/core'
+import {
+  getAiModeLabel,
+  normalizeAiResultCards,
+  normalizeAiResultItems,
+} from './aiRuntime.js'
 
 const props = defineProps({
   result: {
@@ -31,20 +36,9 @@ const props = defineProps({
 })
 
 const text = computed(() => String(props.result?.text || '').trim())
-const cards = computed(() => Array.isArray(props.result?.cards) ? props.result.cards : [])
-const modeLabel = computed(() => {
-  const mode = String(props.result?.mode || '').trim()
-  if (mode === 'remote') return '远程模型'
-  if (mode === 'fallback') return '本地预览'
-  if (mode === 'disabled') return '已关闭'
-  return ''
-})
-
-function normalizeItems(items) {
-  return Array.isArray(items)
-    ? items.map(item => String(item || '').trim()).filter(Boolean)
-    : []
-}
+const cards = computed(() => normalizeAiResultCards(props.result))
+const modeLabel = computed(() => getAiModeLabel(props.result))
+const normalizeItems = normalizeAiResultItems
 </script>
 
 <style scoped>

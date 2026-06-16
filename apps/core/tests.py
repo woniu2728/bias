@@ -4417,6 +4417,30 @@ class ExtensionPublicApiBoundaryTests(TestCase):
 
         self.assertEqual(violations, [])
 
+    def test_builtin_extension_backend_code_does_not_import_other_extension_backends(self):
+        extensions_root = Path(settings.BASE_DIR) / "extensions"
+        violations = []
+        for source_extension in extensions_root.iterdir():
+            backend_root = source_extension / "backend"
+            if not backend_root.is_dir():
+                continue
+            for path in backend_root.glob("**/*.py"):
+                if path.name == "tests.py" or "django_migrations" in path.parts:
+                    continue
+                text = path.read_text(encoding="utf-8")
+                for target_extension in extensions_root.iterdir():
+                    if target_extension == source_extension:
+                        continue
+                    target_name = target_extension.name.replace("-", "_")
+                    markers = (
+                        f"from extensions.{target_name}.backend",
+                        f"import extensions.{target_name}.backend",
+                    )
+                    if any(marker in text for marker in markers):
+                        violations.append(f"{path.relative_to(settings.BASE_DIR)}: {target_name}")
+
+        self.assertEqual(violations, [], "extension backend code must depend on public contracts, not other extension backends")
+
     def test_core_runtime_code_uses_runtime_facade_instead_of_runtime_access_imports(self):
         forbidden = "from apps.core.extensions.runtime_access"
         allowed_files = {

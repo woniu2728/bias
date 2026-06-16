@@ -2,6 +2,11 @@ import {
   extendForum,
 } from '@bias/forum'
 import ProfilePointsSection from './ProfilePointsSection.vue'
+import {
+  buildUserPointsPath,
+  formatPointsBalance,
+  formatPointsLabel,
+} from './pointsRuntime.js'
 
 export const extend = [
   extendForum('points', registerPointsForum),
@@ -25,7 +30,7 @@ function registerPointsForum(forum) {
       placement: 'mobile-drawer-personal',
       order: 25,
       icon: 'fas fa-coins',
-      label: ({ authStore }) => `${Number(authStore?.user?.points_balance || 0)} 积分`,
+      label: ({ authStore }) => formatPointsLabel(authStore?.user),
       to: ({ authStore }) => buildUserPointsPath(authStore?.user),
       isVisible: ({ authStore }) => Boolean(authStore?.user),
     })
@@ -50,7 +55,7 @@ function registerPointsForum(forum) {
       surfaces: ['profile-hero'],
       resolve: ({ user }) => ({
         icon: 'fas fa-coins',
-        text: `${Number(user?.points_balance || 0)} 积分`,
+        text: formatPointsLabel(user),
       }),
     })
     .uiCopy({
@@ -67,16 +72,4 @@ function registerPointsForum(forum) {
     })
 
   return forum
-}
-
-function buildUserPointsPath(user) {
-  if (!user?.id && !user?.username) {
-    return '/profile?tab=points'
-  }
-  const identifier = encodeURIComponent(String(user.username || user.id))
-  return `/u/${identifier}?tab=points`
-}
-
-function formatPointsBalance(user) {
-  return Number(user?.points_balance || 0)
 }

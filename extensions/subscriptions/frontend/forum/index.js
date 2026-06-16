@@ -4,6 +4,12 @@ import {
   extendForum,
   getUiCopy
 } from '@bias/forum'
+import {
+  getSubscriptionActionDescription,
+  getSubscriptionActionLabel,
+  isDiscussionSubscribed,
+  shouldFollowAfterReply,
+} from './subscriptionRuntime.js'
 
 export const extend = [
   extendForum(registerSubscriptionsForum),
@@ -98,19 +104,19 @@ function registerSubscriptionsForum(forum) {
     isVisible: ({ authStore, isSuspended }) => Boolean(authStore?.isAuthenticated) && !isSuspended,
     resolve: ({ pendingDiscussionActions, discussion }) => {
       const actionPending = Boolean(pendingDiscussionActions?.['toggle-subscription'])
-      const isSubscribed = Boolean(discussion?.is_subscribed)
+      const isSubscribed = isDiscussionSubscribed(discussion)
       return {
         key: 'toggle-subscription',
         label: getUiCopy({
           surface: 'discussion-action-toggle-subscription-label',
           actionPending,
           isSubscribed,
-        })?.text || (actionPending ? '提交中...' : (isSubscribed ? '取消关注' : '关注讨论')),
+        })?.text || getSubscriptionActionLabel(discussion, { pending: actionPending }),
         icon: isSubscribed ? 'fas fa-bell-slash' : 'far fa-star',
         description: getUiCopy({
           surface: 'discussion-action-toggle-subscription-description',
           isSubscribed,
-        })?.text || (isSubscribed ? '停止接收这条讨论后续回复通知。' : '接收这条讨论后续回复通知。'),
+        })?.text || getSubscriptionActionDescription(discussion),
         disabled: actionPending,
         disabledReason: actionPending
           ? (getUiCopy({
@@ -135,7 +141,7 @@ function registerSubscriptionsForum(forum) {
     moduleId: 'subscriptions',
     order: 40,
     surfaces: ['discussion-list-item'],
-    isVisible: ({ discussion }) => Boolean(discussion?.is_subscribed),
+    isVisible: ({ discussion }) => isDiscussionSubscribed(discussion),
     resolve: () => ({
       label: '已关注',
       tone: 'soft-primary',
@@ -177,7 +183,7 @@ function registerSubscriptionsForum(forum) {
     moduleId: 'subscriptions',
     order: 20,
     surfaces: ['discussion-sidebar-action-notice'],
-    isVisible: ({ authStore, discussion }) => Boolean(authStore?.isAuthenticated && discussion?.is_subscribed),
+    isVisible: ({ authStore, discussion }) => Boolean(authStore?.isAuthenticated && isDiscussionSubscribed(discussion)),
     resolve: () => ({
       text: '你会收到这条讨论后续回复的通知。',
     }),
@@ -188,7 +194,7 @@ function registerSubscriptionsForum(forum) {
     moduleId: 'subscriptions',
     order: 10,
     onReplyCreated({ authStore }) {
-      if (!authStore?.user?.preferences?.follow_after_reply) {
+      if (!shouldFollowAfterReply(authStore?.user)) {
         return null
       }
       return {
@@ -210,7 +216,7 @@ async function handleToggleSubscription({
     return
   }
 
-  const isSubscribed = Boolean(discussion.is_subscribed)
+  const isSubscribed = isDiscussionSubscribed(discussion)
   setDiscussionActionPending?.('toggle-subscription', true)
   try {
     if (isSubscribed) {

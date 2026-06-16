@@ -17,14 +17,32 @@
       "@bias/forum": [
         "src/forum/sdk.js"
       ],
+      "@bias/ai": [
+        "../extensions/ai/frontend/forum/sdk.js"
+      ],
+      "@bias/approval": [
+        "../extensions/approval/frontend/forum/sdk.js"
+      ],
       "@bias/discussions": [
         "../extensions/discussions/frontend/forum/sdk.js"
       ],
       "@bias/emoji": [
         "../extensions/emoji/frontend/forum/sdk.js"
       ],
+      "@bias/flags": [
+        "../extensions/flags/frontend/forum/sdk.js"
+      ],
+      "@bias/likes": [
+        "../extensions/likes/frontend/forum/sdk.js"
+      ],
+      "@bias/mentions": [
+        "../extensions/mentions/frontend/forum/sdk.js"
+      ],
       "@bias/notifications": [
         "../extensions/notifications/frontend/forum/sdk.js"
+      ],
+      "@bias/points": [
+        "../extensions/points/frontend/forum/sdk.js"
       ],
       "@bias/posts": [
         "../extensions/posts/frontend/forum/sdk.js"
@@ -34,6 +52,18 @@
       ],
       "@bias/search": [
         "../extensions/search/frontend/forum/sdk.js"
+      ],
+      "@bias/security": [
+        "../extensions/security/frontend/forum/sdk.js"
+      ],
+      "@bias/subscriptions": [
+        "../extensions/subscriptions/frontend/forum/sdk.js"
+      ],
+      "@bias/tags": [
+        "../extensions/tags/frontend/forum/sdk.js"
+      ],
+      "@bias/uploads": [
+        "../extensions/uploads/frontend/forum/sdk.js"
       ],
       "@bias/users": [
         "../extensions/users/frontend/forum/sdk.js"

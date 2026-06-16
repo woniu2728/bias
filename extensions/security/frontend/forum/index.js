@@ -5,6 +5,10 @@ import {
   registerAuthChallengeProvider,
 } from '@bias/users'
 import TurnstileChallenge from './TurnstileChallenge.vue'
+import {
+  buildHumanVerificationPayload,
+  shouldUseTurnstile,
+} from './securityRuntime.js'
 
 export const extend = [
   extendForum('security', registerSecurityForum),
@@ -17,9 +21,7 @@ function registerSecurityForum(forum) {
     order: 10,
     component: TurnstileChallenge,
     isVisible: ({ mode, settings }) => shouldUseTurnstile(mode, settings),
-    buildPayload: ({ token }) => ({
-      human_verification_token: token || undefined,
-    }),
+    buildPayload: buildHumanVerificationPayload,
   })
 
   forum
@@ -46,20 +48,4 @@ function registerSecurityForum(forum) {
     })
 
   return forum
-}
-
-function shouldUseTurnstile(mode, settings = {}) {
-  if (settings.auth_human_verification_provider !== 'turnstile') {
-    return false
-  }
-  if (!settings.auth_turnstile_site_key) {
-    return false
-  }
-  if (mode === 'login') {
-    return Boolean(settings.auth_human_verification_login_enabled)
-  }
-  if (mode === 'register') {
-    return Boolean(settings.auth_human_verification_register_enabled)
-  }
-  return false
 }

@@ -5,6 +5,12 @@ import {
   getUiCopy
 } from '@bias/forum'
 import PostReportModal from './PostReportModal.vue'
+import {
+  buildPostFlagPanel,
+  canModeratePostFlags,
+  getPostOpenFlagCount,
+  hasViewerOpenFlag,
+} from './flagRuntime.js'
 
 export const extend = [
   extendForum(registerFlagsForum),
@@ -37,7 +43,7 @@ function registerFlagsForum(forum) {
     key: 'resolve-post-flags',
     moduleId: 'flags',
     order: 10,
-    isVisible: ({ post }) => Boolean(post?.can_moderate_flags),
+    isVisible: ({ post }) => canModeratePostFlags(post),
     handle: handleResolvePostFlags,
   })
 
@@ -46,7 +52,7 @@ function registerFlagsForum(forum) {
     moduleId: 'flags',
     order: 30,
     surfaces: ['discussion-post'],
-    isVisible: ({ post }) => Boolean(post?.viewer_has_open_flag && !post?.can_moderate_flags),
+    isVisible: ({ post }) => Boolean(hasViewerOpenFlag(post) && !canModeratePostFlags(post)),
     resolve: () => ({
       label: '已举报',
       tone: 'info',
@@ -58,9 +64,9 @@ function registerFlagsForum(forum) {
     moduleId: 'flags',
     order: 40,
     surfaces: ['discussion-post'],
-    isVisible: ({ post }) => Boolean(Number(post?.open_flag_count || 0) > 0 && post?.can_moderate_flags),
+    isVisible: ({ post }) => Boolean(getPostOpenFlagCount(post) > 0 && canModeratePostFlags(post)),
     resolve: ({ post }) => ({
-      label: `${post.open_flag_count} 条举报待处理`,
+      label: `${getPostOpenFlagCount(post)} 条举报待处理`,
       tone: 'soft-warning',
     }),
   })
@@ -70,38 +76,8 @@ function registerFlagsForum(forum) {
     moduleId: 'flags',
     order: 10,
     surfaces: ['discussion-post'],
-    isVisible: ({ post }) => Boolean(post?.can_moderate_flags && Number(post?.open_flag_count || 0) > 0),
-    resolve: ({ post }) => {
-      const flagPending = Boolean(post?.is_flag_pending)
-      return {
-        title: '前台举报处理',
-        description: '版主可直接在这里查看原因并关闭举报。',
-        items: (post.open_flags || []).map(flag => ({
-          key: flag.id,
-          reason: flag.reason,
-          userLabel: flag.user?.display_name || flag.user?.username || '匿名用户',
-          message: flag.message || '举报人未填写补充说明。',
-        })),
-        actions: [
-          {
-            key: 'resolved',
-            action: 'resolve-post-flags',
-            label: flagPending ? '处理中...' : '标记已处理',
-            tone: 'primary',
-            status: 'resolved',
-            disabled: Boolean(flagPending),
-          },
-          {
-            key: 'ignored',
-            action: 'resolve-post-flags',
-            label: '忽略举报',
-            tone: 'secondary',
-            status: 'ignored',
-            disabled: Boolean(flagPending),
-          },
-        ],
-      }
-    },
+    isVisible: ({ post }) => Boolean(canModeratePostFlags(post) && getPostOpenFlagCount(post) > 0),
+    resolve: ({ post }) => buildPostFlagPanel(post),
   })
 
   registerFlagsUiCopy(forum)
@@ -153,10 +129,10 @@ async function handleResolvePostFlags({
   uiText,
   upsertPost,
 }) {
-  if (!post?.can_moderate_flags) return
+  if (!canModeratePostFlags(post)) return
 
   const isIgnoring = status === 'ignored'
-  const openFlagCount = Number(post.open_flag_count || 0)
+  const openFlagCount = getPostOpenFlagCount(post)
   const confirmed = await modalStore.confirm({
     title: resolveText(
       uiText,

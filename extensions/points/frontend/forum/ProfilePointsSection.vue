@@ -32,6 +32,9 @@ import {
 import {
   getUiCopy,
 } from '@bias/forum'
+import {
+  getUserPointsBalance,
+} from './pointsRuntime.js'
 
 const props = defineProps({
   user: {
@@ -40,7 +43,7 @@ const props = defineProps({
   }
 })
 
-const balance = computed(() => Number(props.user?.points_balance || 0))
+const balance = computed(() => getUserPointsBalance(props.user))
 const titleText = computed(() => getUiCopy({
   surface: 'points-profile-title',
 })?.text || '积分')

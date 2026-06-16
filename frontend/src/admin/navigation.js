@@ -1,5 +1,5 @@
-import { getAdminRoutes } from './registry'
-import { useAdminRegistryStore } from '../stores/adminRegistry'
+import { getAdminRoutes } from './registry/routes.js'
+import { useAdminRegistryStore } from '../stores/adminRegistry.js'
 
 export function isAdminPathActive(currentPath, targetPath) {
   if (targetPath === '/admin') {
@@ -19,6 +19,12 @@ export function getAdminNavSections() {
     visibleRoutes
       .filter(route => !route.redirect && !isExtensionOwnedRoute(route))
       .map(route => String(route.moduleId || 'core').trim())
+      .filter(Boolean)
+  )
+  const firstClassAdminExtensionIds = new Set(
+    visibleRoutes
+      .filter(route => !route.redirect && isExtensionOwnedRoute(route) && !isExtensionDetailRoute(route))
+      .map(route => String(route.extensionId || route.extension_id || '').trim())
       .filter(Boolean)
   )
   const coreItems = visibleRoutes
@@ -53,6 +59,7 @@ export function getAdminNavSections() {
     }))
     .filter(item => item?.id && item.id !== 'core')
     .filter(item => item?.product_visible !== false)
+    .filter(item => !firstClassAdminExtensionIds.has(String(item.id || '').trim()))
     .filter(item => !coreModuleIds.has(String(item.id || '').trim()))
     .map(item => ({
       path: `/admin/extensions/${item.id}`,
@@ -105,6 +112,10 @@ function buildExtensionIconStyle(extension) {
 
 function isExtensionOwnedRoute(route) {
   return Boolean(String(route?.extensionId || route?.extension_id || '').trim())
+}
+
+function isExtensionDetailRoute(route) {
+  return String(route?.path || '').startsWith('/admin/extensions/')
 }
 
 export function getAdminRouteMeta(currentPath) {
