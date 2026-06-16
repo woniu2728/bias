@@ -1,7 +1,9 @@
 """
 论坛设置读取与保存服务
 """
+import hashlib
 import json
+import time
 from types import SimpleNamespace
 
 from django.conf import settings
@@ -29,7 +31,11 @@ from apps.core.forum_registry import get_forum_registry
 ADVANCED_SETTINGS_CACHE_KEY = "settings.group.advanced"
 PUBLIC_FORUM_SETTINGS_CACHE_KEY = "settings.public.forum"
 ADVANCED_SETTINGS_CACHE_TIMEOUT_SECONDS = 60
+ADVANCED_SETTINGS_PROCESS_CACHE_TTL_SECONDS = 1.0
 _EXTENSION_SETTING_GROUP_DEFAULTS_CACHE: dict[str, dict] = {}
+_ADVANCED_SETTINGS_PROCESS_CACHE: dict | None = None
+_ADVANCED_SETTINGS_PROCESS_CACHE_KEY = ""
+_ADVANCED_SETTINGS_PROCESS_CACHE_AT = 0.0
 
 
 def _get_forum_registry():
@@ -146,8 +152,20 @@ def get_extension_mail_setting_defaults() -> dict:
 
 
 def get_advanced_settings_defaults() -> dict:
-    defaults = ADVANCED_SETTINGS_DEFAULTS.copy()
+    defaults = _build_advanced_settings_defaults()
     defaults.update(get_extension_setting_group_defaults("advanced"))
+    return defaults
+
+
+def _build_advanced_settings_defaults() -> dict:
+    defaults = ADVANCED_SETTINGS_DEFAULTS.copy()
+    queue_driver = "redis" if "redis" in str(getattr(settings, "CELERY_BROKER_URL", "") or "").lower() else "sync"
+    defaults["cache_driver"] = (
+        "redis" if "redis" in settings.CACHES.get("default", {}).get("BACKEND", "").lower() else "file"
+    )
+    defaults["queue_driver"] = queue_driver
+    defaults["queue_enabled"] = bool(queue_driver == "redis" and not _is_test_process())
+    defaults["debug_mode"] = settings.DEBUG
     return defaults
 
 
@@ -235,8 +253,15 @@ def sync_mail_settings_to_site_config(mail_settings: dict) -> str | None:
 def clear_runtime_setting_caches():
     from apps.core.runtime_state import clear_runtime_status_cache
 
+    global _ADVANCED_SETTINGS_PROCESS_CACHE
+    global _ADVANCED_SETTINGS_PROCESS_CACHE_KEY
+    global _ADVANCED_SETTINGS_PROCESS_CACHE_AT
+
     _EXTENSION_SETTING_GROUP_DEFAULTS_CACHE.clear()
-    _cache_delete(ADVANCED_SETTINGS_CACHE_KEY)
+    _ADVANCED_SETTINGS_PROCESS_CACHE = None
+    _ADVANCED_SETTINGS_PROCESS_CACHE_KEY = ""
+    _ADVANCED_SETTINGS_PROCESS_CACHE_AT = 0.0
+    _cache_delete(_advanced_settings_cache_key())
     _cache_delete(PUBLIC_FORUM_SETTINGS_CACHE_KEY)
     clear_runtime_status_cache()
 
@@ -286,8 +311,24 @@ def _is_valid_public_forum_settings_cache(payload) -> bool:
 
 
 def get_advanced_settings() -> dict:
-    cached = _cache_get(ADVANCED_SETTINGS_CACHE_KEY)
+    global _ADVANCED_SETTINGS_PROCESS_CACHE
+    global _ADVANCED_SETTINGS_PROCESS_CACHE_KEY
+    global _ADVANCED_SETTINGS_PROCESS_CACHE_AT
+
+    now = time.monotonic()
+    cache_key = _advanced_settings_cache_key()
+    if (
+        isinstance(_ADVANCED_SETTINGS_PROCESS_CACHE, dict)
+        and _ADVANCED_SETTINGS_PROCESS_CACHE_KEY == cache_key
+        and now - _ADVANCED_SETTINGS_PROCESS_CACHE_AT < ADVANCED_SETTINGS_PROCESS_CACHE_TTL_SECONDS
+    ):
+        return _ADVANCED_SETTINGS_PROCESS_CACHE.copy()
+
+    cached = _cache_get(cache_key)
     if isinstance(cached, dict):
+        _ADVANCED_SETTINGS_PROCESS_CACHE = cached.copy()
+        _ADVANCED_SETTINGS_PROCESS_CACHE_KEY = cache_key
+        _ADVANCED_SETTINGS_PROCESS_CACHE_AT = now
         return cached.copy()
 
     advanced_settings = get_setting_group("advanced", get_advanced_settings_defaults())
@@ -304,8 +345,21 @@ def get_advanced_settings() -> dict:
     advanced_settings["maintenance_mode_key"] = mode
     advanced_settings["maintenance_mode"] = mode != "none"
     advanced_settings["maintenance_mode_label"] = get_maintenance_mode_label(mode)
-    _cache_set(ADVANCED_SETTINGS_CACHE_KEY, advanced_settings, ADVANCED_SETTINGS_CACHE_TIMEOUT_SECONDS)
+    _cache_set(cache_key, advanced_settings, ADVANCED_SETTINGS_CACHE_TIMEOUT_SECONDS)
+    _ADVANCED_SETTINGS_PROCESS_CACHE = advanced_settings.copy()
+    _ADVANCED_SETTINGS_PROCESS_CACHE_KEY = cache_key
+    _ADVANCED_SETTINGS_PROCESS_CACHE_AT = now
     return advanced_settings.copy()
+
+
+def _advanced_settings_cache_key() -> str:
+    cache_backend = settings.CACHES.get("default", {}).get("BACKEND", "")
+    celery_broker = str(getattr(settings, "CELERY_BROKER_URL", "") or "")
+    debug = "1" if settings.DEBUG else "0"
+    signature = hashlib.sha256(
+        "|".join([str(cache_backend), celery_broker, debug]).encode("utf-8")
+    ).hexdigest()[:16]
+    return f"{ADVANCED_SETTINGS_CACHE_KEY}:{signature}"
 
 
 def get_cache_lifetime() -> int:

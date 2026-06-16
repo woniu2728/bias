@@ -6,6 +6,7 @@ from apps.core.extensions.runtime_core import (
     get_extension_host_service,
     require_extension_host_service,
     runtime_service_method,
+    runtime_service_value,
 )
 
 
@@ -18,19 +19,19 @@ def require_runtime_tag_service():
 
 
 def get_runtime_tag_model():
-    service = require_runtime_tag_service()
-    model = service.get("model") if isinstance(service, dict) else getattr(service, "model", None)
-    if model is None:
-        raise RuntimeError("tags.service 未提供标签模型")
-    return model
+    return runtime_service_value(
+        require_runtime_tag_service(),
+        "model",
+        required_message="tags.service 未提供标签模型",
+    )
 
 
 def get_runtime_discussion_tag_model():
-    service = require_runtime_tag_service()
-    model = service.get("relationship_model") if isinstance(service, dict) else getattr(service, "relationship_model", None)
-    if model is None:
-        raise RuntimeError("tags.service 未提供讨论标签关系模型")
-    return model
+    return runtime_service_value(
+        require_runtime_tag_service(),
+        "relationship_model",
+        required_message="tags.service 未提供讨论标签关系模型",
+    )
 
 
 def get_runtime_tag_summaries_by_slugs(slugs) -> dict[str, dict]:

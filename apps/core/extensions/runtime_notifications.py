@@ -6,6 +6,7 @@ from apps.core.extensions.runtime_core import (
     get_extension_host_service,
     require_extension_host_service,
     runtime_service_method,
+    runtime_service_value,
 )
 
 
@@ -18,11 +19,11 @@ def require_runtime_notification_service():
 
 
 def get_runtime_notification_model():
-    service = require_runtime_notification_service()
-    model = service.get("model") if isinstance(service, dict) else getattr(service, "model", None)
-    if model is None:
-        raise RuntimeError("notifications.service 未提供通知模型")
-    return model
+    return runtime_service_value(
+        require_runtime_notification_service(),
+        "model",
+        required_message="notifications.service 未提供通知模型",
+    )
 
 
 def notify_runtime_notification(method_name: str, *args, **kwargs):

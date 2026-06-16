@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from apps.core.secret_validation import looks_like_placeholder_secret
+
 
 DEFAULT_SITE_CONFIG_PATH = Path("instance") / "site.json"
 
@@ -30,19 +32,6 @@ def _env_first(*keys: str) -> str:
         if value is not None and value.strip():
             return value.strip()
     return ""
-
-
-def _looks_like_placeholder_secret(value: str) -> bool:
-    normalized = (value or "").strip().lower()
-    return (
-        not normalized
-        or "change-this" in normalized
-        or normalized.startswith("replace-with")
-        or normalized in {
-            "django-insecure-change-this-in-production",
-            "jwt-secret-key-change-this",
-        }
-    )
 
 
 def _normalize_frontend_url(value: str, scheme: str, domains: list[str]) -> str:
@@ -228,8 +217,8 @@ def _load_env_bootstrap() -> SiteBootstrapConfig | None:
     env_secret_key = _env_first("SECRET_KEY")
     env_jwt_secret_key = _env_first("JWT_SECRET_KEY") or env_secret_key
     has_required_runtime_secrets = not (
-        _looks_like_placeholder_secret(env_secret_key)
-        or _looks_like_placeholder_secret(env_jwt_secret_key)
+        looks_like_placeholder_secret(env_secret_key)
+        or looks_like_placeholder_secret(env_jwt_secret_key)
     )
     has_required_runtime_origin = bool(_env_first("FRONTEND_URL") or site_domains)
     config = SiteBootstrapConfig(

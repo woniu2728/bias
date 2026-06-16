@@ -6,6 +6,7 @@ from apps.core.extensions.runtime_core import (
     get_extension_host_service,
     require_extension_host_service,
     runtime_service_method,
+    runtime_service_value,
 )
 
 
@@ -18,11 +19,11 @@ def require_runtime_post_service():
 
 
 def get_runtime_post_model():
-    service = require_runtime_post_service()
-    model = service.get("model") if isinstance(service, dict) else getattr(service, "model", None)
-    if model is None:
-        raise RuntimeError("posts.service 未提供帖子模型")
-    return model
+    return runtime_service_value(
+        require_runtime_post_service(),
+        "model",
+        required_message="posts.service 未提供帖子模型",
+    )
 
 
 def get_runtime_post_by_id(
@@ -72,24 +73,21 @@ def reject_runtime_post(post: Any, admin_user: Any, note: str = ""):
 
 
 def get_runtime_post_approval_approved() -> str:
-    service = require_runtime_post_service()
-    value = service.get("approval_approved") if isinstance(service, dict) else getattr(service, "approval_approved", "")
+    value = runtime_service_value(require_runtime_post_service(), "approval_approved", "")
     if not value:
         raise RuntimeError("posts.service 未提供已审核状态常量")
     return str(value)
 
 
 def get_runtime_post_approval_pending() -> str:
-    service = require_runtime_post_service()
-    value = service.get("approval_pending") if isinstance(service, dict) else getattr(service, "approval_pending", "")
+    value = runtime_service_value(require_runtime_post_service(), "approval_pending", "")
     if not value:
         raise RuntimeError("posts.service 未提供待审核状态常量")
     return str(value)
 
 
 def get_runtime_post_approval_rejected() -> str:
-    service = require_runtime_post_service()
-    value = service.get("approval_rejected") if isinstance(service, dict) else getattr(service, "approval_rejected", "")
+    value = runtime_service_value(require_runtime_post_service(), "approval_rejected", "")
     if not value:
         raise RuntimeError("posts.service 未提供已拒绝状态常量")
     return str(value)

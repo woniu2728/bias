@@ -6,6 +6,7 @@ from apps.core.extensions.runtime_core import (
     get_extension_host_service,
     require_extension_host_service,
     runtime_service_method,
+    runtime_service_value,
 )
 
 
@@ -33,11 +34,11 @@ def can_runtime_like_post(post: Any, user: Any) -> bool:
 
 
 def get_runtime_post_like_model():
-    service = require_runtime_like_service()
-    model = service.get("model") if isinstance(service, dict) else getattr(service, "model", None)
-    if model is None:
-        raise RuntimeError("likes.service 未提供点赞模型")
-    return model
+    return runtime_service_value(
+        require_runtime_like_service(),
+        "model",
+        required_message="likes.service 未提供点赞模型",
+    )
 
 
 def get_runtime_flag_service(default: Any = None):
@@ -92,11 +93,11 @@ def delete_runtime_post_flags(post_id: int, user: Any) -> int:
 
 
 def get_runtime_post_flag_model():
-    service = require_runtime_flag_service()
-    model = service.get("model") if isinstance(service, dict) else getattr(service, "model", None)
-    if model is None:
-        raise RuntimeError("flags.service 未提供举报模型")
-    return model
+    return runtime_service_value(
+        require_runtime_flag_service(),
+        "model",
+        required_message="flags.service 未提供举报模型",
+    )
 
 
 def get_runtime_approval_service(default: Any = None):

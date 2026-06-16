@@ -29,6 +29,16 @@ def runtime_service_method(service: Any, name: str):
     return method
 
 
+def runtime_service_value(service: Any, name: str, default: Any = None, *, required_message: str = ""):
+    if isinstance(service, dict):
+        value = service.get(name, default)
+    else:
+        value = getattr(service, name, default)
+    if value is None and required_message:
+        raise RuntimeError(required_message)
+    return value
+
+
 def get_runtime_resource_registry():
     from apps.core.resource_registry import get_resource_registry
 

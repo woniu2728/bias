@@ -27,6 +27,7 @@ from apps.core.extension_django_apps import normalize_extension_django_app_label
 from apps.core.extensions.product import get_extension_protected_reason, is_extension_protected, is_product_visible_extension
 from apps.core.extensions.runtime_probe import inspect_extension_runtime
 from apps.core.extensions.frontend_runtime_service import build_frontend_document_payload
+from apps.core.extensions.frontend_compiler import inspect_extension_frontend_output_manifest
 from apps.core.extensions.admin_assets import (
     serialize_extension_frontend_asset_state,
     serialize_extension_frontend_asset_state_for_extension,
@@ -205,8 +206,13 @@ def get_admin_extension(request, extension_id: str):
         extension = get_extension_registry().get_extension(extension_id)
     except ExtensionNotFoundError:
         return api_error("扩展不存在", status=404, code="extension_not_found")
+    frontend_output_manifest = inspect_extension_frontend_output_manifest()
     return {
-        "extension": _serialize_admin_extension(extension, include_permission_details=True),
+        "extension": _serialize_admin_extension(
+            extension,
+            include_permission_details=True,
+            frontend_output_manifest=frontend_output_manifest,
+        ),
     }
 
 
@@ -362,8 +368,15 @@ def uninstall_admin_extension(request, extension_id: str):
 
 
 def _serialize_admin_extensions_payload(extensions, *, summary: bool = False):
+    frontend_output_manifest = inspect_extension_frontend_output_manifest()
     payload = [
-        _serialize_admin_extension_summary(extension) if summary else _serialize_admin_extension(extension)
+        _serialize_admin_extension_summary(
+            extension,
+            frontend_output_manifest=frontend_output_manifest,
+        ) if summary else _serialize_admin_extension(
+            extension,
+            frontend_output_manifest=frontend_output_manifest,
+        )
         for extension in extensions
     ]
     diagnostics_summary = summarize_extension_diagnostics(payload)
@@ -395,22 +408,23 @@ def _serialize_admin_extensions_payload(extensions, *, summary: bool = False):
 
 
 def _serialize_admin_extension_action_payload(extension):
+    frontend_output_manifest = inspect_extension_frontend_output_manifest()
     return {
         "runtime": {
             **_serialize_extension_runtime_rebuild_state(),
             "recovery": serialize_extension_recovery_state(),
         },
-        "extension": _serialize_admin_extension(extension),
+        "extension": _serialize_admin_extension(extension, frontend_output_manifest=frontend_output_manifest),
     }
 
 
-def _serialize_admin_extension_summary(extension):
+def _serialize_admin_extension_summary(extension, *, frontend_output_manifest: dict | None = None):
     runtime_view = _resolve_extension_runtime_record(extension)
     settings_pages = _resolve_extension_settings_pages(extension, runtime_view)
     permissions_pages = _resolve_extension_permissions_pages(extension, runtime_view)
     operations_pages = _resolve_extension_operations_pages(extension, runtime_view)
     frontend_admin_entry = _resolve_extension_frontend_admin_entry(extension, runtime_view)
-    frontend_outputs = _resolve_extension_frontend_outputs(extension.id)
+    frontend_outputs = _resolve_extension_frontend_outputs(extension.id, frontend_output_manifest=frontend_output_manifest)
     frontend_routes = _build_extension_frontend_routes(runtime_view)
 
     return {
@@ -453,7 +467,12 @@ def _serialize_admin_extension_summary(extension):
     }
 
 
-def _serialize_admin_extension(extension, include_permission_details: bool = False):
+def _serialize_admin_extension(
+    extension,
+    include_permission_details: bool = False,
+    *,
+    frontend_output_manifest: dict | None = None,
+):
     runtime_view = _resolve_extension_runtime_record(extension)
     detail_page = f"/admin/extensions/{extension.id}"
     settings_pages = _resolve_extension_settings_pages(extension, runtime_view)
@@ -461,7 +480,7 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
     operations_pages = _resolve_extension_operations_pages(extension, runtime_view)
     frontend_admin_entry = _resolve_extension_frontend_admin_entry(extension, runtime_view)
     frontend_forum_entry = _resolve_extension_frontend_forum_entry(extension, runtime_view)
-    frontend_outputs = _resolve_extension_frontend_outputs(extension.id)
+    frontend_outputs = _resolve_extension_frontend_outputs(extension.id, frontend_output_manifest=frontend_output_manifest)
     frontend_routes = _build_extension_frontend_routes(runtime_view)
     settings_page = next(iter(settings_pages), "")
     permissions_page = next(iter(permissions_pages), "")
@@ -517,6 +536,8 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         language_packs=language_packs,
     )
 
+    settings_schema = serialize_extension_settings_schema(extension.id)
+
     payload = {
         "id": extension.id,
         "name": extension.name,
@@ -544,8 +565,8 @@ def _serialize_admin_extension(extension, include_permission_details: bool = Fal
         "permissions_pages": list(permissions_pages),
         "operations_pages": list(operations_pages),
         "operations_profile": dict(getattr(extension.manifest, "operations_profile", {}) or {}),
-        "settings_schema": serialize_extension_settings_schema(extension.id),
-        "settings_values": get_extension_settings(extension.id) if serialize_extension_settings_schema(extension.id) else {},
+        "settings_schema": settings_schema,
+        "settings_values": get_extension_settings(extension.id) if settings_schema else {},
         "compatibility": {
             "bias_version": _manifest_nested_attr(extension, "compatibility", "bias_version"),
             "api_version": _manifest_nested_attr(extension, "compatibility", "api_version", "1.0"),
@@ -728,10 +749,8 @@ def _resolve_extension_frontend_forum_entry(extension, runtime_record=None) -> s
     return extension.frontend_forum_entry
 
 
-def _resolve_extension_frontend_outputs(extension_id: str) -> dict:
-    from apps.core.extensions.frontend_compiler import inspect_extension_frontend_output_manifest
-
-    output_manifest = inspect_extension_frontend_output_manifest()
+def _resolve_extension_frontend_outputs(extension_id: str, *, frontend_output_manifest: dict | None = None) -> dict:
+    output_manifest = frontend_output_manifest or inspect_extension_frontend_output_manifest()
     payload = dict(dict(output_manifest.get("extensions") or {}).get(str(extension_id or "").strip()) or {})
     return dict(payload.get("outputs") or {})
 

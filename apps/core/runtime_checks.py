@@ -3,7 +3,6 @@ from __future__ import annotations
 import socket
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 from django.conf import settings
 from django.core.cache import cache
@@ -75,63 +74,7 @@ def is_redis_enabled(queue_enabled: bool = False, queue_driver: str = "") -> boo
 
 
 def _probe_cache_connection() -> dict[str, Any]:
-    backend = (settings.CACHES.get("default", {}).get("BACKEND") or "").lower()
-    if "django_redis" not in backend and "redis" not in backend:
-        return {
-            "enabled": False,
-            "available": None,
-            "status": "disabled",
-            "label": "未启用",
-            "message": "当前默认缓存未使用 Redis。",
-        }
-
-    try:
-        cache.set("admin.runtime.cache_probe", "ok", timeout=5)
-        cache.get("admin.runtime.cache_probe")
-    except Exception as exc:
-        return {
-            "enabled": True,
-            "available": False,
-            "status": "unavailable",
-            "label": "连接失败",
-            "message": str(exc) or "无法访问缓存后端。",
-        }
-
-    return {
-        "enabled": True,
-        "available": True,
-        "status": "available",
-        "label": "可用",
-        "message": "缓存后端可正常读写。",
-    }
-
-
-def _probe_tcp_endpoint(host: str | None, port: int | None, *, label: str) -> dict[str, Any]:
-    normalized_host = str(host or "").strip()
-    normalized_port = int(port or 0)
-    if not normalized_host or normalized_port <= 0:
-        return {
-            "available": False,
-            "status": "misconfigured",
-            "label": "配置缺失",
-            "message": f"{label} 缺少主机或端口配置。",
-        }
-
-    try:
-        with socket.create_connection((normalized_host, normalized_port), timeout=NETWORK_PROBE_TIMEOUT_SECONDS):
-            return {
-                "available": True,
-                "status": "available",
-                "label": "可达",
-                "message": f"{label} 主机 {normalized_host}:{normalized_port} 可连通。",
-            }
-    except OSError as exc:
-        return {
-            "available": False,
-            "status": "unreachable",
-            "label": "不可达",
-            "message": f"{label} 主机 {normalized_host}:{normalized_port} 无法连通：{exc}",
-        }
+    return admin_runtime_helpers.probe_cache_connection(settings_obj=settings, cache_backend=cache)
 
 
 def _redis_command(*parts: str) -> bytes:
@@ -193,107 +136,29 @@ def _probe_redis_ping(host: str | None, port: int | None, *, label: str, passwor
 
 
 def _probe_realtime_connection() -> dict[str, Any]:
-    channel_config = settings.CHANNEL_LAYERS.get("default", {})
-    backend = (channel_config.get("BACKEND") or "").lower()
-    if "channels_redis" not in backend and "redis" not in backend:
-        return {
-            "enabled": False,
-            "available": None,
-            "status": "disabled",
-            "label": "未启用",
-            "message": "当前实时层未使用 Redis Channel Layer。",
-        }
-
-    hosts = channel_config.get("CONFIG", {}).get("hosts") or []
-    if not hosts:
-        return {
-            "enabled": True,
-            "available": False,
-            "status": "misconfigured",
-            "label": "配置缺失",
-            "message": "Redis Channel Layer 缺少 hosts 配置。",
-        }
-
-    first_host = hosts[0]
-    if isinstance(first_host, (list, tuple)):
-        host = first_host[0] if len(first_host) > 0 else None
-        port = first_host[1] if len(first_host) > 1 else 6379
-    elif isinstance(first_host, str):
-        parsed = urlparse(first_host if "://" in first_host else f"redis://{first_host}")
-        host = parsed.hostname
-        port = parsed.port or 6379
-    else:
-        host = None
-        port = None
-
-    connectivity = _probe_redis_ping(
-        host,
-        port,
-        label="Redis Channel Layer",
-        password=getattr(settings, "REDIS_PASSWORD", ""),
+    return admin_runtime_helpers.probe_realtime_connection(
+        settings_obj=settings,
+        redis_probe=lambda host, port, label, password="": _probe_redis_ping(
+            host,
+            port,
+            label=label,
+            password=password,
+        ),
     )
-    return {
-        "enabled": True,
-        "available": connectivity["available"],
-        "status": connectivity["status"],
-        "label": connectivity["label"],
-        "message": connectivity["message"],
-    }
 
 
 def _probe_queue_broker_connection(queue_enabled: bool, queue_driver: str) -> dict[str, Any]:
-    normalized_driver = str(queue_driver or "").strip().lower()
-    broker_url = str(getattr(settings, "CELERY_BROKER_URL", "") or "").strip()
-    if not queue_enabled or normalized_driver != "redis":
-        return {
-            "enabled": False,
-            "available": None,
-            "status": "disabled",
-            "label": "未启用",
-            "message": "当前未启用 Redis 队列 broker。",
-        }
-
-    if not broker_url:
-        return {
-            "enabled": True,
-            "available": False,
-            "status": "misconfigured",
-            "label": "配置缺失",
-            "message": "队列已启用，但 CELERY_BROKER_URL 为空。",
-        }
-
-    parsed = urlparse(broker_url)
-    if "redis" not in (parsed.scheme or "").lower():
-        return {
-            "enabled": True,
-            "available": False,
-            "status": "misconfigured",
-            "label": "驱动不匹配",
-            "message": "队列驱动为 Redis，但 broker URL 不是 Redis 协议。",
-        }
-
-    if not parsed.hostname:
-        return {
-            "enabled": True,
-            "available": False,
-            "status": "misconfigured",
-            "label": "配置缺失",
-            "message": "Redis broker 缺少主机配置。",
-        }
-
-    connectivity = _probe_redis_ping(
-        parsed.hostname,
-        parsed.port or 6379,
-        label="Redis broker",
-        password=parsed.password or getattr(settings, "REDIS_PASSWORD", ""),
+    return admin_runtime_helpers.probe_queue_broker_connection(
+        settings_obj=settings,
+        queue_enabled=queue_enabled,
+        queue_driver=queue_driver,
+        redis_probe=lambda host, port, label, password="": _probe_redis_ping(
+            host,
+            port,
+            label=label,
+            password=password,
+        ),
     )
-    return {
-        "enabled": True,
-        "available": connectivity["available"],
-        "status": connectivity["status"],
-        "label": connectivity["label"],
-        "message": connectivity["message"],
-    }
 
 
 def build_auth_secret_risks() -> list[dict[str, Any]]:

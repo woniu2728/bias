@@ -6,6 +6,7 @@ from apps.core.extensions.runtime_core import (
     get_extension_host_service,
     require_extension_host_service,
     runtime_service_method,
+    runtime_service_value,
 )
 
 
@@ -18,24 +19,23 @@ def require_runtime_discussion_service():
 
 
 def get_runtime_discussion_model():
-    service = require_runtime_discussion_service()
-    model = service.get("model") if isinstance(service, dict) else getattr(service, "model", None)
-    if model is None:
-        raise RuntimeError("discussions.service 未提供讨论模型")
-    return model
+    return runtime_service_value(
+        require_runtime_discussion_service(),
+        "model",
+        required_message="discussions.service 未提供讨论模型",
+    )
 
 
 def get_runtime_discussion_state_model():
-    service = require_runtime_discussion_service()
-    model = service.get("state_model") if isinstance(service, dict) else getattr(service, "state_model", None)
-    if model is None:
-        raise RuntimeError("discussions.service 未提供讨论状态模型")
-    return model
+    return runtime_service_value(
+        require_runtime_discussion_service(),
+        "state_model",
+        required_message="discussions.service 未提供讨论状态模型",
+    )
 
 
 def get_runtime_discussion_approval_approved() -> str:
-    service = require_runtime_discussion_service()
-    value = service.get("approval_approved") if isinstance(service, dict) else getattr(service, "approval_approved", "")
+    value = runtime_service_value(require_runtime_discussion_service(), "approval_approved", "")
     if not value:
         raise RuntimeError("discussions.service 未提供已审核状态常量")
     return str(value)

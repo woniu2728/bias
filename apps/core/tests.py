@@ -2529,6 +2529,23 @@ class ExtensionManifestLoaderTests(TestCase):
         self.assertFalse(Setting.objects.filter(key=RUNTIME_REBUILD_MARKER_KEY).exists())
         rebuild_runtime.assert_called_once_with()
 
+    def test_extension_runtime_invalidation_middleware_uses_short_version_cache(self):
+        from apps.core.extensions.lifecycle import mark_extension_runtime_version_seen, reset_extension_runtime_version_seen
+        from apps.core.middleware import ExtensionRuntimeInvalidationMiddleware
+
+        reset_extension_runtime_version_seen()
+        mark_extension_runtime_version_seen("stable-version")
+
+        request = RequestFactory().get("/api/forum")
+        middleware = ExtensionRuntimeInvalidationMiddleware(lambda current_request: HttpResponse("ok"))
+        with patch("apps.core.extensions.lifecycle.get_extension_runtime_version", return_value="stable-version") as get_version:
+            first = middleware(request)
+            second = middleware(request)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        get_version.assert_called_once_with()
+
     def test_maintenance_mode_exemption_skips_jwt_resolution_without_token(self):
         from apps.core.middleware import MaintenanceModeMiddleware
 
@@ -7787,6 +7804,21 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(sample_extension["admin_actions"][0]["key"], "details")
         self.assertTrue(any(action["key"] == "documentation" for action in sample_extension["admin_actions"]))
         self.assertTrue(any(action["action"] == "hook:run_rebuild_cache" for action in sample_extension["runtime_actions"]))
+
+    @patch("apps.core.admin_content_api.inspect_extension_frontend_output_manifest")
+    def test_extensions_api_reuses_frontend_output_manifest_snapshot(self, inspect_manifest):
+        inspect_manifest.return_value = {
+            "extensions": {},
+        }
+
+        response = self.client.get(
+            "/api/admin/extensions",
+            **self.auth_header(),
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertGreater(len(response.json()["extensions"]), 1)
+        inspect_manifest.assert_called_once()
 
     def test_extensions_sync_api_prunes_missing_installations_and_returns_package_lock(self):
         ExtensionInstallation.objects.create(
@@ -14029,6 +14061,39 @@ class AdminSettingsApiTests(TestCase):
         self.assertIn(">官网</a>", html)
         self.assertIn('target="_blank"', html)
 
+
+class SecretValidationTests(TestCase):
+    def test_placeholder_runtime_secrets_are_detected_consistently(self):
+        from apps.core.secret_validation import build_auth_secret_risks, looks_like_placeholder_secret
+
+        self.assertTrue(looks_like_placeholder_secret(""))
+        self.assertTrue(looks_like_placeholder_secret("replace-with-django-secret-key"))
+        self.assertTrue(looks_like_placeholder_secret("bias-dev-secret-key-change-this-32bytes-min"))
+
+        risks = build_auth_secret_risks(
+            secret_key="replace-with-django-secret-key",
+            jwt_algorithm="HS256",
+            jwt_signing_key="short-jwt-secret",
+        )
+        risk_codes = {item["code"] for item in risks}
+
+        self.assertIn("django-secret-placeholder", risk_codes)
+        self.assertIn("jwt-secret-too-short", risk_codes)
+
+    def test_non_hmac_jwt_algorithm_does_not_apply_hs_length_rule(self):
+        from apps.core.secret_validation import build_auth_secret_risks, jwt_key_length_requirement
+
+        self.assertEqual(jwt_key_length_requirement("RS256"), 0)
+
+        risks = build_auth_secret_risks(
+            secret_key="production-django-secret-key-1234567890",
+            jwt_algorithm="RS256",
+            jwt_signing_key="short",
+        )
+
+        self.assertEqual(risks, [])
+
+
 class AdminDashboardStatsApiTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(
@@ -14186,6 +14251,23 @@ class AdminDashboardStatsApiTests(TestCase):
         self.assertIn("locmem-cache-production", risk_codes)
         self.assertIn("realtime-inmemory-production", risk_codes)
         self.assertIn("queue-worker-unavailable", risk_codes)
+
+    @override_settings(
+        WEB_CONCURRENCY=2,
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "dashboard-test"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
+        CELERY_BROKER_URL="memory://",
+        SECRET_KEY="dashboard-secret-key-12345678901234567890",
+        NINJA_JWT={"ALGORITHM": "HS256", "SIGNING_KEY": "dashboard-jwt-secret-key-123456789012345"},
+    )
+    def test_admin_stats_reports_multiprocess_inmemory_risks(self):
+        response = self.client.get("/api/admin/stats", **self.auth_header())
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        risk_codes = {item["code"] for item in payload["runtimeRisks"]}
+        self.assertIn("locmem-cache-multiprocess", risk_codes)
+        self.assertIn("realtime-inmemory-multiprocess", risk_codes)
 
     @override_settings(
         CACHES={"default": {"BACKEND": "django_redis.cache.RedisCache", "LOCATION": "redis://localhost:6379/0"}},
@@ -14856,6 +14938,73 @@ class SettingsServiceFallbackTests(TestCase):
         self.assertEqual(second["maintenance_mode_key"], "none")
         get_defaults.assert_called_once_with("advanced")
 
+    def test_advanced_settings_use_short_process_cache_before_backend_cache(self):
+        with patch("apps.core.settings_service.get_extension_setting_group_defaults", return_value={}):
+            first = get_advanced_settings()
+            with patch("apps.core.settings_service._cache_get", side_effect=AssertionError("backend cache hit")):
+                second = get_advanced_settings()
+
+        self.assertEqual(first["maintenance_mode_key"], "none")
+        self.assertEqual(second["maintenance_mode_key"], "none")
+
+    def test_clear_runtime_setting_caches_clears_advanced_settings_process_cache(self):
+        with patch("apps.core.settings_service.get_extension_setting_group_defaults", return_value={}) as get_defaults:
+            get_advanced_settings()
+
+        clear_runtime_setting_caches()
+
+        with patch("apps.core.settings_service.get_extension_setting_group_defaults", return_value={}) as get_defaults_after_clear:
+            get_advanced_settings()
+
+        get_defaults.assert_called_once_with("advanced")
+        get_defaults_after_clear.assert_called_once_with("advanced")
+
+    @override_settings(CELERY_BROKER_URL="redis://:secret-password@localhost:6379/1")
+    def test_advanced_settings_cache_key_does_not_expose_broker_secret(self):
+        from apps.core.settings_service import _advanced_settings_cache_key
+
+        first_key = _advanced_settings_cache_key()
+
+        with override_settings(CELERY_BROKER_URL="redis://:other-password@localhost:6379/1"):
+            second_key = _advanced_settings_cache_key()
+
+        self.assertNotIn("secret-password", first_key)
+        self.assertNotIn("other-password", second_key)
+        self.assertNotEqual(first_key, second_key)
+
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
+    def test_advanced_settings_do_not_enable_queue_by_default_in_tests(self):
+        clear_runtime_setting_caches()
+
+        settings_data = get_advanced_settings()
+
+        self.assertEqual(settings_data["queue_driver"], "redis")
+        self.assertFalse(settings_data["queue_enabled"])
+
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
+    def test_advanced_settings_enable_queue_by_default_for_redis_runtime(self):
+        clear_runtime_setting_caches()
+
+        with patch("apps.core.settings_service._is_test_process", return_value=False):
+            settings_data = get_advanced_settings()
+
+        self.assertEqual(settings_data["queue_driver"], "redis")
+        self.assertTrue(settings_data["queue_enabled"])
+
+    @override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")
+    def test_saved_queue_disabled_setting_overrides_redis_runtime_default(self):
+        Setting.objects.update_or_create(
+            key="advanced.queue_enabled",
+            defaults={"value": json.dumps(False)},
+        )
+        clear_runtime_setting_caches()
+
+        with patch("apps.core.settings_service._is_test_process", return_value=False):
+            settings_data = get_advanced_settings()
+
+        self.assertEqual(settings_data["queue_driver"], "redis")
+        self.assertFalse(settings_data["queue_enabled"])
+
 
 class EnsureAdminCommandTests(TestCase):
     def test_ensure_admin_command_creates_admin_user_and_group_membership(self):
@@ -15080,6 +15229,24 @@ class ProductionRuntimeCheckTests(TestCase):
         self.assertIn("bias.redis-disabled-production", message_ids)
         self.assertIn("bias.frontend-url-missing-production", message_ids)
         self.assertIn("bias.email-backend-development-production", message_ids)
+
+    @override_settings(
+        DEBUG=False,
+        WEB_CONCURRENCY=2,
+        DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
+        CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "LOCATION": "runtime-check-test"}},
+        CHANNEL_LAYERS={"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}},
+        SECRET_KEY="runtime-secret-key-12345678901234567890",
+        NINJA_JWT={"ALGORITHM": "HS256", "SIGNING_KEY": "runtime-jwt-secret-key-123456789012345"},
+    )
+    @patch.object(settings.BOOTSTRAP, "installed", True)
+    @patch("apps.core.runtime_checks._is_test_process", return_value=False)
+    def test_production_runtime_checks_warn_about_multiprocess_inmemory_backends(self, _is_test_process):
+        messages = run_checks(tags=["bias_runtime"])
+        message_ids = {message.id for message in messages}
+
+        self.assertIn("bias.locmem-cache-multiprocess", message_ids)
+        self.assertIn("bias.realtime-inmemory-multiprocess", message_ids)
 
     @override_settings(DEBUG=False)
     @patch.object(settings.BOOTSTRAP, "installed", True)

@@ -13,6 +13,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 BOOTSTRAP = load_site_bootstrap(BASE_DIR)
 
 
+def env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)) or default)
+    except (TypeError, ValueError):
+        return default
+
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = BOOTSTRAP.secret_key
 
@@ -97,6 +104,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 ASGI_APPLICATION = 'config.asgi.application'
 TEST_RUNNER = 'apps.core.test_runner.BiasDiscoverRunner'
+WEB_CONCURRENCY = max(1, env_int("WEB_CONCURRENCY", 1))
 
 # Database
 DB_MODE = BOOTSTRAP.database_mode.strip().lower()
@@ -206,7 +214,7 @@ SECURE_SSL_REDIRECT = (
     .lower()
     in {"1", "true", "yes", "on"}
 )
-SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "31536000" if (not DEBUG and BOOTSTRAP.site_scheme == "https") else "0"))
+SECURE_HSTS_SECONDS = env_int("SECURE_HSTS_SECONDS", 31536000 if (not DEBUG and BOOTSTRAP.site_scheme == "https") else 0)
 SECURE_HSTS_INCLUDE_SUBDOMAINS = (
     os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "1" if SECURE_HSTS_SECONDS else "0")
     .strip()

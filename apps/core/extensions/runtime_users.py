@@ -7,6 +7,7 @@ from apps.core.extensions.runtime_core import (
     get_runtime_resource_registry,
     require_extension_host_service,
     runtime_service_method,
+    runtime_service_value,
 )
 
 
@@ -76,27 +77,27 @@ def verify_runtime_user_password(user: Any, password: str, *, default_checker: A
 
 
 def get_runtime_user_model():
-    service = require_runtime_user_service()
-    model = service.get("model") if isinstance(service, dict) else getattr(service, "model", None)
-    if model is None:
-        raise RuntimeError("users.service 未提供用户模型")
-    return model
+    return runtime_service_value(
+        require_runtime_user_service(),
+        "model",
+        required_message="users.service 未提供用户模型",
+    )
 
 
 def get_runtime_group_model():
-    service = require_runtime_user_service()
-    model = service.get("group_model") if isinstance(service, dict) else getattr(service, "group_model", None)
-    if model is None:
-        raise RuntimeError("users.service 未提供用户组模型")
-    return model
+    return runtime_service_value(
+        require_runtime_user_service(),
+        "group_model",
+        required_message="users.service 未提供用户组模型",
+    )
 
 
 def get_runtime_permission_model():
-    service = require_runtime_user_service()
-    model = service.get("permission_model") if isinstance(service, dict) else getattr(service, "permission_model", None)
-    if model is None:
-        raise RuntimeError("users.service 未提供权限模型")
-    return model
+    return runtime_service_value(
+        require_runtime_user_service(),
+        "permission_model",
+        required_message="users.service 未提供权限模型",
+    )
 
 
 def resolve_runtime_user_by_username(username: str):

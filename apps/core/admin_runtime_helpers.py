@@ -1,12 +1,38 @@
 from typing import Any
 from urllib.parse import urlparse
 
+from django.conf import settings
 
-MIN_HS256_KEY_LENGTH = 32
-KNOWN_PLACEHOLDER_SECRETS = {
-    "django-insecure-change-this-in-production",
-    "jwt-secret-key-change-this",
-}
+from apps.core import secret_validation
+
+
+def normalize_secret_value(value: Any) -> str:
+    return secret_validation.normalize_secret_value(value)
+
+
+def looks_like_placeholder_secret(value: Any) -> bool:
+    return secret_validation.looks_like_placeholder_secret(value)
+
+
+def jwt_key_length_requirement(algorithm: str) -> int:
+    return secret_validation.jwt_key_length_requirement(algorithm)
+
+
+def build_auth_secret_risks(
+    *,
+    secret_key: str,
+    jwt_algorithm: str,
+    jwt_signing_key: str,
+) -> list[dict[str, Any]]:
+    return secret_validation.build_auth_secret_risks(
+        secret_key=secret_key,
+        jwt_algorithm=jwt_algorithm,
+        jwt_signing_key=jwt_signing_key,
+    )
+
+
+def build_auth_secret_status(*, risks: list[dict[str, Any]]) -> dict[str, Any]:
+    return secret_validation.build_auth_secret_status(risks=risks)
 
 
 def probe_cache_connection(*, settings_obj, cache_backend) -> dict[str, Any]:
@@ -149,84 +175,6 @@ def probe_queue_broker_connection(
     }
 
 
-def normalize_secret_value(value: Any) -> str:
-    return str(value or "").strip()
-
-
-def looks_like_placeholder_secret(value: str) -> bool:
-    normalized = value.lower()
-    return (
-        normalized in KNOWN_PLACEHOLDER_SECRETS
-        or "change-this" in normalized
-        or normalized.startswith("replace-with")
-    )
-
-
-def jwt_key_length_requirement(algorithm: str) -> int:
-    normalized = str(algorithm or "").strip().upper()
-    if normalized.startswith("HS"):
-        return MIN_HS256_KEY_LENGTH
-    return 0
-
-
-def build_auth_secret_risks(
-    *,
-    secret_key: str,
-    jwt_algorithm: str,
-    jwt_signing_key: str,
-) -> list[dict[str, Any]]:
-    risks: list[dict[str, Any]] = []
-    jwt_required_length = jwt_key_length_requirement(jwt_algorithm)
-
-    if looks_like_placeholder_secret(secret_key):
-        risks.append(
-            {
-                "code": "django-secret-placeholder",
-                "level": "danger",
-                "title": "Django SECRET_KEY 仍为默认占位值",
-                "message": "当前 SECRET_KEY 仍带有开发占位标记，生产环境必须替换为独立高强度密钥。",
-            }
-        )
-
-    if looks_like_placeholder_secret(jwt_signing_key):
-        risks.append(
-            {
-                "code": "jwt-secret-placeholder",
-                "level": "danger",
-                "title": "JWT 签名密钥仍为默认占位值",
-                "message": "当前 JWT 签名密钥仍带有开发占位标记，生产环境必须替换为独立高强度密钥。",
-            }
-        )
-
-    if jwt_required_length and len(jwt_signing_key) < jwt_required_length:
-        risks.append(
-            {
-                "code": "jwt-secret-too-short",
-                "level": "danger",
-                "title": "JWT 签名密钥长度不足",
-                "message": f"当前 {jwt_algorithm or 'JWT'} 签名密钥长度小于 {jwt_required_length} 字节，存在被弱密钥攻击的风险。",
-            }
-        )
-
-    return risks
-
-
-def build_auth_secret_status(*, risks: list[dict[str, Any]]) -> dict[str, Any]:
-    if risks:
-        highest_level = "danger" if any(item.get("level") == "danger" for item in risks) else "warning"
-        return {
-            "status": highest_level,
-            "label": "存在风险",
-            "message": "；".join(item.get("title") or "" for item in risks if item.get("title")),
-        }
-
-    return {
-        "status": "healthy",
-        "label": "健康",
-        "message": "Django 与 JWT 密钥未发现默认占位值或长度不足问题。",
-    }
-
-
 def build_runtime_risks(
     *,
     debug_mode: bool,
@@ -247,6 +195,7 @@ def build_runtime_risks(
     normalized_cache_driver = str(cache_driver or "").lower()
     normalized_realtime_driver = str(realtime_driver or "").lower()
     normalized_queue_driver = str(queue_driver or "").lower()
+    web_concurrency = max(1, int(getattr(settings, "WEB_CONCURRENCY", 1) or 1))
 
     if debug_mode:
         risks.append(
@@ -346,6 +295,26 @@ def build_runtime_risks(
                 "level": "warning",
                 "title": "缓存驱动不是共享缓存",
                 "message": "当前缓存驱动缺少跨实例共享能力，生产环境下容易出现配置和统计状态不一致。",
+            }
+        )
+
+    if web_concurrency > 1 and "内存" in normalized_cache_driver:
+        risks.append(
+            {
+                "code": "locmem-cache-multiprocess",
+                "level": "warning",
+                "title": "多进程下使用本地内存缓存",
+                "message": f"当前 WEB_CONCURRENCY={web_concurrency}，LocMemCache 会在不同 worker 间割裂，运行时状态、限流和公共设置缓存可能不一致。",
+            }
+        )
+
+    if web_concurrency > 1 and normalized_realtime_driver == "in-memory":
+        risks.append(
+            {
+                "code": "realtime-inmemory-multiprocess",
+                "level": "warning",
+                "title": "多进程下使用内存实时通道",
+                "message": f"当前 WEB_CONCURRENCY={web_concurrency}，In-memory Channel Layer 无法跨 worker 广播实时事件，应切换到 Redis Channel Layer。",
             }
         )
 
