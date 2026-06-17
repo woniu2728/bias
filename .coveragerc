@@ -1,5 +1,5 @@
 [run]
-source = apps,config,extensions
+source = apps,config
 omit =
     */migrations/*
     */tests/*
