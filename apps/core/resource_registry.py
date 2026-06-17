@@ -76,11 +76,13 @@ class ResourceRegistry:
         from apps.core.registry.search_bridge import SearchBridge
         from apps.core.registry.definition_mutator import DefinitionMutator
         from apps.core.registry.endpoint_context import EndpointContextResolver
+        from apps.core.registry.jsonapi_serializer import JsonApiSerializer
 
         self._preload_planner: PreloadPlanner = PreloadPlanner(self)
         self._search_bridge: SearchBridge = SearchBridge(self)
         self._definition_mutator: DefinitionMutator = DefinitionMutator(self)
         self._endpoint_context: EndpointContextResolver = EndpointContextResolver(self)
+        self._jsonapi_serializer: JsonApiSerializer = JsonApiSerializer(self)
 
     def _get_enabled_module_ids(self) -> set[str] | None:
         if self._enabled_module_ids_cache is not _NOT_CACHED:
@@ -1279,38 +1281,7 @@ class ResourceRegistry:
         only: Tuple[str, ...] | List[str] | None = None,
         include: Tuple[str, ...] | List[str] | None = None,
     ) -> dict:
-        resolved_context = context or {}
-        payload = {}
-
-        resource_definition = self.get_resource(resource)
-        if resource_definition:
-            payload.update(resource_definition.resolver(instance, resolved_context) or {})
-
-        selected_fields = set(only or [])
-        for definition in self.get_effective_fields(resource, resolved_context):
-            if selected_fields and definition.field not in selected_fields:
-                continue
-            if not self._is_field_visible(definition, instance, resolved_context):
-                continue
-            payload[definition.field] = definition.resolver(instance, resolved_context)
-
-        payload = self.apply_payload_field_mutators(resource, payload, resolved_context)
-
-        include_set = set(include or [])
-        if include_set:
-            for definition in self.get_effective_relationships(resource, resolved_context):
-                if definition.relationship not in include_set:
-                    continue
-                if not self._is_relationship_visible(definition, instance, resolved_context):
-                    continue
-                if not self._is_relationship_includable(definition, resolved_context):
-                    continue
-                payload[definition.relationship] = self._serialize_plain_relationship(
-                    definition,
-                    definition.resolver(instance, resolved_context),
-                    resolved_context,
-                )
-        return payload
+        return self._jsonapi_serializer.serialize(resource, instance, context, only=only, include=include)
 
     def _serialize_plain_relationship(
         self,
@@ -1318,13 +1289,7 @@ class ResourceRegistry:
         value: Any,
         context: dict,
     ):
-        if definition.many:
-            return [
-                self._serialize_plain_related_item(definition, item, context)
-                for item in ResourceSerializer.relationship_values(value, many=True)
-                if item is not None
-            ]
-        return self._serialize_plain_related_item(definition, value, context)
+        return self._jsonapi_serializer._serialize_plain_relationship(definition, value, context)
 
     def _serialize_plain_related_item(
         self,
@@ -1332,14 +1297,7 @@ class ResourceRegistry:
         value: Any,
         context: dict,
     ):
-        if value is None or isinstance(value, (str, int, float, bool)):
-            return value
-        if isinstance(value, dict):
-            return value
-        resource_type = ResourceSerializer(self, context).related_resource_type(definition, value, ensure_resource_context(context))
-        if not resource_type or self.get_resource(resource_type) is None:
-            return value
-        return self.serialize(resource_type, value, context)
+        return self._jsonapi_serializer._serialize_plain_related_item(definition, value, context)
 
     def serialize_jsonapi_document(
         self,
@@ -1351,8 +1309,7 @@ class ResourceRegistry:
         include: Tuple[str, ...] | List[str] | None = None,
         many: bool = False,
     ) -> dict:
-        serializer = ResourceSerializer(self, context)
-        return serializer.document(resource, data, only=only, include=include, many=many)
+        return self._jsonapi_serializer.serialize_jsonapi_document(resource, data, context, only=only, include=include, many=many)
 
     def serialize_jsonapi_resource(
         self,
@@ -1365,15 +1322,8 @@ class ResourceRegistry:
         included: dict[tuple[str, str], tuple[tuple[str, str], dict]] | None = None,
         deferred: list[Callable[[], None]] | None = None,
     ) -> dict:
-        return self._serialize_jsonapi_resource_internal(
-            resource,
-            instance,
-            context,
-            only=only,
-            include_tree=include_tree,
-            included=included,
-            deferred=deferred,
-        )
+        return self._jsonapi_serializer.serialize_jsonapi_resource(resource, instance, context, only=only,
+                                                                     include_tree=include_tree, included=included, deferred=deferred)
 
     def _serialize_jsonapi_resource_internal(
         self,
@@ -1386,37 +1336,11 @@ class ResourceRegistry:
         included: dict[tuple[str, str], tuple[tuple[str, str], dict]] | None = None,
         deferred: list[Callable[[], None]] | None = None,
     ) -> dict:
-        serializer = ResourceSerializer(self, context)
-        if included is not None:
-            serializer.included = included
-        if deferred is not None:
-            serializer.deferred = deferred
-        return serializer._build_resource(resource, instance, only=only, include_tree=include_tree or {})
+        return self._jsonapi_serializer._serialize_jsonapi_resource_internal(resource, instance, context, only=only,
+                                                                               include_tree=include_tree, included=included, deferred=deferred)
 
     def apply_payload_field_mutators(self, resource: str, payload: dict, context: dict | None = None) -> dict:
-        output = dict(payload or {})
-        resolved_context = dict(context or {})
-        for definition in self.get_field_mutators(resource):
-            if not self._is_applicable(definition.condition, resolved_context):
-                continue
-            operation = str(definition.operation or "mutate").strip().lower()
-            if operation == "add":
-                try:
-                    mutated = definition.mutator(output.get(definition.field))
-                except (AttributeError, TypeError):
-                    continue
-                if not self._is_resource_definition_mutation(mutated):
-                    output[definition.field] = mutated
-            elif operation == "remove":
-                output.pop(definition.field, None)
-            elif operation == "mutate" and definition.field in output:
-                try:
-                    mutated = definition.mutator(output[definition.field])
-                except (AttributeError, TypeError):
-                    continue
-                if not self._is_resource_definition_mutation(mutated):
-                    output[definition.field] = mutated
-        return output
+        return self._jsonapi_serializer.apply_payload_field_mutators(resource, payload, context)
 
     @staticmethod
     def _build_include_tree(include: Tuple[str, ...] | List[str]) -> dict[str, dict]:
