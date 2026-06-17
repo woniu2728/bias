@@ -1,60 +1,16 @@
 import logging
 
 from ninja import Body, Router
-from pathlib import Path
 
 from apps.core.api_errors import api_error
 from apps.core.admin_auth import require_staff
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
-from apps.core.extensions.bootstrap import get_extension_host
 from apps.core.extensions.registry import get_extension_registry
-from apps.core.extensions.validation import (
-    inspect_backend_entry,
-    inspect_frontend_admin_entry,
-    inspect_frontend_forum_entry,
-    resolve_admin_surface_implementation,
-    validate_extension_manifests_with_available_ids,
-)
-from apps.core.extension_diagnostics import (
-    classify_extension_diagnostics,
-    summarize_extension_delivery,
-    summarize_extension_diagnostics,
-)
 from apps.core.extension_service import ExtensionService
 from apps.core.extension_settings_service import get_extension_settings, serialize_extension_settings_schema, save_extension_settings
-from apps.core.extension_django_apps import normalize_extension_django_app_label
-from apps.core.extensions.product import get_extension_protected_reason, is_extension_protected, is_product_visible_extension
-from apps.core.extensions.runtime_probe import inspect_extension_runtime
-from apps.core.extensions.frontend_runtime_service import build_frontend_document_payload
 from apps.core.extensions.frontend_compiler import inspect_extension_frontend_output_manifest
-from apps.core.extensions.admin_assets import (
-    serialize_extension_frontend_asset_state,
-    serialize_extension_frontend_asset_state_for_extension,
-)
-from apps.core.extensions.admin_actions import (
-    build_default_extension_admin_actions,
-    serialize_extension_admin_actions,
-)
-from apps.core.extension_validation_context import resolve_available_extension_ids_for_validation
-from apps.core.extensions.admin_manifest import (
-    build_extension_author_names as _build_extension_author_names,
-    build_extension_links as _build_extension_links,
-    build_extension_readme as _build_extension_readme,
-    manifest_attr as _manifest_attr,
-    manifest_nested_attr as _manifest_nested_attr,
-    manifest_nested_value as _manifest_nested_value,
-    manifest_sequence as _manifest_sequence,
-)
-from apps.core.extensions.recovery import (
-    get_extension_bisect_state,
-    get_extension_safe_mode_extension_ids,
-    is_extension_safe_mode_enabled,
-    serialize_extension_recovery_state,
-)
 from apps.core.audit import log_admin_action
 from apps.core.jwt_auth import AccessTokenAuth
-from apps.core.forum_registry import get_forum_registry
-from apps.core.extensions.runtime import get_runtime_resource_registry
 from apps.core.admin_extension_detail import (
     _serialize_admin_extension,
     _serialize_admin_extension_action_payload,

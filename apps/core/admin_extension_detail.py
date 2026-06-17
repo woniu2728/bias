@@ -1,10 +1,6 @@
 import logging
-
-from ninja import Body, Router
 from pathlib import Path
 
-from apps.core.api_errors import api_error
-from apps.core.admin_auth import require_staff
 from apps.core.extensions.exceptions import ExtensionNotFoundError, ExtensionStateError
 from apps.core.extensions.bootstrap import get_extension_host
 from apps.core.extensions.registry import get_extension_registry
@@ -51,8 +47,6 @@ from apps.core.extensions.recovery import (
     is_extension_safe_mode_enabled,
     serialize_extension_recovery_state,
 )
-from apps.core.audit import log_admin_action
-from apps.core.jwt_auth import AccessTokenAuth
 from apps.core.forum_registry import get_forum_registry
 from apps.core.extensions.runtime import get_runtime_resource_registry
 
