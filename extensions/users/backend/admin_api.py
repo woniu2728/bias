@@ -326,6 +326,10 @@ def update_admin_user(request, user_id: int, payload: dict = Body(...)):
     if user.id == request.auth.id and "is_staff" in payload and not payload.get("is_staff"):
         return api_error("不能取消自己的管理员权限", status=400)
 
+    if user.is_staff and "is_staff" in payload and not payload.get("is_staff"):
+        if not User.objects.filter(is_staff=True).exclude(id=user.id).exists():
+            return api_error("不能移除最后一位超级管理员", status=400)
+
     username = payload.get("username")
     if username and username != user.username:
         if User.objects.filter(username=username).exclude(id=user.id).exists():

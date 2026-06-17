@@ -390,8 +390,16 @@ class UserService:
             token=token,
         )
 
-        if not email_sent and not settings.DEBUG:
-            raise ValueError("重置密码邮件发送失败")
+        if not email_sent:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "密码重置邮件发送失败: email=%s, username=%s",
+                user.email,
+                user.display_name or user.username,
+            )
+            if not settings.DEBUG:
+                raise ValueError("重置密码邮件发送失败，请联系管理员。")
 
         return password_token
 
