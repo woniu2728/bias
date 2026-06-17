@@ -23,21 +23,32 @@ POLICIES = {
 }
 
 
-def check_auth_rate_limit(action: str, request, identifier: str = "") -> None:
-    policy = POLICIES[action]
-    for key in _rate_limit_keys(action, request, identifier):
-        if int(cache.get(key) or 0) >= policy.limit:
-            raise AuthRateLimitExceeded("请求过于频繁，请稍后再试")
+def check_and_record_rate_limit(action: str, request, identifier: str = "") -> None:
+    """原子化检查并记录限流（消除 check/record 之间的 TOCTOU 窗口）。
 
-
-def record_auth_rate_limit_failure(action: str, request, identifier: str = "") -> None:
+    使用 cache.incr 的原子性，将检查与记录合并为一步。
+    每次调用都会递增计数器，若超过限制则抛出异常。
+    等同于旧版 check_auth_rate_limit + record_auth_rate_limit_failure 的组合。
+    """
     policy = POLICIES[action]
     for key in _rate_limit_keys(action, request, identifier):
         try:
-            cache.add(key, 0, timeout=policy.window_seconds)
-            cache.incr(key)
+            current = cache.incr(key)
         except ValueError:
-            cache.set(key, 1, timeout=policy.window_seconds)
+            # key 不存在，首次创建
+            cache.add(key, 1, timeout=policy.window_seconds)
+            current = 1
+        if current > policy.limit:
+            raise AuthRateLimitExceeded("请求过于频繁，请稍后再试")
+
+
+# 向后兼容别名
+def check_auth_rate_limit(action: str, request, identifier: str = "") -> None:
+    check_and_record_rate_limit(action, request, identifier)
+
+
+def record_auth_rate_limit_failure(action: str, request, identifier: str = "") -> None:
+    check_and_record_rate_limit(action, request, identifier)
 
 
 def clear_auth_rate_limit(action: str, request, identifier: str = "", *, dimensions: str = "all") -> None:

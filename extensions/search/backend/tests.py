@@ -27,6 +27,7 @@ from apps.core.extensions.runtime import (
 from extensions.search.backend.services import SearchService
 from apps.core.extensions.runtime import (
     get_runtime_group_model,
+    get_runtime_permission_model,
     get_runtime_user_model,
 )
 
@@ -44,6 +45,7 @@ class RuntimeModelProxy:
 
 User = RuntimeModelProxy(get_runtime_user_model)
 Group = RuntimeModelProxy(get_runtime_group_model)
+Permission = RuntimeModelProxy(get_runtime_permission_model)
 
 
 class SearchIndexDefinitionTests(ExtensionRuntimeTestMixin, TestCase):
@@ -509,6 +511,7 @@ class SearchApiTests(ChineseSearchTests):
             is_email_confirmed=True,
         )
         restricted_group = Group.objects.create(name="NoUserSearch", color="#95a5a6")
+        Permission.objects.create(group=restricted_group, permission="viewForum")
         restricted_user.user_groups.add(restricted_group)
 
         response = self.client.get(

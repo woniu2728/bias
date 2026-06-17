@@ -99,7 +99,7 @@ class AdminExtensionsApiTests(TestCase):
         self.assertTrue(any(action["key"] == "documentation" for action in sample_extension["admin_actions"]))
         self.assertTrue(any(action["action"] == "hook:run_rebuild_cache" for action in sample_extension["runtime_actions"]))
 
-    @patch("apps.core.admin_extension_detail.inspect_extension_frontend_output_manifest")
+    @patch("apps.core.extension_detail.orchestrator.inspect_extension_frontend_output_manifest")
     def test_extensions_api_reuses_frontend_output_manifest_snapshot(self, inspect_manifest):
         inspect_manifest.return_value = {
             "extensions": {},
@@ -485,8 +485,8 @@ class AdminExtensionsApiTests(TestCase):
         self.assertEqual(theme_runtime["document_attributes"], [{"class": ["alpha-theme"]}])
         self.assertEqual(theme_runtime["head_tags"][0]["attributes"]["name"], "alpha-theme")
 
-    @patch("apps.core.admin_extension_detail.get_extension_settings", return_value={})
-    @patch("apps.core.admin_extension_detail.serialize_extension_settings_schema", return_value=[])
+    @patch("apps.core.extension_settings_service.get_extension_settings", return_value={})
+    @patch("apps.core.extension_settings_service.serialize_extension_settings_schema", return_value=[])
     @patch("apps.core.admin_content_api.get_extension_registry")
     def test_extension_detail_api_prefers_contract_runtime_surfaces(
         self,

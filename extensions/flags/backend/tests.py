@@ -54,6 +54,7 @@ class FlagsPermissionRegistryTests(TestCase):
         permissions = {
             "admin.flag.view",
             "admin.flag.resolve",
+            "admin.flag.delete",
         }
 
         self.assertEqual(set(get_registry_permission_codes_by_prefix("admin.flag.")), permissions)

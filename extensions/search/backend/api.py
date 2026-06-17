@@ -87,7 +87,11 @@ def search(
 
     query = q.strip()
     user = get_optional_user(request)
-    can_search_users = has_forum_permission(user, "searchUsers")
+
+    if user and user.is_authenticated and not has_forum_permission(user, "viewForum"):
+        return api_error("没有权限访问搜索", status=403)
+
+    can_search_users = user and has_forum_permission(user, "searchUsers")
     discussion_resource_options = parse_resource_query_options(request, "search_discussion")
     post_resource_options = parse_resource_query_options(request, "search_post")
     user_resource_options = parse_resource_query_options(request, "search_user")
@@ -249,6 +253,10 @@ def get_search_suggestions(request, q: str, limit: int = 5):
         return {"suggestions": []}
 
     user = get_optional_user(request)
+
+    if user and user.is_authenticated and not has_forum_permission(user, "viewForum"):
+        return api_error("没有权限访问搜索", status=403)
+
     suggestions = SearchService.get_search_suggestions(q.strip(), limit, user=user)
     return {"suggestions": suggestions}
 

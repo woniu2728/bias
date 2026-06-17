@@ -3,11 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from apps.core.extensions.runtime_core import (
+    RuntimeServiceProxy,
     get_extension_host_service,
     require_extension_host_service,
     runtime_service_method,
     runtime_service_value,
 )
+
+_post_service = RuntimeServiceProxy("posts.service")
 
 
 def get_runtime_post_service(default: Any = None):
@@ -19,11 +22,7 @@ def require_runtime_post_service():
 
 
 def get_runtime_post_model():
-    return runtime_service_value(
-        require_runtime_post_service(),
-        "model",
-        required_message="posts.service 未提供帖子模型",
-    )
+    return _post_service.value("model", required_message="posts.service 未提供帖子模型")
 
 
 def get_runtime_post_by_id(
@@ -35,11 +34,7 @@ def get_runtime_post_by_id(
     select_related: tuple[str, ...] = (),
 ):
     if require_visible and not select_related:
-        return runtime_service_method(require_runtime_post_service(), "get_by_id")(
-            post_id,
-            user,
-            preload=preload,
-        )
+        return _post_service.get_by_id(post_id, user, preload=preload)
     model = get_runtime_post_model()
     queryset = model.objects
     if select_related:
@@ -53,48 +48,40 @@ def get_runtime_post_by_id(
 
 
 def can_runtime_view_post(post: Any, user: Any = None) -> bool:
-    return bool(runtime_service_method(require_runtime_post_service(), "can_view")(post, user))
+    return bool(_post_service.can_view(post, user))
 
 
 def approve_runtime_post(post: Any, admin_user: Any, note: str = ""):
-    return runtime_service_method(require_runtime_post_service(), "approve")(
-        post,
-        admin_user,
-        note=note,
-    )
+    return _post_service.approve(post, admin_user, note=note)
 
 
 def reject_runtime_post(post: Any, admin_user: Any, note: str = ""):
-    return runtime_service_method(require_runtime_post_service(), "reject")(
-        post,
-        admin_user,
-        note=note,
-    )
+    return _post_service.reject(post, admin_user, note=note)
 
 
 def get_runtime_post_approval_approved() -> str:
-    value = runtime_service_value(require_runtime_post_service(), "approval_approved", "")
+    value = _post_service.value("approval_approved", "")
     if not value:
         raise RuntimeError("posts.service 未提供已审核状态常量")
     return str(value)
 
 
 def get_runtime_post_approval_pending() -> str:
-    value = runtime_service_value(require_runtime_post_service(), "approval_pending", "")
+    value = _post_service.value("approval_pending", "")
     if not value:
         raise RuntimeError("posts.service 未提供待审核状态常量")
     return str(value)
 
 
 def get_runtime_post_approval_rejected() -> str:
-    value = runtime_service_value(require_runtime_post_service(), "approval_rejected", "")
+    value = _post_service.value("approval_rejected", "")
     if not value:
         raise RuntimeError("posts.service 未提供已拒绝状态常量")
     return str(value)
 
 
 def create_runtime_post(*, discussion_id: int, content: str, user: Any, reply_to_post_id: int | None = None):
-    return runtime_service_method(require_runtime_post_service(), "create")(
+    return _post_service.create(
         discussion_id=discussion_id,
         content=content,
         user=user,
@@ -103,35 +90,31 @@ def create_runtime_post(*, discussion_id: int, content: str, user: Any, reply_to
 
 
 def update_runtime_post(post_id: int, user: Any, content: str):
-    return runtime_service_method(require_runtime_post_service(), "update")(
-        post_id,
-        user,
-        content,
-    )
+    return _post_service.update(post_id, user, content)
 
 
 def delete_runtime_post(post_id: int, user: Any) -> bool:
-    return bool(runtime_service_method(require_runtime_post_service(), "delete")(post_id, user))
+    return bool(_post_service.delete(post_id, user))
 
 
 def set_runtime_post_hidden_state(post: Any, user: Any, hidden: bool):
-    return runtime_service_method(require_runtime_post_service(), "set_hidden_state")(post, user, hidden)
+    return _post_service.set_hidden_state(post, user, hidden)
 
 
 def create_runtime_first_post(**kwargs):
-    return runtime_service_method(require_runtime_post_service(), "create_first_post")(**kwargs)
+    return _post_service.create_first_post(**kwargs)
 
 
 def get_runtime_first_post(discussion: Any):
-    return runtime_service_method(require_runtime_post_service(), "get_first_post")(discussion)
+    return _post_service.get_first_post(discussion)
 
 
 def resolve_runtime_post_content_html(post: Any) -> str:
-    return str(runtime_service_method(require_runtime_post_service(), "resolve_content_html")(post) or "")
+    return str(_post_service.resolve_content_html(post) or "")
 
 
 def update_runtime_first_post_content(discussion: Any, *, content: str, content_html: str, editor: Any):
-    return runtime_service_method(require_runtime_post_service(), "update_first_post_content")(
+    return _post_service.update_first_post_content(
         discussion,
         content=content,
         content_html=content_html,
@@ -140,11 +123,11 @@ def update_runtime_first_post_content(discussion: Any, *, content: str, content_
 
 
 def resubmit_runtime_first_post(discussion: Any):
-    return runtime_service_method(require_runtime_post_service(), "resubmit_first_post")(discussion)
+    return _post_service.resubmit_first_post(discussion)
 
 
 def approve_runtime_first_post(discussion: Any, *, approved_at: Any, approved_by: Any, note: str = ""):
-    return runtime_service_method(require_runtime_post_service(), "approve_first_post")(
+    return _post_service.approve_first_post(
         discussion,
         approved_at=approved_at,
         approved_by=approved_by,
@@ -153,7 +136,7 @@ def approve_runtime_first_post(discussion: Any, *, approved_at: Any, approved_by
 
 
 def reject_runtime_first_post(discussion: Any, *, rejected_at: Any, rejected_by: Any, note: str = ""):
-    return runtime_service_method(require_runtime_post_service(), "reject_first_post")(
+    return _post_service.reject_first_post(
         discussion,
         rejected_at=rejected_at,
         rejected_by=rejected_by,
@@ -166,13 +149,10 @@ def get_runtime_approved_reply_counts_by_author(
     *,
     user_counted_post_types,
 ) -> dict:
-    return dict(
-        runtime_service_method(require_runtime_post_service(), "approved_reply_counts_by_author")(
-            discussion,
-            user_counted_post_types=user_counted_post_types,
-        )
-        or {}
-    )
+    return dict(_post_service.approved_reply_counts_by_author(
+        discussion,
+        user_counted_post_types=user_counted_post_types,
+    ) or {})
 
 
 def get_runtime_approved_discussion_post_stats(
@@ -180,20 +160,14 @@ def get_runtime_approved_discussion_post_stats(
     *,
     discussion_counted_post_types,
 ) -> dict:
-    return dict(
-        runtime_service_method(require_runtime_post_service(), "approved_discussion_stats")(
-            discussion,
-            discussion_counted_post_types=discussion_counted_post_types,
-        )
-        or {}
-    )
+    return dict(_post_service.approved_discussion_stats(
+        discussion,
+        discussion_counted_post_types=discussion_counted_post_types,
+    ) or {})
 
 
 def delete_runtime_discussion_posts(discussion: Any) -> tuple[dict, ...]:
-    return tuple(
-        runtime_service_method(require_runtime_post_service(), "delete_discussion_posts")(discussion)
-        or ()
-    )
+    return tuple(_post_service.delete_discussion_posts(discussion) or ())
 
 
 def is_runtime_post_not_found(exc: Exception) -> bool:
@@ -204,28 +178,24 @@ def is_runtime_post_not_found(exc: Exception) -> bool:
 
 
 def serialize_runtime_post(post: Any, user: Any = None, **kwargs) -> dict:
-    return runtime_service_method(require_runtime_post_service(), "serialize")(post, user=user, **kwargs)
+    return _post_service.serialize(post, user=user, **kwargs)
 
 
 def serialize_runtime_post_by_id(post_id: int, user: Any = None, **kwargs) -> dict | None:
-    return runtime_service_method(require_runtime_post_service(), "serialize_by_id")(post_id, user=user, **kwargs)
+    return _post_service.serialize_by_id(post_id, user=user, **kwargs)
 
 
 def create_runtime_post_event(**kwargs):
-    return runtime_service_method(require_runtime_post_service(), "create_event_post")(**kwargs)
+    return _post_service.create_event_post(**kwargs)
 
 
 def get_runtime_post_reply_notification_context(reply_to_post_id: int, post_id: int, from_user: Any):
-    return runtime_service_method(require_runtime_post_service(), "reply_notification_context")(
-        reply_to_post_id,
-        post_id,
-        from_user,
-    )
+    return _post_service.reply_notification_context(reply_to_post_id, post_id, from_user)
 
 
 def get_runtime_post_notification_context(post_id: int):
-    return runtime_service_method(require_runtime_post_service(), "notification_context")(post_id)
+    return _post_service.notification_context(post_id)
 
 
 def get_runtime_post_number(post_id: int):
-    return runtime_service_method(require_runtime_post_service(), "get_number")(post_id)
+    return _post_service.get_number(post_id)

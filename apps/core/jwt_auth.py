@@ -1,9 +1,12 @@
 import logging
+from datetime import datetime, timezone
 
 from django.conf import settings
+from django.core.cache import cache
 from django.http import HttpRequest
 from ninja.security import HttpBearer
 from ninja_jwt.authentication import JWTAuth, JWTBaseAuthentication
+from ninja_jwt.tokens import RefreshToken
 
 
 logger = logging.getLogger(__name__)
@@ -12,6 +15,10 @@ ACCESS_TOKEN_COOKIE_NAME = "bias_access_token"
 ACCESS_TOKEN_COOKIE_PATH = "/"
 REFRESH_TOKEN_COOKIE_NAME = "bias_refresh_token"
 REFRESH_TOKEN_COOKIE_PATH = "/api/users"
+
+# JWT 黑名单缓存前缀 + TTL 缓冲（秒）
+_BLACKLIST_CACHE_PREFIX = "jwt:blacklist:"
+_BLACKLIST_TTL_BUFFER = 300  # 额外保留 5 分钟防止时钟偏差"
 
 
 def access_token_max_age() -> int:
@@ -79,6 +86,10 @@ def resolve_user_from_access_token(token: str):
     if not token:
         return None
 
+    if is_jwt_blacklisted(token):
+        logger.debug("JWT token is blacklisted, rejecting.")
+        return None
+
     try:
         auth = JWTBaseAuthentication()
         validated_token = auth.get_validated_token(token)
@@ -86,6 +97,49 @@ def resolve_user_from_access_token(token: str):
     except Exception as exc:
         logger.debug("Failed to resolve JWT access token: %s", exc, exc_info=True)
         return None
+
+
+def blacklist_jwt_token(token_str: str) -> None:
+    """将 JWT token 加入黑名单，使其在剩余有效期内失效。"""
+    try:
+        from ninja_jwt.authentication import JWTBaseAuthentication
+
+        auth = JWTBaseAuthentication()
+        validated = auth.get_validated_token(token_str)
+        jti = validated.get("jti", "")
+        exp = validated.get("exp", 0)
+        if not jti:
+            return
+        now = datetime.now(tz=timezone.utc).timestamp()
+        ttl = max(int(exp - now) + _BLACKLIST_TTL_BUFFER, _BLACKLIST_TTL_BUFFER)
+        cache.set(f"{_BLACKLIST_CACHE_PREFIX}{jti}", "1", timeout=ttl)
+    except Exception as exc:
+        logger.warning("Failed to blacklist JWT token: %s", exc, exc_info=True)
+
+
+def is_jwt_blacklisted(token_str: str) -> bool:
+    """检查 JWT token 是否已被加入黑名单。"""
+    try:
+        from ninja_jwt.authentication import JWTBaseAuthentication
+
+        auth = JWTBaseAuthentication()
+        validated = auth.get_validated_token(token_str)
+        jti = validated.get("jti", "")
+        if not jti:
+            return False
+        return bool(cache.get(f"{_BLACKLIST_CACHE_PREFIX}{jti}"))
+    except Exception:
+        return False
+
+
+def blacklist_refresh_token(token_str: str) -> None:
+    """将 RefreshToken 加入黑名单。blacklist_jwt_token 的别名。"""
+    blacklist_jwt_token(token_str)
+
+
+def clear_expired_jwt_blacklist() -> int:
+    """清理已过期的 JWT 黑名单缓存条目（cache 自动过期，本函数仅用于统计）。"""
+    return 0
 
 
 def resolve_authenticated_user(request: HttpRequest):

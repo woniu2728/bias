@@ -326,8 +326,8 @@ def update_admin_user(request, user_id: int, payload: dict = Body(...)):
     if user.id == request.auth.id and "is_staff" in payload and not payload.get("is_staff"):
         return api_error("不能取消自己的管理员权限", status=400)
 
-    if user.is_staff and "is_staff" in payload and not payload.get("is_staff"):
-        if not User.objects.filter(is_staff=True).exclude(id=user.id).exists():
+    if user.is_superuser and "is_superuser" in payload and not payload.get("is_superuser"):
+        if not User.objects.filter(is_superuser=True).exclude(id=user.id).exists():
             return api_error("不能移除最后一位超级管理员", status=400)
 
     username = payload.get("username")
@@ -428,8 +428,8 @@ def delete_admin_user(request, user_id: int):
     if user.id == request.auth.id:
         return api_error("不能删除当前登录的管理员账号", status=400)
 
-    if user.is_staff and User.objects.filter(is_staff=True).exclude(id=user.id).count() == 0:
-        return api_error("至少需要保留一个管理员账号", status=400)
+    if user.is_superuser and User.objects.filter(is_superuser=True).exclude(id=user.id).count() == 0:
+        return api_error("不能删除最后一位超级管理员", status=400)
 
     user_snapshot = {
         "username": user.username,

@@ -72,6 +72,12 @@ class ResourceRegistry:
         self._resource_modifiers: dict[type, dict[str, list[Callable[[list[Any], Resource], list[Any]]]]] = {}
         self._enabled_module_ids_cache: set[str] | None = _NOT_CACHED
 
+        from apps.core.registry.preload_planner import PreloadPlanner
+        from apps.core.registry.search_bridge import SearchBridge
+
+        self._preload_planner: PreloadPlanner = PreloadPlanner(self)
+        self._search_bridge: SearchBridge = SearchBridge(self)
+
     def _get_enabled_module_ids(self) -> set[str] | None:
         if self._enabled_module_ids_cache is not _NOT_CACHED:
             return self._enabled_module_ids_cache
@@ -774,79 +780,7 @@ class ResourceRegistry:
         only: Tuple[str, ...] | List[str] | None = None,
         include: Tuple[str, ...] | List[str] | None = None,
     ) -> ResourcePreloadPlan:
-        resolved_context = context or {}
-        select_related: list[str] = []
-        prefetch_related: list[Any] = []
-        prefetch_where: list[tuple[str, Callable[[Any, dict], Any]]] = []
-        annotations: list[tuple[str, Any]] = []
-        seen_select: set[str] = set()
-        seen_prefetch: set[str] = set()
-        seen_annotations: set[str] = set()
-
-        selected_fields = set(only or [])
-        for definition in self.get_effective_fields(resource, resolved_context):
-            if selected_fields and definition.field not in selected_fields:
-                continue
-            self._merge_preload_definition(
-                definition,
-                resolved_context,
-                select_related,
-                prefetch_related,
-                seen_select,
-                seen_prefetch,
-                prefetch_where,
-                annotations,
-                seen_annotations,
-            )
-
-        include_tree = self._build_include_tree(include or ())
-        include_set = set(include_tree.keys())
-        for definition in self.get_effective_relationships(resource, resolved_context):
-            if include_set and definition.relationship not in include_set:
-                continue
-            if not include_set and definition.relationship not in set():
-                continue
-            if not self._is_relationship_includable(definition, resolved_context):
-                continue
-            self._merge_preload_definition(
-                definition,
-                resolved_context,
-                select_related,
-                prefetch_related,
-                seen_select,
-                seen_prefetch,
-                prefetch_where,
-                annotations,
-                seen_annotations,
-                include=include,
-            )
-            nested_include = include_tree.get(definition.relationship) or {}
-            if nested_include and definition.resource_type:
-                nested_plan = self.build_preload_plan(
-                    definition.resource_type,
-                    resolved_context,
-                    include=tuple(self._flatten_include_tree(nested_include)),
-                )
-                for item in nested_plan.select_related:
-                    nested_item = f"{definition.relationship}__{item}"
-                    if nested_item not in seen_select:
-                        seen_select.add(nested_item)
-                        select_related.append(nested_item)
-                for item in nested_plan.prefetch_related:
-                    nested_item = self._prefix_prefetch(definition.relationship, item)
-                    prefetch_key = self._prefetch_key(nested_item)
-                    if prefetch_key and prefetch_key not in seen_prefetch:
-                        seen_prefetch.add(prefetch_key)
-                        prefetch_related.append(nested_item)
-                for relation, callback in nested_plan.prefetch_where:
-                    prefetch_where.append((f"{definition.relationship}__{relation}", callback))
-
-        return ResourcePreloadPlan(
-            select_related=tuple(select_related),
-            prefetch_related=tuple(prefetch_related),
-            prefetch_where=tuple(prefetch_where),
-            annotations=tuple(annotations),
-        )
+        return self._preload_planner.build_preload_plan(resource, context, only=only, include=include)
 
     def apply_preload_plan(
         self,
@@ -857,19 +791,7 @@ class ResourceRegistry:
         only: Tuple[str, ...] | List[str] | None = None,
         include: Tuple[str, ...] | List[str] | None = None,
     ):
-        plan = self.build_preload_plan(
-            resource,
-            context,
-            only=only,
-            include=include,
-        )
-        if plan.select_related:
-            queryset = queryset.select_related(*plan.select_related)
-        if plan.prefetch_related:
-            queryset = queryset.prefetch_related(*plan.prefetch_related)
-        if plan.annotations:
-            queryset = queryset.annotate(**dict(plan.annotations))
-        return queryset
+        return self._preload_planner.apply_preload_plan(queryset, resource, context, only=only, include=include)
 
     def build_endpoint_preload_plan(
         self,
@@ -877,52 +799,14 @@ class ResourceRegistry:
         endpoint: str,
         context: dict | None = None,
     ) -> ResourcePreloadPlan:
-        resolved_context = dict(context or {})
-        definition = self.get_dispatch_endpoint(
-            resource,
-            endpoint,
-            str(resolved_context.get("method") or "GET"),
-            resolved_context,
-        )
-        if definition is None:
-            return ResourcePreloadPlan()
-
-        return self.build_endpoint_definition_preload_plan(definition, resolved_context)
+        return self._preload_planner.build_endpoint_preload_plan(resource, endpoint, context)
 
     def build_endpoint_definition_preload_plan(
         self,
         definition: ResourceEndpointDefinition,
         context: dict | None = None,
     ) -> ResourcePreloadPlan:
-        resolved_context = dict(context or {})
-        include = tuple(resolved_context.get("include") or definition.default_include or ())
-        plan = self.build_preload_plan(definition.resource, resolved_context, include=include)
-        select_related = list(plan.select_related)
-        prefetch_related = list(plan.prefetch_related)
-        prefetch_where = list(plan.prefetch_where)
-        annotations = list(plan.annotations)
-        seen_select = set(select_related)
-        seen_prefetch = {self._prefetch_key(item) for item in prefetch_related}
-        seen_annotations = {name for name, _value in annotations}
-
-        self._merge_preload_definition(
-            definition,
-            resolved_context,
-            select_related,
-            prefetch_related,
-            seen_select,
-            seen_prefetch,
-            prefetch_where,
-            annotations,
-            seen_annotations,
-            include=include,
-        )
-        return ResourcePreloadPlan(
-            select_related=tuple(select_related),
-            prefetch_related=tuple(prefetch_related),
-            prefetch_where=tuple(prefetch_where),
-            annotations=tuple(annotations),
-        )
+        return self._preload_planner.build_endpoint_definition_preload_plan(definition, context)
 
     def apply_resource_payload(
         self,
@@ -1040,137 +924,6 @@ class ResourceRegistry:
         from apps.core.resource_endpoint_runner import ResourceEndpointRunner
 
         return ResourceEndpointRunner(self).run(definition, ensure_resource_context(context))
-
-    def _dispatch_index(self, resource_object: DatabaseResource, definition: ResourceEndpointDefinition, context: dict):
-        self._call_endpoint_before(definition, context)
-        queryset = resource_object.scope(resource_object.query(context), context)
-        pagination = self._resolve_endpoint_pagination(definition, context) if definition.paginate else None
-        include = self._resolve_endpoint_include(definition, context)
-        sort = self._resolve_endpoint_sort(definition, context)
-        filters = self._resolve_endpoint_filters(context)
-        search_results = self._search_resource_index(
-            resource_object,
-            definition,
-            queryset,
-            context,
-            filters=filters,
-            sort=sort,
-            pagination=pagination,
-        )
-        total = None
-        if search_results is not None:
-            queryset = search_results.results
-            total = search_results.total
-            if sort and not search_results.sort_applied:
-                queryset = self.apply_named_sort(definition.resource, queryset, sort, context)
-        else:
-            if sort:
-                queryset = self.apply_named_sort(definition.resource, queryset, sort, context)
-            total = resource_object.count(queryset, context) if definition.paginate else None
-        queryset = self.apply_preload_plan(
-            queryset,
-            definition.resource,
-            context,
-            include=include,
-        )
-        if pagination and not (search_results is not None and search_results.pagination_applied):
-            pagination_context = dict(context)
-            pagination_context["pagination"] = pagination
-            queryset = resource_object.paginate(queryset, pagination_context)
-        results = resource_object.results(queryset, context)
-        results = self._call_endpoint_after(definition, context, results)
-        document = self.serialize_jsonapi_document(definition.resource, results, context, include=include, many=True)
-        if not definition.paginate:
-            return document
-        if total is None:
-            total = resource_object.count(queryset, context)
-        meta = dict(document.get("meta") or {})
-        meta.update({
-            "total": total,
-            "count": len(document.get("data") or []),
-            "limit": pagination["limit"] if pagination else None,
-            "offset": pagination["offset"] if pagination else 0,
-        })
-        meta.update(self._resolve_endpoint_meta(definition, context, {"results": results, "total": total}) or {})
-        document["meta"] = meta
-        links = self._resolve_endpoint_links(definition, context, {"results": results, "total": total})
-        if links:
-            document["links"] = links
-        return document
-
-    def _dispatch_show(self, resource_object: DatabaseResource, definition: ResourceEndpointDefinition, context: dict):
-        self._call_endpoint_before(definition, context)
-        instance = resource_object.find(str(context.get("object_id") or ""), context)
-        if instance is None:
-            raise LookupError("资源不存在")
-        self._ensure_resource_ability(resource_object, definition, instance, context)
-        instance = self._call_endpoint_after(definition, context, instance)
-        document = self.serialize_jsonapi_document(
-            definition.resource,
-            instance,
-            context,
-            include=self._resolve_endpoint_include(definition, context),
-        )
-        self._merge_endpoint_document_meta_links(document, definition, context, instance)
-        return document
-
-    def _dispatch_create(self, resource_object: DatabaseResource, definition: ResourceEndpointDefinition, context: dict):
-        self._call_endpoint_before(definition, context)
-        self._ensure_resource_ability(resource_object, definition, None, context)
-        instance = resource_object.new_model(context)
-        self._parse_jsonapi_data(context, definition.resource, creating=True)
-        self.apply_resource_payload(
-            definition.resource,
-            instance,
-            self._extract_resource_payload(context),
-            context,
-            creating=True,
-        )
-        instance = resource_object.create_action(instance, context)
-        instance = self._call_endpoint_after(definition, context, instance)
-        document = self.serialize_jsonapi_document(
-            definition.resource,
-            instance,
-            context,
-            include=self._resolve_endpoint_include(definition, context),
-        )
-        self._merge_endpoint_document_meta_links(document, definition, context, instance)
-        return 201, document
-
-    def _dispatch_update(self, resource_object: DatabaseResource, definition: ResourceEndpointDefinition, context: dict):
-        self._call_endpoint_before(definition, context)
-        instance = resource_object.find(str(context.get("object_id") or ""), context)
-        if instance is None:
-            raise LookupError("资源不存在")
-        self._ensure_resource_ability(resource_object, definition, instance, context)
-        self._parse_jsonapi_data(context, definition.resource, creating=False, instance=instance, resource_object=resource_object)
-        self.apply_resource_payload(
-            definition.resource,
-            instance,
-            self._extract_resource_payload(context),
-            context,
-            creating=False,
-        )
-        instance = resource_object.update_action(instance, context)
-        instance = self._call_endpoint_after(definition, context, instance)
-        document = self.serialize_jsonapi_document(
-            definition.resource,
-            instance,
-            context,
-            include=self._resolve_endpoint_include(definition, context),
-        )
-        self._merge_endpoint_document_meta_links(document, definition, context, instance)
-        return document
-
-    def _dispatch_delete(self, resource_object: DatabaseResource, definition: ResourceEndpointDefinition, context: dict):
-        self._call_endpoint_before(definition, context)
-        instance = resource_object.find(str(context.get("object_id") or ""), context)
-        if instance is None:
-            raise LookupError("资源不存在")
-        self._ensure_resource_ability(resource_object, definition, instance, context)
-        resource_object.delete_action(instance, context)
-        self._call_endpoint_after(definition, context, None)
-        return 204, None
 
     @staticmethod
     def _extract_resource_payload(context: dict) -> dict:
@@ -1904,30 +1657,18 @@ class ResourceRegistry:
 
     @staticmethod
     def _build_include_tree(include: Tuple[str, ...] | List[str]) -> dict[str, dict]:
-        tree: dict[str, dict] = {}
-        for item in include or ():
-            current = tree
-            for part in str(item or "").split("."):
-                normalized = part.strip()
-                if not normalized:
-                    continue
-                current = current.setdefault(normalized, {})
-        return tree
+        from apps.core.registry.preload_planner import PreloadPlanner
+        return PreloadPlanner._build_include_tree(include)
 
     @staticmethod
     def _flatten_include_tree(tree: dict[str, dict], prefix: str = "") -> list[str]:
-        output: list[str] = []
-        for name, children in tree.items():
-            path = f"{prefix}.{name}" if prefix else name
-            output.append(path)
-            output.extend(ResourceRegistry._flatten_include_tree(children, path))
-        return output
+        from apps.core.registry.preload_planner import PreloadPlanner
+        return PreloadPlanner._flatten_include_tree(tree, prefix)
 
     @staticmethod
     def _prefix_prefetch(prefix: str, item: Any) -> Any:
-        if isinstance(item, str):
-            return f"{prefix}__{item}"
-        return item
+        from apps.core.registry.preload_planner import PreloadPlanner
+        return PreloadPlanner._prefix_prefetch(prefix, item)
 
     def _add_jsonapi_included(
         self,
@@ -2075,116 +1816,29 @@ class ResourceRegistry:
         sort: str,
         pagination: dict[str, int] | None,
     ) -> ResourceSearchResults | None:
-        criteria = ResourceSearchCriteria(
-            user=context.get("user"),
-            filters=dict(filters or {}),
-            limit=pagination.get("limit") if pagination else None,
-            offset=pagination.get("offset") if pagination else 0,
-            sort=sort,
-            default_sort=not bool((context.get("query") or {}).get("sort")),
-            query=str((filters or {}).get("q") or ""),
-            resource=definition.resource,
+        return self._search_bridge.search_resource_index(
+            resource_object, definition, queryset, context,
+            filters=filters, sort=sort, pagination=pagination,
         )
-        context_with_search = {**context, "queryset": queryset, "search_criteria": criteria}
-
-        search = getattr(resource_object, "search", None)
-        if callable(search):
-            result = search(criteria, context_with_search)
-            normalized = self._normalize_search_result(result)
-            if normalized is not None:
-                return normalized
-
-        manager = self._runtime_search_manager()
-        if manager is not None:
-            model = getattr(resource_object, "model", None)
-            if manager.searchable(model) or manager.filters_for(model, resource=definition.resource):
-                return manager.query(model, queryset, criteria, context_with_search)
-
-        try:
-            from apps.core.extensions.bootstrap_state import is_extension_host_bootstrapped
-
-            if not is_extension_host_bootstrapped():
-                search_service = None
-            else:
-                from apps.core.extensions.runtime import get_runtime_search_service
-
-                search_service = get_runtime_search_service()
-        except Exception:
-            logger.warning("Failed to resolve runtime search service for resource dispatch.", exc_info=True)
-            search_service = None
-        if search_service is not None:
-            searchers = getattr(search_service, "get_searchers", lambda target: [])(definition.resource)
-            for searcher in searchers:
-                result = self._invoke_resource_searcher(searcher, queryset, criteria, context_with_search)
-                normalized = self._normalize_search_result(result)
-                if normalized is not None:
-                    return normalized
-        return None
 
     def _runtime_search_manager(self):
-        try:
-            from apps.core.extensions.bootstrap_state import is_extension_host_bootstrapped
-
-            if not is_extension_host_bootstrapped():
-                raise RuntimeError("extension host is not bootstrapped")
-            from apps.core.extensions.runtime import get_runtime_search_service
-
-            service = get_runtime_search_service()
-            manager = getattr(service, "manager", None)
-            if manager is not None:
-                self._sync_resource_filters_to_search_manager(manager)
-                return manager
-        except RuntimeError:
-            pass
-        except Exception:
-            logger.warning("Failed to resolve extension runtime search manager.", exc_info=True)
-        manager = get_resource_search_manager()
-        self._sync_resource_filters_to_search_manager(manager)
-        return manager
+        return self._search_bridge.runtime_search_manager()
 
     def _sync_resource_filters_to_search_manager(self, manager) -> None:
-        for resource in set(self._definitions.keys()) | set(self._resource_objects.keys()) | set(self._filters.keys()):
-            for definition in self.get_effective_filters(resource):
-                self._register_search_filter(definition, manager=manager)
+        self._search_bridge._sync_resource_filters_to_search_manager(manager)
 
     def _register_search_filter(self, definition: ResourceFilterDefinition, *, manager=None) -> None:
-        target_manager = manager or self._runtime_search_manager()
-        if target_manager is None:
-            return
-        target_manager.register_filter(
-            definition.resource,
-            ResourceSearchFilter(
-                name=definition.filter,
-                handler=definition.handler,
-                visible=definition.visible,
-                module_id=definition.module_id,
-            ),
-        )
+        self._search_bridge._register_search_filter(definition, manager=manager)
 
     @staticmethod
     def _normalize_search_result(result: Any) -> ResourceSearchResults | None:
-        if result is None:
-            return None
-        if isinstance(result, ResourceSearchResults):
-            return result
-        if isinstance(result, tuple) and len(result) == 2:
-            return ResourceSearchResults(results=result[0], total=result[1], sort_applied=True, pagination_applied=True)
-        if isinstance(result, dict) and "results" in result:
-            return ResourceSearchResults(
-                results=result.get("results"),
-                total=result.get("total"),
-                sort_applied=bool(result.get("sort_applied", False)),
-                pagination_applied=bool(result.get("pagination_applied", False)),
-            )
-        return ResourceSearchResults(results=result, total=None, sort_applied=False, pagination_applied=False)
+        from apps.core.registry.search_bridge import SearchBridge
+        return SearchBridge._normalize_search_result(result)
 
     @staticmethod
     def _invoke_resource_searcher(searcher: Any, queryset, criteria: ResourceSearchCriteria, context: dict):
-        if hasattr(searcher, "search") and callable(searcher.search):
-            return searcher.search(queryset, criteria, context)
-        if callable(searcher):
-            return searcher(queryset, criteria, context)
-        return None
+        from apps.core.registry.search_bridge import SearchBridge
+        return SearchBridge._invoke_resource_searcher(searcher, queryset, criteria, context)
 
     @staticmethod
     def _sort_order_fields(fields: tuple | list, descending: bool) -> list[str]:
@@ -2199,27 +1853,7 @@ class ResourceRegistry:
         return output
 
     def _apply_default_fulltext_filter(self, resource: str, queryset, value: Any, context: dict):
-        query = str(value or "").strip()
-        if not query:
-            return queryset
-        resource_object = self.get_resource_object(resource)
-        fields = [
-            definition.field
-            for definition in self.get_effective_fields(resource, context)
-            if str(getattr(definition, "value_type", "") or "").strip().lower() in {"", "string"}
-        ]
-        if not fields:
-            return queryset
-        try:
-            from django.db.models import Q
-        except Exception:
-            return queryset
-        condition = Q()
-        for field in fields:
-            condition |= Q(**{f"{field}__icontains": query})
-        if not condition:
-            return queryset
-        return queryset.filter(condition)
+        return self._search_bridge.apply_default_fulltext_filter(resource, queryset, value, context)
 
     def _merge_preload_definition(
         self,
@@ -2234,84 +1868,18 @@ class ResourceRegistry:
         seen_annotations: set[str] | None = None,
         include: Tuple[str, ...] | List[str] | None = None,
     ) -> None:
-        for item in getattr(definition, "select_related", ()) or ():
-            if item and item not in seen_select:
-                seen_select.add(item)
-                select_related.append(item)
-
-        for item in getattr(definition, "prefetch_related", ()) or ():
-            prefetch_key = self._prefetch_key(item)
-            if prefetch_key and prefetch_key not in seen_prefetch:
-                seen_prefetch.add(prefetch_key)
-                prefetch_related.append(item)
-
-        preload_resolver = getattr(definition, "preload_resolver", None)
-        if preload_resolver is not None:
-            extra_select, extra_prefetch = preload_resolver(context)
-            for item in extra_select or ():
-                if item and item not in seen_select:
-                    seen_select.add(item)
-                    select_related.append(item)
-
-            for item in extra_prefetch or ():
-                prefetch_key = self._prefetch_key(item)
-                if prefetch_key and prefetch_key not in seen_prefetch:
-                    seen_prefetch.add(prefetch_key)
-                    prefetch_related.append(item)
-
-        annotate_resolver = getattr(definition, "annotate_resolver", None)
-        if annotate_resolver is not None and annotations is not None and seen_annotations is not None:
-            for name, expression in (annotate_resolver(context) or {}).items():
-                normalized = str(name or "").strip()
-                if not normalized or normalized in seen_annotations:
-                    continue
-                seen_annotations.add(normalized)
-                annotations.append((normalized, expression))
-
-        for item in getattr(definition, "eager_load", ()) or ():
-            prefetch_key = self._prefetch_key(item)
-            if prefetch_key and prefetch_key not in seen_prefetch:
-                seen_prefetch.add(prefetch_key)
-                prefetch_related.append(item)
-
-        include_set = set(str(item or "").strip() for item in include or () if str(item or "").strip())
-        when_included_rules = (
-            getattr(definition, "eager_load_when_included_rules", ())
-            or getattr(definition, "eager_load_when_included", ())
-            or ()
+        self._preload_planner._merge_preload_definition(
+            definition, context,
+            select_related, prefetch_related,
+            seen_select, seen_prefetch,
+            prefetch_where, annotations,
+            seen_annotations, include,
         )
-        for included, items in when_included_rules:
-            if str(included or "").strip() not in include_set:
-                continue
-            for item in items or ():
-                prefetch_key = self._prefetch_key(item)
-                if prefetch_key and prefetch_key not in seen_prefetch:
-                    seen_prefetch.add(prefetch_key)
-                    prefetch_related.append(item)
-
-        where_rules = (
-            getattr(definition, "eager_load_where_rules", ())
-            or getattr(definition, "eager_load_where", ())
-            or ()
-        )
-        for relation, callback in where_rules:
-            normalized = str(relation or "").strip()
-            if not normalized or not callable(callback):
-                continue
-            if prefetch_where is not None:
-                prefetch_where.append((normalized, callback))
-            if normalized not in seen_prefetch:
-                seen_prefetch.add(normalized)
-                prefetch_related.append(normalized)
 
     @staticmethod
     def _prefetch_key(item: Any) -> str:
-        if isinstance(item, str):
-            return item
-        lookup = getattr(item, "prefetch_to", None) or getattr(item, "lookup", None)
-        if lookup:
-            return str(lookup)
-        return repr(item)
+        from apps.core.registry.preload_planner import PreloadPlanner
+        return PreloadPlanner._prefetch_key(item)
 
     @staticmethod
     def _is_applicable(condition, context: dict) -> bool:

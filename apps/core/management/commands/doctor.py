@@ -185,6 +185,24 @@ class Command(BaseCommand):
             return _check("cache", "error", f"缓存读写失败: {exc}")
         if value != "ok":
             return _check("cache", "error", "缓存读写结果不一致。")
+
+        # 检测生产环境多 worker + LocMem 不匹配
+        cache_backend = str(getattr(settings, "CACHES", {}).get("default", {}).get("BACKEND", "") or "")
+        is_locmem = "LocMemCache" in cache_backend or "locmem" in cache_backend.lower()
+        worker_count = _detect_worker_count()
+        is_production = not settings.DEBUG and worker_count is not None and worker_count > 1
+
+        if is_production and is_locmem and worker_count and worker_count > 1:
+            return _check("cache", "warning", (
+                f"生产环境使用 LocMemCache（{cache_backend.rsplit('.', 1)[-1]}）"
+                f"且检测到 {worker_count} 个 worker，"
+                f"多 worker 间限流/在线状态/缓存不一致。建议使用 Redis 等共享缓存后端。"
+            ), {
+                "backend": cache_backend,
+                "worker_count": worker_count,
+                "recommended_backend": "django.core.cache.backends.redis.RedisCache",
+            })
+
         return _check("cache", "ok", "缓存读写正常。")
 
     def _write_text(self, payload: dict[str, Any]) -> None:
@@ -227,3 +245,21 @@ def _summarize_frontend_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "build_ran": bool(build.get("ran")),
         "build_compiled_at": str(build.get("compiled_at") or ""),
     }
+
+
+def _detect_worker_count() -> int | None:
+    """检测 Gunicorn / uWSGI worker 数量"""
+    try:
+        gunicorn_workers = getattr(settings, "WEB_CONCURRENCY", None)
+        if gunicorn_workers is not None:
+            return int(gunicorn_workers)
+    except (ValueError, TypeError):
+        pass
+    try:
+        import os
+        gunicorn_proc = os.environ.get("WEB_CONCURRENCY")
+        if gunicorn_proc:
+            return int(gunicorn_proc)
+    except (ValueError, TypeError):
+        pass
+    return None

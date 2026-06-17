@@ -166,6 +166,16 @@ def permission_definitions():
             description="允许在后台把帖子举报标记为已处理或已忽略。",
             required_permissions=("admin.flag.view",),
         ),
+        PermissionDefinition(
+            code="admin.flag.delete",
+            label="删除帖子举报",
+            section="moderation",
+            section_label="审核与举报",
+            module_id=EXTENSION_ID,
+            icon="fas fa-trash-alt",
+            description="允许删除指定的帖子举报记录。",
+            required_permissions=("admin.flag.view",),
+        ),
     )
 
 

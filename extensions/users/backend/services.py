@@ -1,6 +1,8 @@
 """
 User service - 用户业务逻辑
 """
+import logging
+
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password, check_password
 from django.db import transaction
@@ -391,7 +393,6 @@ class UserService:
         )
 
         if not email_sent:
-            import logging
             logger = logging.getLogger(__name__)
             logger.warning(
                 "密码重置邮件发送失败: email=%s, username=%s",
