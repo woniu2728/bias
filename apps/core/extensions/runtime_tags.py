@@ -7,11 +7,7 @@ from apps.core.extensions.runtime_core import (
     require_extension_host_service,
     runtime_service_method,
     runtime_service_value,
-    RuntimeServiceProxy,
 )
-
-# 便捷代理
-_tags = RuntimeServiceProxy("tags.service")
 
 
 def get_runtime_tag_service(default: Any = None):

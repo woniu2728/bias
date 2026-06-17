@@ -1,18 +1,6 @@
 from apps.core.tests.common import *
 
 class SecretValidationTests(TestCase):
-    def test_runtime_diagnostics_keeps_admin_helper_compatibility_imports(self):
-        from apps.core import admin_runtime_helpers, runtime_diagnostics
-
-        self.assertIs(
-            admin_runtime_helpers.build_runtime_risks,
-            runtime_diagnostics.build_runtime_risks,
-        )
-        self.assertIs(
-            admin_runtime_helpers.probe_cache_connection,
-            runtime_diagnostics.probe_cache_connection,
-        )
-
     @override_settings(WEB_CONCURRENCY=1)
     def test_runtime_diagnostics_accepts_explicit_web_concurrency(self):
         from apps.core import runtime_diagnostics

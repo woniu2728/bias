@@ -7,13 +7,7 @@ from apps.core.extensions.runtime_core import (
     require_extension_host_service,
     runtime_service_method,
     runtime_service_value,
-    RuntimeServiceProxy,
 )
-
-# 便捷代理 —— 可直接用于简单方法调用，减少样板代码：
-#   _posts.get_by_id(post_id, user=user)
-#   _posts.value("model")
-_posts = RuntimeServiceProxy("posts.service")
 
 
 def get_runtime_post_service(default: Any = None):
