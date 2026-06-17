@@ -324,11 +324,6 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
-            'formatter': 'verbose',
-        },
     },
     'root': {
         'handlers': ['console'],
@@ -336,15 +331,26 @@ LOGGING = {
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
     },
 }
 
-# Create logs directory
-os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+# 非 Docker 环境下额外启用文件日志
+if not os.getenv("BIAS_DOCKER", os.getenv("BIAS_SITE_CONFIG", "")):
+    _LOG_DIR = BASE_DIR / 'logs'
+    try:
+        os.makedirs(_LOG_DIR, exist_ok=True)
+        LOGGING['handlers']['file'] = {
+            'class': 'logging.FileHandler',
+            'filename': _LOG_DIR / 'django.log',
+            'formatter': 'verbose',
+        }
+        LOGGING['loggers']['django']['handlers'] = ['console', 'file']
+    except (OSError, PermissionError):
+        pass
 
 # Debug Toolbar (only in DEBUG mode)
 ENABLE_DEBUG_TOOLBAR = (
