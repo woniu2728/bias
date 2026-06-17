@@ -74,9 +74,11 @@ class ResourceRegistry:
 
         from apps.core.registry.preload_planner import PreloadPlanner
         from apps.core.registry.search_bridge import SearchBridge
+        from apps.core.registry.definition_mutator import DefinitionMutator
 
         self._preload_planner: PreloadPlanner = PreloadPlanner(self)
         self._search_bridge: SearchBridge = SearchBridge(self)
+        self._definition_mutator: DefinitionMutator = DefinitionMutator(self)
 
     def _get_enabled_module_ids(self) -> set[str] | None:
         if self._enabled_module_ids_cache is not _NOT_CACHED:
@@ -624,44 +626,10 @@ class ResourceRegistry:
         return definitions
 
     def apply_endpoint_mutators(self, resource: str, endpoint: str, endpoint_object: Any, context: dict | None = None):
-        output = endpoint_object
-        resolved_context = dict(context or {})
-        for definition in self.get_endpoints(resource):
-            if definition.endpoint != endpoint:
-                continue
-            if not self._is_applicable(definition.condition, resolved_context):
-                continue
-            if definition.mutator is None:
-                continue
-            output = definition.mutator(output)
-        return output
+        return self._definition_mutator.apply_endpoint_mutators(resource, endpoint, endpoint_object, context)
 
     def apply_endpoint_definitions(self, resource: str, endpoints: List[Any], context: dict | None = None) -> List[Any]:
-        output = list(endpoints or [])
-        resolved_context = dict(context or {})
-        for definition in self.get_endpoints(resource):
-            if not self._is_applicable(definition.condition, resolved_context):
-                continue
-            operation = str(definition.operation or "mutate").strip().lower()
-            if operation == "remove":
-                output = [item for item in output if self._item_name(item) != definition.endpoint]
-                continue
-            if definition.mutator is None:
-                continue
-            if operation == "add":
-                output.append(definition.mutator(None))
-            elif operation == "before_all":
-                output.insert(0, definition.mutator(None))
-            elif operation == "before":
-                self._insert_before(output, definition.anchor, definition.mutator(None))
-            elif operation == "after":
-                self._insert_after(output, definition.anchor, definition.mutator(None))
-            elif operation == "mutate":
-                output = [
-                    definition.mutator(item) if self._item_name(item) == definition.endpoint else item
-                    for item in output
-                ]
-        return output
+        return self._definition_mutator.apply_endpoint_definitions(resource, endpoints, context)
 
     def get_dispatch_endpoints(self, resource: str, context: dict | None = None) -> List[ResourceEndpointDefinition]:
         output: list[ResourceEndpointDefinition] = []
@@ -719,58 +687,10 @@ class ResourceRegistry:
         return None
 
     def apply_field_definitions(self, resource: str, fields: List[Any], context: dict | None = None) -> List[Any]:
-        output = list(fields or [])
-        resolved_context = dict(context or {})
-        for definition in self.get_field_mutators(resource):
-            if self._mutator_kind(definition) == "relationship":
-                continue
-            if not self._is_applicable(definition.condition, resolved_context):
-                continue
-            operation = str(definition.operation or "mutate").strip().lower()
-            if operation == "add":
-                output.append(definition.mutator(None))
-            elif operation == "before_all":
-                output.insert(0, definition.mutator(None))
-            elif operation == "before":
-                self._insert_before(output, definition.anchor, definition.mutator(None))
-            elif operation == "after":
-                self._insert_after(output, definition.anchor, definition.mutator(None))
-            elif operation == "remove":
-                output = [item for item in output if self._item_name(item) != definition.field]
-            elif operation == "mutate":
-                output = [
-                    definition.mutator(item) if self._item_name(item) == definition.field else item
-                    for item in output
-                ]
-        return output
+        return self._definition_mutator.apply_field_definitions(resource, fields, context)
 
     def apply_sort_definitions(self, resource: str, sorts: List[Any], context: dict | None = None) -> List[Any]:
-        output = list(sorts or [])
-        resolved_context = dict(context or {})
-
-        for definition in self.get_sorts(resource):
-            if not self._is_applicable(definition.condition, resolved_context):
-                continue
-            operation = str(definition.operation or "add").strip().lower()
-            value = self._sort_definition_value(definition)
-            if operation == "add":
-                output.append(value)
-            elif operation == "before_all":
-                output.insert(0, value)
-            elif operation == "before":
-                self._insert_before(output, definition.anchor, value)
-            elif operation == "after":
-                self._insert_after(output, definition.anchor, value)
-            elif operation == "remove":
-                output = [item for item in output if self._item_name(item) != definition.sort]
-            elif operation == "mutate" and definition.mutator is not None:
-                output = [
-                    self._external_sort_mutator_result(definition, item)
-                    if self._item_name(item) == definition.sort
-                    else item
-                    for item in output
-                ]
-        return output
+        return self._definition_mutator.apply_sort_definitions(resource, sorts, context)
 
     def build_preload_plan(
         self,
