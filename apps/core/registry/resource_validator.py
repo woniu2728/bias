@@ -165,6 +165,30 @@ class ResourceValidator:
         return [{"detail": str(result)}]
 
     @staticmethod
+    def _validate_resource_value(definition, value, context):
+        name = str(getattr(definition, "field", "") or getattr(definition, "relationship", "") or "value")
+        if value is None:
+            if not bool(getattr(definition, "nullable", False)):
+                raise JsonApiValidationError(f"{name} cannot be null", pointer=ResourceValidator._validation_pointer(definition))
+            return
+        fo = getattr(definition, "field_object", None)
+        vl = getattr(fo, "validate", None)
+        if callable(vl):
+            try:
+                vl(value, context)
+            except ValueError as exc:
+                raise JsonApiValidationError(str(exc), pointer=ResourceValidator._validation_pointer(definition)) from exc
+            return
+        for rule in getattr(definition, "validation_rules", ()) or ():
+            ResourceValidator._validate_resource_rule(name, rule, value, context, definition)
+        v = getattr(definition, "validator", None)
+        if v is not None:
+            try:
+                v(value, context)
+            except ValueError as exc:
+                raise JsonApiValidationError(str(exc), pointer=ResourceValidator._validation_pointer(definition)) from exc
+
+    @staticmethod
     def _validate_resource_rule(name, rule, value, context, definition=None):
         if callable(rule):
             try:
