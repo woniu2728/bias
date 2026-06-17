@@ -101,27 +101,24 @@ class JsonApiSerializer:
                     output[definition.field] = mutated
         return output
 
-    @staticmethod
-    def _add_jsonapi_included(definition, value, context, include_tree, included=None, deferred=None):
-        serializer = ResourceSerializer(None, context)
+    def _add_jsonapi_included(self, definition, value, context, include_tree, included=None, deferred=None):
+        serializer = ResourceSerializer(self._store, context)
         if included is not None:
             serializer.included = included
         if deferred is not None:
             serializer.deferred = deferred
         serializer.add_relationship_included(definition, value, ensure_resource_context(context), include_tree)
 
-    @staticmethod
-    def _set_jsonapi_value(payload, key, value, deferred=None):
-        serializer = ResourceSerializer(None)
+    def _set_jsonapi_value(self, payload, key, value, deferred=None):
+        serializer = ResourceSerializer(self._store)
         if deferred is not None:
             serializer.deferred = deferred
         serializer.set_value(payload, key, value)
         if deferred is None:
             serializer.resolve_deferred()
 
-    @staticmethod
-    def _set_jsonapi_relationship(relationship_payload, definition, value, context, include_tree, included=None, deferred=None):
-        serializer = ResourceSerializer(None, context)
+    def _set_jsonapi_relationship(self, relationship_payload, definition, value, context, include_tree, included=None, deferred=None):
+        serializer = ResourceSerializer(self._store, context)
         if included is not None:
             serializer.included = included
         if deferred is not None:

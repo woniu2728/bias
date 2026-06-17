@@ -1366,11 +1366,7 @@ class ResourceRegistry:
         included: dict[tuple[str, str], tuple[tuple[str, str], dict]] | None,
         deferred: list[Callable[[], None]] | None = None,
     ) -> None:
-        serializer = ResourceSerializer(self, context)
-        serializer.included = included if included is not None else {}
-        if deferred is not None:
-            serializer.deferred = deferred
-        serializer.add_relationship_included(definition, value, ensure_resource_context(context), include_tree)
+        return self._jsonapi_serializer._add_jsonapi_included(definition, value, context, include_tree, included, deferred)
 
     def _set_jsonapi_value(
         self,
@@ -1379,12 +1375,7 @@ class ResourceRegistry:
         value: Any,
         deferred: list[Callable[[], None]] | None,
     ) -> None:
-        serializer = ResourceSerializer(self)
-        if deferred is not None:
-            serializer.deferred = deferred
-        serializer.set_value(payload, key, value)
-        if deferred is None:
-            serializer.resolve_deferred()
+        return self._jsonapi_serializer._set_jsonapi_value(payload, key, value, deferred)
 
     def _set_jsonapi_relationship(
         self,
@@ -1396,42 +1387,39 @@ class ResourceRegistry:
         included: dict[tuple[str, str], tuple[tuple[str, str], dict]] | None,
         deferred: list[Callable[[], None]] | None,
     ) -> None:
-        serializer = ResourceSerializer(self, context)
-        serializer.included = included if included is not None else {}
-        if deferred is not None:
-            serializer.deferred = deferred
-        serializer.set_relationship(relationship_payload, definition, value, ensure_resource_context(context), include_tree)
-        if deferred is None:
-            serializer.resolve_deferred()
+        return self._jsonapi_serializer._set_jsonapi_relationship(relationship_payload, definition, value, context, include_tree, included, deferred)
 
     @staticmethod
     def _resolve_jsonapi_deferred(deferred: list[Callable[[], None]]) -> None:
-        ResourceSerializer.resolve_deferred_callbacks(deferred)
+        from apps.core.registry.jsonapi_serializer import JsonApiSerializer
+        JsonApiSerializer._resolve_jsonapi_deferred(deferred)
 
     def _relationship_linkage(self, definition: ResourceRelationshipDefinition, value: Any, context: dict):
-        return ResourceSerializer(self, context).relationship_linkage(definition, value, ensure_resource_context(context))
+        return self._jsonapi_serializer._relationship_linkage(definition, value, context)
 
     def _resource_identifier_payload(self, resource: str, value: Any, context: dict) -> dict | None:
-        return ResourceSerializer(self, context).resource_identifier_payload(resource, value, ensure_resource_context(context))
+        return self._jsonapi_serializer._resource_identifier_payload(resource, value, context)
 
     def _resolve_related_resource_type(self, definition: ResourceRelationshipDefinition, value: Any, context: dict) -> str:
-        return ResourceSerializer(self, context).related_resource_type(definition, value, ensure_resource_context(context))
+        return self._jsonapi_serializer._resolve_related_resource_type(definition, value, context)
 
     @staticmethod
     def _resource_self_link(resource: str, resource_id: str, context: dict) -> str:
-        return ResourceSerializer.resource_self_link(resource, resource_id, context)
+        from apps.core.registry.jsonapi_serializer import JsonApiSerializer
+        return JsonApiSerializer._resource_self_link(resource, resource_id, context)
 
-    @staticmethod
-    def _resource_identifier(resource: str, instance: Any, context: dict, resource_object: Resource | None = None) -> str | None:
-        return ResourceSerializer.resource_identifier(resource, instance, context, resource_object)
+    def _resource_identifier(self, resource: str, instance: Any, context: dict, resource_object: Resource | None = None) -> str | None:
+        return self._jsonapi_serializer._resource_identifier(resource, instance, context, resource_object)
 
     @staticmethod
     def _relationship_values(value: Any, *, many: bool) -> list[Any]:
-        return ResourceSerializer.relationship_values(value, many=many)
+        from apps.core.registry.jsonapi_serializer import JsonApiSerializer
+        return JsonApiSerializer._relationship_values(value, many=many)
 
     @staticmethod
     def _is_jsonapi_identifier(value: Any) -> bool:
-        return ResourceSerializer.is_jsonapi_identifier(value)
+        from apps.core.registry.jsonapi_serializer import JsonApiSerializer
+        return JsonApiSerializer._is_jsonapi_identifier(value)
 
     def apply_named_sort(self, resource: str, queryset, sort: str, context: dict | None = None):
         return self._endpoint_context.apply_named_sort(resource, queryset, sort, context)
