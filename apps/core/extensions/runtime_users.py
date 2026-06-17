@@ -3,12 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from apps.core.extensions.runtime_core import (
+    RuntimeServiceProxy,
     get_extension_host_service,
     get_runtime_resource_registry,
     require_extension_host_service,
-    runtime_service_method,
-    runtime_service_value,
 )
+
+_user = RuntimeServiceProxy("users.service")
 
 
 def get_runtime_user_service(default: Any = None):
@@ -20,19 +21,15 @@ def require_runtime_user_service():
 
 
 def ensure_runtime_user_not_suspended(user: Any, action_label: str = "") -> None:
-    runtime_service_method(require_runtime_user_service(), "ensure_not_suspended")(user, action_label)
+    _user.ensure_not_suspended(user, action_label)
 
 
 def ensure_runtime_user_email_confirmed(user: Any, action_label: str = "") -> None:
-    runtime_service_method(require_runtime_user_service(), "ensure_email_confirmed")(user, action_label)
+    _user.ensure_email_confirmed(user, action_label)
 
 
 def ensure_runtime_forum_permission(user: Any, permission_names, message: str = "无权限") -> None:
-    runtime_service_method(require_runtime_user_service(), "ensure_forum_permission")(
-        user,
-        permission_names,
-        message,
-    )
+    _user.ensure_forum_permission(user, permission_names, message)
 
 
 def has_runtime_forum_permission(user: Any, permission_names) -> bool:
@@ -42,18 +39,12 @@ def has_runtime_forum_permission(user: Any, permission_names) -> bool:
 
 
 def requires_runtime_content_approval(user: Any, bypass_permission: str) -> bool:
-    return bool(
-        runtime_service_method(require_runtime_user_service(), "requires_content_approval")(
-            user,
-            bypass_permission,
-        )
-    )
+    return bool(_user.requires_content_approval(user, bypass_permission))
 
 
 def get_runtime_user_preference(user: Any, key: str, fallback: Any = None) -> Any:
-    service = require_runtime_user_service()
     try:
-        return runtime_service_method(service, "get_preference")(user, key, fallback=fallback)
+        return _user.get_preference(user, key, fallback=fallback)
     except RuntimeError:
         return fallback
 
@@ -77,49 +68,36 @@ def verify_runtime_user_password(user: Any, password: str, *, default_checker: A
 
 
 def get_runtime_user_model():
-    return runtime_service_value(
-        require_runtime_user_service(),
-        "model",
-        required_message="users.service 未提供用户模型",
-    )
+    return _user.value("model", required_message="users.service 未提供用户模型")
 
 
 def get_runtime_group_model():
-    return runtime_service_value(
-        require_runtime_user_service(),
-        "group_model",
-        required_message="users.service 未提供用户组模型",
-    )
+    return _user.value("group_model", required_message="users.service 未提供用户组模型")
 
 
 def get_runtime_permission_model():
-    return runtime_service_value(
-        require_runtime_user_service(),
-        "permission_model",
-        required_message="users.service 未提供权限模型",
-    )
+    return _user.value("permission_model", required_message="users.service 未提供权限模型")
 
 
 def resolve_runtime_user_by_username(username: str):
-    return runtime_service_method(require_runtime_user_service(), "get_by_username")(username)
+    return _user.get_by_username(username)
 
 
 def get_runtime_user_by_id(user_id: int):
-    return runtime_service_method(require_runtime_user_service(), "get_by_id")(user_id)
+    return _user.get_by_id(user_id)
 
 
 def list_runtime_users_by_usernames(usernames) -> list[Any]:
-    return list(runtime_service_method(require_runtime_user_service(), "list_by_usernames")(usernames) or [])
+    return list(_user.list_by_usernames(usernames) or [])
 
 
 def get_runtime_username_id_map(usernames) -> dict[str, int]:
-    return dict(runtime_service_method(require_runtime_user_service(), "username_id_map")(usernames) or {})
+    return dict(_user.username_id_map(usernames) or {})
 
 
 def serialize_runtime_users_by_ids(user_ids, *, limit: int = 50) -> list[dict]:
-    service = require_runtime_user_service()
     try:
-        serializer = runtime_service_method(service, "serialize_many_by_ids")
+        serializer = _user.method("serialize_many_by_ids")
     except RuntimeError:
         return []
     return list(serializer(list(user_ids or []), limit=int(limit or 50)) or [])
@@ -136,38 +114,20 @@ def serialize_runtime_user(user: Any, *, resource: str = "user_detail", context:
 
 
 def increment_runtime_user_discussion_count(user_id: int, delta: int) -> int:
-    return int(
-        runtime_service_method(require_runtime_user_service(), "increment_discussion_count")(
-            user_id,
-            delta,
-        )
-        or 0
-    )
+    return int(_user.increment_discussion_count(user_id, delta) or 0)
 
 
 def increment_runtime_user_comment_count(user_id: int, delta: int) -> int:
-    return int(
-        runtime_service_method(require_runtime_user_service(), "increment_comment_count")(
-            user_id,
-            delta,
-        )
-        or 0
-    )
+    return int(_user.increment_comment_count(user_id, delta) or 0)
 
 
 def apply_runtime_user_comment_count_deltas(deltas: dict | None) -> int:
-    return int(
-        runtime_service_method(require_runtime_user_service(), "apply_comment_count_deltas")(
-            dict(deltas or {}),
-        )
-        or 0
-    )
+    return int(_user.apply_comment_count_deltas(dict(deltas or {})) or 0)
 
 
 def ensure_runtime_admin_user(*, username: str, email: str, password: str) -> dict:
-    service = require_runtime_user_service()
     try:
-        handler = runtime_service_method(service, "ensure_admin")
+        handler = _user.method("ensure_admin")
     except RuntimeError as exc:
         raise RuntimeError("用户扩展尚未提供管理员账号管理能力") from exc
     return dict(handler(username=username, email=email, password=password) or {})
