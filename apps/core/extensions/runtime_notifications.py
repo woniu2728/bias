@@ -3,27 +3,24 @@ from __future__ import annotations
 from typing import Any
 
 from apps.core.extensions.runtime_core import (
+    RuntimeServiceProxy,
     get_extension_host_service,
-    require_extension_host_service,
     runtime_service_method,
-    runtime_service_value,
 )
+
+_notification = RuntimeServiceProxy("notifications.service")
 
 
 def get_runtime_notification_service(default: Any = None):
     return get_extension_host_service("notifications.service", default)
 
 
-def require_runtime_notification_service():
-    return require_extension_host_service("notifications.service")
+# 向后兼容
+require_runtime_notification_service = get_runtime_notification_service
 
 
 def get_runtime_notification_model():
-    return runtime_service_value(
-        require_runtime_notification_service(),
-        "model",
-        required_message="notifications.service 未提供通知模型",
-    )
+    return _notification.value("model", required_message="notifications.service 未提供通知模型")
 
 
 def notify_runtime_notification(method_name: str, *args, **kwargs):
