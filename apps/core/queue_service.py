@@ -124,8 +124,12 @@ class QueueService:
         try:
             from config.celery import app as celery_app
 
-            inspector = celery_app.control.inspect(timeout=0.5)
+            inspector = celery_app.control.inspect(timeout=3.0)
             ping_result = inspector.ping() or {}
+            if not ping_result:
+                # 首次探测可能因 broker 延迟失败，重试一次
+                inspector = celery_app.control.inspect(timeout=3.0)
+                ping_result = inspector.ping() or {}
         except Exception as exc:
             logger.warning("Queue worker health check failed.", exc_info=True)
             return {

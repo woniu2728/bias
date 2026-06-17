@@ -148,7 +148,7 @@ def delete_post_flags(post_id: int, user: Any) -> int:
     post = get_runtime_post_by_id(post_id, select_related=("discussion",))
     if not can_runtime_view_post(post, user):
         raise PermissionDenied("没有权限查看此帖子")
-    if not has_runtime_forum_permission(user, "admin.flag.view"):
+    if not has_runtime_forum_permission(user, "admin.flag.delete"):
         raise PermissionDenied("无权查看举报")
 
     with transaction.atomic():

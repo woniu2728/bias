@@ -54,6 +54,7 @@ from apps.core.resource_conversion import (
 
 
 _JSONAPI_SKIP = object()
+_NOT_CACHED = object()
 logger = logging.getLogger(__name__)
 
 class ResourceRegistry:
@@ -69,8 +70,11 @@ class ResourceRegistry:
         self._core_endpoint_keys: set[tuple[str, str, str]] = set()
         self._resolved_resource_cache: Dict[str, Resource] = {}
         self._resource_modifiers: dict[type, dict[str, list[Callable[[list[Any], Resource], list[Any]]]]] = {}
+        self._enabled_module_ids_cache: set[str] | None = _NOT_CACHED
 
     def _get_enabled_module_ids(self) -> set[str] | None:
+        if self._enabled_module_ids_cache is not _NOT_CACHED:
+            return self._enabled_module_ids_cache
         try:
             overrides = {
                 item["extension_id"]: bool(item["enabled"])
@@ -102,7 +106,12 @@ class ResourceRegistry:
         enabled_ids.update(definition.module_id for definitions in self._endpoints.values() for definition in definitions)
         enabled_ids.update(definition.module_id for definitions in self._sorts.values() for definition in definitions)
         enabled_ids.update(definition.module_id for definitions in self._filters.values() for definition in definitions)
-        return enabled_ids - disabled_ids
+        result = enabled_ids - disabled_ids
+        self._enabled_module_ids_cache = result
+        return result
+
+    def _invalidate_enabled_module_ids_cache(self) -> None:
+        self._enabled_module_ids_cache = _NOT_CACHED
 
     def _is_module_enabled(self, module_id: str, enabled_module_ids: set[str] | None) -> bool:
         if enabled_module_ids is None:
@@ -2716,6 +2725,8 @@ _resource_registry: ResourceRegistry | None = None
 def reset_resource_registry_state() -> None:
     global _resource_registry
 
+    if _resource_registry is not None:
+        _resource_registry._invalidate_enabled_module_ids_cache()
     _resource_registry = None
 
 

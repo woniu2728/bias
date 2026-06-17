@@ -51,11 +51,13 @@ def register(request, payload: UserRegisterSchema):
             payload.human_verification_token,
             context={"payload": payload.human_verification_payload or {}},
         )
-        return UserService.create_user(
+        user = UserService.create_user(
             username=payload.username,
             email=payload.email,
             password=payload.password,
         )
+        record_auth_rate_limit_failure("register", request, payload.email)
+        return user
     except AuthRateLimitExceeded as e:
         return api_error(str(e), status=429)
     except RuntimeHumanVerificationError as e:
@@ -84,7 +86,7 @@ def login(request, payload: UserLoginSchema):
         access_token = str(refresh.access_token)
         response = JsonResponse({"access": access_token})
         response = set_access_token_cookie(response, access_token)
-        clear_auth_rate_limit("login", request, payload.identification)
+        clear_auth_rate_limit("login", request, payload.identification, dimensions="id")
         return set_refresh_token_cookie(response, str(refresh))
     except AuthRateLimitExceeded as e:
         return api_error(str(e), status=429)

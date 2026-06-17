@@ -363,7 +363,7 @@ def build_runtime_risks(
         risks.append(
             {
                 "code": "queue-worker-unavailable",
-                "level": "danger",
+                "level": "warning",
                 "title": "队列已启用但没有可用 worker",
                 "message": queue_worker_status.get("message") or "当前队列会持续回退到同步执行，后台异步任务无法稳定处理。",
             }
