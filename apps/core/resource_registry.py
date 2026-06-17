@@ -75,10 +75,12 @@ class ResourceRegistry:
         from apps.core.registry.preload_planner import PreloadPlanner
         from apps.core.registry.search_bridge import SearchBridge
         from apps.core.registry.definition_mutator import DefinitionMutator
+        from apps.core.registry.endpoint_context import EndpointContextResolver
 
         self._preload_planner: PreloadPlanner = PreloadPlanner(self)
         self._search_bridge: SearchBridge = SearchBridge(self)
         self._definition_mutator: DefinitionMutator = DefinitionMutator(self)
+        self._endpoint_context: EndpointContextResolver = EndpointContextResolver(self)
 
     def _get_enabled_module_ids(self) -> set[str] | None:
         if self._enabled_module_ids_cache is not _NOT_CACHED:
@@ -737,125 +739,18 @@ class ResourceRegistry:
         *,
         creating: bool = False,
     ) -> Any:
-        resolved_context = dict(context or {})
-        resolved_context["creating"] = bool(creating)
-        input_payload = dict(payload or {})
-        self._run_extension_validators(resource, instance, input_payload, resolved_context)
-        fields = {
-            definition.field: definition
-            for definition in self.get_effective_fields(resource, resolved_context)
-        }
-        relationships = {
-            definition.relationship: definition
-            for definition in self.get_effective_relationships(resource, resolved_context)
-        }
-
-        missing = [
-            definition.field
-            for definition in fields.values()
-            if (
-                (creating and definition.required_on_create)
-                or (not creating and definition.required_on_update)
-            )
-            and definition.field not in input_payload
-        ]
-        if missing:
-            raise JsonApiValidationError(
-                f"缺少必填字段: {', '.join(missing)}",
-                pointer=f"/data/attributes/{missing[0]}",
-            )
-
-        for field_name, value in input_payload.items():
-            definition = fields.get(field_name)
-            if definition is None:
-                continue
-            if not self._is_field_writable(definition, instance, resolved_context):
-                raise JsonApiForbidden(f"字段不可写: {field_name}", pointer=f"/data/attributes/{field_name}")
-            value = self._deserialize_resource_value(definition, value, resolved_context)
-            self._validate_resource_value(definition, value, resolved_context)
-            self._set_resource_value(definition, instance, value, resolved_context)
-        relationship_payload = self._extract_relationship_payload(context)
-        missing_relationships = [
-            definition.relationship
-            for definition in relationships.values()
-            if (
-                (creating and definition.required_on_create)
-                or (not creating and definition.required_on_update)
-            )
-            and definition.relationship not in relationship_payload
-        ]
-        if missing_relationships:
-            raise JsonApiValidationError(
-                f"缺少必填关系: {', '.join(missing_relationships)}",
-                pointer=f"/data/relationships/{missing_relationships[0]}",
-            )
-        for relationship_name, value in relationship_payload.items():
-            definition = relationships.get(relationship_name)
-            if definition is None:
-                continue
-            if not self._is_field_writable(definition, instance, resolved_context):
-                raise JsonApiForbidden(f"关系不可写: {relationship_name}", pointer=f"/data/relationships/{relationship_name}")
-            value = self._deserialize_resource_value(definition, value, resolved_context)
-            self._validate_resource_value(definition, value, resolved_context)
-            self._set_resource_value(definition, instance, value, resolved_context)
-        return instance
+        return self._endpoint_context.apply_resource_payload(resource, instance, payload, context, creating=creating)
 
     def _run_extension_validators(self, resource: str, instance: Any, payload: dict, context: dict) -> None:
-        try:
-            from apps.core.extensions.bootstrap import get_extension_host
-        except Exception:
-            return
-        host = get_extension_host()
-        if host is None:
-            return
-        validators = getattr(host, "validators", None)
-        if validators is None:
-            return
-        target_keys = [resource]
-        if instance is not None:
-            target_keys.extend([
-                instance.__class__,
-                f"{instance.__class__.__module__}.{instance.__class__.__qualname__}",
-            ])
-        seen = set()
-        definitions = []
-        for target in target_keys:
-            for definition in validators.get_definitions(target=target):
-                key = (definition.module_id, definition.key, definition.target)
-                if key in seen:
-                    continue
-                seen.add(key)
-                definitions.append(definition)
-        for definition in definitions:
-            try:
-                definition.callback({
-                    "resource": resource,
-                    "instance": instance,
-                    "payload": payload,
-                    "context": context,
-                    "creating": bool(context.get("creating")),
-                }, context)
-            except JsonApiValidationError:
-                raise
-            except ValueError as exc:
-                raise JsonApiValidationError(str(exc), pointer="/data/attributes") from exc
+        self._endpoint_context._run_extension_validators(resource, instance, payload, context)
 
     def dispatch_resource_endpoint(self, definition: ResourceEndpointDefinition, context: dict):
-        from apps.core.resource_endpoint_runner import ResourceEndpointRunner
-
-        return ResourceEndpointRunner(self).run(definition, ensure_resource_context(context))
+        return self._endpoint_context.dispatch_resource_endpoint(definition, context)
 
     @staticmethod
     def _extract_resource_payload(context: dict) -> dict:
-        payload = context.get("payload") or {}
-        if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
-            data = payload["data"]
-            if isinstance(data.get("attributes"), dict):
-                return dict(data["attributes"])
-            return {}
-        if payload:
-            raise BadJsonApiRequest("data must be an object", pointer="/data")
-        return {}
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        return EndpointContextResolver._extract_resource_payload(context)
 
     def _parse_jsonapi_data(
         self,
@@ -1130,32 +1025,23 @@ class ResourceRegistry:
 
     @staticmethod
     def _call_endpoint_before(definition: ResourceEndpointDefinition, context: dict) -> None:
-        if callable(definition.before_hook):
-            definition.before_hook(context)
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        EndpointContextResolver._call_endpoint_before(definition, context)
 
     @staticmethod
     def _call_endpoint_after(definition: ResourceEndpointDefinition, context: dict, value: Any):
-        if callable(definition.after_hook):
-            updated = definition.after_hook(context, value)
-            if updated is not None:
-                return updated
-        return value
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        return EndpointContextResolver._call_endpoint_after(definition, context, value)
 
     @staticmethod
     def _resolve_endpoint_meta(definition: ResourceEndpointDefinition, context: dict, value: Any) -> dict:
-        if callable(definition.meta_resolver):
-            output = definition.meta_resolver(context, value)
-            if isinstance(output, dict):
-                return output
-        return {}
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        return EndpointContextResolver._resolve_endpoint_meta(definition, context, value)
 
     @staticmethod
     def _resolve_endpoint_links(definition: ResourceEndpointDefinition, context: dict, value: Any) -> dict:
-        if callable(definition.links_resolver):
-            output = definition.links_resolver(context, value)
-            if isinstance(output, dict):
-                return output
-        return {}
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        return EndpointContextResolver._resolve_endpoint_links(definition, context, value)
 
     def _merge_endpoint_document_meta_links(
         self,
@@ -1164,29 +1050,14 @@ class ResourceRegistry:
         context: dict,
         value: Any,
     ) -> None:
-        meta = self._resolve_endpoint_meta(definition, context, value)
-        if meta:
-            document["meta"] = {**dict(document.get("meta") or {}), **meta}
-        links = self._resolve_endpoint_links(definition, context, value)
-        if links:
-            document["links"] = {**dict(document.get("links") or {}), **links}
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        EndpointContextResolver._merge_endpoint_document_meta_links(document, definition, context, value)
 
     @staticmethod
+    @staticmethod
     def _extract_relationship_payload(context: dict) -> dict:
-        context = context or {}
-        payload = context.get("payload") or {}
-        if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
-            return {}
-        relationships = payload["data"].get("relationships")
-        if not isinstance(relationships, dict):
-            return {}
-        output = {}
-        for name, value in relationships.items():
-            if isinstance(value, dict) and "data" in value:
-                output[name] = value["data"]
-            else:
-                output[name] = value
-        return output
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        return EndpointContextResolver._extract_relationship_payload(context)
 
     @staticmethod
     def _ensure_resource_ability(
@@ -1226,18 +1097,13 @@ class ResourceRegistry:
 
     @staticmethod
     def _resolve_endpoint_include(definition: ResourceEndpointDefinition, context: dict) -> tuple[str, ...]:
-        raw_include = context.get("query", {}).get("include") if isinstance(context.get("query"), dict) else None
-        if raw_include:
-            if isinstance(raw_include, str):
-                return tuple(item.strip() for item in raw_include.split(",") if item.strip())
-            if isinstance(raw_include, (list, tuple)):
-                return tuple(str(item).strip() for item in raw_include if str(item).strip())
-        return tuple(definition.default_include or ())
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        return EndpointContextResolver._resolve_endpoint_include(definition, context)
 
     @staticmethod
     def _resolve_endpoint_sort(definition: ResourceEndpointDefinition, context: dict) -> str:
-        query = context.get("query") if isinstance(context.get("query"), dict) else {}
-        return str(query.get("sort") or definition.default_sort or "").strip()
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        return EndpointContextResolver._resolve_endpoint_sort(definition, context)
 
     @staticmethod
     def _resolve_endpoint_filters(context: dict) -> dict[str, Any]:
@@ -1259,36 +1125,13 @@ class ResourceRegistry:
 
     @staticmethod
     def _resolve_endpoint_pagination(definition: ResourceEndpointDefinition, context: dict) -> dict[str, int]:
-        query = context.get("query") if isinstance(context.get("query"), dict) else {}
-        default_limit = max(1, int(definition.pagination_default_limit or 20))
-        max_limit = max(1, int(definition.pagination_max_limit or default_limit))
-        raw_limit = query.get("page[limit]", default_limit)
-        raw_offset = query.get("page[offset]", None)
-        raw_page_number = query.get("page[number]", None)
-
-        limit = ResourceRegistry._parse_non_negative_int(raw_limit, "page[limit]")
-        if limit < 1:
-            raise ValueError("page[limit] must be at least 1")
-        limit = min(limit, max_limit)
-
-        if raw_page_number not in (None, ""):
-            page_number = ResourceRegistry._parse_non_negative_int(raw_page_number, "page[number]")
-            if page_number < 1:
-                raise ValueError("page[number] must be at least 1")
-            offset = (page_number - 1) * limit
-        else:
-            offset = ResourceRegistry._parse_non_negative_int(raw_offset or 0, "page[offset]")
-        return {"limit": limit, "offset": offset}
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        return EndpointContextResolver._resolve_endpoint_pagination(definition, context)
 
     @staticmethod
     def _parse_non_negative_int(value: Any, name: str) -> int:
-        try:
-            output = int(value)
-        except (TypeError, ValueError):
-            raise ValueError(f"{name} must be an integer")
-        if output < 0:
-            raise ValueError(f"{name} must be at least 0")
-        return output
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        return EndpointContextResolver._parse_non_negative_int(value, name)
 
     @staticmethod
     def _deserialize_resource_value(definition: Any, value: Any, context: dict) -> Any:
@@ -1667,63 +1510,13 @@ class ResourceRegistry:
         return ResourceSerializer.is_jsonapi_identifier(value)
 
     def apply_named_sort(self, resource: str, queryset, sort: str, context: dict | None = None):
-        normalized = str(sort or "").strip()
-        resolved_context = dict(context or {})
-        descending = normalized.startswith("-")
-        sort_name = normalized[1:] if descending else normalized
-        for definition in self.get_effective_sorts(resource, resolved_context):
-            if definition.sort != sort_name:
-                continue
-            handler = definition.handler
-            sort_context = {**resolved_context, "sort": sort_name, "descending": descending}
-            if callable(handler):
-                return handler(queryset, sort_context)
-            if isinstance(handler, (list, tuple)):
-                fields = self._sort_order_fields(handler, descending)
-                return queryset.order_by(*fields)
-            if isinstance(handler, str) and handler.strip():
-                field = handler.strip()
-                if descending and not field.startswith("-"):
-                    field = f"-{field}"
-                return queryset.order_by(field)
-        return queryset
+        return self._endpoint_context.apply_named_sort(resource, queryset, sort, context)
 
     def has_named_sort(self, resource: str, sort: str, context: dict | None = None) -> bool:
-        normalized = str(sort or "").strip()
-        resolved_context = dict(context or {})
-        for definition in self.get_effective_sorts(resource, resolved_context):
-            if definition.sort != normalized:
-                continue
-            handler = definition.handler
-            if callable(handler):
-                return True
-            if isinstance(handler, (list, tuple)) and handler:
-                return True
-            if isinstance(handler, str) and handler.strip():
-                return True
-        return False
+        return self._endpoint_context.has_named_sort(resource, sort, context)
 
     def apply_resource_filters(self, resource: str, queryset, filters: dict[str, Any], context: dict | None = None):
-        output = queryset
-        resolved_context = dict(context or {})
-        available = {
-            definition.filter: definition
-            for definition in self.get_effective_filters(resource, resolved_context)
-            if self._is_filter_visible(definition, resolved_context)
-        }
-        for name, value in (filters or {}).items():
-            normalized = str(name or "").strip()
-            if normalized == "q":
-                output = self._apply_default_fulltext_filter(resource, output, value, resolved_context)
-                continue
-            negate = normalized.startswith("-")
-            filter_name = normalized[1:] if negate else normalized
-            definition = available.get(filter_name)
-            if definition is None:
-                raise BadJsonApiRequest(f"Invalid filter: {filter_name}", parameter=f"filter[{filter_name}]")
-            filter_context = {**resolved_context, "filter": filter_name, "negate": negate}
-            output = definition.handler(output, value, filter_context)
-        return output
+        return self._endpoint_context.apply_resource_filters(resource, queryset, filters, context)
 
     def _search_resource_index(
         self,
@@ -1762,15 +1555,8 @@ class ResourceRegistry:
 
     @staticmethod
     def _sort_order_fields(fields: tuple | list, descending: bool) -> list[str]:
-        output = []
-        for field in fields:
-            normalized = str(field or "").strip()
-            if not normalized:
-                continue
-            if descending and not normalized.startswith("-"):
-                normalized = f"-{normalized}"
-            output.append(normalized)
-        return output
+        from apps.core.registry.endpoint_context import EndpointContextResolver
+        return EndpointContextResolver._sort_order_fields(fields, descending)
 
     def _apply_default_fulltext_filter(self, resource: str, queryset, value: Any, context: dict):
         return self._search_bridge.apply_default_fulltext_filter(resource, queryset, value, context)

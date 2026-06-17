@@ -272,25 +272,48 @@ class EndpointContextResolver:
     def _resolve_endpoint_pagination(definition, context):
         if not definition.paginate:
             return None
-        q = context.get("query") or {}
-        p = EndpointContextResolver._parse_non_negative_int(q.get("page"), "page") or 1
-        l = EndpointContextResolver._parse_non_negative_int(q.get("limit"), "limit") or definition.pagination_default_limit or 20
-        ml = definition.pagination_max_limit or 50
-        l = min(l, ml)
-        return {"offset": max(p - 1, 0) * l, "limit": l, "page": p}
+        query = context.get("query") if isinstance(context.get("query"), dict) else {}
+        default_limit = max(1, int(definition.pagination_default_limit or 20))
+        max_limit = max(1, int(definition.pagination_max_limit or default_limit))
+        raw_limit = query.get("page[limit]", default_limit)
+        raw_offset = query.get("page[offset]", None)
+        raw_page_number = query.get("page[number]", None)
+
+        limit = EndpointContextResolver._parse_non_negative_int(raw_limit, "page[limit]")
+        if limit < 1:
+            raise ValueError("page[limit] must be at least 1")
+        limit = min(limit, max_limit)
+
+        if raw_page_number not in (None, ""):
+            page_number = EndpointContextResolver._parse_non_negative_int(raw_page_number, "page[number]")
+            if page_number < 1:
+                raise ValueError("page[number] must be at least 1")
+            offset = (page_number - 1) * limit
+        else:
+            offset = EndpointContextResolver._parse_non_negative_int(raw_offset or 0, "page[offset]")
+        return {"limit": limit, "offset": offset}
 
     @staticmethod
     def _parse_non_negative_int(value, name):
-        if value is None:
-            return None
         try:
-            return max(int(str(value or "0").strip()), 0)
-        except (ValueError, TypeError):
-            raise BadJsonApiRequest(f"无效的 {name} 参数值", parameter=f"{name}")
+            output = int(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"{name} must be an integer")
+        if output < 0:
+            raise ValueError(f"{name} must be at least 0")
+        return output
 
     @staticmethod
     def _sort_order_fields(fields, descending):
-        return [f"-{f.strip()}" if descending and f.strip() else f.strip() for f in fields if f.strip()]
+        output = []
+        for field in fields:
+            normalized = str(field or "").strip()
+            if not normalized:
+                continue
+            if descending and not normalized.startswith("-"):
+                normalized = f"-{normalized}"
+            output.append(normalized)
+        return output
 
     @staticmethod
     def _validate_field(definition, value, context):
