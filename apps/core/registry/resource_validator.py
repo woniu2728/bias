@@ -193,8 +193,8 @@ class ResourceValidator:
                 continue
             value = attributes_payload.get(definition.field)
             try:
-                value = self._deserialize_resource_value(definition, value, context)
-                self._validate_resource_value(definition, value, context)
+                value = self._store._deserialize_resource_value(definition, value, context)
+                ResourceValidator._validate_resource_value(definition, value, context)
             except JsonApiValidationError as exc:
                 errors.append(ResourceValidator._validation_error_to_document(exc, definition, messages, attributes))
         for definition in self._store.get_effective_relationships(resource_object.type(), context):
@@ -205,8 +205,8 @@ class ResourceValidator:
             if isinstance(value, dict) and "data" in value:
                 value = value["data"]
             try:
-                value = self._deserialize_resource_value(definition, value, context)
-                self._validate_resource_value(definition, value, context)
+                value = self._store._deserialize_resource_value(definition, value, context)
+                ResourceValidator._validate_resource_value(definition, value, context)
             except JsonApiValidationError as exc:
                 errors.append(ResourceValidator._validation_error_to_document(exc, definition, messages, attributes))
         return errors
