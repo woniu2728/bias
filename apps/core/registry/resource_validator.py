@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 from apps.core.resource_errors import JsonApiValidationError
 from apps.core.resource_objects import Resource
+from apps.core.resource_validation import ResourceValidationError, ResourceValidatorFactory
 
 class ResourceValidator:
     def __init__(self, store: Any):
