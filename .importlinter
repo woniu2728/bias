@@ -1,0 +1,14 @@
+[importlinter]
+root_packages =
+    apps
+    extensions
+include_external_packages = False
+
+[importlinter:forbidden-core-extensions]
+type = forbidden
+name = Core must not depend on extension packages
+source_modules =
+    apps.core
+forbidden_modules =
+    extensions
+exclude = ^apps\.core\.extensions\b

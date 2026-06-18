@@ -58,3 +58,4 @@ factory-boy==3.3.0
 black==24.2.0
 flake8==7.0.0
 isort==5.13.2
+import-linter==2.11
