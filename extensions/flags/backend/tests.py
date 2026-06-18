@@ -110,7 +110,7 @@ class FlagsExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
         owned_item = audit["items"][0]
 
         self.assertEqual(extension["id"], "flags")
-        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+        self.assertIn("0001_state_post_flag.py", extension["migration_plan"]["pending_files"])
         self.assertEqual(audit["extension_native_count"], 1)
         self.assertEqual(audit["app_label_migration_required_count"], 0)
         self.assertEqual(audit["app_label_migration_plan_required_count"], 0)
@@ -458,7 +458,7 @@ class FlagsExtensionTests(TestCase):
             ),
         )
 
-        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime_models.get_runtime_model_service", return_value=app.models):
             visible_flag_ids = set(
                 scope_flag_visibility(
                     PostFlag.objects.filter(id__in=[allowed_flag.id, denied_flag.id]),
