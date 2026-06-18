@@ -24,7 +24,7 @@ from apps.core.models import AuditLog
 from apps.core.extensions import ResourceEndpointDefinition
 from extensions.testing import ResourceRegistry
 from apps.core.search_index_service import get_search_index_definitions
-from extensions.testing import ExtensionRuntimeTestMixin
+from extensions.testing import ExtensionRuntimeTestMixin, bootstrap_enabled_extension_application
 from extensions.posts.backend.resources import resolve_post_event_data
 from extensions.discussions.backend.visibility import (
     build_post_visibility_q,
@@ -136,8 +136,9 @@ class PostsExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
         self.assertIn("0005_transfer_extension_owned_models_state.py", extension["migration_plan"]["pending_files"])
 
 
-class PostRegistryTests(TestCase):
+class PostRegistryTests(ExtensionRuntimeTestMixin, TestCase):
     def test_posts_extension_registers_default_comment_post_type(self):
+        self.bootstrap_extensions("posts")
         registry = get_forum_registry()
 
         self.assertEqual(registry.get_default_post_type_code(), "comment")

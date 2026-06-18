@@ -49,8 +49,9 @@ Group = RuntimeModelProxy(get_runtime_group_model)
 Permission = RuntimeModelProxy(get_runtime_permission_model)
 
 
-class FlagsPermissionRegistryTests(TestCase):
+class FlagsPermissionRegistryTests(ExtensionRuntimeTestMixin, TestCase):
     def test_flags_admin_permissions_are_registered_by_extension(self):
+        self.bootstrap_extensions("flags")
         permissions = {
             "admin.flag.view",
             "admin.flag.resolve",
