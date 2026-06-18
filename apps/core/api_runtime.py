@@ -124,7 +124,7 @@ def _make_named_route_view(route):
                 try:
                     return handler(**path_params)
                 except TypeError:
-                    pass
+                    return handler(request)
             return handler(request)
 
     view.__name__ = f"extension_route_{route.module_id}_{route.name}".replace("-", "_").replace(".", "_")

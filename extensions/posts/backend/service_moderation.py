@@ -18,6 +18,7 @@ from apps.core.extensions.runtime import (
     increment_runtime_user_comment_count,
     mark_runtime_discussion_read,
 )
+from extensions.discussions.backend.models import Discussion
 
 
 def approve_post(
@@ -51,13 +52,13 @@ def approve_post(
 
         discussion = post.discussion
         if not was_counted:
-            discussion.comment_count = F("comment_count") + 1
+            updates = {"comment_count": F("comment_count") + 1}
             if not discussion.last_post_number or post.number >= discussion.last_post_number:
-                discussion.last_posted_at = now
-                discussion.last_posted_user = post.user
-                discussion.last_post_id = post.id
-                discussion.last_post_number = post.number
-            discussion.save()
+                updates["last_posted_at"] = now
+                updates["last_posted_user"] = post.user
+                updates["last_post_id"] = post.id
+                updates["last_post_number"] = post.number
+            type(discussion).objects.filter(id=discussion.id).update(**updates)
 
             if post.user and post.type in user_counted_post_types:
                 increment_runtime_user_comment_count(post.user_id, 1)

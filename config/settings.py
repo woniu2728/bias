@@ -3,8 +3,12 @@ Django settings for bias project.
 """
 
 from pathlib import Path
+import logging as _logging
 import os
 from datetime import timedelta
+
+
+logger = _logging.getLogger(__name__)
 
 from apps.core.bootstrap_config import load_site_bootstrap
 from apps.core.extension_django_apps import discover_extension_django_apps, discover_extension_django_migration_modules
@@ -350,7 +354,7 @@ if not os.getenv("BIAS_DOCKER", os.getenv("BIAS_SITE_CONFIG", "")):
         }
         LOGGING['loggers']['django']['handlers'] = ['console', 'file']
     except (OSError, PermissionError):
-        pass
+        _logger.warning("无法创建日志目录 %s，日志将仅输出到控制台", _LOG_DIR)
 
 # Debug Toolbar (only in DEBUG mode)
 ENABLE_DEBUG_TOOLBAR = (

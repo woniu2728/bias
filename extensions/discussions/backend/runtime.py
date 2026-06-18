@@ -160,20 +160,27 @@ def _set_subscription(discussion_id: int, user, subscribed: bool) -> bool:
     from django.utils import timezone
     from apps.core.extensions.platform import can_view_model_instance
     from django.core.exceptions import PermissionDenied
+    from django.db import IntegrityError
     from extensions.discussions.backend.models import Discussion, DiscussionUser
 
     discussion = Discussion.objects.get(id=discussion_id)
     if not can_view_model_instance(Discussion, discussion, user=user, ability="view"):
         raise PermissionDenied("没有权限查看此讨论")
 
-    state, _ = DiscussionUser.objects.get_or_create(
-        discussion=discussion,
-        user=user,
-        defaults={
-            "last_read_at": timezone.now(),
-            "last_read_post_number": discussion.last_post_number or 0,
-        },
-    )
+    try:
+        state, _ = DiscussionUser.objects.get_or_create(
+            discussion=discussion,
+            user=user,
+            defaults={
+                "last_read_at": timezone.now(),
+                "last_read_post_number": discussion.last_post_number or 0,
+            },
+        )
+    except IntegrityError:
+        state = DiscussionUser.objects.get(
+            discussion=discussion,
+            user=user,
+        )
     if state.is_subscribed == subscribed:
         return False
     state.is_subscribed = subscribed

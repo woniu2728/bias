@@ -186,17 +186,22 @@ def _normalize_usernames(usernames) -> list[str]:
 
 
 def ensure_admin_user(*, username: str, email: str, password: str) -> dict:
+    from django.db import IntegrityError
     from extensions.users.backend.models import Group, User
 
-    user, created = User.objects.get_or_create(
-        username=username,
-        defaults={
-            "email": email,
-            "is_staff": True,
-            "is_superuser": True,
-            "is_email_confirmed": True,
-        },
-    )
+    try:
+        user, created = User.objects.get_or_create(
+            username=username,
+            defaults={
+                "email": email,
+                "is_staff": True,
+                "is_superuser": True,
+                "is_email_confirmed": True,
+            },
+        )
+    except IntegrityError:
+        user = User.objects.get(username=username)
+        created = False
 
     user.email = email
     user.is_staff = True

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
+
+_logger = logging.getLogger(__name__)
 from typing import Any, List, Optional
 
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
+from django.db import IntegrityError
 from django.db.models import F
 from django.utils import timezone
 
@@ -45,7 +49,7 @@ def record_view(
             return False
         cache.set(cache_key, True, throttle_seconds)
     except Exception:
-        pass
+        _logger.exception("cache throttle 失败 discussion_id=%s", discussion.id)
 
     try:
         pending_count = increment_pending_view_count(
@@ -60,6 +64,7 @@ def record_view(
             flush_delay_seconds=flush_delay_seconds,
         )
     except Exception:
+        _logger.exception("缓存写入失败，回退到 F() 自增 discussion_id=%s", discussion.id)
         Discussion.objects.filter(id=discussion.id).update(view_count=F("view_count") + 1)
 
     discussion.view_count = (discussion.view_count or 0) + 1
@@ -256,14 +261,20 @@ def update_read_state(discussion_id: int, user: Any, last_read_post_number: int)
         raise PermissionDenied("没有权限查看此讨论")
 
     clamped_number = max(1, min(last_read_post_number, discussion.last_post_number or 1))
-    state, _ = DiscussionUser.objects.get_or_create(
-        discussion=discussion,
-        user=user,
-        defaults={
-            "last_read_at": timezone.now(),
-            "last_read_post_number": clamped_number,
-        },
-    )
+    try:
+        state, _ = DiscussionUser.objects.get_or_create(
+            discussion=discussion,
+            user=user,
+            defaults={
+                "last_read_at": timezone.now(),
+                "last_read_post_number": clamped_number,
+            },
+        )
+    except IntegrityError:
+        state = DiscussionUser.objects.get(
+            discussion=discussion,
+            user=user,
+        )
 
     next_number = max(state.last_read_post_number, clamped_number)
     update_fields = []
