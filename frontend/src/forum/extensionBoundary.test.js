@@ -361,7 +361,8 @@ test('discussion and post sdks own their runtime exports', () => {
     readFileSync(resolve(repoRoot, 'extensions/discussions/frontend/forum/sdk.js'), 'utf8'),
     readFileSync(resolve(repoRoot, 'extensions/discussions/frontend/forum/nodeSdk.js'), 'utf8'),
     readFileSync(resolve(repoRoot, 'extensions/posts/frontend/forum/sdk.js'), 'utf8'),
-    readFileSync(resolve(repoRoot, 'extensions/posts/frontend/forum/nodeSdk.js'), 'utf8'),
+    readFileSync(resolve(repoRoot, 'extensions/posts/frontend/forum/sdk.js'), 'utf8'),
+    // posts 已合并 — nodeSdk.js 已删除，sdk.js 同时用作浏览器和 Node 入口
   ]
 
   assert.deepEqual(

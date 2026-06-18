@@ -11,28 +11,18 @@ test('public extension SDK aliases are discovered from extension manifests', () 
   const nodeAliases = createNodeSdkAliasMap()
   const jsconfigPaths = createJsconfigSdkPaths()
 
-  for (const extensionId of [
-    'ai',
-    'approval',
-    'discussions',
-    'emoji',
-    'flags',
-    'likes',
-    'mentions',
-    'notifications',
-    'points',
-    'posts',
-    'realtime',
-    'search',
-    'security',
-    'subscriptions',
-    'tags',
-    'uploads',
-    'users',
-  ]) {
+  // 这些扩展的 nodeSdk.js 已合并删除，node 环境会自动回退到 sdk.js
+  const mergedExtensions = new Set(['approval', 'likes', 'notifications', 'points', 'posts', 'search', 'subscriptions', 'uploads', 'users'])
+  const splitExtensions = new Set(['ai', 'discussions', 'emoji', 'flags', 'mentions', 'realtime', 'security', 'tags'])
+
+  for (const extensionId of [...mergedExtensions, ...splitExtensions]) {
     const alias = `@bias/${extensionId}`
     assert.match(browserAliases.get(alias), new RegExp(`extensions[/\\\\]${extensionId}[/\\\\]frontend[/\\\\]forum[/\\\\]sdk\\.js$`))
-    assert.match(nodeAliases.get(alias), new RegExp(`extensions[/\\\\]${extensionId}[/\\\\]frontend[/\\\\]forum[/\\\\]nodeSdk\\.js$`))
+    if (splitExtensions.has(extensionId)) {
+      assert.match(nodeAliases.get(alias), new RegExp(`extensions[/\\\\]${extensionId}[/\\\\]frontend[/\\\\]forum[/\\\\]nodeSdk\\.js$`))
+    } else {
+      assert.match(nodeAliases.get(alias), new RegExp(`extensions[/\\\\]${extensionId}[/\\\\]frontend[/\\\\]forum[/\\\\]sdk\\.js$`))
+    }
     assert.deepEqual(jsconfigPaths[alias], [`../extensions/${extensionId}/frontend/forum/sdk.js`])
   }
 
