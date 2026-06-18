@@ -13,6 +13,7 @@ from apps.core.extensions.platform import (
     clear_refresh_token_cookie,
     get_frontend_url,
     is_debug_mode,
+    is_jwt_blacklisted,
     set_access_token_cookie,
     set_refresh_token_cookie,
 )
@@ -101,6 +102,11 @@ def refresh_access_token(request):
     refresh_token = request.COOKIES.get(REFRESH_TOKEN_COOKIE_NAME)
     if not refresh_token:
         return api_error("登录状态已过期，请重新登录", status=401)
+
+    if is_jwt_blacklisted(refresh_token):
+        response = api_error("登录状态已过期，请重新登录", status=401)
+        response = clear_access_token_cookie(response)
+        return clear_refresh_token_cookie(response)
 
     try:
         refresh = RefreshToken(refresh_token)
