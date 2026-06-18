@@ -67,10 +67,21 @@
 ## 性能优化
 
 ### 4. 全文搜索 GIN 索引 (P1)
-- **现状**: `extensions/search/backend/services.py` 用 `SearchVector(...)` 实时算 `to_tsvector`，无 `GinIndex`
-- **方案**: 加 `SearchVectorField` + `GinIndex`，或 PG 函数索引
-- **风险**: 中（需要数据库迁移、验证查询计划）
-- **预估**: 1-2 天
+- **现状 (2026-06-18 评估)**:
+  - 三个扩展已通过 `SearchIndexExtender.postgres_index()` 注册了 SQL 级 GIN 功能索引：
+    - `discussions_title_slug_fts_idx`（discussions 扩展）
+    - `posts_content_fts_idx`（posts 扩展，带 searchable type WHERE 过滤）
+    - `users_profile_fts_idx`（users 扩展）
+  - 索引通过 admin API `POST /api/admin/search-indexes/rebuild` 在 PostgreSQL 上生效
+  - 搜索代码仍用 `SearchVector(...)` 实时计算 `to_tsvector`（无存储字段）
+- **未完成**: Django 模型级 `SearchVectorField` + `GinIndex` 未添加，搜索逻辑仍是实时计算
+- **困难点**:
+  1. 搜索目标模型（Post/Discussion/User）在扩展包中，不是 `apps.core` 模型；加字段需要改扩展模型 + 创建扩展迁移
+  2. 需要 setup trigger/signal 在内容变更时自动刷新向量字段（否则搜索和内容会不一致）
+  3. PostgreSQL 函数索引（已实现）在 PG 查询计划中通常能匹配 `to_tsvector(...)` 表达式，性能瓶颈不明确 — 缺少实测数据支撑"必须改"的结论
+  4. 本地用 SQLite（不支持 GIN），改完无法本地验证查询计划，需要 PostgreSQL 实例
+- **建议**: 先在生产 PostgreSQL 上用 `EXPLAIN ANALYZE` 验证现有函数索引是否命中，确认优化必要性后再投入模型级改造
+- **预估**: 1-2 天（如有 PostgreSQL 环境）
 
 ### 5. web 多 worker + LocMem 不一致报警 (P2)
 - **现状**: gunicorn 2 worker，无 Redis 时限流/在线状态/缓存不一致
