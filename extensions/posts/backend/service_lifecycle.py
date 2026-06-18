@@ -24,7 +24,6 @@ from extensions.posts.backend.events import (
     PostResubmittedEvent,
 )
 from extensions.posts.backend.models import Post
-from extensions.discussions.backend.models import Discussion
 
 
 def create_post(
@@ -70,7 +69,7 @@ def create_post(
         refresh_runtime_model_private(post, save=True)
 
         if not requires_approval:
-            Discussion.objects.filter(id=discussion.id).update(
+            type(discussion).objects.filter(id=discussion.id).update(
                 comment_count=F("comment_count") + 1,
                 last_posted_at=timezone.now(),
                 last_posted_user=user,
