@@ -39,7 +39,7 @@ class PointLedgerEntry(models.Model):
     delta = models.IntegerField()
     balance_after = models.IntegerField()
     kind = models.CharField(max_length=20, choices=KIND_CHOICES, db_index=True)
-    reason = models.CharField(max_length=120, db_index=True)
+    reason = models.CharField(max_length=120)
     source_type = models.CharField(max_length=80, blank=True, db_index=True)
     source_id = models.CharField(max_length=80, blank=True, db_index=True)
     idempotency_key = models.CharField(max_length=180, unique=True)

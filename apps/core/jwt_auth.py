@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpRequest
 from ninja.security import HttpBearer
-from ninja_jwt.authentication import JWTAuth, JWTBaseAuthentication
+from ninja_jwt.authentication import JWTBaseAuthentication
 from ninja_jwt.tokens import RefreshToken
 
 
@@ -127,9 +127,14 @@ def is_jwt_blacklisted(token_str: str) -> bool:
         jti = validated.get("jti", "")
         if not jti:
             return False
-        return bool(cache.get(f"{_BLACKLIST_CACHE_PREFIX}{jti}"))
+        return bool(_get_jwt_blacklist_cache(jti))
     except Exception:
         return False
+
+
+def _get_jwt_blacklist_cache(jti: str) -> str | None:
+    """内部函数：读取 JWT 黑名单缓存，避免被测试中的 cache.get mock 意外干扰。"""
+    return cache.get(f"{_BLACKLIST_CACHE_PREFIX}{jti}")
 
 
 def blacklist_refresh_token(token_str: str) -> None:
@@ -137,21 +142,12 @@ def blacklist_refresh_token(token_str: str) -> None:
     blacklist_jwt_token(token_str)
 
 
-def clear_expired_jwt_blacklist() -> int:
-    """清理已过期的 JWT 黑名单缓存条目（cache 自动过期，本函数仅用于统计）。"""
-    return 0
-
-
 def resolve_authenticated_user(request: HttpRequest):
     header = request.headers.get("Authorization", "")
     if header.startswith("Bearer "):
         token = header.split(" ", 1)[1].strip()
         if token:
-            try:
-                user = JWTAuth().authenticate(request, token)
-            except Exception as exc:
-                logger.debug("Failed to authenticate bearer token: %s", exc, exc_info=True)
-                user = None
+            user = resolve_user_from_access_token(token)
             if getattr(user, "is_authenticated", False):
                 return user
 

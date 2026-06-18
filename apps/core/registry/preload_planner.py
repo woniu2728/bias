@@ -64,9 +64,9 @@ class PreloadPlanner:
         include_tree = self._build_include_tree(include or ())
         include_set = set(include_tree.keys())
         for definition in self._store.get_effective_relationships(resource, resolved_context):
-            if include_set and definition.relationship not in include_set:
+            if not include_set:
                 continue
-            if not include_set and definition.relationship not in set():
+            if definition.relationship not in include_set:
                 continue
             if not self._store._is_relationship_includable(definition, resolved_context):
                 continue

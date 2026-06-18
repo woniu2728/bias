@@ -17,15 +17,15 @@ class Discussion(models.Model):
     ]
 
     title = models.CharField(max_length=200)
-    slug = models.SlugField(max_length=255, unique=True, db_index=True)
+    slug = models.SlugField(max_length=255, unique=True)
 
     # 作者
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='discussions')
 
     # 时间戳
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    last_posted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_posted_at = models.DateTimeField(null=True, blank=True)
 
     # 最后发帖用户
     last_posted_user = models.ForeignKey(
@@ -84,10 +84,8 @@ class Discussion(models.Model):
         db_table = 'discussions'
         ordering = ['-is_sticky', '-last_posted_at']
         indexes = [
-            models.Index(fields=['user']),
             models.Index(fields=['created_at']),
             models.Index(fields=['last_posted_at']),
-            models.Index(fields=['slug']),
             models.Index(fields=['is_sticky', 'last_posted_at']),
         ]
 
@@ -119,22 +117,6 @@ class Discussion(models.Model):
     def is_pending_approval(self):
         return self.approval_status == self.APPROVAL_PENDING
 
-    def increment_comment_count(self):
-        """增加评论数"""
-        self.comment_count += 1
-        self.save(update_fields=['comment_count'])
-
-    def decrement_comment_count(self):
-        """减少评论数"""
-        if self.comment_count > 0:
-            self.comment_count -= 1
-            self.save(update_fields=['comment_count'])
-
-    def increment_view_count(self):
-        """增加浏览次数"""
-        self.view_count += 1
-        self.save(update_fields=['view_count'])
-
 
 class DiscussionUser(models.Model):
     """
@@ -155,10 +137,6 @@ class DiscussionUser(models.Model):
     class Meta:
         db_table = 'discussion_user'
         unique_together = [['discussion', 'user']]
-        indexes = [
-            models.Index(fields=['discussion']),
-            models.Index(fields=['user']),
-        ]
 
     def __str__(self):
         return f"{self.user.username} - {self.discussion.title}"

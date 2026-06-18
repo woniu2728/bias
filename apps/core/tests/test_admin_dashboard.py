@@ -55,10 +55,11 @@ class AdminDashboardStatsApiTests(TestCase):
         NINJA_JWT={"ALGORITHM": "HS256", "SIGNING_KEY": "dashboard-jwt-secret-key-123456789012345"},
     )
     @patch("apps.core.admin_runtime_summary.probe_redis_ping")
-    @patch("apps.core.admin_runtime_summary.cache.get", return_value="ok")
-    @patch("apps.core.admin_runtime_summary.cache.set", return_value=None)
+    @patch("apps.core.admin_runtime_summary.cache")
     @patch("apps.core.admin_stats_api.QueueService.get_worker_status")
-    def test_admin_stats_marks_redis_and_queue_status(self, get_worker_status, _cache_set, _cache_get, probe_redis_ping):
+    def test_admin_stats_marks_redis_and_queue_status(self, get_worker_status, mock_cache, probe_redis_ping):
+        mock_cache.get.return_value = "ok"
+        mock_cache.set.return_value = None
         probe_redis_ping.return_value = {
             "available": True,
             "status": "available",
@@ -180,9 +181,10 @@ class AdminDashboardStatsApiTests(TestCase):
         CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {"hosts": [("localhost", 6379)]}}},
         CELERY_BROKER_URL="redis://localhost:6379/1",
     )
-    @patch("apps.core.admin_runtime_summary.cache.get", side_effect=RuntimeError("cache offline"))
-    @patch("apps.core.admin_runtime_summary.cache.set", side_effect=RuntimeError("cache offline"))
-    def test_admin_stats_reports_cache_backend_unavailable(self, _cache_set, _cache_get):
+    @patch("apps.core.admin_runtime_summary.cache")
+    def test_admin_stats_reports_cache_backend_unavailable(self, mock_cache):
+        mock_cache.get.side_effect = RuntimeError("cache offline")
+        mock_cache.set.side_effect = RuntimeError("cache offline")
         Setting.objects.update_or_create(
             key="advanced.queue_enabled",
             defaults={"value": json.dumps(True)},
@@ -256,17 +258,17 @@ class AdminDashboardStatsApiTests(TestCase):
         CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {"hosts": [("redis.internal", 6379)]}}},
         CELERY_BROKER_URL="redis://redis.internal:6379/1",
     )
-    @patch("apps.core.admin_runtime_summary.cache.get", return_value="ok")
-    @patch("apps.core.admin_runtime_summary.cache.set", return_value=None)
+    @patch("apps.core.admin_runtime_summary.cache")
     @patch("apps.core.admin_runtime_summary.probe_redis_ping")
     @patch("apps.core.admin_stats_api.QueueService.get_worker_status")
     def test_admin_stats_reports_unreachable_realtime_and_queue_broker(
         self,
         get_worker_status,
         probe_redis_ping,
-        _cache_set,
-        _cache_get,
+        mock_cache,
     ):
+        mock_cache.get.return_value = "ok"
+        mock_cache.set.return_value = None
         Setting.objects.update_or_create(
             key="advanced.queue_enabled",
             defaults={"value": json.dumps(True)},
@@ -309,17 +311,17 @@ class AdminDashboardStatsApiTests(TestCase):
         CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer", "CONFIG": {"hosts": [("redis.internal", 6379)]}}},
         CELERY_BROKER_URL="redis://redis.internal:6379/1",
     )
-    @patch("apps.core.admin_runtime_summary.cache.get", return_value="ok")
-    @patch("apps.core.admin_runtime_summary.cache.set", return_value=None)
+    @patch("apps.core.admin_runtime_summary.cache")
     @patch("apps.core.admin_runtime_summary.probe_redis_ping")
     @patch("apps.core.admin_stats_api.QueueService.get_worker_status")
     def test_admin_stats_reports_protocol_error_for_realtime_and_queue_broker(
         self,
         get_worker_status,
         probe_redis_ping,
-        _cache_set,
-        _cache_get,
+        mock_cache,
     ):
+        mock_cache.get.return_value = "ok"
+        mock_cache.set.return_value = None
         Setting.objects.update_or_create(
             key="advanced.queue_enabled",
             defaults={"value": json.dumps(True)},

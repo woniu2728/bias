@@ -8,7 +8,7 @@ class User(AbstractUser):
     Bias 用户模型
     """
     # 覆盖username字段，添加唯一约束
-    username = models.CharField(max_length=100, unique=True, db_index=True)
+    username = models.CharField(max_length=100, unique=True)  # unique 自动建索引
 
     # 显示名称
     display_name = models.CharField(max_length=100, blank=True)
@@ -24,7 +24,7 @@ class User(AbstractUser):
 
     # 时间戳
     joined_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    last_seen_at = models.DateTimeField(auto_now=True, db_index=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
     marked_all_as_read_at = models.DateTimeField(null=True, blank=True)
     read_notifications_at = models.DateTimeField(null=True, blank=True)
 
@@ -45,7 +45,6 @@ class User(AbstractUser):
         db_table = 'users'
         ordering = ['-joined_at']
         indexes = [
-            models.Index(fields=['username']),
             models.Index(fields=['email']),
             models.Index(fields=['last_seen_at']),
         ]
@@ -73,28 +72,6 @@ class User(AbstractUser):
         if not self.last_seen_at or (now - self.last_seen_at).seconds > 180:
             self.last_seen_at = now
             self.save(update_fields=['last_seen_at'])
-
-    def increment_discussion_count(self):
-        """增加讨论数"""
-        self.discussion_count += 1
-        self.save(update_fields=['discussion_count'])
-
-    def decrement_discussion_count(self):
-        """减少讨论数"""
-        if self.discussion_count > 0:
-            self.discussion_count -= 1
-            self.save(update_fields=['discussion_count'])
-
-    def increment_comment_count(self):
-        """增加评论数"""
-        self.comment_count += 1
-        self.save(update_fields=['comment_count'])
-
-    def decrement_comment_count(self):
-        """减少评论数"""
-        if self.comment_count > 0:
-            self.comment_count -= 1
-            self.save(update_fields=['comment_count'])
 
 
 class Group(models.Model):
@@ -146,7 +123,7 @@ class AccessToken(models.Model):
     """
     Bias 访问令牌模型
     """
-    token = models.CharField(max_length=255, unique=True, db_index=True)
+    token = models.CharField(max_length=255, unique=True)  # unique 自动建索引
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='access_tokens')
     type = models.CharField(max_length=50, default='session')
     title = models.CharField(max_length=150, blank=True)
@@ -157,7 +134,6 @@ class AccessToken(models.Model):
     class Meta:
         db_table = 'access_tokens'
         indexes = [
-            models.Index(fields=['token']),
             models.Index(fields=['user']),
             models.Index(fields=['type']),
         ]
@@ -170,7 +146,7 @@ class EmailToken(models.Model):
     """
     Bias 邮箱验证令牌模型
     """
-    token = models.CharField(max_length=255, unique=True, db_index=True)
+    token = models.CharField(max_length=255, unique=True)  # unique 自动建索引
     email = models.EmailField()
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_tokens')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -179,7 +155,6 @@ class EmailToken(models.Model):
     class Meta:
         db_table = 'email_tokens'
         indexes = [
-            models.Index(fields=['token']),
             models.Index(fields=['user']),
         ]
 
@@ -191,7 +166,7 @@ class PasswordToken(models.Model):
     """
     Bias 密码重置令牌模型
     """
-    token = models.CharField(max_length=255, unique=True, db_index=True)
+    token = models.CharField(max_length=255, unique=True)  # unique 自动建索引
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_tokens')
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
@@ -199,7 +174,6 @@ class PasswordToken(models.Model):
     class Meta:
         db_table = 'password_tokens'
         indexes = [
-            models.Index(fields=['token']),
             models.Index(fields=['user']),
         ]
 

@@ -18,7 +18,12 @@ from apps.core.settings_service import (
 sql_logger = logging.getLogger("bias.sql")
 
 
-class ExtensionErrorHandlingMiddleware:
+class _AsyncCapableMiddleware:
+    """消除 sync/async 样板代码的基类。
+
+    子类只需实现 _sync_call(request) 和 _async_call(request) 两个方法，
+    __init__ 与 __call__ 分发由本基类统一处理。
+    """
     sync_capable = True
     async_capable = True
 
@@ -31,7 +36,21 @@ class ExtensionErrorHandlingMiddleware:
     def __call__(self, request):
         if self._is_async:
             return self.__acall__(request)
+        return self._sync_call(request)
 
+    async def __acall__(self, request):
+        return await self._async_call(request)
+
+    def _sync_call(self, request):
+        raise NotImplementedError
+
+    async def _async_call(self, request):
+        raise NotImplementedError
+
+
+class ExtensionErrorHandlingMiddleware(_AsyncCapableMiddleware):
+
+    def _sync_call(self, request):
         try:
             return self.get_response(request)
         except Exception as exc:
@@ -40,7 +59,7 @@ class ExtensionErrorHandlingMiddleware:
                 return response
             raise
 
-    async def __acall__(self, request):
+    async def _async_call(self, request):
         try:
             return await self.get_response(request)
         except Exception as exc:
@@ -56,23 +75,13 @@ class ExtensionErrorHandlingMiddleware:
         return handle_runtime_error(exc, request=request, operation="request")
 
 
-class ExtensionCsrfMiddleware:
-    sync_capable = True
-    async_capable = True
+class ExtensionCsrfMiddleware(_AsyncCapableMiddleware):
 
-    def __init__(self, get_response):
-        self.get_response = get_response
-        self._is_async = iscoroutinefunction(get_response)
-        if self._is_async:
-            markcoroutinefunction(self)
-
-    def __call__(self, request):
-        if self._is_async:
-            return self.__acall__(request)
+    def _sync_call(self, request):
         self._apply_exemption(request)
         return self.get_response(request)
 
-    async def __acall__(self, request):
+    async def _async_call(self, request):
         await sync_to_async(self._apply_exemption, thread_sensitive=True)(request)
         return await self.get_response(request)
 
@@ -90,22 +99,12 @@ class ExtensionCsrfMiddleware:
         return None
 
 
-class ExtensionThrottleApiMiddleware:
-    sync_capable = True
-    async_capable = True
+class ExtensionThrottleApiMiddleware(_AsyncCapableMiddleware):
 
-    def __init__(self, get_response):
-        self.get_response = get_response
-        self._is_async = iscoroutinefunction(get_response)
-        if self._is_async:
-            markcoroutinefunction(self)
-
-    def __call__(self, request):
-        if self._is_async:
-            return self.__acall__(request)
+    def _sync_call(self, request):
         return self.get_response(request)
 
-    async def __acall__(self, request):
+    async def _async_call(self, request):
         return await self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):
@@ -195,23 +194,13 @@ class StartupStateMiddleware:
         return HttpResponse(body, status=503, content_type="text/html; charset=utf-8")
 
 
-class ExtensionRuntimeInvalidationMiddleware:
-    sync_capable = True
-    async_capable = True
+class ExtensionRuntimeInvalidationMiddleware(_AsyncCapableMiddleware):
 
-    def __init__(self, get_response):
-        self.get_response = get_response
-        self._is_async = iscoroutinefunction(get_response)
-        if self._is_async:
-            markcoroutinefunction(self)
-
-    def __call__(self, request):
-        if self._is_async:
-            return self.__acall__(request)
+    def _sync_call(self, request):
         self._sync_runtime_state()
         return self.get_response(request)
 
-    async def __acall__(self, request):
+    async def _async_call(self, request):
         await sync_to_async(self._sync_runtime_state, thread_sensitive=True)()
         return await self.get_response(request)
 
@@ -517,25 +506,14 @@ class MaintenanceModeMiddleware:
         return response
 
 
-class SecurityHeadersMiddleware:
-    sync_capable = True
-    async_capable = True
+class SecurityHeadersMiddleware(_AsyncCapableMiddleware):
 
-    def __init__(self, get_response):
-        self.get_response = get_response
-        self._is_async = iscoroutinefunction(get_response)
-        if self._is_async:
-            markcoroutinefunction(self)
-
-    def __call__(self, request):
-        if self._is_async:
-            return self.__acall__(request)
-
+    def _sync_call(self, request):
         request.csp_nonce = _generate_csp_nonce()
         response = self.get_response(request)
         return self._apply_headers(request, response)
 
-    async def __acall__(self, request):
+    async def _async_call(self, request):
         request.csp_nonce = _generate_csp_nonce()
         response = await self.get_response(request)
         return self._apply_headers(request, response)

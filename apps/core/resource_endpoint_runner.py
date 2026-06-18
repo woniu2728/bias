@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Callable
 
 from apps.core.resource_context import ResourceContext, ensure_resource_context
 from apps.core.resource_objects import DatabaseResource
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -177,8 +181,8 @@ class EndpointIncludesData:
                 from django.db.models import prefetch_related_objects
 
                 prefetch_related_objects(list(results or ()), *prefetches)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("prefetch_related_objects failed: %s", exc, exc_info=True)
         return results
 
     def apply_where_eager_loads(

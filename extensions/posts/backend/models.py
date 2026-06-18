@@ -20,7 +20,7 @@ class Post(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='posts')
 
     # 帖子类型（comment, discussionRenamed等）
-    type = models.CharField(max_length=50, default='comment', db_index=True)
+    type = models.CharField(max_length=50, default='comment')
 
     # 内容
     content = models.TextField(blank=True)
@@ -30,7 +30,7 @@ class Post(models.Model):
     ip_address = models.GenericIPAddressField(null=True, blank=True)
 
     # 时间戳
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     # 编辑相关
@@ -78,8 +78,6 @@ class Post(models.Model):
         unique_together = [['discussion', 'number']]
         ordering = ['discussion', 'number']
         indexes = [
-            models.Index(fields=['discussion']),
-            models.Index(fields=['user']),
             models.Index(fields=['created_at']),
             models.Index(fields=['type']),
         ]

@@ -21,7 +21,7 @@ class Notification(models.Model):
     data = models.JSONField(default=dict, blank=True)
     is_read = models.BooleanField(default=False, db_index=True)
     read_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         app_label = "notifications"
