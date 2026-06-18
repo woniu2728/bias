@@ -915,7 +915,7 @@ class NotificationExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase)
         item = audit["items"][0]
 
         self.assertEqual(extension["id"], "notifications")
-        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+        self.assertIn("0001_initial.py", extension["migration_plan"]["pending_files"])
         self.assertEqual(audit["owned_model_count"], 1)
         self.assertEqual(audit["extension_native_count"], 1)
         self.assertEqual(audit["django_app_count"], 0)

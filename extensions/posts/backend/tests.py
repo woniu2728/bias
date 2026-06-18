@@ -290,7 +290,7 @@ class PostPaginationTests(TestCase):
             def is_private(self, model, instance, *, default=False):
                 return model is Post and getattr(instance, "number", 0) > 1
 
-        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=RuntimeModelService()):
+        with patch("apps.core.extensions.runtime_models.get_runtime_model_service", return_value=RuntimeModelService()):
             reply = PostService.create_post(
                 discussion_id=discussion.id,
                 content="Private reply",
@@ -326,7 +326,7 @@ class PostPaginationTests(TestCase):
             def is_private(self, model, instance, *, default=False):
                 return model is Post and instance.id == reply.id
 
-        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=RuntimeModelService()):
+        with patch("apps.core.extensions.runtime_models.get_runtime_model_service", return_value=RuntimeModelService()):
             approved = PostService.approve_post(reply, admin)
 
         self.assertTrue(approved.is_private)
@@ -385,7 +385,7 @@ class PostPaginationTests(TestCase):
             ),
         )
 
-        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime_models.get_runtime_model_service", return_value=app.models):
             visible_ids = set(
                 PostService.apply_visibility_filters(
                     Post.objects.filter(id__in=[allowed.id, denied.id]),
@@ -455,7 +455,7 @@ class PostPaginationTests(TestCase):
             ),
         )
 
-        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime_models.get_runtime_model_service", return_value=app.models):
             visible_ids = set(
                 PostService.apply_visibility_filters(
                     Post.objects.filter(id__in=[allowed.id, denied.id]),

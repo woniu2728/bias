@@ -155,7 +155,7 @@ class DiscussionRegistryTests(ExtensionRuntimeTestMixin, TestCase):
             and item["target_app_label_source"] == "manifest"
             for item in audit["items"]
         ))
-        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+        self.assertIn("0001_initial.py", extension["migration_plan"]["pending_files"])
 
     def test_discussions_extension_registers_discussion_sort_catalog(self):
         registry = get_forum_registry()
@@ -252,7 +252,7 @@ class DiscussionApiTests(TestCase):
             def is_private(self, model, instance, *, default=False):
                 return model is Discussion
 
-        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=RuntimeModelService()):
+        with patch("apps.core.extensions.runtime_models.get_runtime_model_service", return_value=RuntimeModelService()):
             discussion = DiscussionService.create_discussion(
                 title="Private runtime discussion",
                 content="Initial post",
@@ -277,7 +277,7 @@ class DiscussionApiTests(TestCase):
         ).extend(app, SimpleNamespace(extension_id="private-runtime"))
         app.make("models")
 
-        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime_models.get_runtime_model_service", return_value=app.models):
             discussion = Discussion.objects.create(
                 title="Private saved by signal",
                 user=self.author,
@@ -346,7 +346,7 @@ class DiscussionApiTests(TestCase):
             ),
         )
 
-        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime_models.get_runtime_model_service", return_value=app.models):
             visible_ids = set(
                 DiscussionService.apply_visibility_filters(
                     Discussion.objects.filter(id__in=[allowed.id, denied.id]),
@@ -419,7 +419,7 @@ class DiscussionApiTests(TestCase):
             ),
         )
 
-        with patch("apps.core.extensions.runtime.get_runtime_model_service", return_value=app.models):
+        with patch("apps.core.extensions.runtime_models.get_runtime_model_service", return_value=app.models):
             visible_ids = set(
                 DiscussionService.apply_visibility_filters(
                     Discussion.objects.filter(id__in=[allowed.id, denied.id]),

@@ -69,7 +69,7 @@ class MentionsExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
         owned_item = audit["items"][0]
 
         self.assertEqual(extension["id"], "mentions")
-        self.assertIn("0001_record_model_ownership.py", extension["migration_plan"]["pending_files"])
+        self.assertIn("0001_state_post_mentions_user.py", extension["migration_plan"]["pending_files"])
         self.assertEqual(audit["extension_native_count"], 1)
         self.assertEqual(audit["app_label_migration_required_count"], 0)
         self.assertEqual(audit["app_label_migration_plan_required_count"], 0)

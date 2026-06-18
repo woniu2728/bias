@@ -2,36 +2,16 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies（含 gosu，用于 entrypoint 降权；Debian 源自带，避免依赖 GitHub/keyserver）
 RUN apt-get update && apt-get install -y \
     postgresql-client \
     gcc \
     python3-dev \
     musl-dev \
     libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install gosu for step-down privilege drop
-RUN set -eux; \
-    savedAptMark="$(apt-mark showmanual)"; \
-    apt-get update && apt-get install -y --no-install-recommends ca-certificates gnupg; \
-    rm -rf /var/lib/apt/lists/*; \
-    \
-    dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; \
-    wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/1.17/gosu-$dpkgArch"; \
-    wget -O /usr/local/bin/gosu.asc "https://github.com/tianon/gosu/releases/download/1.17/gosu-$dpkgArch.asc"; \
-    \
-    export GNUPGHOME="$(mktemp -d)"; \
-    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4; \
-    gpg --batch --verify /usr/local/bin/gosu.asc /usr/local/bin/gosu; \
-    gpgconf --kill all; \
-    rm -rf "$GNUPGHOME" /usr/local/bin/gosu.asc; \
-    \
-    apt-mark auto '.*' > /dev/null; \
-    [ -z "$savedAptMark" ] || apt-mark manual $savedAptMark; \
-    apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \
-    chmod +x /usr/local/bin/gosu; \
-    gosu --version
+    gosu \
+    && rm -rf /var/lib/apt/lists/* \
+    && gosu --version
 
 # Install Python dependencies
 COPY requirements.txt .

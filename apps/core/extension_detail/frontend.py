@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import logging
+
 from apps.core.extension_settings_service import get_extension_settings, serialize_extension_settings_schema, save_extension_settings
+
+logger = logging.getLogger(__name__)
 from apps.core.extensions.admin_assets import (
     serialize_extension_frontend_asset_state,
     serialize_extension_frontend_asset_state_for_extension,
