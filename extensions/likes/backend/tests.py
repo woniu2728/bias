@@ -82,8 +82,10 @@ class LikesExtensionDiagnosticsTests(ExtensionRuntimeTestMixin, TestCase):
         self.assertEqual(owned_item["migration_risk"], "none")
 
 
-class LikesExtensionTests(TestCase):
+class LikesExtensionTests(ExtensionRuntimeTestMixin, TestCase):
     def setUp(self):
+        super().setUp()
+        self.bootstrap_extensions("likes")
         self.author = User.objects.create_user(
             username="like_author",
             email="like_author@example.com",
@@ -247,7 +249,7 @@ class LikesExtensionTests(TestCase):
         self.assertNotIn(other_post.id, ids)
 
     def test_like_post_dispatches_domain_event_instead_of_direct_notification_call(self):
-        with patch("apps.core.extensions.runtime.notify_runtime_notification") as notify_mock:
+        with patch("extensions.likes.backend.listeners.notify_runtime_notification") as notify_mock:
             with self.captureOnCommitCallbacks(execute=True):
                 like_runtime_post(self.post.id, self.liker)
 
