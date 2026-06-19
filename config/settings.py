@@ -354,7 +354,7 @@ if not os.getenv("BIAS_DOCKER", os.getenv("BIAS_SITE_CONFIG", "")):
         }
         LOGGING['loggers']['django']['handlers'] = ['console', 'file']
     except (OSError, PermissionError):
-        _logger.warning("无法创建日志目录 %s，日志将仅输出到控制台", _LOG_DIR)
+        logger.warning("无法创建日志目录 %s，日志将仅输出到控制台", _LOG_DIR)
 
 # Debug Toolbar (only in DEBUG mode)
 ENABLE_DEBUG_TOOLBAR = (
