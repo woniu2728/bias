@@ -1,6 +1,6 @@
 {
   "name": "bias-frontend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Bias Frontend - Vue 3 Application",
   "private": true,
   "scripts": {
