@@ -984,6 +984,32 @@ scripts/docker-upgrade.*
 
 在真实业务扩展迁移前，建议做一个极小的 fixture theme，用来验证主题协议和宿主前端边界。
 
+默认主题在第一阶段留在 `bias-site`，不单独做成扩展。原因是空网站工程需要一个不依赖扩展系统的基础外观和 fallback tokens。如果默认主题一开始就是扩展，那么 `bias-site` 的最小启动链路会被主题扩展安装、发现、manifest 生成和前端加载同时牵住，调试成本会变高。
+
+但默认主题不能按“永远留在宿主内部”的方式写。它需要按未来可抽离为 `bias-theme-default` 的标准组织：
+
+```text
+frontend/src/theme/default/
+├─ tokens.css
+├─ forum.css
+├─ admin.css
+└─ slots.js
+```
+
+第一阶段默认主题职责：
+
+- 提供无主题安装时的默认 tokens。
+- 提供 forum/admin 基础样式。
+- 定义主题 CSS layer 顺序。
+- 提供 fixture theme 可以覆盖的稳定变量。
+
+第一阶段默认主题不负责：
+
+- 主题市场。
+- 多主题切换 UI。
+- 第三方主题配置页面。
+- 大规模组件替换。
+
 fixture theme 只需要：
 
 ```text
@@ -1070,9 +1096,11 @@ bias-theme-fixture/
 主题迁移策略：
 
 - 旧项目如果已有站点级主题或外观配置，不直接放进 `bias-site` 内部。
-- 先沉淀默认主题 tokens，作为 `bias-site` 默认外观。
+- 先沉淀默认主题 tokens，作为 `bias-site` 默认外观和 fallback。
 - 再把可替换外观能力抽象成 `bias-theme-*`。
-- 官方默认主题可以暂时内置在 `bias-site`，但第三方主题协议必须按扩展方式设计。
+- 官方默认主题第一阶段内置在 `bias-site`。
+- 主题协议稳定后，再决定是否抽成官方 `bias-theme-default`。
+- 即使默认主题暂时内置，也要按可抽离结构编写，避免后续抽包时重写样式体系。
 
 ## 七、关键技术决策
 
