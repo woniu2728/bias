@@ -125,3 +125,85 @@ test_runtime_cache / test_management / test_production_runtime / test_runner
 ---
 
 *本评估基于 2026-06-25 的代码快照。`bias_core/docs/completion-checklist.md`（2026-06-22 创建）是此前抽包补全的进行中清单，其中项 1/2/3 已完成、项 4（migrations 0002–0005）仍未完成。*
+
+---
+
+# 二轮复查（2026-06-25，commit `b9e1015` 之后）
+
+> 用户照 eval.md 做了一轮修复（`9af5edd` services 包冲突重命名 + `b9e1015` Fix: eval.md 指出的问题）。以下为复查结果。
+
+## 本轮已修复 ✅
+
+1. **重复副本删除**——`resources/` 13→1、`services/` 16→1、`api/` 顶层 6 个副本（`api.py`/`auth.py`/`errors.py`/`jwt_auth.py`/`runtime.py`/`admin_auth.py`）删除。
+2. **版本号统一 0.1.1**——`VERSION`/`pyproject.toml`/`version.py(APP_VERSION)` 三处一致。
+3. **import-linter 落地**——`[tool.importlinter]` 两条 forbidden 契约配置完成。
+4. **`api.py` → `api_main.py`**——消除包/文件名冲突。
+5. **`default_app_config` 变量删除**（`apps.py` 靠 AppConfig 自动发现）。
+
+## 🔴 仍存在的架构问题
+
+### 1. 目录归类方向走偏，停在半成品（最该决策的点）
+文档目标是「子目录为主路径 + 顶层 shim 兼容」（§2 / Phase C5-C7），实际做成了**「顶层扁平为主 + 子目录空壳」**：
+
+- `bias_core/resources/` 只剩一句 docstring，文档承诺的 `bias_core.resources.registry` 路径**已不存在**；
+- `bias_core/services/` 只剩 docstring + 从 `services_old` 重导出 `PaginationService`；
+- `bias_core/api/` 只剩 `admin/` 子目录 + `__init__` re-export `api_runtime`/`api_main`。
+
+调用者看到 `bias_core.resources` 包会以为有实现，import 才发现是空的——**接口不清晰**。必须二选一做到位：
+- **方案 A（文档目标）**：把顶层扁平文件真正搬进 `api/`/`resources/`/`services/` 子目录，顶层留 re-export shim 兼容一个大版本后删；
+- **方案 B（承认扁平）**：顶层扁平就是最终结构，删掉 `resources/`/`services/`/`api/` 这几个空壳包（或只保留 namespace 用途）。
+
+现在是两边好处都没拿到的中间态，最差。
+
+### 2. `api/admin/` 子目录漏删，仍 1:1 重复顶层
+`b9e1015` 删了 `api/` 顶层副本，但漏了 `api/admin/` 下 11 个文件。抽样 6 对全部逐字节 SAME：
+
+```
+api/admin/admin_api.py        == admin_api.py
+api/admin/admin_audit_api.py  == admin_audit_api.py
+api/admin/admin_auth.py       == admin_auth.py
+api/admin/admin_content_api.py== admin_content_api.py
+api/admin/admin_settings_api.py == admin_settings_api.py
+api/admin/admin_stats_api.py  == admin_stats_api.py
+```
+
+且 `api/__init__.py` 只 re-export `api_runtime`/`api_main`，根本不碰 `admin/`——纯死代码。
+
+### 4. 核心测试仍 18 个 `.skip`
+11 激活 / 18 跳过，`test_extension_boundary`/`test_extension_validation`/`test_extension_registry`/`test_resource_registry`/`test_settings_fallback` 等仍被跳过。行为一致性零验证。
+
+## 🟡 残留小问题
+
+5. **import-linter 规则可绕过**：forbidden 列了 `bias_core.services`（已空壳）和部分 `resource_*`，但顶层 `resource_dispatcher`/`resource_api`/`audit`/`authorization`/`forum_registry` 等真正内部实现路径没列全，扩展可绕过。需把所有「内部」顶层模块补进 forbidden。
+6. **`__all__` 残留 `default_app_config`**：变量删了，`__all__ = ["__version__", "default_app_config"]` 仍引用（`hasattr(bias_core,'default_app_config')` = False）。
+7. **`services_old.py` 临时命名**：`_old` 后缀不该留在正式架构，`PaginationService` 应有正式归属（如 `services/pagination.py` 或 `platform`）。
+8. **`bias-ext-users/tests.py` 仍 8 处旧路径**（`apps.core` / `extensions.testing`），patch 不到 `bias_core` 目标模块，扩展测试跑不通。
+9. **`Dockerfile` 未闭环**：仍 `pip install bias-ext-users==0.1.0`（未发布到任何源）+ 提交进仓的 `bias_core-0.1.1-py3-none-any.whl`（354KB）。
+10. **`settings.py` 的 `os` bug 仍在**：`os` 只在 `env_int()` 内 import，模块级 `os.getenv`（line 243）会 `NameError`。
+11. **前端 SDK 包名未收敛** `@bias/core/*`（仍 `@bias/forum`/`@bias/admin` 并列，未动）。
+12. **SDK import 有 settings 副作用**：`from bias_core.extensions import SettingsExtender` 在无 Django settings 的裸进程里报 `ImproperlyConfigured`——导入链在 import 时触发了 settings 访问，限制了「扩展可独立 import SDK」的纯粹性和可测试性，建议查根因（疑似 `authorization` 或某 extender 模块 import 时触发）。
+
+## 更新后的修补优先级
+
+1. **决策目录归类最终方向**（A 搬进子目录 / B 扁平删空壳），并删 `api/admin/` 重复死代码。
+3. **恢复 `.skip` 核心测试**（至少 5 个 boundary/validation/registry/resource/settings_fallback）。
+4. **收紧 import-linter forbidden 列表**：覆盖所有顶层扁平内部模块，并实跑 `lint-imports` 进 CI。
+5. **修 `bias-ext-users/tests.py` 旧路径**：`apps.core.*` → `bias_core.*`、`extensions.testing` → `bias_core` 测试 helper。
+6. **小修**：`__all__` 去 `default_app_config`；`services_old` 正式归属；`settings.py` 模块级 `import os`；SDK import 副作用查根因。
+7. **闭环部署**：Dockerfile 改本地 editable/源码装扩展或搭私有源；移除进仓 whl。
+8. **前端 SDK 包名收敛** `@bias/core/*`。
+
+## 里程碑对照（更新）
+
+| 里程碑 | 状态（二轮后） |
+|---|---|
+| M1 bias-core 可安装 | ✅ |
+| M2 可加载测试扩展 | 🟡 能 import，但 SDK import 有 settings 副作用、核心测试仍 .skip |
+| M3 空宿主可运行 | 🟡 settings 组装 OK，但 migrations 缺 0002–0005、`os` bug |
+| M4 前端扩展加载跑通 | 🟡 alias 在，但包名未收敛、ext entry 源码路径与文档不一致 |
+| M5 第一个扩展迁移成功 | 🟡 users 代码迁完，但测试带旧路径跑不通，不算「成功」 |
+| M6/M7 核心链路 / 替代旧项目 | ❌ 16 个扩展仍在旧仓 |
+
+---
+
+*二轮复查基于 2026-06-25 `b9e1015` 之后的代码快照。本轮修掉重复副本/版本号/import-linter 配置/包名冲突/default_app_config 五项；目录归类方向、migrations、核心测试三项为主要剩余缺口。*
