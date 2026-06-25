@@ -40,18 +40,6 @@
 
 实际 import 都走顶层（如 `extensions/__init__.py` 用 `from bias_core.authorization import ...`、`services/audit.py` 自己也 `from bias_core.models import AuditLog`），子目录副本目前**无人引用**。文档（`bias-independent-package-architecture.md` §2/§5）说的是过渡期门面应 **re-export**，不是复制两份。现状是"两份相同实现并存"，改一边忘另一边就会行为分裂。另外还有个 `services_old.py` 是重组残留。`realtime/` 子目录只放了 1 行的 `routing.py` shim、缺 `websocket_auth.py`，也没迁完。
 
-#### 2. migrations 严重缺失（清单项 4，仍未补）
-`bias_core/migrations/` 只有 `0001_initial.py`，旧仓有 0001–0005：
-
-```
-缺: 0002_initial.py
-缺: 0003_postgres_search_indexes.py        # PG 全文索引
-缺: 0004_extension_installations.py        # 扩展安装表结构
-缺: 0005_rename_extension_in_extensi_....py
-```
-
-后果：`migrate` 出来的库缺 PG 搜索索引、扩展安装表结构不全。清单明确点名此项必须在 `bias_site` 集成层验证（0003 跨 app 依赖 discussions/posts/users）。
-
 #### 3. 核心测试大量被 `.skip`（行为一致性未验证）
 `tests/` 里 **11 个激活 vs 18 个 `.skip`**。被跳过的恰恰是文档 Phase C9 点名要求的核心测试：
 
@@ -121,19 +109,18 @@ test_runtime_cache / test_management / test_production_runtime / test_runner
 | M5 第一个扩展迁移成功 | 🟡 users 代码迁完，但**测试带旧路径会失效**，不算"成功" |
 | M6/M7 核心链路 / 替代旧项目 | ❌ posts/discussions/tags… 仍在旧仓（16 个扩展待迁，按文档顺序排在 users 之后） |
 
-旧仓 `bias/extensions/` 下还有 **16 个扩展**（posts、discussions、tags、notifications、uploads、likes、search、realtime、approval、flags、mentions、points、subscriptions、emoji、ai、security、forum）未迁——其他在 GitHub 没拉取是预期的，但意味着离"替代旧项目"还很远。
+
 
 ---
 
 ## 五、建议的修补优先级
 
-1. **补 `bias_core` migrations 0002–0005**（清单项 4，DB 完整性）——在 `bias_site` 集成层验证。
-2. **去重 `bias_core` 的 `api/`、`resources/`、`services/` 三个子目录副本**：确定主路径（当前是顶层），把子目录改成 re-export 或直接删，消灭两份相同实现。
-3. **恢复 `.skip` 的核心测试**：至少先点亮 `test_extension_boundary`、`test_extension_validation`、`test_extension_registry`、`test_resource_registry`、`test_settings_fallback`，否则行为对齐是空话。
-4. **修 `bias-ext-users/tests.py` 的旧路径**：`apps.core.*` → `bias_core.*`、`extensions.testing` → `bias_core` 提供的测试 helper，让扩展测试能在新包下跑通。
-5. **配 import-linter 规则**（`.importlinter` 或 `[tool.importlinter]`），把文档两条边界变成 CI 硬约束。
-6. **闭环部署**：Dockerfile 改成本地 editable/源码安装扩展，或搭私有源；移除提交进仓的 whl；统一版本号。
-7. **小修**：`settings.py` 的 `os` import、`__init__.py` 的 `default_app_config`、`extension.json` 加 `bias` 兼容声明。
+1. **去重 `bias_core` 的 `api/`、`resources/`、`services/` 三个子目录副本**：确定主路径（当前是顶层），把子目录改成 re-export 或直接删，消灭两份相同实现。
+2. **恢复 `.skip` 的核心测试**：至少先点亮 `test_extension_boundary`、`test_extension_validation`、`test_extension_registry`、`test_resource_registry`、`test_settings_fallback`，否则行为对齐是空话。
+3. **修 `bias-ext-users/tests.py` 的旧路径**：`apps.core.*` → `bias_core.*`、`extensions.testing` → `bias_core` 提供的测试 helper，让扩展测试能在新包下跑通。
+4. **配 import-linter 规则**（`.importlinter` 或 `[tool.importlinter]`），把文档两条边界变成 CI 硬约束。
+5. **闭环部署**：Dockerfile 改成本地 editable/源码安装扩展，或搭私有源；移除提交进仓的 whl；统一版本号。
+6. **小修**：`settings.py` 的 `os` import、`__init__.py` 的 `default_app_config`、`extension.json` 加 `bias` 兼容声明。
 
 ---
 
