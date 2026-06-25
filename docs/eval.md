@@ -206,4 +206,107 @@ api/admin/admin_stats_api.py  == admin_stats_api.py
 
 ---
 
-*二轮复查基于 2026-06-25 `b9e1015` 之后的代码快照。本轮修掉重复副本/版本号/import-linter 配置/包名冲突/default_app_config 五项；目录归类方向、migrations、核心测试三项为主要剩余缺口。*
+## 附：.skip 测试根因详析（2026-06-25）
+
+> 追问「.skip 掉的测试是否依赖扩展宿主运行时」后的深入排查。修正上方第 4 条「行为一致性零验证」的笼统说法。
+
+### 结论
+
+**这 18 个测试确实依赖扩展宿主运行时（构造 `ExtensionApplication` / `build_extension_application` / `ExtensionRegistry` 发现 fixture 扩展、验证 route/resource dispatch/生命周期），但宿主本身 `bias_core` 已完整迁过来，不是缺宿主。真正逼到 `.skip` 的是「测试基础设施漏迁」——测试用例本身完整迁了，公共 helper 没跟着迁，一启动就 NameError/import 错，于是批量禁用。**
+
+### 依赖的宿主能力（bias_core 已有 ✓）
+
+`.skip` 文件里的调用统计：
+
+- `build_extension_application` — 4 文件 25 处
+- `ExtensionApplication` — 3 文件 52 处
+- `ExtensionRegistry` — 6 文件 48 处
+- `get_extension_host` — 4 文件 17 处（patch 字符串形式）
+
+这些 `tests/common.py` 已 import（line 69/84/51），`from tests.common import *` 能拿到。`extensions/` 子系统与旧仓 1:1 完整迁，宿主能力齐全——「依赖宿主」不是阻塞点。
+
+fixture 扩展是测试**内联动态生成**的（`make_workspace_temp_dir()` → 手写 `extension.json`/`ext.py` → `ExtensionInstallation.objects.create()` → `ExtensionRegistry(extensions_path=...)`），不依赖文件系统 fixture，也不依赖 `create_alpha_tools_extension` 工厂（0 引用）。
+
+### 真正的阻塞点
+
+**1. `tests/common.py` 残缺（旧仓 392 行 → bias_core 114 行）** 🔴
+旧仓有、bias_core 砍掉的关键 helper：
+
+- `make_extension_test_base_dir()` — **3 个 .skip 的 `setUp` 第一行就调**（`test_admin_extensions_api:6`、`test_extension_validation:5/18/37/56`、`test_extension_service:5`），bias_core 定义数=0 → 启动即 `NameError`，最可能的批量 `.skip` 诱因。
+- `RuntimeModelProxy`、`TestDiscussionCreatedEvent`/`TestUserSuspendedEvent` 等测试事件类、`discussion_tags_payload` 等也砍了。
+
+**2. `extensions/testing.py` 整个没迁** 🔴
+旧仓 `extensions/testing.py`(131行) 提供 `bootstrap_enabled_extension_application()`（一键 bootstrap 启用扩展的宿主）、`ExtensionRuntimeTestMixin` —— bias_core 完全无对应物（find/grep 为空）。当前 .skip 没直接调，但 `bias-ext-users/tests.py` 在调（`from extensions.testing import` 旧路径），跨仓共用 helper 漏迁，影响面大于 18 个 .skip。
+
+**3. 旧路径残留 + import 错** 🟡
+`test_settings_fallback`：`from bias_core.services import SettingsService`（`services/` 现空壳，`SettingsService` 实际在顶层 `settings_service.py`）+ `patch("apps.core.extensions.bootstrap.get_extension_host")`（apps.core patch 不到）。
+
+**4. Redis 基础设施** 🟡
+`test_queue`（`@override_settings(CELERY_BROKER_URL="redis://localhost:6379/1")`）、`test_admin_settings_api`（`channels_redis`）—— 宿主搭好也需 Redis，得接 fakeredis 或 CI 起 redis。
+
+### 18 文件按阻塞原因分类
+
+| 阻塞原因 | 文件 |
+|---|---|
+| `make_extension_test_base_dir` 漏迁 → setUp 即 NameError | `test_admin_extensions_api`、`test_extension_validation`、`test_extension_service` |
+| 深度依赖宿主（fixture + `build_extension_application`，宿主已迁，需实跑验证） | `test_extension_registry`、`test_extension_loader`(3844行)、`test_resource_registry`(4704行)、`test_extension_middleware`、`test_extension_policy`、`test_extension_boundary`、`test_extension_commands`、`test_admin_permissions`、`test_runner`、`test_management` |
+| Redis 基础设施 | `test_queue`、`test_admin_settings_api` |
+| 旧路径残留 + import 错 | `test_settings_fallback` |
+| bootstrap/runtime 状态 | `test_runtime_cache`、`test_production_runtime` |
+
+### 恢复路径
+
+1. **补全 `tests/common.py`**：从旧仓搬 `make_extension_test_base_dir`/`RuntimeModelProxy`/测试事件类，改 `apps.core` → `bias_core`。直接救活第一类 3 个。
+2. **迁 `extensions/testing.py` → `bias_core/extensions/testing.py`**（或 `bias_core/testing.py`），改内部 import；`bias-ext-users/tests.py` 的 `from extensions.testing` 同步改 `from bias_core.extensions.testing`，一处修两仓受益。
+3. **修 `test_settings_fallback`**：`bias_core.services.SettingsService` → `bias_core.settings_service.SettingsService`；`patch("apps.core...")` → `patch("bias_core...")`。
+4. **逐个 `.skip` → `.py` 点亮**：先点文档 C9 点名的 5 个（boundary/validation/registry/resource_registry/settings_fallback），跑通即行为对齐有据。
+5. **Redis 类**：接 fakeredis 或 CI 起 redis。
+
+---
+
+*二轮复查基于 2026-06-25 `b9e1015` 之后的代码快照。本轮修掉重复副本/版本号/import-linter 配置/包名冲突/default_app_config 五项；目录归类方向、核心测试三项为主要剩余缺口。*
+
+---
+
+# 三轮复查（2026-06-25，commit `031c5f1` 之后）
+
+> 用户照 eval.md 二轮复查又修了一轮（bias_core `031c5f1` + bias_site `3241e95`）。本轮主要修小问题，核心硬骨头仍未碰。
+
+## 本轮已修对 ✅
+
+1. **`api/admin/` 去重**——删 10 个 1:1 重复文件，`api/admin/` 只剩 `__init__.py`。
+2. **`PaginationService` 正式归属**——移至 `services/pagination.py`（内容正确，类名/自引用无误），`services/__init__` re-export；删 `services_old.py` 临时文件。
+3. **`__all__`**——`["__version__"]`，去掉残留的 `default_app_config`。
+
+## 🟡 声称修但未落地
+
+**`settings.py` 模块级 `import os` 仍在**：bias_site `3241e95` commit message 写「添加模块级 import os」，但 `git show 3241e95 -- config/settings.py` diff 为空——**该 commit 根本没改这个文件**。当前 `config/settings.py` 模块级仍无 `import os`（`os` 仍只在 `env_int()` 内 line 20），line 243 `ENABLE_DEBUG_TOOLBAR = DEBUG and os.getenv(...)` 在 DEBUG=True 时仍会 `NameError`。**修复名不副实，需补做并在 DEBUG 分支实跑验证。**
+
+## 🟡 新遗留
+
+**`api/admin/` 去重后留下空 `__init__.py` 壳**——目录半成品继续蔓延。当前子目录现状：
+
+| 子目录 | 内容 | 性质 |
+|---|---|---|
+| `resources/` | 仅 `__init__.py`(docstring) | 空壳 |
+| `services/` | `__init__` + `pagination.py` | 仅 1 个正式模块 |
+| `api/` | `__init__` + `admin/__init__`(空) | 空壳 |
+| `realtime/` | `__init__` + `routing.py`(1行 shim) | 空壳 |
+
+顶层扁平文件仍 72 个，是实际主路径。**目录归类方向（子目录为主 vs 扁平为主）仍未决策，停在半成品。**
+
+## 🔴 连续三轮未碰的核心硬骨头
+
+这四项是「是否拆完整」的真正阻力，本轮和上两轮都没动：
+
+1. **18 个 `.skip` 测试**——`tests/common.py` 仍 113 行（旧仓 392 行，`make_extension_test_base_dir` 等漏迁）、`extensions/testing.py` 仍没迁。详见上方「附：.skip 根因详析」。
+2. **import-linter forbidden 没收紧**——仍只 12 个模块，漏 `resource_dispatcher`/`audit`/`authorization`/`forum_registry` 等顶层内部路径，扩展可绕过。
+3. **`bias-ext-users/tests.py` 旧路径**（`apps.core`/`extensions.testing`）。
+
+## 架构师判断
+
+**连续两轮在修「容易的表面问题」（去重、命名、`__all__`、`os`），回避了「难的硬骨头」（migrations、测试基础设施、目录方向）。** 且 `os` 修复名不副实，说明「改了没验证」。建议停止修小问题，集中攻一个硬骨头——**优先测试基础设施**（补 `common.py` + 迁 `testing.py`），因为它能一次性解锁 18 个 `.skip` 里的行为验证（文档 C9 核心），且 `bias-ext-users` 也跟着受益；目录方向最后定（不影响跑，只影响整洁）。
+
+---
+
+*三轮复查基于 2026-06-25 `031c5f1` 之后的代码快照。本轮修对 api/admin 去重、PaginationService 归属、__all__、services_old 删除四项；settings.py os 修复未落地；migrations、.skip 测试、目录方向、import-linter 收紧四项硬骨头连续三轮未碰。*
