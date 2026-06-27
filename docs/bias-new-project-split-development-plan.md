@@ -13,7 +13,7 @@
   先开发独立后端核心包
   提供 bias_core Python 包和后端扩展 SDK
 
-新项目 bias-site
+新项目 bias
   再开发网站工程
   作为最终可部署站点，依赖 bias-core
 
@@ -32,7 +32,7 @@
 workspace/
 ├─ bias/                     # 旧项目，只读参考为主
 ├─ bias-core/                # 新后端核心包
-├─ bias-site/                # 新网站工程
+├─ bias/                # 新网站工程
 ├─ bias-frontend-sdk/        # 可选，@bias/core 前端 SDK 包
 ├─ bias-ext-users/           # 后续迁移出的用户扩展
 ├─ bias-ext-discussions/     # 后续迁移出的讨论扩展
@@ -47,7 +47,7 @@ workspace/
 bias-platform/
 ├─ packages/
 │  ├─ bias-core/
-│  ├─ bias-site/
+│  ├─ bias/
 │  ├─ frontend-sdk/
 │  └─ extensions/
 │     ├─ users/
@@ -144,9 +144,9 @@ bias-platform/
 
 主题不属于 core 的具体实现内容，但主题协议属于 core 的平台能力。
 
-### 3. bias-site 负责什么
+### 3. bias 负责什么
 
-`bias-site` 是网站工程，负责：
+`bias` 是网站工程，负责：
 
 - Django 项目配置：
   - settings
@@ -200,7 +200,7 @@ bias-platform/
 - 读取主题设置。
 - 注入主题局部样式或 assets。
 
-第一阶段可以把它放在 `bias-site/frontend` 里开发，稳定后再独立成 `bias-frontend-sdk` 项目。
+第一阶段可以把它放在 `bias/frontend` 里开发，稳定后再独立成 `bias-frontend-sdk` 项目。
 
 ## 三、从旧项目抽取的总体原则
 
@@ -396,8 +396,8 @@ bias_core/conf/extension_discovery.py
 
 验收：
 
-- `bias-site` 能从 `bias_core.conf.bootstrap` 读取站点配置。
-- `bias-site` 不需要 import core 内部实现。
+- `bias` 能从 `bias_core.conf.bootstrap` 读取站点配置。
+- `bias` 不需要 import core 内部实现。
 
 ### Phase C3：抽取扩展 SDK 公共面
 
@@ -616,7 +616,7 @@ websocket_urlpatterns
 
 验收：
 
-- `bias-site` 可以挂载 `/api/`。
+- `bias` 可以挂载 `/api/`。
 - `/api/system/status` 可用。
 - admin auth 基础接口可用。
 - WebSocket routing 可初始化。
@@ -705,14 +705,14 @@ bias_core 不得 import 任何 bias_ext_* 包
 - 新虚拟环境中安装 wheel 成功。
 - 安装后测试最小 Django 项目成功。
 
-## 五、bias-site 项目详细开发方案
+## 五、bias 项目详细开发方案
 
 ### Phase S0：创建项目骨架
 
 目录：
 
 ```text
-bias-site/
+bias/
 ├─ pyproject.toml
 ├─ manage.py
 ├─ config/
@@ -738,7 +738,7 @@ bias-site/
 
 ```toml
 [project]
-name = "bias-site"
+name = "bias"
 version = "0.1.0"
 dependencies = [
   "bias-core>=0.1,<0.2"
@@ -838,7 +838,7 @@ frontend/src/common/sdk.js   -> 未来 @bias/core/common
 frontend/src/forum/sdk.js    -> 未来 @bias/core/forum
 frontend/src/admin/sdk.js    -> 未来 @bias/core/admin
 frontend/src/assets/main.css -> 需要逐步 token 化，避免主题只能覆盖内部选择器
-其余页面和布局            -> bias-site 宿主内部
+其余页面和布局            -> bias 宿主内部
 ```
 
 第一阶段不急着发布 `@bias/core`，但代码结构应按未来包边界整理。
@@ -872,7 +872,7 @@ frontend/src/theme/
 
 两种选择：
 
-方案 A：先在 `bias-site/frontend` 内维护。
+方案 A：先在 `bias/frontend` 内维护。
 
 ```text
 frontend/src/sdk/
@@ -969,7 +969,7 @@ scripts/docker-upgrade.*
 改造：
 
 - 后端镜像安装 `bias-core`。
-- 前端 build 使用 `bias-site/frontend`。
+- 前端 build 使用 `bias/frontend`。
 - `doctor` 命令来自 `bias-core`。
 - install/upgrade 流程支持包化扩展。
 
@@ -984,7 +984,7 @@ scripts/docker-upgrade.*
 
 在真实业务扩展迁移前，建议做一个极小的 fixture theme，用来验证主题协议和宿主前端边界。
 
-默认主题在第一阶段留在 `bias-site`，不单独做成扩展。原因是空网站工程需要一个不依赖扩展系统的基础外观和 fallback tokens。如果默认主题一开始就是扩展，那么 `bias-site` 的最小启动链路会被主题扩展安装、发现、manifest 生成和前端加载同时牵住，调试成本会变高。
+默认主题在第一阶段留在 `bias`，不单独做成扩展。原因是空网站工程需要一个不依赖扩展系统的基础外观和 fallback tokens。如果默认主题一开始就是扩展，那么 `bias` 的最小启动链路会被主题扩展安装、发现、manifest 生成和前端加载同时牵住，调试成本会变高。
 
 但默认主题不能按“永远留在宿主内部”的方式写。它需要按未来可抽离为 `bias-theme-default` 的标准组织：
 
@@ -1030,7 +1030,7 @@ bias-theme-fixture/
 
 验收：
 
-- `bias-site` 能安装 fixture theme。
+- `bias` 能安装 fixture theme。
 - 后台能看到 theme 类型扩展。
 - 启用后 frontend manifest 包含 theme CSS。
 - 页面根节点应用 theme class。
@@ -1040,7 +1040,7 @@ bias-theme-fixture/
 
 ## 六、旧项目扩展迁移策略
 
-扩展迁移必须在 `bias-core` 和 `bias-site` 最小链路跑通后开始。
+扩展迁移必须在 `bias-core` 和 `bias` 最小链路跑通后开始。
 
 推荐顺序：
 
@@ -1078,7 +1078,7 @@ bias-theme-fixture/
 7. 添加 extension.json
 8. 添加 entry point
 9. 迁移 tests
-10. 在 bias-site 中 pip install -e ../bias-ext-xxx
+10. 在 bias 中 pip install -e ../bias-ext-xxx
 11. sync_extensions + migrate + frontend build
 12. 和旧项目行为对照
 ```
@@ -1095,10 +1095,10 @@ bias-theme-fixture/
 
 主题迁移策略：
 
-- 旧项目如果已有站点级主题或外观配置，不直接放进 `bias-site` 内部。
-- 先沉淀默认主题 tokens，作为 `bias-site` 默认外观和 fallback。
+- 旧项目如果已有站点级主题或外观配置，不直接放进 `bias` 内部。
+- 先沉淀默认主题 tokens，作为 `bias` 默认外观和 fallback。
 - 再把可替换外观能力抽象成 `bias-theme-*`。
-- 官方默认主题第一阶段内置在 `bias-site`。
+- 官方默认主题第一阶段内置在 `bias`。
 - 主题协议稳定后，再决定是否抽成官方 `bias-theme-default`。
 - 即使默认主题暂时内置，也要按可抽离结构编写，避免后续抽包时重写样式体系。
 
@@ -1133,9 +1133,9 @@ label = "core"
 
 建议：不马上独立成仓。
 
-先在 `bias-site/frontend` 内形成 `@bias/core` 的 exports/alias。等至少一个扩展迁移完成后，再抽成独立 npm 包。
+先在 `bias/frontend` 内形成 `@bias/core` 的 exports/alias。等至少一个扩展迁移完成后，再抽成独立 npm 包。
 
-主题 API 也按这个节奏处理。先在 `bias-site/frontend` 里实现 theme runtime 和 SDK 导出，等 fixture theme 与一个真实扩展都跑通后，再一起抽出 `@bias/core`。
+主题 API 也按这个节奏处理。先在 `bias/frontend` 里实现 theme runtime 和 SDK 导出，等 fixture theme 与一个真实扩展都跑通后，再一起抽出 `@bias/core`。
 
 ### 4. 是否支持旧扩展路径
 
@@ -1155,7 +1155,7 @@ from bias_core.extensions import ...
 
 不建议。
 
-`bias-core` + `bias-site` 先跑空宿主，再迁移 users/discussions/posts 等扩展。这样能尽早验证拆分边界。
+`bias-core` + `bias` 先跑空宿主，再迁移 users/discussions/posts 等扩展。这样能尽早验证拆分边界。
 
 ## 八、里程碑
 
@@ -1176,7 +1176,7 @@ from bias_core.extensions import ...
 - `extend()` 可执行。
 - settings/permissions/routes/resources 可注册。
 
-### M3：bias-site 空宿主可运行
+### M3：bias 空宿主可运行
 
 验收：
 
@@ -1260,7 +1260,7 @@ from bias_core.extensions import ...
 
 控制：
 
-- 先在 `bias-site` 内形成稳定 exports。
+- 先在 `bias` 内形成稳定 exports。
 - 至少迁移一个真实扩展后再独立 npm 包。
 
 ### 风险 4：Django migrations 和 app label 出问题
@@ -1288,7 +1288,7 @@ from bias_core.extensions import ...
 5. 抽 `extensions.__init__`、`sdk`、`contracts`、`types`、`extenders`。
 6. 写 `test_sdk_exports.py`。
 7. 抽最小 extension loader，跑通一个 fixture 扩展。
-8. 创建 `bias-site` 骨架，editable 安装 `bias-core`。
+8. 创建 `bias` 骨架，editable 安装 `bias-core`。
 9. 跑通 `python manage.py check`。
 10. 整理第一批缺失依赖和路径替换清单。
 
@@ -1300,7 +1300,7 @@ from bias_core.extensions import ...
 
 ```text
 1. bias-core 后端核心包
-2. bias-site 空网站工程
+2. bias 空网站工程
 3. 前端 SDK 边界
 4. 测试扩展
 5. users 扩展
@@ -1312,7 +1312,7 @@ from bias_core.extensions import ...
 
 ```text
 bias-core 只做平台和 SDK
-bias-site 只做组合、部署和宿主
+bias 只做组合、部署和宿主
 bias-ext-* 只做具体业务能力
 旧项目只做参考和迁移来源
 ```

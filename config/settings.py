@@ -1,5 +1,5 @@
 """
-Django settings for bias-site project.
+Django settings for bias project.
 
 Generated from bias-core bootstrap pattern.
 """

@@ -288,15 +288,15 @@ def extend():
 - 同一站点同一时间只能启用一个 primary theme。
 - 可以同时启用多个 appearance extension，例如代码高亮、字体包、小型装饰包。
 - `bias-core` 负责主题注册、启停、设置、manifest 暴露和兼容校验。
-- `bias-site` 前端宿主负责加载 CSS、应用 theme class、注入 design tokens。
+- `bias` 前端宿主负责加载 CSS、应用 theme class、注入 design tokens。
 - `@bias/core` 提供主题前端 API，例如注册 theme variant 或 slot component。
 
 默认主题建议分阶段处理：
 
-- 第一阶段默认主题留在 `bias-site`，作为宿主基础外观、默认 design tokens 和无主题安装时的 fallback。
-- 第一阶段不要求 `bias-site` 必须安装一个 `bias-theme-default` 才能运行，避免空站点启动链路依赖主题扩展系统。
+- 第一阶段默认主题留在 `bias`，作为宿主基础外观、默认 design tokens 和无主题安装时的 fallback。
+- 第一阶段不要求 `bias` 必须安装一个 `bias-theme-default` 才能运行，避免空站点启动链路依赖主题扩展系统。
 - 主题协议稳定后，可以把默认主题抽成官方扩展 `bias-theme-default`。
-- 即使默认主题初期内置在 `bias-site`，它也必须按未来主题扩展的边界编写：使用 CSS variables、CSS layer、theme slots，不依赖一次性写死的内部覆盖规则。
+- 即使默认主题初期内置在 `bias`，它也必须按未来主题扩展的边界编写：使用 CSS variables、CSS layer、theme slots，不依赖一次性写死的内部覆盖规则。
 
 拆分时需要提前预留主题边界。即使第一版不迁移具体主题，也应保证宿主前端的基础样式由 token 和 CSS layer 驱动，避免后续主题只能通过覆盖内部选择器实现。
 

@@ -1,8 +1,8 @@
 #!/bin/bash
-# bias-site docker upgrade script
+# bias docker upgrade script
 set -e
 
-echo "=== Bias Site Docker Upgrade ==="
+echo "=== Bias Docker Upgrade ==="
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -33,7 +33,7 @@ resolve_workspace_root() {
     done
 
     echo "Error: could not locate workspace root containing bias_core and bias-ext-*." >&2
-    echo "Set WORKSPACE_ROOT to the parent directory of bias_site and retry." >&2
+    echo "Set WORKSPACE_ROOT to the parent directory of bias and retry." >&2
     return 1
 }
 
@@ -68,10 +68,10 @@ if $PYTHON_BIN -c "import build" >/dev/null 2>&1; then
 else
     docker run --rm -v "$WORKSPACE_ROOT":/workspace -w /workspace python:3.12-slim sh -lc '
         pip install --no-cache-dir build setuptools wheel >/dev/null &&
-        python -m build --wheel --no-isolation bias_core -o bias_site/wheels &&
+        python -m build --wheel --no-isolation bias_core -o bias/wheels &&
         for extension_dir in bias-ext-*; do
             [ -d "$extension_dir" ] || continue
-            python -m build --wheel --no-isolation "$extension_dir" -o bias_site/wheels
+            python -m build --wheel --no-isolation "$extension_dir" -o bias/wheels
         done
     '
 fi

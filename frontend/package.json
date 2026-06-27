@@ -1,5 +1,5 @@
 {
-  "name": "bias-site-frontend",
+  "name": "bias-frontend",
   "version": "0.1.0",
   "description": "Bias Site Frontend - Vue 3 Application",
   "private": true,

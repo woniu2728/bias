@@ -1,5 +1,5 @@
 """
-ASGI config for bias-site project.
+ASGI config for bias project.
 
 Supports both HTTP (Django) and WebSocket (Channels) protocols.
 """

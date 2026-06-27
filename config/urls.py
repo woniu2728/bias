@@ -1,5 +1,5 @@
 """
-URL configuration for bias-site project.
+URL configuration for bias project.
 """
 
 from django.contrib import admin

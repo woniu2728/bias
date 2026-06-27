@@ -38,7 +38,7 @@ function discoverExtensionSdks() {
     }
   }
 
-  // frontendRoot = <workspace>/bias_site/frontend
+  // frontendRoot = <workspace>/bias/frontend
   // workspace = <workspace>
   const workspace = resolve(frontendRoot, '..', '..')
   if (!existsSync(workspace)) return results

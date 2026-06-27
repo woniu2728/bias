@@ -2,7 +2,7 @@
 set -e
 
 # ============================================================
-# bias-site entrypoint — run migrations, collect static, then
+# bias entrypoint - run migrations, collect static, then
 # drop privileges to the bias user and run the CMD.
 # ============================================================
 

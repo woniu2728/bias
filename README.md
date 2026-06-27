@@ -1,4 +1,4 @@
-# bias_site
+# bias
 
 Bias 站点宿主工程。核心后端 SDK 在 `bias_core`，官方扩展位于同级 `bias-ext-*` 包，本仓库只保留站点配置、前端宿主和部署入口。
 

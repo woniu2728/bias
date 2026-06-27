@@ -1,5 +1,5 @@
 [project]
-name = "bias-site"
+name = "bias"
 version = "0.1.0"
 description = "Bias forum site project"
 requires-python = ">=3.11"

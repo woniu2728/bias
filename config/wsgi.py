@@ -1,5 +1,5 @@
 """
-WSGI config for bias-site project.
+WSGI config for bias project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 """
