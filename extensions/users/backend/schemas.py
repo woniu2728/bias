@@ -114,6 +114,16 @@ class CurrentUserSchema(UserDetailSchema):
     forum_permissions: List[str] = []
 
 
+class SessionStateUserSchema(UserDetailSchema):
+    """会话探测时返回的用户摘要。"""
+    forum_permissions: List[str] = []
+
+
+class SessionStateSchema(Schema):
+    authenticated: bool
+    user: Optional[SessionStateUserSchema] = None
+
+
 class UserPreferenceItemSchema(Schema):
     key: str
     label: str

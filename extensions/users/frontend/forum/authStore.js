@@ -95,14 +95,26 @@ export const useAuthStore = defineStore('auth', () => {
     isRestoringSession.value = true
 
     try {
-      await api.post('/users/token/refresh', null, {
+      const session = await api.get('/users/session', {
         skipAuthRefresh: true,
         skipAuthInvalidation: true,
       })
-      return await fetchUser()
-    } catch (_error) {
+
+      if (!session?.authenticated) {
+        user.value = null
+        isRestoringSession.value = false
+        return null
+      }
+
+      user.value = session.user
+      isRestoringSession.value = false
+      return session.user
+    } catch (error) {
       user.value = null
       isRestoringSession.value = false
+      if (error.response?.status !== 503) {
+        console.error('检查登录状态失败:', error)
+      }
       return null
     }
   }

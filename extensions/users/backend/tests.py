@@ -612,6 +612,32 @@ class UserProfileApiTests(TestCase):
             {"startDiscussion", "discussion.reply"},
         )
 
+    def test_session_state_reports_guest_without_auth(self):
+        response = self.client.get("/api/users/session")
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json(), {"authenticated": False, "user": None})
+
+    def test_session_state_reports_authenticated_user(self):
+        user = User.objects.create_user(
+            username="session-user",
+            email="session-user@example.com",
+            password="password123",
+            is_email_confirmed=True,
+        )
+        token = str(RefreshToken.for_user(user).access_token)
+
+        response = self.client.get(
+            "/api/users/session",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        payload = response.json()
+        self.assertTrue(payload["authenticated"])
+        self.assertEqual(payload["user"]["username"], "session-user")
+        self.assertEqual(payload["user"]["forum_permissions"], sorted(payload["user"]["forum_permissions"]))
+
     def test_forum_permissions_include_runtime_processed_groups(self):
         user = User.objects.create_user(
             username="runtime-group-permission",

@@ -3,6 +3,7 @@ from ninja_jwt.exceptions import TokenError
 from ninja_jwt.tokens import RefreshToken
 from django.http import JsonResponse
 
+from apps.core.auth import get_optional_user
 from apps.core.extensions.platform import (
     ACCESS_TOKEN_COOKIE_NAME,
     AccessTokenAuth,
@@ -28,6 +29,7 @@ from extensions.users.backend.schemas import (
     EmailVerifySchema,
     PasswordResetRequestSchema,
     PasswordResetSchema,
+    SessionStateSchema,
     TokenSchema,
     UserLoginSchema,
     UserOutSchema,
@@ -135,6 +137,19 @@ def logout(request):
     response = JsonResponse({"message": "登出成功"})
     response = clear_access_token_cookie(response)
     return clear_refresh_token_cookie(response)
+
+
+@router.get("/session", response=SessionStateSchema, tags=["Auth"])
+def session_state(request):
+    user = get_optional_user(request)
+
+    if not user:
+        return {"authenticated": False, "user": None}
+
+    return {
+        "authenticated": True,
+        "user": UserService.get_session_state_user(user),
+    }
 
 
 @router.post("/verify-email", response=UserOutSchema, tags=["Auth"])

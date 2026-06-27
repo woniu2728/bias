@@ -163,6 +163,21 @@ class UserService:
         return sorted(UserService.get_forum_permission_set(user))
 
     @staticmethod
+    def get_session_state_user(user: User):
+        """返回轻量级会话探测用户数据。"""
+        from extensions.users.backend.resources import serialize_user_payload
+
+        payload = serialize_user_payload(user, "user_detail") or {}
+        payload.update({
+            "email": user.email,
+            "is_email_confirmed": user.is_email_confirmed,
+            "is_suspended": user.is_suspended,
+            "is_staff": user.is_staff,
+            "forum_permissions": UserService.get_serialized_forum_permissions(user),
+        })
+        return payload
+
+    @staticmethod
     def has_forum_permission(user: User, permission_names) -> bool:
         if not user or not user.is_authenticated:
             return False

@@ -66,6 +66,7 @@ function isAuthEndpoint(url = '') {
   return url.includes('/users/login')
     || url.includes('/users/logout')
     || url.includes('/users/token/refresh')
+    || url.includes('/users/session')
 }
 
 async function refreshAccessToken() {
@@ -86,7 +87,7 @@ function notifyAuthInvalidated(error) {
 
   if (typeof window !== 'undefined') {
     const requestUrl = String(error.config?.url || '')
-    const isSessionProbe = requestUrl.includes('/users/me')
+    const isSessionProbe = requestUrl.includes('/users/me') || requestUrl.includes('/users/session')
     const isAdminRuntime =
       window.location.pathname.startsWith('/admin')
       || window.location.pathname.endsWith('/admin.html')
