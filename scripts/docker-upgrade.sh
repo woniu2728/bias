@@ -1,46 +1,86 @@
-#!/usr/bin/env sh
-set -eu
+#!/bin/bash
+# bias-site docker upgrade script
+set -e
 
-SKIP_PULL="${SKIP_PULL:-0}"
-SKIP_BUILD="${SKIP_BUILD:-0}"
-SKIP_DOCTOR="${SKIP_DOCTOR:-0}"
+echo "=== Bias Site Docker Upgrade ==="
 
-run_step() {
-  label="$1"
-  shift
-  printf '\n==> %s\n' "$label"
-  "$@"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+resolve_workspace_root() {
+    local candidates=()
+    if [ -n "${WORKSPACE_ROOT:-}" ]; then
+        candidates+=("$WORKSPACE_ROOT")
+    fi
+    local windows_pwd
+    windows_pwd="$(cmd.exe /c cd 2>/dev/null | tr -d '\r' || true)"
+    if [[ "$windows_pwd" =~ ^([A-Za-z]):\\(.*)$ ]]; then
+        local drive="${BASH_REMATCH[1],,}"
+        local tail="${BASH_REMATCH[2]//\\//}"
+        candidates+=("/mnt/$drive/$tail/..")
+    fi
+    candidates+=("$SITE_DIR/..")
+
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        [ -n "$candidate" ] || continue
+        candidate="$(cd "$candidate" 2>/dev/null && pwd || true)"
+        [ -n "$candidate" ] || continue
+        if [ -d "$candidate/bias_core" ] && compgen -G "$candidate/bias-ext-*" >/dev/null; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    echo "Error: could not locate workspace root containing bias_core and bias-ext-*." >&2
+    echo "Set WORKSPACE_ROOT to the parent directory of bias_site and retry." >&2
+    return 1
 }
 
-verify_frontend_dist() {
-  if [ ! -f "frontend/dist/index.html" ] || [ ! -f "frontend/dist/admin.html" ]; then
-    echo "前端构建产物缺失，请检查 frontend 容器日志：docker compose logs frontend" >&2
+WORKSPACE_ROOT="$(resolve_workspace_root)"
+
+PYTHON_BIN="${PYTHON_BIN:-}"
+if [ -z "$PYTHON_BIN" ]; then
+    if command -v python3 >/dev/null 2>&1; then
+        PYTHON_BIN=python3
+    elif command -v python >/dev/null 2>&1; then
+        PYTHON_BIN=python
+    else
+        echo "Error: Python is not available."
+        exit 1
+    fi
+fi
+
+if ! docker compose ps &> /dev/null; then
+    echo "Bias is not running. Use docker-install.sh to install."
     exit 1
-  fi
-}
-
-if [ ! -f ".env" ]; then
-  echo "缺少 .env 文件，请先复制 .env.example 并填写数据库配置。" >&2
-  exit 1
 fi
 
-if [ "$SKIP_PULL" != "1" ]; then
-  run_step "拉取最新代码" git pull --ff-only
+# Pull latest images and rebuild
+mkdir -p wheels
+rm -f wheels/*.whl
+if $PYTHON_BIN -c "import build" >/dev/null 2>&1; then
+    $PYTHON_BIN -m build --wheel --no-isolation "$WORKSPACE_ROOT/bias_core" -o wheels
+    for extension_dir in "$WORKSPACE_ROOT"/bias-ext-*; do
+        [ -d "$extension_dir" ] || continue
+        $PYTHON_BIN -m build --wheel --no-isolation "$extension_dir" -o wheels
+    done
+else
+    docker run --rm -v "$WORKSPACE_ROOT":/workspace -w /workspace python:3.12-slim sh -lc '
+        pip install --no-cache-dir build setuptools wheel >/dev/null &&
+        python -m build --wheel --no-isolation bias_core -o bias_site/wheels &&
+        for extension_dir in bias-ext-*; do
+            [ -d "$extension_dir" ] || continue
+            python -m build --wheel --no-isolation "$extension_dir" -o bias_site/wheels
+        done
+    '
 fi
+docker compose pull
+docker compose down --remove-orphans
+docker compose up -d --build
+docker compose exec -T web python manage.py upgrade_forum --non-interactive --skip-migrate --skip-collectstatic
+docker compose exec -T web python manage.py doctor
 
-if [ "$SKIP_BUILD" != "1" ]; then
-  run_step "构建后端镜像" docker compose build web celery
-fi
-
-run_step "启动基础服务" docker compose up -d db redis web celery nginx
-run_step "执行 Bias 升级" docker compose exec web python manage.py upgrade_forum --non-interactive
-run_step "重新构建前端资源" docker compose restart frontend
-run_step "等待前端构建完成" docker compose up -d --wait frontend
-run_step "检查前端构建产物" verify_frontend_dist
-run_step "重启应用进程" docker compose restart web celery nginx
-
-if [ "$SKIP_DOCTOR" != "1" ]; then
-  run_step "运行部署检查" docker compose exec web python manage.py doctor
-fi
-
-printf '\nBias 升级完成：http://localhost:8080\n'
+echo ""
+echo "=== Upgrade Complete ==="
+echo "Run 'docker compose logs -f web' to verify startup."

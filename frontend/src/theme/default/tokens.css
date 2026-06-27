@@ -1,0 +1,21 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * Bias default theme — Design tokens
+ * ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --bias-color-primary: #4D5AE5;
+  --bias-color-primary-light: #7B83EB;
+  --bias-color-primary-dark: #3741C9;
+  --bias-color-bg: #ffffff;
+  --bias-color-bg-secondary: #f8f9fa;
+  --bias-color-text: #1a1a2e;
+  --bias-color-text-muted: #6b7280;
+  --bias-color-border: #e5e7eb;
+  --bias-radius-sm: 4px;
+  --bias-radius-md: 8px;
+  --bias-radius-lg: 12px;
+  --bias-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bias-font-mono: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  --bias-shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --bias-shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+  --bias-shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
+}

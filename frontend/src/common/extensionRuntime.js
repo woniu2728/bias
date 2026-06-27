@@ -1,26 +1,14 @@
 import { ensureExportRegistry } from './exportRegistry.js'
+import { getCurrentExtensionId, runWithExtensionScope } from './extensionScope.js'
 import ItemList from './itemList.js'
 
-let currentExtensionId = ''
 const patchRecords = []
 const lazyPatchRecords = []
 const handledRuntimeErrors = new Set()
 const runtimeErrors = []
 const lazyModuleRegistry = new Map()
 
-export function getCurrentExtensionId() {
-  return currentExtensionId
-}
-
-export function runWithExtensionScope(extensionId, callback) {
-  const previous = currentExtensionId
-  currentExtensionId = String(extensionId || '').trim()
-  try {
-    return callback()
-  } finally {
-    currentExtensionId = previous
-  }
-}
+export { getCurrentExtensionId, runWithExtensionScope }
 
 export function createExtensionInitializers() {
   const items = []

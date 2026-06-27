@@ -1,0 +1,5 @@
+/* Default theme — forum CSS layer */
+@layer theme {
+  body { font-family: var(--bias-font-sans); color: var(--bias-color-text); background: var(--bias-color-bg); }
+  a { color: var(--bias-color-primary); }
+}

@@ -6,15 +6,14 @@ const VIRTUAL_ID = 'virtual:bias-extension-import-map'
 const RESOLVED_VIRTUAL_ID = `\0${VIRTUAL_ID}`
 
 const fallbackSource = [
-  '// This virtual module is backed by src/generated/extensionImportMap.js when it exists.',
   'export const generatedAdminExtensionModules = {}',
   'export const generatedForumExtensionModules = {}',
   '',
 ].join('\n')
 
 export function biasExtensionImportMapPlugin() {
-  const importMapPath = fileURLToPath(new URL('./src/generated/extensionImportMap.js', import.meta.url))
   const frontendRoot = fileURLToPath(new URL('.', import.meta.url))
+  const importMapPath = fileURLToPath(new URL('./src/generated/extensionImportMap.js', import.meta.url))
 
   return {
     name: 'bias-extension-import-map',

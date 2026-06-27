@@ -1,200 +1,35 @@
-# Bias
+# bias_site
 
-Bias 是一个使用 Django + Vue 3 构建的论坛项目，目标是提供扩展优先的现代论坛体验和后台管理能力。
+Bias 站点宿主工程。核心后端 SDK 在 `bias_core`，官方扩展位于同级 `bias-ext-*` 包，本仓库只保留站点配置、前端宿主和部署入口。
 
-## 技术栈
+## 本地前端构建
 
-- 后端：Django 5、Django Ninja、Channels、Celery
-- 前端：Vue 3、Vue Router、Pinia、Vite
-- 数据库：PostgreSQL
-- 缓存与队列：Redis
-- 部署方式：Docker Compose
-
-## Docker 安装
-
-### 1. 准备配置
+官方扩展已经拆成独立包，但 Vite 仍需要在站点工程内看到扩展前端源码。构建前执行：
 
 ```bash
-git clone <your-repo-url>
-cd bias
-cp .env.example .env
+cd frontend
+npm run sync:extension-sources
+npm run build
 ```
 
-至少填写 `.env` 中的数据库和访问地址配置：
+`sync:extension-sources` 会从同级 `bias-ext-*` 仓库同步 `extension.json` 和 `frontend/` 到 `extensions/<id>`。这些目录是生成的构建输入，不应作为站点源码提交；本地 fixture 扩展 `extensions/fixture_theme` 例外。
 
-```env
-DB_NAME=your_bias_db
-DB_USER=your_bias_user
-DB_PASSWORD=your_strong_password
-FRONTEND_URL=http://localhost:8080
-SITE_SCHEME=http
-```
-
-首次安装时 `SECRET_KEY`、`JWT_SECRET_KEY` 可以留空，安装命令会生成随机强密钥并写入 `instance/site.json`。已安装站点不要随意修改这个文件里的密钥，否则现有登录态和签名数据会失效。
-
-本地 `http://localhost:8080` 演示环境保持 `CSRF_COOKIE_SECURE=0`、`SESSION_COOKIE_SECURE=0`。正式 HTTPS 部署时把 `FRONTEND_URL`/`SITE_SCHEME` 改成 `https`，并开启这两个 secure cookie 开关。
-
-`WEB_CONCURRENCY` 和 `CELERY_CONCURRENCY` 默认均为 2，可按服务器 CPU、内存和实际流量调大。
-
-生产邮件建议配置 SMTP：
-
-```env
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp.example.com
-EMAIL_PORT=587
-EMAIL_USE_TLS=1
-EMAIL_HOST_USER=your-smtp-user
-EMAIL_HOST_PASSWORD=your-smtp-password
-DEFAULT_FROM_EMAIL=noreply@example.com
-```
-
-如果这台机器之前运行过同名 Bias 容器，首次安装前建议先清理旧卷，避免 PostgreSQL 复用历史账号：
-
-```bash
-docker compose down -v
-```
-
-### 2. 一键安装
-
-Windows / PowerShell:
+## 工作区验证
 
 ```powershell
-.\scripts\docker-install.ps1 `
-  -SiteDomains "bias.chat,www.bias.chat" `
-  -SiteScheme "https" `
-  -AdminUsername "admin" `
-  -AdminEmail "admin@example.com"
+.\scripts\validate-workspace.ps1 -BuildFrontend
 ```
 
-Linux / macOS:
+该脚本会编译 Python 包、检查拆包 import 边界，并验证/构建站点前端。
+
+## 部署前静态资源
+
+发布镜像不包含 Node。前端 dist 应在镜像构建前由宿主机或 CI 生成，再由 Dockerfile 复制进 `/app`：
 
 ```bash
-SITE_DOMAINS="bias.chat,www.bias.chat" \
-SITE_SCHEME="https" \
-ADMIN_USERNAME="admin" \
-ADMIN_EMAIL="admin@example.com" \
-sh scripts/docker-install.sh
+cd frontend
+npm install
+npm run build
 ```
 
-脚本会依次完成：
-
-- 构建并启动 Docker 服务
-- 执行 `install_forum`
-- 同步扩展、迁移数据库、生成扩展前端 manifest
-- 重启 web、celery、frontend、nginx
-- 执行 `doctor` 部署检查
-
-默认访问入口：
-
-- Forum 前台：`http://localhost:8080`
-- 管理后台：`http://localhost:8080/admin.html`
-- API 文档：`http://localhost:8080/api/docs`
-- 系统状态：`http://localhost:8080/api/system/status`
-
-## Docker 升级
-
-Windows / PowerShell:
-
-```powershell
-.\scripts\docker-upgrade.ps1
-```
-
-Linux / macOS:
-
-```bash
-sh scripts/docker-upgrade.sh
-```
-
-升级脚本会依次完成：
-
-- `git pull --ff-only`
-- 构建后端镜像
-- 启动基础服务
-- 执行 `upgrade_forum --non-interactive`
-- 重启 frontend 触发 Vite 构建
-- 重启 web、celery、nginx
-- 执行 `doctor` 部署检查
-
-可选跳过项：
-
-PowerShell:
-
-```powershell
-.\scripts\docker-upgrade.ps1 -SkipPull -SkipBuild -SkipDoctor
-```
-
-Shell:
-
-```bash
-SKIP_PULL=1 SKIP_BUILD=1 SKIP_DOCTOR=1 sh scripts/docker-upgrade.sh
-```
-
-## 部署检查
-
-任何时候都可以执行：
-
-```bash
-docker compose exec web python manage.py doctor
-```
-
-JSON 输出：
-
-```bash
-docker compose exec web python manage.py doctor --format json
-```
-
-`doctor` 会检查：
-
-- 安装版本是否与代码版本一致
-- 数据库连接是否正常
-- Django 迁移是否已完成
-- 扩展包是否缺失或版本漂移
-- 前端 dist 是否存在
-- 扩展前端 manifest 是否存在且未过期
-- 缓存是否可读写
-
-## 常见故障
-
-### PostgreSQL 提示 role 不存在
-
-如果安装时报：
-
-```text
-role "<your user>" does not exist
-```
-
-通常是旧的 `postgres_data` 卷仍在使用旧账号。无数据需要保留时执行：
-
-```bash
-docker compose down -v
-docker compose up -d --build
-```
-
-然后重新运行安装脚本。
-
-### 页面仍是旧版本
-
-前端页面由 `frontend` 容器执行 `npm run build` 生成到 `frontend/dist`。如果升级后页面仍旧，执行：
-
-```bash
-docker compose restart frontend nginx
-docker compose exec web python manage.py doctor
-```
-
-### 只改域名
-
-重新运行安装脚本并允许覆盖配置。
-
-PowerShell:
-
-```powershell
-.\scripts\docker-install.ps1 -SiteDomains "bias.chat,www.bias.chat" -SiteScheme "https" -Overwrite
-```
-
-Shell:
-
-```bash
-SITE_DOMAINS="bias.chat,www.bias.chat" SITE_SCHEME="https" OVERWRITE=1 sh scripts/docker-install.sh
-```
-
-已有密钥、数据库配置、Redis 配置会保留。
+运行时容器只执行 Django 迁移和 `collectstatic`。

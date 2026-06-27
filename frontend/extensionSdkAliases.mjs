@@ -1,27 +1,90 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { dirname, relative, resolve, sep } from 'node:path'
+import { existsSync, readdirSync } from 'node:fs'
+import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const frontendRoot = dirname(fileURLToPath(import.meta.url))
-export const repoRoot = resolve(frontendRoot, '..')
-export const extensionsRoot = resolve(repoRoot, 'extensions')
+const corePackageRoot = resolve(frontendRoot, 'sdk-package')
 
 const browserCoreAliases = [
-  ['@bias/core', 'src/common/sdk.js'],
-  ['@bias/admin/components', 'src/admin/componentsSdk.js'],
-  ['@bias/admin', 'src/admin/sdk.js'],
-  ['@bias/forum', 'src/forum/sdk.js'],
+  ['@bias/core', 'common.js'],
+  ['@bias/core/common', 'common.js'],
+  ['@bias/core/forum', 'forum.js'],
+  ['@bias/core/admin', 'admin.js'],
+  ['@bias/core/components/admin', 'components-admin.js'],
 ]
 
 const nodeCoreAliases = [
-  ['@bias/core', 'src/common/sdk.js'],
-  ['@bias/admin/components', 'src/admin/nodeComponentsSdk.js'],
-  ['@bias/admin', 'src/admin/sdk.js'],
-  ['@bias/forum', 'src/forum/nodeSdk.js'],
+  ['@bias/core', 'common.js'],
+  ['@bias/core/common', 'common.js'],
+  ['@bias/core/forum', 'forum-node.js'],
+  ['@bias/core/admin', 'admin.js'],
+  ['@bias/core/components/admin', 'components-admin-node.js'],
 ]
 
+function discoverExtensionSdks() {
+  const results = []
+  const seen = new Set()
+  const siteExtensionsRoot = resolve(frontendRoot, '..', 'extensions')
+  if (existsSync(siteExtensionsRoot)) {
+    const entries = readdirSync(siteExtensionsRoot, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const extId = entry.name
+      const sdkPath = resolve(siteExtensionsRoot, entry.name, 'frontend', 'forum', 'sdk.js')
+      if (existsSync(sdkPath)) {
+        results.push(['@bias/' + extId, sdkPath])
+        seen.add(extId)
+      }
+    }
+  }
+
+  // frontendRoot = <workspace>/bias_site/frontend
+  // workspace = <workspace>
+  const workspace = resolve(frontendRoot, '..', '..')
+  if (!existsSync(workspace)) return results
+
+  const entries = readdirSync(workspace, { withFileTypes: true })
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const m = entry.name.match(/^bias-ext-(.+)$/)
+    if (!m) continue
+    const extId = m[1]
+    if (seen.has(extId)) continue
+    const sdkPath = resolve(workspace, entry.name, 'frontend', 'forum', 'sdk.js')
+    if (existsSync(sdkPath)) {
+      results.push(['@bias/' + extId, sdkPath])
+    }
+  }
+  return results
+}
+
+const extensionSdks = discoverExtensionSdks()
+
+export function discoverExtensionSdkAliases() {
+  return extensionSdks.slice()
+}
+
 export function createViteSdkAliases() {
-  return Object.fromEntries(createBrowserSdkAliasEntries())
+  return createBrowserSdkAliasEntries()
+    .sort(([left], [right]) => right.length - left.length)
+    .map(([find, replacement]) => ({ find, replacement }))
+}
+
+export function createBrowserSdkAliasEntries() {
+  return [
+    ...browserCoreAliases.map(([alias, target]) => [alias, resolve(corePackageRoot, target)]),
+    ...extensionSdks,
+  ]
+}
+
+export function createNodeSdkAliasEntries() {
+  return [
+    ...nodeCoreAliases.map(([alias, target]) => [alias, resolve(corePackageRoot, target)]),
+    ...extensionSdks.map(([alias, target]) => {
+      const nodeTarget = resolve(dirname(target), 'nodeSdk.js')
+      return [alias, existsSync(nodeTarget) ? nodeTarget : target]
+    }),
+  ]
 }
 
 export function createNodeSdkAliasMap() {
@@ -29,74 +92,14 @@ export function createNodeSdkAliasMap() {
 }
 
 export function createJsconfigSdkPaths() {
-  return Object.fromEntries(
-    createBrowserSdkAliasEntries().map(([alias, target]) => [
+  const paths = Object.fromEntries(
+    browserCoreAliases.map(([alias, target]) => [
       alias,
-      [normalizeJsconfigPath(relative(frontendRoot, target))],
-    ])
+      [relative(frontendRoot, resolve(corePackageRoot, target)).replaceAll('\\', '/')],
+    ]),
   )
-}
-
-export function createBrowserSdkAliasEntries() {
-  return [
-    ...browserCoreAliases.map(([alias, target]) => [alias, resolve(frontendRoot, target)]),
-    ...discoverExtensionSdkAliases({ runtime: 'browser' }),
-  ]
-}
-
-export function createNodeSdkAliasEntries() {
-  return [
-    ...nodeCoreAliases.map(([alias, target]) => [alias, resolve(frontendRoot, target)]),
-    ...discoverExtensionSdkAliases({ runtime: 'node' }),
-  ]
-}
-
-export function discoverExtensionSdkAliases({ runtime = 'browser' } = {}) {
-  if (!existsSync(extensionsRoot)) {
-    return []
+  for (const [alias, target] of extensionSdks) {
+    paths[alias] = [relative(frontendRoot, target).replaceAll('\\', '/')]
   }
-
-  return readdirSync(extensionsRoot, { withFileTypes: true })
-    .filter(entry => entry.isDirectory())
-    .map(entry => resolve(extensionsRoot, entry.name))
-    .map(extensionPath => discoverExtensionSdkAlias(extensionPath, runtime))
-    .filter(Boolean)
-    .sort((left, right) => left[0].localeCompare(right[0]))
-}
-
-function discoverExtensionSdkAlias(extensionPath, runtime) {
-  const manifestPath = resolve(extensionPath, 'extension.json')
-  if (!existsSync(manifestPath)) {
-    return null
-  }
-
-  const extensionId = readExtensionId(manifestPath)
-  if (!extensionId) {
-    return null
-  }
-
-  const forumFrontendPath = resolve(extensionPath, 'frontend', 'forum')
-  const browserSdkPath = resolve(forumFrontendPath, 'sdk.js')
-  if (!existsSync(browserSdkPath)) {
-    return null
-  }
-
-  const nodeSdkPath = resolve(forumFrontendPath, 'nodeSdk.js')
-  const target = runtime === 'node' && existsSync(nodeSdkPath)
-    ? nodeSdkPath
-    : browserSdkPath
-  return [`@bias/${extensionId}`, target]
-}
-
-function readExtensionId(manifestPath) {
-  try {
-    const payload = JSON.parse(readFileSync(manifestPath, 'utf8'))
-    return String(payload.id || '').trim()
-  } catch {
-    return ''
-  }
-}
-
-function normalizeJsconfigPath(path) {
-  return path.split(sep).join('/')
+  return paths
 }

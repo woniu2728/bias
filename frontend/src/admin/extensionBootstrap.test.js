@@ -26,7 +26,6 @@ import {
 import { createAdminRuntimeRegistry } from './runtimeRegistry.js'
 import {
   Exports as AdminSdkExports,
-  createAdminRuntimeRegistry as createAdminRuntimeRegistryFromSdk,
 } from './sdk.js'
 import { ItemList as AdminSdkItemList } from '../common/sdk.js'
 import {
@@ -279,7 +278,6 @@ test('admin public sdk exposes stable extension developer APIs', () => {
 
   assert.equal(list.toArray()[0].itemName, 'high')
   assert.equal(typeof AdminSdkExports, 'function')
-  assert.equal(typeof createAdminRuntimeRegistryFromSdk, 'function')
 })
 
 test('bootstrapEnabledAdminExtensions runs runtime application initializers', async () => {

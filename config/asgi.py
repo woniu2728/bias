@@ -1,29 +1,25 @@
 """
-ASGI config for bias project.
-"""
-import os
-from django.core.asgi import get_asgi_application
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
+ASGI config for bias-site project.
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+Supports both HTTP (Django) and WebSocket (Channels) protocols.
+"""
+
+import os
+
+from channels.auth import AuthMiddlewareStack
+from channels.routing import ProtocolTypeRouter, URLRouter
+from django.core.asgi import get_asgi_application
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 django_asgi_app = get_asgi_application()
 
-from apps.core.startup_guard import enforce_production_runtime_checks
-
-enforce_production_runtime_checks()
-
-from apps.core import routing
-from apps.core.websocket_auth import JWTAuthMiddlewareStack
+# WebSocket URL patterns from bias_core and extensions
+from bias_core.realtime.routing import websocket_urlpatterns
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    "websocket": AllowedHostsOriginValidator(
-        JWTAuthMiddlewareStack(
-            URLRouter(
-                routing.websocket_urlpatterns
-            )
-        )
+    "websocket": AuthMiddlewareStack(
+        URLRouter(websocket_urlpatterns)
     ),
 })

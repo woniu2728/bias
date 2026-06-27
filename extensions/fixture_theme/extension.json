@@ -1,0 +1,19 @@
+{
+  "id": "fixture-theme",
+  "name": "Fixture Theme",
+  "version": "0.1.0",
+  "description": "Minimal fixture theme for validating theme runtime, CSS loading, and token boundaries.",
+  "icon": "fas fa-palette",
+  "category": "theme",
+  "authors": ["Bias"],
+  "dependencies": ["core"],
+  "backend": {
+    "entry": "extensions.fixture_theme.backend.ext:extend"
+  },
+  "security": {
+    "capabilities_notice": "Fixture theme extension; injects theme CSS, document classes, and public design token values only."
+  },
+  "extra": {
+    "product_visible": false
+  }
+}

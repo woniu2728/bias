@@ -55,8 +55,10 @@ onMounted(async () => {
   await forumUiStore.initialize()
 
   // 检查认证状态
-  await authStore.checkAuth()
-  await forumUiStore.refreshFromUserPreferences()
+  const session = await authStore.checkAuth()
+  if (session) {
+    await forumUiStore.refreshFromUserPreferences()
+  }
 
   // 检查是否是管理员
   if (!authStore.user?.is_staff) {

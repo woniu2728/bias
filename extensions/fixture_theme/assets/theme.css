@@ -1,0 +1,11 @@
+@layer bias-theme {
+  :root.bias-theme-fixture {
+    --forum-primary-color: #256f68;
+    --forum-primary-strong: #1d5953;
+    --forum-accent-color: #b44d24;
+    --forum-accent-strong: #983f1d;
+    --forum-bg-canvas: #f6f8f5;
+    --forum-bg-subtle: #e9f0ec;
+    --forum-border-color: #cbdad3;
+  }
+}

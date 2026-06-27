@@ -9,7 +9,9 @@ import { primeCsrfProtection } from '../api'
 import { useForumStore } from '../stores/forum'
 import { useForumUiStore } from '../stores/forumUi'
 import { useResourceStore } from '../stores/resource'
+import { bootstrapThemeRuntime } from '../theme/themeRuntime'
 import '@fortawesome/fontawesome-free/css/all.min.css'
+import '../theme/cssLayers.css'
 import '../assets/main.css'
 
 const app = createApp(AdminApp)
@@ -35,6 +37,7 @@ setRuntimeApplication('admin', runtimeApp)
 
 runtimeApp.boot(async () => {
   await forumStore.initialize()
+  await bootstrapThemeRuntime({ api })
 }).finally(() => {
   app.mount('#app')
 })

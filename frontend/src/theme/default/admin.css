@@ -1,0 +1,4 @@
+/* Default theme — admin CSS layer */
+@layer theme {
+  .admin-layout { background: var(--bias-color-bg-secondary); }
+}

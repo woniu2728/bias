@@ -12,7 +12,9 @@ import { useForumStore } from './stores/forum'
 import { useForumUiStore } from './stores/forumUi'
 import { useResourceStore } from './stores/resource'
 import { generatedForumExtensionModules } from 'virtual:bias-extension-import-map'
+import { bootstrapThemeRuntime } from './theme/themeRuntime'
 import '@fortawesome/fontawesome-free/css/all.min.css'
+import './theme/cssLayers.css'
 import './assets/main.css'
 
 const app = createApp(App)
@@ -24,7 +26,6 @@ primeCsrfProtection().catch(() => {})
 const forumStore = useForumStore(pinia)
 const resourceStore = useResourceStore(pinia)
 const forumExtensionModules = {
-  ...import.meta.glob('../../extensions/*/frontend/forum/index.js'),
   ...generatedForumExtensionModules,
 }
 useForumUiStore(pinia)
@@ -43,6 +44,7 @@ setRuntimeApplication('forum', runtimeApp)
 async function bootstrap() {
   await runtimeApp.boot(async () => {
     await forumStore.initialize()
+    await bootstrapThemeRuntime({ api })
     try {
       await loadEnabledForumExtensions({
         app: runtimeApp,

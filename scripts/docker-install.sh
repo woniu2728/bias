@@ -1,77 +1,138 @@
-#!/usr/bin/env sh
-set -eu
+#!/bin/bash
+# bias-site docker install script
+set -e
 
-SITE_DOMAINS="${SITE_DOMAINS:-localhost}"
-SITE_SCHEME="${SITE_SCHEME:-http}"
-ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
-ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.com}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
-OVERWRITE="${OVERWRITE:-0}"
-SKIP_BUILD="${SKIP_BUILD:-0}"
+echo "=== Bias Site Docker Installation ==="
 
-run_step() {
-  label="$1"
-  shift
-  printf '\n==> %s\n' "$label"
-  "$@"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SITE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+resolve_workspace_root() {
+    local candidates=()
+    if [ -n "${WORKSPACE_ROOT:-}" ]; then
+        candidates+=("$WORKSPACE_ROOT")
+    fi
+    local windows_pwd
+    windows_pwd="$(cmd.exe /c cd 2>/dev/null | tr -d '\r' || true)"
+    if [[ "$windows_pwd" =~ ^([A-Za-z]):\\(.*)$ ]]; then
+        local drive="${BASH_REMATCH[1],,}"
+        local tail="${BASH_REMATCH[2]//\\//}"
+        candidates+=("/mnt/$drive/$tail/..")
+    fi
+    candidates+=("$SITE_DIR/..")
+
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        [ -n "$candidate" ] || continue
+        candidate="$(cd "$candidate" 2>/dev/null && pwd || true)"
+        [ -n "$candidate" ] || continue
+        if [ -d "$candidate/bias_core" ] && compgen -G "$candidate/bias-ext-*" >/dev/null; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    echo "Error: could not locate workspace root containing bias_core and bias-ext-*." >&2
+    echo "Set WORKSPACE_ROOT to the parent directory of bias_site and retry." >&2
+    return 1
 }
 
-verify_frontend_dist() {
-  if [ ! -f "frontend/dist/index.html" ] || [ ! -f "frontend/dist/admin.html" ]; then
-    echo "前端构建产物缺失，请检查 frontend 容器日志：docker compose logs frontend" >&2
-    exit 1
-  fi
-}
+WORKSPACE_ROOT="$(resolve_workspace_root)"
 
-if [ ! -f ".env" ]; then
-  if [ -f ".env.example" ]; then
-    cp .env.example .env
-    echo "已从 .env.example 创建 .env，请确认 DB_NAME/DB_USER/DB_PASSWORD 后重新执行。"
-    exit 1
-  fi
-  echo "缺少 .env 文件。" >&2
-  exit 1
+PYTHON_BIN="${PYTHON_BIN:-}"
+if [ -z "$PYTHON_BIN" ]; then
+    if command -v python3 >/dev/null 2>&1; then
+        PYTHON_BIN=python3
+    elif command -v python >/dev/null 2>&1; then
+        PYTHON_BIN=python
+    else
+        echo "Error: Python is not available."
+        exit 1
+    fi
 fi
 
-if [ -z "$ADMIN_PASSWORD" ]; then
-  printf "管理员密码: "
-  stty -echo
-  read ADMIN_PASSWORD
-  stty echo
-  printf '\n'
+# Check Docker
+if ! command -v docker &> /dev/null; then
+    echo "Error: Docker is not installed."
+    exit 1
 fi
 
-if [ "$SKIP_BUILD" = "1" ]; then
-  run_step "启动 Docker 服务" docker compose up -d
+# Check docker-compose
+if ! docker compose version &> /dev/null; then
+    echo "Error: docker compose plugin is not available."
+    exit 1
+fi
+
+# Create instance directory
+mkdir -p instance
+mkdir -p wheels
+
+# Copy .env if not exists
+if [ ! -f .env ]; then
+    cp .env.example .env 2>/dev/null || true
+    echo "Created .env from .env.example"
+fi
+$PYTHON_BIN scripts/ensure-secrets.py
+set -a
+. ./.env
+set +a
+case "${EMAIL_USE_TLS:-on}" in
+    1|true|TRUE|yes|YES|on|ON)
+        EMAIL_USE_TLS_OPTION=on
+        ;;
+    0|false|FALSE|no|NO|off|OFF)
+        EMAIL_USE_TLS_OPTION=off
+        ;;
+    *)
+        EMAIL_USE_TLS_OPTION=auto
+        ;;
+esac
+
+# Build and start
+rm -f wheels/*.whl
+if $PYTHON_BIN -c "import build" >/dev/null 2>&1; then
+    $PYTHON_BIN -m build --wheel --no-isolation "$WORKSPACE_ROOT/bias_core" -o wheels
+    for extension_dir in "$WORKSPACE_ROOT"/bias-ext-*; do
+        [ -d "$extension_dir" ] || continue
+        $PYTHON_BIN -m build --wheel --no-isolation "$extension_dir" -o wheels
+    done
 else
-  run_step "构建并启动 Docker 服务" docker compose up -d --build
+    docker run --rm -v "$WORKSPACE_ROOT":/workspace -w /workspace python:3.12-slim sh -lc '
+        pip install --no-cache-dir build setuptools wheel >/dev/null &&
+        python -m build --wheel --no-isolation bias_core -o bias_site/wheels &&
+        for extension_dir in bias-ext-*; do
+            [ -d "$extension_dir" ] || continue
+            python -m build --wheel --no-isolation "$extension_dir" -o bias_site/wheels
+        done
+    '
 fi
-
-if [ "$OVERWRITE" = "1" ]; then
-run_step "安装 Bias" docker compose exec web python manage.py install_forum \
-    --database postgres \
-    --site-domains "$SITE_DOMAINS" \
-    --site-scheme "$SITE_SCHEME" \
-    --admin-username "$ADMIN_USERNAME" \
-    --admin-email "$ADMIN_EMAIL" \
-    --admin-password "$ADMIN_PASSWORD" \
+docker compose down --remove-orphans
+docker compose up -d --build
+docker compose exec -T web python manage.py install_forum \
     --non-interactive \
-    --overwrite
-else
-  run_step "安装 Bias" docker compose exec web python manage.py install_forum \
+    --overwrite \
     --database postgres \
-    --site-domains "$SITE_DOMAINS" \
-    --site-scheme "$SITE_SCHEME" \
-    --admin-username "$ADMIN_USERNAME" \
-    --admin-email "$ADMIN_EMAIL" \
-    --admin-password "$ADMIN_PASSWORD" \
-    --non-interactive
-fi
-run_step "重启应用进程" docker compose restart web celery
-run_step "构建前端资源" docker compose restart frontend
-run_step "等待前端构建完成" docker compose up -d --wait frontend
-run_step "检查前端构建产物" verify_frontend_dist
-run_step "重启 Nginx" docker compose restart nginx
-run_step "运行部署检查" docker compose exec web python manage.py doctor
+    --db-name "${DB_NAME:-bias}" \
+    --db-user "${DB_USER:-bias}" \
+    --db-password "${DB_PASSWORD:-bias}" \
+    --db-host db \
+    --db-port "${DB_PORT:-5432}" \
+    --redis on \
+    --redis-host redis \
+    --redis-port 6379 \
+    --frontend-url "${FRONTEND_URL:-http://localhost:8080}" \
+    --site-scheme "${SITE_SCHEME:-http}" \
+    --email-backend "${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}" \
+    --email-host "${EMAIL_HOST:-smtp.example.com}" \
+    --email-port "${EMAIL_PORT:-587}" \
+    --email-use-tls "$EMAIL_USE_TLS_OPTION" \
+    --default-from-email "${DEFAULT_FROM_EMAIL:-noreply@example.com}" \
+    --skip-migrate \
+    --skip-collectstatic \
+    --skip-admin
+docker compose exec -T web python manage.py doctor
 
-printf '\nBias 安装完成：http://localhost:8080\n'
+echo ""
+echo "=== Installation Complete ==="
+echo "Site will be available at http://localhost:8080 after startup."
+echo "Run 'docker compose logs -f web' to follow startup."

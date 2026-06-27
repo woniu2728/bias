@@ -37,7 +37,6 @@ import {
 const loadedAdminExtensionIds = new Set()
 
 const adminEntryModules = {
-  ...(typeof import.meta.glob === 'function' ? import.meta.glob('../../../extensions/*/frontend/admin/index.js') : {}),
   ...generatedAdminExtensionModules,
 }
 

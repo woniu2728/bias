@@ -2,23 +2,20 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "src/*"
-      ],
       "@bias/core": [
-        "src/common/sdk.js"
+        "sdk-package/common.js"
       ],
-      "@bias/admin/components": [
-        "src/admin/componentsSdk.js"
+      "@bias/core/common": [
+        "sdk-package/common.js"
       ],
-      "@bias/admin": [
-        "src/admin/sdk.js"
+      "@bias/core/forum": [
+        "sdk-package/forum.js"
       ],
-      "@bias/forum": [
-        "src/forum/sdk.js"
+      "@bias/core/admin": [
+        "sdk-package/admin.js"
       ],
-      "@bias/ai": [
-        "../extensions/ai/frontend/forum/sdk.js"
+      "@bias/core/components/admin": [
+        "sdk-package/components-admin.js"
       ],
       "@bias/approval": [
         "../extensions/approval/frontend/forum/sdk.js"
@@ -67,13 +64,14 @@
       ],
       "@bias/users": [
         "../extensions/users/frontend/forum/sdk.js"
+      ],
+      "@/*": [
+        "./src/*"
       ]
     }
   },
-  "include": [
-    "src/**/*.js",
-    "src/**/*.vue",
-    "../extensions/**/*.js",
-    "../extensions/**/*.vue"
+  "exclude": [
+    "node_modules",
+    "dist"
   ]
 }

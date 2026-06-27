@@ -301,6 +301,13 @@ class AcmeBadgesConfig(AppConfig):
 
 ## 三、前端开发入口
 
+当前实现状态：
+
+- 官方扩展前端源码保留在各自 `bias-ext-* /frontend` 目录。
+- 站点前端构建前，通过 `bias_site/frontend/scripts/syncExtensionSources.mjs` 同步到 `bias_site/extensions/<id>`。
+- `bias_site/extensions/<id>` 下的官方扩展目录是生成的构建输入，不是源码目录。
+- `@bias/core/*` 目前仍由 `bias_site/frontend` 内的 alias 提供，尚未拆成独立 npm 包。
+
 ### 1. forum 入口
 
 `frontend/src/forum/index.js`：

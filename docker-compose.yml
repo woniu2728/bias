@@ -71,6 +71,8 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/1}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
       - SECRET_KEY=${SECRET_KEY:-}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8080}
@@ -91,7 +93,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).read()\nPY"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/api/health\", timeout=5).read()'"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -99,33 +101,13 @@ services:
     networks:
       - bias_network
 
-  frontend:
-    image: node:20-alpine
-    container_name: bias_frontend
-    restart: unless-stopped
-    working_dir: /app/frontend
-    command: >
-      sh -c "if [ -f package-lock.json ]; then npm ci; else npm install; fi &&
-             npm run build &&
-             tail -f /dev/null"
-    volumes:
-      - .:/app
-      - frontend_node_modules:/app/frontend/node_modules
-    healthcheck:
-      test: ["CMD-SHELL", "test -f /app/frontend/dist/index.html && test -f /app/frontend/dist/admin.html"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-    networks:
-      - bias_network
-
+  # frontend: built locally
   celery:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: bias_celery
     restart: unless-stopped
-    # celery 容器仅在显式开启队列时启动：docker compose --profile queue up -d
     profiles:
       - queue
     command: >
@@ -145,6 +127,8 @@ services:
       - REDIS_PORT=6379
       - REDIS_DB=0
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/1}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
       - SECRET_KEY=${SECRET_KEY:-}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:8080}
@@ -186,16 +170,9 @@ services:
     depends_on:
       web:
         condition: service_healthy
-      frontend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
+      # frontend: built locally
     networks:
       - bias_network
-
 volumes:
   postgres_data:
   redis_data:

@@ -1,6 +1,6 @@
 const adminRoutes = []
 
-import { getCurrentExtensionId } from '../../common/extensionRuntime.js'
+import { getCurrentExtensionId } from '../../common/extensionScope.js'
 
 function upsertByPath(target, value) {
   const existingIndex = target.findIndex(item => item.path === value.path)

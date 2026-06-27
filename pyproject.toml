@@ -1,0 +1,19 @@
+[project]
+name = "bias-site"
+version = "0.1.0"
+description = "Bias forum site project"
+requires-python = ">=3.11"
+
+dependencies = [
+  "bias-core>=0.1,<0.2"
+]
+
+[project.optional-dependencies]
+dev = [
+  "django-debug-toolbar>=4.3,<4.4",
+  "ipython>=8.22,<9",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["config*"]
