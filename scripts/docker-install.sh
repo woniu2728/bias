@@ -16,6 +16,13 @@ run_step() {
   "$@"
 }
 
+verify_frontend_dist() {
+  if [ ! -f "frontend/dist/index.html" ] || [ ! -f "frontend/dist/admin.html" ]; then
+    echo "前端构建产物缺失，请检查 frontend 容器日志：docker compose logs frontend" >&2
+    exit 1
+  fi
+}
+
 if [ ! -f ".env" ]; then
   if [ -f ".env.example" ]; then
     cp .env.example .env
@@ -63,6 +70,7 @@ fi
 run_step "重启应用进程" docker compose restart web celery
 run_step "构建前端资源" docker compose restart frontend
 run_step "等待前端构建完成" docker compose up -d --wait frontend
+run_step "检查前端构建产物" verify_frontend_dist
 run_step "重启 Nginx" docker compose restart nginx
 run_step "运行部署检查" docker compose exec web python manage.py doctor
 

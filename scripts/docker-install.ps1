@@ -24,6 +24,12 @@ function Run-Step {
     & $Command[0] @args
 }
 
+function Test-FrontendDist {
+    if (-not (Test-Path "frontend\dist\index.html") -or -not (Test-Path "frontend\dist\admin.html")) {
+        throw "前端构建产物缺失，请检查 frontend 容器日志：docker compose logs frontend"
+    }
+}
+
 if (-not (Test-Path ".env")) {
     if (Test-Path ".env.example") {
         Copy-Item ".env.example" ".env"
@@ -67,6 +73,7 @@ Run-Step "安装 Bias" @("docker", $installArgs)
 Run-Step "重启应用进程" @("docker", "compose", "restart", "web", "celery")
 Run-Step "构建前端资源" @("docker", "compose", "restart", "frontend")
 Run-Step "等待前端构建完成" @("docker", "compose", "up", "-d", "--wait", "frontend")
+Run-Step "检查前端构建产物" @("Test-FrontendDist")
 Run-Step "重启 Nginx" @("docker", "compose", "restart", "nginx")
 Run-Step "运行部署检查" @("docker", "compose", "exec", "web", "python", "manage.py", "doctor")
 

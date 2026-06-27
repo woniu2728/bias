@@ -20,6 +20,12 @@ function Run-Step {
     & $Command[0] @args
 }
 
+function Test-FrontendDist {
+    if (-not (Test-Path "frontend\dist\index.html") -or -not (Test-Path "frontend\dist\admin.html")) {
+        throw "前端构建产物缺失，请检查 frontend 容器日志：docker compose logs frontend"
+    }
+}
+
 if (-not (Test-Path ".env")) {
     throw "缺少 .env 文件，请先复制 .env.example 并填写数据库配置。"
 }
@@ -36,6 +42,7 @@ Run-Step "启动基础服务" @("docker", "compose", "up", "-d", "db", "redis", 
 Run-Step "执行 Bias 升级" @("docker", "compose", "exec", "web", "python", "manage.py", "upgrade_forum", "--non-interactive")
 Run-Step "重新构建前端资源" @("docker", "compose", "restart", "frontend")
 Run-Step "等待前端构建完成" @("docker", "compose", "up", "-d", "--wait", "frontend")
+Run-Step "检查前端构建产物" @("Test-FrontendDist")
 Run-Step "重启应用进程" @("docker", "compose", "restart", "web", "celery", "nginx")
 
 if (-not $SkipDoctor) {
