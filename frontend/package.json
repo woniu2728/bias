@@ -17,7 +17,9 @@
     "sync:sdk-package": "node ./scripts/syncSdkPackageSources.mjs",
     "check:sdk-package-sources": "node ./scripts/syncSdkPackageSources.mjs --check",
     "sync:sdk-aliases": "node ./scripts/syncSdkAliases.mjs",
-    "check:sdk-package": "npm run check:sdk-package-sources && node ./scripts/checkSdkPackage.mjs && npm pack --dry-run --workspace @bias/core"
+    "check:extension-boundary": "node ./scripts/checkExtensionFrontendBoundary.mjs",
+    "check:sdk-package": "npm run check:sdk-package-sources && node ./scripts/checkSdkPackage.mjs && node ./scripts/checkSdkExports.mjs && npm pack --dry-run --workspace @bias/core",
+    "check:platform": "npm run check:extension-sources && npm run check:sdk-package && npm run check:extension-boundary"
   },
   "dependencies": {
     "@bias/core": "file:./sdk-package",

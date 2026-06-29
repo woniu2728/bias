@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { discoverExtensionSdkAliases } from '../../extensionSdkAliases.mjs'
+import { collectExtensionFrontendBoundaryViolations } from '../../scripts/checkExtensionFrontendBoundary.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const workspaceRoot = resolve(repoRoot, '..')
@@ -86,30 +87,17 @@ function assertCorePostTypesDoesNotOwn(keys) {
 }
 
 test('extension frontend imports only public app APIs', () => {
-  const offenders = []
-  for (const path of listExtensionFrontendFiles()) {
-    const source = readFileSync(path, 'utf8')
-    for (const importPath of extractImports(source)) {
-      if (allowedPublicPackageImports.has(importPath)) {
-        continue
-      }
-      if (importPath.startsWith('@bias/')) {
-        offenders.push(`${relative(repoRoot, path)} imports unknown public SDK ${importPath}`)
-      }
-      if (importPath === 'vue' || importPath === 'vue-router') {
-        offenders.push(`${relative(repoRoot, path)} imports ${importPath}`)
-      }
-      if (
-        importPath.startsWith('@/')
-        || importPath.includes('frontend/src/')
-        || importPath.includes('../../../../frontend/src')
-      ) {
-        offenders.push(`${relative(repoRoot, path)} imports ${importPath}`)
-      }
-    }
-  }
-
-  assert.deepEqual(offenders, [])
+  assert.deepEqual(
+    collectExtensionFrontendBoundaryViolations({
+      extensionFrontendRoots: extensionPackageRoots.map(packageRoot => ({
+        extensionId: packageRoot.slice(packageRoot.lastIndexOf('bias-ext-') + 'bias-ext-'.length),
+        packageRoot,
+        frontendRoot: resolve(packageRoot, 'frontend'),
+      })),
+      allowedPublicImports: allowedPublicPackageImports,
+    }),
+    []
+  )
 })
 
 test('forum runtime does not import extension source modules directly', () => {
