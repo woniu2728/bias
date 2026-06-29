@@ -1,0 +1,36 @@
+{
+  "id": "content",
+  "name": "Content Foundation",
+  "version": "0.1.0",
+  "description": "Required forum content foundation for discussions, posts, first-post lifecycle, read state, and content metadata.",
+  "icon": "fas fa-layer-group",
+  "category": "foundation",
+  "authors": [
+    "Bias"
+  ],
+  "dependencies": [
+    "core",
+    "users"
+  ],
+  "provides": [
+    "discussions",
+    "posts"
+  ],
+  "django": {
+    "app_config": "bias_content.backend.apps.ContentFoundationConfig",
+    "app_label": "content",
+    "migration_module": "bias_content.backend.django_migrations"
+  },
+  "backend": {
+    "entry": "bias_content.backend.ext:extend"
+  },
+  "extra": {
+    "auto_install": true,
+    "auto_enable": true,
+    "protected": true,
+    "protected_reason": "论坛内容基础域承载 Discussion/Post 生命周期，不能作为普通扩展停用或卸载。"
+  },
+  "security": {
+    "capabilities_notice": "Required content foundation; will own discussion and post records, first-post lifecycle, read states, counters, baseline visibility, and moderation lifecycle."
+  }
+}
