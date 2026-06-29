@@ -9,13 +9,13 @@ import os
 
 from bias_core.conf.bootstrap import load_site_bootstrap
 from bias_core.conf.extension_discovery import (
-    discover_installed_extension_django_apps,
-    discover_extension_migration_modules,
+    discover_extension_django_configuration,
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 BIAS_EXTENSION_WORKSPACE_ROOT = BASE_DIR.parent
 BOOTSTRAP = load_site_bootstrap(BASE_DIR)
+EXTENSION_DJANGO_CONFIGURATION = discover_extension_django_configuration(BASE_DIR)
 
 
 def env_int(name: str, default: int) -> int:
@@ -56,10 +56,10 @@ INSTALLED_APPS = [
     "bias_core",
 
     # Extensions (auto-discovered via entry points)
-    *discover_installed_extension_django_apps(BASE_DIR),
+    *EXTENSION_DJANGO_CONFIGURATION["installed_apps"],
 ]
 
-MIGRATION_MODULES = discover_extension_migration_modules(BASE_DIR)
+MIGRATION_MODULES = EXTENSION_DJANGO_CONFIGURATION["migration_modules"]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -139,7 +139,7 @@ else:
     }
 
 
-AUTH_USER_MODEL = "users.User"
+AUTH_USER_MODEL = EXTENSION_DJANGO_CONFIGURATION["auth_user_model"]
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
