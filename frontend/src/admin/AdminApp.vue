@@ -18,14 +18,14 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppModalHost from '../components/AppModalHost.vue'
 import AdminHeader from './components/AdminHeader.vue'
 import AdminNav from './components/AdminNav.vue'
-import { useAuthStore } from '@bias/users'
+import { getAuthStore } from './runtimeServices'
 import { useAdminRegistryStore } from '../stores/adminRegistry'
 import { useForumStore } from '../stores/forum'
 import { useForumUiStore } from '../stores/forumUi'
 import { useModalStore } from '../stores/modal'
 import { useRouter, useRoute } from 'vue-router'
 
-const authStore = useAuthStore()
+const authStore = getAuthStore()
 const adminRegistryStore = useAdminRegistryStore()
 const forumStore = useForumStore()
 const forumUiStore = useForumUiStore()

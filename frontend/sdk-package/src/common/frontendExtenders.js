@@ -367,6 +367,7 @@ export class AdminExtender {
     this.generalIndexes = []
     this.dashboardItems = []
     this.pageItems = []
+    this.services = []
     this.configurators = []
     this.configured = false
   }
@@ -506,6 +507,16 @@ export class AdminExtender {
   pageAction(pageKey, definition) { return this.registerPageContribution('registerAdminPageAction', pageKey, definition) }
   pageActionMeta(pageKey, definition) { return this.registerPageContribution('registerAdminPageActionMeta', pageKey, definition) }
   pageNoteTemplate(pageKey, definition) { return this.registerPageContribution('registerAdminPageNoteTemplate', pageKey, definition) }
+  service(key, service) {
+    const normalizedKey = normalizeKey(key)
+    if (normalizedKey && service != null) {
+      this.services.push({
+        key: normalizedKey,
+        service,
+      })
+    }
+    return this
+  }
 
   extend(app, extension = {}) {
     this.applyConfigurators()
@@ -513,6 +524,13 @@ export class AdminExtender {
     const registry = resolveRegistry(app)
     const router = app?.router || targetApp?.router
     const extensionId = normalizeKey(extension.name || app?.extension?.id || targetApp?.extension?.id || this.context)
+
+    for (const item of this.services) {
+      const definition = resolveExtenderDefinition(item)
+      if (definition?.key) {
+        targetApp.services?.register?.(definition.key, definition.service, { extensionId })
+      }
+    }
 
     for (const route of this.routes) {
       const normalizedRoute = {
@@ -654,6 +672,7 @@ export class AdminExtender {
         this.generalIndexes.push(...result.generalIndexes)
         this.dashboardItems.push(...result.dashboardItems)
         this.pageItems.push(...result.pageItems)
+        this.services.push(...result.services)
       }
     }
     return this

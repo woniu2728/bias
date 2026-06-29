@@ -138,6 +138,25 @@ test('forum host shell uses runtime services instead of feature SDK imports', ()
   assert.deepEqual(offenders, [])
 })
 
+test('admin host shell uses runtime services instead of users sdk imports', () => {
+  const checkedFiles = [
+    'frontend/src/admin/AdminApp.vue',
+    'frontend/src/admin/components/AdminHeader.vue',
+    'frontend/src/admin/components/AdminNav.vue',
+  ]
+  const offenders = []
+  for (const relativePath of checkedFiles) {
+    const source = readFileSync(resolve(repoRoot, relativePath), 'utf8')
+    for (const specifier of extractImports(source)) {
+      if (specifier === '@bias/users') {
+        offenders.push(`${relativePath} imports ${specifier}`)
+      }
+    }
+  }
+
+  assert.deepEqual(offenders, [])
+})
+
 test('forum sdk does not expose core runtime facade', () => {
   const forumSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8')
   const forumNodeSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/nodeSdk.js'), 'utf8')

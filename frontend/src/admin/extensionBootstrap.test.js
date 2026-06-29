@@ -28,6 +28,7 @@ import {
   Exports as AdminSdkExports,
 } from './sdk.js'
 import { ItemList as AdminSdkItemList } from '../common/sdk.js'
+import { AdminExtender } from '../common/frontendExtenders.js'
 import {
   clearAdminRoutesForExtension,
   getAdminRoutes,
@@ -138,6 +139,17 @@ test('resetAdminExtensionRuntimeContributions removes scoped admin routes and it
   resetAdminExtensionRuntimeContributions('scoped', { app })
   assert.equal(getAdminRoutes().some(route => route.name === 'admin-scoped'), false)
   assert.equal(app.registry.get('toolbar-actions').some(item => item.key === 'inspect'), false)
+})
+
+test('admin extender registers and resets extension-owned services', () => {
+  const runtimeApp = createRuntimeApplication({ kind: 'admin' })
+  const service = { ready: true }
+
+  new AdminExtender().service('alpha.service', service).extend(runtimeApp, { name: 'alpha' })
+
+  assert.equal(runtimeApp.services.get('alpha.service'), service)
+  resetAdminExtensionRuntimeContributions('alpha', { app: runtimeApp })
+  assert.equal(runtimeApp.services.get('alpha.service'), null)
 })
 
 test('resetAdminExtensionRuntimeContributions clears export registry namespace', () => {

@@ -269,6 +269,7 @@ export function resetAdminExtensionRuntimeContributions(extensionId = '', { rout
   clearAdminRegistryExtensions(extensionId)
   unregisterLoadedExtensionModule(extensionId, { app })
   unregisterRuntimeRoutesForExtension(app, extensionId)
+  app?.services?.clearForExtension?.(extensionId)
   resetAdminExtensionAppRuntime(extensionId, { app })
 }
 

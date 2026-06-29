@@ -70,7 +70,7 @@
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import ForumNavList from '@/components/forum/ForumNavList.vue'
-import { useAuthStore } from '@bias/users'
+import { getAuthStore } from '../runtimeServices'
 import { getAdminNavSections, isAdminPathActive } from '../navigation'
 
 defineProps({
@@ -83,7 +83,7 @@ defineProps({
 defineEmits(['close'])
 
 const route = useRoute()
-const authStore = useAuthStore()
+const authStore = getAuthStore()
 const extensionQuery = ref('')
 const navSections = computed(() => getAdminNavSections()
   .map(section => ({

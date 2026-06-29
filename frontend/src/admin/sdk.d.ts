@@ -1,5 +1,6 @@
 export declare class AdminExtender {
   constructor(context?: string | null)
+  service(key: string, service: any): this
 }
 export declare class ExportsExtender {
   constructor(exports?: Record<string, any>)

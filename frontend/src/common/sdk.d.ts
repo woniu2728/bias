@@ -129,6 +129,7 @@ export declare class AdminExtender {
   pageAction(pageKey: string, definition: Record<string, any>): this
   pageActionMeta(pageKey: string, definition: Record<string, any>): this
   pageNoteTemplate(pageKey: string, definition: Record<string, any>): this
+  service(key: string, service: any): this
   extend(app: any, extension?: { name?: string; id?: string }): void
 }
 

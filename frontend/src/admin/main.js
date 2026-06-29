@@ -6,6 +6,8 @@ import api from '../api'
 import { createRuntimeApplication } from '../common/application'
 import { setRuntimeApplication } from '../common/applicationRegistry'
 import { primeCsrfProtection } from '../api'
+import { bootstrapEnabledAdminExtensions } from './extensionBootstrap'
+import { useAdminRegistryStore } from '../stores/adminRegistry'
 import { useForumStore } from '../stores/forum'
 import { useForumUiStore } from '../stores/forumUi'
 import { useResourceStore } from '../stores/resource'
@@ -23,6 +25,7 @@ app.use(router)
 primeCsrfProtection().catch(() => {})
 const forumStore = useForumStore(pinia)
 const resourceStore = useResourceStore(pinia)
+const adminRegistryStore = useAdminRegistryStore(pinia)
 useForumUiStore(pinia)
 const runtimeApp = createRuntimeApplication({
   kind: 'admin',
@@ -38,6 +41,13 @@ setRuntimeApplication('admin', runtimeApp)
 runtimeApp.boot(async () => {
   await forumStore.initialize()
   await bootstrapThemeRuntime({ api })
+  await adminRegistryStore.fetchExtensions()
+  await bootstrapEnabledAdminExtensions({
+    app: runtimeApp,
+    extensions: adminRegistryStore.extensions,
+    router,
+    runtime: adminRegistryStore.extensionRuntime,
+  })
 }).finally(() => {
   app.mount('#app')
 })

@@ -74,7 +74,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { getUserAvatarColor, getUserInitial } from '@/utils/forum'
-import { useAuthStore } from '@bias/users'
+import { getAuthStore } from '../runtimeServices'
 import { getAdminRouteMeta } from '../navigation'
 
 defineProps({
@@ -86,7 +86,7 @@ defineProps({
 
 defineEmits(['toggle-nav', 'close-nav'])
 
-const authStore = useAuthStore()
+const authStore = getAuthStore()
 const route = useRoute()
 const showUserMenu = ref(false)
 const userMenuRef = ref(null)
