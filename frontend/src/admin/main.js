@@ -7,6 +7,7 @@ import { createRuntimeApplication } from '../common/application'
 import { setRuntimeApplication } from '../common/applicationRegistry'
 import { primeCsrfProtection } from '../api'
 import { bootstrapEnabledAdminExtensions } from './extensionBootstrap'
+import { filterPreloadAdminExtensions } from './bootstrapPolicy'
 import { useAdminRegistryStore } from '../stores/adminRegistry'
 import { useForumStore } from '../stores/forum'
 import { useForumUiStore } from '../stores/forumUi'
@@ -44,7 +45,7 @@ runtimeApp.boot(async () => {
   await adminRegistryStore.fetchExtensions()
   await bootstrapEnabledAdminExtensions({
     app: runtimeApp,
-    extensions: adminRegistryStore.extensions,
+    extensions: filterPreloadAdminExtensions(adminRegistryStore.extensions),
     router,
     runtime: adminRegistryStore.extensionRuntime,
   })
