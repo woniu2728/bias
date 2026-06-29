@@ -36,7 +36,7 @@ Bias 网站工程
                 ▼                                ▼
 ┌────────────────────────────────────────────────────────────┐
 │                        Extensions                          │
-│ bias-ext-users / bias-ext-discussions / third-party-ext    │
+│ bias-content / bias-ext-users / third-party-ext            │
 │ backend: Python package, frontend: JS bundle or source     │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -601,18 +601,19 @@ packages/bias-core-frontend/
 ```text
 Python:
   bias-core
+  bias-content
   bias-ext-users
-  bias-ext-discussions
-  bias-ext-posts
   bias-ext-tags
 
 npm:
   @bias/core
+  @bias/content
   optional: @bias/ext-users-frontend
-  optional: @bias/ext-discussions-frontend
 ```
 
 内置扩展可以先继续随网站仓库发布，等 core 包稳定后再逐个包化。
+
+`bias-content` 是论坛内容基础域，承载 Discussion/Post/首帖/阅读状态/计数等必装能力。不要把 `discussions` 和 `posts` 作为两个普通扩展分别包化；当前运行时审计已能识别这种拆分带来的 `discussions -> posts -> discussions` 循环。详细决策见 `docs/content-foundation-adr.md`。
 
 ### 10. 推荐迁移路线
 

@@ -34,9 +34,8 @@ workspace/
 ├─ bias-core/                # 新后端核心包
 ├─ bias/                # 新网站工程
 ├─ bias-frontend-sdk/        # 可选，@bias/core 前端 SDK 包
+├─ bias-content/             # 论坛内容基础域，合并 Discussion/Post
 ├─ bias-ext-users/           # 后续迁移出的用户扩展
-├─ bias-ext-discussions/     # 后续迁移出的讨论扩展
-├─ bias-ext-posts/
 ├─ bias-ext-tags/
 └─ bias-ext-...
 ```
@@ -1046,21 +1045,20 @@ bias-theme-fixture/
 
 ```text
 1. users
-2. posts
-3. discussions
-4. tags
-5. notifications
-6. uploads
-7. likes
-8. search
-9. realtime
-10. approval / flags / mentions / points / subscriptions / emoji / ai
+2. content foundation（合并 discussions + posts 的基础域）
+3. tags
+4. notifications
+5. uploads
+6. likes
+7. search
+8. realtime
+9. approval / flags / mentions / points / subscriptions / emoji / ai
 ```
 
 原因：
 
 - users 通常是 AUTH_USER_MODEL 和认证基础。
-- posts/discussions 是论坛核心内容。
+- discussions/posts 是论坛核心内容，不能作为两个普通可选扩展继续拆分；运行时 facade 审计已经证明当前边界会形成 `discussions -> posts -> discussions` 循环。目标边界见 `docs/content-foundation-adr.md`。
 - tags/notifications/uploads 是常见依赖。
 - search/realtime 依赖前面模型和事件。
 
@@ -1155,7 +1153,7 @@ from bias_core.extensions import ...
 
 不建议。
 
-`bias-core` + `bias` 先跑空宿主，再迁移 users/discussions/posts 等扩展。这样能尽早验证拆分边界。
+`bias-core` + `bias` 先跑空宿主，再迁移 users 和 content foundation。这样能尽早验证拆分边界，同时避免把 discussions/posts 继续拆成两个会互相依赖的普通扩展。
 
 ## 八、里程碑
 
@@ -1304,7 +1302,7 @@ from bias_core.extensions import ...
 3. 前端 SDK 边界
 4. 测试扩展
 5. users 扩展
-6. posts/discussions 扩展
+6. content foundation（Discussion/Post 基础域）
 7. 其他扩展逐个独立
 ```
 
@@ -1312,6 +1310,7 @@ from bias_core.extensions import ...
 
 ```text
 bias-core 只做平台和 SDK
+bias-content 做论坛内容基础域
 bias 只做组合、部署和宿主
 bias-ext-* 只做具体业务能力
 旧项目只做参考和迁移来源
