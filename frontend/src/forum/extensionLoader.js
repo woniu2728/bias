@@ -370,6 +370,7 @@ export function resetLoadedExtensionsWhenRuntimeChanges(loadedIds, runtime, { on
 }
 
 export function resetForumExtensionRuntimeContributions(extensionId = '', { app } = {}) {
+  app?.services?.clearForExtension?.(extensionId)
   clearForumRegistryExtensions(extensionId)
   resetResourceNormalizers(extensionId)
   if (extensionId) {

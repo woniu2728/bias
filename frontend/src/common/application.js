@@ -3,6 +3,13 @@ import { registerDefaultResourceModels } from './resourceModels.js'
 import { createResourceStoreAdapter } from './resourceStoreAdapter.js'
 import { createExtensionRegistry } from './listRegistry.js'
 import { ensureExportRegistry } from './exportRegistry.js'
+import {
+  getFrontendService,
+  clearFrontendServices,
+  clearFrontendServicesForExtension,
+  registerFrontendService,
+  requireFrontendService,
+} from './services.js'
 
 export function createRuntimeApplication({
   kind,
@@ -70,6 +77,13 @@ export function createRuntimeApplication({
     extensions,
     extensionRegistry,
     exportRegistry,
+    services: {
+      clear: clearFrontendServices,
+      clearForExtension: clearFrontendServicesForExtension,
+      get: getFrontendService,
+      register: registerFrontendService,
+      require: requireFrontendService,
+    },
     items: extensionRegistry,
     cache,
     data,

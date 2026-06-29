@@ -1014,6 +1014,7 @@ test('frontend dedicated extenders register notification post search and routes'
   const discussionListRequests = []
   const composerSubmitSuccessItems = []
   const forumRealtimeEvents = []
+  const services = []
   const dashboardStats = []
   const adminPageCopies = []
   const adminPageConfigs = []
@@ -1149,6 +1150,11 @@ test('frontend dedicated extenders register notification post search and routes'
       },
     },
   })
+  const originalRegisterService = runtimeApp.services.register
+  runtimeApp.services.register = (key, service, options = {}) => {
+    services.push({ key, service })
+    return originalRegisterService(key, service, options)
+  }
 
   await runtimeApp.bootExtensions({
     frontend: {
@@ -1171,6 +1177,7 @@ test('frontend dedicated extenders register notification post search and routes'
           .pageState({ key: 'alpha-page-state', order: 21 })
           .composerSubmitSuccess({ key: 'alpha-composer-success', order: 22 })
           .realtimeEvent({ key: 'alpha-realtime-event', order: 23, eventTypes: ['alpha.event'], refresh: true })
+          .service('alpha.service', { ready: true })
           .postType('alphaEvent', { label: 'Alpha event', component: () => null })
           .postType('betaEvent', { label: 'Beta event', component: () => null }),
         extendAdmin(admin => admin
@@ -1244,6 +1251,10 @@ test('frontend dedicated extenders register notification post search and routes'
   assert.equal(composerSubmitSuccessItems[0].extensionId, 'frontend')
   assert.equal(forumRealtimeEvents[0].key, 'alpha-realtime-event')
   assert.equal(forumRealtimeEvents[0].extensionId, 'frontend')
+  assert.deepEqual(services[0], { key: 'alpha.service', service: { ready: true } })
+  assert.deepEqual(runtimeApp.services.get('alpha.service'), { ready: true })
+  runtimeApp.services.clearForExtension('frontend')
+  assert.equal(runtimeApp.services.get('alpha.service'), null)
   assert.equal(dashboardStats[0].key, 'alpha-stat')
   assert.equal(dashboardStats[0].moduleId, 'frontend')
   assert.deepEqual(adminPageCopies[0], {
@@ -1335,6 +1346,7 @@ test('common extenders export unified frontend extension entry', () => {
   assert.equal(new ForumExtender().pageState({ key: 'demo' }) instanceof ForumExtender, true)
   assert.equal(new ForumExtender().composerSubmitSuccess({ key: 'demo' }) instanceof ForumExtender, true)
   assert.equal(new ForumExtender().realtimeEvent({ key: 'demo' }) instanceof ForumExtender, true)
+  assert.equal(new ForumExtender().service('demo.service', {}) instanceof ForumExtender, true)
   assert.equal(new ForumExtender().postType('demo', { label: 'Demo' }) instanceof ForumExtender, true)
   assert.equal(new ForumExtender().feedbackNote({ key: 'demo' }) instanceof ForumExtender, true)
   assert.equal(extendForum(forum => forum.navItem({ key: 'demo' })) instanceof ForumExtender, true)

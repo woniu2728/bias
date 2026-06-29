@@ -187,6 +187,7 @@ export declare class ForumExtender {
   feedbackNote(definition: Record<string, any>): this
   realtimeEvent(definition: Record<string, any>): this
   runtime(definition: Record<string, any>): this
+  service(key: string, service: any): this
   extend(app: any, extension?: { name?: string; id?: string }): void
 }
 

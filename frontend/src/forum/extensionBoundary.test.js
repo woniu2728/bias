@@ -118,6 +118,26 @@ test('forum runtime does not import extension source modules directly', () => {
   assert.deepEqual(offenders, [])
 })
 
+test('forum host shell uses runtime services instead of feature SDK imports', () => {
+  const checkedFiles = [
+    'frontend/src/App.vue',
+    'frontend/src/components/Header.vue',
+    'frontend/src/composables/useHeaderActions.js',
+    'frontend/src/router/index.js',
+  ]
+  const offenders = []
+  for (const relativePath of checkedFiles) {
+    const source = readFileSync(resolve(repoRoot, relativePath), 'utf8')
+    for (const specifier of extractImports(source)) {
+      if (specifier === '@bias/users' || specifier === '@bias/realtime') {
+        offenders.push(`${relativePath} imports ${specifier}`)
+      }
+    }
+  }
+
+  assert.deepEqual(offenders, [])
+})
+
 test('forum sdk does not expose core runtime facade', () => {
   const forumSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/sdk.js'), 'utf8')
   const forumNodeSdkSource = readFileSync(resolve(repoRoot, 'frontend/src/forum/nodeSdk.js'), 'utf8')

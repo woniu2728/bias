@@ -1,5 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore, openForgotPasswordModal, openLoginModal, openRegisterModal } from '@bias/users'
+import {
+  getAuthStore,
+  openForgotPassword,
+  openLogin,
+  openRegister,
+} from '@/forum/runtimeServices'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -17,18 +22,18 @@ const router = createRouter({
 
 // 路由守卫
 router.beforeEach((to, from, next) => {
-  const authStore = useAuthStore()
+  const authStore = getAuthStore()
   const hasActivePageContext = from.matched.length > 0
 
   if (['login', 'register', 'forgot-password'].includes(String(to.name || '')) && hasActivePageContext) {
     const redirectPath = typeof to.query.redirect === 'string' ? to.query.redirect : from.fullPath
 
     if (to.name === 'register') {
-      openRegisterModal({ redirectPath })
+      openRegister({ redirectPath })
     } else if (to.name === 'forgot-password') {
-      openForgotPasswordModal({ redirectPath })
+      openForgotPassword({ redirectPath })
     } else {
-      openLoginModal({ redirectPath })
+      openLogin({ redirectPath })
     }
 
     next(false)
@@ -37,7 +42,7 @@ router.beforeEach((to, from, next) => {
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     if (hasActivePageContext) {
-      openLoginModal({ redirectPath: to.fullPath })
+      openLogin({ redirectPath: to.fullPath })
       next(false)
       return
     }

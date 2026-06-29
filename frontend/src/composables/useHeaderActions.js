@@ -1,5 +1,5 @@
 import { getSearchModalProvider } from '@/forum/registry'
-import { openLoginModal, openRegisterModal } from '@bias/users'
+import { openLogin as openRuntimeLogin, openRegister as openRuntimeRegister } from '@/forum/runtimeServices'
 
 export function useHeaderActions({
   authStore,
@@ -52,11 +52,11 @@ export function useHeaderActions({
   }
 
   function openLogin() {
-    openLoginModal({ redirectPath: route.fullPath })
+    openRuntimeLogin({ redirectPath: route.fullPath })
   }
 
   function openRegister() {
-    openRegisterModal({ redirectPath: route.fullPath })
+    openRuntimeRegister({ redirectPath: route.fullPath })
   }
 
   async function handleLogout() {

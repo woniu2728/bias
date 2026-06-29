@@ -49,20 +49,24 @@ import Header from './components/Header.vue'
 import Footer from './components/Footer.vue'
 import AppModalHost from './components/AppModalHost.vue'
 import ForumInlineMessage from './components/forum/ForumInlineMessage.vue'
-import { useAuthStore, useOnlineUsersStore, openLoginModal } from '@bias/users'
 import { useComposerStore } from './stores/composer'
 import { useForumStore } from './stores/forum'
 import { useForumUiStore } from './stores/forumUi'
-import { useForumRealtimeStore } from '@bias/realtime'
 import { useForumRealtimeStatus } from './composables/useForumRealtimeStatus'
 import { getComposerHosts, getUiCopy, runForumRuntimeHook } from './forum/registry'
+import {
+  getAuthStore,
+  getForumRealtimeStore,
+  getOnlineUsersStore,
+  openLogin,
+} from './forum/runtimeServices'
 
-const authStore = useAuthStore()
+const authStore = getAuthStore()
 const composerStore = useComposerStore()
 const forumStore = useForumStore()
 const forumUiStore = useForumUiStore()
-const forumRealtimeStore = useForumRealtimeStore()
-const onlineUsersStore = useOnlineUsersStore()
+const forumRealtimeStore = getForumRealtimeStore()
+const onlineUsersStore = getOnlineUsersStore()
 const route = useRoute()
 const forumRealtimeStatus = useForumRealtimeStatus({
   forumRealtimeStore,
@@ -150,7 +154,7 @@ function handleAuthRequired(event) {
   authStore.logout()
 
   const redirect = event?.detail?.redirect || route.fullPath
-  openLoginModal({ redirectPath: redirect })
+  openLogin({ redirectPath: redirect })
 }
 
 function handleAuthInvalidated() {

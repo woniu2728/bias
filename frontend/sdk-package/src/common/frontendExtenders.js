@@ -279,6 +279,19 @@ export class ForumExtender {
   feedbackNote(definition) { return this.register('registerFeedbackNote', definition) }
   realtimeEvent(definition) { return this.register('registerForumRealtimeEvent', definition) }
   runtime(definition) { return this.register('registerForumRuntime', definition) }
+  service(key, service) {
+    const normalizedKey = normalizeKey(key)
+    if (normalizedKey && service != null) {
+      this.items.push({
+        method: 'registerFrontendService',
+        definition: {
+          key: normalizedKey,
+          service,
+        },
+      })
+    }
+    return this
+  }
 
   extend(app, extension = {}) {
     this.applyConfigurators()
@@ -289,6 +302,13 @@ export class ForumExtender {
       ? (registry.for(this.context || extensionId) || registry)
       : registry
     for (const item of this.items) {
+      if (item.method === 'registerFrontendService') {
+        const definition = resolveExtenderDefinition(item.definition)
+        if (definition?.key) {
+          targetApp.services?.register?.(definition.key, definition.service, { extensionId })
+        }
+        continue
+      }
       const register = scopedRegistry?.[item.method]
       if (typeof register !== 'function') {
         continue

@@ -123,7 +123,7 @@ import { useHeaderMobileState } from '@/composables/useHeaderMobileState'
 import { useHeaderUiState } from '@/composables/useHeaderUiState'
 import { getHeaderItems } from '@/forum/frontendRegistry'
 import { useStartDiscussionAction } from '@/forum/startDiscussionRuntime'
-import { useAuthStore } from '@bias/users'
+import { getAuthStore } from '@/forum/runtimeServices'
 import { useComposerStore } from '@/stores/composer'
 import { useForumStore } from '@/stores/forum'
 import { useForumUiStore } from '@/stores/forumUi'
@@ -134,7 +134,7 @@ import {
   getUserInitial
 } from '@/utils/forum'
 
-const authStore = useAuthStore()
+const authStore = getAuthStore()
 const composerStore = useComposerStore()
 const forumStore = useForumStore()
 const forumUiStore = useForumUiStore()
