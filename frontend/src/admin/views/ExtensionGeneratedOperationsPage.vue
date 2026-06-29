@@ -85,6 +85,7 @@ import {
   resolveExtensionNavigationSource,
   resolveExtensionOperationsSections,
 } from '../extensions/diagnostics'
+import { postRuntimeAction } from '../extensions/runtimeActions'
 
 const props = defineProps({
   extension: {
@@ -159,9 +160,7 @@ async function runRuntimeAction(action) {
   errorMessage.value = ''
 
   try {
-    const data = action.action.startsWith('hook:')
-      ? await api.post(`/admin/extensions/${props.extension.id}/runtime-hooks/${action.action.slice(5)}`)
-      : await api.post(`/admin/extensions/${props.extension.id}/${action.action}`)
+    const data = await postRuntimeAction(api, props.extension.id, action)
     emit('extension-updated', data)
     if (action.success_message) {
       await modalStore.alert({

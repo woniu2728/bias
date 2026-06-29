@@ -186,6 +186,7 @@ import AdminStateBlock from '../components/AdminStateBlock.vue'
 import { resolveExtensionAdminComponent } from '../extensions/entryResolver'
 import { resolveFallbackExtensionPermissionsPage, resolveFallbackExtensionSettingsPage } from '../extensions/fallbacks'
 import { buildExtensionRouteTarget } from '../extensions/diagnostics'
+import { postRuntimeAction } from '../extensions/runtimeActions'
 import { generatedAdminExtensionModules } from 'virtual:bias-extension-import-map'
 
 const route = useRoute()
@@ -434,12 +435,7 @@ async function runRuntimeAction(action) {
   applyRuntimeActionState(action)
 
   try {
-    let data = null
-    if (action.action.startsWith('hook:')) {
-      data = await api.post(`/admin/extensions/${extension.value.id}/runtime-hooks/${action.action.slice(5)}`)
-    } else {
-      data = await api.post(`/admin/extensions/${extension.value.id}/${action.action}`)
-    }
+    const data = await postRuntimeAction(api, extension.value.id, action)
     handleExtensionUpdated(data)
     applyRuntimeActionState(action)
     refreshExtensionDetailsSilently(action)
