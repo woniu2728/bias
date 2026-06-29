@@ -31,6 +31,11 @@ bias_content or bias_forum_foundation
   Discussion, Post, first post, replies, discussion user state, read state,
   post numbering, counted-content metadata, baseline visibility, baseline moderation lifecycle.
 
+bias-users or protected bias-ext-users
+  Required system user domain:
+  User, group, permission assignment, preferences, suspension, account security,
+  and user-facing identity/runtime services.
+
 bias-ext-*
   Optional or feature extensions:
   tags, approval, notifications, likes, flags, subscriptions, uploads, mentions,
@@ -38,6 +43,10 @@ bias-ext-*
 ```
 
 `bias_core` must stay a platform kernel. The forum content domain is product foundation, not extension infrastructure, so it should be a required foundation package rather than being absorbed into the platform kernel.
+
+The user domain follows the same rule. Flarum keeps `User` in core, but Bias keeps `bias_core` smaller than Flarum core. User records, groups, permissions, preferences, and suspension are product/system domain behavior, so they should stay in a required protected system package (`bias-ext-users` today, potentially `bias-users` later) instead of moving into `bias_core`.
+
+Search and realtime are infrastructure extensions, not foundation data domains. They may be auto-installed, protected, or bundled, but content and user hot paths should not depend on them for base behavior. They should attach through registered search targets, event listeners, and realtime transports.
 
 ## Performance Rationale
 
