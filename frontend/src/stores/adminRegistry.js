@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import api from '@/api/index.js'
+import { fetchAdminExtensionSummaries } from '@/admin/extensions/extensionRequests.js'
 
 export const useAdminRegistryStore = defineStore('adminRegistry', () => {
   const extensionScopes = ref([])
@@ -29,9 +30,7 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
 
     loading.value = true
     try {
-      const extensionsData = await api.get('/admin/extensions', {
-        params: { summary: 1 }
-      })
+      const extensionsData = await fetchAdminExtensionSummaries(api)
       extensions.value = Array.isArray(extensionsData?.extensions)
         ? extensionsData.extensions.filter(item => item?.product_visible !== false)
         : []
