@@ -598,6 +598,26 @@ function cloneNotification(notification) {
   }
 }
 
+function buildReplyCreatedNotification(post) {
+  return {
+    id: 303,
+    type: 'postReply',
+    subject_type: 'post',
+    subject_id: 502,
+    data: {
+      discussion_id: 101,
+      discussion_title: 'Browser E2E discussion list renders',
+      post_id: post.id,
+      post_number: post.number,
+      reply_to_post_id: 502,
+      reply_to_post_number: 2,
+    },
+    created_at: post.created_at,
+    is_read: false,
+    from_user: charlie,
+  }
+}
+
 function buildPostStreamPayload(extraPosts = []) {
   const posts = [
     ...postStreamPayload.data,
@@ -1020,6 +1040,10 @@ test.beforeEach(async ({ page }) => {
         user: charlie,
       }
       createdReplies.push(post)
+      notificationItems = [
+        buildReplyCreatedNotification(post),
+        ...notificationItems,
+      ]
       return json(post, { status: 201 })
     }
     if (url.pathname === '/api/discussions/101/posts') {
@@ -1341,6 +1365,17 @@ test('authenticated user replies from discussion detail composer through browser
   await expect(page.locator('#post-3')).toContainText('Reply submitted through Playwright')
   await expect(page.locator('#post-3 .post-number')).toContainText('#3')
   await expect(page.locator('.posts .post-item')).toHaveCount(3)
+
+  const notificationsResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications'
+      && response.status() === 200
+  })
+  await page.goto('/notifications')
+  await notificationsResponse
+  await expect(page.getByText('Charlie 回复了你的帖子')).toBeVisible()
+  await expect(page.getByText('Browser E2E discussion list renders').first()).toBeVisible()
+  await expect(page.getByText('2 未读')).toBeVisible()
 
   expect(page.browserErrors).toEqual([])
 })

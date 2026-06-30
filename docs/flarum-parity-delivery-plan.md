@@ -247,7 +247,8 @@ administrator
 - 已补 Playwright 真实浏览器下认证与账号安全主流程：未登录直达 `/discussions/create` 会打开登录 modal，登录 `POST /api/users/login` 后保留 redirect 并回到 composer；注册断言 `POST /api/users/register` payload；忘记密码断言 `POST /api/users/forgot-password` 并显示 debug reset link；`/verify-email?token=...` 触发 `POST /api/users/verify-email`；`/reset-password?token=...` 触发 `POST /api/users/reset-password`。同时修复 AuthRouteView 在认证成功时过早 `replace('/')` 导致 redirect 丢失的问题，并用 `bias-ext-users/frontend/forum/useAuthRoutePage.test.js` 覆盖。
 - 已补 Playwright 真实浏览器下账号安全失败路径：登录失败显示 `用户名或密码错误` 并清空密码；注册密码确认不一致不发请求，邮箱占用显示后端错误；无效邮箱验证 token 和无效重置密码 token 显示错误；Profile 安全页覆盖邮箱重发失败、修改密码确认不一致和旧密码错误。
 - 已补 Playwright 真实浏览器下人机验证流程：`/api/forum` 启用 security 扩展和 Turnstile 设置后，登录/注册 modal 渲染 Turnstile 挑战组件，并断言 `POST /api/users/login`、`POST /api/users/register` payload 携带 `human_verification_token`。该 E2E 暴露并修复了 AuthSessionModal 在 token 更新后重新计算 challenge provider、触发 reset、导致 `Maximum recursive updates exceeded` 的前台稳定性问题。
-- 阶段 3 尚未完成：仍需继续收敛真实内容操作触发通知，以及通知邮件/队列投递。
+- 已补 Playwright 真实浏览器下真实内容操作触发通知流程：讨论详情提交 `POST /api/discussions/{id}/posts` 成功追加回复后，通知 fixture 生成新的 `postReply` 通知；随后进入 `/notifications`，断言新通知和未读计数被渲染。
+- 阶段 3 尚未完成：仍需继续收敛通知邮件/队列投递。
 
 ## 阶段 4：官方扩展对齐矩阵
 
