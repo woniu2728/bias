@@ -233,7 +233,8 @@ administrator
 - 已补 `/api/search` 的 all/discussions/posts HTTP 可见性矩阵，覆盖公开、隐藏、私有、pending、rejected discussion/post 对 guest、registered user、discussion author、approval author、post author、moderator、administrator 的一致过滤。
 - 已补 `bias/frontend/src/forum/extensionLoader.test.js` 的 bundled forum product routes 证据，确认 discussions/search 扩展能把首页、讨论详情、创建讨论和搜索页注册到前台 router，并解析到对应 Vue view；新增 `npm run test:node` 作为前端 Node 测试入口。
 - 已接入 Playwright 浏览器 E2E，并补 `bias/frontend/e2e/forum-home.spec.js` 覆盖真实 Chromium + Vite runtime 下的论坛首页：`/api/forum` 启用 users/discussions 扩展、装载扩展路由、请求 `/api/discussions/`、渲染讨论列表项并链接到 `/d/:id`；该 E2E 暴露并修复了 `App.vue` 对 `forumStore.settings` 的 deep watch 会遍历扩展 runtime 对象并触发 `Maximum call stack size exceeded` 的前台稳定性问题。
-- 阶段 3 尚未完成：仍需补讨论详情、composer 创建/回复、搜索页等浏览器流程，以及更细的 fields/include/error 格式覆盖。
+- 已补 Playwright 真实浏览器下从首页讨论列表点击进入讨论详情的闭环，验证 `/api/discussions/{id}`、`/api/discussions/{id}/posts?limit=20&near=1`、详情标题、帖子流正文、楼层编号和加载态退出。
+- 阶段 3 尚未完成：仍需补 composer 创建/回复、搜索页等浏览器流程，以及更细的 fields/include/error 格式覆盖。
 
 ## 阶段 4：官方扩展对齐矩阵
 
