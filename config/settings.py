@@ -160,7 +160,7 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = BOOTSTRAP.static_url
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_ROOT = Path(os.getenv("BIAS_STATIC_ROOT") or BASE_DIR / "staticfiles")
 STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
 
 MEDIA_URL = BOOTSTRAP.media_url

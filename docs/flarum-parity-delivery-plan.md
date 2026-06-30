@@ -504,7 +504,7 @@ cd D:\files\project\tmp\bias-ext-tags
 python -m build
 
 cd D:\files\project\tmp\bias
-python manage.py smoke_install_upgrade --from-wheels --skip-collectstatic --format json
+python manage.py smoke_install_upgrade --from-wheels --publish-frontend-dist --format json
 
 cd D:\files\project\tmp\bias\frontend
 npm run build
@@ -514,6 +514,7 @@ npm run build
 
 - `smoke_install_upgrade` 已覆盖临时 SQLite 站点安装和升级：执行 `install_forum` 的 migrate、sync extensions、sync extension order、migrate extensions、init groups、sync version、build extension frontend、ensure admin；随后执行 `upgrade_forum` 的 check、migrate、sync extensions、sync extension order、migrate extensions、init groups、sync version、clear runtime cache、build extension frontend，并断言管理员、已安装扩展、已启用扩展和 `system.version` 在升级后保持。
 - `smoke_install_upgrade --from-wheels` 已覆盖从构建产物安装的非 editable 冒烟：构建 `bias-core`、`bias-content` 和 16 个官方 `bias-ext-*` wheel，安装到临时 `site-packages` target，并断言安装/升级子进程的 `bias_core.__file__` 来自该 wheel target，扩展安装启用状态在升级后保持。
+- `smoke_install_upgrade --from-wheels --publish-frontend-dist` 已覆盖发布级前端链路：安装和升级均执行 `build_extension_frontend --rebuild --publish` 与 `collectstatic --noinput`，`STATIC_ROOT` 指向临时站点目录，断言 `staticfiles/extensions/frontend-build-manifest.json`、`staticfiles/extensions/frontend-output-manifest.json` 存在，且 `staticfiles/frontend` 收集到 129 个前端构建文件；`build_extension_frontend --rebuild` 失败现在会让安装/升级失败，不再只打印 `[ERROR]` 后继续。
 - `upgrade_forum` 已支持拆分站点工程没有 `VERSION` 文件的场景，改为先校验 `bias_core.APP_VERSION`，仅当站点工程存在 `VERSION` 时才执行站点 VERSION 与前端版本一致性校验。
 
 通过标准：
