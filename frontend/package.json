@@ -18,6 +18,7 @@
     "check:sdk-package-sources": "node ./scripts/syncSdkPackageSources.mjs --check",
     "sync:sdk-aliases": "node ./scripts/syncSdkAliases.mjs",
     "test:node": "node --import ./src/testing/registerBiasSdkAliases.mjs --test \"src/**/*.test.js\"",
+    "test:e2e": "playwright test",
     "check:extension-boundary": "node ./scripts/checkExtensionFrontendBoundary.mjs",
     "check:sdk-package": "npm run check:sdk-package-sources && node ./scripts/checkSdkPackage.mjs && node ./scripts/checkSdkExports.mjs && npm pack --dry-run --workspace @bias/core",
     "check:platform": "npm run check:extension-sources && npm run check:sdk-package && npm run check:extension-boundary"
@@ -35,6 +36,7 @@
     "vue-router": "^4.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@vitejs/plugin-vue": "^5.0.4",
     "vite": "^5.1.5"
   }

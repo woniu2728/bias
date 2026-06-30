@@ -194,8 +194,7 @@ watch(
   () => forumStore.settings,
   () => {
     forumUiStore.syncFromForumSettings()
-  },
-  { deep: true }
+  }
 )
 
 watch(
