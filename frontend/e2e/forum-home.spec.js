@@ -169,6 +169,23 @@ const forumSettings = {
   },
 }
 
+const securityExtensionSettings = {
+  ...forumSettings,
+  auth_human_verification_provider: 'turnstile',
+  auth_turnstile_site_key: 'e2e-site-key',
+  auth_human_verification_login_enabled: true,
+  auth_human_verification_register_enabled: true,
+  enabled_modules: [...forumSettings.enabled_modules, 'security'],
+  enabled_extensions: [
+    ...forumSettings.enabled_extensions,
+    {
+      id: 'security',
+      frontend_forum_entry: 'extensions/security/frontend/forum/index.js',
+      frontend_routes: [],
+    },
+  ],
+}
+
 const alice = {
   id: 7,
   username: 'alice',
@@ -602,6 +619,8 @@ test.beforeEach(async ({ page }) => {
   let notificationItems = baseNotifications.map(cloneNotification)
   let currentUser = { ...charlie }
 
+  page.e2eForumSettings = forumSettings
+
   await page.exposeFunction('__biasE2ESetEmailUnconfirmed', () => {
     currentUser = {
       ...currentUser,
@@ -696,7 +715,7 @@ test.beforeEach(async ({ page }) => {
       })
     }
     if (url.pathname === '/api/forum') {
-      return json(forumSettings)
+      return json(page.e2eForumSettings || forumSettings)
     }
     if (url.pathname === '/api/forum/theme') {
       return json({ theme: { id: 'default', className: 'theme-default', colorScheme: 'light' } })
@@ -1133,6 +1152,96 @@ test('account security pages verify email and reset password through browser run
   await page.getByRole('button', { name: '重置密码' }).click()
   await resetResponse
   await expect(page.getByText('密码已重置，正在返回登录页...')).toBeVisible()
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('auth browser flow submits Turnstile human verification tokens', async ({ page }) => {
+  page.e2eAuthenticated = false
+  page.e2eForumSettings = securityExtensionSettings
+
+  await page.addInitScript(() => {
+    const widgets = new Map()
+    let nextWidgetId = 1
+    window.__biasE2ETurnstileTokens = []
+    window.turnstile = {
+      render(container, options = {}) {
+        const widgetId = nextWidgetId
+        nextWidgetId += 1
+        const token = `e2e-turnstile-token-${widgetId}`
+        widgets.set(widgetId, { container, options, token })
+        container.setAttribute('data-e2e-turnstile-widget', String(widgetId))
+        container.textContent = 'Turnstile verification ready'
+        setTimeout(() => {
+          window.__biasE2ETurnstileTokens.push(token)
+          options.callback?.(token)
+        }, 0)
+        return widgetId
+      },
+      reset(widgetId) {
+        const widget = widgets.get(widgetId)
+        if (!widget) return
+        const token = `${widget.token}-reset`
+        window.__biasE2ETurnstileTokens.push(token)
+        widget.options.callback?.(token)
+      },
+      remove(widgetId) {
+        widgets.delete(widgetId)
+      },
+    }
+  })
+
+  await page.goto('/register')
+  await expect(page.getByRole('heading', { name: '加入讨论' })).toBeVisible()
+  await expect(page.getByText('Turnstile verification ready')).toBeVisible()
+  await page.waitForFunction(() => window.__biasE2ETurnstileTokens?.length > 0)
+
+  await page.getByLabel('用户名').fill('browseruser')
+  await page.getByLabel('邮箱').fill('browseruser@example.test')
+  await page.getByLabel('密码', { exact: true }).fill('browser-password')
+  await page.getByLabel('确认密码').fill('browser-password')
+  const expectedRegisterToken = await page.evaluate(() => window.__biasE2ETurnstileTokens.at(-1))
+
+  const registerRequest = page.waitForRequest(request => {
+    const url = new URL(request.url())
+    return url.pathname === '/api/users/register' && request.method() === 'POST'
+  })
+  const registerResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/register'
+      && response.request().method() === 'POST'
+      && response.status() === 201
+  })
+  await page.locator('.AuthSessionModal form').getByRole('button', { name: '注册' }).click()
+  const registerPayload = (await registerRequest).postDataJSON()
+  await registerResponse
+  expect(registerPayload).toMatchObject({
+    human_verification_token: expectedRegisterToken,
+  })
+
+  await page.goto('/login')
+  await expect(page.getByRole('heading', { name: '登录' })).toBeVisible()
+  await expect(page.getByText('Turnstile verification ready')).toBeVisible()
+  await page.waitForFunction(() => window.__biasE2ETurnstileTokens?.length > 0)
+
+  await page.getByLabel('用户名或邮箱').fill('charlie@example.test')
+  await page.getByLabel('密码').fill('correct-password')
+  const expectedLoginToken = await page.evaluate(() => window.__biasE2ETurnstileTokens.at(-1))
+
+  const loginRequest = page.waitForRequest(request => {
+    const url = new URL(request.url())
+    return url.pathname === '/api/users/login' && request.method() === 'POST'
+  })
+  const meResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/me' && response.status() === 200
+  })
+  await page.locator('.AuthSessionModal form').getByRole('button', { name: '登录' }).click()
+  const loginPayload = (await loginRequest).postDataJSON()
+  await meResponse
+  expect(loginPayload).toMatchObject({
+    human_verification_token: expectedLoginToken,
+  })
 
   expect(page.browserErrors).toEqual([])
 })
