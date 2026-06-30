@@ -382,6 +382,7 @@ D:\files\project\tmp\flarum_code\tags\tests
    - sync extensions。
    - rebuild frontend。
    - 展示 diagnostics 和 recovery state。
+   - 已补 `bias/frontend/e2e/admin-extensions.spec.js` 的真实浏览器证据，覆盖从后台仪表盘进入扩展中心、扩展列表、protected 扩展不暴露停用入口、非 protected 扩展详情页停用再启用、sync extensions、同步启用顺序、rebuild frontend，以及 diagnostics、recovery state、frontend asset 状态展示；同时补上 `/admin/extensions` 核心后台路由。
 
 2. 用户和权限。
    - 用户列表。
@@ -577,6 +578,7 @@ npm run build
 
 当前证据：
 
+- `bias/frontend/e2e/admin-extensions.spec.js` 已覆盖管理员处理扩展管理：进入扩展中心、停用/启用非 protected 扩展、确认 protected 扩展不能停用、触发 sync extensions、同步顺序和 rebuild frontend。
 - `bias/frontend/e2e/admin-tags.spec.js` 已覆盖管理员处理后台标签管理：创建顶级标签、创建子标签、编辑权限范围、刷新统计和删除。
 - `bias/frontend/e2e/admin-flags.spec.js` 已覆盖管理员处理 flag。
 
