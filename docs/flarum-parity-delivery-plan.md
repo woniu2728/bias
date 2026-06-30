@@ -251,6 +251,7 @@ administrator
 - 已补通知邮件/队列投递后端闭环：`bias-ext-notifications` 注册 `NotificationCreatedEvent` 监听器，通知创建后派发 `dispatch_notification_batch`；Celery 任务执行实时通知加载和 `EmailService` 通知邮件发送；测试覆盖队列启用入队、入队失败同步 fallback、通知邮件 subject/body/link、无邮箱收件人跳过，并让通知测试夹具适配 tags 必填关系。
 - 已补 flags 后端组合证据：`bias-ext-flags` 测试夹具适配当前 tags 必填关系后，后端测试覆盖 `POST /api/posts/{id}/report` 创建举报、`/api/admin/flags` 后台队列列表、`/api/admin/flags/{id}/resolve` 后台处理、讨论页版主 `/api/posts/{id}/flags/resolve` 处理、非 staff 拒绝、删除帖子清理举报和对应事件。
 - 已补 Playwright 真实浏览器下 flags 后台主流程：从后台仪表盘“处理举报”进入举报管理，加载 `GET /api/admin/flags?status=open` 并渲染待处理举报；提交 `POST /api/admin/flags/{id}/resolve` 后刷新待处理空状态；再切换“已处理”筛选，加载 `GET /api/admin/flags?status=resolved` 并验证处理备注和处理人。该 E2E 暴露并修复了浏览器构建中 `@bias/core/*` 指向 SDK 包副本、导致扩展 pageConfig 写入宿主 registry 但页面从 SDK 副本读取而丢失筛选 tab 的后台 runtime 单例问题。
+- 已补 Playwright 真实浏览器下 tags 后台主流程：从后台仪表盘“管理标签”进入标签管理，加载 `GET /api/admin/tags`，创建顶级标签、创建子标签、编辑隐藏/限制和查看/发帖/回帖权限，触发 `POST /api/admin/tags/stats/refresh` 刷新统计，并删除子标签。该 E2E 暴露并修复了 tags 后台操作按钮默认禁用 pointer events 导致不可点击，以及删除成功后编辑 modal 残留的问题。
 - 阶段 3 的后端主流程已进一步收敛；剩余风险转向真实 Redis worker/生产冒烟和更多跨扩展浏览器矩阵。
 
 ## 阶段 4：官方扩展对齐矩阵
@@ -359,6 +360,7 @@ D:\files\project\tmp\flarum_code\tags\tests
 5. 讨论列表 tag labels。
 6. 讨论详情/侧边栏 tag 展示。
 7. 后台 tag 管理。
+   - 已补 `bias/frontend/e2e/admin-tags.spec.js` 的真实浏览器证据，覆盖创建、编辑权限、刷新统计和删除。
 
 通过标准：
 
@@ -401,6 +403,7 @@ D:\files\project\tmp\flarum_code\tags\tests
    - 重排。
    - 父子关系管理。
    - 权限和约束。
+   - 已补 `bias/frontend/e2e/admin-tags.spec.js` 的真实浏览器证据，覆盖顶级标签、子标签、权限范围、统计刷新和删除。
 
 通过标准：
 
@@ -571,6 +574,11 @@ npm run build
 19. 禁用一个非 protected 扩展。
 20. rebuild frontend。
 21. 重新加载前台和后台页面。
+
+当前证据：
+
+- `bias/frontend/e2e/admin-tags.spec.js` 已覆盖管理员处理后台标签管理：创建顶级标签、创建子标签、编辑权限范围、刷新统计和删除。
+- `bias/frontend/e2e/admin-flags.spec.js` 已覆盖管理员处理 flag。
 
 通过标准：
 
