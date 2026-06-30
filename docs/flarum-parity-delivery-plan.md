@@ -238,6 +238,7 @@ administrator
 - 已补 Playwright 真实浏览器下已登录用户直达 `/discussions/create`、等待 session 恢复、打开 discussion composer、提交 `POST /api/discussions/`、跳转 `/d/{id}` 并渲染首帖的闭环；该 E2E 暴露并修复了受保护路由在 session 恢复前误判未登录、导致直达创建页弹登录并回首页的前台认证时序问题。
 - 已补 Playwright 真实浏览器下搜索页 `/search?q=browser&type=all` 主流程，覆盖 search 扩展路由装载、`GET /api/search?q=browser&type=all&page=1&limit=20`、讨论/帖子/用户分组结果渲染、搜索统计、加载态退出，并从讨论搜索结果点击进入 `/d/101` 详情；该 E2E 暴露并修复了 `SearchResultCard.vue` 把 `computed` import 放在 `<script setup>` 外导致结果卡片渲染时报 `computed is not defined` 的前台稳定性问题。
 - 已补 search/user 资源 include 细节：`bias-ext-users` 声明 `search_user.groups` relationship，`bias-ext-search` 的 `/api/search?type=users&include=groups` 现在把 include 传入资源序列化，并用 HTTP 测试覆盖 `fields[search_user]=primary_group&include=groups` 同时返回 `primary_group` 和 `groups`。
+- 已补 `bias_ext_search/backend/tests.py` 全量后端测试证据：在 tags 扩展启用且创建 discussion 必须带 tags relationship 的条件下，搜索后端 62 个测试通过；搜索测试夹具统一注入 tag relationship payload，并把 `created:YYYY-MM` 过滤断言切到本地时区语义。
 - 阶段 3 尚未完成：仍需补更细的 fields/include/error 格式覆盖。
 
 ## 阶段 4：官方扩展对齐矩阵
