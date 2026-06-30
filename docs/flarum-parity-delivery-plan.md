@@ -503,9 +503,17 @@ python -m build
 cd D:\files\project\tmp\bias-ext-tags
 python -m build
 
+cd D:\files\project\tmp\bias
+python manage.py smoke_install_upgrade --skip-collectstatic --format json
+
 cd D:\files\project\tmp\bias\frontend
 npm run build
 ```
+
+当前证据：
+
+- `smoke_install_upgrade` 已覆盖临时 SQLite 站点安装和升级：执行 `install_forum` 的 migrate、sync extensions、sync extension order、migrate extensions、init groups、sync version、build extension frontend、ensure admin；随后执行 `upgrade_forum` 的 check、migrate、sync extensions、sync extension order、migrate extensions、init groups、sync version、clear runtime cache、build extension frontend，并断言管理员、已安装扩展、已启用扩展和 `system.version` 在升级后保持。
+- `upgrade_forum` 已支持拆分站点工程没有 `VERSION` 文件的场景，改为先校验 `bias_core.APP_VERSION`，仅当站点工程存在 `VERSION` 时才执行站点 VERSION 与前端版本一致性校验。
 
 通过标准：
 
