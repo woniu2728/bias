@@ -30,6 +30,21 @@ const forumSettings = {
           frontend: 'forum',
           module_id: 'users',
         },
+        {
+          path: '/profile',
+          name: 'profile',
+          component: './ProfileView.vue',
+          frontend: 'forum',
+          module_id: 'users',
+          requires_auth: true,
+        },
+        {
+          path: '/u/:id',
+          name: 'user-profile',
+          component: './ProfileView.vue',
+          frontend: 'forum',
+          module_id: 'users',
+        },
       ],
     },
     {
@@ -162,6 +177,14 @@ const charlie = {
   display_name: 'Charlie',
   avatar_url: '',
   is_staff: false,
+  bio: 'Charlie profile biography',
+  email: 'charlie@example.test',
+  color: '#4d698e',
+  joined_at: '2026-06-01T08:00:00Z',
+  last_seen_at: '2026-06-30T10:15:00Z',
+  discussion_count: 2,
+  comment_count: 4,
+  is_email_confirmed: true,
   is_suspended: false,
   forum_permissions: ['startDiscussion', 'discussion.reply', 'discussion.typing'],
 }
@@ -445,6 +468,65 @@ const searchPayload = {
   user_total: 1,
 }
 
+const profilePreferencesPayload = {
+  values: {
+    notify_post_reply: true,
+    notify_user_mentioned: false,
+  },
+  ui_values: {},
+  definitions: [
+    {
+      key: 'notify_post_reply',
+      label: '回复通知',
+      description: '有人回复你的帖子时通知你。',
+      category: 'notifications',
+    },
+    {
+      key: 'notify_user_mentioned',
+      label: '提及通知',
+      description: '有人提及你时通知你。',
+      category: 'notifications',
+    },
+  ],
+}
+
+const profileDiscussionPayload = {
+  data: [
+    {
+      ...discussionListPayload.data[0],
+      title: 'Charlie profile discussion',
+      slug: 'charlie-profile-discussion',
+      user: charlie,
+      comment_count: 5,
+    },
+  ],
+  total: 1,
+}
+
+const profilePostsPayload = {
+  data: [
+    {
+      id: 701,
+      discussion_id: 101,
+      number: 4,
+      type: 'comment',
+      content: 'Profile reply rendered from author feed',
+      content_html: '<p>Profile reply rendered from author feed</p>',
+      created_at: '2026-06-30T10:45:00Z',
+      is_hidden: false,
+      can_edit: true,
+      can_delete: true,
+      can_hide: false,
+      user: charlie,
+      discussion: {
+        id: 101,
+        title: 'Browser E2E discussion list renders',
+      },
+    },
+  ],
+  total: 1,
+}
+
 const baseNotifications = [
   {
     id: 301,
@@ -584,6 +666,47 @@ test.beforeEach(async ({ page }) => {
       }
       return json({ authenticated: false, user: null })
     }
+    if (url.pathname === '/api/users/me') {
+      return json(charlie)
+    }
+    if (url.pathname === '/api/users/me/preferences' && route.request().method() === 'GET') {
+      return json(profilePreferencesPayload)
+    }
+    if (url.pathname === '/api/users/me/preferences' && route.request().method() === 'PATCH') {
+      const requestBody = route.request().postDataJSON()
+      expect(requestBody).toMatchObject({
+        values: {
+          notify_post_reply: true,
+          notify_user_mentioned: false,
+        },
+        ui_values: {},
+      })
+      return json(profilePreferencesPayload)
+    }
+    if (url.pathname === '/api/users/9' && route.request().method() === 'PATCH') {
+      const requestBody = route.request().postDataJSON()
+      expect(requestBody).toMatchObject({
+        display_name: 'Charlie Browser',
+        email: 'charlie@example.test',
+        bio: 'Profile updated through Playwright',
+      })
+      return json({
+        ...charlie,
+        display_name: 'Charlie Browser',
+        bio: 'Profile updated through Playwright',
+      })
+    }
+    if (url.pathname === '/api/users/7') {
+      return json({
+        ...alice,
+        bio: 'Alice public profile biography',
+        color: '#2d8fdd',
+        joined_at: '2026-05-20T08:00:00Z',
+        last_seen_at: '2026-06-30T09:30:00Z',
+        discussion_count: 1,
+        comment_count: 2,
+      })
+    }
     if (url.pathname === '/api/search') {
       expect(url.searchParams.get('q')).toBe('browser')
       expect(url.searchParams.get('type')).toBe('all')
@@ -636,6 +759,10 @@ test.beforeEach(async ({ page }) => {
       notificationItems = notificationItems.filter(item => item.id !== notificationId)
       return json({ ok: true })
     }
+    if (url.pathname === '/api/posts' && url.searchParams.get('author') === 'charlie') {
+      expect(url.searchParams.get('limit')).toBe('20')
+      return json(profilePostsPayload)
+    }
     if (url.pathname === '/api/discussions/' && route.request().method() === 'POST') {
       const requestBody = route.request().postDataJSON()
       expect(requestBody).toMatchObject({
@@ -658,6 +785,23 @@ test.beforeEach(async ({ page }) => {
       return json(createdDiscussion, { status: 201 })
     }
     if (url.pathname === '/api/discussions/') {
+      if (url.searchParams.get('author') === 'charlie') {
+        expect(url.searchParams.get('sort')).toBe('newest')
+        expect(url.searchParams.get('limit')).toBe('20')
+        return json(profileDiscussionPayload)
+      }
+      if (url.searchParams.get('author') === 'alice') {
+        return json({
+          ...profileDiscussionPayload,
+          data: [
+            {
+              ...profileDiscussionPayload.data[0],
+              title: 'Alice public profile discussion',
+              user: alice,
+            },
+          ],
+        })
+      }
       if (url.searchParams.get('tag') === 'general') {
         return json(taggedDiscussionListPayload)
       }
@@ -890,6 +1034,85 @@ test('authenticated user manages notifications through browser runtime', async (
   await expect(page.getByRole('heading', { name: '已清除已读通知' })).toBeVisible()
   await page.locator('.Modal').getByRole('button', { name: '确定' }).click()
   await expect(page.getByText('暂无通知')).toBeVisible()
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('profile pages render user activity and save own profile through browser runtime', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  const ownProfileResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/me' && response.status() === 200
+  })
+  const ownDiscussionsResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/'
+      && url.searchParams.get('author') === 'charlie'
+      && response.status() === 200
+  })
+  const preferencesResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/me/preferences'
+      && response.request().method() === 'GET'
+      && response.status() === 200
+  })
+
+  await page.goto('/profile')
+  await ownProfileResponse
+  await ownDiscussionsResponse
+  await preferencesResponse
+
+  await expect(page.getByRole('heading', { name: 'Charlie' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Charlie profile discussion' })).toBeVisible()
+  await expect(page.locator('.user-sidebar').getByText(/^讨论\s*2$/)).toBeVisible()
+  await expect(page.locator('.user-sidebar').getByText(/^回复\s*4$/)).toBeVisible()
+
+  const postsResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/posts'
+      && url.searchParams.get('author') === 'charlie'
+      && response.status() === 200
+  })
+  await page.getByText('回复').click()
+  await postsResponse
+  await expect(page.getByText('Profile reply rendered from author feed')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Browser E2E discussion list renders' })).toBeVisible()
+
+  await page.getByRole('button', { name: '设置' }).click()
+  await expect(page.getByRole('heading', { name: '个人设置' })).toBeVisible()
+  await expect(page.getByLabel('显示名称')).toHaveValue('Charlie')
+  await page.getByLabel('显示名称').fill('Charlie Browser')
+  await page.getByLabel('个人简介').fill('Profile updated through Playwright')
+
+  const saveProfileResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/9'
+      && response.request().method() === 'PATCH'
+      && response.status() === 200
+  })
+  await page.getByRole('button', { name: '保存资料' }).click()
+  await saveProfileResponse
+  await expect(page.getByText('资料已保存')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Charlie Browser' })).toBeVisible()
+
+  const publicProfileResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/7' && response.status() === 200
+  })
+  const publicDiscussionsResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/'
+      && url.searchParams.get('author') === 'alice'
+      && response.status() === 200
+  })
+  await page.goto('/u/7')
+  await publicProfileResponse
+  await publicDiscussionsResponse
+
+  await expect(page.getByRole('heading', { name: 'Alice' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Alice public profile discussion' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '设置' })).toHaveCount(0)
 
   expect(page.browserErrors).toEqual([])
 })

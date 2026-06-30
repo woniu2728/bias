@@ -242,7 +242,8 @@ administrator
 - 已补核心论坛 HTTP resource 格式证据：`bias_core/tests/test_forum_discussion_api.py` 覆盖 discussion list/detail 与 post stream/detail 的 `fields[...]` + `include` 组合，以及 discussion/post 404、403 plain error 格式；同时修复 `/api/discussions/{id}/posts` 在 discussion 不存在或不可见时误返回 200 空列表的问题，改为与 discussion detail 一致的 404 `讨论不存在`。
 - 已补 Playwright 真实浏览器下 tags 前台主流程：`/tags` 加载 `GET /api/tags?include_children=true` 并渲染主标签、子标签和二级标签；`/t/general` 加载 tag detail，并让讨论列表请求携带 `tag=general`；从 tag 页面发起讨论时 composer 自动带入主标签、选择次标签，并断言 `POST /api/discussions/` payload 写入 `relationships.tags.data`。
 - 已补 Playwright 真实浏览器下通知页主流程：`/notifications` 加载 `GET /api/notifications` 并渲染 reply/account 通知；单条通知点击“标记为已读”触发 `POST /api/notifications/{id}/read`；确认“当前页清除已读”触发 `DELETE /api/notifications/read/clear`，并验证清理后的空状态。
-- 阶段 3 尚未完成：仍需补用户资料浏览器流程，并继续收敛通知触发、删除、筛选刷新和用户相关 HTTP 矩阵。
+- 已补 Playwright 真实浏览器下用户资料主流程：`/profile` 加载 `GET /api/users/me`、作者讨论列表、作者回复列表和 `GET /api/users/me/preferences`；设置页保存资料时断言 `PATCH /api/users/{id}` payload；公开 `/u/{id}` 加载他人资料和作者讨论，且不显示自己的设置入口。
+- 阶段 3 尚未完成：仍需继续收敛通知触发、删除、筛选刷新，以及注册/登录/邮箱验证/密码重置等用户相关 HTTP 与浏览器矩阵。
 
 ## 阶段 4：官方扩展对齐矩阵
 
