@@ -137,6 +137,11 @@ rg "from config|import config|from bias_ext_|import bias_ext_" src\bias_core -g 
 docs/flarum-core-parity-matrix.md
 ```
 
+当前状态：
+
+- 矩阵文件已创建。
+- 阶段 2 尚未完成；矩阵中仍有 `partial` 项，需先补阶段 3 的主论坛 HTTP 流程证据。
+
 最少包含以下条目：
 
 | 领域 | Flarum 参照 | Bias 归属 | 状态 | 必需证据 |
