@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 const forumSettings = {
   forum_title: 'Bias E2E Forum',
   forum_description: 'Browser flow fixture',
-  enabled_modules: ['users', 'discussions', 'posts', 'realtime', 'search', 'tags'],
+  enabled_modules: ['users', 'discussions', 'posts', 'realtime', 'search', 'tags', 'notifications'],
   enabled_extensions: [
     {
       id: 'users',
@@ -108,6 +108,20 @@ const forumSettings = {
               href: '/api/tags?include=children,lastPostedDiscussion,parent&include_children=true',
             },
           ],
+        },
+      ],
+    },
+    {
+      id: 'notifications',
+      frontend_forum_entry: 'extensions/notifications/frontend/forum/index.js',
+      frontend_routes: [
+        {
+          path: '/notifications',
+          name: 'notifications',
+          component: './NotificationView.vue',
+          frontend: 'forum',
+          module_id: 'notifications',
+          requires_auth: true,
         },
       ],
     },
@@ -431,6 +445,44 @@ const searchPayload = {
   user_total: 1,
 }
 
+const baseNotifications = [
+  {
+    id: 301,
+    type: 'postReply',
+    subject_type: 'post',
+    subject_id: 502,
+    data: {
+      discussion_id: 101,
+      discussion_title: 'Browser E2E discussion list renders',
+      post_id: 502,
+      post_number: 2,
+    },
+    created_at: '2026-06-30T09:10:00Z',
+    is_read: false,
+    from_user: bob,
+  },
+  {
+    id: 302,
+    type: 'userSuspended',
+    subject_type: 'user',
+    subject_id: 9,
+    data: {
+      suspend_message: 'Browser account moderation notice',
+    },
+    created_at: '2026-06-30T07:30:00Z',
+    is_read: true,
+    from_user: alice,
+  },
+]
+
+function cloneNotification(notification) {
+  return {
+    ...notification,
+    data: { ...(notification.data || {}) },
+    from_user: notification.from_user ? { ...notification.from_user } : null,
+  }
+}
+
 function buildPostStreamPayload(extraPosts = []) {
   const posts = [
     ...postStreamPayload.data,
@@ -449,6 +501,43 @@ function buildPostStreamPayload(extraPosts = []) {
 test.beforeEach(async ({ page }) => {
   const browserErrors = []
   const createdReplies = []
+  let notificationItems = baseNotifications.map(cloneNotification)
+
+  function buildNotificationListPayload(params = {}) {
+    let items = notificationItems.map(cloneNotification)
+    if (params.type) {
+      items = items.filter(item => item.type === params.type)
+    }
+    if (params.isRead !== null && params.isRead !== undefined) {
+      items = items.filter(item => item.is_read === params.isRead)
+    }
+
+    const allUnreadCount = notificationItems.filter(item => !item.is_read).length
+    return {
+      data: items,
+      total: items.length,
+      limit: Number(params.limit || 20),
+      unread_count: allUnreadCount,
+      type_counts: {
+        postReply: notificationItems.filter(item => item.type === 'postReply').length,
+        userSuspended: notificationItems.filter(item => item.type === 'userSuspended').length,
+      },
+      unread_type_counts: {
+        postReply: notificationItems.filter(item => item.type === 'postReply' && !item.is_read).length,
+        userSuspended: notificationItems.filter(item => item.type === 'userSuspended' && !item.is_read).length,
+      },
+    }
+  }
+
+  function buildNotificationStatsPayload() {
+    const total = notificationItems.length
+    const unread = notificationItems.filter(item => !item.is_read).length
+    return {
+      total,
+      unread_count: unread,
+      read_count: Math.max(0, total - unread),
+    }
+  }
 
   page.on('pageerror', error => {
     browserErrors.push(error.message)
@@ -458,6 +547,8 @@ test.beforeEach(async ({ page }) => {
     const text = message.text()
     if (text.includes('WebSocket connection')) return
     if (text.includes('Failed to load resource') && text.includes('/ws/online/')) return
+    if (text.includes('Failed to load resource') && text.includes('/ws/notifications/')) return
+    if (text.includes('WebSocket错误: Event')) return
     browserErrors.push(text)
   })
 
@@ -512,6 +603,38 @@ test.beforeEach(async ({ page }) => {
     }
     if (url.pathname === '/api/tags/popular') {
       return json({ data: tagTreePayload.data })
+    }
+    if (url.pathname === '/api/notifications/stats') {
+      return json(buildNotificationStatsPayload())
+    }
+    if (url.pathname === '/api/notifications' && route.request().method() === 'GET') {
+      return json(buildNotificationListPayload({
+        page: Number(url.searchParams.get('page') || 1),
+        limit: Number(url.searchParams.get('limit') || 20),
+        type: url.searchParams.get('type') || '',
+        isRead: url.searchParams.has('is_read') ? url.searchParams.get('is_read') === 'true' : null,
+      }))
+    }
+    if (url.pathname === '/api/notifications/read-all' && route.request().method() === 'POST') {
+      notificationItems = notificationItems.map(item => ({ ...item, is_read: true }))
+      return json({ count: notificationItems.length })
+    }
+    if (url.pathname === '/api/notifications/read/clear' && route.request().method() === 'DELETE') {
+      const beforeCount = notificationItems.length
+      notificationItems = notificationItems.filter(item => !item.is_read)
+      return json({ count: beforeCount - notificationItems.length })
+    }
+    if (url.pathname.match(/^\/api\/notifications\/\d+\/read$/) && route.request().method() === 'POST') {
+      const notificationId = Number(url.pathname.split('/')[3])
+      notificationItems = notificationItems.map(item => (
+        item.id === notificationId ? { ...item, is_read: true } : item
+      ))
+      return json({ ok: true })
+    }
+    if (url.pathname.match(/^\/api\/notifications\/\d+$/) && route.request().method() === 'DELETE') {
+      const notificationId = Number(url.pathname.split('/')[3])
+      notificationItems = notificationItems.filter(item => item.id !== notificationId)
+      return json({ ok: true })
     }
     if (url.pathname === '/api/discussions/' && route.request().method() === 'POST') {
       const requestBody = route.request().postDataJSON()
@@ -722,6 +845,51 @@ test('tags forum flow renders tags index, filters tag discussions, and contribut
 
   await expect(page).toHaveURL(/\/d\/202$/)
   await expect(page.getByRole('heading', { name: 'Discussion created through Playwright' })).toBeVisible()
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('authenticated user manages notifications through browser runtime', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  const notificationsResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications' && response.status() === 200
+  })
+
+  await page.goto('/notifications')
+  await notificationsResponse
+
+  await expect(page.getByRole('heading', { name: '通知' }).first()).toBeVisible()
+  await expect(page.getByText('Bob 回复了你的帖子')).toBeVisible()
+  await expect(page.getByText('Browser E2E discussion list renders')).toBeVisible()
+  await expect(page.getByText('Alice 已封禁你的账号：Browser account moderation notice')).toBeVisible()
+  await expect(page.getByRole('button', { name: '全部标记为已读' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '当前页清除已读' })).toBeVisible()
+
+  const markOneReadResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications/301/read'
+      && response.request().method() === 'POST'
+      && response.status() === 200
+  })
+  await page.getByTitle('标记为已读').first().click()
+  await markOneReadResponse
+  await expect(page.getByTitle('标记为已读')).toHaveCount(0)
+
+  const clearReadResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications/read/clear'
+      && response.request().method() === 'DELETE'
+      && response.status() === 200
+  })
+  await page.getByRole('button', { name: '当前页清除已读' }).click()
+  await expect(page.getByRole('heading', { name: '清除当前页已读通知' })).toBeVisible()
+  await page.locator('.Modal').getByRole('button', { name: '清除已读' }).click()
+  await clearReadResponse
+  await expect(page.getByRole('heading', { name: '已清除已读通知' })).toBeVisible()
+  await page.locator('.Modal').getByRole('button', { name: '确定' }).click()
+  await expect(page.getByText('暂无通知')).toBeVisible()
 
   expect(page.browserErrors).toEqual([])
 })
