@@ -13,6 +13,14 @@ const browserCoreAliases = [
   ['@bias/core/components/admin', 'components-admin.js'],
 ]
 
+const viteBrowserCoreAliases = [
+  ['@bias/core', resolve(frontendRoot, 'src/common/sdk.js')],
+  ['@bias/core/common', resolve(frontendRoot, 'src/common/sdk.js')],
+  ['@bias/core/forum', resolve(frontendRoot, 'src/forum/sdk.js')],
+  ['@bias/core/admin', resolve(frontendRoot, 'src/admin/sdk.js')],
+  ['@bias/core/components/admin', resolve(frontendRoot, 'src/admin/componentsSdk.js')],
+]
+
 const nodeCoreAliases = [
   ['@bias/core', 'common.js'],
   ['@bias/core/common', 'common.js'],
@@ -65,9 +73,16 @@ export function discoverExtensionSdkAliases() {
 }
 
 export function createViteSdkAliases() {
-  return createBrowserSdkAliasEntries()
+  return createViteBrowserSdkAliasEntries()
     .sort(([left], [right]) => right.length - left.length)
     .map(([find, replacement]) => ({ find, replacement }))
+}
+
+export function createViteBrowserSdkAliasEntries() {
+  return [
+    ...viteBrowserCoreAliases,
+    ...extensionSdks,
+  ]
 }
 
 export function createBrowserSdkAliasEntries() {

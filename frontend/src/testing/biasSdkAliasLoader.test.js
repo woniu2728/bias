@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   createJsconfigSdkPaths,
   createNodeSdkAliasMap,
+  createViteBrowserSdkAliasEntries,
   discoverExtensionSdkAliases,
 } from '../../extensionSdkAliases.mjs'
 
@@ -30,6 +31,14 @@ test('public extension SDK aliases are discovered from generated site extension 
 
   assert.equal(browserAliases.has('@bias/core'), false)
   assert.match(browserAliases.get('@bias/approval'), /extensions[/\\]approval[/\\]frontend[/\\]forum[/\\]sdk\.js$/)
+})
+
+test('vite browser runtime resolves core sdk aliases to host source singletons', () => {
+  const aliases = new Map(createViteBrowserSdkAliasEntries())
+
+  assert.match(aliases.get('@bias/core'), /frontend[/\\]src[/\\]common[/\\]sdk\.js$/)
+  assert.match(aliases.get('@bias/core/admin'), /frontend[/\\]src[/\\]admin[/\\]sdk\.js$/)
+  assert.match(aliases.get('@bias/core/components/admin'), /frontend[/\\]src[/\\]admin[/\\]componentsSdk\.js$/)
 })
 
 test('node test runtime resolves public Bias SDK package aliases', async () => {

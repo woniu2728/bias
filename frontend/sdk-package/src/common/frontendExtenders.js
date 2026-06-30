@@ -644,7 +644,9 @@ export class AdminExtender {
       }
     }
 
-    if (typeof targetApp?.beforeMount === 'function') {
+    if (targetApp?.booted) {
+      applyAdminRegistry()
+    } else if (typeof targetApp?.beforeMount === 'function') {
       targetApp.beforeMount(applyAdminRegistry)
     } else {
       applyAdminRegistry()

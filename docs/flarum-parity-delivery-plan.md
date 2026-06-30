@@ -250,7 +250,8 @@ administrator
 - 已补 Playwright 真实浏览器下真实内容操作触发通知流程：讨论详情提交 `POST /api/discussions/{id}/posts` 成功追加回复后，通知 fixture 生成新的 `postReply` 通知；随后进入 `/notifications`，断言新通知和未读计数被渲染。
 - 已补通知邮件/队列投递后端闭环：`bias-ext-notifications` 注册 `NotificationCreatedEvent` 监听器，通知创建后派发 `dispatch_notification_batch`；Celery 任务执行实时通知加载和 `EmailService` 通知邮件发送；测试覆盖队列启用入队、入队失败同步 fallback、通知邮件 subject/body/link、无邮箱收件人跳过，并让通知测试夹具适配 tags 必填关系。
 - 已补 flags 后端组合证据：`bias-ext-flags` 测试夹具适配当前 tags 必填关系后，后端测试覆盖 `POST /api/posts/{id}/report` 创建举报、`/api/admin/flags` 后台队列列表、`/api/admin/flags/{id}/resolve` 后台处理、讨论页版主 `/api/posts/{id}/flags/resolve` 处理、非 staff 拒绝、删除帖子清理举报和对应事件。
-- 阶段 3 的后端主流程已进一步收敛；剩余风险转向真实 Redis worker/生产冒烟、flags/admin 浏览器证据和更多跨扩展浏览器矩阵。
+- 已补 Playwright 真实浏览器下 flags 后台主流程：从后台仪表盘“处理举报”进入举报管理，加载 `GET /api/admin/flags?status=open` 并渲染待处理举报；提交 `POST /api/admin/flags/{id}/resolve` 后刷新待处理空状态；再切换“已处理”筛选，加载 `GET /api/admin/flags?status=resolved` 并验证处理备注和处理人。该 E2E 暴露并修复了浏览器构建中 `@bias/core/*` 指向 SDK 包副本、导致扩展 pageConfig 写入宿主 registry 但页面从 SDK 副本读取而丢失筛选 tab 的后台 runtime 单例问题。
+- 阶段 3 的后端主流程已进一步收敛；剩余风险转向真实 Redis worker/生产冒烟和更多跨扩展浏览器矩阵。
 
 ## 阶段 4：官方扩展对齐矩阵
 
@@ -392,7 +393,7 @@ D:\files\project\tmp\flarum_code\tags\tests
 3. 内容审核。
    - 待审核讨论。
    - 待审核回复。
-   - flags 队列。
+   - flags 队列。已补 `bias/frontend/e2e/admin-flags.spec.js` 的真实浏览器证据，覆盖队列加载、处理和已处理筛选。
    - 通过、拒绝、恢复、隐藏、删除操作。
 
 4. 标签。

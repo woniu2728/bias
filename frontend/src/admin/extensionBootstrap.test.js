@@ -30,6 +30,10 @@ import {
 import { ItemList as AdminSdkItemList } from '../common/sdk.js'
 import { AdminExtender } from '../common/frontendExtenders.js'
 import {
+  getAdminPageConfig,
+  registerAdminPageConfig,
+} from './registry/pages.js'
+import {
   clearAdminRoutesForExtension,
   getAdminRoutes,
   registerAdminRoute,
@@ -281,6 +285,39 @@ test('admin runtime registry scopes settings permissions pages and general index
   assert.equal(registry.getPages('alpha')[0].path, '/admin/alpha')
   assert.equal(routes[0].path, '/admin/alpha')
   assert.deepEqual(registry.generalIndex.get('alpha', 'settings'), [{ key: 'alpha_setting' }])
+})
+
+test('admin extender registers page config into host admin registry after app boot', async () => {
+  const runtimeApp = createRuntimeApplication({ kind: 'admin' })
+  const registry = {
+    registerAdminPageConfig,
+  }
+  const extensionApp = createAdminExtensionApp({
+    app: runtimeApp,
+    extension: { id: 'flags' },
+    registry,
+    router: {
+      addRoute() {},
+      hasRoute() {
+        return false
+      },
+    },
+  })
+
+  await runtimeApp.boot()
+
+  new AdminExtender()
+    .pageConfig('flags.index', {
+      key: 'flags-page-config',
+      resolve: () => ({
+        filters: [{ value: 'open', label: '待处理' }],
+      }),
+    })
+    .extend(extensionApp, { name: 'flags' })
+
+  const config = getAdminPageConfig('flags.index')
+  assert.deepEqual(config.filters, [{ value: 'open', label: '待处理' }])
+  resetAdminExtensionRuntimeContributions('flags')
 })
 
 test('admin public sdk exposes stable extension developer APIs', () => {
