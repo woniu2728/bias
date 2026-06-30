@@ -231,6 +231,7 @@ administrator
 - 已补 rejected discussion/post 作者重新提交后回到 pending、清空审核备注、保持他人不可见并产生 resubmitted event post 的 core 级 HTTP 证据。
 - 已补 `GET /api/discussions/?limit=6` 的列表 SQL 预算证据，覆盖含作者、最后回复用户、首帖摘要、标签和阅读状态的普通列表响应，并把查询数限制在 24 次以内。
 - 已补 `/api/search` 的 all/discussions/posts HTTP 可见性矩阵，覆盖公开、隐藏、私有、pending、rejected discussion/post 对 guest、registered user、discussion author、approval author、post author、moderator、administrator 的一致过滤。
+- 已补 `bias/frontend/src/forum/extensionLoader.test.js` 的 bundled forum product routes 证据，确认 discussions/search 扩展能把首页、讨论详情、创建讨论和搜索页注册到前台 router，并解析到对应 Vue view；新增 `npm run test:node` 作为前端 Node 测试入口。
 - 阶段 3 尚未完成：仍需补浏览器流程，以及更细的 fields/include/error 格式覆盖。
 
 ## 阶段 4：官方扩展对齐矩阵

@@ -1917,6 +1917,97 @@ test('loadEnabledForumExtensions registers route-only extensions', async () => {
   assert.equal(result.loadedExtensionIds.has('route-demo'), true)
 })
 
+test('loadEnabledForumExtensions registers bundled forum product routes', async () => {
+  const routes = []
+  const routeNames = new Set()
+  const payload = {
+    enabled_extensions: [
+      {
+        id: 'discussions',
+        frontend_forum_entry: 'extensions/discussions/frontend/forum/index.js',
+        frontend_routes: [
+          {
+            path: '/',
+            name: 'home',
+            component: './DiscussionListView.vue',
+            frontend: 'forum',
+            module_id: 'discussions',
+          },
+          {
+            path: '/d/:id',
+            name: 'discussion-detail',
+            component: './DiscussionDetailView.vue',
+            frontend: 'forum',
+            module_id: 'discussions',
+          },
+          {
+            path: '/discussions/create',
+            name: 'discussion-create',
+            component: './DiscussionCreateView.vue',
+            frontend: 'forum',
+            module_id: 'discussions',
+            requires_auth: true,
+          },
+        ],
+      },
+      {
+        id: 'search',
+        frontend_forum_entry: 'extensions/search/frontend/forum/index.js',
+        frontend_routes: [
+          {
+            path: '/search',
+            name: 'search',
+            component: './SearchResultsView.vue',
+            frontend: 'forum',
+            module_id: 'search',
+          },
+        ],
+      },
+    ],
+  }
+
+  const result = await loadEnabledForumExtensions({
+    fetchPayload: async () => payload,
+    router: {
+      hasRoute(name) {
+        return routeNames.has(name)
+      },
+      addRoute(route) {
+        routeNames.add(route.name)
+        routes.push(route)
+      },
+    },
+    importers: {
+      '../../../extensions/discussions/frontend/forum/index.js': async () => ({ extend: [] }),
+      '../../../extensions/search/frontend/forum/index.js': async () => ({ extend: [] }),
+      'discussions:./DiscussionListView.vue': async () => ({ default: { name: 'DiscussionListView' } }),
+      'discussions:./DiscussionDetailView.vue': async () => ({ default: { name: 'DiscussionDetailView' } }),
+      'discussions:./DiscussionCreateView.vue': async () => ({ default: { name: 'DiscussionCreateView' } }),
+      'search:./SearchResultsView.vue': async () => ({ default: { name: 'SearchResultsView' } }),
+    },
+  })
+
+  assert.deepEqual(routes.map(route => route.name), [
+    'home',
+    'discussion-detail',
+    'discussion-create',
+    'search',
+  ])
+  assert.deepEqual(routes.map(route => route.path), [
+    '/',
+    '/d/:id',
+    '/discussions/create',
+    '/search',
+  ])
+  assert.equal(routes.find(route => route.name === 'discussion-create').meta.requiresAuth, true)
+  assert.equal((await routes.find(route => route.name === 'home').component()).name, 'DiscussionListView')
+  assert.equal((await routes.find(route => route.name === 'discussion-detail').component()).name, 'DiscussionDetailView')
+  assert.equal((await routes.find(route => route.name === 'discussion-create').component()).name, 'DiscussionCreateView')
+  assert.equal((await routes.find(route => route.name === 'search').component()).name, 'SearchResultsView')
+  assert.equal(result.loadedExtensionIds.has('discussions'), true)
+  assert.equal(result.loadedExtensionIds.has('search'), true)
+})
+
 test('loadEnabledForumExtensions resolves route-only components from frontend outputs', async () => {
   const runtimeApp = createRuntimeApplication({ kind: 'forum' })
   const routes = []
