@@ -88,6 +88,16 @@ const bob = {
   is_staff: false,
 }
 
+const charlie = {
+  id: 9,
+  username: 'charlie',
+  display_name: 'Charlie',
+  avatar_url: '',
+  is_staff: false,
+  is_suspended: false,
+  forum_permissions: ['discussion.reply', 'discussion.typing'],
+}
+
 const discussionListPayload = {
   data: [
     {
@@ -188,8 +198,24 @@ const postStreamPayload = {
   current_end: 2,
 }
 
+function buildPostStreamPayload(extraPosts = []) {
+  const posts = [
+    ...postStreamPayload.data,
+    ...extraPosts,
+  ]
+
+  return {
+    ...postStreamPayload,
+    data: posts,
+    total: posts.length,
+    current_start: posts[0]?.number || 0,
+    current_end: posts[posts.length - 1]?.number || 0,
+  }
+}
+
 test.beforeEach(async ({ page }) => {
   const browserErrors = []
+  const createdReplies = []
 
   page.on('pageerror', error => {
     browserErrors.push(error.message)
@@ -202,6 +228,7 @@ test.beforeEach(async ({ page }) => {
     browserErrors.push(text)
   })
 
+  page.e2eAuthenticated = false
   await page.route('**/*', route => {
     const url = new URL(route.request().url())
     if (!url.pathname.startsWith('/api/')) {
@@ -228,6 +255,9 @@ test.beforeEach(async ({ page }) => {
       return json({ theme: { id: 'default', className: 'theme-default', colorScheme: 'light' } })
     }
     if (url.pathname === '/api/users/session') {
+      if (page.e2eAuthenticated) {
+        return json({ authenticated: true, user: charlie })
+      }
       return json({ authenticated: false, user: null })
     }
     if (url.pathname === '/api/discussions/') {
@@ -236,10 +266,33 @@ test.beforeEach(async ({ page }) => {
     if (url.pathname === '/api/discussions/101') {
       return json(discussionDetailPayload)
     }
+    if (url.pathname === '/api/discussions/101/posts' && route.request().method() === 'POST') {
+      const requestBody = route.request().postDataJSON()
+      expect(requestBody).toMatchObject({
+        content: 'Reply submitted through Playwright',
+        reply_to_post_id: null,
+      })
+      const post = {
+        id: 503,
+        discussion_id: 101,
+        number: 3,
+        type: 'comment',
+        content: requestBody.content,
+        content_html: '<p>Reply submitted through Playwright</p>',
+        created_at: '2026-06-30T10:00:00Z',
+        is_hidden: false,
+        can_edit: true,
+        can_delete: true,
+        can_hide: false,
+        user: charlie,
+      }
+      createdReplies.push(post)
+      return json(post, { status: 201 })
+    }
     if (url.pathname === '/api/discussions/101/posts') {
       expect(url.searchParams.get('limit')).toBe('20')
       expect(url.searchParams.get('near')).toBe('1')
-      return json(postStreamPayload)
+      return json(buildPostStreamPayload(createdReplies))
     }
 
     return json({ error: `Unhandled E2E API fixture: ${url.pathname}` }, { status: 404 })
@@ -263,6 +316,36 @@ test('forum home renders discussion list through browser runtime', async ({ page
   await expect(page.locator('.discussion-list')).toBeVisible()
   const discussionHref = await page.getByRole('link', { name: 'Browser E2E discussion list renders' }).getAttribute('href')
   expect(new URL(discussionHref, 'http://127.0.0.1:3100').pathname).toBe('/d/101')
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('authenticated user replies from discussion detail composer through browser runtime', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  await page.goto('/d/101')
+  await expect(page.getByRole('heading', { name: 'Browser E2E discussion list renders' })).toBeVisible()
+  await expect(page.locator('.posts .post-item')).toHaveCount(2)
+
+  await page.getByRole('button', { name: '回复讨论' }).click()
+  await expect(page.locator('.floating-composer')).toBeVisible()
+  await expect(page.locator('.floating-composer textarea')).toBeVisible()
+  await page.locator('.floating-composer textarea').fill('Reply submitted through Playwright')
+
+  const replyResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/101/posts'
+      && response.request().method() === 'POST'
+      && response.status() === 201
+  })
+
+  await page.getByRole('button', { name: '发布回复' }).click()
+  await replyResponse
+
+  await expect(page.locator('.floating-composer')).toBeHidden()
+  await expect(page.locator('#post-3')).toContainText('Reply submitted through Playwright')
+  await expect(page.locator('#post-3 .post-number')).toContainText('#3')
+  await expect(page.locator('.posts .post-item')).toHaveCount(3)
 
   expect(page.browserErrors).toEqual([])
 })
