@@ -31,6 +31,20 @@ const forumSettings = {
           module_id: 'users',
         },
         {
+          path: '/verify-email',
+          name: 'verify-email',
+          component: './VerifyEmailView.vue',
+          frontend: 'forum',
+          module_id: 'users',
+        },
+        {
+          path: '/reset-password',
+          name: 'reset-password',
+          component: './ResetPasswordView.vue',
+          frontend: 'forum',
+          module_id: 'users',
+        },
+        {
           path: '/profile',
           name: 'profile',
           component: './ProfileView.vue',
@@ -584,6 +598,7 @@ test.beforeEach(async ({ page }) => {
   const browserErrors = []
   const createdReplies = []
   let notificationItems = baseNotifications.map(cloneNotification)
+  let currentUser = { ...charlie }
 
   function buildNotificationListPayload(params = {}) {
     let items = notificationItems.map(cloneNotification)
@@ -662,12 +677,68 @@ test.beforeEach(async ({ page }) => {
     }
     if (url.pathname === '/api/users/session') {
       if (page.e2eAuthenticated) {
-        return json({ authenticated: true, user: charlie })
+        return json({ authenticated: true, user: currentUser })
       }
       return json({ authenticated: false, user: null })
     }
+    if (url.pathname === '/api/users/login' && route.request().method() === 'POST') {
+      const requestBody = route.request().postDataJSON()
+      expect(requestBody).toMatchObject({
+        identification: 'charlie@example.test',
+        password: 'correct-password',
+      })
+      page.e2eAuthenticated = true
+      currentUser = { ...charlie }
+      return json({ ok: true })
+    }
+    if (url.pathname === '/api/users/register' && route.request().method() === 'POST') {
+      const requestBody = route.request().postDataJSON()
+      expect(requestBody).toMatchObject({
+        username: 'browseruser',
+        email: 'browseruser@example.test',
+        password: 'browser-password',
+      })
+      return json({
+        id: 10,
+        username: 'browseruser',
+        display_name: 'browseruser',
+        email: 'browseruser@example.test',
+      }, { status: 201 })
+    }
+    if (url.pathname === '/api/users/forgot-password' && route.request().method() === 'POST') {
+      const requestBody = route.request().postDataJSON()
+      expect(requestBody).toMatchObject({
+        email: 'charlie@example.test',
+      })
+      return json({
+        message: 'Reset link sent to charlie@example.test',
+        debug_reset_url: 'http://127.0.0.1:3100/reset-password?token=reset-token-1',
+      })
+    }
+    if (url.pathname === '/api/users/verify-email' && route.request().method() === 'POST') {
+      const requestBody = route.request().postDataJSON()
+      expect(requestBody).toMatchObject({
+        token: 'verify-token-1',
+      })
+      currentUser = {
+        ...currentUser,
+        is_email_confirmed: true,
+      }
+      return json(currentUser)
+    }
+    if (url.pathname === '/api/users/reset-password' && route.request().method() === 'POST') {
+      const requestBody = route.request().postDataJSON()
+      expect(requestBody).toMatchObject({
+        token: 'reset-token-1',
+        password: 'new-password',
+      })
+      return json({
+        ...charlie,
+        password_reset_at: '2026-06-30T11:00:00Z',
+      })
+    }
     if (url.pathname === '/api/users/me') {
-      return json(charlie)
+      return json(currentUser)
     }
     if (url.pathname === '/api/users/me/preferences' && route.request().method() === 'GET') {
       return json(profilePreferencesPayload)
@@ -868,6 +939,109 @@ test('forum home renders discussion list through browser runtime', async ({ page
   await expect(page.locator('.discussion-list')).toBeVisible()
   const discussionHref = await page.getByRole('link', { name: 'Browser E2E discussion list renders' }).getAttribute('href')
   expect(new URL(discussionHref, 'http://127.0.0.1:3100').pathname).toBe('/d/101')
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('auth browser flow logs in from protected route and returns to composer', async ({ page }) => {
+  page.e2eAuthenticated = false
+
+  await page.goto('/discussions/create')
+  await expect(page.getByRole('heading', { name: '登录' })).toBeVisible()
+
+  await page.getByLabel('用户名或邮箱').fill('charlie@example.test')
+  await page.getByLabel('密码').fill('correct-password')
+
+  const loginResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/login'
+      && response.request().method() === 'POST'
+      && response.status() === 200
+  })
+  const meResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/me' && response.status() === 200
+  })
+
+  await page.locator('.AuthSessionModal form').getByRole('button', { name: '登录' }).click()
+  await loginResponse
+  await meResponse
+
+  await expect(page).toHaveURL(/\/discussions\/create$/)
+  await expect(page.locator('.floating-composer')).toBeVisible()
+  await expect(page.getByPlaceholder('讨论标题')).toBeVisible()
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('auth browser flow registers user and requests password reset link', async ({ page }) => {
+  page.e2eAuthenticated = false
+
+  await page.goto('/register')
+  await expect(page.getByRole('heading', { name: '加入讨论' })).toBeVisible()
+
+  await page.getByLabel('用户名').fill('browseruser')
+  await page.getByLabel('邮箱').fill('browseruser@example.test')
+  await page.getByLabel('密码', { exact: true }).fill('browser-password')
+  await page.getByLabel('确认密码').fill('browser-password')
+
+  const registerResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/register'
+      && response.request().method() === 'POST'
+      && response.status() === 201
+  })
+  await page.locator('.AuthSessionModal form').getByRole('button', { name: '注册' }).click()
+  await registerResponse
+  await expect(page.getByText('注册成功，请检查邮箱完成验证。')).toBeVisible()
+
+  await page.goto('/forgot-password')
+  await expect(page.getByRole('heading', { name: '找回密码' })).toBeVisible()
+  await page.getByLabel('邮箱').fill('charlie@example.test')
+
+  const forgotPasswordResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/forgot-password'
+      && response.request().method() === 'POST'
+      && response.status() === 200
+  })
+  await page.getByRole('button', { name: '发送重置链接' }).click()
+  await forgotPasswordResponse
+  await expect(page.getByText('Reset link sent to charlie@example.test')).toBeVisible()
+  await expect(page.getByRole('link', { name: /reset-token-1/ })).toBeVisible()
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('account security pages verify email and reset password through browser runtime', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  const verifyResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/verify-email'
+      && response.request().method() === 'POST'
+      && response.status() === 200
+  })
+  await page.goto('/verify-email?token=verify-token-1')
+  await verifyResponse
+  await expect(page.getByRole('heading', { name: '验证邮箱' })).toBeVisible()
+  await expect(page.getByText('邮箱验证成功。现在你可以继续登录，或返回个人资料查看最新状态。')).toBeVisible()
+
+  await page.goto('/reset-password?token=reset-token-1')
+  await expect(page.getByRole('heading', { name: '重置密码' })).toBeVisible()
+  await expect(page.getByLabel('重置令牌')).toHaveValue('reset-token-1')
+  await page.getByLabel('新密码', { exact: true }).fill('new-password')
+  await page.getByLabel('确认新密码').fill('new-password')
+
+  const resetResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/reset-password'
+      && response.request().method() === 'POST'
+      && response.status() === 200
+  })
+  await page.getByRole('button', { name: '重置密码' }).click()
+  await resetResponse
+  await expect(page.getByText('密码已重置，正在返回登录页...')).toBeVisible()
 
   expect(page.browserErrors).toEqual([])
 })
