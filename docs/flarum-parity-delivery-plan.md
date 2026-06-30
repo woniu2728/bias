@@ -230,7 +230,8 @@ administrator
 - 已补非 staff 用户持有 `discussion.lock` / `discussion.sticky` 后通过 endpoint、PATCH 操作锁定/置顶，并可在锁定讨论中回复的 HTTP 证据。
 - 已补 rejected discussion/post 作者重新提交后回到 pending、清空审核备注、保持他人不可见并产生 resubmitted event post 的 core 级 HTTP 证据。
 - 已补 `GET /api/discussions/?limit=6` 的列表 SQL 预算证据，覆盖含作者、最后回复用户、首帖摘要、标签和阅读状态的普通列表响应，并把查询数限制在 24 次以内。
-- 阶段 3 尚未完成：仍需补搜索/隐藏/私有组合可见性，以及浏览器流程。
+- 已补 `/api/search` 的 all/discussions/posts HTTP 可见性矩阵，覆盖公开、隐藏、私有、pending、rejected discussion/post 对 guest、registered user、discussion author、approval author、post author、moderator、administrator 的一致过滤。
+- 阶段 3 尚未完成：仍需补浏览器流程，以及更细的 fields/include/error 格式覆盖。
 
 ## 阶段 4：官方扩展对齐矩阵
 
