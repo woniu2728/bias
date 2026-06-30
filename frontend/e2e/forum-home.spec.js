@@ -541,6 +541,8 @@ const profilePostsPayload = {
   total: 1,
 }
 
+const browserAvatarDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
+
 const baseNotifications = [
   {
     id: 301,
@@ -753,6 +755,16 @@ test.beforeEach(async ({ page }) => {
         ui_values: {},
       })
       return json(profilePreferencesPayload)
+    }
+    if (url.pathname === '/api/users/9/avatar' && route.request().method() === 'POST') {
+      const contentType = route.request().headers()['content-type'] || ''
+      expect(contentType).toContain('multipart/form-data')
+
+      currentUser = {
+        ...currentUser,
+        avatar_url: browserAvatarDataUrl,
+      }
+      return json(currentUser)
     }
     if (url.pathname === '/api/users/9' && route.request().method() === 'PATCH') {
       const requestBody = route.request().postDataJSON()
@@ -1367,6 +1379,25 @@ test('profile pages render user activity and save own profile through browser ru
   await expect(page.getByRole('link', { name: 'Charlie profile discussion' })).toBeVisible()
   await expect(page.locator('.user-sidebar').getByText(/^讨论\s*2$/)).toBeVisible()
   await expect(page.locator('.user-sidebar').getByText(/^回复\s*4$/)).toBeVisible()
+
+  const avatarUploadResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/9/avatar'
+      && response.request().method() === 'POST'
+      && response.status() === 200
+  })
+  await page.locator('.avatar-input').setInputFiles({
+    name: 'browser-avatar.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from([
+      0x89, 0x50, 0x4e, 0x47,
+      0x0d, 0x0a, 0x1a, 0x0a,
+      0x00, 0x00, 0x00, 0x0d,
+      0x49, 0x48, 0x44, 0x52,
+    ]),
+  })
+  await avatarUploadResponse
+  await expect(page.locator('.user-avatar img.avatar-large')).toHaveAttribute('src', browserAvatarDataUrl)
 
   const postsResponse = page.waitForResponse(response => {
     const url = new URL(response.url())
