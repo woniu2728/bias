@@ -95,7 +95,7 @@ const charlie = {
   avatar_url: '',
   is_staff: false,
   is_suspended: false,
-  forum_permissions: ['discussion.reply', 'discussion.typing'],
+  forum_permissions: ['startDiscussion', 'discussion.reply', 'discussion.typing'],
 }
 
 const discussionListPayload = {
@@ -198,6 +198,55 @@ const postStreamPayload = {
   current_end: 2,
 }
 
+const createdDiscussion = {
+  id: 202,
+  title: 'Discussion created through Playwright',
+  slug: 'discussion-created-through-playwright',
+  created_at: '2026-06-30T10:30:00Z',
+  last_posted_at: '2026-06-30T10:30:00Z',
+  last_post_number: 1,
+  comment_count: 1,
+  participant_count: 1,
+  unread_count: 0,
+  last_read_post_number: 0,
+  is_sticky: false,
+  is_locked: false,
+  is_hidden: false,
+  can_reply: true,
+  can_edit: true,
+  can_delete: true,
+  can_hide: false,
+  user: charlie,
+  last_post: {
+    id: 601,
+    number: 1,
+    created_at: '2026-06-30T10:30:00Z',
+    user: charlie,
+  },
+}
+
+const createdDiscussionPostsPayload = {
+  data: [
+    {
+      id: 601,
+      discussion_id: 202,
+      number: 1,
+      type: 'comment',
+      content: 'Opening post created through Playwright',
+      content_html: '<p>Opening post created through Playwright</p>',
+      created_at: '2026-06-30T10:30:00Z',
+      is_hidden: false,
+      can_edit: true,
+      can_delete: true,
+      can_hide: false,
+      user: charlie,
+    },
+  ],
+  total: 1,
+  current_start: 1,
+  current_end: 1,
+}
+
 function buildPostStreamPayload(extraPosts = []) {
   const posts = [
     ...postStreamPayload.data,
@@ -260,11 +309,33 @@ test.beforeEach(async ({ page }) => {
       }
       return json({ authenticated: false, user: null })
     }
+    if (url.pathname === '/api/discussions/' && route.request().method() === 'POST') {
+      const requestBody = route.request().postDataJSON()
+      expect(requestBody).toMatchObject({
+        data: {
+          type: 'discussion',
+          attributes: {
+            title: 'Discussion created through Playwright',
+            content: 'Opening post created through Playwright',
+          },
+          relationships: {},
+        },
+      })
+      return json(createdDiscussion, { status: 201 })
+    }
     if (url.pathname === '/api/discussions/') {
       return json(discussionListPayload)
     }
     if (url.pathname === '/api/discussions/101') {
       return json(discussionDetailPayload)
+    }
+    if (url.pathname === '/api/discussions/202') {
+      return json(createdDiscussion)
+    }
+    if (url.pathname === '/api/discussions/202/posts') {
+      expect(url.searchParams.get('limit')).toBe('20')
+      expect(url.searchParams.get('near')).toBe('1')
+      return json(createdDiscussionPostsPayload)
     }
     if (url.pathname === '/api/discussions/101/posts' && route.request().method() === 'POST') {
       const requestBody = route.request().postDataJSON()
@@ -346,6 +417,36 @@ test('authenticated user replies from discussion detail composer through browser
   await expect(page.locator('#post-3')).toContainText('Reply submitted through Playwright')
   await expect(page.locator('#post-3 .post-number')).toContainText('#3')
   await expect(page.locator('.posts .post-item')).toHaveCount(3)
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('authenticated user creates a discussion through browser runtime', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  await page.goto('/discussions/create')
+  await expect(page.locator('.floating-composer')).toBeVisible()
+  await expect(page.getByPlaceholder('讨论标题')).toBeVisible()
+
+  await page.getByPlaceholder('讨论标题').fill('Discussion created through Playwright')
+  await page.getByPlaceholder('输入讨论内容... 支持 Markdown、@用户名 和代码块').fill('Opening post created through Playwright')
+
+  const createResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/'
+      && response.request().method() === 'POST'
+      && response.status() === 201
+  })
+
+  await page.getByRole('button', { name: '发布讨论' }).click()
+  await createResponse
+
+  await expect(page.locator('.floating-composer')).toBeHidden()
+  await expect(page).toHaveURL(/\/d\/202$/)
+  await expect(page.getByRole('heading', { name: 'Discussion created through Playwright' })).toBeVisible()
+  await expect(page.locator('#post-1')).toContainText('Opening post created through Playwright')
+  await expect(page.locator('#post-1 .post-number')).toContainText('#1')
+  await expect(page.locator('.posts .post-item')).toHaveCount(1)
 
   expect(page.browserErrors).toEqual([])
 })

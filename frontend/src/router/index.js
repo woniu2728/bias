@@ -5,6 +5,7 @@ import {
   openLogin,
   openRegister,
 } from '@/forum/runtimeServices'
+import { resolveForumRouteGuard } from './guards.js'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -21,37 +22,17 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
-  const authStore = getAuthStore()
-  const hasActivePageContext = from.matched.length > 0
+router.beforeEach(async (to, from, next) => {
+  const result = await resolveForumRouteGuard({
+    to,
+    from,
+    authStore: getAuthStore(),
+    openForgotPassword,
+    openLogin,
+    openRegister,
+  })
 
-  if (['login', 'register', 'forgot-password'].includes(String(to.name || '')) && hasActivePageContext) {
-    const redirectPath = typeof to.query.redirect === 'string' ? to.query.redirect : from.fullPath
-
-    if (to.name === 'register') {
-      openRegister({ redirectPath })
-    } else if (to.name === 'forgot-password') {
-      openForgotPassword({ redirectPath })
-    } else {
-      openLogin({ redirectPath })
-    }
-
-    next(false)
-    return
-  }
-
-  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    if (hasActivePageContext) {
-      openLogin({ redirectPath: to.fullPath })
-      next(false)
-      return
-    }
-
-    next({ name: 'login', query: { redirect: to.fullPath } })
-    return
-  }
-
-  next()
+  next(result === true ? undefined : result)
 })
 
 export default router
