@@ -505,6 +505,7 @@ python -m build
 
 cd D:\files\project\tmp\bias
 python manage.py smoke_install_upgrade --from-wheels --publish-frontend-dist --format json
+python manage.py smoke_install_upgrade --database postgres --db-user <user> --db-password <password> --db-host <host> --db-port <port> --postgres-create-db --postgres-drop-db --redis auto --redis-host <redis-host> --redis-port <redis-port> --skip-collectstatic --skip-extension-frontend --format json
 
 cd D:\files\project\tmp\bias\frontend
 npm run build
@@ -515,6 +516,8 @@ npm run build
 - `smoke_install_upgrade` 已覆盖临时 SQLite 站点安装和升级：执行 `install_forum` 的 migrate、sync extensions、sync extension order、migrate extensions、init groups、sync version、build extension frontend、ensure admin；随后执行 `upgrade_forum` 的 check、migrate、sync extensions、sync extension order、migrate extensions、init groups、sync version、clear runtime cache、build extension frontend，并断言管理员、已安装扩展、已启用扩展和 `system.version` 在升级后保持。
 - `smoke_install_upgrade --from-wheels` 已覆盖从构建产物安装的非 editable 冒烟：构建 `bias-core`、`bias-content` 和 16 个官方 `bias-ext-*` wheel，安装到临时 `site-packages` target，并断言安装/升级子进程的 `bias_core.__file__` 来自该 wheel target，扩展安装启用状态在升级后保持。
 - `smoke_install_upgrade --from-wheels --publish-frontend-dist` 已覆盖发布级前端链路：安装和升级均执行 `build_extension_frontend --rebuild --publish` 与 `collectstatic --noinput`，`STATIC_ROOT` 指向临时站点目录，断言 `staticfiles/extensions/frontend-build-manifest.json`、`staticfiles/extensions/frontend-output-manifest.json` 存在，且 `staticfiles/frontend` 收集到 129 个前端构建文件；`build_extension_frontend --rebuild` 失败现在会让安装/升级失败，不再只打印 `[ERROR]` 后继续。
+- `smoke_install_upgrade --database postgres --postgres-create-db --postgres-drop-db` 已覆盖全新 PostgreSQL 安装/升级冒烟：命令会创建一次性 `bias_smoke_*` 数据库，安装阶段执行 PostgreSQL migrate、写入 Redis 运行时设置、同步扩展、初始化默认组和权限、写入版本、创建管理员；升级阶段执行 check、migrate、sync extensions、sync extension order、migrate extensions、init groups、sync version、clear runtime cache；断言管理员、17 个官方启用扩展、`system.version`、`advanced.queue_enabled=true`、`advanced.queue_driver="redis"` 在升级后保持，并在结束后删除临时数据库。实际验证使用 Docker `bias_db`/`bias_redis` 经临时本机端口代理执行，返回 `summary.ok=true`。
+- `install_forum` 的安装运行时设置现在通过目标 `BIAS_SITE_CONFIG` 的 `manage.py shell` 子进程写入，避免 PostgreSQL 安装时在父进程当前数据库上写 `advanced.queue_*`。
 - `upgrade_forum` 已支持拆分站点工程没有 `VERSION` 文件的场景，改为先校验 `bias_core.APP_VERSION`，仅当站点工程存在 `VERSION` 时才执行站点 VERSION 与前端版本一致性校验。
 
 通过标准：
