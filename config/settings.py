@@ -14,6 +14,7 @@ from bias_core.conf.extension_discovery import (
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 BIAS_EXTENSION_WORKSPACE_ROOT = BASE_DIR.parent
+BIAS_CELERY_APP = "config.celery:app"
 BOOTSTRAP = load_site_bootstrap(BASE_DIR)
 EXTENSION_DJANGO_CONFIGURATION = discover_extension_django_configuration(BASE_DIR)
 
