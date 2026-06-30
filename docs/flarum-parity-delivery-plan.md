@@ -228,7 +228,8 @@ administrator
 - 已在 `bias_core/tests/test_forum_discussion_api.py` 覆盖 discussion/post 主 HTTP 流程：列表、排序、过滤、详情、post stream `near/before/after`、创建、编辑、隐藏/恢复、删除、锁定、置顶、单讨论已读、全部已读。
 - 已补 approval 主 HTTP 流程：待审核 discussion/reply、`/api/admin/approval-queue` 列表、通过 discussion、拒绝 reply，以及 pending/rejected discussion/post 对 guest、registered user、author、moderator、administrator 的可见性矩阵。
 - 已补非 staff 用户持有 `discussion.lock` / `discussion.sticky` 后通过 endpoint、PATCH 操作锁定/置顶，并可在锁定讨论中回复的 HTTP 证据。
-- 阶段 3 尚未完成：仍需补 rejected 后重新提交的 core 级 HTTP 证据、列表 SQL 预算、搜索/隐藏/私有组合可见性，以及浏览器流程。
+- 已补 rejected discussion/post 作者重新提交后回到 pending、清空审核备注、保持他人不可见并产生 resubmitted event post 的 core 级 HTTP 证据。
+- 阶段 3 尚未完成：仍需补列表 SQL 预算、搜索/隐藏/私有组合可见性，以及浏览器流程。
 
 ## 阶段 4：官方扩展对齐矩阵
 
