@@ -818,6 +818,32 @@ test.beforeEach(async ({ page }) => {
       notificationItems = notificationItems.filter(item => !item.is_read)
       return json({ count: beforeCount - notificationItems.length })
     }
+    if (url.pathname === '/api/notifications/read-filtered' && route.request().method() === 'POST') {
+      const type = url.searchParams.get('type') || ''
+      const discussionId = Number(url.searchParams.get('discussion_id') || 0)
+      let count = 0
+      notificationItems = notificationItems.map(item => {
+        const matchesType = !type || item.type === type
+        const matchesDiscussion = !discussionId || Number(item.data?.discussion_id || 0) === discussionId
+        if (!item.is_read && matchesType && matchesDiscussion) {
+          count += 1
+          return { ...item, is_read: true }
+        }
+        return item
+      })
+      return json({ count })
+    }
+    if (url.pathname === '/api/notifications/read/clear-filtered' && route.request().method() === 'DELETE') {
+      const type = url.searchParams.get('type') || ''
+      const discussionId = Number(url.searchParams.get('discussion_id') || 0)
+      const beforeCount = notificationItems.length
+      notificationItems = notificationItems.filter(item => {
+        const matchesType = !type || item.type === type
+        const matchesDiscussion = !discussionId || Number(item.data?.discussion_id || 0) === discussionId
+        return !(item.is_read && matchesType && matchesDiscussion)
+      })
+      return json({ count: beforeCount - notificationItems.length })
+    }
     if (url.pathname.match(/^\/api\/notifications\/\d+\/read$/) && route.request().method() === 'POST') {
       const notificationId = Number(url.pathname.split('/')[3])
       notificationItems = notificationItems.map(item => (
@@ -1208,6 +1234,106 @@ test('authenticated user manages notifications through browser runtime', async (
   await expect(page.getByRole('heading', { name: '已清除已读通知' })).toBeVisible()
   await page.locator('.Modal').getByRole('button', { name: '确定' }).click()
   await expect(page.getByText('暂无通知')).toBeVisible()
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('authenticated user filters and deletes notifications through browser runtime', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  await page.goto('/notifications')
+  await expect(page.getByText('Bob 回复了你的帖子')).toBeVisible()
+  await expect(page.getByText('Alice 已封禁你的账号：Browser account moderation notice')).toBeVisible()
+
+  const postReplyFilterResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications'
+      && url.searchParams.get('type') === 'postReply'
+      && !url.searchParams.has('is_read')
+      && response.status() === 200
+  })
+  await page.locator('.search-filters .filter-item').filter({ hasText: '回复被回应' }).click()
+  await postReplyFilterResponse
+  await expect(page).toHaveURL(/\/notifications\?type=postReply$/)
+  await expect(page.getByText('Bob 回复了你的帖子')).toBeVisible()
+  await expect(page.getByText('Alice 已封禁你的账号：Browser account moderation notice')).toHaveCount(0)
+
+  const unreadFilterResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications'
+      && url.searchParams.get('type') === 'postReply'
+      && url.searchParams.get('is_read') === 'false'
+      && response.status() === 200
+  })
+  await page.goto('/notifications?type=postReply&state=unread')
+  await unreadFilterResponse
+  await expect(page).toHaveURL(/\/notifications\?type=postReply&state=unread$/)
+  await expect(page.getByRole('button', { name: '查看全部通知' })).toBeVisible()
+
+  const markFilteredResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications/read-filtered'
+      && url.searchParams.get('type') === 'postReply'
+      && response.request().method() === 'POST'
+      && response.status() === 200
+  })
+  await page.getByRole('button', { name: '当前筛选标记已读' }).click()
+  await expect(page.getByRole('heading', { name: '标记当前筛选结果为已读' })).toBeVisible()
+  await page.locator('.Modal').getByRole('button', { name: '标记已读' }).click()
+  await markFilteredResponse
+  await expect(page.getByRole('heading', { name: '已全部标记为已读' })).toBeVisible()
+  await page.locator('.Modal').getByRole('button', { name: '确定' }).click()
+  await expect(page.getByText('当前没有未读通知')).toBeVisible()
+
+  const allPostReplyResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications'
+      && url.searchParams.get('type') === 'postReply'
+      && !url.searchParams.has('is_read')
+      && response.status() === 200
+  })
+  await page.getByRole('button', { name: '查看全部通知' }).click()
+  await allPostReplyResponse
+  await expect(page).toHaveURL(/\/notifications\?type=postReply$/)
+  await expect(page.getByText('Bob 回复了你的帖子')).toBeVisible()
+
+  const deleteResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications/301'
+      && response.request().method() === 'DELETE'
+      && response.status() === 200
+  })
+  await page.getByTitle('删除通知').click()
+  await expect(page.getByRole('heading', { name: '删除通知' })).toBeVisible()
+  await page.locator('.Modal').getByRole('button', { name: '删除' }).click()
+  await deleteResponse
+  await expect(page.getByText('当前筛选下暂无通知')).toBeVisible()
+
+  const accountFilterResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications'
+      && url.searchParams.get('type') === 'userSuspended'
+      && response.status() === 200
+  })
+  await page.locator('.search-filters .filter-item').filter({ hasText: '账号封禁通知' }).click()
+  await accountFilterResponse
+  await expect(page).toHaveURL(/\/notifications\?type=userSuspended$/)
+  await expect(page.getByText('Alice 已封禁你的账号：Browser account moderation notice')).toBeVisible()
+
+  const clearFilteredResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications/read/clear-filtered'
+      && url.searchParams.get('type') === 'userSuspended'
+      && response.request().method() === 'DELETE'
+      && response.status() === 200
+  })
+  await page.getByRole('button', { name: '当前筛选清除已读' }).click()
+  await expect(page.getByRole('heading', { name: '清除当前筛选中的已读通知' })).toBeVisible()
+  await page.locator('.Modal').getByRole('button', { name: '清除已读' }).click()
+  await clearFilteredResponse
+  await expect(page.getByRole('heading', { name: '已清除已读通知' })).toBeVisible()
+  await page.locator('.Modal').getByRole('button', { name: '确定' }).click()
+  await expect(page.getByText('当前筛选下暂无通知')).toBeVisible()
 
   expect(page.browserErrors).toEqual([])
 })
