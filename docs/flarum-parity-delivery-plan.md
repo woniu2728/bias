@@ -223,6 +223,12 @@ administrator
 - 只测 service 不算完成。
 - 测试必须断言状态码、响应结构、可见性行为和相关计数。
 
+当前状态：
+
+- 已在 `bias_core/tests/test_forum_discussion_api.py` 覆盖 discussion/post 主 HTTP 流程：列表、排序、过滤、详情、post stream `near/before/after`、创建、编辑、隐藏/恢复、删除、锁定、置顶、单讨论已读、全部已读。
+- 已补 approval 主 HTTP 流程：待审核 discussion/reply、`/api/admin/approval-queue` 列表、通过 discussion、拒绝 reply，以及 pending/rejected discussion/post 对 guest、registered user、author、moderator、administrator 的可见性矩阵。
+- 阶段 3 尚未完成：仍需补 rejected 后重新提交的 core 级 HTTP 证据、非 staff 但具备 moderation 权限的操作一致性、列表 SQL 预算、搜索/隐藏/私有组合可见性，以及浏览器流程。
+
 ## 阶段 4：官方扩展对齐矩阵
 
 目标：把 Bias 官方扩展与 Flarum 官方扩展行为逐项对齐，关闭所有非刻意差异。
