@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 const forumSettings = {
   forum_title: 'Bias E2E Forum',
   forum_description: 'Browser flow fixture',
-  enabled_modules: ['users', 'discussions', 'posts', 'realtime', 'search'],
+  enabled_modules: ['users', 'discussions', 'posts', 'realtime', 'search', 'tags'],
   enabled_extensions: [
     {
       id: 'users',
@@ -79,10 +79,51 @@ const forumSettings = {
       ],
     },
     {
+      id: 'tags',
+      frontend_forum_entry: 'extensions/tags/frontend/forum/index.js',
+      frontend_routes: [
+        {
+          path: '/tags',
+          name: 'tags',
+          component: './TagsView.vue',
+          frontend: 'forum',
+          module_id: 'tags',
+          preloads: [
+            {
+              href: '/api/tags?include=children,lastPostedDiscussion,parent&include_children=true',
+            },
+          ],
+        },
+        {
+          path: '/t/:slug',
+          name: 'tag-detail',
+          component: 'extensions/discussions/frontend/forum/DiscussionListView.vue',
+          frontend: 'forum',
+          module_id: 'tags',
+          preloads: [
+            {
+              href: '/api/tags/slug/:slug',
+            },
+            {
+              href: '/api/tags?include=children,lastPostedDiscussion,parent&include_children=true',
+            },
+          ],
+        },
+      ],
+    },
+    {
       id: 'realtime',
       frontend_routes: [],
     },
   ],
+  extensions: {
+    tags: {
+      min_primary_tags: 1,
+      max_primary_tags: 1,
+      min_secondary_tags: 0,
+      max_secondary_tags: 2,
+    },
+  },
 }
 
 const alice = {
@@ -130,6 +171,26 @@ const discussionListPayload = {
       can_delete: false,
       can_hide: false,
       user: alice,
+      tags: [
+        {
+          id: 1,
+          name: 'General',
+          slug: 'general',
+          color: '#2d8fdd',
+          is_primary: true,
+          parent_id: null,
+          children: [],
+        },
+        {
+          id: 3,
+          name: 'Browser',
+          slug: 'browser',
+          color: '#8e44ad',
+          is_primary: false,
+          parent_id: 1,
+          children: [],
+        },
+      ],
       last_post: {
         id: 501,
         number: 3,
@@ -145,6 +206,70 @@ const discussionListPayload = {
   ],
   available_filters: [
     { value: 'all', label: '全部讨论' },
+  ],
+}
+
+const tagTreePayload = {
+  data: [
+    {
+      id: 1,
+      name: 'General',
+      slug: 'general',
+      description: 'General forum discussions',
+      color: '#2d8fdd',
+      icon: 'fas fa-comments',
+      position: 1,
+      is_primary: true,
+      is_child: false,
+      parent_id: null,
+      discussion_count: 2,
+      children: [
+        {
+          id: 3,
+          name: 'Browser',
+          slug: 'browser',
+          description: 'Browser automation cases',
+          color: '#8e44ad',
+          icon: 'fas fa-window-maximize',
+          position: 1,
+          is_primary: false,
+          is_child: true,
+          parent_id: 1,
+          discussion_count: 1,
+          children: [],
+          last_posted_discussion: discussionListPayload.data[0],
+        },
+      ],
+      last_posted_discussion: discussionListPayload.data[0],
+    },
+    {
+      id: 2,
+      name: 'Support',
+      slug: 'support',
+      description: 'Support questions',
+      color: '#16a085',
+      icon: 'fas fa-life-ring',
+      position: null,
+      is_primary: false,
+      is_child: false,
+      parent_id: null,
+      discussion_count: 4,
+      children: [],
+      last_posted_discussion: null,
+    },
+  ],
+}
+
+const tagDetailPayload = tagTreePayload.data[0]
+
+const taggedDiscussionListPayload = {
+  ...discussionListPayload,
+  data: [
+    {
+      ...discussionListPayload.data[0],
+      title: 'Browser tag filtered discussion',
+      slug: 'browser-tag-filtered-discussion',
+    },
   ],
 }
 
@@ -230,6 +355,10 @@ const createdDiscussion = {
   can_delete: true,
   can_hide: false,
   user: charlie,
+  tags: [
+    tagTreePayload.data[0],
+    tagTreePayload.data[0].children[0],
+  ],
   last_post: {
     id: 601,
     number: 1,
@@ -374,6 +503,16 @@ test.beforeEach(async ({ page }) => {
     if (url.pathname === '/api/search/filters') {
       return json({ filters: [] })
     }
+    if (url.pathname === '/api/tags') {
+      expect(url.searchParams.get('include_children')).toBe('true')
+      return json(tagTreePayload)
+    }
+    if (url.pathname === '/api/tags/slug/general') {
+      return json(tagDetailPayload)
+    }
+    if (url.pathname === '/api/tags/popular') {
+      return json({ data: tagTreePayload.data })
+    }
     if (url.pathname === '/api/discussions/' && route.request().method() === 'POST') {
       const requestBody = route.request().postDataJSON()
       expect(requestBody).toMatchObject({
@@ -383,12 +522,22 @@ test.beforeEach(async ({ page }) => {
             title: 'Discussion created through Playwright',
             content: 'Opening post created through Playwright',
           },
-          relationships: {},
+          relationships: {
+            tags: {
+              data: [
+                { type: 'tag', id: '1' },
+                { type: 'tag', id: '3' },
+              ],
+            },
+          },
         },
       })
       return json(createdDiscussion, { status: 201 })
     }
     if (url.pathname === '/api/discussions/') {
+      if (url.searchParams.get('tag') === 'general') {
+        return json(taggedDiscussionListPayload)
+      }
       return json(discussionListPayload)
     }
     if (url.pathname === '/api/discussions/101') {
@@ -492,6 +641,8 @@ test('authenticated user creates a discussion through browser runtime', async ({
   await page.goto('/discussions/create')
   await expect(page.locator('.floating-composer')).toBeVisible()
   await expect(page.getByPlaceholder('讨论标题')).toBeVisible()
+  await page.locator('.composer-tag-select').first().selectOption('1')
+  await page.locator('.composer-tag-select').nth(1).selectOption('3')
 
   await page.getByPlaceholder('讨论标题').fill('Discussion created through Playwright')
   await page.getByPlaceholder('输入讨论内容... 支持 Markdown、@用户名 和代码块').fill('Opening post created through Playwright')
@@ -512,6 +663,65 @@ test('authenticated user creates a discussion through browser runtime', async ({
   await expect(page.locator('#post-1')).toContainText('Opening post created through Playwright')
   await expect(page.locator('#post-1 .post-number')).toContainText('#1')
   await expect(page.locator('.posts .post-item')).toHaveCount(1)
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('tags forum flow renders tags index, filters tag discussions, and contributes composer tag payload', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  const tagsResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/tags' && response.status() === 200
+  })
+
+  await page.goto('/tags')
+  await tagsResponse
+
+  await expect(page.getByRole('heading', { name: '全部标签' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'General' })).toBeVisible()
+  await expect(page.getByText('General forum discussions')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Browser', exact: true })).toBeVisible()
+  await expect(page.getByText('Support')).toBeVisible()
+
+  const tagDetailResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/tags/slug/general' && response.status() === 200
+  })
+  const tagDiscussionResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/'
+      && url.searchParams.get('tag') === 'general'
+      && response.status() === 200
+  })
+  await page.goto('/t/general')
+  await tagDetailResponse
+  await tagDiscussionResponse
+
+  expect(new URL(page.url()).pathname).toBe('/t/general')
+  await expect(page.getByRole('link', { name: 'General', exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Browser tag filtered discussion' })).toBeVisible()
+
+  await page.getByRole('button', { name: '发起讨论' }).click()
+  await expect(page.locator('.floating-composer')).toBeVisible()
+  await expect(page.locator('.composer-tag-select').first()).toHaveValue('1')
+  await page.locator('.composer-tag-select').nth(1).selectOption('3')
+
+  await page.getByPlaceholder('讨论标题').fill('Discussion created through Playwright')
+  await page.getByPlaceholder('输入讨论内容... 支持 Markdown、@用户名 和代码块').fill('Opening post created through Playwright')
+
+  const createResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/'
+      && response.request().method() === 'POST'
+      && response.status() === 201
+  })
+
+  await page.getByRole('button', { name: '发布讨论' }).click()
+  await createResponse
+
+  await expect(page).toHaveURL(/\/d\/202$/)
+  await expect(page.getByRole('heading', { name: 'Discussion created through Playwright' })).toBeVisible()
 
   expect(page.browserErrors).toEqual([])
 })
