@@ -249,7 +249,8 @@ administrator
 - 已补 Playwright 真实浏览器下人机验证流程：`/api/forum` 启用 security 扩展和 Turnstile 设置后，登录/注册 modal 渲染 Turnstile 挑战组件，并断言 `POST /api/users/login`、`POST /api/users/register` payload 携带 `human_verification_token`。该 E2E 暴露并修复了 AuthSessionModal 在 token 更新后重新计算 challenge provider、触发 reset、导致 `Maximum recursive updates exceeded` 的前台稳定性问题。
 - 已补 Playwright 真实浏览器下真实内容操作触发通知流程：讨论详情提交 `POST /api/discussions/{id}/posts` 成功追加回复后，通知 fixture 生成新的 `postReply` 通知；随后进入 `/notifications`，断言新通知和未读计数被渲染。
 - 已补通知邮件/队列投递后端闭环：`bias-ext-notifications` 注册 `NotificationCreatedEvent` 监听器，通知创建后派发 `dispatch_notification_batch`；Celery 任务执行实时通知加载和 `EmailService` 通知邮件发送；测试覆盖队列启用入队、入队失败同步 fallback、通知邮件 subject/body/link、无邮箱收件人跳过，并让通知测试夹具适配 tags 必填关系。
-- 阶段 3 的后端主流程已进一步收敛；剩余风险转向真实 Redis worker/生产冒烟、flags/admin 组合和更多跨扩展浏览器矩阵。
+- 已补 flags 后端组合证据：`bias-ext-flags` 测试夹具适配当前 tags 必填关系后，后端测试覆盖 `POST /api/posts/{id}/report` 创建举报、`/api/admin/flags` 后台队列列表、`/api/admin/flags/{id}/resolve` 后台处理、讨论页版主 `/api/posts/{id}/flags/resolve` 处理、非 staff 拒绝、删除帖子清理举报和对应事件。
+- 阶段 3 的后端主流程已进一步收敛；剩余风险转向真实 Redis worker/生产冒烟、flags/admin 浏览器证据和更多跨扩展浏览器矩阵。
 
 ## 阶段 4：官方扩展对齐矩阵
 
