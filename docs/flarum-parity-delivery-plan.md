@@ -620,14 +620,15 @@ cd D:\files\project\tmp\bias
 python manage.py create_extension alpha-tools --target D:\files\project\tmp\.tmp-extension-dx
 python manage.py validate_extensions --extensions-path D:\files\project\tmp\.tmp-extension-dx
 python manage.py inspect_extension_imports --extensions-path D:\files\project\tmp\.tmp-extension-dx --check-runtime-facades --format json
-python manage.py inspect_extension_packages --extensions-path D:\files\project\tmp\.tmp-extension-dx --extension-id alpha-tools --build --install-smoke --format json
+python manage.py inspect_extension_packages --extensions-path D:\files\project\tmp\.tmp-extension-dx --extension-id alpha-tools --build --install-smoke --install-set-smoke --lifecycle-smoke --format json
 ```
 
 当前证据：
 
 - `create_extension --target` 已支持把生成扩展写入显式工作区根目录，不再要求通过 `BASE_DIR` 或环境配置间接控制输出位置。
 - `inspect_extension_packages --build --install-smoke` 已覆盖生成扩展 wheel 构建、manifest/backend entry point/frontend/locale 资源入包、安装态发现器识别为 `python-package`、后端入口导入。
-- `bias_core/tests/test_extension_commands.py` 已覆盖显式 target、隐藏临时父目录下的资源计数、wheel 审计和安装态 discovery。
+- `inspect_extension_packages --install-set-smoke --lifecycle-smoke` 已覆盖干净安装态站点从 wheel discovery 进入真实 `ExtensionManager` 生命周期，执行 install、disable、enable 后最终 `installed/enabled/booted=true`。
+- `bias_core/tests/test_extension_commands.py` 已覆盖显式 target、隐藏临时父目录下的资源计数、wheel 审计、安装态 discovery 和安装态生命周期 smoke。
 
 通过标准：
 
