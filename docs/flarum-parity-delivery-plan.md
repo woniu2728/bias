@@ -245,7 +245,8 @@ administrator
 - 已补 Playwright 真实浏览器下通知筛选与删除主流程：`type=postReply` 筛选刷新列表，`state=unread` 让 `GET /api/notifications` 携带 `is_read=false`；当前筛选标记已读触发 `POST /api/notifications/read-filtered?type=postReply`；单条删除触发 `DELETE /api/notifications/{id}` 并显示筛选空状态；账号通知筛选后当前筛选清除已读触发 `DELETE /api/notifications/read/clear-filtered?type=userSuspended`。
 - 已补 Playwright 真实浏览器下用户资料主流程：`/profile` 加载 `GET /api/users/me`、作者讨论列表、作者回复列表和 `GET /api/users/me/preferences`；选择头像图片后断言 `POST /api/users/{id}/avatar` multipart 请求并渲染新头像；设置页保存资料时断言 `PATCH /api/users/{id}` payload；公开 `/u/{id}` 加载他人资料和作者讨论，且不显示自己的设置入口。
 - 已补 Playwright 真实浏览器下认证与账号安全主流程：未登录直达 `/discussions/create` 会打开登录 modal，登录 `POST /api/users/login` 后保留 redirect 并回到 composer；注册断言 `POST /api/users/register` payload；忘记密码断言 `POST /api/users/forgot-password` 并显示 debug reset link；`/verify-email?token=...` 触发 `POST /api/users/verify-email`；`/reset-password?token=...` 触发 `POST /api/users/reset-password`。同时修复 AuthRouteView 在认证成功时过早 `replace('/')` 导致 redirect 丢失的问题，并用 `bias-ext-users/frontend/forum/useAuthRoutePage.test.js` 覆盖。
-- 阶段 3 尚未完成：仍需继续收敛真实内容操作触发通知、通知邮件/队列投递，以及账号安全失败路径等用户相关 HTTP 与浏览器矩阵。
+- 已补 Playwright 真实浏览器下账号安全失败路径：登录失败显示 `用户名或密码错误` 并清空密码；注册密码确认不一致不发请求，邮箱占用显示后端错误；无效邮箱验证 token 和无效重置密码 token 显示错误；Profile 安全页覆盖邮箱重发失败、修改密码确认不一致和旧密码错误。
+- 阶段 3 尚未完成：仍需继续收敛真实内容操作触发通知、通知邮件/队列投递，以及人机验证浏览器矩阵。
 
 ## 阶段 4：官方扩展对齐矩阵
 

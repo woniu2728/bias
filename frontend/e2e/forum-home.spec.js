@@ -602,6 +602,19 @@ test.beforeEach(async ({ page }) => {
   let notificationItems = baseNotifications.map(cloneNotification)
   let currentUser = { ...charlie }
 
+  await page.exposeFunction('__biasE2ESetEmailUnconfirmed', () => {
+    currentUser = {
+      ...currentUser,
+      is_email_confirmed: false,
+    }
+  })
+  await page.exposeFunction('__biasE2ESetEmailConfirmed', () => {
+    currentUser = {
+      ...currentUser,
+      is_email_confirmed: true,
+    }
+  })
+
   function buildNotificationListPayload(params = {}) {
     let items = notificationItems.map(cloneNotification)
     if (params.type) {
@@ -647,6 +660,17 @@ test.beforeEach(async ({ page }) => {
     if (text.includes('WebSocket connection')) return
     if (text.includes('Failed to load resource') && text.includes('/ws/online/')) return
     if (text.includes('Failed to load resource') && text.includes('/ws/notifications/')) return
+    if (
+      text.includes('Failed to load resource')
+      && (
+        text.includes('/api/users/login')
+        || text.includes('/api/users/register')
+        || text.includes('/api/users/verify-email')
+        || text.includes('/api/users/reset-password')
+        || text.includes('/api/users/me/resend-email-verification')
+        || text.includes('/api/users/9/password')
+      )
+    ) return
     if (text.includes('WebSocket错误: Event')) return
     browserErrors.push(text)
   })
@@ -685,6 +709,9 @@ test.beforeEach(async ({ page }) => {
     }
     if (url.pathname === '/api/users/login' && route.request().method() === 'POST') {
       const requestBody = route.request().postDataJSON()
+      if (requestBody.identification === 'wrong@example.test') {
+        return json({ error: '用户名或密码错误' }, { status: 401 })
+      }
       expect(requestBody).toMatchObject({
         identification: 'charlie@example.test',
         password: 'correct-password',
@@ -695,6 +722,9 @@ test.beforeEach(async ({ page }) => {
     }
     if (url.pathname === '/api/users/register' && route.request().method() === 'POST') {
       const requestBody = route.request().postDataJSON()
+      if (requestBody.email === 'taken@example.test') {
+        return json({ error: '邮箱已被使用' }, { status: 400 })
+      }
       expect(requestBody).toMatchObject({
         username: 'browseruser',
         email: 'browseruser@example.test',
@@ -719,6 +749,9 @@ test.beforeEach(async ({ page }) => {
     }
     if (url.pathname === '/api/users/verify-email' && route.request().method() === 'POST') {
       const requestBody = route.request().postDataJSON()
+      if (requestBody.token === 'bad-verify-token') {
+        return json({ error: '邮箱验证令牌无效或已过期' }, { status: 400 })
+      }
       expect(requestBody).toMatchObject({
         token: 'verify-token-1',
       })
@@ -730,6 +763,9 @@ test.beforeEach(async ({ page }) => {
     }
     if (url.pathname === '/api/users/reset-password' && route.request().method() === 'POST') {
       const requestBody = route.request().postDataJSON()
+      if (requestBody.token === 'bad-reset-token') {
+        return json({ error: '重置密码令牌无效或已过期' }, { status: 400 })
+      }
       expect(requestBody).toMatchObject({
         token: 'reset-token-1',
         password: 'new-password',
@@ -737,6 +773,15 @@ test.beforeEach(async ({ page }) => {
       return json({
         ...charlie,
         password_reset_at: '2026-06-30T11:00:00Z',
+      })
+    }
+    if (url.pathname === '/api/users/me/resend-email-verification' && route.request().method() === 'POST') {
+      if (currentUser.is_email_confirmed) {
+        return json({ error: '当前邮箱已经验证' }, { status: 400 })
+      }
+      return json({
+        message: '验证邮件已发送',
+        debug_verify_url: 'http://127.0.0.1:3100/verify-email?token=verify-token-2',
       })
     }
     if (url.pathname === '/api/users/me') {
@@ -765,6 +810,14 @@ test.beforeEach(async ({ page }) => {
         avatar_url: browserAvatarDataUrl,
       }
       return json(currentUser)
+    }
+    if (url.pathname === '/api/users/9/password' && route.request().method() === 'POST') {
+      const requestBody = route.request().postDataJSON()
+      expect(requestBody).toMatchObject({
+        old_password: 'wrong-current-password',
+        new_password: 'new-secure-password',
+      })
+      return json({ error: '当前密码不正确' }, { status: 400 })
     }
     if (url.pathname === '/api/users/9' && route.request().method() === 'PATCH') {
       const requestBody = route.request().postDataJSON()
@@ -1082,6 +1135,75 @@ test('account security pages verify email and reset password through browser run
   await expect(page.getByText('密码已重置，正在返回登录页...')).toBeVisible()
 
   expect(page.browserErrors).toEqual([])
+})
+
+test('auth browser flow surfaces login, register, verify, and reset failures', async ({ page }) => {
+  page.e2eAuthenticated = false
+
+  await page.goto('/login')
+  await expect(page.getByRole('heading', { name: '登录' })).toBeVisible()
+  await page.getByLabel('用户名或邮箱').fill('wrong@example.test')
+  await page.getByLabel('密码').fill('wrong-password')
+
+  const failedLoginResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/login'
+      && response.request().method() === 'POST'
+      && response.status() === 401
+  })
+  await page.locator('.AuthSessionModal form').getByRole('button', { name: '登录' }).click()
+  await failedLoginResponse
+  await expect(page.getByText('用户名或密码错误')).toBeVisible()
+  await expect(page.getByLabel('密码')).toHaveValue('')
+
+  await page.goto('/register')
+  await expect(page.getByRole('heading', { name: '加入讨论' })).toBeVisible()
+  await page.getByLabel('用户名').fill('takenuser')
+  await page.getByLabel('邮箱').fill('taken@example.test')
+  await page.getByLabel('密码', { exact: true }).fill('browser-password')
+  await page.getByLabel('确认密码').fill('different-password')
+  await page.locator('.AuthSessionModal form').getByRole('button', { name: '注册' }).click()
+  await expect(page.getByText('两次输入的密码不一致')).toBeVisible()
+
+  await page.getByLabel('确认密码').fill('browser-password')
+  const failedRegisterResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/register'
+      && response.request().method() === 'POST'
+      && response.status() === 400
+  })
+  await page.locator('.AuthSessionModal form').getByRole('button', { name: '注册' }).click()
+  await failedRegisterResponse
+  await expect(page.getByText('邮箱已被使用')).toBeVisible()
+
+  const failedVerifyResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/verify-email'
+      && response.request().method() === 'POST'
+      && response.status() === 400
+  })
+  await page.goto('/verify-email?token=bad-verify-token')
+  await failedVerifyResponse
+  await expect(page.getByText('邮箱验证令牌无效或已过期')).toBeVisible()
+
+  await page.goto('/reset-password?token=bad-reset-token')
+  await page.getByLabel('新密码', { exact: true }).fill('new-password')
+  await page.getByLabel('确认新密码').fill('different-password')
+  await page.getByRole('button', { name: '重置密码' }).click()
+  await expect(page.getByText('两次输入的新密码不一致')).toBeVisible()
+
+  await page.getByLabel('确认新密码').fill('new-password')
+  const failedResetResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/reset-password'
+      && response.request().method() === 'POST'
+      && response.status() === 400
+  })
+  await page.getByRole('button', { name: '重置密码' }).click()
+  await failedResetResponse
+  await expect(page.getByText('重置密码令牌无效或已过期')).toBeVisible()
+
+  expect(page.browserErrors.filter(error => !error.startsWith('Failed to load resource:'))).toEqual([])
 })
 
 test('authenticated user replies from discussion detail composer through browser runtime', async ({ page }) => {
@@ -1446,6 +1568,56 @@ test('profile pages render user activity and save own profile through browser ru
   await expect(page.getByRole('button', { name: '设置' })).toHaveCount(0)
 
   expect(page.browserErrors).toEqual([])
+})
+
+test('profile security page surfaces resend and password failure paths through browser runtime', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  await page.goto('/profile')
+  await expect(page.getByRole('heading', { name: 'Charlie' })).toBeVisible()
+
+  await page.evaluate(() => {
+    window.__biasE2ESetEmailUnconfirmed?.()
+  })
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Charlie' })).toBeVisible()
+
+  await page.locator('.user-sidebar .nav-link').filter({ hasText: '安全' }).click()
+  await expect(page.getByRole('heading', { name: '账号安全' })).toBeVisible()
+  await expect(page.getByText('未验证', { exact: true })).toBeVisible()
+
+  await page.evaluate(() => {
+    window.__biasE2ESetEmailConfirmed?.()
+  })
+  const resendFailureResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/me/resend-email-verification'
+      && response.request().method() === 'POST'
+      && response.status() === 400
+  })
+  await page.getByRole('button', { name: '重新发送验证邮件' }).click()
+  await resendFailureResponse
+  await expect(page.getByText('当前邮箱已经验证')).toBeVisible()
+
+  await page.getByLabel('当前密码').fill('old-password')
+  await page.getByLabel('新密码', { exact: true }).fill('new-secure-password')
+  await page.getByLabel('确认新密码').fill('mismatched-password')
+  await page.getByRole('button', { name: '更新密码' }).click()
+  await expect(page.getByText('两次输入的新密码不一致')).toBeVisible()
+
+  await page.getByLabel('当前密码').fill('wrong-current-password')
+  await page.getByLabel('确认新密码').fill('new-secure-password')
+  const passwordFailureResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users/9/password'
+      && response.request().method() === 'POST'
+      && response.status() === 400
+  })
+  await page.getByRole('button', { name: '更新密码' }).click()
+  await passwordFailureResponse
+  await expect(page.getByText('当前密码不正确')).toBeVisible()
+
+  expect(page.browserErrors.filter(error => !error.startsWith('Failed to load resource:'))).toEqual([])
 })
 
 test('forum search page renders grouped results and opens discussion result through browser runtime', async ({ page }) => {
