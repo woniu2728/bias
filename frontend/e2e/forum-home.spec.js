@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 const forumSettings = {
   forum_title: 'Bias E2E Forum',
   forum_description: 'Browser flow fixture',
-  enabled_modules: ['users', 'discussions', 'posts', 'realtime'],
+  enabled_modules: ['users', 'discussions', 'posts', 'realtime', 'search'],
   enabled_extensions: [
     {
       id: 'users',
@@ -64,6 +64,19 @@ const forumSettings = {
       id: 'posts',
       frontend_forum_entry: 'extensions/posts/frontend/forum/index.js',
       frontend_routes: [],
+    },
+    {
+      id: 'search',
+      frontend_forum_entry: 'extensions/search/frontend/forum/index.js',
+      frontend_routes: [
+        {
+          path: '/search',
+          name: 'search',
+          component: './SearchResultsView.vue',
+          frontend: 'forum',
+          module_id: 'search',
+        },
+      ],
     },
     {
       id: 'realtime',
@@ -247,6 +260,48 @@ const createdDiscussionPostsPayload = {
   current_end: 1,
 }
 
+const searchPayload = {
+  total: 3,
+  discussions: [
+    {
+      id: 101,
+      title: 'Browser E2E discussion list renders',
+      slug: 'browser-e2e-discussion-list-renders',
+      excerpt: 'Browser search discussion excerpt',
+      created_at: '2026-06-30T08:00:00Z',
+      last_posted_at: '2026-06-30T09:00:00Z',
+      comment_count: 3,
+      user: alice,
+    },
+  ],
+  posts: [
+    {
+      id: 502,
+      discussion_id: 101,
+      discussion_title: 'Browser E2E discussion list renders',
+      number: 2,
+      excerpt: 'Browser search post excerpt',
+      content: 'Browser search post excerpt',
+      created_at: '2026-06-30T09:00:00Z',
+      user: bob,
+    },
+  ],
+  users: [
+    {
+      id: 7,
+      username: 'alice',
+      display_name: 'Alice Searcher',
+      avatar_url: '',
+      bio: 'Browser search user profile',
+      discussion_count: 1,
+      comment_count: 2,
+    },
+  ],
+  discussion_total: 1,
+  post_total: 1,
+  user_total: 1,
+}
+
 function buildPostStreamPayload(extraPosts = []) {
   const posts = [
     ...postStreamPayload.data,
@@ -308,6 +363,16 @@ test.beforeEach(async ({ page }) => {
         return json({ authenticated: true, user: charlie })
       }
       return json({ authenticated: false, user: null })
+    }
+    if (url.pathname === '/api/search') {
+      expect(url.searchParams.get('q')).toBe('browser')
+      expect(url.searchParams.get('type')).toBe('all')
+      expect(url.searchParams.get('page')).toBe('1')
+      expect(url.searchParams.get('limit')).toBe('20')
+      return json(searchPayload)
+    }
+    if (url.pathname === '/api/search/filters') {
+      return json({ filters: [] })
     }
     if (url.pathname === '/api/discussions/' && route.request().method() === 'POST') {
       const requestBody = route.request().postDataJSON()
@@ -447,6 +512,46 @@ test('authenticated user creates a discussion through browser runtime', async ({
   await expect(page.locator('#post-1')).toContainText('Opening post created through Playwright')
   await expect(page.locator('#post-1 .post-number')).toContainText('#1')
   await expect(page.locator('.posts .post-item')).toHaveCount(1)
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('forum search page renders grouped results and opens discussion result through browser runtime', async ({ page }) => {
+  const searchResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/search' && response.status() === 200
+  })
+
+  await page.goto('/search?q=browser&type=all')
+  await searchResponse
+
+  await expect(page.getByRole('heading', { name: '“browser”' })).toBeVisible()
+  await expect(page.getByText('共找到 3 条结果，已按讨论、帖子和用户分组展示。')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '讨论' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '帖子' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '用户' })).toBeVisible()
+  await expect(page.getByText('Browser E2E discussion list renders').first()).toBeVisible()
+  await expect(page.getByText('Browser search discussion excerpt')).toBeVisible()
+  await expect(page.getByText('Browser search post excerpt')).toBeVisible()
+  await expect(page.getByText('Alice Searcher')).toBeVisible()
+  await expect(page.getByText('Browser search user profile')).toBeVisible()
+  await expect(page.getByText('搜索中...')).toBeHidden()
+
+  const discussionResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/101' && response.status() === 200
+  })
+  const postsResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/101/posts' && response.status() === 200
+  })
+
+  await page.locator('.result-card').filter({ hasText: 'Browser search discussion excerpt' }).click()
+  await discussionResponse
+  await postsResponse
+
+  expect(new URL(page.url()).pathname).toBe('/d/101')
+  await expect(page.getByRole('heading', { name: 'Browser E2E discussion list renders' })).toBeVisible()
 
   expect(page.browserErrors).toEqual([])
 })

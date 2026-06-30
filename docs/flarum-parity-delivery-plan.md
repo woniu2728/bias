@@ -236,7 +236,8 @@ administrator
 - 已补 Playwright 真实浏览器下从首页讨论列表点击进入讨论详情的闭环，验证 `/api/discussions/{id}`、`/api/discussions/{id}/posts?limit=20&near=1`、详情标题、帖子流正文、楼层编号和加载态退出。
 - 已补 Playwright 真实浏览器下已登录用户在讨论详情打开回复 composer、提交回复到 `POST /api/discussions/{id}/posts`、关闭 composer 并把新回复追加进当前帖子流的闭环。
 - 已补 Playwright 真实浏览器下已登录用户直达 `/discussions/create`、等待 session 恢复、打开 discussion composer、提交 `POST /api/discussions/`、跳转 `/d/{id}` 并渲染首帖的闭环；该 E2E 暴露并修复了受保护路由在 session 恢复前误判未登录、导致直达创建页弹登录并回首页的前台认证时序问题。
-- 阶段 3 尚未完成：仍需补搜索页等浏览器流程，以及更细的 fields/include/error 格式覆盖。
+- 已补 Playwright 真实浏览器下搜索页 `/search?q=browser&type=all` 主流程，覆盖 search 扩展路由装载、`GET /api/search?q=browser&type=all&page=1&limit=20`、讨论/帖子/用户分组结果渲染、搜索统计、加载态退出，并从讨论搜索结果点击进入 `/d/101` 详情；该 E2E 暴露并修复了 `SearchResultCard.vue` 把 `computed` import 放在 `<script setup>` 外导致结果卡片渲染时报 `computed is not defined` 的前台稳定性问题。
+- 阶段 3 尚未完成：仍需补更细的 fields/include/error 格式覆盖。
 
 ## 阶段 4：官方扩展对齐矩阵
 
