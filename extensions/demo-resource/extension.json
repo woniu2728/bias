@@ -1,0 +1,47 @@
+{
+  "id": "demo-resource",
+  "name": "Demo Resource",
+  "version": "0.1.0",
+  "description": "Demo extension for API resource endpoints.",
+  "icon": "fas fa-puzzle-piece",
+  "category": "feature",
+  "authors": [
+    "Bias"
+  ],
+  "documentation_url": "/admin.html#/admin/docs?guide=extension-system-roadmap&extension=demo-resource",
+  "dependencies": [
+    "core"
+  ],
+  "provides": [
+    "demo-resource-panel"
+  ],
+  "backend": {
+    "entry": "bias_ext_demo_resource.backend.ext"
+  },
+  "django": {
+    "app_config": "bias_ext_demo_resource.backend.apps.DemoResourceExtensionConfig",
+    "app_label": "demo_resource",
+    "migration_module": "bias_ext_demo_resource.backend.django_migrations"
+  },
+  "compatibility": {
+    "bias_version": ">=0.1.0 <0.2.0",
+    "api_version": "1.0",
+    "api_stability": "experimental",
+    "api_stability_label": "实验性",
+    "breaking_change_policy": "Bias 在主版本升级前会优先通过路线图与开发文档公告扩展协议的 breaking change。"
+  },
+  "security": {
+    "support_email": "security@example.com",
+    "capabilities_notice": "此扩展处于实验阶段，请在生产环境启用前完成本地校验与权限审查。"
+  },
+  "distribution": {
+    "channel": "private",
+    "channel_label": "私有分发",
+    "signing_key_id": "",
+    "signature_url": ""
+  },
+  "extra": {
+    "display_order": 1000,
+    "experimental": true
+  }
+}

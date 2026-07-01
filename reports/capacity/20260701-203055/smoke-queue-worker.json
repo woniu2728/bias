@@ -1,0 +1,22 @@
+{
+  "broker_url": "redis://127.0.0.1:6379/1",
+  "result_backend": "redis://127.0.0.1:6379/2",
+  "task_name": "bias_core.queue_worker_probe",
+  "token": "queue-smoke-67d536d7f39d4224bbe4a6214737f2c4",
+  "worker_status": {
+    "status": "available",
+    "label": "1 �� worker ����",
+    "available": true,
+    "worker_count": 1,
+    "message": "Celery worker ���á�"
+  },
+  "task_result": {
+    "ok": true,
+    "token": "queue-smoke-67d536d7f39d4224bbe4a6214737f2c4",
+    "worker_pid": 14
+  },
+  "summary": {
+    "ok": true,
+    "error_count": 0
+  }
+}

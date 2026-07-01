@@ -10,12 +10,14 @@
       </div>
     </div>
     <AppModalHost />
+    <RuntimeAlertHost />
   </div>
 </template>
 
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppModalHost from '../components/AppModalHost.vue'
+import RuntimeAlertHost from '../components/RuntimeAlertHost.vue'
 import AdminHeader from './components/AdminHeader.vue'
 import AdminNav from './components/AdminNav.vue'
 import { getAuthStore } from './runtimeServices'

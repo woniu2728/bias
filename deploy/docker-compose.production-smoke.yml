@@ -1,0 +1,235 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-bias_smoke}
+      POSTGRES_USER: ${DB_USER:-bias_smoke}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-bias-smoke-local-password-not-for-production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks:
+      - bias_smoke
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT_PUBLISHED:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks:
+      - bias_smoke
+
+  web:
+    build:
+      context: ../..
+      dockerfile: bias/deploy/Dockerfile.production-smoke
+    restart: unless-stopped
+    command: >
+      gunicorn config.asgi:application
+      -k uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --workers ${WEB_CONCURRENCY:-2}
+    env_file:
+      - ../.env.production-smoke.example
+    environment:
+      BIAS_SITE_CONFIG: /app/instance/site.json
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_CONN_MAX_AGE: ${DB_CONN_MAX_AGE:-0}
+      DB_CONN_HEALTH_CHECKS: ${DB_CONN_HEALTH_CHECKS:-1}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      USE_REDIS: "1"
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      BIAS_SKIP_ENTRYPOINT_MIGRATE: "1"
+      BIAS_SKIP_ENTRYPOINT_COLLECTSTATIC: "1"
+      BIAS_HEALTH_STRICT: "1"
+      DJANGO_ALLOW_ASYNC_UNSAFE: "true"
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - instance_volume:/app/instance
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/api/health?strict=1\", timeout=5).read()'"]
+      interval: 30s
+      timeout: 10s
+      retries: 6
+      start_period: 40s
+    networks:
+      - bias_smoke
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: bias/deploy/Dockerfile.production-smoke
+    restart: unless-stopped
+    command: >
+      celery -A config worker -l info
+      --concurrency=${CELERY_CONCURRENCY:-2}
+      --max-tasks-per-child=${CELERY_MAX_TASKS_PER_CHILD:-200}
+    env_file:
+      - ../.env.production-smoke.example
+    environment:
+      BIAS_SITE_CONFIG: /app/instance/site.json
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_CONN_MAX_AGE: ${DB_CONN_MAX_AGE:-0}
+      DB_CONN_HEALTH_CHECKS: ${DB_CONN_HEALTH_CHECKS:-1}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      USE_REDIS: "1"
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      BIAS_SKIP_ENTRYPOINT_MIGRATE: "1"
+      BIAS_SKIP_ENTRYPOINT_COLLECTSTATIC: "1"
+      DJANGO_ALLOW_ASYNC_UNSAFE: "true"
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - instance_volume:/app/instance
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping -d celery@$${HOSTNAME} --timeout=5 | grep -q pong"]
+      interval: 30s
+      timeout: 10s
+      retries: 6
+      start_period: 40s
+    networks:
+      - bias_smoke
+
+  scheduler:
+    build:
+      context: ../..
+      dockerfile: bias/deploy/Dockerfile.production-smoke
+    restart: unless-stopped
+    command: celery -A config beat -l info
+    env_file:
+      - ../.env.production-smoke.example
+    environment:
+      BIAS_SITE_CONFIG: /app/instance/site.json
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_CONN_MAX_AGE: ${DB_CONN_MAX_AGE:-0}
+      DB_CONN_HEALTH_CHECKS: ${DB_CONN_HEALTH_CHECKS:-1}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      USE_REDIS: "1"
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      BIAS_SKIP_ENTRYPOINT_MIGRATE: "1"
+      BIAS_SKIP_ENTRYPOINT_COLLECTSTATIC: "1"
+      DJANGO_ALLOW_ASYNC_UNSAFE: "true"
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - instance_volume:/app/instance
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bias_smoke
+
+  init:
+    build:
+      context: ../..
+      dockerfile: bias/deploy/Dockerfile.production-smoke
+    restart: "no"
+    command: >
+      python manage.py install_forum
+      --database postgres
+      --config /app/instance/site.json
+      --overwrite
+      --non-interactive
+      --skip-admin
+      --db-name ${DB_NAME:-bias_smoke}
+      --db-user ${DB_USER:-bias_smoke}
+      --db-password ${DB_PASSWORD:-bias-smoke-local-password-not-for-production}
+      --db-host postgres
+      --db-port 5432
+      --redis on
+      --redis-host redis
+      --redis-port 6379
+      --redis-db 0
+      --site-domains ${SITE_DOMAINS:-localhost}
+      --site-scheme ${SITE_SCHEME:-http}
+      --frontend-url ${FRONTEND_URL:-http://localhost:8000}
+      --email-backend ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      --email-host ${EMAIL_HOST:-smtp.example.com}
+      --email-port ${EMAIL_PORT:-587}
+      --email-use-tls ${EMAIL_USE_TLS:-on}
+      --default-from-email ${DEFAULT_FROM_EMAIL:-noreply@example.com}
+    env_file:
+      - ../.env.production-smoke.example
+    environment:
+      BIAS_SITE_CONFIG: /app/instance/site.json
+      BIAS_SKIP_ENTRYPOINT_MIGRATE: "1"
+      BIAS_SKIP_ENTRYPOINT_COLLECTSTATIC: "1"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_CONN_MAX_AGE: ${DB_CONN_MAX_AGE:-0}
+      DB_CONN_HEALTH_CHECKS: ${DB_CONN_HEALTH_CHECKS:-1}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      USE_REDIS: "1"
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      DJANGO_ALLOW_ASYNC_UNSAFE: "true"
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - instance_volume:/app/instance
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bias_smoke
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_volume:
+  media_volume:
+  instance_volume:
+
+networks:
+  bias_smoke:
+    driver: bridge

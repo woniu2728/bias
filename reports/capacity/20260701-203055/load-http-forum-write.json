@@ -1,0 +1,58 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-write",
+  "concurrency": 1,
+  "duration_seconds": 0.5464927998837084,
+  "request_limit": 1,
+  "dynamic_values": {
+    "sequence": 1782909149168,
+    "discussion_id": 40
+  },
+  "isolated_targets": {},
+  "targets": [
+    {
+      "method": "POST",
+      "path": "/api/discussions/40/posts",
+      "target": "0:POST /api/discussions/40/posts",
+      "target_label": "POST /api/discussions/40/posts",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 1,
+      "error_rate": 1.0,
+      "status_code_counts": {
+        "403": 1
+      },
+      "min_ms": 544.4810998160392,
+      "max_ms": 544.4810998160392,
+      "average_ms": 544.4810998160392,
+      "p50_ms": 544.4810998160392,
+      "p95_ms": 544.4810998160392,
+      "p99_ms": 544.4810998160392,
+      "threshold_ms": 500.0,
+      "ok": false
+    }
+  ],
+  "errors": [
+    {
+      "method": "POST",
+      "path": "/api/discussions/40/posts",
+      "target": "0:POST /api/discussions/40/posts",
+      "target_label": "POST /api/discussions/40/posts",
+      "url": "http://127.0.0.1:8000/api/discussions/40/posts",
+      "duration_ms": 544.4810998160392,
+      "status_code": 403,
+      "error": true,
+      "error_message": "HTTP 403"
+    }
+  ],
+  "summary": {
+    "ok": false,
+    "request_count": 1,
+    "error_count": 1,
+    "error_rate": 1.0,
+    "requests_per_second": 1.8298502747205385,
+    "failed_threshold_count": 1
+  }
+}

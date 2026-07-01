@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 const forumSettings = {
   forum_title: 'Bias E2E Forum',
   forum_description: 'Browser flow fixture',
-  enabled_modules: ['users', 'discussions', 'posts', 'realtime', 'search', 'tags', 'notifications'],
+  enabled_modules: ['users', 'discussions', 'posts', 'realtime', 'search', 'tags', 'notifications', 'likes', 'mentions', 'subscriptions', 'emoji', 'uploads'],
   enabled_extensions: [
     {
       id: 'users',
@@ -155,7 +155,56 @@ const forumSettings = {
       ],
     },
     {
+      id: 'likes',
+      frontend_forum_entry: 'extensions/likes/frontend/forum/index.js',
+      frontend_routes: [],
+    },
+    {
+      id: 'mentions',
+      frontend_forum_entry: 'extensions/mentions/frontend/forum/index.js',
+      frontend_routes: [],
+    },
+    {
+      id: 'subscriptions',
+      frontend_forum_entry: 'extensions/subscriptions/frontend/forum/index.js',
+      frontend_routes: [
+        {
+          path: '/following',
+          name: 'following',
+          component: 'extensions/discussions/frontend/forum/DiscussionListView.vue',
+          frontend: 'forum',
+          module_id: 'subscriptions',
+          requires_auth: true,
+        },
+      ],
+    },
+    {
+      id: 'emoji',
+      frontend_forum_entry: 'extensions/emoji/frontend/forum/index.js',
+      frontend_routes: [],
+      forum_settings: {
+        cdn_url: 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/',
+      },
+      settings_values: {
+        cdn_url: 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/',
+      },
+    },
+    {
+      id: 'uploads',
+      frontend_forum_entry: 'extensions/uploads/frontend/forum/index.js',
+      frontend_routes: [],
+      forum_settings: {
+        attachment_max_size_mb: 10,
+        allowed_attachment_extensions: ['.pdf', '.txt', '.png', '.jpg'],
+      },
+      settings_values: {
+        attachment_max_size_mb: 10,
+        allowed_attachment_extensions: ['.pdf', '.txt', '.png', '.jpg'],
+      },
+    },
+    {
       id: 'realtime',
+      frontend_forum_entry: 'extensions/realtime/frontend/forum/index.js',
       frontend_routes: [],
     },
   ],
@@ -238,6 +287,7 @@ const discussionListPayload = {
       can_edit: false,
       can_delete: false,
       can_hide: false,
+      is_subscribed: false,
       user: alice,
       tags: [
         {
@@ -359,6 +409,7 @@ const discussionDetailPayload = {
   can_edit: false,
   can_delete: false,
   can_hide: false,
+  is_subscribed: false,
   user: alice,
   last_post: {
     id: 502,
@@ -382,6 +433,9 @@ const postStreamPayload = {
       can_edit: false,
       can_delete: false,
       can_hide: false,
+      can_like: true,
+      like_count: 0,
+      is_liked: false,
       user: alice,
     },
     {
@@ -396,6 +450,9 @@ const postStreamPayload = {
       can_edit: false,
       can_delete: false,
       can_hide: false,
+      can_like: true,
+      like_count: 0,
+      is_liked: false,
       user: bob,
     },
   ],
@@ -449,6 +506,9 @@ const createdDiscussionPostsPayload = {
       can_edit: true,
       can_delete: true,
       can_hide: false,
+      can_like: true,
+      like_count: 0,
+      is_liked: false,
       user: charlie,
     },
   ],
@@ -458,7 +518,7 @@ const createdDiscussionPostsPayload = {
 }
 
 const searchPayload = {
-  total: 3,
+  total: 4,
   discussions: [
     {
       id: 101,
@@ -494,9 +554,21 @@ const searchPayload = {
       comment_count: 2,
     },
   ],
+  tags: [
+    {
+      id: 3,
+      name: 'Browser',
+      slug: 'browser',
+      description: 'Browser automation cases',
+      color: '#8e44ad',
+      icon: 'fas fa-window-maximize',
+      discussion_count: 1,
+    },
+  ],
   discussion_total: 1,
   post_total: 1,
   user_total: 1,
+  tag_total: 1,
 }
 
 const profilePreferencesPayload = {
@@ -548,6 +620,9 @@ const profilePostsPayload = {
       can_edit: true,
       can_delete: true,
       can_hide: false,
+      can_like: true,
+      like_count: 0,
+      is_liked: false,
       user: charlie,
       discussion: {
         id: 101,
@@ -618,6 +693,60 @@ function buildReplyCreatedNotification(post) {
   }
 }
 
+function buildUserMentionedNotification(post) {
+  return {
+    id: 304,
+    type: 'userMentioned',
+    subject_type: 'post',
+    subject_id: post.id,
+    data: {
+      discussion_id: 101,
+      discussion_title: 'Browser E2E discussion list renders',
+      post_id: post.id,
+      post_number: post.number,
+    },
+    created_at: post.created_at,
+    is_read: false,
+    from_user: charlie,
+  }
+}
+
+function buildPostLikedNotification(post) {
+  return {
+    id: 305,
+    type: 'postLiked',
+    subject_type: 'post',
+    subject_id: post.id,
+    data: {
+      discussion_id: 101,
+      discussion_title: 'Browser E2E discussion list renders',
+      post_id: post.id,
+      post_number: post.number,
+    },
+    created_at: '2026-06-30T10:05:00Z',
+    is_read: false,
+    from_user: charlie,
+  }
+}
+
+function buildDiscussionReplyNotification() {
+  return {
+    id: 306,
+    type: 'discussionReply',
+    subject_type: 'post',
+    subject_id: 502,
+    data: {
+      discussion_id: 101,
+      discussion_title: 'Browser E2E discussion list renders',
+      post_id: 502,
+      post_number: 2,
+    },
+    created_at: '2026-06-30T10:10:00Z',
+    is_read: false,
+    from_user: bob,
+  }
+}
+
 function buildPostStreamPayload(extraPosts = []) {
   const posts = [
     ...postStreamPayload.data,
@@ -633,11 +762,21 @@ function buildPostStreamPayload(extraPosts = []) {
   }
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 test.beforeEach(async ({ page }) => {
   const browserErrors = []
   const createdReplies = []
   let notificationItems = baseNotifications.map(cloneNotification)
   let currentUser = { ...charlie }
+  let isDiscussionSubscribed = false
 
   page.e2eForumSettings = forumSettings
 
@@ -670,10 +809,16 @@ test.beforeEach(async ({ page }) => {
       limit: Number(params.limit || 20),
       unread_count: allUnreadCount,
       type_counts: {
+        discussionReply: notificationItems.filter(item => item.type === 'discussionReply').length,
+        postLiked: notificationItems.filter(item => item.type === 'postLiked').length,
+        userMentioned: notificationItems.filter(item => item.type === 'userMentioned').length,
         postReply: notificationItems.filter(item => item.type === 'postReply').length,
         userSuspended: notificationItems.filter(item => item.type === 'userSuspended').length,
       },
       unread_type_counts: {
+        discussionReply: notificationItems.filter(item => item.type === 'discussionReply' && !item.is_read).length,
+        postLiked: notificationItems.filter(item => item.type === 'postLiked' && !item.is_read).length,
+        userMentioned: notificationItems.filter(item => item.type === 'userMentioned' && !item.is_read).length,
         postReply: notificationItems.filter(item => item.type === 'postReply' && !item.is_read).length,
         userSuspended: notificationItems.filter(item => item.type === 'userSuspended' && !item.is_read).length,
       },
@@ -739,6 +884,25 @@ test.beforeEach(async ({ page }) => {
     }
     if (url.pathname === '/api/forum/theme') {
       return json({ theme: { id: 'default', className: 'theme-default', colorScheme: 'light' } })
+    }
+    if (url.pathname === '/api/preview' && route.request().method() === 'POST') {
+      const requestBody = route.request().postDataJSON()
+      return json({
+        html: `<p>${escapeHtml(requestBody.content || '')}</p>`,
+      })
+    }
+    if (url.pathname === '/api/uploads' && route.request().method() === 'POST') {
+      const multipart = route.request().postDataBuffer().toString('utf8')
+      expect(multipart).toContain('filename="guide.pdf"')
+      expect(multipart).toContain('application/pdf')
+      return json({
+        url: '/media/attachments/9/guide.pdf',
+        original_name: 'guide.pdf',
+        size: 128,
+        mime_type: 'application/pdf',
+        hash: 'e2e-guide-hash',
+        is_image: false,
+      })
     }
     if (url.pathname === '/api/users/session') {
       if (page.e2eAuthenticated) {
@@ -882,6 +1046,17 @@ test.beforeEach(async ({ page }) => {
         comment_count: 2,
       })
     }
+    if (url.pathname === '/api/users' && route.request().method() === 'GET') {
+      expect(url.searchParams.get('limit')).toBe('5')
+      return json([
+        {
+          ...bob,
+          bio: 'Mention target user',
+          discussion_count: 1,
+          comment_count: 2,
+        },
+      ])
+    }
     if (url.pathname === '/api/search') {
       expect(url.searchParams.get('q')).toBe('browser')
       expect(url.searchParams.get('type')).toBe('all')
@@ -898,6 +1073,9 @@ test.beforeEach(async ({ page }) => {
     }
     if (url.pathname === '/api/tags/slug/general') {
       return json(tagDetailPayload)
+    }
+    if (url.pathname === '/api/tags/slug/browser') {
+      return json(tagTreePayload.data[0].children[0])
     }
     if (url.pathname === '/api/tags/popular') {
       return json({ data: tagTreePayload.data })
@@ -986,6 +1164,15 @@ test.beforeEach(async ({ page }) => {
       return json(createdDiscussion, { status: 201 })
     }
     if (url.pathname === '/api/discussions/') {
+      if (url.searchParams.get('filter') === 'following') {
+        const discussion = {
+          ...discussionListPayload.data[0],
+          is_subscribed: true,
+        }
+        return json(isDiscussionSubscribed
+          ? { ...discussionListPayload, data: [discussion], total: 1 }
+          : { ...discussionListPayload, data: [], total: 0 })
+      }
       if (url.searchParams.get('author') === 'charlie') {
         expect(url.searchParams.get('sort')).toBe('newest')
         expect(url.searchParams.get('limit')).toBe('20')
@@ -1009,7 +1196,22 @@ test.beforeEach(async ({ page }) => {
       return json(discussionListPayload)
     }
     if (url.pathname === '/api/discussions/101') {
-      return json(discussionDetailPayload)
+      return json({
+        ...discussionDetailPayload,
+        is_subscribed: isDiscussionSubscribed,
+      })
+    }
+    if (url.pathname === '/api/discussions/101/subscribe' && route.request().method() === 'POST') {
+      isDiscussionSubscribed = true
+      notificationItems = [
+        buildDiscussionReplyNotification(),
+        ...notificationItems.filter(item => item.type !== 'discussionReply'),
+      ]
+      return json({ is_subscribed: true })
+    }
+    if (url.pathname === '/api/discussions/101/subscribe' && route.request().method() === 'DELETE') {
+      isDiscussionSubscribed = false
+      return json({ is_subscribed: false })
     }
     if (url.pathname === '/api/discussions/202') {
       return json(createdDiscussion)
@@ -1021,30 +1223,77 @@ test.beforeEach(async ({ page }) => {
     }
     if (url.pathname === '/api/discussions/101/posts' && route.request().method() === 'POST') {
       const requestBody = route.request().postDataJSON()
-      expect(requestBody).toMatchObject({
-        content: 'Reply submitted through Playwright',
-        reply_to_post_id: null,
-      })
+      expect(requestBody.reply_to_post_id ?? null).toBe(null)
+      expect([
+        'Reply submitted through Playwright',
+        'Mention reply submitted through Playwright @bob ',
+        'Emoji reply through Playwright 😀',
+        'Attachment reply through Playwright [guide](/media/attachments/9/guide.pdf)',
+      ]).toContain(requestBody.content)
       const post = {
         id: 503,
         discussion_id: 101,
         number: 3,
         type: 'comment',
         content: requestBody.content,
-        content_html: '<p>Reply submitted through Playwright</p>',
+        content_html: requestBody.content.includes('/media/attachments/9/guide.pdf')
+          ? '<p>Attachment reply through Playwright <a href="/media/attachments/9/guide.pdf">guide</a></p>'
+          : `<p>${requestBody.content}</p>`,
         created_at: '2026-06-30T10:00:00Z',
         is_hidden: false,
         can_edit: true,
         can_delete: true,
         can_hide: false,
+        can_like: true,
+        like_count: 0,
+        is_liked: false,
         user: charlie,
       }
       createdReplies.push(post)
+      const nextNotifications = [buildReplyCreatedNotification(post)]
+      if (requestBody.content.includes('@bob')) {
+        nextNotifications.push(buildUserMentionedNotification(post))
+      }
       notificationItems = [
-        buildReplyCreatedNotification(post),
+        ...nextNotifications,
         ...notificationItems,
       ]
       return json(post, { status: 201 })
+    }
+    if (url.pathname.match(/^\/api\/posts\/\d+$/) && route.request().method() === 'PATCH') {
+      const postId = Number(url.pathname.split('/')[3])
+      const requestBody = route.request().postDataJSON()
+      expect(postId).toBe(503)
+      expect(requestBody).toMatchObject({
+        content: 'Edited mention reply through Playwright',
+      })
+      const index = createdReplies.findIndex(post => Number(post.id) === postId)
+      expect(index).toBeGreaterThanOrEqual(0)
+      const updatedPost = {
+        ...createdReplies[index],
+        content: requestBody.content,
+        content_html: '<p>Edited mention reply through Playwright</p>',
+        edited_at: '2026-06-30T10:04:00Z',
+        edited_user: charlie,
+      }
+      createdReplies[index] = updatedPost
+      return json(updatedPost)
+    }
+    if (url.pathname.match(/^\/api\/posts\/\d+\/like$/) && route.request().method() === 'POST') {
+      const postId = Number(url.pathname.split('/')[3])
+      const index = createdReplies.findIndex(post => Number(post.id) === postId)
+      expect(index).toBeGreaterThanOrEqual(0)
+      const likedPost = {
+        ...createdReplies[index],
+        like_count: Number(createdReplies[index].like_count || 0) + 1,
+        is_liked: true,
+      }
+      createdReplies[index] = likedPost
+      notificationItems = [
+        buildPostLikedNotification(likedPost),
+        ...notificationItems,
+      ]
+      return json({ ok: true })
     }
     if (url.pathname === '/api/discussions/101/posts') {
       expect(url.searchParams.get('limit')).toBe('20')
@@ -1057,6 +1306,123 @@ test.beforeEach(async ({ page }) => {
 
   page.browserErrors = browserErrors
 })
+
+async function installRealtimeWebSocketMock(page) {
+  await page.addInitScript(() => {
+    const NativeEvent = window.Event
+    const NativeMessageEvent = window.MessageEvent
+
+    class BiasE2EWebSocket {
+      static CONNECTING = 0
+      static OPEN = 1
+      static CLOSING = 2
+      static CLOSED = 3
+
+      constructor(url) {
+        this.url = String(url || '')
+        this.readyState = BiasE2EWebSocket.CONNECTING
+        this.sent = []
+        this.onopen = null
+        this.onmessage = null
+        this.onerror = null
+        this.onclose = null
+        this._listeners = {}
+
+        const key = this.url.includes('/ws/forum/') ? 'forum' : this.url.includes('/ws/online/') ? 'online' : `socket${Object.keys(window.__biasE2ERealtimeSockets.sockets).length + 1}`
+        window.__biasE2ERealtimeSockets.sockets[key] = this
+        if (key === 'forum' || key === 'online') {
+          window.__biasE2ERealtimeSockets[key] = this
+        }
+
+        setTimeout(() => {
+          this.readyState = BiasE2EWebSocket.OPEN
+          this._emit('open', new NativeEvent('open'))
+          if (this.url.includes('/ws/forum/')) {
+            this.receive({
+              type: 'connection_established',
+              message: '已连接到论坛实时服务',
+            })
+          }
+          if (this.url.includes('/ws/online/')) {
+            this.receive({
+              type: 'online_users',
+              users: [],
+            })
+          }
+        }, 0)
+      }
+
+      addEventListener(type, listener) {
+        this._listeners[type] = this._listeners[type] || []
+        this._listeners[type].push(listener)
+      }
+
+      removeEventListener(type, listener) {
+        this._listeners[type] = (this._listeners[type] || []).filter(item => item !== listener)
+      }
+
+      send(data) {
+        const parsed = (() => {
+          try {
+            return JSON.parse(data)
+          } catch {
+            return data
+          }
+        })()
+        this.sent.push(parsed)
+        if (parsed?.type === 'subscribe_discussions') {
+          this.receive({
+            type: 'subscribed',
+            discussion_ids: parsed.discussion_ids || [],
+          })
+        }
+        if (parsed?.type === 'unsubscribe_discussions') {
+          this.receive({
+            type: 'unsubscribed',
+            discussion_ids: parsed.discussion_ids || [],
+          })
+        }
+        if (parsed?.type === 'ping') {
+          this.receive({ type: 'pong' })
+        }
+      }
+
+      close() {
+        this.readyState = BiasE2EWebSocket.CLOSED
+        this._emit('close', new NativeEvent('close'))
+      }
+
+      receive(payload) {
+        const message = new NativeMessageEvent('message', {
+          data: typeof payload === 'string' ? payload : JSON.stringify(payload),
+        })
+        this._emit('message', message)
+      }
+
+      _emit(type, event) {
+        const handler = this[`on${type}`]
+        if (typeof handler === 'function') {
+          handler.call(this, event)
+        }
+        for (const listener of this._listeners[type] || []) {
+          listener.call(this, event)
+        }
+      }
+    }
+
+    BiasE2EWebSocket.prototype.CONNECTING = BiasE2EWebSocket.CONNECTING
+    BiasE2EWebSocket.prototype.OPEN = BiasE2EWebSocket.OPEN
+    BiasE2EWebSocket.prototype.CLOSING = BiasE2EWebSocket.CLOSING
+    BiasE2EWebSocket.prototype.CLOSED = BiasE2EWebSocket.CLOSED
+
+    window.__biasE2ERealtimeSockets = {
+      forum: null,
+      online: null,
+      sockets: {},
+    }
+    window.WebSocket = BiasE2EWebSocket
+  })
+}
 
 test('forum home renders discussion list through browser runtime', async ({ page }) => {
   const discussionsResponse = page.waitForResponse(response => {
@@ -1376,6 +1742,319 @@ test('authenticated user replies from discussion detail composer through browser
   await expect(page.getByText('Charlie 回复了你的帖子')).toBeVisible()
   await expect(page.getByText('Browser E2E discussion list renders').first()).toBeVisible()
   await expect(page.getByText('2 未读')).toBeVisible()
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('authenticated user inserts emoji through composer picker and preview', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  await page.goto('/d/101')
+  await expect(page.getByRole('heading', { name: 'Browser E2E discussion list renders' })).toBeVisible()
+
+  await page.getByRole('button', { name: '回复讨论' }).click()
+  await expect(page.locator('.floating-composer textarea')).toBeVisible()
+  await page.locator('.floating-composer textarea').fill('Emoji reply through Playwright ')
+
+  await page.getByRole('button', { name: '表情' }).click()
+  await expect(page.locator('.composer-emoji-picker')).toBeVisible()
+  await page.locator('.composer-emoji-grid button').filter({ hasText: '😀' }).first().click()
+  await expect(page.locator('.floating-composer textarea')).toHaveValue('Emoji reply through Playwright 😀')
+
+  const previewResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/preview'
+      && response.request().method() === 'POST'
+      && response.status() === 200
+  })
+  await page.getByRole('button', { name: '预览' }).click()
+  await previewResponse
+  await expect(page.locator('.composer-preview-body')).toContainText('Emoji reply through Playwright')
+  await expect(page.locator('.composer-preview-body img.emoji')).toBeVisible()
+
+  const replyResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/101/posts'
+      && response.request().method() === 'POST'
+      && response.status() === 201
+  })
+  await page.getByRole('button', { name: '发布回复' }).click()
+  await replyResponse
+
+  await expect(page.locator('.floating-composer')).toBeHidden()
+  await expect(page.locator('#post-3')).toContainText('Emoji reply through Playwright')
+  await expect(page.locator('#post-3 .post-body img.emoji')).toBeVisible()
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('authenticated user uploads attachment through discussion composer', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  await page.goto('/d/101')
+  await expect(page.getByRole('heading', { name: 'Browser E2E discussion list renders' })).toBeVisible()
+
+  await page.getByRole('button', { name: '回复讨论' }).click()
+  await expect(page.locator('.floating-composer textarea')).toBeVisible()
+  await page.locator('.floating-composer textarea').fill('Attachment reply through Playwright ')
+
+  const uploadResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/uploads'
+      && response.request().method() === 'POST'
+      && response.status() === 200
+  })
+  await page.getByRole('button', { name: '上传附件' }).click()
+  await page.locator('.floating-composer input[type="file"]').first().setInputFiles({
+    name: 'guide.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.4 e2e attachment fixture'),
+  })
+  await uploadResponse
+
+  await expect(page.locator('.floating-composer')).toContainText('附件已插入编辑器')
+  await expect(page.locator('.floating-composer textarea')).toHaveValue(
+    'Attachment reply through Playwright [guide](/media/attachments/9/guide.pdf)'
+  )
+
+  const replyResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/101/posts'
+      && response.request().method() === 'POST'
+      && response.status() === 201
+  })
+  await page.getByRole('button', { name: '发布回复' }).click()
+  await replyResponse
+
+  await expect(page.locator('.floating-composer')).toBeHidden()
+  await expect(page.locator('#post-3')).toContainText('Attachment reply through Playwright')
+  await expect(page.locator('#post-3 .post-body a[href="/media/attachments/9/guide.pdf"]')).toContainText('guide')
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('realtime websocket event appends discussion reply without breaking current page', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  await installRealtimeWebSocketMock(page)
+
+  const discussionResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/101' && response.status() === 200
+  })
+  const postsResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/101/posts' && response.status() === 200
+  })
+  await page.goto('/d/101')
+  await discussionResponse
+  await postsResponse
+
+  await expect(page.getByRole('heading', { name: 'Browser E2E discussion list renders' })).toBeVisible()
+  await expect(page.locator('.posts .post-item')).toHaveCount(2)
+  await expect.poll(async () => {
+    return page.evaluate(() => window.__biasE2ERealtimeSockets?.forum?.sent || [])
+  }).toContainEqual(expect.objectContaining({
+    type: 'subscribe_discussions',
+    discussion_ids: [101],
+  }))
+
+  await page.evaluate(() => {
+    window.__biasE2ERealtimeSockets.forum.receive({
+      type: 'forum_event',
+      event: {
+        scope: 'discussion',
+        discussion_id: 101,
+        event_type: 'post.created',
+        payload: {
+          data: {
+            posts: [
+              {
+                id: 704,
+                discussion_id: 101,
+                number: 3,
+                type: 'comment',
+                content: 'Realtime reply delivered through websocket',
+                content_html: '<p>Realtime reply delivered through websocket</p>',
+                created_at: '2026-06-30T10:40:00Z',
+                is_hidden: false,
+                can_edit: false,
+                can_delete: false,
+                can_hide: false,
+                can_like: true,
+                like_count: 0,
+                is_liked: false,
+                user: {
+                  id: 8,
+                  username: 'bob',
+                  display_name: 'Bob',
+                  avatar_url: '',
+                },
+              },
+            ],
+          },
+          post: {
+            id: 704,
+            discussion_id: 101,
+            number: 3,
+            type: 'comment',
+            content: 'Realtime reply delivered through websocket',
+            content_html: '<p>Realtime reply delivered through websocket</p>',
+            created_at: '2026-06-30T10:40:00Z',
+            is_hidden: false,
+            can_edit: false,
+            can_delete: false,
+            can_hide: false,
+            can_like: true,
+            like_count: 0,
+            is_liked: false,
+            user: {
+              id: 8,
+              username: 'bob',
+              display_name: 'Bob',
+              avatar_url: '',
+            },
+          },
+        },
+      },
+    })
+  })
+
+  await expect(page.locator('#post-3')).toContainText('Realtime reply delivered through websocket')
+  await expect(page.locator('.posts .post-item')).toHaveCount(3)
+  await expect(page.getByRole('heading', { name: 'Browser E2E discussion list renders' })).toBeVisible()
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('authenticated user mentions, edits and likes a reply through browser runtime', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  await page.goto('/d/101')
+  await expect(page.getByRole('heading', { name: 'Browser E2E discussion list renders' })).toBeVisible()
+
+  await page.getByRole('button', { name: '回复讨论' }).click()
+  await expect(page.locator('.floating-composer textarea')).toBeVisible()
+  await page.locator('.floating-composer textarea').fill('Mention reply submitted through Playwright @b')
+
+  const usersResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/users'
+      && url.searchParams.get('q') === 'b'
+      && response.status() === 200
+  })
+  await usersResponse
+  await page.locator('.composer-mention-item').filter({ hasText: '@bob' }).click()
+  await expect(page.locator('.floating-composer textarea')).toHaveValue('Mention reply submitted through Playwright @bob ')
+
+  const replyResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/101/posts'
+      && response.request().method() === 'POST'
+      && response.status() === 201
+  })
+  await page.getByRole('button', { name: '发布回复' }).click()
+  await replyResponse
+  await expect(page.locator('#post-3')).toContainText('Mention reply submitted through Playwright @bob')
+
+  await page.locator('#post-3 .post-action--icon').click()
+  await page.locator('#post-3 .post-controls-menu-item').filter({ hasText: '编辑' }).click()
+  await expect(page.locator('.floating-composer')).toBeVisible()
+  await expect(page.locator('.floating-composer textarea')).toHaveValue('Mention reply submitted through Playwright @bob ')
+  await page.locator('.floating-composer textarea').fill('Edited mention reply through Playwright')
+
+  const editResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/posts/503'
+      && response.request().method() === 'PATCH'
+      && response.status() === 200
+  })
+  await page.locator('.floating-composer .composer-submit').click()
+  await editResponse
+  await expect(page.locator('.floating-composer')).toBeHidden()
+  await expect(page.locator('#post-3')).toContainText('Edited mention reply through Playwright')
+  await expect(page.locator('#post-3')).toContainText('已编辑')
+
+  const likeResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/posts/503/like'
+      && response.request().method() === 'POST'
+      && response.status() === 200
+  })
+  await page.locator('#post-3 .post-action').filter({ hasText: '赞' }).click()
+  await likeResponse
+  await expect(page.locator('#post-3 .post-feedback')).toContainText('你赞了这条回复')
+
+  const notificationsResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications'
+      && response.status() === 200
+  })
+  await page.goto('/notifications')
+  await notificationsResponse
+  await expect(page.getByText('Charlie 在回复中提到了你')).toBeVisible()
+  await expect(page.getByText('Charlie 点赞了你的回复')).toBeVisible()
+  await expect(page.getByRole('button', { name: '回复被点赞 1 / 1 未读' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '@提及通知 1 / 1 未读' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '标记为已读', exact: true })).toHaveCount(4)
+
+  expect(page.browserErrors).toEqual([])
+})
+
+test('authenticated user follows discussions and sees subscription notifications through browser runtime', async ({ page }) => {
+  page.e2eAuthenticated = true
+
+  await page.goto('/d/101')
+  await expect(page.getByRole('heading', { name: 'Browser E2E discussion list renders' })).toBeVisible()
+
+  const subscribeResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/101/subscribe'
+      && response.request().method() === 'POST'
+      && response.status() === 200
+  })
+  await page.getByRole('button', { name: '关注讨论' }).click()
+  await subscribeResponse
+  await expect(page.getByRole('button', { name: '取消关注' })).toBeVisible()
+  await expect(page.getByText('你会收到这条讨论后续回复的通知。')).toBeVisible()
+
+  const followingResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/'
+      && url.searchParams.get('filter') === 'following'
+      && response.status() === 200
+  })
+  await page.goto('/following')
+  await followingResponse
+  expect(new URL(page.url()).pathname).toBe('/following')
+  await expect(page.locator('[data-discussion-id="101"]')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Browser E2E discussion list renders' })).toHaveAttribute(
+    'href',
+    '/d/101?returnTo=/following&returnDiscussion=101',
+  )
+
+  const notificationsResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/notifications'
+      && response.status() === 200
+  })
+  await page.goto('/notifications')
+  await notificationsResponse
+  await expect(page.getByText('Bob 回复了你的讨论 "Browser E2E discussion list renders"')).toBeVisible()
+  await expect(page.getByRole('button', { name: '讨论新回复 1 / 1 未读' })).toBeVisible()
+
+  await page.goto('/d/101')
+  await expect(page.getByRole('button', { name: '取消关注' })).toBeVisible()
+
+  const unsubscribeResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/101/subscribe'
+      && response.request().method() === 'DELETE'
+      && response.status() === 200
+  })
+  await page.getByRole('button', { name: '取消关注' }).click()
+  await unsubscribeResponse
+  await expect(page.getByRole('button', { name: '关注讨论' })).toBeVisible()
 
   expect(page.browserErrors).toEqual([])
 })
@@ -1774,15 +2453,18 @@ test('forum search page renders grouped results and opens discussion result thro
   await searchResponse
 
   await expect(page.getByRole('heading', { name: '“browser”' })).toBeVisible()
-  await expect(page.getByText('共找到 3 条结果，已按讨论、帖子和用户分组展示。')).toBeVisible()
+  await expect(page.getByText('共找到 4 条结果，已按讨论、帖子、用户和标签分组展示。')).toBeVisible()
   await expect(page.getByRole('heading', { name: '讨论' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '帖子' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '用户' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '标签' })).toBeVisible()
   await expect(page.getByText('Browser E2E discussion list renders').first()).toBeVisible()
   await expect(page.getByText('Browser search discussion excerpt')).toBeVisible()
   await expect(page.getByText('Browser search post excerpt')).toBeVisible()
   await expect(page.getByText('Alice Searcher')).toBeVisible()
   await expect(page.getByText('Browser search user profile')).toBeVisible()
+  await expect(page.locator('.result-card').filter({ hasText: 'Browser automation cases' })).toBeVisible()
+  await expect(page.getByText('1 条讨论')).toBeVisible()
   await expect(page.getByText('搜索中...')).toBeHidden()
 
   const discussionResponse = page.waitForResponse(response => {
@@ -1800,6 +2482,23 @@ test('forum search page renders grouped results and opens discussion result thro
 
   expect(new URL(page.url()).pathname).toBe('/d/101')
   await expect(page.getByRole('heading', { name: 'Browser E2E discussion list renders' })).toBeVisible()
+
+  const tagDetailResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/tags/slug/browser' && response.status() === 200
+  })
+  const tagDiscussionResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/discussions/'
+      && url.searchParams.get('tag') === 'browser'
+      && response.status() === 200
+  })
+
+  await page.goto('/search?q=browser&type=all')
+  await page.locator('.result-card').filter({ hasText: 'Browser automation cases' }).click()
+  await tagDetailResponse
+  await tagDiscussionResponse
+  expect(new URL(page.url()).pathname).toBe('/t/browser')
 
   expect(page.browserErrors).toEqual([])
 })

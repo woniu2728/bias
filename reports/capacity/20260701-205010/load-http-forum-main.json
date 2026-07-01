@@ -1,0 +1,114 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-main",
+  "concurrency": 2,
+  "duration_seconds": 0.3114126119762659,
+  "request_limit": 8,
+  "dynamic_values": {
+    "sequence": 1782910286102
+  },
+  "isolated_targets": {},
+  "targets": [
+    {
+      "method": "GET",
+      "path": "/api/forum",
+      "target": "0:GET /api/forum",
+      "target_label": "GET /api/forum",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 2
+      },
+      "min_ms": 13.993117958307266,
+      "max_ms": 85.3674840182066,
+      "average_ms": 49.68030098825693,
+      "p50_ms": 49.68030098825693,
+      "p95_ms": 81.79876571521163,
+      "p99_ms": 84.6537403576076,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/discussions/?limit=20",
+      "target": "1:GET /api/discussions/?limit=20",
+      "target_label": "GET /api/discussions/?limit=20",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 2
+      },
+      "min_ms": 69.50775510631502,
+      "max_ms": 90.15159495174885,
+      "average_ms": 79.82967502903193,
+      "p50_ms": 79.82967502903193,
+      "p95_ms": 89.11940295947716,
+      "p99_ms": 89.94515655329451,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/search?q=loadtest",
+      "target": "2:GET /api/search?q=loadtest",
+      "target_label": "GET /api/search?q=loadtest",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 2
+      },
+      "min_ms": 112.23910097032785,
+      "max_ms": 113.08056605048478,
+      "average_ms": 112.65983351040632,
+      "p50_ms": 112.65983351040632,
+      "p95_ms": 113.03849279647693,
+      "p99_ms": 113.07215139968321,
+      "threshold_ms": 800.0,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/tags",
+      "target": "3:GET /api/tags",
+      "target_label": "GET /api/tags",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 2
+      },
+      "min_ms": 56.53426609933376,
+      "max_ms": 63.10767610557377,
+      "average_ms": 59.82097110245377,
+      "p50_ms": 59.82097110245377,
+      "p95_ms": 62.77900560526177,
+      "p99_ms": 63.04194200551137,
+      "threshold_ms": 300.0,
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "ok": true,
+    "request_count": 8,
+    "error_count": 0,
+    "error_rate": 0.0,
+    "requests_per_second": 25.689389871627018,
+    "failed_threshold_count": 0
+  }
+}

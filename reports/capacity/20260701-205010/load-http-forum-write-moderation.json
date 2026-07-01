@@ -1,0 +1,280 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-write-moderation",
+  "concurrency": 1,
+  "duration_seconds": 0.4771834050770849,
+  "request_limit": 9,
+  "dynamic_values": {
+    "sequence": 1782911169864,
+    "discussion_id": 112,
+    "post_id": 329,
+    "isolated_targets": {
+      "prefix": "loadtest-isolated-1782911169864",
+      "user_id": 60,
+      "discussion_id": 112,
+      "post_id": 329,
+      "first_post_id": 328,
+      "tag_id": 39,
+      "notification_id": 152
+    },
+    "tag_id": 39,
+    "notification_id": 152
+  },
+  "isolated_targets": {
+    "prefix": "loadtest-isolated-1782911169864",
+    "user_id": 60,
+    "discussion_id": 112,
+    "post_id": 329,
+    "first_post_id": 328,
+    "tag_id": 39,
+    "notification_id": 152
+  },
+  "targets": [
+    {
+      "method": "PATCH",
+      "path": "/api/posts/329",
+      "target": "0:PATCH /api/posts/329",
+      "target_label": "PATCH /api/posts/329",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1
+      },
+      "min_ms": 102.24793897941709,
+      "max_ms": 102.24793897941709,
+      "average_ms": 102.24793897941709,
+      "p50_ms": 102.24793897941709,
+      "p95_ms": 102.24793897941709,
+      "p99_ms": 102.24793897941709,
+      "threshold_ms": 500.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/posts/329/report",
+      "target": "1:POST /api/posts/329/report",
+      "target_label": "POST /api/posts/329/report",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1
+      },
+      "min_ms": 57.041750056669116,
+      "max_ms": 57.041750056669116,
+      "average_ms": 57.041750056669116,
+      "p50_ms": 57.041750056669116,
+      "p95_ms": 57.041750056669116,
+      "p99_ms": 57.041750056669116,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications/152/read",
+      "target": "2:POST /api/notifications/152/read",
+      "target_label": "POST /api/notifications/152/read",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1
+      },
+      "min_ms": 28.36073306389153,
+      "max_ms": 28.36073306389153,
+      "average_ms": 28.36073306389153,
+      "p50_ms": 28.36073306389153,
+      "p95_ms": 28.36073306389153,
+      "p99_ms": 28.36073306389153,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/posts/329/hide",
+      "target": "3:POST /api/posts/329/hide",
+      "target_label": "POST /api/posts/329/hide",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1
+      },
+      "min_ms": 72.64375383965671,
+      "max_ms": 72.64375383965671,
+      "average_ms": 72.64375383965671,
+      "p50_ms": 72.64375383965671,
+      "p95_ms": 72.64375383965671,
+      "p99_ms": 72.64375383965671,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/posts/329/hide",
+      "target": "4:POST /api/posts/329/hide",
+      "target_label": "POST /api/posts/329/hide",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1
+      },
+      "min_ms": 57.948665926232934,
+      "max_ms": 57.948665926232934,
+      "average_ms": 57.948665926232934,
+      "p50_ms": 57.948665926232934,
+      "p95_ms": 57.948665926232934,
+      "p99_ms": 57.948665926232934,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications/read-filtered?type=postReply&discussion_id=112",
+      "target": "5:POST /api/notifications/read-filtered?type=postReply&discussion_id=112",
+      "target_label": "POST /api/notifications/read-filtered?type=postReply&discussion_id=112",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1
+      },
+      "min_ms": 25.75682010501623,
+      "max_ms": 25.75682010501623,
+      "average_ms": 25.75682010501623,
+      "p50_ms": 25.75682010501623,
+      "p95_ms": 25.75682010501623,
+      "p99_ms": 25.75682010501623,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/notifications/read/clear-filtered?type=postReply&discussion_id=112",
+      "target": "6:DELETE /api/notifications/read/clear-filtered?type=postReply&discussion_id=112",
+      "target_label": "DELETE /api/notifications/read/clear-filtered?type=postReply&discussion_id=112",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1
+      },
+      "min_ms": 25.98137315362692,
+      "max_ms": 25.98137315362692,
+      "average_ms": 25.98137315362692,
+      "p50_ms": 25.98137315362692,
+      "p95_ms": 25.98137315362692,
+      "p99_ms": 25.98137315362692,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/notifications/read/clear",
+      "target": "7:DELETE /api/notifications/read/clear",
+      "target_label": "DELETE /api/notifications/read/clear",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1
+      },
+      "min_ms": 24.531947914510965,
+      "max_ms": 24.531947914510965,
+      "average_ms": 24.531947914510965,
+      "p50_ms": 24.531947914510965,
+      "p95_ms": 24.531947914510965,
+      "p99_ms": 24.531947914510965,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/posts/329",
+      "target": "8:DELETE /api/posts/329",
+      "target_label": "DELETE /api/posts/329",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1
+      },
+      "min_ms": 81.36669988743961,
+      "max_ms": 81.36669988743961,
+      "average_ms": 81.36669988743961,
+      "p50_ms": 81.36669988743961,
+      "p95_ms": 81.36669988743961,
+      "p99_ms": 81.36669988743961,
+      "threshold_ms": 500.0,
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "ok": true,
+    "request_count": 9,
+    "error_count": 0,
+    "error_rate": 0.0,
+    "requests_per_second": 18.86067265592802,
+    "failed_threshold_count": 0
+  },
+  "cleanup": {
+    "ok": true,
+    "prefix": "loadtest-isolated-1782911169864",
+    "deleted_total": 8,
+    "deleted": {
+      "notifications.Notification": 1,
+      "tags.DiscussionTag": 1,
+      "content.Discussion": 4,
+      "tags.Tag": 1,
+      "auth.User": 1
+    },
+    "details": {
+      "notifications.Notification": {
+        "notifications.Notification": 1
+      },
+      "tags.DiscussionTag": {
+        "tags.DiscussionTag": 1
+      },
+      "content.Discussion": {
+        "content.Post": 3,
+        "content.Discussion": 1
+      },
+      "tags.Tag": {
+        "tags.Tag": 1
+      },
+      "auth.User": {
+        "users.User": 1
+      }
+    }
+  }
+}

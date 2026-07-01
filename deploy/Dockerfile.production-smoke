@@ -1,0 +1,62 @@
+FROM python:3.12-slim
+
+WORKDIR /workspace
+
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    gcc \
+    python3-dev \
+    gosu \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir build setuptools wheel \
+    "gunicorn>=22.0" "uvicorn>=0.30" "websockets>=12.0,<13" "psycopg2-binary>=2.9"
+
+COPY bias_core/ bias_core/
+COPY bias-content/ bias-content/
+COPY bias-ext-approval/ bias-ext-approval/
+COPY bias-ext-discussions/ bias-ext-discussions/
+COPY bias-ext-emoji/ bias-ext-emoji/
+COPY bias-ext-flags/ bias-ext-flags/
+COPY bias-ext-likes/ bias-ext-likes/
+COPY bias-ext-mentions/ bias-ext-mentions/
+COPY bias-ext-notifications/ bias-ext-notifications/
+COPY bias-ext-points/ bias-ext-points/
+COPY bias-ext-posts/ bias-ext-posts/
+COPY bias-ext-realtime/ bias-ext-realtime/
+COPY bias-ext-search/ bias-ext-search/
+COPY bias-ext-security/ bias-ext-security/
+COPY bias-ext-subscriptions/ bias-ext-subscriptions/
+COPY bias-ext-tags/ bias-ext-tags/
+COPY bias-ext-uploads/ bias-ext-uploads/
+COPY bias-ext-users/ bias-ext-users/
+
+RUN mkdir -p /tmp/bias-wheels \
+    && python -m build --wheel --no-isolation bias_core -o /tmp/bias-wheels \
+    && python -m build --wheel --no-isolation bias-content -o /tmp/bias-wheels \
+    && for extension_dir in bias-ext-*; do \
+         python -m build --wheel --no-isolation "$extension_dir" -o /tmp/bias-wheels; \
+       done \
+    && pip install --no-cache-dir /tmp/bias-wheels/*.whl \
+    && rm -rf /root/.cache/pip
+
+WORKDIR /app
+
+COPY bias/pyproject.toml .
+COPY bias/config/ config/
+COPY bias/manage.py .
+COPY bias/docker/ docker/
+COPY bias/frontend/dist/ frontend/dist/
+COPY bias/static/ static/
+COPY bias/staticfiles/ staticfiles/
+
+RUN pip install --no-cache-dir -e . \
+    && cp docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && mkdir -p media static instance /var/log/bias \
+    && useradd -m -u 1000 -s /bin/bash bias \
+    && chown -R 1000:1000 /var/log/bias /app
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+EXPOSE 8000
+CMD ["gunicorn", "config.asgi:application", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--workers", "2"]

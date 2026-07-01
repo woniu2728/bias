@@ -1,0 +1,45 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-main",
+  "concurrency": 20,
+  "duration_seconds": 120.42614839994349,
+  "request_limit": 0,
+  "dynamic_values": {
+    "sequence": 1782917604017
+  },
+  "isolated_targets": {},
+  "targets": [
+    {
+      "method": "GET",
+      "path": "/api/discussions/?limit=20",
+      "target": "0:GET /api/discussions/?limit=20",
+      "target_label": "GET /api/discussions/?limit=20",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 5243,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 5243
+      },
+      "min_ms": 106.70770006254315,
+      "max_ms": 1176.1409000027925,
+      "average_ms": 450.71497434659074,
+      "p50_ms": 438.57180001214147,
+      "p95_ms": 681.5094599733128,
+      "p99_ms": 819.6600700169801,
+      "threshold_ms": 300.0,
+      "ok": false
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "ok": false,
+    "request_count": 5243,
+    "error_count": 0,
+    "error_rate": 0.0,
+    "requests_per_second": 43.537056276080826,
+    "failed_threshold_count": 1
+  }
+}

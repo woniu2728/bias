@@ -1,0 +1,88 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "requests_per_target": 5,
+  "warmup_per_target": 1,
+  "targets": [
+    {
+      "path": "/api/forum",
+      "url": "http://127.0.0.1:8000/api/forum",
+      "request_count": 5,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 5
+      },
+      "min_ms": 8.823999902233481,
+      "max_ms": 32.980200136080384,
+      "average_ms": 14.211460016667843,
+      "p95_ms": 28.466840088367455,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "path": "/api/discussions/?limit=20",
+      "url": "http://127.0.0.1:8000/api/discussions/?limit=20",
+      "request_count": 5,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 5
+      },
+      "min_ms": 62.41450016386807,
+      "max_ms": 116.85860017314553,
+      "average_ms": 74.10496012307703,
+      "p95_ms": 106.41570016741753,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "path": "/api/search?q=smoke",
+      "url": "http://127.0.0.1:8000/api/search?q=smoke",
+      "request_count": 5,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 5
+      },
+      "min_ms": 93.83350005373359,
+      "max_ms": 125.68120006471872,
+      "average_ms": 101.35986004024744,
+      "p95_ms": 119.79358005337416,
+      "threshold_ms": 800.0,
+      "ok": true
+    },
+    {
+      "path": "/api/tags",
+      "url": "http://127.0.0.1:8000/api/tags",
+      "request_count": 5,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 5
+      },
+      "min_ms": 41.13979986868799,
+      "max_ms": 66.57249992713332,
+      "average_ms": 54.61195996031165,
+      "p95_ms": 65.84389992058277,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "path": "/api/notifications",
+      "url": "http://127.0.0.1:8000/api/notifications",
+      "request_count": 5,
+      "error_count": 0,
+      "status_code_counts": {
+        "401": 5
+      },
+      "min_ms": 7.883799960836768,
+      "max_ms": 9.323199978098273,
+      "average_ms": 8.759819949045777,
+      "p95_ms": 9.299719985574484,
+      "threshold_ms": 300.0,
+      "ok": true
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "target_count": 5,
+    "failed_count": 0
+  },
+  "note": "���� smoke ֻ��֤��ǰ���л����Ĺؼ�·�� P95����ʽ������������ʹ�������ȼ��������Ͳ���ģ�͡�"
+}

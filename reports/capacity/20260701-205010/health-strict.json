@@ -1,0 +1,157 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "name": "discussion_query_budgets",
+      "status": "ok",
+      "message": "discussion list/detail/post stream query budget tests are declared.",
+      "budgets": {
+        "discussion_list": {
+          "path": "/api/discussions/?limit=6",
+          "max_queries": 24,
+          "test": "tests.test_forum_discussion_api.ForumDiscussionApiTests.test_discussion_list_endpoint_keeps_query_count_within_budget"
+        },
+        "discussion_detail": {
+          "path": "/api/discussions/{id}",
+          "max_queries": 20,
+          "test": "tests.test_forum_discussion_api.ForumDiscussionApiTests.test_discussion_detail_endpoint_keeps_query_count_within_budget"
+        },
+        "post_stream": {
+          "path": "/api/discussions/{id}/posts?near={number}&limit=8",
+          "max_queries": 22,
+          "test": "tests.test_forum_discussion_api.ForumDiscussionApiTests.test_post_stream_endpoint_keeps_query_count_within_budget"
+        }
+      }
+    },
+    {
+      "name": "tag_stats_refresh",
+      "status": "ok",
+      "message": "tag stats refresh exposes batched implementation and duration metrics.",
+      "extension_id": "tags",
+      "extension_name": "Tags",
+      "extension_version": "0.1.0",
+      "metrics": {
+        "refreshed_count": "int",
+        "duration_ms": "float",
+        "batched": true
+      },
+      "tests": [
+        "bias_ext_tags.backend.tests.TagExtensionTests.test_refresh_tag_stats_batches_counts_and_latest_discussions"
+      ]
+    },
+    {
+      "name": "notification_pagination_indexes",
+      "status": "ok",
+      "message": "notification list has pagination and required indexes.",
+      "extension_id": "notifications",
+      "extension_name": "Notifications",
+      "extension_version": "0.1.0",
+      "required_indexes": [
+        [
+          "user"
+        ],
+        [
+          "user",
+          "is_read"
+        ],
+        [
+          "user",
+          "is_deleted"
+        ],
+        [
+          "created_at"
+        ],
+        [
+          "subject_type",
+          "subject_id"
+        ]
+      ],
+      "missing_indexes": [],
+      "pagination": "page/limit normalized by PaginationService"
+    },
+    {
+      "name": "search_driver_boundary",
+      "status": "ok",
+      "message": "database search uses PostgreSQL full text only when supported and keeps extension targets behind runtime services.",
+      "extension_id": "search",
+      "extension_name": "Search",
+      "extension_version": "0.1.0",
+      "database_boundary": "SearchService.should_use_postgres_full_text",
+      "extension_boundary": "search.target.* runtime services"
+    },
+    {
+      "name": "http_request_metrics",
+      "status": "ok",
+      "message": "HTTP metrics include request counts, status buckets and latency fields.",
+      "required_fields": [
+        "average_duration_ms",
+        "error_count",
+        "error_rate",
+        "last_duration_ms",
+        "max_duration_ms",
+        "method_counts",
+        "request_count",
+        "status_code_counts"
+      ],
+      "missing_fields": []
+    },
+    {
+      "name": "storage_operation_metrics",
+      "status": "ok",
+      "message": "storage metrics include upload/delete counts, failures, bytes and latency fields.",
+      "required_fields": [
+        "average_duration_ms",
+        "delete_count",
+        "delete_failure_count",
+        "failure_count",
+        "failure_rate",
+        "last_duration_ms",
+        "max_duration_ms",
+        "operation_count",
+        "total_bytes",
+        "upload_count",
+        "upload_failure_count"
+      ],
+      "missing_fields": []
+    },
+    {
+      "name": "queue_worker_metrics",
+      "status": "ok",
+      "message": "queue metrics include task duration, failure rate and retry count.",
+      "required_fields": [
+        "average_duration_ms",
+        "enqueued_count",
+        "failed_count",
+        "failure_rate",
+        "fallback_count",
+        "last_duration_ms",
+        "max_duration_ms",
+        "retry_count",
+        "sync_count",
+        "task_event_count"
+      ],
+      "missing_fields": []
+    },
+    {
+      "name": "realtime_metrics",
+      "status": "ok",
+      "message": "realtime metrics include connections, subscriptions and message counters.",
+      "extension_id": "realtime",
+      "extension_name": "Realtime",
+      "extension_version": "0.1.0",
+      "required_fields": [
+        "active_connections",
+        "active_subscriptions",
+        "connection_count",
+        "failed_send_count",
+        "message_count",
+        "subscription_count"
+      ],
+      "missing_fields": []
+    }
+  ],
+  "extensions_path": "/app/extensions",
+  "extension_contract_count": 4,
+  "p95_load_test_required": true,
+  "p95_note": "此命令只验证仓库内性能基线契约；正式上线前仍需在目标部署环境执行真实数据量 P95 压测。"
+}

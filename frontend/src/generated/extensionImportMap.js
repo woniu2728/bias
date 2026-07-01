@@ -85,7 +85,6 @@ export const generatedForumExtensionModules = {
   "../../../extensions/tags/frontend/forum/TagsView.vue": () => import("../../../extensions/tags/frontend/forum/TagsView.vue"),
   "tags:./TagsView.vue": () => import("../../../extensions/tags/frontend/forum/TagsView.vue"),
   "tags:extensions/tags/frontend/forum/TagsView.vue": () => import("../../../extensions/tags/frontend/forum/TagsView.vue"),
-  "tags:extensions/discussions/frontend/forum/DiscussionListView.vue": () => import("../../../extensions/discussions/frontend/forum/DiscussionListView.vue"),
   "../../../extensions/uploads/frontend/forum/index.js": () => import("../../../extensions/uploads/frontend/forum/index.js"),
   "uploads": () => import("../../../extensions/uploads/frontend/forum/index.js"),
   "../../../extensions/users/frontend/forum/index.js": () => import("../../../extensions/users/frontend/forum/index.js"),

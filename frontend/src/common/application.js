@@ -100,6 +100,9 @@ export function createRuntimeApplication({
     get booted() {
       return booted
     },
+    get isBooted() {
+      return booted
+    },
     get currentInitializerExtension() {
       return currentInitializerExtension
     },
@@ -116,18 +119,24 @@ export function createRuntimeApplication({
       }
       return app
     },
-    booting(callback) {
-      if (typeof callback === 'function') bootingCallbacks.push(callback)
+    booting(callback, options = {}) {
+      if (typeof callback === 'function') bootingCallbacks.push(createLifecycleCallback(callback, options, app))
     },
-    booted(callback) {
-      if (typeof callback === 'function') bootedCallbacks.push(callback)
+    booted(callback, options = {}) {
+      if (typeof callback === 'function') bootedCallbacks.push(createLifecycleCallback(callback, options, app))
     },
-    beforeMount(callback) {
-      if (typeof callback === 'function') beforeMountCallbacks.push(callback)
+    beforeMount(callback, options = {}) {
+      if (typeof callback === 'function') beforeMountCallbacks.push(createLifecycleCallback(callback, options, app))
+    },
+    clearLifecycleCallbacks(extensionId = '') {
+      const normalizedExtensionId = String(extensionId || '').trim()
+      clearLifecycleCallbackList(bootingCallbacks, normalizedExtensionId)
+      clearLifecycleCallbackList(bootedCallbacks, normalizedExtensionId)
+      clearLifecycleCallbackList(beforeMountCallbacks, normalizedExtensionId)
     },
     async runBeforeMount() {
       for (const item of beforeMountCallbacks.splice(0)) {
-        await item(app)
+        await item.callback(app)
       }
       return app
     },
@@ -157,7 +166,7 @@ export function createRuntimeApplication({
     },
     async boot(callback) {
       for (const item of bootingCallbacks.splice(0)) {
-        await item(app)
+        await item.callback(app)
       }
       if (typeof callback === 'function') {
         await callback(app)
@@ -166,7 +175,7 @@ export function createRuntimeApplication({
       initialRoute = getCurrentLocation()
       booted = true
       for (const item of bootedCallbacks.splice(0)) {
-        await item(app)
+        await item.callback(app)
       }
       return app
     },
@@ -371,6 +380,21 @@ function normalizeApplicationPayload(payload) {
     apiDocument: value.apiDocument || value.api_document || null,
     resources: Array.isArray(value.resources) ? value.resources : [],
     session: value.session && typeof value.session === 'object' ? value.session : {},
+  }
+}
+
+function createLifecycleCallback(callback, options = {}, app = null) {
+  return {
+    callback,
+    extensionId: String(options.extensionId || options.extension_id || app?.currentInitializerExtension || '').trim(),
+  }
+}
+
+function clearLifecycleCallbackList(callbacks, extensionId = '') {
+  for (let index = callbacks.length - 1; index >= 0; index -= 1) {
+    if (!extensionId || callbacks[index].extensionId === extensionId) {
+      callbacks.splice(index, 1)
+    }
   }
 }
 

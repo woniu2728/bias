@@ -1,0 +1,45 @@
+{
+  "prefix": "loadtest",
+  "targets": {
+    "users": 1000,
+    "discussions": 10000,
+    "posts": 100000,
+    "tags": 200,
+    "notifications": 50000
+  },
+  "sections": {
+    "users": {
+      "target": 1000,
+      "existing": 1000,
+      "created": 0
+    },
+    "discussions": {
+      "target": 10000,
+      "existing": 10000,
+      "created": 0
+    },
+    "posts": {
+      "target": 100000,
+      "existing": 100000,
+      "created": 0
+    },
+    "tags": {
+      "target": 200,
+      "existing": 200,
+      "created": 0,
+      "discussion_relations_created": 0
+    },
+    "notifications": {
+      "target": 50000,
+      "existing": 50000,
+      "created": 0
+    }
+  },
+  "errors": [],
+  "duration_ms": 274.77,
+  "summary": {
+    "ok": true,
+    "created_total": 0,
+    "skipped_optional": []
+  }
+}

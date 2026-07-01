@@ -1,0 +1,45 @@
+{
+  "prefix": "smoke-capacity",
+  "targets": {
+    "users": 20,
+    "discussions": 40,
+    "posts": 120,
+    "tags": 10,
+    "notifications": 80
+  },
+  "sections": {
+    "users": {
+      "target": 20,
+      "existing": 0,
+      "created": 20
+    },
+    "discussions": {
+      "target": 40,
+      "existing": 0,
+      "created": 40
+    },
+    "posts": {
+      "target": 120,
+      "existing": 0,
+      "created": 120
+    },
+    "tags": {
+      "target": 10,
+      "existing": 0,
+      "created": 10,
+      "discussion_relations_created": 40
+    },
+    "notifications": {
+      "target": 80,
+      "existing": 0,
+      "created": 80
+    }
+  },
+  "errors": [],
+  "duration_ms": 93.88,
+  "summary": {
+    "ok": true,
+    "created_total": 270,
+    "skipped_optional": []
+  }
+}

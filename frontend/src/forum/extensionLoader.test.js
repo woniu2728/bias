@@ -1,4 +1,4 @@
-import test from 'node:test'
+import test, { afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
@@ -37,6 +37,11 @@ import {
   ThemeModeExtender,
 } from '../common/frontendExtenders.js'
 import { GroupModel, UserModel } from '../common/resourceModels.js'
+
+afterEach(() => {
+  resetForumExtensionRuntimeContributions('')
+  clearExtensionRuntimeErrors()
+})
 
 function createTestResourceStore() {
   const buckets = {}
@@ -693,6 +698,21 @@ test('runtime application exposes load, beforeMount, preloaded document and titl
       globalThis.location = previousLocation
     }
   }
+})
+
+test('runtime application clears extension-owned lifecycle callbacks', async () => {
+  const runtimeApp = createRuntimeApplication({ kind: 'forum' })
+  const calls = []
+
+  runtimeApp.beforeMount(() => calls.push('core'))
+  runtimeApp.currentInitializerExtension = 'alpha'
+  runtimeApp.beforeMount(() => calls.push('alpha'))
+  runtimeApp.currentInitializerExtension = null
+
+  resetForumExtensionRuntimeContributions('alpha', { app: runtimeApp })
+  await runtimeApp.runBeforeMount()
+
+  assert.deepEqual(calls, ['core'])
 })
 
 test('runtime application request handles csrf, response parsing and default errors', async () => {

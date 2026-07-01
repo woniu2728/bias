@@ -1,0 +1,114 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-main-auth",
+  "concurrency": 2,
+  "duration_seconds": 0.26849425281398,
+  "request_limit": 8,
+  "dynamic_values": {
+    "sequence": 1782910288080
+  },
+  "isolated_targets": {},
+  "targets": [
+    {
+      "method": "GET",
+      "path": "/api/users/me",
+      "target": "0:GET /api/users/me",
+      "target_label": "GET /api/users/me",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 2
+      },
+      "min_ms": 47.88687406107783,
+      "max_ms": 55.585597874596715,
+      "average_ms": 51.736235967837274,
+      "p50_ms": 51.736235967837274,
+      "p95_ms": 55.20066168392077,
+      "p99_ms": 55.508610636461526,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/discussions/?filter=my&limit=20",
+      "target": "1:GET /api/discussions/?filter=my&limit=20",
+      "target_label": "GET /api/discussions/?filter=my&limit=20",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 2
+      },
+      "min_ms": 38.31040090881288,
+      "max_ms": 38.80515182390809,
+      "average_ms": 38.557776366360486,
+      "p50_ms": 38.557776366360486,
+      "p95_ms": 38.78041427815333,
+      "p99_ms": 38.80020431475714,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/discussions/?filter=unread&limit=20",
+      "target": "2:GET /api/discussions/?filter=unread&limit=20",
+      "target_label": "GET /api/discussions/?filter=unread&limit=20",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 2
+      },
+      "min_ms": 74.36051219701767,
+      "max_ms": 131.1745240818709,
+      "average_ms": 102.76751813944429,
+      "p50_ms": 102.76751813944429,
+      "p95_ms": 128.33382348762825,
+      "p99_ms": 130.60638396302238,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "target": "3:GET /api/notifications",
+      "target_label": "GET /api/notifications",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 2
+      },
+      "min_ms": 35.43528821319342,
+      "max_ms": 89.93953908793628,
+      "average_ms": 62.68741365056485,
+      "p50_ms": 62.68741365056485,
+      "p95_ms": 87.21432654419914,
+      "p99_ms": 89.39449657918885,
+      "threshold_ms": 300.0,
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "ok": true,
+    "request_count": 8,
+    "error_count": 0,
+    "error_rate": 0.0,
+    "requests_per_second": 29.795796059525394,
+    "failed_threshold_count": 0
+  }
+}

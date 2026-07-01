@@ -32,6 +32,7 @@
       </main>
       <Footer />
       <AppModalHost />
+      <RuntimeAlertHost />
       <component
         :is="host.component"
         v-for="host in composerHosts"
@@ -48,6 +49,7 @@ import { useRoute } from 'vue-router'
 import Header from './components/Header.vue'
 import Footer from './components/Footer.vue'
 import AppModalHost from './components/AppModalHost.vue'
+import RuntimeAlertHost from './components/RuntimeAlertHost.vue'
 import ForumInlineMessage from './components/forum/ForumInlineMessage.vue'
 import { useComposerStore } from './stores/composer'
 import { useForumStore } from './stores/forum'

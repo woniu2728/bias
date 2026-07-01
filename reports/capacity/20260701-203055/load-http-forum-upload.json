@@ -1,0 +1,57 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-upload",
+  "concurrency": 1,
+  "duration_seconds": 0.5434216000139713,
+  "request_limit": 1,
+  "dynamic_values": {
+    "sequence": 1782909160689
+  },
+  "isolated_targets": {},
+  "targets": [
+    {
+      "method": "POST",
+      "path": "/api/uploads",
+      "target": "0:POST /api/uploads",
+      "target_label": "POST /api/uploads",
+      "has_json_body": false,
+      "has_multipart_file": true,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 1,
+      "error_rate": 1.0,
+      "status_code_counts": {
+        "403": 1
+      },
+      "min_ms": 541.2256999406964,
+      "max_ms": 541.2256999406964,
+      "average_ms": 541.2256999406964,
+      "p50_ms": 541.2256999406964,
+      "p95_ms": 541.2256999406964,
+      "p99_ms": 541.2256999406964,
+      "threshold_ms": 800.0,
+      "ok": false
+    }
+  ],
+  "errors": [
+    {
+      "method": "POST",
+      "path": "/api/uploads",
+      "target": "0:POST /api/uploads",
+      "target_label": "POST /api/uploads",
+      "url": "http://127.0.0.1:8000/api/uploads",
+      "duration_ms": 541.2256999406964,
+      "status_code": 403,
+      "error": true,
+      "error_message": "HTTP 403"
+    }
+  ],
+  "summary": {
+    "ok": false,
+    "request_count": 1,
+    "error_count": 1,
+    "error_rate": 1.0,
+    "requests_per_second": 1.840191850994311,
+    "failed_threshold_count": 1
+  }
+}

@@ -1,0 +1,264 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-write-mixed",
+  "concurrency": 1,
+  "duration_seconds": 3.7958698999136686,
+  "request_limit": 7,
+  "dynamic_values": {
+    "sequence": 1782909153299,
+    "discussion_id": 40,
+    "post_id": 120,
+    "tag_id": 10
+  },
+  "isolated_targets": {},
+  "targets": [
+    {
+      "method": "POST",
+      "path": "/api/discussions/",
+      "target": "0:POST /api/discussions/",
+      "target_label": "POST /api/discussions/",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 1,
+      "error_rate": 1.0,
+      "status_code_counts": {
+        "403": 1
+      },
+      "min_ms": 534.2447001021355,
+      "max_ms": 534.2447001021355,
+      "average_ms": 534.2447001021355,
+      "p50_ms": 534.2447001021355,
+      "p95_ms": 534.2447001021355,
+      "p99_ms": 534.2447001021355,
+      "threshold_ms": 500.0,
+      "ok": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/discussions/40",
+      "target": "1:PATCH /api/discussions/40",
+      "target_label": "PATCH /api/discussions/40",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 1,
+      "error_rate": 1.0,
+      "status_code_counts": {
+        "403": 1
+      },
+      "min_ms": 551.2790998909622,
+      "max_ms": 551.2790998909622,
+      "average_ms": 551.2790998909622,
+      "p50_ms": 551.2790998909622,
+      "p95_ms": 551.2790998909622,
+      "p99_ms": 551.2790998909622,
+      "threshold_ms": 500.0,
+      "ok": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/discussions/40/read",
+      "target": "2:POST /api/discussions/40/read",
+      "target_label": "POST /api/discussions/40/read",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 1,
+      "error_rate": 1.0,
+      "status_code_counts": {
+        "403": 1
+      },
+      "min_ms": 536.1591000109911,
+      "max_ms": 536.1591000109911,
+      "average_ms": 536.1591000109911,
+      "p50_ms": 536.1591000109911,
+      "p95_ms": 536.1591000109911,
+      "p99_ms": 536.1591000109911,
+      "threshold_ms": 300.0,
+      "ok": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/posts/120/like",
+      "target": "3:POST /api/posts/120/like",
+      "target_label": "POST /api/posts/120/like",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 1,
+      "error_rate": 1.0,
+      "status_code_counts": {
+        "403": 1
+      },
+      "min_ms": 528.6709000356495,
+      "max_ms": 528.6709000356495,
+      "average_ms": 528.6709000356495,
+      "p50_ms": 528.6709000356495,
+      "p95_ms": 528.6709000356495,
+      "p99_ms": 528.6709000356495,
+      "threshold_ms": 300.0,
+      "ok": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/posts/120/like",
+      "target": "4:DELETE /api/posts/120/like",
+      "target_label": "DELETE /api/posts/120/like",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 1,
+      "error_rate": 1.0,
+      "status_code_counts": {
+        "403": 1
+      },
+      "min_ms": 536.9011999573559,
+      "max_ms": 536.9011999573559,
+      "average_ms": 536.9011999573559,
+      "p50_ms": 536.9011999573559,
+      "p95_ms": 536.9011999573559,
+      "p99_ms": 536.9011999573559,
+      "threshold_ms": 300.0,
+      "ok": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/discussions/40/subscribe",
+      "target": "5:POST /api/discussions/40/subscribe",
+      "target_label": "POST /api/discussions/40/subscribe",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 1,
+      "error_rate": 1.0,
+      "status_code_counts": {
+        "403": 1
+      },
+      "min_ms": 554.8143000341952,
+      "max_ms": 554.8143000341952,
+      "average_ms": 554.8143000341952,
+      "p50_ms": 554.8143000341952,
+      "p95_ms": 554.8143000341952,
+      "p99_ms": 554.8143000341952,
+      "threshold_ms": 300.0,
+      "ok": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/discussions/40/subscribe",
+      "target": "6:DELETE /api/discussions/40/subscribe",
+      "target_label": "DELETE /api/discussions/40/subscribe",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1,
+      "error_count": 1,
+      "error_rate": 1.0,
+      "status_code_counts": {
+        "403": 1
+      },
+      "min_ms": 541.5627998299897,
+      "max_ms": 541.5627998299897,
+      "average_ms": 541.5627998299897,
+      "p50_ms": 541.5627998299897,
+      "p95_ms": 541.5627998299897,
+      "p99_ms": 541.5627998299897,
+      "threshold_ms": 300.0,
+      "ok": false
+    }
+  ],
+  "errors": [
+    {
+      "method": "POST",
+      "path": "/api/discussions/",
+      "target": "0:POST /api/discussions/",
+      "target_label": "POST /api/discussions/",
+      "url": "http://127.0.0.1:8000/api/discussions/",
+      "duration_ms": 534.2447001021355,
+      "status_code": 403,
+      "error": true,
+      "error_message": "HTTP 403"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/discussions/40",
+      "target": "1:PATCH /api/discussions/40",
+      "target_label": "PATCH /api/discussions/40",
+      "url": "http://127.0.0.1:8000/api/discussions/40",
+      "duration_ms": 551.2790998909622,
+      "status_code": 403,
+      "error": true,
+      "error_message": "HTTP 403"
+    },
+    {
+      "method": "POST",
+      "path": "/api/discussions/40/read",
+      "target": "2:POST /api/discussions/40/read",
+      "target_label": "POST /api/discussions/40/read",
+      "url": "http://127.0.0.1:8000/api/discussions/40/read",
+      "duration_ms": 536.1591000109911,
+      "status_code": 403,
+      "error": true,
+      "error_message": "HTTP 403"
+    },
+    {
+      "method": "POST",
+      "path": "/api/posts/120/like",
+      "target": "3:POST /api/posts/120/like",
+      "target_label": "POST /api/posts/120/like",
+      "url": "http://127.0.0.1:8000/api/posts/120/like",
+      "duration_ms": 528.6709000356495,
+      "status_code": 403,
+      "error": true,
+      "error_message": "HTTP 403"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/posts/120/like",
+      "target": "4:DELETE /api/posts/120/like",
+      "target_label": "DELETE /api/posts/120/like",
+      "url": "http://127.0.0.1:8000/api/posts/120/like",
+      "duration_ms": 536.9011999573559,
+      "status_code": 403,
+      "error": true,
+      "error_message": "HTTP 403"
+    },
+    {
+      "method": "POST",
+      "path": "/api/discussions/40/subscribe",
+      "target": "5:POST /api/discussions/40/subscribe",
+      "target_label": "POST /api/discussions/40/subscribe",
+      "url": "http://127.0.0.1:8000/api/discussions/40/subscribe",
+      "duration_ms": 554.8143000341952,
+      "status_code": 403,
+      "error": true,
+      "error_message": "HTTP 403"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/discussions/40/subscribe",
+      "target": "6:DELETE /api/discussions/40/subscribe",
+      "target_label": "DELETE /api/discussions/40/subscribe",
+      "url": "http://127.0.0.1:8000/api/discussions/40/subscribe",
+      "duration_ms": 541.5627998299897,
+      "status_code": 403,
+      "error": true,
+      "error_message": "HTTP 403"
+    }
+  ],
+  "summary": {
+    "ok": false,
+    "request_count": 7,
+    "error_count": 7,
+    "error_rate": 1.0,
+    "requests_per_second": 1.8441095676538346,
+    "failed_threshold_count": 7
+  }
+}

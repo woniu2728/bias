@@ -1,0 +1,159 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-main-auth",
+  "concurrency": 2,
+  "duration_seconds": 2.5424895000178367,
+  "request_limit": 8,
+  "dynamic_values": {
+    "sequence": 1782909143084
+  },
+  "isolated_targets": {},
+  "targets": [
+    {
+      "method": "GET",
+      "path": "/api/users/me",
+      "target": "0:GET /api/users/me",
+      "target_label": "GET /api/users/me",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 2,
+      "error_rate": 1.0,
+      "status_code_counts": {
+        "401": 2
+      },
+      "min_ms": 635.1373000070453,
+      "max_ms": 645.2365000732243,
+      "average_ms": 640.1869000401348,
+      "p50_ms": 640.1869000401348,
+      "p95_ms": 644.7315400699154,
+      "p99_ms": 645.1355080725625,
+      "threshold_ms": 300.0,
+      "ok": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/discussions/?filter=my&limit=20",
+      "target": "1:GET /api/discussions/?filter=my&limit=20",
+      "target_label": "GET /api/discussions/?filter=my&limit=20",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 2
+      },
+      "min_ms": 643.2763000484556,
+      "max_ms": 651.7345001921058,
+      "average_ms": 647.5054001202807,
+      "p50_ms": 647.5054001202807,
+      "p95_ms": 651.3115901849233,
+      "p99_ms": 651.6499181906693,
+      "threshold_ms": 300.0,
+      "ok": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/discussions/?filter=unread&limit=20",
+      "target": "2:GET /api/discussions/?filter=unread&limit=20",
+      "target_label": "GET /api/discussions/?filter=unread&limit=20",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 2
+      },
+      "min_ms": 616.4916001725942,
+      "max_ms": 631.5695000812411,
+      "average_ms": 624.0305501269177,
+      "p50_ms": 624.0305501269177,
+      "p95_ms": 630.8156050858088,
+      "p99_ms": 631.4187210821547,
+      "threshold_ms": 300.0,
+      "ok": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "target": "3:GET /api/notifications",
+      "target_label": "GET /api/notifications",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2,
+      "error_count": 2,
+      "error_rate": 1.0,
+      "status_code_counts": {
+        "401": 2
+      },
+      "min_ms": 613.7127000838518,
+      "max_ms": 625.7805998902768,
+      "average_ms": 619.7466499870643,
+      "p50_ms": 619.7466499870643,
+      "p95_ms": 625.1772048999555,
+      "p99_ms": 625.6599208922125,
+      "threshold_ms": 300.0,
+      "ok": false
+    }
+  ],
+  "errors": [
+    {
+      "method": "GET",
+      "path": "/api/users/me",
+      "target": "0:GET /api/users/me",
+      "target_label": "GET /api/users/me",
+      "url": "http://127.0.0.1:8000/api/users/me",
+      "duration_ms": 645.2365000732243,
+      "status_code": 401,
+      "error": true,
+      "error_message": "HTTP 401"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "target": "3:GET /api/notifications",
+      "target_label": "GET /api/notifications",
+      "url": "http://127.0.0.1:8000/api/notifications",
+      "duration_ms": 625.7805998902768,
+      "status_code": 401,
+      "error": true,
+      "error_message": "HTTP 401"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/me",
+      "target": "0:GET /api/users/me",
+      "target_label": "GET /api/users/me",
+      "url": "http://127.0.0.1:8000/api/users/me",
+      "duration_ms": 635.1373000070453,
+      "status_code": 401,
+      "error": true,
+      "error_message": "HTTP 401"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "target": "3:GET /api/notifications",
+      "target_label": "GET /api/notifications",
+      "url": "http://127.0.0.1:8000/api/notifications",
+      "duration_ms": 613.7127000838518,
+      "status_code": 401,
+      "error": true,
+      "error_message": "HTTP 401"
+    }
+  ],
+  "summary": {
+    "ok": false,
+    "request_count": 8,
+    "error_count": 4,
+    "error_rate": 0.5,
+    "requests_per_second": 3.1465223356650545,
+    "failed_threshold_count": 4
+  }
+}

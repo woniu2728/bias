@@ -9,7 +9,11 @@ set -e
 chown -R 1000:1000 /app/instance /app/media /app/staticfiles 2>/dev/null || true
 
 cd /app
-gosu bias python manage.py migrate --noinput
-gosu bias python manage.py collectstatic --noinput
+if [ "${BIAS_SKIP_ENTRYPOINT_MIGRATE:-0}" != "1" ]; then
+    gosu bias python manage.py migrate --noinput
+fi
+if [ "${BIAS_SKIP_ENTRYPOINT_COLLECTSTATIC:-0}" != "1" ]; then
+    gosu bias python manage.py collectstatic --noinput
+fi
 
 exec gosu bias "$@"

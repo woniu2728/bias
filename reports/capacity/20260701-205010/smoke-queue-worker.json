@@ -1,0 +1,22 @@
+{
+  "broker_url": "redis://redis:6379/1",
+  "result_backend": "redis://redis:6379/2",
+  "task_name": "bias_core.queue_worker_probe",
+  "token": "queue-smoke-2e659daa869c45dea8b13070e1c26e35",
+  "worker_status": {
+    "status": "available",
+    "label": "1 个 worker 在线",
+    "available": true,
+    "worker_count": 1,
+    "message": "Celery worker 可用。"
+  },
+  "task_result": {
+    "ok": true,
+    "token": "queue-smoke-2e659daa869c45dea8b13070e1c26e35",
+    "worker_pid": 120
+  },
+  "summary": {
+    "ok": true,
+    "error_count": 0
+  }
+}

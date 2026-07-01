@@ -15,6 +15,8 @@ import {
   resetForumExtensionAppRuntime,
 } from './extensionApp.js'
 import { clearForumRegistryExtensions } from './frontendRegistry.js'
+import { clearAdminRegistryExtensions } from '../admin/registry/shared.js'
+import { clearAdminRoutesForExtension } from '../admin/registry/routes.js'
 import {
   handleExtensionRuntimeError,
   registerLoadedExtensionModule,
@@ -371,7 +373,10 @@ export function resetLoadedExtensionsWhenRuntimeChanges(loadedIds, runtime, { on
 
 export function resetForumExtensionRuntimeContributions(extensionId = '', { app } = {}) {
   app?.services?.clearForExtension?.(extensionId)
+  app?.clearLifecycleCallbacks?.(extensionId)
   clearForumRegistryExtensions(extensionId)
+  clearAdminRegistryExtensions(extensionId)
+  clearAdminRoutesForExtension(extensionId)
   resetResourceNormalizers(extensionId)
   if (extensionId) {
     clearExtensionDocumentRuntimeForExtension(extensionId)

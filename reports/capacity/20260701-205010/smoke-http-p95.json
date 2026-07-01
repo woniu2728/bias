@@ -1,0 +1,73 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "requests_per_target": 5,
+  "warmup_per_target": 1,
+  "targets": [
+    {
+      "path": "/api/forum",
+      "url": "http://127.0.0.1:8000/api/forum",
+      "request_count": 5,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 5
+      },
+      "min_ms": 6.450196960940957,
+      "max_ms": 7.425564108416438,
+      "average_ms": 6.891950871795416,
+      "p95_ms": 7.40856952033937,
+      "threshold_ms": 1000.0,
+      "ok": true
+    },
+    {
+      "path": "/api/discussions/?limit=20",
+      "url": "http://127.0.0.1:8000/api/discussions/?limit=20",
+      "request_count": 5,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 5
+      },
+      "min_ms": 59.65644493699074,
+      "max_ms": 114.24375302158296,
+      "average_ms": 72.87500221282244,
+      "p95_ms": 104.48074503801763,
+      "threshold_ms": 1000.0,
+      "ok": true
+    },
+    {
+      "path": "/api/search?q=smoke",
+      "url": "http://127.0.0.1:8000/api/search?q=smoke",
+      "request_count": 5,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 5
+      },
+      "min_ms": 92.46293012984097,
+      "max_ms": 106.24509491026402,
+      "average_ms": 98.47305663861334,
+      "p95_ms": 105.04765813238919,
+      "threshold_ms": 1000.0,
+      "ok": true
+    },
+    {
+      "path": "/api/tags",
+      "url": "http://127.0.0.1:8000/api/tags",
+      "request_count": 5,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 5
+      },
+      "min_ms": 45.46179203316569,
+      "max_ms": 53.36649599485099,
+      "average_ms": 48.19373274222016,
+      "p95_ms": 52.2866181563586,
+      "threshold_ms": 1000.0,
+      "ok": true
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "target_count": 4,
+    "failed_count": 0
+  },
+  "note": "轻量 smoke 只验证当前运行环境的关键路径 P95；正式容量验收仍需使用生产等价数据量和并发模型。"
+}

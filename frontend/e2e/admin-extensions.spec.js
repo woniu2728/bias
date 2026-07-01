@@ -11,8 +11,65 @@ const adminUser = {
 const forumSettings = {
   forum_title: 'Bias E2E Forum',
   forum_description: 'Admin extensions browser flow fixture',
-  enabled_modules: ['core', 'users', 'content', 'likes'],
-  enabled_extensions: [],
+  enabled_modules: ['core', 'users', 'content', 'discussions', 'posts', 'likes'],
+  enabled_extensions: [
+    {
+      id: 'users',
+      frontend_forum_entry: 'extensions/users/frontend/forum/index.js',
+      frontend_routes: [],
+    },
+    {
+      id: 'discussions',
+      frontend_forum_entry: 'extensions/discussions/frontend/forum/index.js',
+      frontend_routes: [{
+        path: '/',
+        name: 'home',
+        component: './DiscussionListView.vue',
+        frontend: 'forum',
+        module_id: 'discussions',
+      }],
+    },
+    {
+      id: 'posts',
+      frontend_forum_entry: 'extensions/posts/frontend/forum/index.js',
+      frontend_routes: [],
+    },
+  ],
+}
+
+const discussionListPayload = {
+  data: [{
+    id: 501,
+    title: 'Frontend remains available after rebuild',
+    slug: 'frontend-remains-available-after-rebuild',
+    excerpt: 'Reloaded forum page still renders after rebuilding extension assets.',
+    comment_count: 1,
+    participant_count: 1,
+    created_at: '2026-06-30T08:00:00Z',
+    last_posted_at: '2026-06-30T08:00:00Z',
+    is_sticky: false,
+    is_locked: false,
+    is_hidden: false,
+    unread_count: 0,
+    can_reply: true,
+    can_edit: false,
+    tags: [],
+    user: {
+      id: 1,
+      username: 'admin',
+      display_name: 'Admin',
+      avatar_url: '',
+    },
+    first_post: {
+      id: 901,
+      number: 1,
+      content: 'Reloaded forum page still renders after rebuilding extension assets.',
+      content_html: '<p>Reloaded forum page still renders after rebuilding extension assets.</p>',
+      created_at: '2026-06-30T08:00:00Z',
+    },
+    last_post: null,
+  }],
+  meta: { page: 1, limit: 20, total: 1, total_pages: 1 },
 }
 
 function createExtensionsFixture() {
@@ -177,6 +234,9 @@ test.beforeEach(async ({ page }) => {
         version: 'e2e',
       })
     }
+    if (url.pathname === '/api/discussions/' && route.request().method() === 'GET') {
+      return json(discussionListPayload)
+    }
     if (url.pathname === '/api/admin/extensions' && route.request().method() === 'GET') {
       return json(buildExtensionsPayload(extensions, {
         runtimeStamp,
@@ -318,6 +378,24 @@ test('admin extensions page manages runtime actions and frontend rebuild through
   await page.getByRole('button', { name: '重建前端' }).click()
   await rebuildResponse
   await expect(extensionCard(page, 'Mentions').getByText('前端已生成')).toBeVisible()
+
+  await page.reload()
+  await waitForExtensionsResponse(page)
+  await expect(page.getByRole('heading', { name: '扩展中心' })).toBeVisible()
+  await expect(extensionCard(page, 'Mentions').getByText('前端已生成')).toBeVisible()
+
+  const forumSettingsReloadResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/forum' && response.status() === 200
+  })
+  await page.goto('/')
+  await forumSettingsReloadResponse
+  await expect(page.locator('.logo')).toContainText('Bias E2E Forum')
+  await expect(page.getByText('Powered by')).toBeVisible()
+
+  await page.goto('/admin.html#/admin/extensions')
+  await waitForExtensionsResponse(page)
+  await expect(page.getByRole('heading', { name: '扩展中心' })).toBeVisible()
 
   const detailResponse = waitForExtensionDetail(page, 'likes')
   await extensionCard(page, 'Likes').getByRole('link', { name: '详情' }).click()

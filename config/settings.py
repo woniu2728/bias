@@ -27,6 +27,13 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
+def env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = BOOTSTRAP.secret_key
 
@@ -76,6 +83,7 @@ MIDDLEWARE = [
     "bias_core.middleware.ExtensionThrottleApiMiddleware",
     "bias_core.middleware.ExtensionRequestMiddleware",
     "bias_core.middleware.QueryLoggingMiddleware",
+    "bias_core.middleware.RequestMetricsMiddleware",
     "bias_core.middleware.MaintenanceModeMiddleware",
     "bias_core.middleware.SecurityHeadersMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -128,7 +136,8 @@ if BOOTSTRAP.database_mode == "postgres":
             "PASSWORD": BOOTSTRAP.db_password,
             "HOST": BOOTSTRAP.db_host,
             "PORT": BOOTSTRAP.db_port,
-            "CONN_MAX_AGE": 60,
+            "CONN_MAX_AGE": env_int("DB_CONN_MAX_AGE", 60),
+            "CONN_HEALTH_CHECKS": env_bool("DB_CONN_HEALTH_CHECKS", True),
         }
     }
 else:
