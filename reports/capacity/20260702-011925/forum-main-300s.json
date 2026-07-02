@@ -1,0 +1,74 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-main",
+  "concurrency": 20,
+  "duration_seconds": 300.3536785049364,
+  "request_limit": 0,
+  "targets": [
+    {
+      "method": "GET",
+      "path": "/api/forum",
+      "request_count": 6844,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {"200": 6844},
+      "average_ms": 133.44375866999107,
+      "p50_ms": 130.93475997447968,
+      "p95_ms": 227.74067030986768,
+      "p99_ms": 263.99541709804885,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/discussions/?limit=20",
+      "request_count": 6844,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {"200": 6844},
+      "average_ms": 204.01061437247716,
+      "p50_ms": 194.35367896221578,
+      "p95_ms": 286.789757781662,
+      "p99_ms": 334.4833248713983,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/search?q=loadtest-discussion-00000001",
+      "request_count": 6848,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {"200": 6848},
+      "average_ms": 392.5468381239285,
+      "p50_ms": 384.8234445322305,
+      "p95_ms": 477.28236139519134,
+      "p99_ms": 522.742017598357,
+      "threshold_ms": 800.0,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/tags",
+      "request_count": 6842,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {"200": 6842},
+      "average_ms": 146.84729237684252,
+      "p50_ms": 141.01687248330563,
+      "p95_ms": 218.77713404828683,
+      "p99_ms": 256.3367367442698,
+      "threshold_ms": 300.0,
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "ok": true,
+    "request_count": 27378,
+    "error_count": 0,
+    "error_rate": 0.0,
+    "requests_per_second": 91.15253768916313,
+    "failed_threshold_count": 0
+  }
+}

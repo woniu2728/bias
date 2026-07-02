@@ -1,0 +1,198 @@
+{
+  "config_path": "/app/instance/site.json",
+  "database_mode": "postgres",
+  "redis_enabled": true,
+  "site_domains": [
+    "localhost"
+  ],
+  "frontend_url": "http://localhost:8000",
+  "backup_required": true,
+  "upgrade_steps": [
+    {
+      "label": "Django 系统检查",
+      "args": [
+        "check"
+      ],
+      "command": "python manage.py check"
+    },
+    {
+      "label": "数据库迁移",
+      "args": [
+        "migrate",
+        "--noinput"
+      ],
+      "command": "python manage.py migrate --noinput"
+    },
+    {
+      "label": "扩展状态同步",
+      "args": [
+        "sync_extensions"
+      ],
+      "command": "python manage.py sync_extensions"
+    },
+    {
+      "label": "扩展启用顺序同步",
+      "args": [
+        "sync_extension_order"
+      ],
+      "command": "python manage.py sync_extension_order"
+    },
+    {
+      "label": "扩展迁移摘要同步",
+      "args": [
+        "migrate_extensions",
+        "--all"
+      ],
+      "command": "python manage.py migrate_extensions --all"
+    },
+    {
+      "label": "默认用户组与权限同步",
+      "args": [
+        "init_groups"
+      ],
+      "command": "python manage.py init_groups"
+    },
+    {
+      "label": "写入安装版本",
+      "args": [
+        "sync_forum_version"
+      ],
+      "command": "python manage.py sync_forum_version"
+    },
+    {
+      "label": "运行时缓存清理",
+      "args": [
+        "clear_runtime_cache"
+      ],
+      "command": "python manage.py clear_runtime_cache"
+    },
+    {
+      "label": "扩展前端构建清单生成",
+      "args": [
+        "build_extension_frontend"
+      ],
+      "command": "python manage.py build_extension_frontend"
+    },
+    {
+      "label": "静态资源收集",
+      "args": [
+        "collectstatic",
+        "--noinput"
+      ],
+      "command": "python manage.py collectstatic --noinput"
+    }
+  ],
+  "executed_steps": [
+    {
+      "label": "Django 系统检查",
+      "args": [
+        "check"
+      ],
+      "command": "python manage.py check",
+      "returncode": 0,
+      "stdout": "System check identified no issues (0 silenced).\n",
+      "stderr": ""
+    },
+    {
+      "label": "数据库迁移",
+      "args": [
+        "migrate",
+        "--noinput"
+      ],
+      "command": "python manage.py migrate --noinput",
+      "returncode": 0,
+      "stdout": "Operations to perform:\n  Apply all migrations: admin, auth, content, contenttypes, core, discussions, flags, likes, mentions, notifications, points, posts, sessions, tags, users\nRunning migrations:\n  No migrations to apply.\n",
+      "stderr": ""
+    },
+    {
+      "label": "扩展状态同步",
+      "args": [
+        "sync_extensions"
+      ],
+      "command": "python manage.py sync_extensions",
+      "returncode": 0,
+      "stdout": "Syncing extensions...\nFound 17 extension(s):\n  - approval\n  - content\n  - discussions\n  - emoji\n  - flags\n  - likes\n  - mentions\n  - notifications\n  - points\n  - posts\n  - realtime\n  - search\n  - security\n  - subscriptions\n  - tags\n  - uploads\n  - users\n创建: 0\n更新: 0\n剪枝: 0\n包锁定: 已更新\nExtension sync complete.\n",
+      "stderr": ""
+    },
+    {
+      "label": "扩展启用顺序同步",
+      "args": [
+        "sync_extension_order"
+      ],
+      "command": "python manage.py sync_extension_order",
+      "returncode": 0,
+      "stdout": "Syncing extension enabled order...\n启用扩展: 17\n过期记录: 0\n已变更: no\nExtension order sync complete.\n",
+      "stderr": ""
+    },
+    {
+      "label": "扩展迁移摘要同步",
+      "args": [
+        "migrate_extensions",
+        "--all"
+      ],
+      "command": "python manage.py migrate_extensions --all",
+      "returncode": 0,
+      "stdout": "目标扩展: 0\n[OK] 扩展迁移摘要同步完成\n",
+      "stderr": ""
+    },
+    {
+      "label": "默认用户组与权限同步",
+      "args": [
+        "init_groups"
+      ],
+      "command": "python manage.py init_groups",
+      "returncode": 0,
+      "stdout": "开始创建默认用户组和权限...\n  用户组已存在: Admin\n  用户组已存在: Guest\n  用户组已存在: Member\n  用户组已存在: Moderator\n\n[SUCCESS] 默认用户组和权限创建完成！\n",
+      "stderr": ""
+    },
+    {
+      "label": "写入安装版本",
+      "args": [
+        "sync_forum_version"
+      ],
+      "command": "python manage.py sync_forum_version",
+      "returncode": 0,
+      "stdout": "[OK] 已同步系统版本: 0.1.1\n",
+      "stderr": ""
+    },
+    {
+      "label": "运行时缓存清理",
+      "args": [
+        "clear_runtime_cache"
+      ],
+      "command": "python manage.py clear_runtime_cache",
+      "returncode": 0,
+      "stdout": "[OK] 已清理运行时缓存\n",
+      "stderr": ""
+    },
+    {
+      "label": "扩展前端构建清单生成",
+      "args": [
+        "build_extension_frontend"
+      ],
+      "command": "python manage.py build_extension_frontend",
+      "returncode": 0,
+      "stdout": "[OK] 已生成扩展前端构建 manifest: /app/static/extensions/frontend-build-manifest.json，扩展 16 个，未执行 Vite 编译\n",
+      "stderr": ""
+    },
+    {
+      "label": "静态资源收集",
+      "args": [
+        "collectstatic",
+        "--noinput"
+      ],
+      "command": "python manage.py collectstatic --noinput",
+      "returncode": 0,
+      "stdout": "\n141 static files copied to '/app/staticfiles', 130 unmodified.\n",
+      "stderr": ""
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "dry_run": false,
+    "executed": true,
+    "executed_step_count": 10
+  }
+}

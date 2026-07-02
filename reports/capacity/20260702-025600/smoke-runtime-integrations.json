@@ -1,0 +1,49 @@
+{
+  "checks": [
+    {
+      "key": "email",
+      "label": "SMTP/email runtime",
+      "ok": true,
+      "mode": "config_dry_run",
+      "backend": "django.core.mail.backends.smtp.EmailBackend",
+      "driver": "smtp",
+      "host": "smtp.example.com",
+      "port": 587,
+      "encryption": "tls",
+      "from_email": "Bias <noreply@example.com>",
+      "validation_errors": {},
+      "duration_ms": 0.0
+    },
+    {
+      "key": "storage",
+      "label": "File storage runtime",
+      "ok": true,
+      "mode": "write_read_delete",
+      "driver": "local",
+      "duration_ms": 1.22,
+      "backend": "LocalStorageBackend",
+      "key_written": "smoke/runtime-integrations/probe-273b1bbcecbb48999707560a50a714ba.txt",
+      "file_url": "/media/smoke/runtime-integrations/probe-273b1bbcecbb48999707560a50a714ba.txt",
+      "delete_key": "smoke/runtime-integrations/probe-273b1bbcecbb48999707560a50a714ba.txt",
+      "deleted": true,
+      "byte_count": 64
+    }
+  ],
+  "errors": [],
+  "warnings": [
+    {
+      "key": "email",
+      "warning": "SMTP connection was not attempted; pass --smtp-connect for target-environment proof."
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "check_count": 2,
+    "error_count": 0,
+    "warning_count": 1,
+    "fail_on_warning": false,
+    "require_smtp_connect": false,
+    "require_storage_write": false,
+    "require_object_storage": false
+  }
+}

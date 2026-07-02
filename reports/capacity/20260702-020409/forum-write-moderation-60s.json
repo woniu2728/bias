@@ -1,0 +1,354 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-write-moderation",
+  "concurrency": 2,
+  "duration_seconds": 60.04585906700231,
+  "request_limit": 0,
+  "dynamic_values": {
+    "sequence": 1782931666299,
+    "discussion_id": 13125,
+    "post_id": 156232,
+    "like_post_id": 156232,
+    "unlike_post_id": 156233,
+    "edit_post_id": 156234,
+    "report_post_id": 156235,
+    "hide_post_id": 156236,
+    "restore_post_id": 156237,
+    "delete_post_id": 156238,
+    "isolated_targets": {
+      "prefix": "loadtest-isolated-1782931666299",
+      "user_id": 1043,
+      "discussion_id": 13125,
+      "post_id": 156232,
+      "like_post_id": 156232,
+      "unlike_post_id": 156233,
+      "edit_post_id": 156234,
+      "report_post_id": 156235,
+      "hide_post_id": 156236,
+      "restore_post_id": 156237,
+      "delete_post_id": 156238,
+      "first_post_id": 156231,
+      "like_post_pool_size": 1,
+      "unlike_post_pool_size": 1,
+      "edit_post_pool_size": 2049,
+      "report_post_pool_size": 2049,
+      "hide_post_pool_size": 2049,
+      "restore_post_pool_size": 2049,
+      "delete_post_pool_size": 2049,
+      "tag_id": 230,
+      "notification_id": 57913,
+      "notification_read_id": 57913,
+      "notification_read_pool_size": 2049
+    },
+    "tag_id": 230,
+    "notification_id": 57913,
+    "notification_read_id": 57913,
+    "sequence_pools": {
+      "edit_post_id": {
+        "size": 2049,
+        "first": 156234,
+        "last": 166474
+      },
+      "report_post_id": {
+        "size": 2049,
+        "first": 156235,
+        "last": 166475
+      },
+      "hide_post_id": {
+        "size": 2049,
+        "first": 156236,
+        "last": 166476
+      },
+      "restore_post_id": {
+        "size": 2049,
+        "first": 156237,
+        "last": 166477
+      },
+      "delete_post_id": {
+        "size": 2049,
+        "first": 156238,
+        "last": 166478
+      },
+      "notification_read_id": {
+        "size": 2049,
+        "first": 57913,
+        "last": 59961
+      }
+    }
+  },
+  "isolated_targets": {
+    "prefix": "loadtest-isolated-1782931666299",
+    "user_id": 1043,
+    "discussion_id": 13125,
+    "post_id": 156232,
+    "like_post_id": 156232,
+    "unlike_post_id": 156233,
+    "edit_post_id": 156234,
+    "report_post_id": 156235,
+    "hide_post_id": 156236,
+    "restore_post_id": 156237,
+    "delete_post_id": 156238,
+    "first_post_id": 156231,
+    "like_post_pool_size": 1,
+    "unlike_post_pool_size": 1,
+    "edit_post_pool_size": 2049,
+    "report_post_pool_size": 2049,
+    "hide_post_pool_size": 2049,
+    "restore_post_pool_size": 2049,
+    "delete_post_pool_size": 2049,
+    "tag_id": 230,
+    "notification_id": 57913,
+    "notification_read_id": 57913,
+    "notification_read_pool_size": 2049
+  },
+  "targets": [
+    {
+      "method": "PATCH",
+      "path": "/api/posts/156234",
+      "target": "0:PATCH /api/posts/156234",
+      "target_label": "PATCH /api/posts/156234",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 309,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 309
+      },
+      "min_ms": 49.29798608645797,
+      "max_ms": 109.77687709964812,
+      "average_ms": 52.74820098168183,
+      "p50_ms": 52.18028603121638,
+      "p95_ms": 55.82209276035428,
+      "p99_ms": 57.50124119222164,
+      "threshold_ms": 500.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/posts/156235/report",
+      "target": "1:POST /api/posts/156235/report",
+      "target_label": "POST /api/posts/156235/report",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 310,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 310
+      },
+      "min_ms": 42.69031109288335,
+      "max_ms": 53.0707729049027,
+      "average_ms": 46.49490471628885,
+      "p50_ms": 46.447946573607624,
+      "p95_ms": 48.7477209768258,
+      "p99_ms": 50.35174457589165,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications/57913/read",
+      "target": "2:POST /api/notifications/57913/read",
+      "target_label": "POST /api/notifications/57913/read",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 310,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 310
+      },
+      "min_ms": 17.702100099995732,
+      "max_ms": 25.03379201516509,
+      "average_ms": 20.327890714660526,
+      "p50_ms": 20.26180748362094,
+      "p95_ms": 22.60661267209798,
+      "p99_ms": 23.892464507371187,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/posts/156236/hide",
+      "target": "3:POST /api/posts/156236/hide",
+      "target_label": "POST /api/posts/156236/hide",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 310,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 310
+      },
+      "min_ms": 62.052846886217594,
+      "max_ms": 97.1568189561367,
+      "average_ms": 76.15493390889418,
+      "p50_ms": 76.75423845648766,
+      "p95_ms": 82.9465261194855,
+      "p99_ms": 88.86517900042239,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/posts/156237/hide",
+      "target": "4:POST /api/posts/156237/hide",
+      "target_label": "POST /api/posts/156237/hide",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 310,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 310
+      },
+      "min_ms": 56.27968208864331,
+      "max_ms": 87.52565085887909,
+      "average_ms": 64.31954707950354,
+      "p50_ms": 65.55950152687728,
+      "p95_ms": 70.25385751621798,
+      "p99_ms": 79.47342747822405,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications/read-filtered?type=postReply&discussion_id=13125",
+      "target": "5:POST /api/notifications/read-filtered?type=postReply&discussion_id=13125",
+      "target_label": "POST /api/notifications/read-filtered?type=postReply&discussion_id=13125",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 309,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 309
+      },
+      "min_ms": 17.592331860214472,
+      "max_ms": 76.26733486540616,
+      "average_ms": 19.618184956749086,
+      "p50_ms": 19.249668112024665,
+      "p95_ms": 21.314014401286837,
+      "p99_ms": 23.17896505817772,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/notifications/read/clear-filtered?type=postReply&discussion_id=13125",
+      "target": "6:DELETE /api/notifications/read/clear-filtered?type=postReply&discussion_id=13125",
+      "target_label": "DELETE /api/notifications/read/clear-filtered?type=postReply&discussion_id=13125",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 308,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 308
+      },
+      "min_ms": 17.378490883857012,
+      "max_ms": 22.601485019549727,
+      "average_ms": 19.04826457672692,
+      "p50_ms": 18.860394833609462,
+      "p95_ms": 20.75491116847843,
+      "p99_ms": 21.577393740881234,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/notifications/read/clear",
+      "target": "7:DELETE /api/notifications/read/clear",
+      "target_label": "DELETE /api/notifications/read/clear",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 308,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 308
+      },
+      "min_ms": 16.63785520941019,
+      "max_ms": 25.163346901535988,
+      "average_ms": 20.085118228702672,
+      "p50_ms": 20.478719612583518,
+      "p95_ms": 22.43384947068989,
+      "p99_ms": 23.52679447038099,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/posts/156238",
+      "target": "8:DELETE /api/posts/156238",
+      "target_label": "DELETE /api/posts/156238",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 308,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 308
+      },
+      "min_ms": 62.08517006598413,
+      "max_ms": 124.23562398180366,
+      "average_ms": 68.90818094018266,
+      "p50_ms": 66.19767646770924,
+      "p95_ms": 77.16181060532108,
+      "p99_ms": 83.068261356093,
+      "threshold_ms": 500.0,
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "ok": true,
+    "request_count": 2782,
+    "error_count": 0,
+    "error_rate": 0.0,
+    "requests_per_second": 46.33125486464768,
+    "failed_threshold_count": 0
+  },
+  "cleanup": {
+    "ok": true,
+    "prefix": "loadtest-isolated-1782931666299",
+    "deleted_total": 12924,
+    "deleted": {
+      "notifications.Notification": 2049,
+      "tags.DiscussionTag": 1,
+      "content.Discussion": 10872,
+      "tags.Tag": 1,
+      "auth.User": 1
+    },
+    "details": {
+      "notifications.Notification": {
+        "notifications.Notification": 2049
+      },
+      "tags.DiscussionTag": {
+        "tags.DiscussionTag": 1
+      },
+      "content.Discussion": {
+        "flags.PostFlag": 310,
+        "likes.PostLike": 1,
+        "content.Post": 10560,
+        "content.Discussion": 1
+      },
+      "tags.Tag": {
+        "tags.Tag": 1
+      },
+      "auth.User": {
+        "users.User": 1
+      }
+    }
+  }
+}

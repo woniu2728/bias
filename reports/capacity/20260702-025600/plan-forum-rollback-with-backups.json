@@ -1,0 +1,112 @@
+{
+  "config_path": "/app/instance/site.json",
+  "backup_dir": "/app/backups/20260702-p2-smoke",
+  "database_mode": "postgres",
+  "redis_enabled": true,
+  "backup_artifacts": [
+    {
+      "key": "site_config",
+      "label": "站点配置备份",
+      "path": "/app/backups/20260702-p2-smoke/site.json",
+      "exists": true,
+      "required": true,
+      "restore_target": "/app/instance/site.json",
+      "restore_hint": "copy <site_config_backup> to /app/instance/site.json"
+    },
+    {
+      "key": "database",
+      "label": "PostgreSQL dump 备份",
+      "path": "/app/backups/20260702-p2-smoke/database.dump",
+      "exists": true,
+      "required": true,
+      "restore_target": "",
+      "restore_hint": "pg_restore --clean --if-exists --dbname bias_smoke --host postgres --port 5432 --username bias_smoke <database_backup>"
+    },
+    {
+      "key": "media",
+      "label": "media 目录备份",
+      "path": "/app/backups/20260702-p2-smoke/media",
+      "exists": true,
+      "required": true,
+      "restore_target": "/app/media",
+      "restore_hint": "Restore media directory from <media_backup> to /app/media"
+    },
+    {
+      "key": "static_frontend",
+      "label": "static/frontend 目录备份",
+      "path": "/app/backups/20260702-p2-smoke/static/frontend",
+      "exists": true,
+      "required": true,
+      "restore_target": "/app/static/frontend",
+      "restore_hint": "Restore static frontend directory from <static_frontend_backup> to /app/static/frontend"
+    }
+  ],
+  "restore_steps": [
+    {
+      "label": "停止 web、worker、scheduler",
+      "action": "stop_services",
+      "destructive": false,
+      "command_hint": "docker compose stop web worker scheduler"
+    },
+    {
+      "label": "恢复 PostgreSQL 数据库备份",
+      "action": "restore_database",
+      "destructive": true,
+      "artifact_key": "database",
+      "command_hint": "pg_restore --clean --if-exists --dbname bias_smoke --host postgres --port 5432 --username bias_smoke <database_backup>"
+    },
+    {
+      "label": "恢复 media 目录",
+      "action": "restore_media",
+      "destructive": true,
+      "artifact_key": "media",
+      "command_hint": "Restore media directory from <media_backup> to /app/media"
+    },
+    {
+      "label": "恢复 static/frontend 目录",
+      "action": "restore_static_frontend",
+      "destructive": true,
+      "artifact_key": "static_frontend",
+      "command_hint": "Restore static frontend directory from <static_frontend_backup> to /app/static/frontend"
+    },
+    {
+      "label": "恢复 instance/site.json",
+      "action": "restore_site_config",
+      "destructive": true,
+      "artifact_key": "site_config",
+      "command_hint": "copy <site_config_backup> to /app/instance/site.json"
+    },
+    {
+      "label": "启动 web、worker、scheduler",
+      "action": "start_services",
+      "destructive": false,
+      "command_hint": "docker compose up -d web worker scheduler"
+    }
+  ],
+  "verification_steps": [
+    {
+      "label": "Django 系统检查",
+      "command": "python manage.py check"
+    },
+    {
+      "label": "严格健康检查",
+      "command": "curl -f http://127.0.0.1:8000/api/health?strict=1"
+    },
+    {
+      "label": "HTTP P95 smoke",
+      "command": "python manage.py smoke_http_p95 --base-url http://127.0.0.1:8000 --fail-on-threshold --format json"
+    },
+    {
+      "label": "队列 worker smoke",
+      "command": "python manage.py smoke_queue_worker --broker-url redis://127.0.0.1:6379/1 --result-backend redis://127.0.0.1:6379/2 --timeout 45 --format json"
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "require_existing_backups": true,
+    "missing_required_artifact_count": 0,
+    "executes_restore": false
+  }
+}

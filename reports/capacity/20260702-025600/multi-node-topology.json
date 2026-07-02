@@ -1,0 +1,31 @@
+{
+  "roles": {
+    "web": 1,
+    "worker": 1,
+    "scheduler": 1
+  },
+  "artifacts": {
+    "image": "local-production-smoke",
+    "version": "0.1.1"
+  },
+  "shared_services": {
+    "database": "postgres://postgres:5432/bias_smoke",
+    "redis": "redis://redis:6379/0",
+    "load_balancer": "http://127.0.0.1:8000"
+  },
+  "errors": [
+    "multi-node target evidence requires at least 2 web nodes",
+    "artifacts.image must identify a target release image",
+    "shared_services.database must identify a shared target service",
+    "shared_services.redis must identify a shared target service",
+    "shared_services.load_balancer must use https"
+  ],
+  "warnings": [],
+  "summary": {
+    "ok": false,
+    "error_count": 5,
+    "warning_count": 0,
+    "multi_node": false,
+    "require_multi_node": true
+  }
+}

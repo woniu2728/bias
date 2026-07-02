@@ -1,0 +1,192 @@
+{
+  "config_path": "/app/instance/site.json",
+  "backup_dir": "/app/backups/20260702-p2-smoke",
+  "database_mode": "postgres",
+  "temp_root": "/tmp/bias-restore-rehearsal-xjyga2va",
+  "temp_database": "bias_smoke_restore_smoke_20260702_p2_smoke",
+  "backup_artifacts": [
+    {
+      "key": "site_config",
+      "label": "站点配置备份",
+      "path": "/app/backups/20260702-p2-smoke/site.json",
+      "exists": true,
+      "required": true
+    },
+    {
+      "key": "database",
+      "label": "PostgreSQL dump 备份",
+      "path": "/app/backups/20260702-p2-smoke/database.dump",
+      "exists": true,
+      "required": true
+    },
+    {
+      "key": "media",
+      "label": "media 目录备份",
+      "path": "/app/backups/20260702-p2-smoke/media",
+      "exists": true,
+      "required": true
+    },
+    {
+      "key": "static_frontend",
+      "label": "static/frontend 目录备份",
+      "path": "/app/backups/20260702-p2-smoke/static/frontend",
+      "exists": true,
+      "required": true
+    }
+  ],
+  "restore_steps": [
+    {
+      "action": "restore_site_config_to_temp_file",
+      "artifact_key": "site_config",
+      "source": "/app/backups/20260702-p2-smoke/site.json",
+      "target": "/tmp/bias-restore-rehearsal-xjyga2va/site.json",
+      "destructive": false,
+      "ok": true
+    },
+    {
+      "action": "create_temp_database",
+      "command": [
+        "createdb",
+        "--host",
+        "postgres",
+        "--port",
+        "5432",
+        "--username",
+        "bias_smoke",
+        "bias_smoke_restore_smoke_20260702_p2_smoke"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "message": "",
+      "destructive": false
+    },
+    {
+      "action": "restore_dump_to_temp_database",
+      "command": [
+        "pg_restore",
+        "--clean",
+        "--if-exists",
+        "--host",
+        "postgres",
+        "--port",
+        "5432",
+        "--username",
+        "bias_smoke",
+        "--dbname",
+        "bias_smoke_restore_smoke_20260702_p2_smoke",
+        "/app/backups/20260702-p2-smoke/database.dump"
+      ],
+      "returncode": 1,
+      "ok": true,
+      "message": "pg_restore: error: could not execute query: ERROR:  unrecognized configuration parameter \"transaction_timeout\"\nCommand was: SET transaction_timeout = 0;\npg_restore: warning: errors ignored on restore: 1",
+      "destructive": false,
+      "tolerated": true,
+      "warning": "pg_restore: error: could not execute query: ERROR:  unrecognized configuration parameter \"transaction_timeout\"\nCommand was: SET transaction_timeout = 0;\npg_restore: warning: errors ignored on restore: 1"
+    },
+    {
+      "action": "verify_temp_database",
+      "command": [
+        "psql",
+        "--host",
+        "postgres",
+        "--port",
+        "5432",
+        "--username",
+        "bias_smoke",
+        "--dbname",
+        "bias_smoke_restore_smoke_20260702_p2_smoke",
+        "--tuples-only",
+        "--no-align",
+        "--command",
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "message": "31",
+      "destructive": false
+    },
+    {
+      "action": "drop_temp_database",
+      "command": [
+        "dropdb",
+        "--if-exists",
+        "--host",
+        "postgres",
+        "--port",
+        "5432",
+        "--username",
+        "bias_smoke",
+        "bias_smoke_restore_smoke_20260702_p2_smoke"
+      ],
+      "returncode": 0,
+      "ok": true,
+      "message": "",
+      "destructive": false
+    },
+    {
+      "action": "restore_media_to_temp_directory",
+      "artifact_key": "media",
+      "source": "/app/backups/20260702-p2-smoke/media",
+      "target": "/tmp/bias-restore-rehearsal-xjyga2va/media",
+      "destructive": false,
+      "ok": true
+    },
+    {
+      "action": "restore_static_frontend_to_temp_directory",
+      "artifact_key": "static_frontend",
+      "source": "/app/backups/20260702-p2-smoke/static/frontend",
+      "target": "/tmp/bias-restore-rehearsal-xjyga2va/static_frontend",
+      "destructive": false,
+      "ok": true
+    }
+  ],
+  "verification": [
+    {
+      "key": "site_config",
+      "ok": true,
+      "validated_by": "read_site_config",
+      "database_mode": "postgres",
+      "installed": true
+    },
+    {
+      "key": "database",
+      "ok": true,
+      "validated_by": "pg_restore_temp_database",
+      "temp_database": "bias_smoke_restore_smoke_20260702_p2_smoke",
+      "table_count": 31,
+      "query": "information_schema.tables public count"
+    },
+    {
+      "key": "media",
+      "ok": true,
+      "validated_by": "copytree_to_temp_directory",
+      "target": "/tmp/bias-restore-rehearsal-xjyga2va/media",
+      "file_count": 10718,
+      "total_bytes": 353691
+    },
+    {
+      "key": "static_frontend",
+      "ok": true,
+      "validated_by": "copytree_to_temp_directory",
+      "target": "/tmp/bias-restore-rehearsal-xjyga2va/static_frontend",
+      "file_count": 131,
+      "total_bytes": 2031834
+    }
+  ],
+  "errors": [],
+  "warnings": [
+    "pg_restore: error: could not execute query: ERROR:  unrecognized configuration parameter \"transaction_timeout\"\nCommand was: SET transaction_timeout = 0;\npg_restore: warning: errors ignored on restore: 1"
+  ],
+  "summary": {
+    "ok": true,
+    "error_count": 0,
+    "warning_count": 1,
+    "artifact_count": 4,
+    "verification_count": 4,
+    "restore_step_count": 7,
+    "executes_live_restore": false,
+    "uses_isolated_restore_targets": true,
+    "keep_temp_database": false,
+    "dropped_temp_database": true
+  }
+}

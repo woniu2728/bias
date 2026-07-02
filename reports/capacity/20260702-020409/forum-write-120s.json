@@ -1,0 +1,47 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-write",
+  "concurrency": 5,
+  "duration_seconds": 120.21612050989643,
+  "request_limit": 0,
+  "dynamic_values": {
+    "sequence": 1782930749809,
+    "discussion_id": 10842,
+    "sequence_pools": {}
+  },
+  "isolated_targets": {},
+  "targets": [
+    {
+      "method": "POST",
+      "path": "/api/discussions/10842/posts",
+      "target": "0:POST /api/discussions/10842/posts",
+      "target_label": "POST /api/discussions/10842/posts",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 2036,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 2036
+      },
+      "min_ms": 145.50290093757212,
+      "max_ms": 481.53917700983584,
+      "average_ms": 295.02510925041776,
+      "p50_ms": 296.68947600293905,
+      "p95_ms": 384.43720812210813,
+      "p99_ms": 420.3454511007295,
+      "threshold_ms": 500.0,
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "ok": true,
+    "request_count": 2036,
+    "error_count": 0,
+    "error_rate": 0.0,
+    "requests_per_second": 16.936164562325835,
+    "failed_threshold_count": 0
+  }
+}

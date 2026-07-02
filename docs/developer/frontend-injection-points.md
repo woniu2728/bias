@@ -56,6 +56,132 @@
 
 优先使用 `extendForum(...)` / `extendAdmin(...)` 声明注入点。只有当现有注入点无法表达“扩展一个核心对象方法”时，才使用 `extend()` 或 `override()`。
 
+## 推荐入口模板
+
+前台入口：
+
+```js
+import { extendForum } from '@bias/core/forum'
+
+export const extend = [
+  extendForum(forum => forum.navItem({
+    key: 'alpha-tools',
+    label: 'Alpha Tools',
+    href: '/alpha-tools',
+    icon: 'fas fa-puzzle-piece',
+    section: 'primary',
+    order: 1000,
+  })),
+]
+```
+
+后台入口：
+
+```js
+import { extendAdmin } from '@bias/core/admin'
+
+export const extend = [
+  extendAdmin(admin => admin.page({
+    name: 'alpha-tools.getting-started',
+    path: '/admin/extensions/alpha-tools/getting-started',
+    label: 'Alpha Tools',
+    icon: 'fas fa-puzzle-piece',
+    navSection: 'feature',
+    navOrder: 1000,
+  })),
+]
+
+export function resolveDetailPage() {
+  return null
+}
+```
+
+规则：
+
+- `export const extend = [...]` 是扩展入口的稳定协议。
+- 所有 `key`、`name`、`path` 必须稳定，避免升级后丢失设置、权限或路由状态。
+- 前台 UI 注入优先使用 `extendForum(...)`，后台 UI 注入优先使用 `extendAdmin(...)`。
+- 只有明确需要 patch 核心对象方法时，才使用 `extend()` / `override()`，并且必须放在扩展生命周期中。
+
+## SDK 入口边界
+
+允许导入：
+
+```js
+import { api, ItemList, ref, computed } from '@bias/core'
+import { extendForum, ForumActionMenu } from '@bias/core/forum'
+import { extendAdmin } from '@bias/core/admin'
+import { AdminPage, AdminToolbar, AdminInlineMessage } from '@bias/core/components/admin'
+```
+
+禁止导入：
+
+```js
+import Something from '../../bias/frontend/src/...'
+import Something from 'bias/frontend/src/...'
+import { internalRegistry } from '@bias/core/src/...'
+```
+
+`npm run check:extension-boundary` 和 `inspect_extension_imports --check-runtime-facades` 会阻止扩展穿透宿主源码。新增公共能力时，应先导出到 `@bias/core/*`，再让扩展使用。
+
+## @bias/core
+
+`@bias/core` 是前后台共享 SDK，适合通用状态、API、资源模型和列表组合：
+
+- Vue/Pinia helper：`ref`、`computed`、`watch`、`defineStore`。
+- HTTP API：`api` / `coreApi`。
+- patch 工具：`extend`、`override`、`resetPatches`。
+- 列表组合：`ItemList`、`orderedRegisteredItems`、`upsertByKey`。
+- 资源模型：`ResourceModel`、`normalizeModelData`、`unwrapList`。
+- 分页和列表状态：`usePaginatedListState`、`useRequestedPaginatedListState`、`useRouteListState`、`useRoutePagination`。
+- 主题能力：`getThemeSlot`、`registerThemeSlot`、`applyTheme`。
+
+示例：
+
+```js
+import { api, ref } from '@bias/core'
+
+export function useExtensionStatus() {
+  const loading = ref(false)
+  const status = ref(null)
+
+  async function load() {
+    loading.value = true
+    try {
+      status.value = await api.get('/api/forum/alpha-tools/status')
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return { loading, status, load }
+}
+```
+
+## @bias/core/forum
+
+`@bias/core/forum` 用于前台注入和可复用 forum UI：
+
+- 入口：`extendForum`、`ForumExtender`。
+- 导航：`forum.navItem(...)`、`forum.navSection(...)`。
+- Composer：`forum.composerTool(...)`、`forum.composerPayloadContributor(...)`、`forum.composerSubmitSuccess(...)`。
+- Realtime：`forum.realtimeEvent(...)`、`registerForumRuntime(...)`。
+- 搜索和列表：`forum.searchSource(...)`、`forum.discussionListContext(...)`、`forum.discussionListRequest(...)`、`forum.discussionListHero(...)`。
+- UI 组件：`ForumActionMenu`、`ForumHeroPanel`、`ForumInlineMessage`、`ForumPagination`、`ForumPrimaryNav`、`ForumStateBlock`。
+
+前台扩展应把业务状态放在扩展自己的模块中，向宿主提交声明式注入项。不要直接修改 `frontendRegistry` 的内部数组，也不要直接 import 页面组件。
+
+## @bias/core/admin
+
+`@bias/core/admin` 用于后台声明：
+
+- 入口：`extendAdmin`、`AdminExtender`、`Exports`。
+- 页面：`admin.page(...)`。
+- 设置：`admin.setting(...)`、`admin.customSetting(...)`、`admin.replaceSetting(...)`、`admin.setSettingPriority(...)`、`admin.removeSetting(...)`。
+- 权限：`admin.permission(...)`、`admin.permissionScope(...)`、`admin.replacePermission(...)`、`admin.setPermissionPriority(...)`、`admin.removePermission(...)`。
+- Dashboard：`admin.dashboardStat(...)`、`admin.dashboardAction(...)`、`admin.dashboardConfig(...)`、`admin.dashboardCopy(...)`。
+- 页面元信息：`admin.pageCopy(...)`、`admin.pageConfig(...)`、`admin.pageActionMeta(...)`、`admin.pageNoteTemplate(...)`。
+
 后台扩展也应只走公共 SDK：
 
 - `extendAdmin(admin => admin.page(...))`
@@ -70,6 +196,24 @@
   声明 dashboard 展示和交互入口。
 - `admin.pageCopy(...)`、`admin.pageConfig(...)`、`admin.pageActionMeta(...)`、`admin.pageNoteTemplate(...)`
   声明后台页面级文案、配置、动作元信息和模板。
+
+## @bias/core/components/admin
+
+后台页面组件从 `@bias/core/components/admin` 引入：
+
+- `AdminPage`
+- `AdminToolbar`
+- `AdminInlineMessage`
+- `AdminStateBlock`
+- `AdminSummaryGrid`
+- `AdminPagination`
+- `AdminSelectMenu`
+- `AdminMultiSelectMenu`
+- `AdminFilterTabs`
+- `AdminColorField`
+- `AdminActionNoteModal`
+
+后台页面应复用这些组件保持一致的信息密度、错误态和保存反馈。不要直接 import `frontend/src/admin/components/...`。
 
 ## 方法扩展和列表组合
 

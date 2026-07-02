@@ -1,0 +1,49 @@
+{
+  "mode": "external_websocket",
+  "url": "ws://127.0.0.1:8000/ws/forum/",
+  "discussion_id": 13124,
+  "channel_broadcast": true,
+  "timings": {
+    "connect_ms": {
+      "count": 20,
+      "p50_ms": 2.292585908435285,
+      "p95_ms": 3.019407182000584,
+      "p99_ms": 10.270432527177023,
+      "max_ms": 12.08318886347115
+    },
+    "initial_message_ms": {
+      "count": 20,
+      "p50_ms": 2.425828482955694,
+      "p95_ms": 3.1601091846823763,
+      "p99_ms": 10.55246729403733,
+      "max_ms": 12.400556821376085
+    },
+    "subscribe_ms": {
+      "count": 20,
+      "p50_ms": 18.996100639924407,
+      "p95_ms": 20.345366827677935,
+      "p99_ms": 20.474170201923698,
+      "max_ms": 20.50637104548514
+    },
+    "broadcast_ms": {
+      "count": 20,
+      "p50_ms": 1.9249275792390108,
+      "p95_ms": 2.603785484097898,
+      "p99_ms": 2.6852627051994205,
+      "max_ms": 2.705632010474801
+    }
+  },
+  "issues": [],
+  "summary": {
+    "ok": true,
+    "connection_count": 20,
+    "expected_connection_count": 20,
+    "connect_p95_ms": 3.019407182000584,
+    "subscribe_p95_ms": 20.345366827677935,
+    "p95_threshold_ms": 1000.0,
+    "broadcast_count": 20,
+    "expected_broadcast_count": 20,
+    "broadcast_p95_ms": 2.603785484097898,
+    "broadcast_threshold_ms": 1000.0
+  }
+}

@@ -1,0 +1,16 @@
+开始升级 Bias
+站点配置: /app/instance/site.json
+数据库模式: postgres
+Redis: 开启
+升级计划:
+- Django 系统检查: python manage.py check
+- 数据库迁移: python manage.py migrate --noinput
+- 扩展状态同步: python manage.py sync_extensions
+- 扩展启用顺序同步: python manage.py sync_extension_order
+- 扩展迁移摘要同步: python manage.py migrate_extensions --all
+- 默认用户组与权限同步: python manage.py init_groups
+- 写入安装版本: python manage.py sync_forum_version
+- 运行时缓存清理: python manage.py clear_runtime_cache
+- 扩展前端构建清单生成: python manage.py build_extension_frontend
+- 静态资源收集: python manage.py collectstatic --noinput
+[DRY-RUN] 仅输出计划，未执行任何升级步骤

@@ -1,0 +1,51 @@
+{
+  "config_path": "/app/instance/site.json",
+  "backup_dir": "/app/backups/20260702-p2-smoke",
+  "database_mode": "postgres",
+  "backup_artifacts": [
+    {
+      "key": "site_config",
+      "label": "站点配置备份",
+      "source": "/app/instance/site.json",
+      "path": "/app/backups/20260702-p2-smoke/site.json",
+      "required": true,
+      "exists": true,
+      "planned": true
+    },
+    {
+      "key": "database",
+      "label": "PostgreSQL dump 备份",
+      "source": "bias_smoke@postgres:5432/bias_smoke",
+      "path": "/app/backups/20260702-p2-smoke/database.dump",
+      "required": true,
+      "exists": true,
+      "planned": true
+    },
+    {
+      "key": "media",
+      "label": "media 目录备份",
+      "source": "/app/media",
+      "path": "/app/backups/20260702-p2-smoke/media",
+      "required": true,
+      "exists": true,
+      "planned": true
+    },
+    {
+      "key": "static_frontend",
+      "label": "static/frontend 目录备份",
+      "source": "/app/static/frontend",
+      "path": "/app/backups/20260702-p2-smoke/static/frontend",
+      "required": true,
+      "exists": true,
+      "planned": true
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "dry_run": false,
+    "artifact_count": 4,
+    "missing_required_artifact_count": 0
+  }
+}

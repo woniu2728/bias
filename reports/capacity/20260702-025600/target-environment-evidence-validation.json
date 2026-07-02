@@ -1,0 +1,2451 @@
+{
+  "report_dir": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600",
+  "p0_report_dir": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925",
+  "p1_report_dir": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409",
+  "plan_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-plan.json",
+  "checks": [
+    {
+      "key": "strict_health",
+      "ok": true,
+      "file": "health-strict.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\health-strict.json"
+    },
+    {
+      "key": "https_http_smoke",
+      "ok": false,
+      "file": "smoke-http-p95.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.json",
+      "errors": [
+        "base_url must use https for target-environment evidence"
+      ],
+      "details": {
+        "base_url": "http://127.0.0.1:8000"
+      }
+    },
+    {
+      "key": "external_websocket",
+      "ok": false,
+      "file": "load-websocket-external-20.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.json",
+      "errors": [
+        "websocket url must use wss for target-environment evidence"
+      ],
+      "details": {
+        "url": "ws://127.0.0.1:8000/ws/forum/"
+      }
+    },
+    {
+      "key": "queue_worker",
+      "ok": false,
+      "file": "smoke-queue-worker.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.json",
+      "errors": [
+        "broker_url must not point at a local/container-only service host",
+        "result_backend must not point at a local/container-only service host"
+      ],
+      "details": {
+        "broker_url": "redis://redis:6379/1",
+        "result_backend": "redis://redis:6379/2",
+        "worker_count": 1,
+        "summary": {
+          "ok": true,
+          "error_count": 0
+        }
+      }
+    },
+    {
+      "key": "install_dry_run",
+      "ok": true,
+      "file": "install-forum-dry-run.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\install-forum-dry-run.json",
+      "details": {
+        "summary": {
+          "ok": true,
+          "error_count": 0,
+          "warning_count": 0,
+          "dry_run": true
+        }
+      }
+    },
+    {
+      "key": "upgrade_dry_run",
+      "ok": true,
+      "file": "upgrade-forum-dry-run.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\upgrade-forum-dry-run.json",
+      "details": {
+        "summary": {
+          "ok": true,
+          "error_count": 0,
+          "warning_count": 0,
+          "dry_run": true,
+          "executed": false
+        }
+      }
+    },
+    {
+      "key": "backup",
+      "ok": false,
+      "file": "backup-forum.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.json",
+      "errors": [
+        "backup_dir must be a durable target-environment backup location",
+        "backup_artifacts.site_config.path must be durable target-environment storage",
+        "backup_artifacts.database.path must be durable target-environment storage",
+        "backup_artifacts.media.path must be durable target-environment storage",
+        "backup_artifacts.static_frontend.path must be durable target-environment storage"
+      ],
+      "details": {
+        "backup_dir": "/app/backups/20260702-p2-smoke",
+        "summary": {
+          "ok": true,
+          "error_count": 0,
+          "warning_count": 0,
+          "dry_run": false,
+          "artifact_count": 4,
+          "missing_required_artifact_count": 0
+        }
+      }
+    },
+    {
+      "key": "backup_verification",
+      "ok": false,
+      "file": "verify-forum-backup.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.json",
+      "errors": [
+        "backup_dir must be a durable target-environment backup location",
+        "checks.site_config.path must be durable target-environment storage",
+        "checks.database.path must be durable target-environment storage",
+        "checks.media.path must be durable target-environment storage",
+        "checks.static_frontend.path must be durable target-environment storage"
+      ],
+      "details": {
+        "backup_dir": "/app/backups/20260702-p2-smoke",
+        "summary": {
+          "ok": true,
+          "error_count": 0,
+          "warning_count": 0,
+          "check_count": 4
+        }
+      }
+    },
+    {
+      "key": "upgrade_executed",
+      "ok": true,
+      "file": "upgrade-forum-executed.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\upgrade-forum-executed.json",
+      "details": {
+        "summary": {
+          "ok": true,
+          "error_count": 0,
+          "warning_count": 0,
+          "dry_run": false,
+          "executed": true,
+          "executed_step_count": 10
+        }
+      }
+    },
+    {
+      "key": "post_upgrade_strict_health",
+      "ok": true,
+      "file": "post-upgrade-health-strict.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-health-strict.json"
+    },
+    {
+      "key": "post_upgrade_http_smoke",
+      "ok": false,
+      "file": "post-upgrade-smoke-http-p95.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json",
+      "errors": [
+        "base_url must use https for target-environment evidence"
+      ],
+      "details": {
+        "base_url": "http://127.0.0.1:8000"
+      }
+    },
+    {
+      "key": "post_upgrade_queue_worker",
+      "ok": false,
+      "file": "post-upgrade-smoke-queue-worker.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json",
+      "errors": [
+        "broker_url must not point at a local/container-only service host",
+        "result_backend must not point at a local/container-only service host"
+      ],
+      "details": {
+        "broker_url": "redis://redis:6379/1",
+        "result_backend": "redis://redis:6379/2",
+        "worker_count": 1,
+        "summary": {
+          "ok": true,
+          "error_count": 0
+        }
+      }
+    },
+    {
+      "key": "rollback_plan",
+      "ok": false,
+      "file": "plan-forum-rollback-with-backups.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.json",
+      "errors": [
+        "backup_dir must be a durable target-environment backup location",
+        "backup_artifacts.site_config.path must be durable target-environment storage",
+        "backup_artifacts.database.path must be durable target-environment storage",
+        "backup_artifacts.media.path must be durable target-environment storage",
+        "backup_artifacts.static_frontend.path must be durable target-environment storage"
+      ],
+      "details": {
+        "backup_dir": "/app/backups/20260702-p2-smoke",
+        "summary": {
+          "ok": true,
+          "error_count": 0,
+          "warning_count": 0,
+          "require_existing_backups": true,
+          "missing_required_artifact_count": 0,
+          "executes_restore": false
+        }
+      }
+    },
+    {
+      "key": "restore_rehearsal",
+      "ok": false,
+      "file": "rehearse-forum-restore.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json",
+      "errors": [
+        "backup_dir must be a durable target-environment backup location",
+        "backup_artifacts.site_config.path must be durable target-environment storage",
+        "backup_artifacts.database.path must be durable target-environment storage",
+        "backup_artifacts.media.path must be durable target-environment storage",
+        "backup_artifacts.static_frontend.path must be durable target-environment storage",
+        "restore_steps.site_config.source must be durable target-environment storage",
+        "restore_steps.media.source must be durable target-environment storage",
+        "restore_steps.static_frontend.source must be durable target-environment storage"
+      ],
+      "details": {
+        "backup_dir": "/app/backups/20260702-p2-smoke",
+        "summary": {
+          "ok": true,
+          "error_count": 0,
+          "warning_count": 1,
+          "artifact_count": 4,
+          "verification_count": 4,
+          "restore_step_count": 7,
+          "executes_live_restore": false,
+          "uses_isolated_restore_targets": true,
+          "keep_temp_database": false,
+          "dropped_temp_database": true
+        }
+      }
+    },
+    {
+      "key": "restore_dry_run",
+      "ok": false,
+      "file": "restore-forum-backup-dry-run.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json",
+      "errors": [
+        "backup_dir must be a durable target-environment backup location",
+        "backup_artifacts.database.path must be durable target-environment storage",
+        "restore_steps.database.source must be durable target-environment storage",
+        "backup_artifacts.media.path must be durable target-environment storage",
+        "restore_steps.media.source must be durable target-environment storage",
+        "backup_artifacts.static_frontend.path must be durable target-environment storage",
+        "restore_steps.static_frontend.source must be durable target-environment storage",
+        "backup_artifacts.site_config.path must be durable target-environment storage",
+        "restore_steps.site_config.source must be durable target-environment storage"
+      ],
+      "details": {
+        "summary": {
+          "ok": true,
+          "error_count": 0,
+          "warning_count": 0,
+          "dry_run": true,
+          "confirmed_overwrites_live_data": false,
+          "executes_live_restore": false,
+          "destructive": true,
+          "restore_step_count": 4
+        }
+      }
+    },
+    {
+      "key": "live_restore",
+      "ok": false,
+      "file": "restore-forum-backup-live.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json",
+      "missing": true,
+      "errors": [
+        "missing evidence file: restore-forum-backup-live.json"
+      ]
+    },
+    {
+      "key": "runtime_integrations",
+      "ok": false,
+      "file": "smoke-runtime-integrations.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.json",
+      "errors": [
+        "summary.fail_on_warning must be true",
+        "summary.require_smtp_connect must be true",
+        "summary.require_storage_write must be true",
+        "summary.require_object_storage must be true",
+        "summary.warning_count must be 0",
+        "email check must connect to SMTP",
+        "storage driver must be non-local object storage"
+      ],
+      "details": {
+        "summary": {
+          "ok": true,
+          "check_count": 2,
+          "error_count": 0,
+          "warning_count": 1,
+          "fail_on_warning": false,
+          "require_smtp_connect": false,
+          "require_storage_write": false,
+          "require_object_storage": false
+        },
+        "email_mode": "config_dry_run",
+        "storage_driver": "local"
+      }
+    },
+    {
+      "key": "multi_node_topology",
+      "ok": false,
+      "file": "multi-node-topology.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.json",
+      "errors": [
+        "summary.ok must be true",
+        "summary.multi_node must be true",
+        "roles.web must be at least 2",
+        "artifacts.image must identify a target release image",
+        "shared_services.database must identify a shared target service",
+        "shared_services.redis must identify a shared target service",
+        "shared_services.load_balancer must use https"
+      ],
+      "details": {
+        "summary": {
+          "ok": false,
+          "error_count": 5,
+          "warning_count": 0,
+          "multi_node": false,
+          "require_multi_node": true
+        },
+        "roles": {
+          "web": 1,
+          "worker": 1,
+          "scheduler": 1
+        },
+        "artifacts": {
+          "image": "local-production-smoke",
+          "version": "0.1.1"
+        },
+        "shared_services": {
+          "database": "postgres://postgres:5432/bias_smoke",
+          "redis": "redis://redis:6379/0",
+          "load_balancer": "http://127.0.0.1:8000"
+        }
+      }
+    },
+    {
+      "key": "p0_capacity_suite",
+      "ok": false,
+      "file": "forum-main-300s.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.json",
+      "errors": [
+        "base_url must use https for target-environment capacity evidence"
+      ],
+      "details": {
+        "base_url": "http://127.0.0.1:8000",
+        "profile": "forum-main",
+        "concurrency": 20,
+        "duration_seconds": 300.3536785049364,
+        "summary": {
+          "ok": true,
+          "request_count": 27378,
+          "error_count": 0,
+          "error_rate": 0.0,
+          "requests_per_second": 91.15253768916313,
+          "failed_threshold_count": 0
+        }
+      }
+    },
+    {
+      "key": "p1_capacity_suite",
+      "ok": false,
+      "file": "20260702-020409",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409",
+      "errors": [
+        "p1_capacity_suite:forum-main-auth failed",
+        "p1_capacity_suite:forum-write failed",
+        "p1_capacity_suite:forum-write-mixed failed",
+        "p1_capacity_suite:forum-upload failed",
+        "p1_capacity_suite:forum-write-moderation failed"
+      ],
+      "details": {
+        "checks": [
+          {
+            "key": "p1_capacity_suite:forum-main-auth",
+            "ok": false,
+            "file": "forum-main-auth-300s.json",
+            "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.json",
+            "errors": [
+              "base_url must use https for target-environment capacity evidence"
+            ],
+            "details": {
+              "base_url": "http://127.0.0.1:8000",
+              "profile": "forum-main-auth",
+              "concurrency": 20,
+              "duration_seconds": 300.050069630146,
+              "summary": {
+                "ok": true,
+                "request_count": 33256,
+                "error_count": 0,
+                "error_rate": 0.0,
+                "requests_per_second": 110.83483513599148,
+                "failed_threshold_count": 0
+              }
+            }
+          },
+          {
+            "key": "p1_capacity_suite:forum-write",
+            "ok": false,
+            "file": "forum-write-120s.json",
+            "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.json",
+            "errors": [
+              "base_url must use https for target-environment capacity evidence"
+            ],
+            "details": {
+              "base_url": "http://127.0.0.1:8000",
+              "profile": "forum-write",
+              "concurrency": 5,
+              "duration_seconds": 120.21612050989643,
+              "summary": {
+                "ok": true,
+                "request_count": 2036,
+                "error_count": 0,
+                "error_rate": 0.0,
+                "requests_per_second": 16.936164562325835,
+                "failed_threshold_count": 0
+              }
+            }
+          },
+          {
+            "key": "p1_capacity_suite:forum-write-mixed",
+            "ok": false,
+            "file": "forum-write-mixed-120s.json",
+            "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json",
+            "errors": [
+              "base_url must use https for target-environment capacity evidence"
+            ],
+            "details": {
+              "base_url": "http://127.0.0.1:8000",
+              "profile": "forum-write-mixed",
+              "concurrency": 5,
+              "duration_seconds": 120.05172839504667,
+              "summary": {
+                "ok": true,
+                "request_count": 8085,
+                "error_count": 0,
+                "error_rate": 0.0,
+                "requests_per_second": 67.34596917584726,
+                "failed_threshold_count": 0
+              }
+            }
+          },
+          {
+            "key": "p1_capacity_suite:forum-upload",
+            "ok": false,
+            "file": "forum-upload-120s.json",
+            "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.json",
+            "errors": [
+              "base_url must use https for target-environment capacity evidence"
+            ],
+            "details": {
+              "base_url": "http://127.0.0.1:8000",
+              "profile": "forum-upload",
+              "concurrency": 5,
+              "duration_seconds": 120.02962901093997,
+              "summary": {
+                "ok": true,
+                "request_count": 4265,
+                "error_count": 0,
+                "error_rate": 0.0,
+                "requests_per_second": 35.53289329596504,
+                "failed_threshold_count": 0
+              }
+            }
+          },
+          {
+            "key": "p1_capacity_suite:forum-write-moderation",
+            "ok": false,
+            "file": "forum-write-moderation-60s.json",
+            "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json",
+            "errors": [
+              "base_url must use https for target-environment capacity evidence"
+            ],
+            "details": {
+              "base_url": "http://127.0.0.1:8000",
+              "profile": "forum-write-moderation",
+              "concurrency": 2,
+              "duration_seconds": 60.04585906700231,
+              "summary": {
+                "ok": true,
+                "request_count": 2782,
+                "error_count": 0,
+                "error_rate": 0.0,
+                "requests_per_second": 46.33125486464768,
+                "failed_threshold_count": 0
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "key": "target_evidence_plan",
+      "ok": false,
+      "file": "target-environment-evidence-plan.json",
+      "path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-plan.json",
+      "errors": [
+        "plan commands must not contain unresolved substitution tokens"
+      ],
+      "details": {
+        "summary": {
+          "ok": true,
+          "command_count": 25,
+          "missing_output_count": 1,
+          "destructive_command_count": 1,
+          "manual_approval_command_count": 2,
+          "safe_unattended_command_count": 3,
+          "safe_archive_ready_command_count": 3,
+          "excluded_from_safe_archive_count": 22,
+          "substitution_required_command_count": 20,
+          "target_value_required_command_count": 0,
+          "dependency_blocked_command_count": 8,
+          "dependency_execution_wave_count": 3,
+          "final_validation_command_count": 1,
+          "execution_queue_counts": {
+            "safe_unattended": 3,
+            "requires_substitution": 20,
+            "target_value_required": 0,
+            "dependency_blocked": 8,
+            "maintenance_approval": 1,
+            "destructive_approval": 1,
+            "final_validation": 1
+          },
+          "error_count": 0,
+          "warning_count": 0,
+          "executes_commands": false
+        },
+        "safe_archive_count": 3,
+        "excluded_from_safe_archive_count": 22
+      }
+    }
+  ],
+  "remediation": {
+    "blocked": true,
+    "failed_keys": [
+      "https_http_smoke",
+      "external_websocket",
+      "queue_worker",
+      "backup",
+      "backup_verification",
+      "post_upgrade_http_smoke",
+      "post_upgrade_queue_worker",
+      "rollback_plan",
+      "restore_rehearsal",
+      "restore_dry_run",
+      "live_restore",
+      "runtime_integrations",
+      "multi_node_topology",
+      "p0_capacity_suite",
+      "p1_capacity_suite",
+      "target_evidence_plan"
+    ],
+    "missing_files": [
+      "restore-forum-backup-live.json"
+    ],
+    "actions": [
+      {
+        "key": "target_evidence_plan",
+        "file": "target-environment-evidence-plan.json",
+        "missing": false,
+        "error_count": 1,
+        "hint": "Regenerate the target run plan with real target values and --write-plan-file, then validate that exact plan file.",
+        "planned_commands": [
+          {
+            "key": "validate_target_environment_evidence",
+            "phase": "final_validation",
+            "execution_group": "final_validation",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": false,
+            "substitution_tokens": [],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py validate_target_environment_evidence --report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600 --p0-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925 --p1-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409 --plan-file D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-plan.json --write-remediation-checklist D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-remediation-checklist.md --require-multi-node --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.stderr.txt",
+            "archive_command": "python manage.py validate_target_environment_evidence --report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600 --p0-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925 --p1-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409 --plan-file D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-plan.json --write-remediation-checklist D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-remediation-checklist.md --require-multi-node --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "https_http_smoke",
+        "file": "smoke-http-p95.json",
+        "missing": false,
+        "error_count": 1,
+        "hint": "Run target HTTPS HTTP P95 smoke and archive smoke-http-p95.json.",
+        "planned_commands": [
+          {
+            "key": "https_http_smoke",
+            "phase": "ops",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.stderr.txt",
+            "archive_command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "external_websocket",
+        "file": "load-websocket-external-20.json",
+        "missing": false,
+        "error_count": 1,
+        "hint": "Run external WSS WebSocket load smoke with a real discussion id.",
+        "planned_commands": [
+          {
+            "key": "external_websocket",
+            "phase": "ops",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<discussion-id>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py load_test_websocket --base-url https://<your-domain> --connections 20 --discussion-id <discussion-id> --p95-threshold-ms 1000 --broadcast-p95-threshold-ms 1000 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.stderr.txt",
+            "archive_command": "python manage.py load_test_websocket --base-url https://<your-domain> --connections 20 --discussion-id <discussion-id> --p95-threshold-ms 1000 --broadcast-p95-threshold-ms 1000 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "queue_worker",
+        "file": "smoke-queue-worker.json",
+        "missing": false,
+        "error_count": 2,
+        "hint": "Run queue worker smoke against shared target Redis broker/result backend.",
+        "planned_commands": [
+          {
+            "key": "queue_worker",
+            "phase": "ops",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<redis-broker-url>",
+              "<redis-result-backend>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.stderr.txt",
+            "archive_command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "backup",
+        "file": "backup-forum.json",
+        "missing": false,
+        "error_count": 5,
+        "hint": "Create a target backup in durable storage and archive backup-forum.json.",
+        "planned_commands": [
+          {
+            "key": "backup",
+            "phase": "ops",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py backup_forum --config instance/site.json --backup-dir <durable-backup-uri> --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.stderr.txt",
+            "archive_command": "python manage.py backup_forum --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "backup_verification",
+        "file": "verify-forum-backup.json",
+        "missing": false,
+        "error_count": 5,
+        "hint": "Verify the durable target backup and archive verify-forum-backup.json.",
+        "planned_commands": [
+          {
+            "key": "backup_verification",
+            "phase": "ops",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py verify_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.stderr.txt",
+            "archive_command": "python manage.py verify_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "post_upgrade_http_smoke",
+        "file": "post-upgrade-smoke-http-p95.json",
+        "missing": false,
+        "error_count": 1,
+        "hint": "Run target HTTPS HTTP P95 smoke after upgrade.",
+        "planned_commands": [
+          {
+            "key": "post_upgrade_http_smoke",
+            "phase": "ops",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "upgrade_executed"
+            ],
+            "command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt",
+            "archive_command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "post_upgrade_queue_worker",
+        "file": "post-upgrade-smoke-queue-worker.json",
+        "missing": false,
+        "error_count": 2,
+        "hint": "Run target queue worker smoke after upgrade.",
+        "planned_commands": [
+          {
+            "key": "post_upgrade_queue_worker",
+            "phase": "ops",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<redis-broker-url>",
+              "<redis-result-backend>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "upgrade_executed"
+            ],
+            "command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt",
+            "archive_command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "rollback_plan",
+        "file": "plan-forum-rollback-with-backups.json",
+        "missing": false,
+        "error_count": 5,
+        "hint": "Generate rollback plan using durable target backups.",
+        "planned_commands": [
+          {
+            "key": "rollback_plan",
+            "phase": "ops",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py plan_forum_rollback --config instance/site.json --backup-dir <durable-backup-uri> --require-existing-backups --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.stderr.txt",
+            "archive_command": "python manage.py plan_forum_rollback --config instance/site.json --backup-dir <durable-backup-uri> --require-existing-backups --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "restore_rehearsal",
+        "file": "rehearse-forum-restore.json",
+        "missing": false,
+        "error_count": 8,
+        "hint": "Run isolated restore rehearsal from durable target backups.",
+        "planned_commands": [
+          {
+            "key": "restore_rehearsal",
+            "phase": "ops",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "backup_verification"
+            ],
+            "command": "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt",
+            "archive_command": "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "restore_dry_run",
+        "file": "restore-forum-backup-dry-run.json",
+        "missing": false,
+        "error_count": 9,
+        "hint": "Run protected live restore dry-run from durable target backups.",
+        "planned_commands": [
+          {
+            "key": "restore_dry_run",
+            "phase": "ops",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "backup_verification",
+              "restore_rehearsal"
+            ],
+            "command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt",
+            "archive_command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "live_restore",
+        "file": "restore-forum-backup-live.json",
+        "missing": true,
+        "error_count": 1,
+        "hint": "Archive approved destructive live restore with post-restore verification.",
+        "planned_commands": [
+          {
+            "key": "live_restore",
+            "phase": "ops",
+            "execution_group": "destructive_approval",
+            "manual_approval_required": true,
+            "destructive": true,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "backup_verification",
+              "restore_dry_run"
+            ],
+            "command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt",
+            "archive_command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "runtime_integrations",
+        "file": "smoke-runtime-integrations.json",
+        "missing": false,
+        "error_count": 7,
+        "hint": "Run runtime integrations with SMTP connect, object storage write/delete, and fail-on-warning.",
+        "planned_commands": [
+          {
+            "key": "runtime_integrations",
+            "phase": "ops",
+            "execution_group": "safe_unattended",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": true,
+            "safe_archive_ready": true,
+            "requires_substitution": false,
+            "substitution_tokens": [],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py smoke_runtime_integrations --smtp-connect --storage-write --require-smtp-connect --require-storage-write --require-object-storage --fail-on-warning --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.stderr.txt",
+            "archive_command": "python manage.py smoke_runtime_integrations --smtp-connect --storage-write --require-smtp-connect --require-storage-write --require-object-storage --fail-on-warning --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "multi_node_topology",
+        "file": "multi-node-topology.json",
+        "missing": false,
+        "error_count": 7,
+        "hint": "Archive target multi-node topology with shared services and HTTPS load balancer.",
+        "planned_commands": [
+          {
+            "key": "multi_node_topology",
+            "phase": "ops",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<db-endpoint>",
+              "<image-or-release>",
+              "<redis-endpoint>",
+              "<scheduler-count>",
+              "<version>",
+              "<web-count>",
+              "<worker-count>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py inspect_target_topology --web-nodes <web-count> --worker-nodes <worker-count> --scheduler-nodes <scheduler-count> --image <image-or-release> --app-version <version> --database <db-endpoint> --redis <redis-endpoint> --load-balancer https://<your-domain> --require-multi-node --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.stderr.txt",
+            "archive_command": "python manage.py inspect_target_topology --web-nodes <web-count> --worker-nodes <worker-count> --scheduler-nodes <scheduler-count> --image <image-or-release> --app-version <version> --database <db-endpoint> --redis <redis-endpoint> --load-balancer https://<your-domain> --require-multi-node --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "p0_capacity_suite",
+        "file": "forum-main-300s.json",
+        "missing": false,
+        "error_count": 1,
+        "hint": "Run target HTTPS P0 forum-main capacity suite.",
+        "planned_commands": [
+          {
+            "key": "p0_forum_main",
+            "phase": "p0_capacity",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main --concurrency 20 --duration 300 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main --concurrency 20 --duration 300 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.stderr.txt"
+          }
+        ]
+      },
+      {
+        "key": "p1_capacity_suite",
+        "file": "20260702-020409",
+        "missing": false,
+        "error_count": 5,
+        "hint": "Run all target HTTPS P1 auth/write/upload/moderation capacity suites.",
+        "planned_commands": [
+          {
+            "key": "p1_forum_main_auth",
+            "phase": "p1_capacity",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<load-password>",
+              "<load-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main-auth --login-username <load-user> --login-password <load-password> --concurrency 20 --duration 300 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main-auth --login-username <load-user> --login-password <load-password> --concurrency 20 --duration 300 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.stderr.txt"
+          },
+          {
+            "key": "p1_forum_write",
+            "phase": "p1_capacity",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<discussion-id>",
+              "<load-password>",
+              "<load-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write --login-username <load-user> --login-password <load-password> --discussion-id <discussion-id> --concurrency 5 --duration 120 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write --login-username <load-user> --login-password <load-password> --discussion-id <discussion-id> --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.stderr.txt"
+          },
+          {
+            "key": "p1_forum_write_mixed",
+            "phase": "p1_capacity",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<load-password>",
+              "<load-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "p1_forum_write"
+            ],
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt"
+          },
+          {
+            "key": "p1_forum_upload",
+            "phase": "p1_capacity",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<load-password>",
+              "<load-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [],
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-upload --login-username <load-user> --login-password <load-password> --concurrency 5 --duration 120 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-upload --login-username <load-user> --login-password <load-password> --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.stderr.txt"
+          },
+          {
+            "key": "p1_forum_moderation",
+            "phase": "p1_capacity",
+            "execution_group": "requires_substitution",
+            "manual_approval_required": false,
+            "destructive": false,
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<moderator-password>",
+              "<moderator-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "p1_forum_write_mixed"
+            ],
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt"
+          }
+        ]
+      }
+    ],
+    "command_groups": {
+      "destructive_approval": {
+        "command_count": 1,
+        "action_keys": [
+          "live_restore"
+        ],
+        "command_keys": [
+          "live_restore"
+        ],
+        "commands": [
+          "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json"
+        ],
+        "archive_commands": [
+          "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt"
+        ],
+        "output_files": [
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json"
+        ],
+        "stderr_files": [
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt"
+        ],
+        "manual_approval_required": true,
+        "destructive": true,
+        "safe_to_run_unattended": false,
+        "safe_archive_ready": false,
+        "requires_substitution": true,
+        "target_value_required": false,
+        "dependency_blocked": true,
+        "requires_completed_commands": [
+          "backup_verification",
+          "restore_dry_run"
+        ]
+      },
+      "final_validation": {
+        "command_count": 1,
+        "action_keys": [
+          "target_evidence_plan"
+        ],
+        "command_keys": [
+          "validate_target_environment_evidence"
+        ],
+        "commands": [
+          "python manage.py validate_target_environment_evidence --report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600 --p0-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925 --p1-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409 --plan-file D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-plan.json --write-remediation-checklist D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-remediation-checklist.md --require-multi-node --format json"
+        ],
+        "archive_commands": [
+          "python manage.py validate_target_environment_evidence --report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600 --p0-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925 --p1-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409 --plan-file D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-plan.json --write-remediation-checklist D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-remediation-checklist.md --require-multi-node --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.stderr.txt"
+        ],
+        "output_files": [
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.json"
+        ],
+        "stderr_files": [
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.stderr.txt"
+        ],
+        "manual_approval_required": false,
+        "destructive": false,
+        "safe_to_run_unattended": false,
+        "safe_archive_ready": false,
+        "requires_substitution": false,
+        "target_value_required": false,
+        "dependency_blocked": false,
+        "requires_completed_commands": []
+      },
+      "requires_substitution": {
+        "command_count": 17,
+        "action_keys": [
+          "https_http_smoke",
+          "external_websocket",
+          "queue_worker",
+          "backup",
+          "backup_verification",
+          "post_upgrade_http_smoke",
+          "post_upgrade_queue_worker",
+          "rollback_plan",
+          "restore_rehearsal",
+          "restore_dry_run",
+          "multi_node_topology",
+          "p0_capacity_suite",
+          "p1_capacity_suite"
+        ],
+        "command_keys": [
+          "https_http_smoke",
+          "external_websocket",
+          "queue_worker",
+          "backup",
+          "backup_verification",
+          "post_upgrade_http_smoke",
+          "post_upgrade_queue_worker",
+          "rollback_plan",
+          "restore_rehearsal",
+          "restore_dry_run",
+          "multi_node_topology",
+          "p0_forum_main",
+          "p1_forum_main_auth",
+          "p1_forum_write",
+          "p1_forum_write_mixed",
+          "p1_forum_upload",
+          "p1_forum_moderation"
+        ],
+        "commands": [
+          "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json",
+          "python manage.py load_test_websocket --base-url https://<your-domain> --connections 20 --discussion-id <discussion-id> --p95-threshold-ms 1000 --broadcast-p95-threshold-ms 1000 --fail-on-threshold --format json",
+          "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json",
+          "python manage.py backup_forum --config instance/site.json --backup-dir <durable-backup-uri> --format json",
+          "python manage.py verify_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --format json",
+          "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json",
+          "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json",
+          "python manage.py plan_forum_rollback --config instance/site.json --backup-dir <durable-backup-uri> --require-existing-backups --format json",
+          "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json",
+          "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json",
+          "python manage.py inspect_target_topology --web-nodes <web-count> --worker-nodes <worker-count> --scheduler-nodes <scheduler-count> --image <image-or-release> --app-version <version> --database <db-endpoint> --redis <redis-endpoint> --load-balancer https://<your-domain> --require-multi-node --format json",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main --concurrency 20 --duration 300 --fail-on-threshold --format json",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main-auth --login-username <load-user> --login-password <load-password> --concurrency 20 --duration 300 --fail-on-threshold --format json",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write --login-username <load-user> --login-password <load-password> --discussion-id <discussion-id> --concurrency 5 --duration 120 --fail-on-threshold --format json",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-upload --login-username <load-user> --login-password <load-password> --concurrency 5 --duration 120 --fail-on-threshold --format json",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json"
+        ],
+        "archive_commands": [
+          "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.stderr.txt",
+          "python manage.py load_test_websocket --base-url https://<your-domain> --connections 20 --discussion-id <discussion-id> --p95-threshold-ms 1000 --broadcast-p95-threshold-ms 1000 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.stderr.txt",
+          "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.stderr.txt",
+          "python manage.py backup_forum --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.stderr.txt",
+          "python manage.py verify_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.stderr.txt",
+          "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt",
+          "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt",
+          "python manage.py plan_forum_rollback --config instance/site.json --backup-dir <durable-backup-uri> --require-existing-backups --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.stderr.txt",
+          "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt",
+          "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt",
+          "python manage.py inspect_target_topology --web-nodes <web-count> --worker-nodes <worker-count> --scheduler-nodes <scheduler-count> --image <image-or-release> --app-version <version> --database <db-endpoint> --redis <redis-endpoint> --load-balancer https://<your-domain> --require-multi-node --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main --concurrency 20 --duration 300 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main-auth --login-username <load-user> --login-password <load-password> --concurrency 20 --duration 300 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write --login-username <load-user> --login-password <load-password> --discussion-id <discussion-id> --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-upload --login-username <load-user> --login-password <load-password> --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt"
+        ],
+        "output_files": [
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.json",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json"
+        ],
+        "stderr_files": [
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.stderr.txt",
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt"
+        ],
+        "manual_approval_required": false,
+        "destructive": false,
+        "safe_to_run_unattended": false,
+        "safe_archive_ready": false,
+        "requires_substitution": true,
+        "target_value_required": false,
+        "dependency_blocked": true,
+        "requires_completed_commands": [
+          "upgrade_executed",
+          "backup_verification",
+          "restore_rehearsal",
+          "p1_forum_write",
+          "p1_forum_write_mixed"
+        ]
+      },
+      "safe_unattended": {
+        "command_count": 1,
+        "action_keys": [
+          "runtime_integrations"
+        ],
+        "command_keys": [
+          "runtime_integrations"
+        ],
+        "commands": [
+          "python manage.py smoke_runtime_integrations --smtp-connect --storage-write --require-smtp-connect --require-storage-write --require-object-storage --fail-on-warning --format json"
+        ],
+        "archive_commands": [
+          "python manage.py smoke_runtime_integrations --smtp-connect --storage-write --require-smtp-connect --require-storage-write --require-object-storage --fail-on-warning --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.stderr.txt"
+        ],
+        "output_files": [
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.json"
+        ],
+        "stderr_files": [
+          "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.stderr.txt"
+        ],
+        "manual_approval_required": false,
+        "destructive": false,
+        "safe_to_run_unattended": true,
+        "safe_archive_ready": true,
+        "requires_substitution": false,
+        "target_value_required": false,
+        "dependency_blocked": false,
+        "requires_completed_commands": []
+      }
+    },
+    "execution_sequence": [
+      {
+        "step": 1,
+        "groups": [
+          "safe_unattended"
+        ],
+        "action_keys": [
+          "runtime_integrations"
+        ],
+        "command_keys": [
+          "runtime_integrations"
+        ],
+        "command_count": 1,
+        "safe_to_run_unattended": true,
+        "safe_archive_ready": true,
+        "manual_approval_required": false,
+        "destructive": false,
+        "requires_substitution": false,
+        "target_value_required": false,
+        "dependency_blocked": false,
+        "requires_completed_commands": [],
+        "policy": "run safe unattended archive commands"
+      },
+      {
+        "step": 2,
+        "groups": [
+          "requires_substitution"
+        ],
+        "action_keys": [
+          "https_http_smoke",
+          "external_websocket",
+          "queue_worker",
+          "backup",
+          "backup_verification",
+          "post_upgrade_http_smoke",
+          "post_upgrade_queue_worker",
+          "rollback_plan",
+          "restore_rehearsal",
+          "restore_dry_run",
+          "multi_node_topology",
+          "p0_capacity_suite",
+          "p1_capacity_suite"
+        ],
+        "command_keys": [
+          "https_http_smoke",
+          "external_websocket",
+          "queue_worker",
+          "backup",
+          "backup_verification",
+          "post_upgrade_http_smoke",
+          "post_upgrade_queue_worker",
+          "rollback_plan",
+          "restore_rehearsal",
+          "restore_dry_run",
+          "multi_node_topology",
+          "p0_forum_main",
+          "p1_forum_main_auth",
+          "p1_forum_write",
+          "p1_forum_write_mixed",
+          "p1_forum_upload",
+          "p1_forum_moderation"
+        ],
+        "command_count": 17,
+        "safe_to_run_unattended": false,
+        "safe_archive_ready": false,
+        "manual_approval_required": false,
+        "destructive": false,
+        "requires_substitution": true,
+        "target_value_required": false,
+        "dependency_blocked": true,
+        "requires_completed_commands": [
+          "upgrade_executed",
+          "backup_verification",
+          "restore_rehearsal",
+          "p1_forum_write",
+          "p1_forum_write_mixed"
+        ],
+        "policy": "replace substitution tokens before running"
+      },
+      {
+        "step": 3,
+        "groups": [
+          "destructive_approval"
+        ],
+        "action_keys": [
+          "live_restore"
+        ],
+        "command_keys": [
+          "live_restore"
+        ],
+        "command_count": 1,
+        "safe_to_run_unattended": false,
+        "safe_archive_ready": false,
+        "manual_approval_required": true,
+        "destructive": true,
+        "requires_substitution": true,
+        "target_value_required": false,
+        "dependency_blocked": true,
+        "requires_completed_commands": [
+          "backup_verification",
+          "restore_dry_run"
+        ],
+        "policy": "run only after approval, durable backup, and rollback staffing are confirmed"
+      },
+      {
+        "step": 4,
+        "groups": [
+          "final_validation"
+        ],
+        "action_keys": [
+          "target_evidence_plan"
+        ],
+        "command_keys": [
+          "validate_target_environment_evidence"
+        ],
+        "command_count": 1,
+        "safe_to_run_unattended": false,
+        "safe_archive_ready": false,
+        "manual_approval_required": false,
+        "destructive": false,
+        "requires_substitution": false,
+        "target_value_required": false,
+        "dependency_blocked": false,
+        "requires_completed_commands": [],
+        "policy": "run only after all evidence-producing commands have been archived"
+      }
+    ],
+    "execution_queues": {
+      "safe_unattended": {
+        "policy": "eligible for unattended archive execution after target values are reviewed",
+        "command_count": 1,
+        "action_keys": [
+          "runtime_integrations"
+        ],
+        "command_keys": [
+          "runtime_integrations"
+        ],
+        "archive_commands": [
+          "python manage.py smoke_runtime_integrations --smtp-connect --storage-write --require-smtp-connect --require-storage-write --require-object-storage --fail-on-warning --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.stderr.txt"
+        ],
+        "commands": [
+          {
+            "action_key": "runtime_integrations",
+            "key": "runtime_integrations",
+            "execution_group": "safe_unattended",
+            "command": "python manage.py smoke_runtime_integrations --smtp-connect --storage-write --require-smtp-connect --require-storage-write --require-object-storage --fail-on-warning --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.stderr.txt",
+            "archive_command": "python manage.py smoke_runtime_integrations --smtp-connect --storage-write --require-smtp-connect --require-storage-write --require-object-storage --fail-on-warning --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-runtime-integrations.stderr.txt",
+            "safe_to_run_unattended": true,
+            "safe_archive_ready": true,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": false,
+            "substitution_tokens": [],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          }
+        ]
+      },
+      "requires_substitution": {
+        "policy": "replace substitution tokens before running",
+        "command_count": 18,
+        "action_keys": [
+          "https_http_smoke",
+          "external_websocket",
+          "queue_worker",
+          "backup",
+          "backup_verification",
+          "post_upgrade_http_smoke",
+          "post_upgrade_queue_worker",
+          "rollback_plan",
+          "restore_rehearsal",
+          "restore_dry_run",
+          "live_restore",
+          "multi_node_topology",
+          "p0_capacity_suite",
+          "p1_capacity_suite"
+        ],
+        "command_keys": [
+          "https_http_smoke",
+          "external_websocket",
+          "queue_worker",
+          "backup",
+          "backup_verification",
+          "post_upgrade_http_smoke",
+          "post_upgrade_queue_worker",
+          "rollback_plan",
+          "restore_rehearsal",
+          "restore_dry_run",
+          "live_restore",
+          "multi_node_topology",
+          "p0_forum_main",
+          "p1_forum_main_auth",
+          "p1_forum_write",
+          "p1_forum_write_mixed",
+          "p1_forum_upload",
+          "p1_forum_moderation"
+        ],
+        "archive_commands": [
+          "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.stderr.txt",
+          "python manage.py load_test_websocket --base-url https://<your-domain> --connections 20 --discussion-id <discussion-id> --p95-threshold-ms 1000 --broadcast-p95-threshold-ms 1000 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.stderr.txt",
+          "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.stderr.txt",
+          "python manage.py backup_forum --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.stderr.txt",
+          "python manage.py verify_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.stderr.txt",
+          "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt",
+          "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt",
+          "python manage.py plan_forum_rollback --config instance/site.json --backup-dir <durable-backup-uri> --require-existing-backups --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.stderr.txt",
+          "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt",
+          "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt",
+          "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt",
+          "python manage.py inspect_target_topology --web-nodes <web-count> --worker-nodes <worker-count> --scheduler-nodes <scheduler-count> --image <image-or-release> --app-version <version> --database <db-endpoint> --redis <redis-endpoint> --load-balancer https://<your-domain> --require-multi-node --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main --concurrency 20 --duration 300 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main-auth --login-username <load-user> --login-password <load-password> --concurrency 20 --duration 300 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write --login-username <load-user> --login-password <load-password> --discussion-id <discussion-id> --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-upload --login-username <load-user> --login-password <load-password> --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt"
+        ],
+        "commands": [
+          {
+            "action_key": "https_http_smoke",
+            "key": "https_http_smoke",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.stderr.txt",
+            "archive_command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-http-p95.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          },
+          {
+            "action_key": "external_websocket",
+            "key": "external_websocket",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py load_test_websocket --base-url https://<your-domain> --connections 20 --discussion-id <discussion-id> --p95-threshold-ms 1000 --broadcast-p95-threshold-ms 1000 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.stderr.txt",
+            "archive_command": "python manage.py load_test_websocket --base-url https://<your-domain> --connections 20 --discussion-id <discussion-id> --p95-threshold-ms 1000 --broadcast-p95-threshold-ms 1000 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\load-websocket-external-20.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<discussion-id>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          },
+          {
+            "action_key": "queue_worker",
+            "key": "queue_worker",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.stderr.txt",
+            "archive_command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\smoke-queue-worker.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<redis-broker-url>",
+              "<redis-result-backend>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          },
+          {
+            "action_key": "backup",
+            "key": "backup",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py backup_forum --config instance/site.json --backup-dir <durable-backup-uri> --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.stderr.txt",
+            "archive_command": "python manage.py backup_forum --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\backup-forum.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          },
+          {
+            "action_key": "backup_verification",
+            "key": "backup_verification",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py verify_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.stderr.txt",
+            "archive_command": "python manage.py verify_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\verify-forum-backup.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          },
+          {
+            "action_key": "post_upgrade_http_smoke",
+            "key": "post_upgrade_http_smoke",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt",
+            "archive_command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "upgrade_executed"
+            ]
+          },
+          {
+            "action_key": "post_upgrade_queue_worker",
+            "key": "post_upgrade_queue_worker",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt",
+            "archive_command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<redis-broker-url>",
+              "<redis-result-backend>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "upgrade_executed"
+            ]
+          },
+          {
+            "action_key": "rollback_plan",
+            "key": "rollback_plan",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py plan_forum_rollback --config instance/site.json --backup-dir <durable-backup-uri> --require-existing-backups --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.stderr.txt",
+            "archive_command": "python manage.py plan_forum_rollback --config instance/site.json --backup-dir <durable-backup-uri> --require-existing-backups --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\plan-forum-rollback-with-backups.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          },
+          {
+            "action_key": "restore_rehearsal",
+            "key": "restore_rehearsal",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt",
+            "archive_command": "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "backup_verification"
+            ]
+          },
+          {
+            "action_key": "restore_dry_run",
+            "key": "restore_dry_run",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt",
+            "archive_command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "backup_verification",
+              "restore_rehearsal"
+            ]
+          },
+          {
+            "action_key": "live_restore",
+            "key": "live_restore",
+            "execution_group": "destructive_approval",
+            "command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt",
+            "archive_command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": true,
+            "destructive": true,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "backup_verification",
+              "restore_dry_run"
+            ]
+          },
+          {
+            "action_key": "multi_node_topology",
+            "key": "multi_node_topology",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py inspect_target_topology --web-nodes <web-count> --worker-nodes <worker-count> --scheduler-nodes <scheduler-count> --image <image-or-release> --app-version <version> --database <db-endpoint> --redis <redis-endpoint> --load-balancer https://<your-domain> --require-multi-node --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.stderr.txt",
+            "archive_command": "python manage.py inspect_target_topology --web-nodes <web-count> --worker-nodes <worker-count> --scheduler-nodes <scheduler-count> --image <image-or-release> --app-version <version> --database <db-endpoint> --redis <redis-endpoint> --load-balancer https://<your-domain> --require-multi-node --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\multi-node-topology.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<db-endpoint>",
+              "<image-or-release>",
+              "<redis-endpoint>",
+              "<scheduler-count>",
+              "<version>",
+              "<web-count>",
+              "<worker-count>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          },
+          {
+            "action_key": "p0_capacity_suite",
+            "key": "p0_forum_main",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main --concurrency 20 --duration 300 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main --concurrency 20 --duration 300 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925\\forum-main-300s.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          },
+          {
+            "action_key": "p1_capacity_suite",
+            "key": "p1_forum_main_auth",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main-auth --login-username <load-user> --login-password <load-password> --concurrency 20 --duration 300 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-main-auth --login-username <load-user> --login-password <load-password> --concurrency 20 --duration 300 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-main-auth-300s.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<load-password>",
+              "<load-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          },
+          {
+            "action_key": "p1_capacity_suite",
+            "key": "p1_forum_write",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write --login-username <load-user> --login-password <load-password> --discussion-id <discussion-id> --concurrency 5 --duration 120 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write --login-username <load-user> --login-password <load-password> --discussion-id <discussion-id> --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-120s.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<discussion-id>",
+              "<load-password>",
+              "<load-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          },
+          {
+            "action_key": "p1_capacity_suite",
+            "key": "p1_forum_write_mixed",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<load-password>",
+              "<load-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "p1_forum_write"
+            ]
+          },
+          {
+            "action_key": "p1_capacity_suite",
+            "key": "p1_forum_upload",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-upload --login-username <load-user> --login-password <load-password> --concurrency 5 --duration 120 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-upload --login-username <load-user> --login-password <load-password> --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-upload-120s.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<load-password>",
+              "<load-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          },
+          {
+            "action_key": "p1_capacity_suite",
+            "key": "p1_forum_moderation",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<moderator-password>",
+              "<moderator-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "p1_forum_write_mixed"
+            ]
+          }
+        ]
+      },
+      "target_value_required": {
+        "policy": "fix target value errors before running",
+        "command_count": 0,
+        "action_keys": [],
+        "command_keys": [],
+        "archive_commands": [],
+        "commands": []
+      },
+      "dependency_blocked": {
+        "policy": "run only after requires_completed_commands have been archived",
+        "command_count": 7,
+        "action_keys": [
+          "post_upgrade_http_smoke",
+          "post_upgrade_queue_worker",
+          "restore_rehearsal",
+          "restore_dry_run",
+          "live_restore",
+          "p1_capacity_suite"
+        ],
+        "command_keys": [
+          "post_upgrade_http_smoke",
+          "post_upgrade_queue_worker",
+          "restore_rehearsal",
+          "restore_dry_run",
+          "live_restore",
+          "p1_forum_write_mixed",
+          "p1_forum_moderation"
+        ],
+        "archive_commands": [
+          "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt",
+          "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt",
+          "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt",
+          "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt",
+          "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt",
+          "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt"
+        ],
+        "commands": [
+          {
+            "action_key": "post_upgrade_http_smoke",
+            "key": "post_upgrade_http_smoke",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt",
+            "archive_command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "upgrade_executed"
+            ]
+          },
+          {
+            "action_key": "post_upgrade_queue_worker",
+            "key": "post_upgrade_queue_worker",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt",
+            "archive_command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<redis-broker-url>",
+              "<redis-result-backend>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "upgrade_executed"
+            ]
+          },
+          {
+            "action_key": "restore_rehearsal",
+            "key": "restore_rehearsal",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt",
+            "archive_command": "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "backup_verification"
+            ]
+          },
+          {
+            "action_key": "restore_dry_run",
+            "key": "restore_dry_run",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt",
+            "archive_command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "backup_verification",
+              "restore_rehearsal"
+            ]
+          },
+          {
+            "action_key": "live_restore",
+            "key": "live_restore",
+            "execution_group": "destructive_approval",
+            "command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt",
+            "archive_command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": true,
+            "destructive": true,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "backup_verification",
+              "restore_dry_run"
+            ]
+          },
+          {
+            "action_key": "p1_capacity_suite",
+            "key": "p1_forum_write_mixed",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<load-password>",
+              "<load-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "p1_forum_write"
+            ]
+          },
+          {
+            "action_key": "p1_capacity_suite",
+            "key": "p1_forum_moderation",
+            "execution_group": "requires_substitution",
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<moderator-password>",
+              "<moderator-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "p1_forum_write_mixed"
+            ]
+          }
+        ]
+      },
+      "maintenance_approval": {
+        "policy": "run only in an approved maintenance window",
+        "command_count": 0,
+        "action_keys": [],
+        "command_keys": [],
+        "archive_commands": [],
+        "commands": []
+      },
+      "destructive_approval": {
+        "policy": "run only after destructive approval and durable backup confirmation",
+        "command_count": 1,
+        "action_keys": [
+          "live_restore"
+        ],
+        "command_keys": [
+          "live_restore"
+        ],
+        "archive_commands": [
+          "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt"
+        ],
+        "commands": [
+          {
+            "action_key": "live_restore",
+            "key": "live_restore",
+            "execution_group": "destructive_approval",
+            "command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt",
+            "archive_command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": true,
+            "destructive": true,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "requires_completed_commands": [
+              "backup_verification",
+              "restore_dry_run"
+            ]
+          }
+        ]
+      },
+      "final_validation": {
+        "policy": "run only after all evidence-producing commands have been archived",
+        "command_count": 1,
+        "action_keys": [
+          "target_evidence_plan"
+        ],
+        "command_keys": [
+          "validate_target_environment_evidence"
+        ],
+        "archive_commands": [
+          "python manage.py validate_target_environment_evidence --report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600 --p0-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925 --p1-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409 --plan-file D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-plan.json --write-remediation-checklist D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-remediation-checklist.md --require-multi-node --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.stderr.txt"
+        ],
+        "commands": [
+          {
+            "action_key": "target_evidence_plan",
+            "key": "validate_target_environment_evidence",
+            "execution_group": "final_validation",
+            "command": "python manage.py validate_target_environment_evidence --report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600 --p0-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925 --p1-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409 --plan-file D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-plan.json --write-remediation-checklist D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-remediation-checklist.md --require-multi-node --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.stderr.txt",
+            "archive_command": "python manage.py validate_target_environment_evidence --report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600 --p0-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-011925 --p1-report-dir D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409 --plan-file D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-plan.json --write-remediation-checklist D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-remediation-checklist.md --require-multi-node --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-evidence-validation.stderr.txt",
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "manual_approval_required": false,
+            "destructive": false,
+            "requires_substitution": false,
+            "substitution_tokens": [],
+            "target_value_errors": [],
+            "requires_completed_commands": []
+          }
+        ]
+      }
+    },
+    "execution_queue_counts": {
+      "safe_unattended": 1,
+      "requires_substitution": 18,
+      "target_value_required": 0,
+      "dependency_blocked": 7,
+      "maintenance_approval": 0,
+      "destructive_approval": 1,
+      "final_validation": 1
+    },
+    "dependency_execution_waves": [
+      {
+        "wave": 1,
+        "dependency_depth": 0,
+        "command_count": 2,
+        "command_keys": [
+          "post_upgrade_http_smoke",
+          "post_upgrade_queue_worker"
+        ],
+        "requires_completed_commands": [
+          "upgrade_executed"
+        ],
+        "commands": [
+          {
+            "key": "post_upgrade_http_smoke",
+            "execution_group": "requires_substitution",
+            "destructive": false,
+            "manual_approval_required": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_completed_commands": [
+              "upgrade_executed"
+            ],
+            "command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt",
+            "archive_command": "python manage.py smoke_http_p95 --base-url https://<your-domain> --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-http-p95.stderr.txt",
+            "action_key": "post_upgrade_http_smoke"
+          },
+          {
+            "key": "post_upgrade_queue_worker",
+            "execution_group": "requires_substitution",
+            "destructive": false,
+            "manual_approval_required": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<redis-broker-url>",
+              "<redis-result-backend>"
+            ],
+            "target_value_errors": [],
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_completed_commands": [
+              "upgrade_executed"
+            ],
+            "command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt",
+            "archive_command": "python manage.py smoke_queue_worker --broker-url <redis-broker-url> --result-backend <redis-result-backend> --timeout 45 --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\post-upgrade-smoke-queue-worker.stderr.txt",
+            "action_key": "post_upgrade_queue_worker"
+          }
+        ]
+      },
+      {
+        "wave": 2,
+        "dependency_depth": 1,
+        "command_count": 2,
+        "command_keys": [
+          "restore_rehearsal",
+          "p1_forum_write_mixed"
+        ],
+        "requires_completed_commands": [
+          "backup_verification",
+          "p1_forum_write"
+        ],
+        "commands": [
+          {
+            "key": "restore_rehearsal",
+            "execution_group": "requires_substitution",
+            "destructive": false,
+            "manual_approval_required": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_completed_commands": [
+              "backup_verification"
+            ],
+            "command": "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt",
+            "archive_command": "python manage.py rehearse_forum_restore --config instance/site.json --backup-dir <durable-backup-uri> --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\rehearse-forum-restore.stderr.txt",
+            "action_key": "restore_rehearsal"
+          },
+          {
+            "key": "p1_forum_write_mixed",
+            "execution_group": "requires_substitution",
+            "destructive": false,
+            "manual_approval_required": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<load-password>",
+              "<load-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_completed_commands": [
+              "p1_forum_write"
+            ],
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-mixed --login-username <load-user> --login-password <load-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 5 --duration 120 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-mixed-120s.stderr.txt",
+            "action_key": "p1_capacity_suite"
+          }
+        ]
+      },
+      {
+        "wave": 3,
+        "dependency_depth": 2,
+        "command_count": 2,
+        "command_keys": [
+          "restore_dry_run",
+          "p1_forum_moderation"
+        ],
+        "requires_completed_commands": [
+          "backup_verification",
+          "restore_rehearsal",
+          "p1_forum_write_mixed"
+        ],
+        "commands": [
+          {
+            "key": "restore_dry_run",
+            "execution_group": "requires_substitution",
+            "destructive": false,
+            "manual_approval_required": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_completed_commands": [
+              "backup_verification",
+              "restore_rehearsal"
+            ],
+            "command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt",
+            "archive_command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --dry-run --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-dry-run.stderr.txt",
+            "action_key": "restore_dry_run"
+          },
+          {
+            "key": "p1_forum_moderation",
+            "execution_group": "requires_substitution",
+            "destructive": false,
+            "manual_approval_required": false,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<moderator-password>",
+              "<moderator-user>",
+              "<your-domain>"
+            ],
+            "target_value_errors": [],
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_completed_commands": [
+              "p1_forum_write_mixed"
+            ],
+            "command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt",
+            "archive_command": "python manage.py load_test_http --base-url https://<your-domain> --profile forum-write-moderation --login-username <moderator-user> --login-password <moderator-password> --prepare-isolated-targets --cleanup-isolated-targets --concurrency 2 --duration 60 --fail-on-threshold --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-020409\\forum-write-moderation-60s.stderr.txt",
+            "action_key": "p1_capacity_suite"
+          }
+        ]
+      },
+      {
+        "wave": 4,
+        "dependency_depth": 3,
+        "command_count": 1,
+        "command_keys": [
+          "live_restore"
+        ],
+        "requires_completed_commands": [
+          "backup_verification",
+          "restore_dry_run"
+        ],
+        "commands": [
+          {
+            "key": "live_restore",
+            "execution_group": "destructive_approval",
+            "destructive": true,
+            "manual_approval_required": true,
+            "requires_substitution": true,
+            "substitution_tokens": [
+              "<durable-backup-uri>"
+            ],
+            "target_value_errors": [],
+            "safe_to_run_unattended": false,
+            "safe_archive_ready": false,
+            "requires_completed_commands": [
+              "backup_verification",
+              "restore_dry_run"
+            ],
+            "command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json",
+            "output_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json",
+            "stderr_file": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt",
+            "archive_command": "python manage.py restore_forum_backup --config instance/site.json --backup-dir <durable-backup-uri> --i-understand-this-overwrites-live-data --confirm-phrase \"restore live forum data\" --format json > D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.json 2> D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\restore-forum-backup-live.stderr.txt",
+            "action_key": "live_restore"
+          }
+        ]
+      }
+    ],
+    "dependency_execution_wave_count": 4,
+    "checklist_path": "D:\\files\\project\\tmp\\bias\\reports\\capacity\\20260702-025600\\target-environment-remediation-checklist.md"
+  },
+  "summary": {
+    "ok": false,
+    "check_count": 21,
+    "failed_count": 16,
+    "missing_count": 1,
+    "remediation_action_count": 16,
+    "target_environment_ready": false,
+    "require_multi_node": true
+  }
+}

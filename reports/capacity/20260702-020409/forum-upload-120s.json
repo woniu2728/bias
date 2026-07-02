@@ -1,0 +1,46 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-upload",
+  "concurrency": 5,
+  "duration_seconds": 120.02962901093997,
+  "request_limit": 0,
+  "dynamic_values": {
+    "sequence": 1782930750303,
+    "sequence_pools": {}
+  },
+  "isolated_targets": {},
+  "targets": [
+    {
+      "method": "POST",
+      "path": "/api/uploads",
+      "target": "0:POST /api/uploads",
+      "target_label": "POST /api/uploads",
+      "has_json_body": false,
+      "has_multipart_file": true,
+      "covered": true,
+      "request_count": 4265,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 4265
+      },
+      "min_ms": 40.770021034404635,
+      "max_ms": 267.08912407048047,
+      "average_ms": 140.6394788078802,
+      "p50_ms": 138.40224384330213,
+      "p95_ms": 202.8913698624819,
+      "p99_ms": 233.4496685676275,
+      "threshold_ms": 800.0,
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "ok": true,
+    "request_count": 4265,
+    "error_count": 0,
+    "error_rate": 0.0,
+    "requests_per_second": 35.53289329596504,
+    "failed_threshold_count": 0
+  }
+}

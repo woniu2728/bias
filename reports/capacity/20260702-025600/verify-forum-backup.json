@@ -1,0 +1,61 @@
+{
+  "config_path": "/app/instance/site.json",
+  "backup_dir": "/app/backups/20260702-p2-smoke",
+  "checks": [
+    {
+      "key": "site_config",
+      "label": "站点配置备份",
+      "path": "/app/backups/20260702-p2-smoke/site.json",
+      "exists": true,
+      "ok": true,
+      "size_bytes": 1167,
+      "installed": true,
+      "database_mode": "postgres",
+      "site_domains": [
+        "localhost"
+      ]
+    },
+    {
+      "key": "database",
+      "label": "PostgreSQL dump 备份",
+      "path": "/app/backups/20260702-p2-smoke/database.dump",
+      "exists": true,
+      "ok": true,
+      "size_bytes": 4155766,
+      "database_mode": "postgres",
+      "validated_by": "pg_restore_list",
+      "entry_count": 345,
+      "command": [
+        "pg_restore",
+        "--list",
+        "/app/backups/20260702-p2-smoke/database.dump"
+      ]
+    },
+    {
+      "key": "media",
+      "label": "media 目录备份",
+      "path": "/app/backups/20260702-p2-smoke/media",
+      "exists": true,
+      "ok": true,
+      "size_bytes": 0,
+      "file_count": 10718,
+      "total_bytes": 353691
+    },
+    {
+      "key": "static_frontend",
+      "label": "static/frontend 目录备份",
+      "path": "/app/backups/20260702-p2-smoke/static/frontend",
+      "exists": true,
+      "ok": true,
+      "size_bytes": 0,
+      "file_count": 131,
+      "total_bytes": 2031834
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "check_count": 4
+  }
+}

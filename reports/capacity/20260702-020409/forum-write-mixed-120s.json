@@ -1,0 +1,290 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "profile": "forum-write-mixed",
+  "concurrency": 5,
+  "duration_seconds": 120.05172839504667,
+  "request_limit": 0,
+  "dynamic_values": {
+    "sequence": 1782931524230,
+    "discussion_id": 11970,
+    "post_id": 149824,
+    "like_post_id": 149824,
+    "unlike_post_id": 149825,
+    "edit_post_id": 149824,
+    "report_post_id": 149824,
+    "hide_post_id": 149824,
+    "restore_post_id": 149824,
+    "delete_post_id": 149824,
+    "isolated_targets": {
+      "prefix": "loadtest-isolated-1782931524230",
+      "user_id": 1042,
+      "discussion_id": 11970,
+      "post_id": 149824,
+      "like_post_id": 149824,
+      "unlike_post_id": 149825,
+      "edit_post_id": 149824,
+      "report_post_id": 149824,
+      "hide_post_id": 149824,
+      "restore_post_id": 149824,
+      "delete_post_id": 149824,
+      "first_post_id": 149823,
+      "like_post_pool_size": 2049,
+      "unlike_post_pool_size": 2049,
+      "edit_post_pool_size": 0,
+      "report_post_pool_size": 0,
+      "hide_post_pool_size": 0,
+      "restore_post_pool_size": 0,
+      "delete_post_pool_size": 0,
+      "tag_id": 229,
+      "notification_id": 57912,
+      "notification_read_id": 57912,
+      "notification_read_pool_size": 1
+    },
+    "tag_id": 229,
+    "notification_id": 57912,
+    "notification_read_id": 57912,
+    "sequence_pools": {
+      "like_post_id": {
+        "size": 2049,
+        "first": 149824,
+        "last": 153920
+      },
+      "unlike_post_id": {
+        "size": 2049,
+        "first": 149825,
+        "last": 153921
+      }
+    }
+  },
+  "isolated_targets": {
+    "prefix": "loadtest-isolated-1782931524230",
+    "user_id": 1042,
+    "discussion_id": 11970,
+    "post_id": 149824,
+    "like_post_id": 149824,
+    "unlike_post_id": 149825,
+    "edit_post_id": 149824,
+    "report_post_id": 149824,
+    "hide_post_id": 149824,
+    "restore_post_id": 149824,
+    "delete_post_id": 149824,
+    "first_post_id": 149823,
+    "like_post_pool_size": 2049,
+    "unlike_post_pool_size": 2049,
+    "edit_post_pool_size": 0,
+    "report_post_pool_size": 0,
+    "hide_post_pool_size": 0,
+    "restore_post_pool_size": 0,
+    "delete_post_pool_size": 0,
+    "tag_id": 229,
+    "notification_id": 57912,
+    "notification_read_id": 57912,
+    "notification_read_pool_size": 1
+  },
+  "targets": [
+    {
+      "method": "POST",
+      "path": "/api/discussions/",
+      "target": "0:POST /api/discussions/",
+      "target_label": "POST /api/discussions/",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1154,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1154
+      },
+      "min_ms": 84.83498101122677,
+      "max_ms": 232.73379215970635,
+      "average_ms": 111.67351553515988,
+      "p50_ms": 112.16668749693781,
+      "p95_ms": 138.9623979339376,
+      "p99_ms": 186.68885642429814,
+      "threshold_ms": 500.0,
+      "ok": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/discussions/11970",
+      "target": "1:PATCH /api/discussions/11970",
+      "target_label": "PATCH /api/discussions/11970",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1155,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1155
+      },
+      "min_ms": 63.305886927992105,
+      "max_ms": 182.20355501398444,
+      "average_ms": 88.32279997273022,
+      "p50_ms": 88.3928220719099,
+      "p95_ms": 112.47122772037983,
+      "p99_ms": 150.3429912449792,
+      "threshold_ms": 500.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/discussions/11970/read",
+      "target": "2:POST /api/discussions/11970/read",
+      "target_label": "POST /api/discussions/11970/read",
+      "has_json_body": true,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1156,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1156
+      },
+      "min_ms": 34.78746605105698,
+      "max_ms": 338.2319819647819,
+      "average_ms": 51.1178358348818,
+      "p50_ms": 49.188504461199045,
+      "p95_ms": 66.19167112512514,
+      "p99_ms": 106.04233909398323,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/posts/149824/like",
+      "target": "3:POST /api/posts/149824/like",
+      "target_label": "POST /api/posts/149824/like",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1156,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1156
+      },
+      "min_ms": 69.78990510106087,
+      "max_ms": 375.32663089223206,
+      "average_ms": 90.5137339753508,
+      "p50_ms": 86.15859341807663,
+      "p95_ms": 134.85268939984962,
+      "p99_ms": 160.5407381313853,
+      "threshold_ms": 500.0,
+      "ok": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/posts/149825/like",
+      "target": "4:DELETE /api/posts/149825/like",
+      "target_label": "DELETE /api/posts/149825/like",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1157,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1157
+      },
+      "min_ms": 58.19334206171334,
+      "max_ms": 155.22829117253423,
+      "average_ms": 79.06196852856176,
+      "p50_ms": 75.71423286572099,
+      "p95_ms": 107.7233484946192,
+      "p99_ms": 142.5152211170644,
+      "threshold_ms": 500.0,
+      "ok": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/discussions/11970/subscribe",
+      "target": "5:POST /api/discussions/11970/subscribe",
+      "target_label": "POST /api/discussions/11970/subscribe",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1154,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1154
+      },
+      "min_ms": 33.71696313843131,
+      "max_ms": 125.71472604759037,
+      "average_ms": 48.735395821611974,
+      "p50_ms": 46.47680057678372,
+      "p95_ms": 64.17300511384383,
+      "p99_ms": 114.11679162178189,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/discussions/11970/subscribe",
+      "target": "6:DELETE /api/discussions/11970/subscribe",
+      "target_label": "DELETE /api/discussions/11970/subscribe",
+      "has_json_body": false,
+      "has_multipart_file": false,
+      "covered": true,
+      "request_count": 1153,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "status_code_counts": {
+        "200": 1153
+      },
+      "min_ms": 33.527957974001765,
+      "max_ms": 125.77265594154596,
+      "average_ms": 49.74009265399442,
+      "p50_ms": 47.46278282254934,
+      "p95_ms": 67.62398076243699,
+      "p99_ms": 106.09261463396255,
+      "threshold_ms": 300.0,
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "ok": true,
+    "request_count": 8085,
+    "error_count": 0,
+    "error_rate": 0.0,
+    "requests_per_second": 67.34596917584726,
+    "failed_threshold_count": 0
+  },
+  "cleanup": {
+    "ok": true,
+    "prefix": "loadtest-isolated-1782931524230",
+    "deleted_total": 9619,
+    "deleted": {
+      "notifications.Notification": 1,
+      "tags.DiscussionTag": 1155,
+      "content.Discussion": 7304,
+      "tags.Tag": 1,
+      "auth.User": 1158
+    },
+    "details": {
+      "notifications.Notification": {
+        "notifications.Notification": 1
+      },
+      "tags.DiscussionTag": {
+        "tags.DiscussionTag": 1155
+      },
+      "content.Discussion": {
+        "likes.PostLike": 2048,
+        "content.DiscussionUser": 1,
+        "content.Post": 5254,
+        "content.Discussion": 1
+      },
+      "tags.Tag": {
+        "tags.Tag": 1
+      },
+      "auth.User": {
+        "points.PointAccount": 1,
+        "points.PointLedgerEntry": 1156,
+        "users.User": 1
+      }
+    }
+  }
+}

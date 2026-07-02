@@ -1,0 +1,88 @@
+{
+  "base_url": "http://127.0.0.1:8000",
+  "requests_per_target": 20,
+  "warmup_per_target": 2,
+  "targets": [
+    {
+      "path": "/api/forum",
+      "url": "http://127.0.0.1:8000/api/forum",
+      "request_count": 20,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 20
+      },
+      "min_ms": 7.384605007246137,
+      "max_ms": 9.187676943838596,
+      "average_ms": 8.217861584853381,
+      "p95_ms": 8.922427403740585,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "path": "/api/discussions/?limit=20",
+      "url": "http://127.0.0.1:8000/api/discussions/?limit=20",
+      "request_count": 20,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 20
+      },
+      "min_ms": 47.4898221436888,
+      "max_ms": 53.4904059022665,
+      "average_ms": 49.88371575018391,
+      "p95_ms": 52.892898686695844,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "path": "/api/search?q=smoke",
+      "url": "http://127.0.0.1:8000/api/search?q=smoke",
+      "request_count": 20,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 20
+      },
+      "min_ms": 250.33413502387702,
+      "max_ms": 264.57521691918373,
+      "average_ms": 253.95714476471767,
+      "p95_ms": 260.53642318584025,
+      "threshold_ms": 800.0,
+      "ok": true
+    },
+    {
+      "path": "/api/tags",
+      "url": "http://127.0.0.1:8000/api/tags",
+      "request_count": 20,
+      "error_count": 0,
+      "status_code_counts": {
+        "200": 20
+      },
+      "min_ms": 7.057890994474292,
+      "max_ms": 9.050331078469753,
+      "average_ms": 7.768123201094568,
+      "p95_ms": 8.718596515245737,
+      "threshold_ms": 300.0,
+      "ok": true
+    },
+    {
+      "path": "/api/notifications",
+      "url": "http://127.0.0.1:8000/api/notifications",
+      "request_count": 20,
+      "error_count": 0,
+      "status_code_counts": {
+        "401": 20
+      },
+      "min_ms": 5.210973089560866,
+      "max_ms": 15.129831852391362,
+      "average_ms": 6.27883292036131,
+      "p95_ms": 6.894410250242806,
+      "threshold_ms": 300.0,
+      "ok": true
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "target_count": 5,
+    "failed_count": 0
+  },
+  "note": "轻量 smoke 只验证当前运行环境的关键路径 P95；正式容量验收仍需使用生产等价数据量和并发模型。"
+}

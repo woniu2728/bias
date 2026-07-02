@@ -1,0 +1,77 @@
+{
+  "config_path": "/app/instance/site.json",
+  "database_mode": "postgres",
+  "redis_enabled": true,
+  "site_domains": [
+    "localhost"
+  ],
+  "frontend_url": "http://localhost:8000",
+  "install_steps": [
+    {
+      "label": "数据库迁移",
+      "args": [
+        "migrate",
+        "--noinput"
+      ],
+      "command": "python manage.py migrate --noinput"
+    },
+    {
+      "label": "扩展状态同步",
+      "args": [
+        "sync_extensions"
+      ],
+      "command": "python manage.py sync_extensions"
+    },
+    {
+      "label": "扩展启用顺序同步",
+      "args": [
+        "sync_extension_order"
+      ],
+      "command": "python manage.py sync_extension_order"
+    },
+    {
+      "label": "扩展迁移摘要同步",
+      "args": [
+        "migrate_extensions",
+        "--all"
+      ],
+      "command": "python manage.py migrate_extensions --all"
+    },
+    {
+      "label": "默认用户组与权限初始化",
+      "args": [
+        "init_groups"
+      ],
+      "command": "python manage.py init_groups"
+    },
+    {
+      "label": "写入安装版本",
+      "args": [
+        "sync_forum_version"
+      ],
+      "command": "python manage.py sync_forum_version"
+    },
+    {
+      "label": "扩展前端构建清单生成",
+      "args": [
+        "build_extension_frontend"
+      ],
+      "command": "python manage.py build_extension_frontend"
+    },
+    {
+      "label": "静态资源收集",
+      "args": [
+        "collectstatic",
+        "--noinput"
+      ],
+      "command": "python manage.py collectstatic --noinput"
+    }
+  ],
+  "production_config_findings": [],
+  "summary": {
+    "ok": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "dry_run": true
+  }
+}

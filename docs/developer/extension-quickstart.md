@@ -56,10 +56,19 @@ python manage.py collectstatic --noinput
 ## 4. 打包检查
 
 ```powershell
-python manage.py inspect_extension_packages --extensions-path D:\files\project\tmp --build --install-smoke --format json
+python manage.py inspect_extensions --format json
+python manage.py inspect_extension_packages --extensions-path D:\files\project\tmp --build --install-smoke --install-set-smoke --lifecycle-smoke --format json
 ```
 
+`inspect_extensions` 的 JSON 输出包含 `compatibility_matrix`，按扩展列出 manifest `schema_version`、Bias 版本范围、API 版本和稳定性、依赖/冲突/能力声明、分发签名/abandoned 状态，以及发布 gate 策略。发布流水线应阻断 `compatibility_matrix.summary.bias_version_incompatible_count > 0` 或 `compatibility_matrix.summary.blocking_count > 0` 的扩展；`prepare_release` 已内置同一阻断检查。
+
+JSON 输出中的 `install_plan` 是安装前计划，不会执行真实站点安装；它列出扩展依赖顺序、wheel 构建/选择、archive inspection、install smoke、install-set smoke、migration smoke 和 lifecycle smoke 步骤，并标记 `executes_install=false`。`upgrade_risk` 是升级前风险摘要，包含 Bias 版本兼容、缺失依赖、依赖环、experimental/beta API 和 abandoned distribution 等风险；发布流水线应阻断 `blocking_risk_count > 0` 的扩展，`prepare_release` 已内置同一阻断检查。
+
+正式发布时，`prepare_release` 会执行同一包审计并追加 `--migration-smoke --lifecycle-smoke`，因此扩展必须能通过迁移 smoke 和 enable/disable 生命周期 smoke。
+
 ## 5. 后端 API 边界
+
+详细参考见 [extension-api.md](extension-api.md)。
 
 优先使用公开包：
 
@@ -75,6 +84,8 @@ python manage.py inspect_extension_packages --extensions-path D:\files\project\t
 
 ## 6. 前端 SDK 边界
 
+详细参考见 [frontend-injection-points.md](frontend-injection-points.md)。
+
 优先从以下入口导入：
 
 - `@bias/core`
@@ -88,6 +99,8 @@ python manage.py inspect_extension_packages --extensions-path D:\files\project\t
 ## 7. 发布前检查清单
 
 ```powershell
+python manage.py inspect_extensions --format json
+python manage.py inspect_extensions --contract-baseline-only --output extension-contract-baseline.json
 python manage.py check_extension_workspace --extensions-path D:\files\project\tmp --format json
 python manage.py inspect_performance_baseline --format json --strict
 

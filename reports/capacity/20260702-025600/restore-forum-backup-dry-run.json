@@ -1,0 +1,92 @@
+{
+  "config_path": "/app/instance/site.json",
+  "backup_dir": "/app/backups/20260702-p2-smoke",
+  "database_mode": "postgres",
+  "backup_artifacts": [
+    {
+      "key": "database",
+      "label": "数据库备份",
+      "path": "/app/backups/20260702-p2-smoke/database.dump",
+      "target": "bias_smoke",
+      "exists": true,
+      "required": true,
+      "planned": true
+    },
+    {
+      "key": "media",
+      "label": "media 目录备份",
+      "path": "/app/backups/20260702-p2-smoke/media",
+      "target": "/app/media",
+      "exists": true,
+      "required": true,
+      "planned": true
+    },
+    {
+      "key": "static_frontend",
+      "label": "static/frontend 目录备份",
+      "path": "/app/backups/20260702-p2-smoke/static/frontend",
+      "target": "/app/static/frontend",
+      "exists": true,
+      "required": true,
+      "planned": true
+    },
+    {
+      "key": "site_config",
+      "label": "站点配置备份",
+      "path": "/app/backups/20260702-p2-smoke/site.json",
+      "target": "/app/instance/site.json",
+      "exists": true,
+      "required": true,
+      "planned": true
+    }
+  ],
+  "restore_steps": [
+    {
+      "action": "restore_postgres_database",
+      "artifact_key": "database",
+      "source": "/app/backups/20260702-p2-smoke/database.dump",
+      "target": "bias_smoke",
+      "destructive": true,
+      "planned_only": true,
+      "ok": true
+    },
+    {
+      "action": "restore_media",
+      "artifact_key": "media",
+      "source": "/app/backups/20260702-p2-smoke/media",
+      "target": "/app/media",
+      "destructive": true,
+      "planned_only": true,
+      "ok": true
+    },
+    {
+      "action": "restore_static_frontend",
+      "artifact_key": "static_frontend",
+      "source": "/app/backups/20260702-p2-smoke/static/frontend",
+      "target": "/app/static/frontend",
+      "destructive": true,
+      "planned_only": true,
+      "ok": true
+    },
+    {
+      "action": "restore_site_config",
+      "artifact_key": "site_config",
+      "source": "/app/backups/20260702-p2-smoke/site.json",
+      "target": "/app/instance/site.json",
+      "destructive": true,
+      "planned_only": true,
+      "ok": true
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "ok": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "dry_run": true,
+    "confirmed_overwrites_live_data": false,
+    "executes_live_restore": false,
+    "destructive": true,
+    "restore_step_count": 4
+  }
+}
