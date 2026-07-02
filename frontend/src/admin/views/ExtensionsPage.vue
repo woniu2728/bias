@@ -276,7 +276,7 @@ import {
   resolveExtensionMigrationState,
   resolveExtensionPrimaryAdminAction,
 } from '../extensions/diagnostics'
-import { fetchAdminExtensionSummaries } from '../extensions/extensionRequests'
+import { fetchAdminExtensionDetailList } from '../extensions/extensionRequests'
 import { postRuntimeAction } from '../extensions/runtimeActions'
 
 const adminRegistryStore = useAdminRegistryStore()
@@ -431,7 +431,7 @@ async function loadExtensions() {
   errorMessage.value = ''
 
   try {
-    const data = await fetchAdminExtensionSummaries(api)
+    const data = await fetchAdminExtensionDetailList(api)
     applyPayload(data)
   } catch (error) {
     console.error('加载扩展信息失败:', error)
