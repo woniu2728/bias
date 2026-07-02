@@ -9,6 +9,7 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
   const extensionRuntime = ref({})
   const loading = ref(false)
   const loaded = ref(false)
+  let loadingPromise = null
 
   const enabledModuleIds = computed(() => {
     const ids = new Set()
@@ -21,27 +22,32 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
   })
 
   async function fetchExtensions(force = false) {
-    if (loading.value) {
-      return
-    }
     if (loaded.value && !force) {
       return
     }
+    if (loadingPromise) {
+      return loadingPromise
+    }
 
     loading.value = true
-    try {
-      const extensionsData = await fetchAdminExtensionSummaries(api)
-      extensions.value = Array.isArray(extensionsData?.extensions)
-        ? extensionsData.extensions.filter(item => item?.product_visible !== false)
-        : []
-      extensionScopes.value = deriveExtensionScopes(extensionsData?.extensions || [])
-      extensionRuntime.value = extensionsData?.runtime || extensionsData?.runtime_rebuild || {}
-      loaded.value = true
-    } catch (error) {
-      console.error('加载后台扩展注册表失败:', error)
-    } finally {
-      loading.value = false
-    }
+    loadingPromise = (async () => {
+      try {
+        const extensionsData = await fetchAdminExtensionSummaries(api)
+        extensions.value = Array.isArray(extensionsData?.extensions)
+          ? extensionsData.extensions.filter(item => item?.product_visible !== false)
+          : []
+        extensionScopes.value = deriveExtensionScopes(extensionsData?.extensions || [])
+        extensionRuntime.value = extensionsData?.runtime || extensionsData?.runtime_rebuild || {}
+        loaded.value = true
+      } catch (error) {
+        console.error('加载后台扩展注册表失败:', error)
+      } finally {
+        loadingPromise = null
+        loading.value = false
+      }
+    })()
+
+    return loadingPromise
   }
 
   function isModuleEnabled(moduleId) {

@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createPinia, setActivePinia } from 'pinia'
+import api from '../api/index.js'
 import { getAdminNavSections } from '../admin/navigation.js'
 import { registerAdminRoute } from '../admin/registry/routes.js'
 import { useAdminRegistryStore } from './adminRegistry.js'
@@ -45,6 +46,50 @@ test('admin registry keeps a module enabled when another provider is still enabl
   ])
 
   assert.equal(store.isModuleEnabled('shared'), true)
+})
+
+test('admin registry waits for an in-flight extension fetch', async () => {
+  setActivePinia(createPinia())
+  const store = useAdminRegistryStore()
+  const originalGet = api.get
+  let resolveRequest
+  let requestCount = 0
+
+  api.get = async (url) => {
+    requestCount += 1
+    assert.equal(url, '/admin/extensions')
+    return new Promise(resolve => {
+      resolveRequest = () => resolve({
+        extensions: [{
+          id: 'likes',
+          name: 'Likes',
+          enabled: true,
+          module_ids: ['likes'],
+        }],
+        runtime: { version: 'test' },
+      })
+    })
+  }
+
+  try {
+    const firstFetch = store.fetchExtensions()
+    const secondFetch = store.fetchExtensions()
+
+    assert.equal(store.loading, true)
+    assert.equal(requestCount, 1)
+    assert.deepEqual(store.extensions, [])
+
+    resolveRequest()
+    await secondFetch
+    await firstFetch
+
+    assert.equal(store.loading, false)
+    assert.equal(store.loaded, true)
+    assert.equal(requestCount, 1)
+    assert.deepEqual(store.extensions.map(extension => extension.id), ['likes'])
+  } finally {
+    api.get = originalGet
+  }
 })
 
 test('admin navigation hides extension details when a first-class admin page exists', () => {
