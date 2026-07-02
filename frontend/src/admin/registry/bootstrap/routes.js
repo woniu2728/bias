@@ -6,7 +6,6 @@ import AppearancePage from '../../views/AppearancePage.vue'
 import MailPage from '../../views/MailPage.vue'
 import AdvancedPage from '../../views/AdvancedPage.vue'
 import DeveloperDocsPage from '../../views/DeveloperDocsPage.vue'
-import ExtensionsPage from '../../views/ExtensionsPage.vue'
 import ExtensionDetailPage from '../../views/ExtensionDetailPage.vue'
 import ExtensionHostPage from '../../views/ExtensionHostPage.vue'
 import { registerAdminRoute } from '../routes.js'
@@ -26,14 +25,9 @@ registerAdminRoute({
 registerAdminRoute({
   path: '/admin/extensions',
   name: 'admin-extensions',
-  component: ExtensionsPage,
-  icon: 'fas fa-plug',
-  label: '扩展中心',
-  navDescription: '查看扩展清单、状态、依赖与后台入口。',
-  navSection: 'core',
-  navOrder: 20,
-  showInDashboardActions: true,
-  dashboardActionLabel: '管理扩展',
+  redirect: '/admin',
+  showInNavigation: false,
+  showInDashboardActions: false,
   moduleId: 'core'
 })
 

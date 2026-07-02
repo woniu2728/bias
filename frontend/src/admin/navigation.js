@@ -58,6 +58,7 @@ export function getAdminNavSections() {
       ...section,
     }))
     .filter(item => item?.id && item.id !== 'core')
+    .filter(item => item?.installed === true)
     .filter(item => item?.product_visible !== false)
     .filter(item => !firstClassAdminExtensionIds.has(String(item.id || '').trim()))
     .filter(item => !coreModuleIds.has(String(item.id || '').trim()))

@@ -34,7 +34,7 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
       try {
         const extensionsData = await fetchAdminExtensionSummaries(api)
         extensions.value = Array.isArray(extensionsData?.extensions)
-          ? extensionsData.extensions.filter(item => item?.product_visible !== false)
+          ? extensionsData.extensions
           : []
         extensionScopes.value = deriveExtensionScopes(extensionsData?.extensions || [])
         extensionRuntime.value = extensionsData?.runtime || extensionsData?.runtime_rebuild || {}
@@ -92,7 +92,7 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
       loaded.value = true
       return
     }
-    extensions.value = nextExtensions.filter(item => item?.product_visible !== false)
+    extensions.value = nextExtensions
     extensionScopes.value = deriveExtensionScopes(nextExtensions)
     loaded.value = true
   }
@@ -115,7 +115,7 @@ export const useAdminRegistryStore = defineStore('adminRegistry', () => {
       extensions.value = currentExtensions.map((item, itemIndex) => (
         itemIndex === index ? nextExtension : item
       ))
-    } else if (nextExtension.product_visible !== false) {
+    } else {
       extensions.value = [...currentExtensions, nextExtension]
     }
 

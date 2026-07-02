@@ -100,13 +100,17 @@ test('admin navigation hides extension details when a first-class admin page exi
     {
       id: 'users',
       name: 'Users',
+      installed: true,
       enabled: true,
+      product_visible: true,
       module_ids: ['users'],
     },
     {
       id: 'likes',
       name: 'Likes',
+      installed: true,
       enabled: true,
+      product_visible: true,
       module_ids: ['likes'],
     },
   ])
@@ -129,4 +133,44 @@ test('admin navigation hides extension details when a first-class admin page exi
   assert.equal(coreSection.items.some(item => item.path === '/admin/users'), true)
   assert.equal(extensionSection.items.some(item => item.path === '/admin/extensions/users'), false)
   assert.equal(extensionSection.items.some(item => item.path === '/admin/extensions/likes'), true)
+})
+
+test('admin navigation shows installed disabled extensions but hides uninstalled discoveries', () => {
+  setActivePinia(createPinia())
+  const store = useAdminRegistryStore()
+
+  store.applyExtensions([
+    {
+      id: 'demo-admin-page',
+      name: 'Demo Admin Page',
+      installed: false,
+      enabled: false,
+      product_visible: true,
+      module_ids: ['demo-admin-page'],
+    },
+    {
+      id: 'likes',
+      name: 'Likes',
+      installed: true,
+      enabled: false,
+      product_visible: true,
+      module_ids: ['likes'],
+    },
+    {
+      id: 'fixture-theme',
+      name: 'Fixture Theme',
+      installed: true,
+      enabled: true,
+      product_visible: false,
+      module_ids: ['fixture-theme'],
+    },
+  ])
+
+  const sections = getAdminNavSections()
+  const extensionSection = sections.find(section => section.key === 'extensions')
+
+  assert.equal(Boolean(extensionSection), true)
+  assert.equal(extensionSection.items.some(item => item.path === '/admin/extensions/demo-admin-page'), false)
+  assert.equal(extensionSection.items.some(item => item.path === '/admin/extensions/likes'), true)
+  assert.equal(extensionSection.items.some(item => item.path === '/admin/extensions/fixture-theme'), false)
 })
