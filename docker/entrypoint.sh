@@ -6,7 +6,7 @@ set -e
 # drop privileges to the bias user and run the CMD.
 # ============================================================
 
-chown -R 1000:1000 /app/instance /app/media /app/staticfiles 2>/dev/null || true
+chown -R 1000:1000 /app/instance /app/media /app/static /app/staticfiles 2>/dev/null || true
 
 cd /app
 if [ "${BIAS_SKIP_ENTRYPOINT_MIGRATE:-0}" != "1" ]; then
