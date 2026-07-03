@@ -6,6 +6,8 @@
 
 旧的 `bias_core.extensions.runtime` 专用 facade 仍保留兼容期入口，但新扩展和新功能必须通过 runtime service contract 访问跨扩展能力。
 
+本文件是正式迁移规范。除 `call_runtime_service`、`get_runtime_service`、`require_runtime_service`、`get_runtime_service_value`、`get_runtime_model`、`get_runtime_resource_registry` 等平台级入口外，`get_runtime_*`、`create_runtime_*`、`list_runtime_*`、`*_runtime_*` 形式的领域 facade 都视为 legacy。
+
 推荐写法：
 
 ```python
@@ -32,6 +34,18 @@ payload = call_runtime_service("notifications.service", "notify_post_liked_from_
 - 需要跨扩展能力时，在 manifest 中声明 `dependencies` 或 `optional_dependencies`。
 - 服务提供方必须声明 `RuntimeServiceContractExtender().service(...)`。
 - 调用方只依赖服务 key 和契约方法，不依赖提供方内部模块路径。
+
+## 推荐 service key
+
+| service key | 领域 | 示例 |
+| --- | --- | --- |
+| `users.service` | 用户、权限、资料 | `call_runtime_service("users.service", "get_by_id", user_id)` |
+| `posts.service` | 帖子读写、序列化、审核 | `call_runtime_service("posts.service", "serialize_by_id", post_id, user)` |
+| `discussions.service` | 讨论读写、可见性、订阅 | `call_runtime_service("discussions.service", "get_visible_ids", user=user)` |
+| `tags.service` | 标签、标签统计、阅读状态 | `call_runtime_service("tags.service", "summaries_by_slugs", slugs)` |
+| `notifications.service` | 通知创建、同步、删除 | `call_runtime_service("notifications.service", "sync_notifications", user)` |
+| `search.service` | 搜索、建议、过滤器 | `call_runtime_service("search.service", "search_all", query, user=user)` |
+| `approval.service` | 审核队列和处理 | `call_runtime_service("approval.service", "list_queue", actor=user)` |
 
 ## 常用映射
 

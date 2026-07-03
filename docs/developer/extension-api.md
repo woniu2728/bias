@@ -4,9 +4,10 @@ Bias 的扩展后端开发只使用这些公开模块：
 
 ```python
 from bias_core.extensions import ...
-from bias_core.extensions.runtime import ...
+from bias_core.extensions.runtime import call_runtime_service, get_runtime_service, require_runtime_service
 from bias_core.extensions.platform import ...
 from bias_core.extensions.forum import ...
+from bias_core.extensions.resources import ...
 ```
 
 扩展定义类也会通过公开 contract 层稳定导出：
@@ -18,9 +19,10 @@ from bias_core.extensions.contracts import ...
 约束：
 
 - `bias_core.extensions`：扩展声明入口，提供 Extender、资源定义、权限定义和 helper。
-- `bias_core.extensions.runtime`：论坛运行时能力，提供用户、帖子、讨论、标签、通知、审核、搜索等领域操作。
+- `bias_core.extensions.runtime`：跨扩展 runtime service contract 调用入口；新扩展只推荐使用 `call_runtime_service`、`get_runtime_service`、`require_runtime_service`。
 - `bias_core.extensions.platform`：通用平台能力，提供 API 响应、鉴权、设置、队列、存储、文件、邮件、Markdown、可见性、策略等基础服务。
 - `bias_core.extensions.forum`：论坛宿主能力，提供注册表、实时广播、在线用户、搜索索引、审计、上传 schema 等宿主级服务。
+- `bias_core.extensions.resources`：资源端点公开分发 helper，用于扩展内需要复用资源 endpoint 管线的受控场景。
 - `bias_core.extensions.contracts`：只导出定义类和资源运行时构造器，适合类型标注或 contract-first 代码。
 - 扩展声明层不要直接 import：
   - `bias_core.extensions.types`
@@ -28,7 +30,7 @@ from bias_core.extensions.contracts import ...
   - `bias_core.resource_registry`
   - `bias_core.extensions.runtime_access`
 - 扩展代码不要直接 import `bias_core.*` 内部实现；如果现有 SDK 缺能力，应先补公开 facade。
-- 扩展运行时能力统一从 `bias_core.extensions.runtime` 获取
+- 扩展运行时能力统一通过 service key 从 `bias_core.extensions.runtime` 获取
 - 扩展通用平台工具统一从 `bias_core.extensions.platform` 获取，例如 API 错误响应、分页、资源查询参数、扩展设置、鉴权、审计、领域事件、可见性、策略判断、队列、存储、文件上传、邮件和 Markdown 渲染
 - 扩展论坛领域宿主能力统一从 `bias_core.extensions.forum` 获取，例如论坛注册表、实时广播、在线用户、搜索索引、上传 schema、审计记录和 SQLite 写重试
 - Core 内部如果继续拆分 runtime、resource、admin 等实现，必须保持以上公开入口稳定
@@ -103,7 +105,7 @@ from bias_core.extensions.forum import (
 
 ## Runtime Service Contract
 
-跨扩展调用必须先声明 service contract，再通过 `get_runtime_service(...)` 或 `call_runtime_service(...)` 调用。新代码不要新增旧式 `get_runtime_*` / `*_runtime_*` facade 依赖；兼容映射见 `runtime-facade-migration.md`。
+跨扩展调用必须先声明 service contract，再通过 `get_runtime_service(...)`、`require_runtime_service(...)` 或 `call_runtime_service(...)` 调用。新代码不要新增旧式 `get_runtime_*` / `create_runtime_*` / `list_runtime_*` / `*_runtime_*` facade 依赖；兼容映射见 `runtime-facade-migration.md`。
 
 ```python
 from __future__ import annotations
@@ -147,6 +149,18 @@ def read_status():
     return call_runtime_service(f"{EXTENSION_ID}.status", "status_payload")
 ```
 
+常用 service key：
+
+| service key | 提供方 | 最小调用示例 |
+| --- | --- | --- |
+| `users.service` | `users` | `call_runtime_service("users.service", "get_by_id", user_id)` |
+| `posts.service` | `posts` | `call_runtime_service("posts.service", "serialize_by_id", post_id, user)` |
+| `discussions.service` | `discussions` | `call_runtime_service("discussions.service", "get_visible_ids", user=user)` |
+| `tags.service` | `tags` | `call_runtime_service("tags.service", "summaries_by_slugs", slugs)` |
+| `notifications.service` | `notifications` | `call_runtime_service("notifications.service", "sync_notifications", user)` |
+| `search.service` | `search` | `call_runtime_service("search.service", "search_all", query, user=user)` |
+| `approval.service` | `approval` | `call_runtime_service("approval.service", "list_queue", actor=user)` |
+
 Contract 规则：
 
 - `service_key` 使用 `<extension-id>.<capability>`，保持稳定。
@@ -154,6 +168,32 @@ Contract 规则：
 - `required_methods` / `required_values` 是消费者可依赖的最小契约，不能无公告移除。
 - Provider 应返回服务对象或可调用服务；服务方法返回 JSON-serializable 数据。
 - `check_extension_workspace --format json` 会检查 runtime service contract 和 core fallback 风险。
+
+## Legacy Runtime Facade
+
+`bias_core.extensions.runtime` 仍保留旧式专用 facade，用于兼容官方历史扩展和迁移期代码，例如：
+
+```python
+from bias_core.extensions.runtime import get_runtime_user_by_id
+from bias_core.extensions.runtime import get_runtime_post_service
+from bias_core.extensions.runtime import notify_runtime_notification
+```
+
+这些入口不要出现在新扩展、新模板或新功能代码里。需要同等能力时，优先使用 service contract：
+
+```python
+from bias_core.extensions.runtime import call_runtime_service
+
+
+user = call_runtime_service("users.service", "get_by_id", user_id)
+payload = call_runtime_service("notifications.service", "create_from_blueprint", blueprint)
+```
+
+迁移要求：
+
+- 官方历史扩展可以暂时保留旧 facade，但新增调用必须走 service contract。
+- `inspect_extension_imports --check-runtime-facades --fail-on-warnings` 会阻断顶层旧 facade import 和未声明依赖的 facade 使用。
+- 迁移映射以 [runtime-facade-migration.md](runtime-facade-migration.md) 为准。
 
 ## API Resource Endpoint
 
