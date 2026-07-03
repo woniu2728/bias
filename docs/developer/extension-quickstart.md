@@ -6,7 +6,7 @@
 
 ```powershell
 cd D:\files\project\tmp\bias
-python manage.py create_extension demo-widget --target D:\files\project\tmp
+python manage.py create_extension demo-widget --target D:\files\project\tmp --template forum-widget
 ```
 
 生成目录类似：
@@ -15,14 +15,21 @@ python manage.py create_extension demo-widget --target D:\files\project\tmp
 D:\files\project\tmp\bias-ext-demo-widget
 ```
 
-新模板默认包含：
+`forum-widget` 模板默认包含：
 
 - `extension.json`
 - 后端 `ext.py`
-- runtime service contract 示例
-- resource 示例
-- admin/forum frontend entry
+- forum frontend entry
 - Python package metadata
+
+其他常用模板：
+
+```powershell
+python manage.py create_extension demo-settings --target D:\files\project\tmp --template settings
+python manage.py create_extension demo-admin --target D:\files\project\tmp --template admin-page
+python manage.py create_extension demo-resource --target D:\files\project\tmp --template resource
+python manage.py create_extension demo-full --target D:\files\project\tmp --template full
+```
 
 ## 2. 校验扩展
 
@@ -56,9 +63,11 @@ python manage.py collectstatic --noinput
 ## 4. 打包检查
 
 ```powershell
-python manage.py inspect_extensions --format json
+python manage.py check_platform_release --extensions-path D:\files\project\tmp --skip-frontend --format json
 python manage.py inspect_extension_packages --extensions-path D:\files\project\tmp --build --install-smoke --install-set-smoke --lifecycle-smoke --format json
 ```
+
+`check_platform_release` 是后端发布聚合 gate，会汇总 workspace 边界、扩展诊断、包构建、doctor 和前端平台检查。正式发布不应跳过 frontend 或 doctor；本地只验证后端扩展时可临时使用 `--skip-frontend` / `--skip-doctor`。
 
 `inspect_extensions` 的 JSON 输出包含 `compatibility_matrix`，按扩展列出 manifest `schema_version`、Bias 版本范围、API 版本和稳定性、依赖/冲突/能力声明、分发签名/abandoned 状态，以及发布 gate 策略。发布流水线应阻断 `compatibility_matrix.summary.bias_version_incompatible_count > 0` 或 `compatibility_matrix.summary.blocking_count > 0` 的扩展；`prepare_release` 已内置同一阻断检查。
 
@@ -99,14 +108,13 @@ JSON 输出中的 `install_plan` 是安装前计划，不会执行真实站点�
 ## 7. 发布前检查清单
 
 ```powershell
-python manage.py inspect_extensions --format json
+python manage.py check_platform_release --extensions-path D:\files\project\tmp --format json
 python manage.py inspect_extensions --contract-baseline-only --output extension-contract-baseline.json
 python manage.py check_extension_workspace --extensions-path D:\files\project\tmp --format json
 python manage.py inspect_performance_baseline --format json --strict
 
 cd D:\files\project\tmp\bias\frontend
 npm run check:platform
-npm run check:extension-boundary
 npm run build
 ```
 

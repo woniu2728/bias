@@ -124,6 +124,25 @@ import { internalRegistry } from '@bias/core/src/...'
 
 `npm run check:extension-boundary` 和 `inspect_extension_imports --check-runtime-facades` 会阻止扩展穿透宿主源码。新增公共能力时，应先导出到 `@bias/core/*`，再让扩展使用。
 
+## SDK 导出稳定性
+
+`@bias/core` 的导出基线在 `frontend/sdk-export-baseline.json`。每个导出都必须标注稳定性：
+
+- `stable`：新扩展可以长期依赖。
+- `experimental`：可试用，升级前需要复核。
+- `internal`：只为兼容或过渡存在，不推荐新扩展使用。
+
+新增公共 SDK 能力时：
+
+```powershell
+cd frontend
+npm run sync:sdk-package
+node ./scripts/checkSdkExports.mjs --write --default-stability=experimental
+npm run check:platform
+```
+
+`npm run check:sdk-package` 会阻断未进入基线、缺少稳定性标注或稳定性值非法的导出。
+
 ## @bias/core
 
 `@bias/core` 是前后台共享 SDK，适合通用状态、API、资源模型和列表组合：
