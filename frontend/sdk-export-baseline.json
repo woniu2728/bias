@@ -1,189 +1,506 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "package": {
     "name": "@bias/core",
     "version": "0.1.1"
   },
+  "stability_values": [
+    "experimental",
+    "internal",
+    "stable"
+  ],
   "entries": {
     ".": {
       "targets": {
         "default": "./common.js",
         "types": "./common.d.ts"
       },
-      "exports": [
-        "AdminExtender",
-        "api",
-        "applyTheme",
-        "applyThemeHeadTags",
-        "bootstrapThemeRuntime",
-        "clearRegistryExtensions",
-        "clearThemeSlots",
-        "computed",
-        "coreApi",
-        "createPinia",
-        "defaultThemeTokens",
-        "defineStore",
-        "Exports",
-        "ExportsExtender",
-        "extend",
-        "extendAdmin",
-        "extendForum",
-        "formatMonth",
-        "formatRelativeTime",
-        "ForumExtender",
-        "getActiveTheme",
-        "getFirstSurfaceAwareItem",
-        "getFrontendRegistrySlot",
-        "getFrontendRegistrySlots",
-        "getThemeSlot",
-        "getThemeSlots",
-        "isRegisteredItemEnabled",
-        "itemContentValue",
-        "ItemList",
-        "loadThemeManifest",
-        "Model",
-        "ModelExtender",
-        "nextTick",
-        "normalizeModelData",
-        "normalizeRegisteredItem",
-        "normalizeThemeTokens",
-        "Notification",
-        "NotificationExtender",
-        "onBeforeUnmount",
-        "onMounted",
-        "orderedRegisteredItems",
-        "override",
-        "PostTypes",
-        "PostTypesExtender",
-        "reactive",
-        "ref",
-        "registerThemeSlot",
-        "resetPatches",
-        "resolveRegisteredItem",
-        "ResourceModel",
-        "ResourceModelExtender",
-        "ResourceNormalizer",
-        "ResourceNormalizerExtender",
-        "Routes",
-        "RoutesExtender",
-        "Search",
-        "SearchExtender",
-        "setActivePinia",
-        "Store",
-        "StoreExtender",
-        "ThemeMode",
-        "ThemeModeExtender",
-        "toRef",
-        "unwrapList",
-        "upsertByKey",
-        "useModalStore",
-        "usePaginatedListState",
-        "useRequestedPaginatedListState",
-        "useResourceStore",
-        "useRoute",
-        "useRouteListState",
-        "useRoutePagination",
-        "useRouter",
-        "watch"
-      ]
+      "exports": {
+        "AdminExtender": {
+          "stability": "stable"
+        },
+        "api": {
+          "stability": "stable"
+        },
+        "applyTheme": {
+          "stability": "stable"
+        },
+        "applyThemeHeadTags": {
+          "stability": "stable"
+        },
+        "bootstrapThemeRuntime": {
+          "stability": "stable"
+        },
+        "clearRegistryExtensions": {
+          "stability": "stable"
+        },
+        "clearThemeSlots": {
+          "stability": "stable"
+        },
+        "computed": {
+          "stability": "stable"
+        },
+        "coreApi": {
+          "stability": "stable"
+        },
+        "createPinia": {
+          "stability": "stable"
+        },
+        "defaultThemeTokens": {
+          "stability": "stable"
+        },
+        "defineStore": {
+          "stability": "stable"
+        },
+        "Exports": {
+          "stability": "stable"
+        },
+        "ExportsExtender": {
+          "stability": "stable"
+        },
+        "extend": {
+          "stability": "stable"
+        },
+        "extendAdmin": {
+          "stability": "stable"
+        },
+        "extendForum": {
+          "stability": "stable"
+        },
+        "formatMonth": {
+          "stability": "stable"
+        },
+        "formatRelativeTime": {
+          "stability": "stable"
+        },
+        "ForumExtender": {
+          "stability": "stable"
+        },
+        "getActiveTheme": {
+          "stability": "stable"
+        },
+        "getFirstSurfaceAwareItem": {
+          "stability": "stable"
+        },
+        "getFrontendRegistrySlot": {
+          "stability": "stable"
+        },
+        "getFrontendRegistrySlots": {
+          "stability": "stable"
+        },
+        "getThemeSlot": {
+          "stability": "stable"
+        },
+        "getThemeSlots": {
+          "stability": "stable"
+        },
+        "isRegisteredItemEnabled": {
+          "stability": "stable"
+        },
+        "itemContentValue": {
+          "stability": "stable"
+        },
+        "ItemList": {
+          "stability": "stable"
+        },
+        "loadThemeManifest": {
+          "stability": "stable"
+        },
+        "Model": {
+          "stability": "stable"
+        },
+        "ModelExtender": {
+          "stability": "stable"
+        },
+        "nextTick": {
+          "stability": "stable"
+        },
+        "normalizeModelData": {
+          "stability": "stable"
+        },
+        "normalizeRegisteredItem": {
+          "stability": "stable"
+        },
+        "normalizeThemeTokens": {
+          "stability": "stable"
+        },
+        "Notification": {
+          "stability": "stable"
+        },
+        "NotificationExtender": {
+          "stability": "stable"
+        },
+        "onBeforeUnmount": {
+          "stability": "stable"
+        },
+        "onMounted": {
+          "stability": "stable"
+        },
+        "orderedRegisteredItems": {
+          "stability": "stable"
+        },
+        "override": {
+          "stability": "stable"
+        },
+        "PostTypes": {
+          "stability": "stable"
+        },
+        "PostTypesExtender": {
+          "stability": "stable"
+        },
+        "reactive": {
+          "stability": "stable"
+        },
+        "ref": {
+          "stability": "stable"
+        },
+        "registerThemeSlot": {
+          "stability": "stable"
+        },
+        "resetPatches": {
+          "stability": "stable"
+        },
+        "resolveRegisteredItem": {
+          "stability": "stable"
+        },
+        "ResourceModel": {
+          "stability": "stable"
+        },
+        "ResourceModelExtender": {
+          "stability": "stable"
+        },
+        "ResourceNormalizer": {
+          "stability": "stable"
+        },
+        "ResourceNormalizerExtender": {
+          "stability": "stable"
+        },
+        "Routes": {
+          "stability": "stable"
+        },
+        "RoutesExtender": {
+          "stability": "stable"
+        },
+        "Search": {
+          "stability": "stable"
+        },
+        "SearchExtender": {
+          "stability": "stable"
+        },
+        "setActivePinia": {
+          "stability": "stable"
+        },
+        "Store": {
+          "stability": "stable"
+        },
+        "StoreExtender": {
+          "stability": "stable"
+        },
+        "ThemeMode": {
+          "stability": "stable"
+        },
+        "ThemeModeExtender": {
+          "stability": "stable"
+        },
+        "toRef": {
+          "stability": "stable"
+        },
+        "unwrapList": {
+          "stability": "stable"
+        },
+        "upsertByKey": {
+          "stability": "stable"
+        },
+        "useModalStore": {
+          "stability": "stable"
+        },
+        "usePaginatedListState": {
+          "stability": "stable"
+        },
+        "useRequestedPaginatedListState": {
+          "stability": "stable"
+        },
+        "useResourceStore": {
+          "stability": "stable"
+        },
+        "useRoute": {
+          "stability": "stable"
+        },
+        "useRouteListState": {
+          "stability": "stable"
+        },
+        "useRoutePagination": {
+          "stability": "stable"
+        },
+        "useRouter": {
+          "stability": "stable"
+        },
+        "watch": {
+          "stability": "stable"
+        }
+      }
     },
     "./admin": {
       "targets": {
         "default": "./admin.js",
         "types": "./admin.d.ts"
       },
-      "exports": [
-        "AdminExtender",
-        "clearThemeSlots",
-        "Exports",
-        "ExportsExtender",
-        "extendAdmin",
-        "getThemeSlot",
-        "getThemeSlots",
-        "registerThemeSlot"
-      ]
+      "exports": {
+        "AdminExtender": {
+          "stability": "stable"
+        },
+        "clearThemeSlots": {
+          "stability": "stable"
+        },
+        "Exports": {
+          "stability": "stable"
+        },
+        "ExportsExtender": {
+          "stability": "stable"
+        },
+        "extendAdmin": {
+          "stability": "stable"
+        },
+        "getThemeSlot": {
+          "stability": "stable"
+        },
+        "getThemeSlots": {
+          "stability": "stable"
+        },
+        "registerThemeSlot": {
+          "stability": "stable"
+        }
+      }
     },
     "./common": {
       "targets": {
         "default": "./common.js",
         "types": "./common.d.ts"
       },
-      "exports": [
-        "AdminExtender",
-        "api",
-        "applyTheme",
-        "applyThemeHeadTags",
-        "bootstrapThemeRuntime",
-        "clearRegistryExtensions",
-        "clearThemeSlots",
-        "computed",
-        "coreApi",
-        "createPinia",
-        "defaultThemeTokens",
-        "defineStore",
-        "Exports",
-        "ExportsExtender",
-        "extend",
-        "extendAdmin",
-        "extendForum",
-        "formatMonth",
-        "formatRelativeTime",
-        "ForumExtender",
-        "getActiveTheme",
-        "getFirstSurfaceAwareItem",
-        "getFrontendRegistrySlot",
-        "getFrontendRegistrySlots",
-        "getThemeSlot",
-        "getThemeSlots",
-        "isRegisteredItemEnabled",
-        "itemContentValue",
-        "ItemList",
-        "loadThemeManifest",
-        "Model",
-        "ModelExtender",
-        "nextTick",
-        "normalizeModelData",
-        "normalizeRegisteredItem",
-        "normalizeThemeTokens",
-        "Notification",
-        "NotificationExtender",
-        "onBeforeUnmount",
-        "onMounted",
-        "orderedRegisteredItems",
-        "override",
-        "PostTypes",
-        "PostTypesExtender",
-        "reactive",
-        "ref",
-        "registerThemeSlot",
-        "resetPatches",
-        "resolveRegisteredItem",
-        "ResourceModel",
-        "ResourceModelExtender",
-        "ResourceNormalizer",
-        "ResourceNormalizerExtender",
-        "Routes",
-        "RoutesExtender",
-        "Search",
-        "SearchExtender",
-        "setActivePinia",
-        "Store",
-        "StoreExtender",
-        "ThemeMode",
-        "ThemeModeExtender",
-        "toRef",
-        "unwrapList",
-        "upsertByKey",
-        "useModalStore",
-        "usePaginatedListState",
-        "useRequestedPaginatedListState",
-        "useResourceStore",
-        "useRoute",
-        "useRouteListState",
-        "useRoutePagination",
-        "useRouter",
-        "watch"
-      ]
+      "exports": {
+        "AdminExtender": {
+          "stability": "stable"
+        },
+        "api": {
+          "stability": "stable"
+        },
+        "applyTheme": {
+          "stability": "stable"
+        },
+        "applyThemeHeadTags": {
+          "stability": "stable"
+        },
+        "bootstrapThemeRuntime": {
+          "stability": "stable"
+        },
+        "clearRegistryExtensions": {
+          "stability": "stable"
+        },
+        "clearThemeSlots": {
+          "stability": "stable"
+        },
+        "computed": {
+          "stability": "stable"
+        },
+        "coreApi": {
+          "stability": "stable"
+        },
+        "createPinia": {
+          "stability": "stable"
+        },
+        "defaultThemeTokens": {
+          "stability": "stable"
+        },
+        "defineStore": {
+          "stability": "stable"
+        },
+        "Exports": {
+          "stability": "stable"
+        },
+        "ExportsExtender": {
+          "stability": "stable"
+        },
+        "extend": {
+          "stability": "stable"
+        },
+        "extendAdmin": {
+          "stability": "stable"
+        },
+        "extendForum": {
+          "stability": "stable"
+        },
+        "formatMonth": {
+          "stability": "stable"
+        },
+        "formatRelativeTime": {
+          "stability": "stable"
+        },
+        "ForumExtender": {
+          "stability": "stable"
+        },
+        "getActiveTheme": {
+          "stability": "stable"
+        },
+        "getFirstSurfaceAwareItem": {
+          "stability": "stable"
+        },
+        "getFrontendRegistrySlot": {
+          "stability": "stable"
+        },
+        "getFrontendRegistrySlots": {
+          "stability": "stable"
+        },
+        "getThemeSlot": {
+          "stability": "stable"
+        },
+        "getThemeSlots": {
+          "stability": "stable"
+        },
+        "isRegisteredItemEnabled": {
+          "stability": "stable"
+        },
+        "itemContentValue": {
+          "stability": "stable"
+        },
+        "ItemList": {
+          "stability": "stable"
+        },
+        "loadThemeManifest": {
+          "stability": "stable"
+        },
+        "Model": {
+          "stability": "stable"
+        },
+        "ModelExtender": {
+          "stability": "stable"
+        },
+        "nextTick": {
+          "stability": "stable"
+        },
+        "normalizeModelData": {
+          "stability": "stable"
+        },
+        "normalizeRegisteredItem": {
+          "stability": "stable"
+        },
+        "normalizeThemeTokens": {
+          "stability": "stable"
+        },
+        "Notification": {
+          "stability": "stable"
+        },
+        "NotificationExtender": {
+          "stability": "stable"
+        },
+        "onBeforeUnmount": {
+          "stability": "stable"
+        },
+        "onMounted": {
+          "stability": "stable"
+        },
+        "orderedRegisteredItems": {
+          "stability": "stable"
+        },
+        "override": {
+          "stability": "stable"
+        },
+        "PostTypes": {
+          "stability": "stable"
+        },
+        "PostTypesExtender": {
+          "stability": "stable"
+        },
+        "reactive": {
+          "stability": "stable"
+        },
+        "ref": {
+          "stability": "stable"
+        },
+        "registerThemeSlot": {
+          "stability": "stable"
+        },
+        "resetPatches": {
+          "stability": "stable"
+        },
+        "resolveRegisteredItem": {
+          "stability": "stable"
+        },
+        "ResourceModel": {
+          "stability": "stable"
+        },
+        "ResourceModelExtender": {
+          "stability": "stable"
+        },
+        "ResourceNormalizer": {
+          "stability": "stable"
+        },
+        "ResourceNormalizerExtender": {
+          "stability": "stable"
+        },
+        "Routes": {
+          "stability": "stable"
+        },
+        "RoutesExtender": {
+          "stability": "stable"
+        },
+        "Search": {
+          "stability": "stable"
+        },
+        "SearchExtender": {
+          "stability": "stable"
+        },
+        "setActivePinia": {
+          "stability": "stable"
+        },
+        "Store": {
+          "stability": "stable"
+        },
+        "StoreExtender": {
+          "stability": "stable"
+        },
+        "ThemeMode": {
+          "stability": "stable"
+        },
+        "ThemeModeExtender": {
+          "stability": "stable"
+        },
+        "toRef": {
+          "stability": "stable"
+        },
+        "unwrapList": {
+          "stability": "stable"
+        },
+        "upsertByKey": {
+          "stability": "stable"
+        },
+        "useModalStore": {
+          "stability": "stable"
+        },
+        "usePaginatedListState": {
+          "stability": "stable"
+        },
+        "useRequestedPaginatedListState": {
+          "stability": "stable"
+        },
+        "useResourceStore": {
+          "stability": "stable"
+        },
+        "useRoute": {
+          "stability": "stable"
+        },
+        "useRouteListState": {
+          "stability": "stable"
+        },
+        "useRoutePagination": {
+          "stability": "stable"
+        },
+        "useRouter": {
+          "stability": "stable"
+        },
+        "watch": {
+          "stability": "stable"
+        }
+      }
     },
     "./components/admin": {
       "targets": {
@@ -191,31 +508,77 @@
         "node": "./components-admin-node.js",
         "types": "./components-admin.d.ts"
       },
-      "exports": [
-        "AdminActionNoteModal",
-        "adminApi",
-        "AdminColorField",
-        "AdminFilterTabs",
-        "AdminInlineMessage",
-        "AdminMultiSelectMenu",
-        "AdminPage",
-        "AdminPagination",
-        "AdminSelectMenu",
-        "AdminStateBlock",
-        "AdminSummaryGrid",
-        "AdminToolbar",
-        "ExtensionGeneratedPermissionsPage",
-        "getAdminPageActionMeta",
-        "getAdminPageConfig",
-        "getAdminPageCopy",
-        "getAdminUsersPageActionMeta",
-        "getAdminUsersPageConfig",
-        "getAdminUsersPageCopy",
-        "resolveApprovalSelectionState",
-        "resolveApprovalTemplateOptions",
-        "useAdminSaveFeedback",
-        "useModalStore"
-      ]
+      "exports": {
+        "AdminActionNoteModal": {
+          "stability": "stable"
+        },
+        "adminApi": {
+          "stability": "stable"
+        },
+        "AdminColorField": {
+          "stability": "stable"
+        },
+        "AdminFilterTabs": {
+          "stability": "stable"
+        },
+        "AdminInlineMessage": {
+          "stability": "stable"
+        },
+        "AdminMultiSelectMenu": {
+          "stability": "stable"
+        },
+        "AdminPage": {
+          "stability": "stable"
+        },
+        "AdminPagination": {
+          "stability": "stable"
+        },
+        "AdminSelectMenu": {
+          "stability": "stable"
+        },
+        "AdminStateBlock": {
+          "stability": "stable"
+        },
+        "AdminSummaryGrid": {
+          "stability": "stable"
+        },
+        "AdminToolbar": {
+          "stability": "stable"
+        },
+        "ExtensionGeneratedPermissionsPage": {
+          "stability": "stable"
+        },
+        "getAdminPageActionMeta": {
+          "stability": "stable"
+        },
+        "getAdminPageConfig": {
+          "stability": "stable"
+        },
+        "getAdminPageCopy": {
+          "stability": "stable"
+        },
+        "getAdminUsersPageActionMeta": {
+          "stability": "stable"
+        },
+        "getAdminUsersPageConfig": {
+          "stability": "stable"
+        },
+        "getAdminUsersPageCopy": {
+          "stability": "stable"
+        },
+        "resolveApprovalSelectionState": {
+          "stability": "stable"
+        },
+        "resolveApprovalTemplateOptions": {
+          "stability": "stable"
+        },
+        "useAdminSaveFeedback": {
+          "stability": "stable"
+        },
+        "useModalStore": {
+          "stability": "stable"
+        }
+      }
     },
     "./forum": {
       "targets": {
@@ -223,77 +586,215 @@
         "node": "./forum-node.js",
         "types": "./forum.d.ts"
       },
-      "exports": [
-        "ComposerActionBar",
-        "ComposerAutocompleteOutlet",
-        "ComposerHeaderBar",
-        "ComposerNoticeStack",
-        "ComposerPreviewPanel",
-        "ComposerStatusBar",
-        "createUiTextCopy",
-        "extendForum",
-        "ForumActionMenu",
-        "ForumExtender",
-        "ForumHeroPanel",
-        "ForumInlineMessage",
-        "ForumLoadMoreButton",
-        "ForumPageWithSidebar",
-        "ForumPagination",
-        "ForumPrimaryNav",
-        "ForumSearchFilterNav",
-        "ForumStateBadge",
-        "ForumStateBlock",
-        "getComposerAutocompleteProviders",
-        "getComposerDraftMeta",
-        "getComposerFields",
-        "getComposerHosts",
-        "getComposerNotices",
-        "getComposerSecondaryActions",
-        "getComposerStatusItems",
-        "getComposerTools",
-        "getComposerUploadHandler",
-        "getEmptyState",
-        "getFeedbackNote",
-        "getForumNavItems",
-        "getForumNavSections",
-        "getForumSidebarSections",
-        "getHeroMetaItems",
-        "getPageState",
-        "getStateBlock",
-        "getTextareaCaretCoordinates",
-        "getUiCopy",
-        "ModerationActionModal",
-        "registerComposerAutocompleteProvider",
-        "registerComposerField",
-        "registerComposerHost",
-        "registerComposerInitialState",
-        "registerComposerNotice",
-        "registerComposerPayloadContributor",
-        "registerComposerPreviewTransformer",
-        "registerComposerSecondaryAction",
-        "registerComposerStatusItem",
-        "registerComposerSubmitGuard",
-        "registerComposerSubmitSuccess",
-        "registerComposerTool",
-        "registerComposerUploadHandler",
-        "registerEmptyState",
-        "registerFeedbackNote",
-        "registerForumNavSection",
-        "registerForumRuntime",
-        "registerForumSidebarSection",
-        "registerHeaderItem",
-        "registerHeroMeta",
-        "registerStateBlock",
-        "registerUiCopy",
-        "runComposerInitialStateContributors",
-        "runComposerPayloadContributors",
-        "runComposerPreviewTransformers",
-        "runComposerSubmitGuards",
-        "runComposerSubmitSuccess",
-        "runForumRuntimeHook",
-        "useComposerRuntime",
-        "useForumUiStore"
-      ]
+      "exports": {
+        "ComposerActionBar": {
+          "stability": "stable"
+        },
+        "ComposerAutocompleteOutlet": {
+          "stability": "stable"
+        },
+        "ComposerHeaderBar": {
+          "stability": "stable"
+        },
+        "ComposerNoticeStack": {
+          "stability": "stable"
+        },
+        "ComposerPreviewPanel": {
+          "stability": "stable"
+        },
+        "ComposerStatusBar": {
+          "stability": "stable"
+        },
+        "createUiTextCopy": {
+          "stability": "stable"
+        },
+        "extendForum": {
+          "stability": "stable"
+        },
+        "ForumActionMenu": {
+          "stability": "stable"
+        },
+        "ForumExtender": {
+          "stability": "stable"
+        },
+        "ForumHeroPanel": {
+          "stability": "stable"
+        },
+        "ForumInlineMessage": {
+          "stability": "stable"
+        },
+        "ForumLoadMoreButton": {
+          "stability": "stable"
+        },
+        "ForumPageWithSidebar": {
+          "stability": "stable"
+        },
+        "ForumPagination": {
+          "stability": "stable"
+        },
+        "ForumPrimaryNav": {
+          "stability": "stable"
+        },
+        "ForumSearchFilterNav": {
+          "stability": "stable"
+        },
+        "ForumStateBadge": {
+          "stability": "stable"
+        },
+        "ForumStateBlock": {
+          "stability": "stable"
+        },
+        "getComposerAutocompleteProviders": {
+          "stability": "stable"
+        },
+        "getComposerDraftMeta": {
+          "stability": "stable"
+        },
+        "getComposerFields": {
+          "stability": "stable"
+        },
+        "getComposerHosts": {
+          "stability": "stable"
+        },
+        "getComposerNotices": {
+          "stability": "stable"
+        },
+        "getComposerSecondaryActions": {
+          "stability": "stable"
+        },
+        "getComposerStatusItems": {
+          "stability": "stable"
+        },
+        "getComposerTools": {
+          "stability": "stable"
+        },
+        "getComposerUploadHandler": {
+          "stability": "stable"
+        },
+        "getEmptyState": {
+          "stability": "stable"
+        },
+        "getFeedbackNote": {
+          "stability": "stable"
+        },
+        "getForumNavItems": {
+          "stability": "stable"
+        },
+        "getForumNavSections": {
+          "stability": "stable"
+        },
+        "getForumSidebarSections": {
+          "stability": "stable"
+        },
+        "getHeroMetaItems": {
+          "stability": "stable"
+        },
+        "getPageState": {
+          "stability": "stable"
+        },
+        "getStateBlock": {
+          "stability": "stable"
+        },
+        "getTextareaCaretCoordinates": {
+          "stability": "stable"
+        },
+        "getUiCopy": {
+          "stability": "stable"
+        },
+        "ModerationActionModal": {
+          "stability": "stable"
+        },
+        "registerComposerAutocompleteProvider": {
+          "stability": "stable"
+        },
+        "registerComposerField": {
+          "stability": "stable"
+        },
+        "registerComposerHost": {
+          "stability": "stable"
+        },
+        "registerComposerInitialState": {
+          "stability": "stable"
+        },
+        "registerComposerNotice": {
+          "stability": "stable"
+        },
+        "registerComposerPayloadContributor": {
+          "stability": "stable"
+        },
+        "registerComposerPreviewTransformer": {
+          "stability": "stable"
+        },
+        "registerComposerSecondaryAction": {
+          "stability": "stable"
+        },
+        "registerComposerStatusItem": {
+          "stability": "stable"
+        },
+        "registerComposerSubmitGuard": {
+          "stability": "stable"
+        },
+        "registerComposerSubmitSuccess": {
+          "stability": "stable"
+        },
+        "registerComposerTool": {
+          "stability": "stable"
+        },
+        "registerComposerUploadHandler": {
+          "stability": "stable"
+        },
+        "registerEmptyState": {
+          "stability": "stable"
+        },
+        "registerFeedbackNote": {
+          "stability": "stable"
+        },
+        "registerForumNavSection": {
+          "stability": "stable"
+        },
+        "registerForumRuntime": {
+          "stability": "stable"
+        },
+        "registerForumSidebarSection": {
+          "stability": "stable"
+        },
+        "registerHeaderItem": {
+          "stability": "stable"
+        },
+        "registerHeroMeta": {
+          "stability": "stable"
+        },
+        "registerStateBlock": {
+          "stability": "stable"
+        },
+        "registerUiCopy": {
+          "stability": "stable"
+        },
+        "runComposerInitialStateContributors": {
+          "stability": "stable"
+        },
+        "runComposerPayloadContributors": {
+          "stability": "stable"
+        },
+        "runComposerPreviewTransformers": {
+          "stability": "stable"
+        },
+        "runComposerSubmitGuards": {
+          "stability": "stable"
+        },
+        "runComposerSubmitSuccess": {
+          "stability": "stable"
+        },
+        "runForumRuntimeHook": {
+          "stability": "stable"
+        },
+        "useComposerRuntime": {
+          "stability": "stable"
+        },
+        "useForumUiStore": {
+          "stability": "stable"
+        }
+      }
     }
   }
 }
